@@ -1,0 +1,9 @@
+[
+  { "id": "gen1", "displayName": "1기생", "unitName": "Everys", "sortOrder": 10, "type": "generation", "notificationDefaultEnabled": true },
+  { "id": "gen2", "displayName": "2기생", "unitName": "Universe", "sortOrder": 20, "type": "generation", "notificationDefaultEnabled": true },
+  { "id": "gen3", "displayName": "3기생", "unitName": "Cliche", "sortOrder": 30, "type": "generation", "notificationDefaultEnabled": true },
+  { "id": "gamja", "displayName": "감자", "unitName": "감자", "sortOrder": 40, "type": "gamja", "notificationDefaultEnabled": true },
+  { "id": "official", "displayName": "기타", "unitName": "공식 채널", "sortOrder": 50, "type": "official", "notificationDefaultEnabled": true },
+  { "id": "gen4-upcoming", "displayName": "4기생", "unitName": "upcoming", "sortOrder": 60, "type": "upcoming", "notificationDefaultEnabled": false }
+]
+

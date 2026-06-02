@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Device {
+  id                 String   @id
+  platform           String
+  deviceToken        String?
+  locale             String?
+  timezone           String?
+  realtimeEnabled    Boolean  @default(false)
+  realtimeAcknowledged Boolean @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model NotificationPreference {
+  id             String   @id @default(cuid())
+  deviceId       String
+  scope          String
+  generationId   String?
+  memberId       String?
+  source         String?
+  eventType      String?
+  enabled        Boolean
+  explicitOverride Boolean @default(false)
+  tapAction      String   @default("open_app")
+  deliveryMode   String   @default("standard")
+  data           Json?
+  updatedAt      DateTime @updatedAt
+}
+
+model PlatformEvent {
+  id                  String   @id
+  source              String
+  type                String
+  memberId            String
+  generationId        String
+  title               String
+  body                String
+  platformUrl         String?
+  appDeepLink         String
+  occurredAt          DateTime
+  receivedAt          DateTime
+  dedupeKey           String   @unique
+  realtimeEligible    Boolean
+  deliveryMode        String
+  ingestionLatencyMs  Int?
+  deliveryRequestedAt DateTime?
+}
+
+model DeliveryAttempt {
+  id                String   @id @default(cuid())
+  eventId           String
+  deviceId          String?
+  attemptedAt       DateTime @default(now())
+  deliveredAt       DateTime?
+  status            String
+  reason            String?
+  tapActionUsed     String
+  title             String
+  body              String
+  source            String
+  eventType         String
+  generationId      String
+  memberId          String
+  deliveryMode      String
+  pushPriority      String
+  deliveryLatencyMs Int?
+  retryCount        Int      @default(0)
+  expiresAt         DateTime?
+}
+
+model LiveStatus {
+  memberId           String   @id
+  generationId        String
+  isLive              Boolean
+  title               String?
+  thumbnailUrl        String?
+  viewerCount         Int?
+  startedAt           DateTime?
+  platformUrl         String?
+  lastCheckedAt       DateTime
+  realtimeObservedAt  DateTime?
+}

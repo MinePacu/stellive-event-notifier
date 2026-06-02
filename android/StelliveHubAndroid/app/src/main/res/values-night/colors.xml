@@ -1,0 +1,17 @@
+<resources>
+    <color name="hub_primary">#9FCED1</color>
+    <color name="hub_secondary">#D6B56B</color>
+    <color name="hub_surface">#202626</color>
+    <color name="hub_surface_dark">#111515</color>
+    <color name="hub_background">#141818</color>
+    <color name="hub_card">#1D2323</color>
+    <color name="hub_text">#ECF2F2</color>
+    <color name="hub_text_muted">#AAB8BA</color>
+    <color name="hub_text_subtle">#7E8C8F</color>
+    <color name="hub_line">#344142</color>
+    <color name="hub_accent_soft">#203A3B</color>
+    <color name="hub_success">#83D8B2</color>
+    <color name="hub_success_soft">#18362A</color>
+    <color name="hub_warning">#E6C978</color>
+    <color name="hub_warning_soft">#39311D</color>
+</resources>

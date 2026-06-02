@@ -1,0 +1,65 @@
+openapi: 3.1.0
+info:
+  title: Stellive Notification Hub API
+  version: 0.1.0
+  description: Unofficial fan-project API. Official YouTube live events for the Stellive official channel are excluded.
+paths:
+  /health:
+    get:
+      responses:
+        "200":
+          description: API health.
+  /v1/bootstrap:
+    get:
+      responses:
+        "200":
+          description: App config, catalog, preferences, and realtime summary.
+  /v1/devices/register:
+    post:
+      responses:
+        "200":
+          description: Anonymous device registration.
+  /v1/members:
+    get:
+      responses:
+        "200":
+          description: Active/upcoming members, Gangzi, official channel, and placeholders.
+  /v1/generations:
+    get:
+      responses:
+        "200":
+          description: Generation/category catalog.
+  /v1/live-status:
+    get:
+      responses:
+        "200":
+          description: CHZZK live status for member and gamja entries. Live entries include startedAt normalized from CHZZK openDate when available.
+  /v1/preferences:
+    get:
+      responses:
+        "200":
+          description: Device preferences.
+    put:
+      responses:
+        "200":
+          description: Updated device preferences.
+  /v1/preferences/resolved:
+    get:
+      responses:
+        "200":
+          description: Resolved notification decision for a sample event.
+  /v1/realtime/status:
+    get:
+      responses:
+        "200":
+          description: Adapter and realtime queue status.
+  /v1/events/stream:
+    get:
+      responses:
+        "200":
+          description: Foreground SSE stream for UI updates.
+  /v1/notifications/delivery-attempts:
+    get:
+      responses:
+        "200":
+          description: Short-lived server delivery attempts for diagnostics. User-visible notification history is stored on device.

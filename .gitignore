@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# OS / IDE
+.DS_Store
+.idea/
+
+# Backend build output
+backend/stellive-hub-api/dist/
+
+# Android
+.gradle/
+build/
+**/build/
+local.properties
+google-services.json
+
+# iOS
+DerivedData/
+**/DerivedData/
+*.xcuserstate
+*.xcuserdata/
+ios/StelliveHubiOS/GoogleService-Info.plist
+
+# Local design mockups
+.superpowers/
+
+# Secrets
+.env
+!.env.example

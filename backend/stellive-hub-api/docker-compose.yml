@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: stellive
+      POSTGRES_PASSWORD: stellive
+      POSTGRES_DB: stellive_hub
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    env_file:
+      - .env.example
+    ports:
+      - "4000:4000"
+    volumes:
+      - .:/app
+      - ../../shared:/shared
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  postgres-data:
+

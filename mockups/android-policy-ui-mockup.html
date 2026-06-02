@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stellive Notification Hub Android UI Mockup</title>
+  <style>
+    :root {
+      --bg: #eef3f4;
+      --phone: #fbfcfc;
+      --surface: #ffffff;
+      --surface-2: #f3f7f7;
+      --ink: #172326;
+      --muted: #667579;
+      --subtle: #8c999c;
+      --line: #d9e2e3;
+      --accent: #246a73;
+      --accent-2: #e8f5f3;
+      --green: #18815f;
+      --amber: #9a6a00;
+      --red: #b7433c;
+      --shadow: 0 20px 60px rgba(29, 52, 57, .18);
+      --radius: 8px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(420px, 480px) minmax(360px, 520px);
+      gap: 32px;
+      align-items: center;
+      justify-content: center;
+      background:
+        linear-gradient(120deg, rgba(36, 106, 115, .08), transparent 40%),
+        var(--bg);
+      color: var(--ink);
+      padding: 32px;
+      letter-spacing: 0;
+      overflow: hidden;
+    }
+
+    .phone {
+      width: 430px;
+      height: min(860px, calc(100vh - 48px));
+      background: var(--phone);
+      border: 1px solid #dce5e6;
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .statusbar {
+      height: 28px;
+      padding: 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 700;
+      color: #4e5b5f;
+      background: rgba(255,255,255,.9);
+    }
+
+    .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; background: currentColor; margin-left: 4px; }
+    .topbar {
+      min-height: 52px;
+      padding: 8px 22px;
+      border-bottom: 1px solid transparent;
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      transition: border-color .18s ease, box-shadow .18s ease;
+      box-shadow: 0 0 0 rgba(29, 52, 57, 0);
+    }
+
+    .phone.scrolled .topbar {
+      border-bottom-color: var(--line);
+      box-shadow: 0 1px 10px rgba(29, 52, 57, .04);
+    }
+
+    .bar-title {
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity .18s ease, transform .18s ease;
+      pointer-events: none;
+    }
+
+    .phone.scrolled .bar-title {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .bar-title strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.2;
+      font-weight: 850;
+    }
+
+    .bar-title span {
+      display: block;
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    main {
+      flex: 1;
+      overflow: auto;
+      padding: 18px 18px 20px;
+    }
+
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    .section-title {
+      margin: 0 0 4px;
+      font-size: 26px;
+      line-height: 1.15;
+      font-weight: 850;
+    }
+
+    .section-copy {
+      margin: 0 0 18px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .filters {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 2px 0 16px;
+      margin: 0 -18px 0;
+      padding-left: 18px;
+      scrollbar-width: none;
+    }
+
+    .home-filters {
+      padding-top: 0;
+      margin-bottom: 0;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: #334044;
+      border-radius: 999px;
+      padding: 8px 12px;
+      white-space: nowrap;
+      font-size: 13px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 34px;
+    }
+
+    .chip.on { background: var(--accent-2); border-color: #a9d0cd; color: var(--accent); }
+    .chip.off { color: var(--subtle); background: #f6f8f8; }
+    .chip .mark { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .summary {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 13px;
+      min-height: 84px;
+    }
+
+    .summary strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1;
+      margin-bottom: 7px;
+    }
+
+    .summary span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      display: block;
+    }
+
+    .notice {
+      background: #f7f3e8;
+      border: 1px solid #e4d7ad;
+      color: #604a10;
+      border-radius: var(--radius);
+      padding: 12px 13px;
+      font-size: 12px;
+      line-height: 1.45;
+      margin-bottom: 14px;
+    }
+
+    .list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .row {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      display: grid;
+      grid-template-columns: 46px 1fr auto;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #286570, #5b8587);
+      color: white;
+      font-weight: 850;
+      font-size: 15px;
+    }
+
+    .avatar.official { border-radius: 8px; background: #4d5f66; }
+    .avatar.upcoming { background: #9aa6a9; color: #fff; }
+
+    .row h3 {
+      margin: 0 0 4px;
+      font-size: 16px;
+      line-height: 1.25;
+      font-weight: 850;
+    }
+
+    .meta, .policy {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .policy { margin-top: 7px; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      padding: 5px 8px;
+      font-size: 11px;
+      font-weight: 850;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    .live { color: var(--green); background: #e8f6ef; border-color: #b8dccb; }
+    .off { color: #627175; background: #f1f4f4; border-color: var(--line); }
+    .blocked { color: var(--amber); background: #fff8e8; border-color: #ead49d; }
+
+    .platforms, .toggles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 750;
+      color: #46575b;
+      background: #f8faf9;
+    }
+
+    .pill.warn { border-color: #edd7a8; color: #72520a; background: #fff9e9; }
+    .pill.good { border-color: #aad8c8; color: #14664d; background: #eaf7f2; }
+    .pill.off { color: #879296; background: #f4f6f6; }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 15px;
+      margin-bottom: 12px;
+    }
+
+    .panel h3 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      line-height: 1.35;
+    }
+
+    .setting-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .setting-row:first-of-type { border-top: 0; padding-top: 0; }
+    .setting-row:last-child { padding-bottom: 0; }
+
+    .setting-row strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 3px;
+    }
+
+    .setting-row span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .switch {
+      width: 43px;
+      height: 25px;
+      border-radius: 999px;
+      background: #cbd4d6;
+      padding: 3px;
+      display: flex;
+      justify-content: flex-start;
+    }
+
+    .switch.on { background: var(--accent); justify-content: flex-end; }
+    .knob { width: 19px; height: 19px; border-radius: 50%; background: white; box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+
+    .event-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 13px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .event-card h3 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .event-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.42;
+    }
+
+    nav {
+      height: 74px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid var(--line);
+      background: rgba(255,255,255,.96);
+    }
+
+    .tab {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: #6f7a7d;
+      font: inherit;
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .icon {
+      width: 23px;
+      height: 23px;
+      display: block;
+      position: relative;
+    }
+
+    .icon::before, .icon::after {
+      content: "";
+      position: absolute;
+      border: 2px solid currentColor;
+      border-radius: 4px;
+      inset: 4px;
+    }
+
+    .tab[data-target="live"] .icon::before { border-radius: 50%; inset: 3px; }
+    .tab[data-target="live"] .icon::after { width: 7px; height: 7px; inset: auto 2px 2px auto; border: 0; background: currentColor; border-radius: 50%; }
+    .tab[data-target="history"] .icon::before { border-radius: 50%; inset: 3px; }
+    .tab[data-target="history"] .icon::after { width: 7px; height: 2px; border: 0; background: currentColor; left: 11px; top: 6px; transform-origin: left center; transform: rotate(90deg); }
+    .tab[data-target="settings"] .icon::before { border-radius: 50%; inset: 5px; }
+    .tab[data-target="settings"] .icon::after { inset: 1px 10px; border-width: 2px 0; border-radius: 0; }
+
+    .tab.active { color: var(--accent); }
+    .tab:focus-visible {
+      outline: 2px solid #91bfbd;
+      outline-offset: -6px;
+      border-radius: 8px;
+    }
+
+    .notes {
+      color: #253438;
+      max-width: 500px;
+      max-height: calc(100vh - 64px);
+      overflow: auto;
+    }
+
+    .notes h1 {
+      margin: 0 0 14px;
+      font-size: 30px;
+      line-height: 1.12;
+    }
+
+    .notes p {
+      color: #58686c;
+      font-size: 15px;
+      line-height: 1.6;
+      margin: 0 0 18px;
+    }
+
+    .notes ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    .notes li {
+      background: rgba(255,255,255,.72);
+      border: 1px solid rgba(198, 213, 216, .9);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .notes b { color: var(--ink); }
+
+    @media (max-width: 980px) {
+      body {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        padding: 20px;
+        overflow: hidden;
+      }
+      .notes { display: none; }
+    }
+
+    @media (max-width: 470px) {
+      body { padding: 0; background: var(--phone); display: block; }
+      .phone {
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+        border: 0;
+        box-shadow: none;
+      }
+      .notes { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <section class="phone" aria-label="Android policy aligned UI mockup">
+    <div class="statusbar">
+      <span>18:24</span>
+      <span>SM-F707N <i class="dot"></i><i class="dot"></i><i class="dot"></i></span>
+    </div>
+    <header class="topbar">
+      <div class="bar-title" aria-live="polite">
+        <strong>홈</strong>
+        <span>활성 멤버와 공식 채널 상태</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="screen active" data-screen="home">
+        <h1 class="section-title">홈</h1>
+        <p class="section-copy">활성 멤버, 강지, 공식 채널만 표시합니다. Former 멤버와 무단 이미지는 제외합니다.</p>
+        <div class="summary-grid">
+          <article class="summary"><strong>1</strong><span>현재 CHZZK 방송 중</span></article>
+          <article class="summary"><strong>OFF</strong><span>upcoming 기본 알림</span></article>
+          <article class="summary"><strong>2</strong><span>공식 채널 이벤트 타입</span></article>
+          <article class="summary"><strong>0</strong><span>공식 YouTube 라이브 알림</span></article>
+        </div>
+        <div class="filters home-filters" aria-label="catalog filters">
+          <button class="chip on"><span class="mark"></span>전체</button>
+          <button class="chip">1기생</button>
+          <button class="chip">2기생</button>
+          <button class="chip">3기생</button>
+          <button class="chip">감자</button>
+          <button class="chip">기타</button>
+          <button class="chip off">upcoming OFF</button>
+        </div>
+        <div class="notice">공식 YouTube는 업로드 알림만 지원합니다. 라이브 예정, 시작, 종료 이벤트는 기록과 푸시에 만들지 않습니다.</div>
+        <div class="list">
+          <article class="row">
+            <div class="avatar">유니</div>
+            <div>
+              <h3>아야츠노 유니</h3>
+              <p class="meta">1기생 · 멤버 · placeholder avatar</p>
+              <div class="platforms"><span class="pill good">CHZZK</span><span class="pill good">YouTube</span><span class="pill good">X</span></div>
+              <p class="policy">개별 알림 ON · realtime_best_effort ON · 사용자 설정 적용 후 전송</p>
+            </div>
+            <span class="status live">LIVE</span>
+          </article>
+          <article class="row">
+            <div class="avatar">후야</div>
+            <div>
+              <h3>사키하네 후야</h3>
+              <p class="meta">1기생 · 멤버 · X handle verify_required</p>
+              <div class="platforms"><span class="pill good">CHZZK</span><span class="pill good">YouTube</span><span class="pill warn">X 확인 필요</span></div>
+              <p class="policy">표준 전달 · 플랫폼별 OFF가 있으면 푸시 차단</p>
+            </div>
+            <span class="status off">OFFLINE</span>
+          </article>
+          <article class="row">
+            <div class="avatar">강지</div>
+            <div>
+              <h3>강지</h3>
+              <p class="meta">감자 · 스텔라이브 대표 · generation member 아님</p>
+              <div class="platforms"><span class="pill good">YouTube</span><span class="pill good">X</span></div>
+              <p class="policy">감자 카테고리와 개별 대표 설정을 분리해서 제어</p>
+            </div>
+            <span class="status off">표준</span>
+          </article>
+          <article class="row">
+            <div class="avatar official">공식</div>
+            <div>
+              <h3>스텔라이브 공식 채널</h3>
+              <p class="meta">기타 · 공식 채널 · 사람이 아닌 항목</p>
+              <div class="platforms"><span class="pill good">공식 X 게시글</span><span class="pill good">공식 YouTube 업로드</span><span class="pill off">YouTube LIVE 제외</span></div>
+              <p class="policy">공식 채널 알림 ON · 실시간 best-effort 가능</p>
+            </div>
+            <span class="status blocked">제한</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="live">
+        <h1 class="section-title">라이브</h1>
+        <p class="section-copy">Foreground 상태 갱신은 화면 표시용입니다. 백그라운드 알림은 서버 중심 푸시로 처리합니다.</p>
+        <div class="filters" aria-label="live filters">
+          <button class="chip on"><span class="mark"></span>방송 중</button>
+          <button class="chip">CHZZK</button>
+          <button class="chip">실시간 우선</button>
+          <button class="chip">표준</button>
+        </div>
+        <article class="panel">
+          <h3>실시간 모드 안내</h3>
+          <div class="setting-row">
+            <div>
+              <strong>최대한 실시간으로 알림 받기</strong>
+              <span>가능한 한 빠르게 시도하지만 플랫폼, OS, 네트워크 정책으로 지연될 수 있습니다.</span>
+            </div>
+            <div class="switch on"><span class="knob"></span></div>
+          </div>
+        </article>
+        <div class="list">
+          <article class="row">
+            <div class="avatar">유니</div>
+            <div>
+              <h3>아야츠노 유니 방송 중</h3>
+              <p class="meta">CHZZK live-status diff · 마지막 갱신 18초 전</p>
+              <p class="policy">허용된 이벤트만 realtime queue에 진입합니다.</p>
+            </div>
+            <span class="status live">LIVE</span>
+          </article>
+          <article class="event-card">
+            <h3>CHZZK chat</h3>
+            <p>기본 OFF입니다. 키워드나 명시 필터가 없으면 푸시 전송 대상으로 쓰지 않습니다.</p>
+            <div class="toggles"><span class="pill off">푸시 OFF</span><span class="pill warn">필터 필요</span></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="history">
+        <h1 class="section-title">기록</h1>
+        <p class="section-copy">서버에서 허용, 중복 제거, 사용자 설정, rate limit을 통과한 이벤트만 표시합니다.</p>
+        <div class="list">
+          <article class="event-card">
+            <h3>방송 시작</h3>
+            <p>아야츠노 유니 CHZZK 방송 시작</p>
+            <div class="toggles"><span class="pill good">chzzk_live_started</span><span class="pill good">realtime_best_effort</span><span class="pill">1800ms</span></div>
+          </article>
+          <article class="event-card">
+            <h3>공식 업로드</h3>
+            <p>스텔라이브 공식 YouTube 업로드</p>
+            <div class="toggles"><span class="pill good">official_youtube_upload</span><span class="pill good">realtime_best_effort</span><span class="pill">2400ms</span></div>
+          </article>
+          <article class="event-card">
+            <h3>차단된 이벤트</h3>
+            <p>공식 YouTube 라이브 예정, 시작, 종료 이벤트는 생성하지 않아 기록에 나타나지 않습니다.</p>
+            <div class="toggles"><span class="pill off">official_youtube_live unsupported</span></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="settings">
+        <h1 class="section-title">설정</h1>
+        <p class="section-copy">전체, 플랫폼, 이벤트 타입, 카테고리, 개별 항목 순서로 설정을 좁혀갑니다.</p>
+        <article class="panel">
+          <h3>전체 알림</h3>
+          <div class="setting-row">
+            <div><strong>마스터 알림</strong><span>OFF이면 모든 푸시와 기록 생성 대상 알림을 차단합니다.</span></div>
+            <div class="switch on"><span class="knob"></span></div>
+          </div>
+          <div class="setting-row">
+            <div><strong>전달 방식</strong><span>표준 또는 realtime_best_effort. 비활성 알림을 다시 켜지는 않습니다.</span></div>
+            <span class="pill good">표준</span>
+          </div>
+        </article>
+        <article class="panel">
+          <h3>카테고리</h3>
+          <div class="setting-row">
+            <div><strong>1기생, 2기생, 3기생</strong><span>활성 멤버만 표시합니다. Former 멤버는 MVP에서 제외합니다.</span></div>
+            <div class="switch on"><span class="knob"></span></div>
+          </div>
+          <div class="setting-row">
+            <div><strong>감자</strong><span>강지는 대표 항목으로만 포함합니다.</span></div>
+            <div class="switch on"><span class="knob"></span></div>
+          </div>
+          <div class="setting-row">
+            <div><strong>기타</strong><span>스텔라이브 공식 X와 YouTube 업로드 알림입니다.</span></div>
+            <div class="switch on"><span class="knob"></span></div>
+          </div>
+          <div class="setting-row">
+            <div><strong>upcoming</strong><span>기본 OFF입니다. 사용자가 명시적으로 켤 수 있습니다.</span></div>
+            <div class="switch"><span class="knob"></span></div>
+          </div>
+        </article>
+        <article class="panel">
+          <h3>플랫폼과 이벤트 타입</h3>
+          <div class="toggles">
+            <span class="pill good">CHZZK live started</span>
+            <span class="pill good">X post</span>
+            <span class="pill good">YouTube upload</span>
+            <span class="pill off">Official YouTube live</span>
+            <span class="pill warn">CHZZK chat 필터 필요</span>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <nav aria-label="bottom navigation">
+      <button class="tab active" data-target="home"><span class="icon"></span><span>홈</span></button>
+      <button class="tab" data-target="live"><span class="icon"></span><span>라이브</span></button>
+      <button class="tab" data-target="history"><span class="icon"></span><span>기록</span></button>
+      <button class="tab" data-target="settings"><span class="icon"></span><span>설정</span></button>
+    </nav>
+  </section>
+
+  <aside class="notes">
+    <h1>정책이 UI 구조로 보이도록 재정리한 목업</h1>
+    <p>현재 앱은 정책 문구를 텍스트로 보여주는 데 가까워서 실제 사용자가 설정 범위와 예외 규칙을 이해하기 어렵습니다. 이 목업은 같은 MVP 데이터를 유지하면서 화면 계층을 정책 중심으로 바꾼 제안입니다.</p>
+    <ul>
+      <li><b>홈:</b> Former 제외, active/upcoming 구분, 강지의 감자 대표 항목, 기타 공식 채널을 한눈에 보이게 구성했습니다.</li>
+      <li><b>라이브:</b> foreground 상태 갱신과 push 전달의 역할을 분리하고, realtime_best_effort가 보장 모드가 아님을 고지합니다.</li>
+      <li><b>기록:</b> 허용된 이벤트와 차단된 공식 YouTube 라이브 이벤트를 분명히 구분합니다.</li>
+      <li><b>설정:</b> global, 카테고리, 개별 항목, 플랫폼, 이벤트 타입 조합 설정으로 자연스럽게 확장할 수 있는 구조입니다.</li>
+      <li><b>비주얼:</b> 공식 로고나 프로필 이미지를 쓰지 않고 앱 소유 placeholder만 사용합니다. 특정 플랫폼 UI를 복제하지 않는 차분한 모바일 설정 톤입니다.</li>
+    </ul>
+  </aside>
+
+  <script>
+    const tabs = document.querySelectorAll(".tab");
+    const screens = document.querySelectorAll(".screen");
+    const phone = document.querySelector(".phone");
+    const main = document.querySelector("main");
+    const barName = document.querySelector(".bar-title strong");
+    const barRole = document.querySelector(".bar-title span");
+    const screenRoles = {
+      home: ["홈", "활성 멤버와 공식 채널 상태"],
+      live: ["라이브", "방송 상태와 실시간 best-effort"],
+      history: ["기록", "허용된 알림과 차단된 이벤트"],
+      settings: ["설정", "전체, 카테고리, 플랫폼 설정"]
+    };
+
+    function updateTopbar(target) {
+      const [name, role] = screenRoles[target];
+      barName.textContent = name;
+      barRole.textContent = role;
+    }
+
+    function syncScrolledState() {
+      phone.classList.toggle("scrolled", main.scrollTop > 24);
+    }
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const target = tab.dataset.target;
+        updateTopbar(target);
+        tabs.forEach((item) => item.classList.toggle("active", item === tab));
+        screens.forEach((screen) => screen.classList.toggle("active", screen.dataset.screen === target));
+        main.scrollTo({ top: 0, behavior: "instant" });
+        syncScrolledState();
+      });
+    });
+
+    main.addEventListener("scroll", syncScrolledState, { passive: true });
+  </script>
+</body>
+</html>
