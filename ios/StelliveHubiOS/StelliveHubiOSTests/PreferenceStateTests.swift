@@ -108,6 +108,59 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertTrue(offlineEvents.allSatisfy { $0.participationMode.isOffline })
     }
 
+    func testOrderedHubEventsUsesIdAsFinalTieBreaker() {
+        let store = MockHubStore()
+        let sharedDate = Date(timeIntervalSince1970: 1_780_500_000)
+        let events = [
+            HubEvent(
+                id: "b-event",
+                category: .onlineGoods,
+                participationMode: .online,
+                status: .open,
+                title: "B",
+                summary: nil,
+                memberId: nil,
+                generationId: "official",
+                sourceUrl: "https://example.com/b",
+                sourceLabel: "B",
+                sourceType: .official,
+                announcedAt: nil,
+                startsAt: sharedDate,
+                endsAt: nil,
+                purchaseUrl: nil,
+                ticketUrl: nil,
+                venueName: nil,
+                venueAddress: nil,
+                notificationEligible: true,
+                updatedAt: sharedDate
+            ),
+            HubEvent(
+                id: "a-event",
+                category: .onlineGoods,
+                participationMode: .online,
+                status: .open,
+                title: "A",
+                summary: nil,
+                memberId: nil,
+                generationId: "official",
+                sourceUrl: "https://example.com/a",
+                sourceLabel: "A",
+                sourceType: .official,
+                announcedAt: nil,
+                startsAt: sharedDate,
+                endsAt: nil,
+                purchaseUrl: nil,
+                ticketUrl: nil,
+                venueName: nil,
+                venueAddress: nil,
+                notificationEligible: true,
+                updatedAt: sharedDate
+            )
+        ]
+
+        XCTAssertEqual(store.orderedHubEvents(events).map(\.id), ["a-event", "b-event"])
+    }
+
     func testLiveSummaryCountsChzzkTargets() {
         let store = MockHubStore()
         XCTAssertEqual(store.chzzkLiveTargetCount, 11)

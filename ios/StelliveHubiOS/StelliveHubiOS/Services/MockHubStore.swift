@@ -146,7 +146,18 @@ final class MockHubStore: ObservableObject {
     }
 
     var hubEventsSummary: HubEventsSummary {
-        let sortedEvents = hubEvents.sorted { lhs, rhs in
+        let sortedEvents = orderedHubEvents(hubEvents)
+
+        return HubEventsSummary(
+            openCount: hubEvents.filter { $0.status == .open }.count,
+            upcomingCount: hubEvents.filter { $0.status == .upcoming }.count,
+            closingSoonCount: hubEvents.filter { $0.status == .closingSoon }.count,
+            preview: Array(sortedEvents.prefix(3))
+        )
+    }
+
+    func orderedHubEvents(_ events: [HubEvent]) -> [HubEvent] {
+        events.sorted { lhs, rhs in
             let lhsRank = Self.hubEventStatusRank(lhs.status)
             let rhsRank = Self.hubEventStatusRank(rhs.status)
             if lhsRank != rhsRank {
@@ -159,15 +170,8 @@ final class MockHubStore: ObservableObject {
                 return lhsDate < rhsDate
             }
 
-            return lhs.updatedAt < rhs.updatedAt
+            return lhs.id < rhs.id
         }
-
-        return HubEventsSummary(
-            openCount: hubEvents.filter { $0.status == .open }.count,
-            upcomingCount: hubEvents.filter { $0.status == .upcoming }.count,
-            closingSoonCount: hubEvents.filter { $0.status == .closingSoon }.count,
-            preview: Array(sortedEvents.prefix(3))
-        )
     }
 
     func hubEvents(for filter: String) -> [HubEvent] {
