@@ -42,4 +42,16 @@ class MainNavigationHistoryTest {
         assertTrue(history.canGoBack)
         assertEquals(HubScreen.HOME, history.goBack())
     }
+
+    @Test
+    fun goodsEventDetailReturnsToGoodsEvents() {
+        val history = MainNavigationHistory()
+
+        history.select(HubScreen.GOODS_EVENTS)
+        history.select(HubScreen.GOODS_EVENT_DETAIL)
+
+        assertEquals(HubScreen.GOODS_EVENT_DETAIL, history.currentScreen)
+        assertEquals(HubScreen.GOODS_EVENTS, history.goBack())
+        assertEquals(HubScreen.GOODS_EVENTS, history.currentScreen)
+    }
 }

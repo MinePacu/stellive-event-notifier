@@ -44,6 +44,7 @@ class MainActivity : AppCompatActivity() {
     private val repository = MockHubRepository()
     private val navigationHistory = MainNavigationHistory()
     private var selectedFilter = "all"
+    private var selectedHubEventId: String? = null
     private var selectedAppearanceMode = AppearanceMode.SYSTEM
     private var notificationPermissionRequested = false
     private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -112,6 +113,7 @@ class MainActivity : AppCompatActivity() {
         when (screen) {
             HubScreen.HOME -> renderHome()
             HubScreen.GOODS_EVENTS -> renderGoodsEvents()
+            HubScreen.GOODS_EVENT_DETAIL -> renderHubEventDetail()
             HubScreen.LIVE -> renderLive()
             HubScreen.HISTORY -> renderHistory()
             HubScreen.SETTINGS -> renderSettings()
@@ -162,6 +164,7 @@ class MainActivity : AppCompatActivity() {
     private fun itemForScreen(screen: HubScreen): Int = when (screen) {
         HubScreen.HOME -> R.id.tab_home
         HubScreen.GOODS_EVENTS -> R.id.tab_home
+        HubScreen.GOODS_EVENT_DETAIL -> R.id.tab_home
         HubScreen.LIVE -> R.id.tab_live
         HubScreen.HISTORY -> R.id.tab_history
         HubScreen.SETTINGS -> R.id.tab_settings
@@ -255,17 +258,60 @@ class MainActivity : AppCompatActivity() {
             )
         )
         binding.contentList.addView(staticChips("전체", "굿즈", "티켓", "오프라인", "마감 임박"))
-        repository.hubEvents.forEach { event ->
-            binding.contentList.addView(
-                compactEventCard(
-                    title = event.title,
-                    body = listOfNotNull(event.status.displayName, event.sourceLabel, event.venueName).joinToString(" · "),
-                    pills = listOf(event.category.displayName, event.participationMode.displayName)
-                )
-            )
+        repository.hubEventsForFilter("all").forEach { event ->
+            binding.contentList.addView(hubEventCard(event))
         }
         binding.contentList.addView(
             noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
+        )
+    }
+
+    private fun renderHubEventDetail() {
+        val event = repository.hubEvents.firstOrNull { it.id == selectedHubEventId }
+        if (event == null) {
+            startScreen(
+                screenId = "goods_event_detail",
+                title = "상세",
+                role = "선택한 굿즈/행사를 찾을 수 없습니다."
+            )
+            binding.contentList.addView(compactEventCard("항목 없음", "목록에서 다시 선택해 주세요.", listOf("굿즈/행사")))
+            return
+        }
+
+        startScreen(
+            screenId = "goods_event_detail",
+            title = "상세",
+            role = "공식 출처와 일정 정보를 확인합니다."
+        )
+        binding.contentList.addView(
+            compactEventCard(
+                title = event.title,
+                body = event.summary ?: "공식 출처 기반 굿즈/행사 정보입니다.",
+                pills = listOf(event.status.displayName, event.category.displayName, event.participationMode.displayName)
+            )
+        )
+        binding.contentList.addView(
+            settingsPanel(
+                title = "정보",
+                rows = listOfNotNull(
+                    SettingRow("분류", event.category.displayName, null, event.category.displayName),
+                    SettingRow("참여 방식", event.participationMode.displayName, null, event.participationMode.displayName),
+                    SettingRow("출처", event.sourceLabel, null, "공식"),
+                    event.venueName?.let { SettingRow("장소", it, null, "오프라인") },
+                    event.endsAt?.let { SettingRow("종료", it.toString(), null, "일정") }
+                )
+            )
+        )
+        val linkRows = listOfNotNull(
+            httpsLinkRow("출처", event.sourceUrl),
+            httpsLinkRow("구매", event.purchaseUrl),
+            httpsLinkRow("티켓", event.ticketUrl)
+        )
+        if (linkRows.isNotEmpty()) {
+            binding.contentList.addView(settingsPanel(title = "링크", rows = linkRows))
+        }
+        binding.contentList.addView(
+            noticeCard("공식 이미지, 로고, 포스터는 앱에 저장하거나 재사용하지 않습니다.")
         )
     }
 
@@ -446,6 +492,11 @@ class MainActivity : AppCompatActivity() {
         NotificationEventType.OFFICIAL_YOUTUBE_UPLOAD -> "스텔라이브 공식 YouTube는 업로드 알림만 지원합니다."
         NotificationEventType.CAFE_POST -> "무단 수집, 로그인 쿠키 수집, 비공개 접근 우회 없이 공식 경로만 사용합니다."
         else -> "사용자 설정, 조용한 시간, 차단 키워드, rate limit 적용 후 전송합니다."
+    }
+
+    private fun httpsLinkRow(title: String, url: String?): SettingRow? {
+        val value = url ?: return null
+        return if (value.startsWith("https://")) SettingRow(title, value, null, "열기") else null
     }
 
     private fun appearanceModePanel(): MaterialCardView =
@@ -834,7 +885,8 @@ class MainActivity : AppCompatActivity() {
             isClickable = true
             isFocusable = true
             setOnClickListener {
-                navigateTo(HubScreen.GOODS_EVENTS, addToBackStack = true)
+                selectedHubEventId = event.id
+                navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
             }
         }
 
