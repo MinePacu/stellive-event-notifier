@@ -10,6 +10,8 @@ data class StatusSummaryItem(
 )
 
 object MainUiPolicy {
+    private const val ROOT_TOP_BAR_TITLE_START_INSET_DP = 10
+
     fun topBarTitle(screenId: String): String = when (screenId) {
         "live" -> "라이브"
         "history" -> "기록"
@@ -23,6 +25,9 @@ object MainUiPolicy {
         "settings" -> "전체, 카테고리, 플랫폼, 이벤트, 조합 설정"
         else -> "활성 멤버와 공식 채널 상태"
     }
+
+    fun topBarTitleStartInsetDp(canGoBack: Boolean): Int =
+        if (canGoBack) 0 else ROOT_TOP_BAR_TITLE_START_INSET_DP
 
     fun realtimeDisclosureLines(): List<String> = NotificationSettingState.REALTIME_DISCLOSURE_LINES
 

@@ -141,7 +141,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateNavigationChrome() {
-        binding.topBarBack.visibility = if (navigationHistory.canGoBack) View.VISIBLE else View.GONE
+        val canGoBack = navigationHistory.canGoBack
+        binding.topBarBack.visibility = if (canGoBack) View.VISIBLE else View.GONE
+        binding.topBarTitleGroup.setPaddingRelative(
+            dp(MainUiPolicy.topBarTitleStartInsetDp(canGoBack)),
+            binding.topBarTitleGroup.paddingTop,
+            binding.topBarTitleGroup.paddingEnd,
+            binding.topBarTitleGroup.paddingBottom
+        )
     }
 
     private fun screenForItem(itemId: Int): HubScreen = when (itemId) {

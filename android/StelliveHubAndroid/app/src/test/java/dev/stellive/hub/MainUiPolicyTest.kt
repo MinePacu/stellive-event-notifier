@@ -16,6 +16,12 @@ class MainUiPolicyTest {
     }
 
     @Test
+    fun topBarTitleStartInsetAlignsRootScreensWithContentPadding() {
+        assertEquals(10, MainUiPolicy.topBarTitleStartInsetDp(canGoBack = false))
+        assertEquals(0, MainUiPolicy.topBarTitleStartInsetDp(canGoBack = true))
+    }
+
+    @Test
     fun homeStatusSummarySurfacesPolicyConstraintsBeforeFilters() {
         val summary = MainUiPolicy.homeStatusSummary()
 
