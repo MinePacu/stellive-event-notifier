@@ -140,12 +140,18 @@ export class HubEventService {
 
   effectiveStatus(event: HubEvent, now: Date = new Date()): HubEventStatus {
     if (event.status === "cancelled") return "cancelled";
+    if (event.status === "ended") return "ended";
 
     const nowTime = now.getTime();
     const startsAt = asDate(event.startsAt);
     const endsAt = asDate(event.endsAt);
 
-    if (endsAt && nowTime > endsAt.getTime()) return "ended";
+    if (event.status === "closing_soon") {
+      if (endsAt && nowTime >= endsAt.getTime()) return "ended";
+      return "closing_soon";
+    }
+
+    if (endsAt && nowTime >= endsAt.getTime()) return "ended";
     if (startsAt && nowTime < startsAt.getTime()) return "upcoming";
     if (endsAt && endsAt.getTime() - nowTime <= closingSoonWindowMs) return "closing_soon";
     if (startsAt || endsAt) return "open";
@@ -179,12 +185,13 @@ export class HubEventService {
 
   toNotificationEvent(event: HubEvent, type: PlatformEvent["type"]): PlatformEvent {
     const timestamp = event.updatedAt;
+    const memberId = event.memberId ?? (event.generationId === "official" ? "stellive-official" : `hub-event:${event.id}`);
 
     return {
       id: `${event.id}:${type}`,
       source: "hub_event",
       type,
-      memberId: event.memberId ?? "stellive-official",
+      memberId,
       generationId: event.generationId,
       title: event.title,
       body: event.summary ?? event.sourceLabel,

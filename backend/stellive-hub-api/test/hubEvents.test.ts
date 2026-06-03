@@ -102,6 +102,55 @@ describe("HubEventService", () => {
     expect(service.effectiveStatus(service.getById("offline-event")!, new Date("2026-06-03T12:00:00Z"))).toBe("upcoming");
   });
 
+  it("keeps persisted terminal statuses and respects closing soon boundaries", () => {
+    const service = createService();
+
+    expect(
+      service.effectiveStatus(
+        hubEvent({
+          id: "ended-event",
+          status: "ended",
+          generationId: "official",
+          sourceLabel: "Stellive Official",
+          sourceType: "official",
+          startsAt: "2026-06-20T00:00:00Z",
+          endsAt: "2026-06-25T00:00:00Z"
+        }),
+        new Date("2026-06-03T12:00:00Z")
+      )
+    ).toBe("ended");
+
+    expect(
+      service.effectiveStatus(
+        hubEvent({
+          id: "persisted-closing-soon",
+          status: "closing_soon",
+          generationId: "official",
+          sourceLabel: "Stellive Official",
+          sourceType: "official",
+          startsAt: "2026-06-03T00:00:00Z",
+          endsAt: "2026-06-04T00:00:00Z"
+        }),
+        new Date("2026-06-03T23:59:59Z")
+      )
+    ).toBe("closing_soon");
+
+    expect(
+      service.effectiveStatus(
+        hubEvent({
+          id: "persisted-closing-soon",
+          status: "closing_soon",
+          generationId: "official",
+          sourceLabel: "Stellive Official",
+          sourceType: "official",
+          startsAt: "2026-06-03T00:00:00Z",
+          endsAt: "2026-06-04T00:00:00Z"
+        }),
+        new Date("2026-06-04T00:00:00Z")
+      )
+    ).toBe("ended");
+  });
+
   it("filters the list by participation mode, status, generation, and member", () => {
     const service = createService();
     const now = new Date("2026-06-03T12:30:00Z");
@@ -110,6 +159,22 @@ describe("HubEventService", () => {
     expect(service.list({ status: "closing_soon" }, now).items.map((event) => event.id)).toEqual(["closing-goods"]);
     expect(service.list({ generationId: "gen3" }, now).items.map((event) => event.id)).toEqual(["closing-goods"]);
     expect(service.list({ memberId: "tenko-shibuki" }, now).items.map((event) => event.id)).toEqual(["closing-goods"]);
+    expect(service.list({ limit: 1 }, now)).toEqual({
+      items: [hubEvent({
+        id: "closing-goods",
+        category: "online_goods",
+        participationMode: "online",
+        status: "open",
+        title: "Closing Goods",
+        memberId: "tenko-shibuki",
+        generationId: "gen3",
+        sourceLabel: "Tenko Shibuki",
+        sourceType: "member",
+        startsAt: "2026-06-02T00:00:00Z",
+        endsAt: "2026-06-04T00:00:00Z"
+      })],
+      nextCursor: "closing-goods"
+    });
   });
 
   it("summarizes counts and preview ordering", () => {
@@ -120,6 +185,23 @@ describe("HubEventService", () => {
     expect(summary.closingSoonCount).toBe(1);
     expect(summary.upcomingCount).toBe(1);
     expect(summary.preview.map((event) => event.id)).toEqual(["closing-goods", "open-goods", "offline-event"]);
+  });
+
+  it("maps memberless non-official events to a synthetic member id", () => {
+    const service = createService();
+    const event = hubEvent({
+      id: "gen3-memberless",
+      category: "online_collab",
+      participationMode: "online",
+      status: "announced",
+      title: "Gen 3 Memberless Event",
+      generationId: "gen3",
+      sourceLabel: "Gen 3 Collab",
+      sourceType: "official_collab"
+    });
+
+    expect(service.toNotificationEvent(event, "event_announced").memberId).toBe("hub-event:gen3-memberless");
+    expect(service.toNotificationEvent(event, "event_announced").memberId).not.toBe("stellive-official");
   });
 });
 
