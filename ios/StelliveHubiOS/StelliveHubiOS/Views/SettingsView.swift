@@ -65,6 +65,16 @@ struct SettingsView: View {
                     LabeledContent("스텔라이브 공식 YouTube 라이브", value: "지원하지 않음")
                 }
 
+                Section("굿즈/행사") {
+                    Toggle(NotificationPlatform.hubEvent.displayName, isOn: platformBinding(.hubEvent))
+                    Toggle(NotificationEventType.eventAnnounced.displayName, isOn: eventTypeBinding(.eventAnnounced))
+                    Toggle(NotificationEventType.eventSalesOpen.displayName, isOn: eventTypeBinding(.eventSalesOpen))
+                    Toggle(NotificationEventType.eventDeadlineSoon.displayName, isOn: eventTypeBinding(.eventDeadlineSoon))
+                    Text("공식/멤버/공식 콜라보 출처가 있는 기간성 굿즈, 티켓, 오프라인 행사만 포함합니다. 방송, 라이브, 업로드, 팬 주최 이벤트, 대표/강지 이벤트는 MVP 굿즈/행사에 포함하지 않습니다.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("고급 조합 설정") {
                     ForEach(store.settings.combinationPreferences.indices, id: \.self) { index in
                         Toggle(store.settings.combinationPreferences[index].label, isOn: $store.settings.combinationPreferences[index].enabled)
@@ -97,6 +107,15 @@ struct SettingsView: View {
                         .disabled(!store.settings.keywordFilters.hasExplicitFilters)
                     LabeledContent("Push 전달 가능", value: store.settings.canEnableChzzkChatPush ? "필터 설정됨" : "필터 필요")
                     Text("기본 off입니다. 키워드 또는 역할 필터를 설정한 경우에만 제한적으로 사용합니다.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("표시 정책") {
+                    LabeledContent("Former 멤버", value: "MVP 제외")
+                    LabeledContent("강지", value: "감자 대표 항목")
+                    LabeledContent("공식 이미지/로고/포스터", value: "저장/재사용 안 함")
+                    Text("홈은 현재 라이브, 최근 알림, 마감 임박 굿즈/행사를 우선 표시하고, 알림 대상과 전송 정책은 설정에서 관리합니다.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

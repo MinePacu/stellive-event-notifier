@@ -88,6 +88,15 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertEqual(store.closingSoonHubEvents.map(\.id), ["closing-official-goods"])
     }
 
+    func testHomeDashboardPreviewCountsAreCurrentStatusOnly() {
+        let store = MockHubStore()
+
+        XCTAssertEqual(store.liveMembers.count, store.liveMemberCount)
+        XCTAssertEqual(store.recentHistoryPreview.count, min(3, store.history.count))
+        XCTAssertEqual(store.closingSoonHubEvents.count, store.hubEventsSummary.closingSoonCount)
+        XCTAssertFalse(store.deliveryModeSummary.isEmpty)
+    }
+
     func testHomePreviewKeepsPolicyContentOutOfHomeSelectors() {
         let store = MockHubStore()
 
