@@ -4,6 +4,11 @@ import dev.stellive.hub.core.model.ActiveStatus
 import dev.stellive.hub.core.model.CatalogRole
 import dev.stellive.hub.core.model.DeliveryMode
 import dev.stellive.hub.core.model.GenerationFilter
+import dev.stellive.hub.core.model.HubEvent
+import dev.stellive.hub.core.model.HubEventCategory
+import dev.stellive.hub.core.model.HubEventParticipationMode
+import dev.stellive.hub.core.model.HubEventSourceType
+import dev.stellive.hub.core.model.HubEventStatus
 import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.NotificationHistoryItem
 import dev.stellive.hub.core.model.NotificationSettingState
@@ -36,6 +41,75 @@ class MockHubRepository {
         HubMember("gen4-placeholder", "4기생 placeholder", "Generation 4 Placeholder", "gen4-upcoming", "4기생", "upcoming", CatalogRole.PLACEHOLDER, activeStatus = ActiveStatus.UPCOMING, isPerson = false, notificationEnabled = false)
     )
 
+    val hubEvents = listOf(
+        HubEvent(
+            id = "closing-official-goods",
+            category = HubEventCategory.ONLINE_GOODS,
+            participationMode = HubEventParticipationMode.ONLINE,
+            status = HubEventStatus.CLOSING_SOON,
+            title = "공식 굿즈 예약 마감 임박",
+            summary = "공식 출처의 온라인 굿즈 예약이 곧 마감됩니다.",
+            generationId = "official",
+            sourceUrl = "https://stellive.example/events/closing-official-goods",
+            sourceLabel = "스텔라이브 공식",
+            sourceType = HubEventSourceType.OFFICIAL,
+            announcedAt = Instant.parse("2026-06-01T00:00:00Z"),
+            startsAt = Instant.parse("2026-06-02T00:00:00Z"),
+            endsAt = Instant.parse("2026-06-05T12:00:00Z"),
+            purchaseUrl = "https://stellive.example/buy/closing-official-goods",
+            updatedAt = Instant.parse("2026-06-03T00:00:00Z")
+        ),
+        HubEvent(
+            id = "open-gen3-goods",
+            category = HubEventCategory.ONLINE_COLLAB,
+            participationMode = HubEventParticipationMode.ONLINE,
+            status = HubEventStatus.OPEN,
+            title = "3기생 콜라보 굿즈 진행 중",
+            summary = "3기생과 함께하는 공식 콜라보 굿즈가 진행 중입니다.",
+            generationId = "gen3",
+            sourceUrl = "https://stellive.example/events/open-gen3-goods",
+            sourceLabel = "공식 콜라보",
+            sourceType = HubEventSourceType.OFFICIAL_COLLAB,
+            announcedAt = Instant.parse("2026-06-01T01:00:00Z"),
+            startsAt = Instant.parse("2026-06-02T03:00:00Z"),
+            endsAt = Instant.parse("2026-06-10T12:00:00Z"),
+            ticketUrl = "https://stellive.example/tickets/open-gen3-goods",
+            updatedAt = Instant.parse("2026-06-03T01:00:00Z")
+        ),
+        HubEvent(
+            id = "upcoming-offline-popup",
+            category = HubEventCategory.OFFLINE_POPUP,
+            participationMode = HubEventParticipationMode.OFFLINE,
+            status = HubEventStatus.UPCOMING,
+            title = "오프라인 팝업 예정",
+            summary = "오프라인 팝업 행사가 곧 공개됩니다.",
+            generationId = "official",
+            sourceUrl = "https://stellive.example/events/upcoming-offline-popup",
+            sourceLabel = "공식 콜라보",
+            sourceType = HubEventSourceType.OFFICIAL_COLLAB,
+            announcedAt = Instant.parse("2026-06-01T02:00:00Z"),
+            startsAt = Instant.parse("2026-06-12T00:00:00Z"),
+            venueName = "서울 팝업 스페이스",
+            venueAddress = "서울특별시",
+            updatedAt = Instant.parse("2026-06-03T02:00:00Z")
+        )
+    )
+
+    val hubEventsSummary = dev.stellive.hub.core.model.HubEventsSummary(
+        openCount = hubEvents.count { it.status == HubEventStatus.OPEN },
+        upcomingCount = hubEvents.count { it.status == HubEventStatus.UPCOMING },
+        closingSoonCount = hubEvents.count { it.status == HubEventStatus.CLOSING_SOON },
+        preview = hubEvents
+            .sortedWith(
+                compareBy<HubEvent>(
+                    { MainUiPolicy.hubEventStatusRank(it.status) },
+                    { it.endsAt ?: it.startsAt ?: it.updatedAt },
+                    { it.updatedAt }
+                )
+            )
+            .take(3)
+    )
+
     val settings = NotificationSettingState()
 
     val history = listOf(
@@ -45,4 +119,14 @@ class MockHubRepository {
 
     fun memberForHistory(item: NotificationHistoryItem): HubMember? =
         members.firstOrNull { it.id == item.memberId }
+
+    fun hubEventsForFilter(filter: String): List<HubEvent> = when (filter.lowercase()) {
+        "goods" -> hubEvents.filter {
+            it.category == HubEventCategory.ONLINE_GOODS || it.category == HubEventCategory.ONLINE_COLLAB
+        }
+        "ticketing" -> hubEvents.filter { it.category == HubEventCategory.TICKETING }
+        "offline" -> hubEvents.filter { it.participationMode.isOffline }
+        "closing" -> hubEvents.filter { it.status == HubEventStatus.CLOSING_SOON }
+        else -> hubEvents
+    }
 }

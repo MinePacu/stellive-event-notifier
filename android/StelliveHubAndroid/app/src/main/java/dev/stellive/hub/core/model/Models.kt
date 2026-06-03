@@ -36,6 +36,39 @@ enum class NotificationEventType(val wireName: String, val displayName: String) 
     EVENT_CANCELLED("event_cancelled", "굿즈/행사 취소")
 }
 
+enum class HubEventCategory(val displayName: String) {
+    ONLINE_GOODS("굿즈"),
+    ONLINE_COLLAB("온라인 콜라보"),
+    OFFLINE_CONCERT("콘서트"),
+    OFFLINE_COLLAB("오프라인 콜라보"),
+    OFFLINE_POPUP("팝업"),
+    TICKETING("티켓")
+}
+
+enum class HubEventParticipationMode(val displayName: String) {
+    ONLINE("온라인"),
+    OFFLINE("오프라인"),
+    HYBRID("온/오프라인");
+
+    val isOffline: Boolean
+        get() = this == OFFLINE || this == HYBRID
+}
+
+enum class HubEventStatus(val displayName: String) {
+    ANNOUNCED("공개"),
+    UPCOMING("예정"),
+    OPEN("진행 중"),
+    CLOSING_SOON("마감 임박"),
+    ENDED("종료"),
+    CANCELLED("취소")
+}
+
+enum class HubEventSourceType {
+    OFFICIAL,
+    MEMBER,
+    OFFICIAL_COLLAB
+}
+
 enum class NotificationPreferenceScope {
     GLOBAL,
     GENERATION,
@@ -92,6 +125,36 @@ data class HubMember(
     val notificationEnabled: Boolean = true,
     val realtimeEnabled: Boolean = false,
     val liveStartedAt: Instant? = null
+)
+
+data class HubEvent(
+    val id: String,
+    val category: HubEventCategory,
+    val participationMode: HubEventParticipationMode,
+    val status: HubEventStatus,
+    val title: String,
+    val summary: String? = null,
+    val memberId: String? = null,
+    val generationId: String,
+    val sourceUrl: String,
+    val sourceLabel: String,
+    val sourceType: HubEventSourceType,
+    val announcedAt: Instant? = null,
+    val startsAt: Instant? = null,
+    val endsAt: Instant? = null,
+    val purchaseUrl: String? = null,
+    val ticketUrl: String? = null,
+    val venueName: String? = null,
+    val venueAddress: String? = null,
+    val notificationEligible: Boolean = true,
+    val updatedAt: Instant
+)
+
+data class HubEventsSummary(
+    val openCount: Int,
+    val upcomingCount: Int,
+    val closingSoonCount: Int,
+    val preview: List<HubEvent>
 )
 
 data class GenerationFilter(
