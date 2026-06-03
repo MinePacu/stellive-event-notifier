@@ -14,6 +14,13 @@ const preferences = new Map<string, UserNotificationPreference[]>();
 const deliveryAttempts: DeliveryAttempt[] = [];
 const devDeviceId = "dev-device";
 
+function parseHubEventLimit(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+  return parsed;
+}
+
 function sampleEvent(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
   const now = new Date().toISOString();
   return {
@@ -124,7 +131,7 @@ export async function registerRoutes(app: FastifyInstance) {
         from: query.from,
         to: query.to,
         cursor: query.cursor,
-        limit: query.limit === undefined ? undefined : Number(query.limit)
+        limit: parseHubEventLimit(query.limit)
       },
       new Date()
     );

@@ -222,11 +222,15 @@ describe("HubEventService", () => {
 });
 
 describe("hub event routes", () => {
-  it("returns a summary with a preview", async () => {
+  async function injectHubEvents(url: string) {
     const app = await buildApp();
-    const response = await app.inject({ method: "GET", url: "/v1/hub-events/summary" });
+    const response = await app.inject({ method: "GET", url });
     await app.close();
+    return response;
+  }
 
+  it("returns a summary with a preview", async () => {
+    const response = await injectHubEvents("/v1/hub-events/summary");
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       preview: expect.any(Array)
@@ -234,23 +238,49 @@ describe("hub event routes", () => {
   });
 
   it("filters hub events by participation mode", async () => {
-    const app = await buildApp();
-    const response = await app.inject({ method: "GET", url: "/v1/hub-events?participationMode=offline" });
-    await app.close();
-
+    const response = await injectHubEvents("/v1/hub-events?participationMode=offline");
     expect(response.statusCode).toBe(200);
     const body = response.json() as { items: HubEvent[] };
     expect(body.items.every((event) => event.participationMode === "offline")).toBe(true);
   });
 
   it("includes a compact hub events summary in bootstrap", async () => {
-    const app = await buildApp();
-    const response = await app.inject({ method: "GET", url: "/v1/bootstrap?deviceId=dev-device" });
-    await app.close();
-
+    const response = await injectHubEvents("/v1/bootstrap?deviceId=dev-device");
     expect(response.statusCode).toBe(200);
     const body = response.json() as { hubEventsSummary?: { preview: HubEvent[] } };
     expect(body.hubEventsSummary?.preview.length).toBeLessThanOrEqual(3);
+  });
+
+  it("falls back to the default list when limit is invalid", async () => {
+    const response = await injectHubEvents("/v1/hub-events?limit=foo");
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: HubEvent[] };
+    expect(body.items.length).toBeGreaterThan(0);
+  });
+
+  it("falls back to the default list when limit is zero or negative", async () => {
+    const zeroResponse = await injectHubEvents("/v1/hub-events?limit=0");
+    const negativeResponse = await injectHubEvents("/v1/hub-events?limit=-1");
+
+    expect(zeroResponse.statusCode).toBe(200);
+    expect(negativeResponse.statusCode).toBe(200);
+
+    const zeroBody = zeroResponse.json() as { items: HubEvent[] };
+    const negativeBody = negativeResponse.json() as { items: HubEvent[] };
+
+    expect(zeroBody.items.length).toBeGreaterThan(0);
+    expect(negativeBody.items.length).toBeGreaterThan(0);
+  });
+
+  it("returns one event and a next cursor for limit=1", async () => {
+    const response = await injectHubEvents("/v1/hub-events?limit=1");
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: HubEvent[]; nextCursor?: string };
+
+    expect(body.items).toHaveLength(1);
+    expect(body.nextCursor).toBeDefined();
   });
 });
 
