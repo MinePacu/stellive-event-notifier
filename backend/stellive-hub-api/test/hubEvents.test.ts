@@ -102,6 +102,21 @@ describe("HubEventService", () => {
     expect(service.effectiveStatus(service.getById("offline-event")!, new Date("2026-06-03T12:00:00Z"))).toBe("upcoming");
   });
 
+  it("treats a regular open event as ended exactly at endsAt", () => {
+    const service = createService();
+    const event = hubEvent({
+      id: "boundary-open-event",
+      status: "open",
+      generationId: "official",
+      sourceLabel: "Stellive Official",
+      sourceType: "official",
+      startsAt: "2026-06-03T00:00:00Z",
+      endsAt: "2026-06-04T00:00:00Z"
+    });
+
+    expect(service.effectiveStatus(event, new Date("2026-06-04T00:00:00Z"))).toBe("ended");
+  });
+
   it("keeps persisted terminal statuses and respects closing soon boundaries", () => {
     const service = createService();
 
