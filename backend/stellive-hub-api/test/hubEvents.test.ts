@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CatalogService } from "../src/catalog/catalog.js";
-import validateHubEvent from "../src/hub-events/hubEventPolicy.js";
+import { validateHubEvent } from "../src/hub-events/hubEventPolicy.js";
 import type { HubEvent, HubEventCategory, HubEventStatus } from "../src/types.js";
 
 describe("HubEvent types", () => {

@@ -34,7 +34,7 @@ function hasAssetField(event: HubEvent): boolean {
   return assetFields.some((field) => Object.prototype.hasOwnProperty.call(event, field));
 }
 
-export default function validateHubEvent(event: HubEvent, catalog: CatalogService): HubEventValidationResult {
+export function validateHubEvent(event: HubEvent, catalog: CatalogService): HubEventValidationResult {
   if (!event.sourceUrl.trim() || !event.sourceLabel.trim()) {
     return { valid: false, reason: "source_required" };
   }
