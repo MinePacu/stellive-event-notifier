@@ -2,6 +2,7 @@ package dev.stellive.hub.feature.home
 
 enum class HubScreen(val id: String) {
     HOME("home"),
+    GOODS_EVENTS("goods_events"),
     LIVE("live"),
     HISTORY("history"),
     SETTINGS("settings");
