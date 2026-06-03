@@ -88,3 +88,36 @@ model LiveStatus {
   lastCheckedAt       DateTime
   realtimeObservedAt  DateTime?
 }
+
+model HubEvent {
+  id                    String   @id
+  category              String
+  participationMode     String
+  status                String
+  title                 String
+  summary               String?
+  memberId              String?
+  generationId          String
+  sourceUrl             String
+  sourceLabel           String
+  sourceType            String
+  announcedAt           DateTime?
+  startsAt              DateTime?
+  endsAt                DateTime?
+  purchaseUrl           String?
+  ticketUrl             String?
+  venueName             String?
+  venueAddress          String?
+  notificationEligible  Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([status])
+  @@index([category])
+  @@index([participationMode])
+  @@index([generationId])
+  @@index([memberId])
+  @@index([startsAt])
+  @@index([endsAt])
+  @@index([updatedAt])
+}

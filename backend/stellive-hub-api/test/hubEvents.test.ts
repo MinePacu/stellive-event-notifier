@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildApp } from "../src/app.js";
 import { CatalogService } from "../src/catalog/catalog.js";
 import { HubEventService } from "../src/hub-events/hubEventService.js";
 import { validateHubEvent } from "../src/hub-events/hubEventPolicy.js";
@@ -217,6 +218,39 @@ describe("HubEventService", () => {
 
     expect(service.toNotificationEvent(event, "event_announced").memberId).toBe("hub-event:gen3-memberless");
     expect(service.toNotificationEvent(event, "event_announced").memberId).not.toBe("stellive-official");
+  });
+});
+
+describe("hub event routes", () => {
+  it("returns a summary with a preview", async () => {
+    const app = await buildApp();
+    const response = await app.inject({ method: "GET", url: "/v1/hub-events/summary" });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      preview: expect.any(Array)
+    });
+  });
+
+  it("filters hub events by participation mode", async () => {
+    const app = await buildApp();
+    const response = await app.inject({ method: "GET", url: "/v1/hub-events?participationMode=offline" });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { items: HubEvent[] };
+    expect(body.items.every((event) => event.participationMode === "offline")).toBe(true);
+  });
+
+  it("includes a compact hub events summary in bootstrap", async () => {
+    const app = await buildApp();
+    const response = await app.inject({ method: "GET", url: "/v1/bootstrap?deviceId=dev-device" });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { hubEventsSummary?: { preview: HubEvent[] } };
+    expect(body.hubEventsSummary?.preview.length).toBeLessThanOrEqual(3);
   });
 });
 
