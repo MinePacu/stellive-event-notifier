@@ -28,6 +28,10 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertEqual(NotificationEventType.eventAnnounced.displayName, "굿즈/행사 공개")
         XCTAssertEqual(NotificationEventType.eventSalesOpen.displayName, "예약/판매 시작")
         XCTAssertEqual(NotificationEventType.eventDeadlineSoon.displayName, "마감 임박")
+        XCTAssertEqual(HubEventCategory.onlineGoods.displayName, "굿즈")
+        XCTAssertEqual(HubEventParticipationMode.hybrid.displayName, "온/오프라인")
+        XCTAssertTrue(HubEventParticipationMode.hybrid.isOffline)
+        XCTAssertEqual(HubEventStatus.closingSoon.displayName, "마감 임박")
         XCTAssertEqual(settings.platformEnabled[.hubEvent], true)
         XCTAssertEqual(settings.eventTypeEnabled[.eventAnnounced], true)
         XCTAssertEqual(settings.eventTypeEnabled[.eventSalesOpen], true)
@@ -74,6 +78,34 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertEqual(store.liveMemberCount, 1)
         XCTAssertEqual(store.recentNotificationCount, 2)
         XCTAssertEqual(store.deliveryModeSummary, "표준")
+    }
+
+    func testHubEventsExcludeGangziAndGamja() {
+        let store = MockHubStore()
+
+        XCTAssertFalse(store.hubEvents.contains { $0.memberId == "gangzi" })
+        XCTAssertFalse(store.hubEvents.contains { $0.generationId == "gamja" })
+    }
+
+    func testHubEventsSummaryPrioritizesClosingSoonOpenUpcoming() {
+        let store = MockHubStore()
+        let summary = store.hubEventsSummary
+
+        XCTAssertGreaterThanOrEqual(summary.openCount, 1)
+        XCTAssertGreaterThanOrEqual(summary.upcomingCount, 1)
+        XCTAssertGreaterThanOrEqual(summary.closingSoonCount, 1)
+        XCTAssertEqual(summary.preview.first?.status, .closingSoon)
+    }
+
+    func testHubEventFiltersMatchExpectedCategoriesAndParticipationModes() {
+        let store = MockHubStore()
+
+        let goodsEvents = store.hubEvents(for: "goods")
+        XCTAssertEqual(Set(goodsEvents.map(\.category)), [.onlineGoods, .onlineCollab])
+        XCTAssertTrue(goodsEvents.allSatisfy { $0.category == .onlineGoods || $0.category == .onlineCollab })
+
+        let offlineEvents = store.hubEvents(for: "offline")
+        XCTAssertTrue(offlineEvents.allSatisfy { $0.participationMode.isOffline })
     }
 
     func testLiveSummaryCountsChzzkTargets() {

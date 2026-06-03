@@ -162,6 +162,117 @@ enum AppearanceMode: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum HubEventCategory: String, Codable, CaseIterable, Hashable, Identifiable {
+    case onlineGoods = "online_goods"
+    case onlineCollab = "online_collab"
+    case offlineConcert = "offline_concert"
+    case offlineCollab = "offline_collab"
+    case offlinePopup = "offline_popup"
+    case ticketing
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .onlineGoods:
+            return "굿즈"
+        case .onlineCollab:
+            return "온라인 콜라보"
+        case .offlineConcert:
+            return "콘서트"
+        case .offlineCollab:
+            return "오프라인 콜라보"
+        case .offlinePopup:
+            return "팝업"
+        case .ticketing:
+            return "티켓"
+        }
+    }
+}
+
+enum HubEventParticipationMode: String, Codable, Hashable {
+    case online
+    case offline
+    case hybrid
+
+    var displayName: String {
+        switch self {
+        case .online:
+            return "온라인"
+        case .offline:
+            return "오프라인"
+        case .hybrid:
+            return "온/오프라인"
+        }
+    }
+
+    var isOffline: Bool {
+        self == .offline || self == .hybrid
+    }
+}
+
+enum HubEventStatus: String, Codable, Hashable {
+    case announced
+    case upcoming
+    case open
+    case closingSoon = "closing_soon"
+    case ended
+    case cancelled
+
+    var displayName: String {
+        switch self {
+        case .announced:
+            return "공개"
+        case .upcoming:
+            return "예정"
+        case .open:
+            return "진행 중"
+        case .closingSoon:
+            return "마감 임박"
+        case .ended:
+            return "종료"
+        case .cancelled:
+            return "취소"
+        }
+    }
+}
+
+enum HubEventSourceType: String, Codable, Hashable {
+    case official
+    case member
+    case officialCollab = "official_collab"
+}
+
+struct HubEvent: Identifiable, Hashable {
+    let id: String
+    let category: HubEventCategory
+    let participationMode: HubEventParticipationMode
+    let status: HubEventStatus
+    let title: String
+    let summary: String?
+    let memberId: String?
+    let generationId: String
+    let sourceUrl: String
+    let sourceLabel: String
+    let sourceType: HubEventSourceType
+    let announcedAt: Date?
+    let startsAt: Date?
+    let endsAt: Date?
+    let purchaseUrl: String?
+    let ticketUrl: String?
+    let venueName: String?
+    let venueAddress: String?
+    let notificationEligible: Bool
+    let updatedAt: Date
+}
+
+struct HubEventsSummary: Equatable {
+    let openCount: Int
+    let upcomingCount: Int
+    let closingSoonCount: Int
+    let preview: [HubEvent]
+}
+
 struct HubMember: Identifiable, Hashable {
     let id: String
     let koreanName: String
