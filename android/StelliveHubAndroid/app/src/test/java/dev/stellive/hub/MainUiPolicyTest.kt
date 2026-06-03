@@ -9,10 +9,10 @@ import java.time.Instant
 class MainUiPolicyTest {
     @Test
     fun topBarRolesMatchBottomNavigationScreens() {
-        assertEquals("활성 멤버와 공식 채널 상태", MainUiPolicy.topBarRole("home"))
+        assertEquals("라이브 현황과 최근 알림", MainUiPolicy.topBarRole("home"))
         assertEquals("방송 상태와 실시간 best-effort", MainUiPolicy.topBarRole("live"))
         assertEquals("허용된 알림과 차단된 이벤트", MainUiPolicy.topBarRole("history"))
-        assertEquals("전체, 카테고리, 플랫폼, 이벤트, 조합 설정", MainUiPolicy.topBarRole("settings"))
+        assertEquals("알림 대상과 전송 정책", MainUiPolicy.topBarRole("settings"))
     }
 
     @Test
@@ -22,14 +22,15 @@ class MainUiPolicyTest {
     }
 
     @Test
-    fun homeStatusSummarySurfacesPolicyConstraintsBeforeFilters() {
-        val summary = MainUiPolicy.homeStatusSummary()
+    fun homeStatusSummarySurfacesCurrentStatus() {
+        val summary = MainUiPolicy.homeStatusSummary(liveCount = 1, recentCount = 3, closingSoonCount = 1)
 
-        assertEquals("현재 CHZZK 방송 중", summary[0].label)
-        assertEquals("upcoming 기본 알림", summary[1].label)
-        assertEquals("공식 채널 이벤트 타입", summary[2].label)
-        assertEquals("공식 YouTube 라이브 알림", summary[3].label)
-        assertTrue(summary.any { it.value == "0" && it.label == "공식 YouTube 라이브 알림" })
+        assertEquals("1", summary[0].value)
+        assertEquals("지금 라이브", summary[0].label)
+        assertEquals("3", summary[1].value)
+        assertEquals("최근 알림", summary[1].label)
+        assertEquals("1", summary[2].value)
+        assertEquals("마감 임박", summary[2].label)
     }
 
     @Test

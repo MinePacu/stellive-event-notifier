@@ -101,12 +101,27 @@ final class MockHubStore: ObservableObject {
     ]
 
     let history: [NotificationHistoryItem] = [
+        .init(id: "h3", title: "마감 임박", body: "스텔라이브 공식 굿즈 예약 마감 임박", memberId: "hub-event:closing-official-goods", memberName: "굿즈/행사", eventType: "event_deadline_soon", deliveryMode: .standard, deliveryLatencyMs: nil),
         .init(id: "h1", title: "방송 시작", body: "아야츠노 유니 CHZZK 방송 시작", memberId: "ayatsuno-yuni", memberName: "아야츠노 유니", eventType: "chzzk_live_started", deliveryMode: .realtimeBestEffort, deliveryLatencyMs: 1800),
         .init(id: "h2", title: "공식 업로드", body: "스텔라이브 공식 YouTube 업로드", memberId: "stellive-official", memberName: "스텔라이브 공식", eventType: "official_youtube_upload", deliveryMode: .realtimeBestEffort, deliveryLatencyMs: 2400)
     ]
 
     var filteredMembers: [HubMember] {
         members.filter { selectedFilter == "all" || $0.generationId == selectedFilter }
+    }
+
+    var liveMembers: [HubMember] {
+        members
+            .filter { $0.catalogRole != .officialChannel && $0.isLive }
+            .sorted { $0.koreanName < $1.koreanName }
+    }
+
+    var recentHistoryPreview: [NotificationHistoryItem] {
+        Array(history.prefix(3))
+    }
+
+    var closingSoonHubEvents: [HubEvent] {
+        orderedHubEvents(hubEvents.filter { $0.status == .closingSoon })
     }
 
     var liveMemberCount: Int {

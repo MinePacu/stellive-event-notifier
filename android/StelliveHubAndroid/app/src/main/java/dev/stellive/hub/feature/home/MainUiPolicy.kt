@@ -24,9 +24,10 @@ object MainUiPolicy {
     fun topBarRole(screenId: String): String = when (screenId) {
         "live" -> "방송 상태와 실시간 best-effort"
         "history" -> "허용된 알림과 차단된 이벤트"
-        "settings" -> "전체, 카테고리, 플랫폼, 이벤트, 조합 설정"
+        "settings" -> "알림 대상과 전송 정책"
         "goods_events" -> "공식 출처의 기간성 굿즈와 행사"
-        else -> "활성 멤버와 공식 채널 상태"
+        "goods_event_detail" -> "공식 출처와 일정 정보"
+        else -> "라이브 현황과 최근 알림"
     }
 
     fun topBarTitleStartInsetDp(canGoBack: Boolean): Int =
@@ -43,11 +44,13 @@ object MainUiPolicy {
         HubEventStatus.ENDED -> 5
     }
 
-    fun homeStatusSummary(): List<StatusSummaryItem> = listOf(
-        StatusSummaryItem("1", "현재 CHZZK 방송 중"),
-        StatusSummaryItem("OFF", "upcoming 기본 알림"),
-        StatusSummaryItem("2", "공식 채널 이벤트 타입"),
-        StatusSummaryItem("0", "공식 YouTube 라이브 알림")
+    fun homeStatusSummary(): List<StatusSummaryItem> =
+        homeStatusSummary(liveCount = 1, recentCount = 3, closingSoonCount = 1)
+
+    fun homeStatusSummary(liveCount: Int, recentCount: Int, closingSoonCount: Int): List<StatusSummaryItem> = listOf(
+        StatusSummaryItem(liveCount.toString(), "지금 라이브"),
+        StatusSummaryItem(recentCount.toString(), "최근 알림"),
+        StatusSummaryItem(closingSoonCount.toString(), "마감 임박")
     )
 
     fun liveStatusText(isLive: Boolean, startedAt: Instant?, now: Instant = Instant.now()): String {

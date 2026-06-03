@@ -76,8 +76,24 @@ final class PreferenceStateTests: XCTestCase {
     func testHomeSummaryCountsLiveMembersAndRecentNotifications() {
         let store = MockHubStore()
         XCTAssertEqual(store.liveMemberCount, 1)
-        XCTAssertEqual(store.recentNotificationCount, 2)
+        XCTAssertEqual(store.recentNotificationCount, 3)
         XCTAssertEqual(store.deliveryModeSummary, "표준")
+    }
+
+    func testHomePreviewSelectorsSurfaceCurrentStatus() {
+        let store = MockHubStore()
+
+        XCTAssertEqual(store.liveMembers.map(\.id), ["ayatsuno-yuni"])
+        XCTAssertEqual(store.recentHistoryPreview.map(\.id), ["h3", "h1", "h2"])
+        XCTAssertEqual(store.closingSoonHubEvents.map(\.id), ["closing-official-goods"])
+    }
+
+    func testHomePreviewKeepsPolicyContentOutOfHomeSelectors() {
+        let store = MockHubStore()
+
+        XCTAssertFalse(store.recentHistoryPreview.contains { $0.eventType.localizedCaseInsensitiveContains("youtube_live") })
+        XCTAssertFalse(store.closingSoonHubEvents.contains { $0.memberId == "gangzi" })
+        XCTAssertFalse(store.closingSoonHubEvents.contains { $0.generationId == "gamja" })
     }
 
     func testHubEventsExcludeGangziAndGamja() {
@@ -184,9 +200,10 @@ final class PreferenceStateTests: XCTestCase {
 
     func testHistoryItemsResolveToCatalogEntries() {
         let store = MockHubStore()
-        let historyMembers = store.history.compactMap { store.member(for: $0) }
+        let catalogHistoryItems = store.history.filter { !$0.memberId.hasPrefix("hub-event:") }
+        let historyMembers = catalogHistoryItems.compactMap { store.member(for: $0) }
 
-        XCTAssertEqual(historyMembers.count, store.history.count)
+        XCTAssertEqual(historyMembers.count, catalogHistoryItems.count)
         XCTAssertTrue(historyMembers.contains { $0.id == "ayatsuno-yuni" && $0.catalogRole == .member })
         XCTAssertTrue(historyMembers.contains { $0.id == "stellive-official" && $0.generationId == "official" && $0.catalogRole == .officialChannel })
     }
