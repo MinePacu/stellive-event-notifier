@@ -44,7 +44,7 @@ struct HomeView: View {
                             NavigationLink {
                                 HubEventDetailView(event: event)
                             } label: {
-                                HubEventPreviewBadge(event: event)
+                                HomeHubEventRow(event: event)
                             }
                         }
 
@@ -83,6 +83,32 @@ private struct HomeHistoryRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct HomeHubEventRow: View {
+    let event: HubEvent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(event.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.86)
+                Spacer(minLength: 8)
+                Text(event.status.displayName)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(event.status == .closingSoon ? Color.red : Color.teal)
+                    .lineLimit(1)
+            }
+            Text([event.category.displayName, event.participationMode.displayName, event.sourceLabel].joined(separator: " · "))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.84)
         }
         .accessibilityElement(children: .combine)
     }

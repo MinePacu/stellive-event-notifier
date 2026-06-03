@@ -66,10 +66,8 @@ struct SettingsView: View {
                 }
 
                 Section("굿즈/행사") {
-                    Toggle(NotificationPlatform.hubEvent.displayName, isOn: platformBinding(.hubEvent))
-                    Toggle(NotificationEventType.eventAnnounced.displayName, isOn: eventTypeBinding(.eventAnnounced))
-                    Toggle(NotificationEventType.eventSalesOpen.displayName, isOn: eventTypeBinding(.eventSalesOpen))
-                    Toggle(NotificationEventType.eventDeadlineSoon.displayName, isOn: eventTypeBinding(.eventDeadlineSoon))
+                    LabeledContent("플랫폼 설정", value: NotificationPlatform.hubEvent.displayName)
+                    LabeledContent("주요 알림", value: "공개, 예약/판매 시작, 마감 임박")
                     Text("공식/멤버/공식 콜라보 출처가 있는 기간성 굿즈, 티켓, 오프라인 행사만 포함합니다. 방송, 라이브, 업로드, 팬 주최 이벤트, 대표/강지 이벤트는 MVP 굿즈/행사에 포함하지 않습니다.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
