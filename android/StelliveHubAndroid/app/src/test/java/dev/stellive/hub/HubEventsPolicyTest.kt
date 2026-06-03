@@ -15,6 +15,10 @@ class HubEventsPolicyTest {
         assertEquals("마감 임박", NotificationEventType.EVENT_DEADLINE_SOON.displayName)
 
         val settings = NotificationSettingState()
+        assertEquals(
+            listOf("generation_platform", "generation_event_type", "member_platform", "member_event_type"),
+            settings.combinationPreferences.map { it.id }
+        )
         assertTrue(settings.platformEnabled[NotificationPlatform.HUB_EVENT] == true)
         assertTrue(settings.eventTypeEnabled[NotificationEventType.EVENT_ANNOUNCED] == true)
         assertTrue(settings.eventTypeEnabled[NotificationEventType.EVENT_SALES_OPEN] == true)

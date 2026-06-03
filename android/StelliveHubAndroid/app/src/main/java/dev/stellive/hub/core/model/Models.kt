@@ -192,8 +192,8 @@ private fun defaultEventTypeEnabled(): Map<NotificationEventType, Boolean> = lin
 )
 
 private fun defaultCombinationPreferences(): List<CombinationPreference> = listOf(
-    CombinationPreference("generation-platform", NotificationPreferenceScope.GENERATION_PLATFORM, "카테고리 + 플랫폼"),
-    CombinationPreference("generation-event-type", NotificationPreferenceScope.GENERATION_EVENT_TYPE, "카테고리 + 이벤트 타입"),
-    CombinationPreference("member-platform", NotificationPreferenceScope.MEMBER_PLATFORM, "개별 항목 + 플랫폼"),
-    CombinationPreference("member-event-type", NotificationPreferenceScope.MEMBER_EVENT_TYPE, "개별 항목 + 이벤트 타입")
+    CombinationPreference("generation_platform", NotificationPreferenceScope.GENERATION_PLATFORM, "카테고리 + 플랫폼"),
+    CombinationPreference("generation_event_type", NotificationPreferenceScope.GENERATION_EVENT_TYPE, "카테고리 + 이벤트 타입"),
+    CombinationPreference("member_platform", NotificationPreferenceScope.MEMBER_PLATFORM, "개별 항목 + 플랫폼"),
+    CombinationPreference("member_event_type", NotificationPreferenceScope.MEMBER_EVENT_TYPE, "개별 항목 + 이벤트 타입")
 )
