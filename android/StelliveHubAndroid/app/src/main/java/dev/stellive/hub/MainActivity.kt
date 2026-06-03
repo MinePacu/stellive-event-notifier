@@ -183,7 +183,7 @@ class MainActivity : AppCompatActivity() {
         startScreen(
             screenId = "home",
             title = getString(R.string.home_title),
-            role = "활성 멤버, 강지, 공식 채널만 표시합니다. Former 멤버와 무단 이미지는 제외합니다."
+            role = "지금 라이브, 최근 알림, 마감 임박 굿즈/행사를 확인합니다."
         )
         binding.contentList.addView(
             summaryGrid(
@@ -194,27 +194,49 @@ class MainActivity : AppCompatActivity() {
                 )
             )
         )
-        binding.contentList.addView(
-            compactEventCard(
-                title = "굿즈/행사",
-                body = "공식 출처 기반 진행 중 ${repository.hubEventsSummary.openCount}개 · 마감 임박 ${repository.hubEventsSummary.closingSoonCount}개",
-                pills = listOf("굿즈", "티켓", "오프라인")
-            ).apply {
-                isClickable = true
-                isFocusable = true
-                setOnClickListener {
-                    navigateTo(HubScreen.GOODS_EVENTS, addToBackStack = true)
-                }
+        binding.contentList.addView(sectionLabel("지금 라이브"))
+        if (repository.liveMembers.isEmpty()) {
+            binding.contentList.addView(
+                compactEventCard("현재 라이브 없음", "서버 갱신 기준으로 표시합니다.", listOf("대기"))
+            )
+        } else {
+            repository.liveMembers.forEach { binding.contentList.addView(liveMemberRow(it)) }
+        }
+        binding.contentList.addView(sectionLabel("최근 알림"))
+        if (repository.recentHistoryPreview.isEmpty()) {
+            binding.contentList.addView(
+                compactEventCard("최근 알림 없음", "허용된 알림이 도착하면 여기에 표시됩니다.", listOf("기록"))
+            )
+        } else {
+            repository.recentHistoryPreview.forEach {
+                binding.contentList.addView(
+                    historyEventCard(
+                        item = it,
+                        member = repository.memberForHistory(it)
+                    )
+                )
             }
-        )
-        binding.contentList.addView(filterChips())
-        binding.contentList.addView(
-            noticeCard("공식 YouTube는 업로드 알림만 지원합니다. 라이브 예정, 시작, 종료 이벤트는 기록과 푸시에 만들지 않습니다.")
-        )
-        repository.members
-            .filter { selectedFilter == "all" || it.generationId == selectedFilter }
-            .filter { it.catalogRole != CatalogRole.PLACEHOLDER || selectedFilter == "gen4-upcoming" }
-            .forEach { binding.contentList.addView(memberCard(it)) }
+        }
+        binding.contentList.addView(sectionLabel("마감 임박 굿즈/행사"))
+        if (repository.closingSoonHubEvents.isEmpty()) {
+            binding.contentList.addView(
+                compactEventCard(
+                    "마감 임박 항목 없음",
+                    "전체 굿즈/행사에서 예정과 진행 중 항목을 볼 수 있습니다.",
+                    listOf("굿즈/행사")
+                ).apply {
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        navigateTo(HubScreen.GOODS_EVENTS, addToBackStack = true)
+                    }
+                }
+            )
+        } else {
+            repository.closingSoonHubEvents.forEach {
+                binding.contentList.addView(hubEventCard(it))
+            }
+        }
     }
 
     private fun renderGoodsEvents() {
@@ -390,6 +412,26 @@ class MainActivity : AppCompatActivity() {
                 pills = listOf("공식 X 게시글", "공식 YouTube 업로드", "공식 YouTube live 제외")
             )
         )
+        binding.contentList.addView(
+            settingsPanel(
+                title = "굿즈/행사",
+                rows = listOf(
+                    SettingRow("굿즈/행사 알림", "공식 출처가 있는 기간성 굿즈, 티켓, 오프라인 행사만 포함합니다.", settings.platformEnabled[NotificationPlatform.HUB_EVENT] == true),
+                    SettingRow("마감 임박", "예약/판매 종료가 가까운 항목을 홈과 알림에 우선 표시합니다.", settings.eventTypeEnabled[NotificationEventType.EVENT_DEADLINE_SOON] == true),
+                    SettingRow("제외 대상", "방송, 라이브, 업로드, 팬 주최 이벤트, 대표/강지 이벤트는 MVP 굿즈/행사에 포함하지 않습니다.", null, "정책")
+                )
+            )
+        )
+        binding.contentList.addView(
+            settingsPanel(
+                title = "표시 정책",
+                rows = listOf(
+                    SettingRow("Former 멤버", "MVP 카탈로그, 알림 대상, 필터, seed data에 포함하지 않습니다.", null, "제외"),
+                    SettingRow("강지", "감자 카테고리의 대표 항목으로 유지하되 굿즈/행사 MVP에는 표시하지 않습니다.", null, "대표"),
+                    SettingRow("이미지/로고/포스터", "공식 이미지, 로고, 포스터, 캡처, 팬아트는 저장하거나 재사용하지 않습니다.", null, "텍스트")
+                )
+            )
+        )
         if (!notificationPermissionRequested) {
             notificationPermissionRequested = true
             requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -495,6 +537,14 @@ class MainActivity : AppCompatActivity() {
         textSize = 13f
         setLineSpacing(0f, 1.12f)
         setPadding(0, 0, 0, dp(16))
+    }
+
+    private fun sectionLabel(text: String): TextView = TextView(this).apply {
+        this.text = text
+        setTextColor(color(R.color.hub_text_muted))
+        textSize = 13f
+        typeface = Typeface.DEFAULT_BOLD
+        setPadding(0, dp(4), 0, dp(8))
     }
 
     private fun summaryGrid(items: List<StatusSummaryItem>): LinearLayout {
@@ -773,6 +823,19 @@ class MainActivity : AppCompatActivity() {
             })
             content.addView(pillRow(pills))
             addView(content)
+        }
+
+    private fun hubEventCard(event: dev.stellive.hub.core.model.HubEvent): MaterialCardView =
+        compactEventCard(
+            title = event.title,
+            body = listOfNotNull(event.status.displayName, event.sourceLabel, event.venueName).joinToString(" · "),
+            pills = listOf(event.category.displayName, event.participationMode.displayName)
+        ).apply {
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                navigateTo(HubScreen.GOODS_EVENTS, addToBackStack = true)
+            }
         }
 
     private fun historyEventCard(item: NotificationHistoryItem, member: HubMember?): MaterialCardView =
