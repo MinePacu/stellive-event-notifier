@@ -185,7 +185,15 @@ class MainActivity : AppCompatActivity() {
             title = getString(R.string.home_title),
             role = "활성 멤버, 강지, 공식 채널만 표시합니다. Former 멤버와 무단 이미지는 제외합니다."
         )
-        binding.contentList.addView(summaryGrid(MainUiPolicy.homeStatusSummary()))
+        binding.contentList.addView(
+            summaryGrid(
+                MainUiPolicy.homeStatusSummary(
+                    liveCount = repository.liveMembers.size,
+                    recentCount = repository.recentHistoryPreview.size,
+                    closingSoonCount = repository.closingSoonHubEvents.size
+                )
+            )
+        )
         binding.contentList.addView(
             compactEventCard(
                 title = "굿즈/행사",

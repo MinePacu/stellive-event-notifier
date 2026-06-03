@@ -190,18 +190,21 @@ final class MockHubStore: ObservableObject {
     }
 
     func hubEvents(for filter: String) -> [HubEvent] {
+        let filtered: [HubEvent]
         switch filter {
         case "goods":
-            return hubEvents.filter { $0.category == .onlineGoods || $0.category == .onlineCollab }
+            filtered = hubEvents.filter { $0.category == .onlineGoods || $0.category == .onlineCollab }
         case "ticketing":
-            return hubEvents.filter { $0.category == .ticketing }
+            filtered = hubEvents.filter { $0.category == .ticketing }
         case "offline":
-            return hubEvents.filter { $0.participationMode.isOffline }
+            filtered = hubEvents.filter { $0.participationMode.isOffline }
         case "closing":
-            return hubEvents.filter { $0.status == .closingSoon }
+            filtered = hubEvents.filter { $0.status == .closingSoon }
         default:
-            return hubEvents
+            filtered = hubEvents
         }
+
+        return orderedHubEvents(filtered)
     }
 
     func member(for historyItem: NotificationHistoryItem) -> HubMember? {

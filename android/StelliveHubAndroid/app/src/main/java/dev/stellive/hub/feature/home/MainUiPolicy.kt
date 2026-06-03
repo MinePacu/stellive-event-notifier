@@ -44,9 +44,6 @@ object MainUiPolicy {
         HubEventStatus.ENDED -> 5
     }
 
-    fun homeStatusSummary(): List<StatusSummaryItem> =
-        homeStatusSummary(liveCount = 1, recentCount = 3, closingSoonCount = 1)
-
     fun homeStatusSummary(liveCount: Int, recentCount: Int, closingSoonCount: Int): List<StatusSummaryItem> = listOf(
         StatusSummaryItem(liveCount.toString(), "지금 라이브"),
         StatusSummaryItem(recentCount.toString(), "최근 알림"),
