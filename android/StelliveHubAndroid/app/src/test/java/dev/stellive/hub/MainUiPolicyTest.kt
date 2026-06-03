@@ -36,6 +36,15 @@ class MainUiPolicyTest {
     }
 
     @Test
+    fun homeHubEventsListActionKeepsFullListReachableWhenClosingSoonExists() {
+        val action = MainUiPolicy.homeHubEventsListAction(closingSoonCount = 1)
+
+        assertEquals("굿즈/행사 전체 보기", action.title)
+        assertEquals("진행 중과 예정 항목을 모두 확인합니다.", action.body)
+        assertEquals(listOf("굿즈/행사", "전체"), action.pills)
+    }
+
+    @Test
     fun liveStatusTextShowsElapsedTimeWhenStartedAtExists() {
         val startedAt = Instant.parse("2026-06-02T09:00:00Z")
         val now = Instant.parse("2026-06-02T10:23:00Z")

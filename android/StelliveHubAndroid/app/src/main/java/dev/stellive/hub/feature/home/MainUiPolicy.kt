@@ -10,6 +10,12 @@ data class StatusSummaryItem(
     val label: String
 )
 
+data class HomeHubEventsAction(
+    val title: String,
+    val body: String,
+    val pills: List<String>
+)
+
 object MainUiPolicy {
     private const val ROOT_TOP_BAR_TITLE_START_INSET_DP = 10
 
@@ -50,6 +56,21 @@ object MainUiPolicy {
         StatusSummaryItem(recentCount.toString(), "최근 알림"),
         StatusSummaryItem(closingSoonCount.toString(), "마감 임박")
     )
+
+    fun homeHubEventsListAction(closingSoonCount: Int): HomeHubEventsAction =
+        if (closingSoonCount > 0) {
+            HomeHubEventsAction(
+                title = "굿즈/행사 전체 보기",
+                body = "진행 중과 예정 항목을 모두 확인합니다.",
+                pills = listOf("굿즈/행사", "전체")
+            )
+        } else {
+            HomeHubEventsAction(
+                title = "마감 임박 항목 없음",
+                body = "전체 굿즈/행사에서 예정과 진행 중 항목을 볼 수 있습니다.",
+                pills = listOf("굿즈/행사")
+            )
+        }
 
     fun liveStatusText(isLive: Boolean, startedAt: Instant?, now: Instant = Instant.now()): String {
         if (!isLive) return "오프라인"

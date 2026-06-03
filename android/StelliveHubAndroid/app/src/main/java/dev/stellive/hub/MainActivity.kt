@@ -221,12 +221,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
         binding.contentList.addView(sectionLabel("마감 임박 굿즈/행사"))
+        val hubEventsListAction = MainUiPolicy.homeHubEventsListAction(repository.closingSoonHubEvents.size)
         if (repository.closingSoonHubEvents.isEmpty()) {
             binding.contentList.addView(
                 compactEventCard(
-                    "마감 임박 항목 없음",
-                    "전체 굿즈/행사에서 예정과 진행 중 항목을 볼 수 있습니다.",
-                    listOf("굿즈/행사")
+                    hubEventsListAction.title,
+                    hubEventsListAction.body,
+                    hubEventsListAction.pills
                 ).apply {
                     isClickable = true
                     isFocusable = true
@@ -239,6 +240,19 @@ class MainActivity : AppCompatActivity() {
             repository.closingSoonHubEvents.forEach {
                 binding.contentList.addView(hubEventCard(it))
             }
+            binding.contentList.addView(
+                compactEventCard(
+                    hubEventsListAction.title,
+                    hubEventsListAction.body,
+                    hubEventsListAction.pills
+                ).apply {
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        navigateTo(HubScreen.GOODS_EVENTS, addToBackStack = true)
+                    }
+                }
+            )
         }
     }
 
