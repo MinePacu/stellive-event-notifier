@@ -26,6 +26,7 @@ enum NotificationPlatform: String, Codable, CaseIterable, Hashable, Identifiable
     case chzzk
     case youtube
     case x
+    case hubEvent = "hub_event"
     case naverCafe = "naver_cafe"
 
     var id: String { rawValue }
@@ -38,6 +39,8 @@ enum NotificationPlatform: String, Codable, CaseIterable, Hashable, Identifiable
             return "YouTube"
         case .x:
             return "X"
+        case .hubEvent:
+            return "굿즈/행사"
         case .naverCafe:
             return "Naver Cafe"
         }
@@ -57,6 +60,11 @@ enum NotificationEventType: String, Codable, CaseIterable, Hashable, Identifiabl
     case youtubeLiveEnded = "youtube_live_ended"
     case officialXPost = "official_x_post"
     case officialYoutubeUpload = "official_youtube_upload"
+    case eventAnnounced = "event_announced"
+    case eventSalesOpen = "event_sales_open"
+    case eventDeadlineSoon = "event_deadline_soon"
+    case eventUpdated = "event_updated"
+    case eventCancelled = "event_cancelled"
 
     var id: String { rawValue }
 
@@ -86,6 +94,16 @@ enum NotificationEventType: String, Codable, CaseIterable, Hashable, Identifiabl
             return "공식 X 게시글"
         case .officialYoutubeUpload:
             return "공식 YouTube 업로드"
+        case .eventAnnounced:
+            return "굿즈/행사 공개"
+        case .eventSalesOpen:
+            return "예약/판매 시작"
+        case .eventDeadlineSoon:
+            return "마감 임박"
+        case .eventUpdated:
+            return "굿즈/행사 변경"
+        case .eventCancelled:
+            return "굿즈/행사 취소"
         }
     }
 }
@@ -292,6 +310,7 @@ struct NotificationSettingsState: Equatable {
         .chzzk: true,
         .youtube: true,
         .x: true,
+        .hubEvent: true,
         .naverCafe: false
     ]
     var eventTypeEnabled: [NotificationEventType: Bool] = [
@@ -306,7 +325,12 @@ struct NotificationSettingsState: Equatable {
         .youtubeLiveStarted: false,
         .youtubeLiveEnded: false,
         .officialXPost: true,
-        .officialYoutubeUpload: true
+        .officialYoutubeUpload: true,
+        .eventAnnounced: true,
+        .eventSalesOpen: true,
+        .eventDeadlineSoon: true,
+        .eventUpdated: false,
+        .eventCancelled: true
     ]
     var combinationPreferences = [
         CombinationPreference(id: "generation_platform", scope: .generationPlatform, label: "기수/분류 + 플랫폼", enabled: true),

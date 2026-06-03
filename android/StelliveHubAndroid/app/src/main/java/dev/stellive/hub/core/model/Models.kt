@@ -12,6 +12,7 @@ enum class NotificationPlatform(val displayName: String) {
     CHZZK("CHZZK"),
     YOUTUBE("YouTube"),
     X("X"),
+    HUB_EVENT("굿즈/행사"),
     NAVER_CAFE("Naver Cafe")
 }
 
@@ -27,7 +28,12 @@ enum class NotificationEventType(val wireName: String, val displayName: String) 
     YOUTUBE_LIVE_STARTED("youtube_live_started", "YouTube 라이브 시작"),
     YOUTUBE_LIVE_ENDED("youtube_live_ended", "YouTube 라이브 종료"),
     OFFICIAL_X_POST("official_x_post", "공식 X 게시글"),
-    OFFICIAL_YOUTUBE_UPLOAD("official_youtube_upload", "공식 YouTube 업로드")
+    OFFICIAL_YOUTUBE_UPLOAD("official_youtube_upload", "공식 YouTube 업로드"),
+    EVENT_ANNOUNCED("event_announced", "굿즈/행사 공개"),
+    EVENT_SALES_OPEN("event_sales_open", "예약/판매 시작"),
+    EVENT_DEADLINE_SOON("event_deadline_soon", "마감 임박"),
+    EVENT_UPDATED("event_updated", "굿즈/행사 변경"),
+    EVENT_CANCELLED("event_cancelled", "굿즈/행사 취소")
 }
 
 enum class NotificationPreferenceScope {
@@ -161,6 +167,7 @@ private fun defaultPlatformEnabled(): Map<NotificationPlatform, Boolean> = linke
     NotificationPlatform.CHZZK to true,
     NotificationPlatform.YOUTUBE to true,
     NotificationPlatform.X to true,
+    NotificationPlatform.HUB_EVENT to true,
     NotificationPlatform.NAVER_CAFE to false
 )
 
@@ -176,7 +183,12 @@ private fun defaultEventTypeEnabled(): Map<NotificationEventType, Boolean> = lin
     NotificationEventType.YOUTUBE_LIVE_STARTED to false,
     NotificationEventType.YOUTUBE_LIVE_ENDED to false,
     NotificationEventType.OFFICIAL_X_POST to true,
-    NotificationEventType.OFFICIAL_YOUTUBE_UPLOAD to true
+    NotificationEventType.OFFICIAL_YOUTUBE_UPLOAD to true,
+    NotificationEventType.EVENT_ANNOUNCED to true,
+    NotificationEventType.EVENT_SALES_OPEN to true,
+    NotificationEventType.EVENT_DEADLINE_SOON to true,
+    NotificationEventType.EVENT_UPDATED to false,
+    NotificationEventType.EVENT_CANCELLED to true
 )
 
 private fun defaultCombinationPreferences(): List<CombinationPreference> = listOf(
