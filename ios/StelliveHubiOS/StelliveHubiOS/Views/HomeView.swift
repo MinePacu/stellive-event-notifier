@@ -20,6 +20,34 @@ struct HomeView: View {
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
 
+                Section("굿즈/행사") {
+                    NavigationLink {
+                        HubEventsView()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("공식 출처 기반 기간성 정보")
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.88)
+                                Text("진행 중 \(store.hubEventsSummary.openCount)개 · 마감 임박 \(store.hubEventsSummary.closingSoonCount)개")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.84)
+                            }
+
+                            HStack(alignment: .top, spacing: 8) {
+                                ForEach(store.hubEventsSummary.preview) { event in
+                                    HubEventPreviewBadge(event: event)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(store.filters) { filter in
@@ -75,6 +103,37 @@ private struct FilterChip: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+private struct HubEventPreviewBadge: View {
+    let event: HubEvent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(event.title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.82)
+            Text(event.status.displayName)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(event.status == .closingSoon ? Color.red : Color.teal)
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill((event.status == .closingSoon ? Color.red : Color.teal).opacity(0.14))
+                )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(.tertiarySystemGroupedBackground))
+        )
     }
 }
 
