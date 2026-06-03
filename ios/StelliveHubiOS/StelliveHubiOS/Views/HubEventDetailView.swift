@@ -61,7 +61,8 @@ struct HubEventDetailView: View {
 
     private func url(from string: String?) -> URL? {
         guard let string, let url = URL(string: string) else { return nil }
-        return url.scheme != nil ? url : nil
+        guard url.scheme?.lowercased() == "https" else { return nil }
+        return url
     }
 }
 
@@ -81,4 +82,3 @@ private struct HubEventStatusBadge: View {
             )
     }
 }
-
