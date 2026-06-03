@@ -27,6 +27,12 @@ Generations/categories include `gen1`, `gen2`, `gen3`, `gamja`, `official`, and 
 - Official YouTube upload: on
 - Official YouTube live events: unsupported and not generated
 
+## Hub Event Notifications
+
+Hub event notification types are `event_announced`, `event_sales_open`, `event_deadline_soon`, `event_updated`, and `event_cancelled`. The MVP enables announced, sales-open, deadline-soon, and cancelled by default, while updated starts disabled.
+
+Hub event notifications are standard delivery by default. Global off, generation/category, member, event type, quiet hours, keyword filters, and rate limits still apply. Realtime best-effort does not enable disabled hub event notifications.
+
 ## Resolution
 
 Global off blocks all notifications. Member explicit overrides can override generation/category settings. Platform and event-type settings apply to the event. More specific member/generation platform and event-type rules can override broader platform/event-type rules. Quiet hours, keyword block, and rate limit always apply last.
