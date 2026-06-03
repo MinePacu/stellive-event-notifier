@@ -18,6 +18,7 @@ object MainUiPolicy {
         "history" -> "기록"
         "settings" -> "설정"
         "goods_events" -> "굿즈/행사"
+        "goods_event_detail" -> "상세"
         else -> "홈"
     }
 

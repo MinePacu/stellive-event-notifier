@@ -13,6 +13,8 @@ class MainUiPolicyTest {
         assertEquals("방송 상태와 실시간 best-effort", MainUiPolicy.topBarRole("live"))
         assertEquals("허용된 알림과 차단된 이벤트", MainUiPolicy.topBarRole("history"))
         assertEquals("알림 대상과 전송 정책", MainUiPolicy.topBarRole("settings"))
+        assertEquals("상세", MainUiPolicy.topBarTitle("goods_event_detail"))
+        assertEquals("공식 출처와 일정 정보", MainUiPolicy.topBarRole("goods_event_detail"))
     }
 
     @Test
