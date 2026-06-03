@@ -12,6 +12,7 @@ import dev.stellive.hub.core.model.NotificationSettingState
 import dev.stellive.hub.feature.home.MockHubRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -41,13 +42,16 @@ class PreferenceResolutionStateTest {
     }
 
     @Test
-    fun historyItemsResolveToCatalogEntriesForAvatars() {
+    fun historyItemsResolveCatalogEntriesOrFallbackTargetsForAvatars() {
         val repository = MockHubRepository()
         val historyMembers = repository.history.mapNotNull { repository.memberForHistory(it) }
+        val hubEventHistory = repository.history.first { it.memberId == "hub-event:closing-official-goods" }
 
-        assertEquals(repository.history.size, historyMembers.size)
         assertTrue(historyMembers.any { it.id == "ayatsuno-yuni" && it.catalogRole == CatalogRole.MEMBER })
         assertTrue(historyMembers.any { it.id == "stellive-official" && it.generationId == "official" && it.catalogRole == CatalogRole.OFFICIAL_CHANNEL })
+        assertEquals("event_deadline_soon", hubEventHistory.eventType)
+        assertEquals("굿즈/행사", hubEventHistory.memberName)
+        assertNull(repository.memberForHistory(hubEventHistory))
     }
 
     @Test
