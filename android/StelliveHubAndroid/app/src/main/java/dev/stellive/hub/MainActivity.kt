@@ -361,32 +361,12 @@ class MainActivity : AppCompatActivity() {
             title = getString(R.string.live_title),
             role = "Foreground 상태 갱신은 화면 표시용입니다. 백그라운드 알림은 서버 중심 푸시로 처리합니다."
         )
-        binding.contentList.addView(staticChips("방송 중", "CHZZK", "실시간 우선", "표준"))
-        binding.contentList.addView(
-            settingsPanel(
-                title = "실시간 모드 안내",
-                rows = MainUiPolicy.realtimeDisclosureLines().mapIndexed { index, line ->
-                    SettingRow(
-                        title = if (index == 0) "최대한 실시간으로 알림 받기" else "정책 제한",
-                        body = line,
-                        checked = if (index == 0) repository.settings.deliveryMode == DeliveryMode.REALTIME_BEST_EFFORT else null,
-                        badge = if (index == 0) null else "적용"
-                    )
-                }
-            )
-        )
+        binding.contentList.addView(staticChips("방송 중", "CHZZK 대상", "서버 푸시"))
         repository.members
             .filter { it.catalogRole != CatalogRole.OFFICIAL_CHANNEL && it.chzzkChannelId != null }
             .forEach { member ->
                 binding.contentList.addView(liveMemberRow(member))
             }
-        binding.contentList.addView(
-            compactEventCard(
-                title = "CHZZK chat",
-                body = "기본 OFF입니다. 키워드나 명시 필터가 없으면 푸시 전송 대상으로 쓰지 않습니다.",
-                pills = listOf("푸시 OFF", "필터 필요")
-            )
-        )
     }
 
     private fun renderHistory() {
@@ -403,13 +383,7 @@ class MainActivity : AppCompatActivity() {
                 )
             )
         }
-        binding.contentList.addView(
-            compactEventCard(
-                title = "차단된 이벤트",
-                body = "공식 YouTube 라이브 예정, 시작, 종료 이벤트는 생성하지 않아 기록에 나타나지 않습니다.",
-                pills = listOf("official_youtube_live unsupported")
-            )
-        )
+        binding.contentList.addView(noticeCard(MainUiPolicy.historyPolicyNotice()))
     }
 
     private fun renderSettings() {

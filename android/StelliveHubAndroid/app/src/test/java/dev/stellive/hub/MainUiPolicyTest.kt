@@ -13,8 +13,8 @@ class MainUiPolicyTest {
     @Test
     fun topBarRolesMatchBottomNavigationScreens() {
         assertEquals("라이브 현황과 최근 알림", MainUiPolicy.topBarRole("home"))
-        assertEquals("방송 상태와 실시간 best-effort", MainUiPolicy.topBarRole("live"))
-        assertEquals("허용된 알림과 차단된 이벤트", MainUiPolicy.topBarRole("history"))
+        assertEquals("방송 상태와 CHZZK 대상 현황", MainUiPolicy.topBarRole("live"))
+        assertEquals("허용된 알림 기록과 정책 제외 항목", MainUiPolicy.topBarRole("history"))
         assertEquals("알림 대상과 전송 정책", MainUiPolicy.topBarRole("settings"))
         assertEquals("상세", MainUiPolicy.topBarTitle("goods_event_detail"))
         assertEquals("공식 출처와 일정 정보", MainUiPolicy.topBarRole("goods_event_detail"))
@@ -135,5 +135,11 @@ class MainUiPolicyTest {
             MainUiPolicy.settingsPlatformPolicy(NotificationPlatform.HUB_EVENT)
         )
         assertTrue(MainUiPolicy.settingsPlatformCommonNotice().contains("플랫폼 OFF"))
+    }
+
+    @Test
+    fun policyNoticesMatchScreenResponsibilities() {
+        assertTrue(MainUiPolicy.hubEventPolicyNotice().contains("팬 주최 이벤트"))
+        assertTrue(MainUiPolicy.historyPolicyNotice().contains("공식 YouTube 라이브 예정, 시작, 종료"))
     }
 }

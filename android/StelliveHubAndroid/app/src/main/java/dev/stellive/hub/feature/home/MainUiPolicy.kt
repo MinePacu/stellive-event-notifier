@@ -65,8 +65,8 @@ object MainUiPolicy {
     }
 
     fun topBarRole(screenId: String): String = when (screenId) {
-        "live" -> "방송 상태와 실시간 best-effort"
-        "history" -> "허용된 알림과 차단된 이벤트"
+        "live" -> "방송 상태와 CHZZK 대상 현황"
+        "history" -> "허용된 알림 기록과 정책 제외 항목"
         "settings" -> "알림 대상과 전송 정책"
         "settings_delivery" -> "알림 전달과 제한"
         "settings_targets" -> "카테고리와 개별 항목"
@@ -239,6 +239,9 @@ object MainUiPolicy {
 
     fun hubEventPolicyNotice(): String =
         "대표/강지 이벤트, 팬 주최 이벤트, 루틴 방송/라이브/업로드는 MVP 굿즈/행사 피드에 포함하지 않습니다."
+
+    fun historyPolicyNotice(): String =
+        "공식 YouTube 라이브 예정, 시작, 종료 이벤트는 생성하지 않아 기록에 나타나지 않습니다."
 
     fun liveStatusText(isLive: Boolean, startedAt: Instant?, now: Instant = Instant.now()): String {
         if (!isLive) return "오프라인"
