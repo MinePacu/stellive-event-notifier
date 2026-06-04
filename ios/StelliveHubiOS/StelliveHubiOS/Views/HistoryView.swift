@@ -2,9 +2,10 @@ import SwiftUI
 
 struct HistoryView: View {
     @EnvironmentObject private var store: MockHubStore
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 HubHeaderCard(
                     iconText: "기",
@@ -16,7 +17,7 @@ struct HistoryView: View {
                         .init(value: store.averageHistoryLatencySummary, label: "평균 지연")
                     ]
                 )
-                .listRowInsets(EdgeInsets(top: 18, leading: 16, bottom: 10, trailing: 16))
+                .listRowInsets(IOSGroupedScreenPolicy.headerRowInsets)
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
 
@@ -33,8 +34,8 @@ struct HistoryView: View {
                     Text("공식 YouTube 라이브 알림 기록은 생성하지 않습니다.")
                 }
             }
-            .listStyle(.plain)
-            .toolbar(.hidden, for: .navigationBar)
+            .listStyle(.insetGrouped)
+            .settingsToolbar(path: $path)
         }
     }
 }
@@ -60,15 +61,58 @@ private struct HistoryNotificationRow: View {
                     .font(.body)
                     .lineLimit(2)
                     .foregroundStyle(.primary)
-                Text("\(item.eventType) · \(item.deliveryMode.rawValue) · \(item.deliveryLatencyMs ?? 0)ms")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.82)
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 4) {
+                ForEach(HistoryPresentationPolicy.metadataParts(for: item), id: \.self) { part in
+                    Text(part)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(part == "실시간" ? Color.teal : Color.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                }
             }
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+}
+
+struct HistoryPresentationPolicy {
+    static func metadataParts(for item: NotificationHistoryItem) -> [String] {
+        metadataText(for: item).components(separatedBy: " · ")
+    }
+
+    static func metadataText(for item: NotificationHistoryItem) -> String {
+        [deliveryLabel(for: item.deliveryMode), latencyLabel(for: item.deliveryLatencyMs)].joined(separator: " · ")
+    }
+
+    private static func deliveryLabel(for mode: DeliveryMode) -> String {
+        switch mode {
+        case .standard:
+            return "표준"
+        case .realtimeBestEffort:
+            return "실시간"
+        }
+    }
+
+    private static func latencyLabel(for latencyMs: Int?) -> String {
+        guard let latencyMs, latencyMs > 0 else {
+            return "방금"
+        }
+
+        guard latencyMs >= 1000 else {
+            return "\(latencyMs)ms"
+        }
+
+        let seconds = Double(latencyMs) / 1000
+        if seconds.rounded() == seconds {
+            return "\(Int(seconds))초"
+        }
+
+        return String(format: "%.1f초", seconds)
     }
 }
 

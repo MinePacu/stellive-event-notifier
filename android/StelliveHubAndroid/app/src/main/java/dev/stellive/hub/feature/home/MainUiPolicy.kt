@@ -1,6 +1,7 @@
 package dev.stellive.hub.feature.home
 
 import dev.stellive.hub.core.model.NotificationEventType
+import dev.stellive.hub.core.model.NotificationPlatform
 import dev.stellive.hub.core.model.NotificationSettingState
 import dev.stellive.hub.core.model.HubEventStatus
 import java.time.Duration
@@ -17,6 +18,11 @@ data class HomeHubEventsAction(
     val pills: List<String>
 )
 
+data class MainNavigationItem(
+    val screenId: String,
+    val label: String
+)
+
 data class SettingsHubRow(
     val screenId: String,
     val title: String,
@@ -26,12 +32,22 @@ data class SettingsHubRow(
 
 data class SettingsPolicyRow(
     val title: String,
-    val body: String,
+    val body: String?,
     val checked: Boolean?
 )
 
 object MainUiPolicy {
     private const val ROOT_TOP_BAR_TITLE_START_INSET_DP = 10
+
+    fun primaryNavigationItems(): List<MainNavigationItem> = listOf(
+        MainNavigationItem("home", "홈"),
+        MainNavigationItem("live", "라이브"),
+        MainNavigationItem("history", "기록"),
+        MainNavigationItem("goods_events", "굿즈/행사")
+    )
+
+    fun showsSettingsTopBarAction(screenId: String, canGoBack: Boolean): Boolean =
+        !canGoBack && screenId in primaryNavigationItems().map { it.screenId }
 
     fun topBarTitle(screenId: String): String = when (screenId) {
         "live" -> "라이브"
@@ -82,6 +98,8 @@ object MainUiPolicy {
         StatusSummaryItem(recentCount.toString(), "최근 알림"),
         StatusSummaryItem(closingSoonCount.toString(), "마감 임박")
     )
+
+    fun homeSummaryCardsVisible(): Boolean = false
 
     fun homeHubEventsListAction(closingSoonCount: Int): HomeHubEventsAction =
         if (closingSoonCount > 0) {
@@ -188,20 +206,36 @@ object MainUiPolicy {
         )
     )
 
-    fun settingsEventTypePolicy(eventType: NotificationEventType): String = when (eventType) {
-        NotificationEventType.CHZZK_CHAT -> "기본 OFF입니다. 명시 필터가 없으면 푸시 전송 대상으로 쓰지 않습니다."
+    fun settingsPlatformPolicy(platform: NotificationPlatform): String? = when (platform) {
+        NotificationPlatform.NAVER_CAFE ->
+            "공식 API와 약관을 우선합니다. 무단 수집이나 로그인 쿠키 수집은 사용하지 않습니다."
+        NotificationPlatform.HUB_EVENT ->
+            "공식 출처가 있는 기간성 굿즈, 티켓, 오프라인 행사만 포함합니다."
+        else -> null
+    }
+
+    fun settingsPlatformCommonNotice(): String =
+        "플랫폼 OFF이면 해당 플랫폼 이벤트 푸시를 차단합니다."
+
+    fun settingsEventTypePolicy(eventType: NotificationEventType): String? = when (eventType) {
+        NotificationEventType.CHZZK_CHAT,
         NotificationEventType.YOUTUBE_LIVE_SCHEDULED,
         NotificationEventType.YOUTUBE_LIVE_STARTED,
-        NotificationEventType.YOUTUBE_LIVE_ENDED -> "공식 채널에는 적용하지 않음. 일반 채널 정책으로만 유지합니다."
-        NotificationEventType.OFFICIAL_YOUTUBE_UPLOAD -> "스텔라이브 공식 YouTube는 업로드 알림만 지원합니다."
+        NotificationEventType.YOUTUBE_LIVE_ENDED,
+        NotificationEventType.OFFICIAL_YOUTUBE_UPLOAD -> null
         NotificationEventType.CAFE_POST -> "무단 수집, 로그인 쿠키 수집, 비공개 접근 우회 없이 공식 경로만 사용합니다."
         NotificationEventType.EVENT_ANNOUNCED -> "공식/멤버/공식 콜라보 출처가 있는 기간성 정보만 포함합니다."
         NotificationEventType.EVENT_SALES_OPEN -> "굿즈, 티켓, 오프라인 행사의 예약/판매 시작 알림입니다."
         NotificationEventType.EVENT_DEADLINE_SOON -> "예약/판매 종료가 가까운 항목을 홈과 알림에 우선 표시합니다."
         NotificationEventType.EVENT_UPDATED -> "굿즈/행사 변경 알림이며 MVP에서는 기본 OFF입니다."
         NotificationEventType.EVENT_CANCELLED -> "공식 출처의 취소 안내만 전송합니다."
-        else -> "사용자 설정, 조용한 시간, 차단 키워드, rate limit 적용 후 전송합니다."
+        else -> null
     }
+
+    fun settingsEventTypeCommonNotices(): List<String> = listOf(
+        "사용자 설정, 조용한 시간, 차단 키워드, rate limit은 계속 적용됩니다.",
+        "공식 채널에는 YouTube 라이브 예정/시작/종료를 적용하지 않으며, 공식 YouTube는 업로드 알림만 지원합니다."
+    )
 
     fun hubEventPolicyNotice(): String =
         "대표/강지 이벤트, 팬 주최 이벤트, 루틴 방송/라이브/업로드는 MVP 굿즈/행사 피드에 포함하지 않습니다."

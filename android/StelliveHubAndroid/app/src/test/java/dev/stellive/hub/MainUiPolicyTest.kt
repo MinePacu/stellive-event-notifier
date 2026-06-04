@@ -1,9 +1,11 @@
 package dev.stellive.hub
 
 import dev.stellive.hub.feature.home.MainUiPolicy
+import dev.stellive.hub.core.model.NotificationPlatform
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.Instant
 
@@ -16,6 +18,19 @@ class MainUiPolicyTest {
         assertEquals("알림 대상과 전송 정책", MainUiPolicy.topBarRole("settings"))
         assertEquals("상세", MainUiPolicy.topBarTitle("goods_event_detail"))
         assertEquals("공식 출처와 일정 정보", MainUiPolicy.topBarRole("goods_event_detail"))
+    }
+
+    @Test
+    fun primaryNavigationMovesSettingsToTopBarAndAddsHubEventsTab() {
+        val navigationItems = MainUiPolicy.primaryNavigationItems()
+
+        assertEquals(listOf("home", "live", "history", "goods_events"), navigationItems.map { it.screenId })
+        assertEquals(listOf("홈", "라이브", "기록", "굿즈/행사"), navigationItems.map { it.label })
+        assertFalse(navigationItems.any { it.screenId == "settings" })
+        assertTrue(MainUiPolicy.showsSettingsTopBarAction("home", canGoBack = false))
+        assertTrue(MainUiPolicy.showsSettingsTopBarAction("goods_events", canGoBack = false))
+        assertFalse(MainUiPolicy.showsSettingsTopBarAction("settings", canGoBack = false))
+        assertFalse(MainUiPolicy.showsSettingsTopBarAction("goods_event_detail", canGoBack = true))
     }
 
     @Test
@@ -34,6 +49,11 @@ class MainUiPolicyTest {
         assertEquals("최근 알림", summary[1].label)
         assertEquals("1", summary[2].value)
         assertEquals("마감 임박", summary[2].label)
+    }
+
+    @Test
+    fun homeSummaryCardsAreDisabled() {
+        assertFalse(MainUiPolicy.homeSummaryCardsVisible())
     }
 
     @Test
@@ -93,9 +113,27 @@ class MainUiPolicyTest {
 
         assertEquals(false, eventRows.first { it.title == "CHZZK 채팅" }.checked)
         assertEquals(false, eventRows.first { it.title == "YouTube 라이브 시작" }.checked)
-        assertTrue(eventRows.first { it.title == "YouTube 라이브 시작" }.body.contains("공식 채널에는 적용하지 않음"))
+        assertNull(eventRows.first { it.title == "CHZZK 채팅" }.body)
+        assertNull(eventRows.first { it.title == "YouTube 라이브 시작" }.body)
+        assertTrue(MainUiPolicy.settingsEventTypeCommonNotices().any { it.contains("공식 채널에는 YouTube 라이브 예정/시작/종료") })
+        assertTrue(MainUiPolicy.settingsEventTypeCommonNotices().any { it.contains("조용한 시간") })
         assertEquals(true, hubRows.first { it.title == "굿즈/행사 알림" }.checked)
         assertEquals(false, hubRows.first { it.title == "변경 알림" }.checked)
         assertTrue(MainUiPolicy.hubEventPolicyNotice().contains("대표/강지 이벤트"))
+    }
+
+    @Test
+    fun settingsSharedPlatformPolicyIsShownOncePerSection() {
+        assertNull(MainUiPolicy.settingsPlatformPolicy(NotificationPlatform.CHZZK))
+        assertNull(MainUiPolicy.settingsPlatformPolicy(NotificationPlatform.YOUTUBE))
+        assertEquals(
+            "공식 API와 약관을 우선합니다. 무단 수집이나 로그인 쿠키 수집은 사용하지 않습니다.",
+            MainUiPolicy.settingsPlatformPolicy(NotificationPlatform.NAVER_CAFE)
+        )
+        assertEquals(
+            "공식 출처가 있는 기간성 굿즈, 티켓, 오프라인 행사만 포함합니다.",
+            MainUiPolicy.settingsPlatformPolicy(NotificationPlatform.HUB_EVENT)
+        )
+        assertTrue(MainUiPolicy.settingsPlatformCommonNotice().contains("플랫폼 OFF"))
     }
 }

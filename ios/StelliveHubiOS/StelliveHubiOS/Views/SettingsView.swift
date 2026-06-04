@@ -9,6 +9,16 @@ enum SettingsRoute: String, CaseIterable, Hashable {
     case advanced
 }
 
+enum SettingsNavigationRowVerticalAlignment: Equatable {
+    case center
+}
+
+enum SettingsNavigationRowLayout {
+    static let trailingSummaryVerticalAlignment: SettingsNavigationRowVerticalAlignment = .center
+    static let summaryLineLimit = 1
+    static let summaryMinimumScaleFactor = 0.85
+}
+
 struct SettingsHubRow: Identifiable, Equatable {
     let route: SettingsRoute
     let title: String
@@ -21,12 +31,17 @@ struct SettingsHubRow: Identifiable, Equatable {
 struct SettingsToggleRow: Identifiable, Equatable {
     let id: String
     let title: String
-    let note: String
+    let note: String?
     let isEnabled: Bool
 }
 
 enum SettingsNavigationPolicy {
     static let hubEventPolicyNotice = "대표/강지 이벤트, 팬 주최 이벤트, 루틴 방송/라이브/업로드는 MVP 굿즈/행사 피드에 포함하지 않습니다."
+    static let platformSettingsCommonNotice = "플랫폼 OFF이면 해당 플랫폼 이벤트 푸시를 차단합니다."
+    static let eventTypeSettingsCommonNotices = [
+        "사용자 설정, 조용한 시간, 차단 키워드, rate limit은 계속 적용됩니다.",
+        "공식 채널에는 YouTube 라이브 예정/시작/종료를 적용하지 않으며, 공식 YouTube는 업로드 알림만 지원합니다."
+    ]
 
     static func hubRows(settings: NotificationSettingsState, members: [HubMember]) -> [SettingsHubRow] {
         [
@@ -117,14 +132,10 @@ enum SettingsNavigationPolicy {
         ]
     }
 
-    static func eventTypePolicy(_ eventType: NotificationEventType) -> String {
+    static func eventTypePolicy(_ eventType: NotificationEventType) -> String? {
         switch eventType {
-        case .chzzkChat:
-            return "기본 OFF입니다. 명시 필터가 없으면 푸시 전송 대상으로 쓰지 않습니다."
-        case .youtubeLiveScheduled, .youtubeLiveStarted, .youtubeLiveEnded:
-            return "공식 채널에는 적용하지 않음. 일반 채널 정책으로만 유지합니다."
-        case .officialYoutubeUpload:
-            return "스텔라이브 공식 YouTube는 업로드 알림만 지원합니다."
+        case .chzzkChat, .youtubeLiveScheduled, .youtubeLiveStarted, .youtubeLiveEnded, .officialYoutubeUpload:
+            return nil
         case .cafePost:
             return "무단 수집, 로그인 쿠키 수집, 비공개 접근 우회 없이 공식 경로만 사용합니다."
         case .eventAnnounced:
@@ -138,7 +149,18 @@ enum SettingsNavigationPolicy {
         case .eventCancelled:
             return "공식 출처의 취소 안내만 전송합니다."
         default:
-            return "사용자 설정, 조용한 시간, 차단 키워드, rate limit 적용 후 전송합니다."
+            return nil
+        }
+    }
+
+    static func platformPolicy(_ platform: NotificationPlatform) -> String? {
+        switch platform {
+        case .naverCafe:
+            return "공식 API와 약관을 우선합니다. 무단 수집이나 로그인 쿠키 수집은 사용하지 않습니다."
+        case .hubEvent:
+            return "공식 출처가 있는 기간성 굿즈, 티켓, 오프라인 행사만 포함합니다."
+        default:
+            return nil
         }
     }
 
@@ -153,55 +175,67 @@ enum SettingsNavigationPolicy {
 }
 
 struct SettingsView: View {
+    var body: some View {
+        NavigationStack {
+            SettingsContentView()
+        }
+    }
+}
+
+struct SettingsContentView: View {
     @EnvironmentObject private var store: MockHubStore
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("전체") {
-                    Toggle("전체 알림", isOn: $store.settings.globalEnabled)
-                    Picker("터치 동작", selection: $store.settings.tapAction) {
-                        Text("앱에서 열기").tag(TapAction.openApp)
-                        Text("원 플랫폼에서 열기").tag(TapAction.openPlatform)
-                    }
+        Form {
+            Section("전체") {
+                Toggle("전체 알림", isOn: $store.settings.globalEnabled)
+                Picker("터치 동작", selection: $store.settings.tapAction) {
+                    Text("앱에서 열기").tag(TapAction.openApp)
+                    Text("원 플랫폼에서 열기").tag(TapAction.openPlatform)
                 }
+            }
 
-                Section("화면 모드") {
-                    appearanceModePicker
-                }
+            Section("화면 모드") {
+                appearanceModePicker
+            }
 
-                Section("알림 설정") {
-                    ForEach(SettingsNavigationPolicy.hubRows(settings: store.settings, members: store.members)) { row in
-                        NavigationLink(value: row.route) {
+            Section("알림 설정") {
+                ForEach(SettingsNavigationPolicy.hubRows(settings: store.settings, members: store.members)) { row in
+                    NavigationLink(value: row.route) {
+                        HStack(alignment: .center, spacing: 12) {
                             VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text(row.title)
-                                    Spacer()
-                                    Text(row.summary)
-                                        .foregroundStyle(.secondary)
-                                }
+                                Text(row.title)
                                 Text(row.note)
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
-                            .padding(.vertical, 3)
+                            .layoutPriority(1)
+
+                            Spacer(minLength: 8)
+
+                            Text(row.summary)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(SettingsNavigationRowLayout.summaryLineLimit)
+                                .minimumScaleFactor(SettingsNavigationRowLayout.summaryMinimumScaleFactor)
+                                .multilineTextAlignment(.trailing)
                         }
+                        .padding(.vertical, 3)
                     }
                 }
+            }
 
-                Section("표시 정책") {
-                    LabeledContent("Former 멤버", value: "MVP 제외")
-                    LabeledContent("강지", value: "감자 대표 항목")
-                    LabeledContent("공식 이미지/로고/포스터", value: "저장/재사용 안 함")
-                    Text("홈은 현재 라이브, 최근 알림, 마감 임박 굿즈/행사를 우선 표시하고, 알림 대상과 전송 정책은 설정에서 관리합니다.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+            Section("표시 정책") {
+                LabeledContent("Former 멤버", value: "MVP 제외")
+                LabeledContent("강지", value: "감자 대표 항목")
+                LabeledContent("공식 이미지/로고/포스터", value: "저장/재사용 안 함")
+                Text("홈은 현재 라이브, 최근 알림, 마감 임박 굿즈/행사를 우선 표시하고, 알림 대상과 전송 정책은 설정에서 관리합니다.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
-            .navigationTitle("설정")
-            .navigationDestination(for: SettingsRoute.self) { route in
-                settingsDestination(route)
-            }
+        }
+        .navigationTitle("설정")
+        .navigationDestination(for: SettingsRoute.self) { route in
+            settingsDestination(route)
         }
     }
 
@@ -300,10 +334,15 @@ struct SettingsView: View {
             Section("플랫폼별 알림") {
                 ForEach(NotificationPlatform.allCases) { platform in
                     Toggle(platform.displayName, isOn: platformBinding(platform))
-                    Text(platformPolicy(platform))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    if let note = SettingsNavigationPolicy.platformPolicy(platform) {
+                        Text(note)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                Text(SettingsNavigationPolicy.platformSettingsCommonNotice)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
         .navigationTitle("플랫폼별 알림")
@@ -314,7 +353,14 @@ struct SettingsView: View {
             Section("이벤트 타입별 알림") {
                 ForEach(NotificationEventType.allCases) { eventType in
                     Toggle(eventType.displayName, isOn: eventTypeBinding(eventType))
-                    Text(SettingsNavigationPolicy.eventTypePolicy(eventType))
+                    if let note = SettingsNavigationPolicy.eventTypePolicy(eventType) {
+                        Text(note)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                ForEach(SettingsNavigationPolicy.eventTypeSettingsCommonNotices, id: \.self) { notice in
+                    Text(notice)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -406,16 +452,4 @@ struct SettingsView: View {
             store.settings.eventTypeEnabled[eventType] = newValue
         }
     }
-
-    private func platformPolicy(_ platform: NotificationPlatform) -> String {
-        switch platform {
-        case .naverCafe:
-            return "공식 API와 약관을 우선합니다. 무단 수집이나 로그인 쿠키 수집은 사용하지 않습니다."
-        case .hubEvent:
-            return "공식 출처가 있는 기간성 굿즈, 티켓, 오프라인 행사만 포함합니다."
-        default:
-            return "플랫폼 OFF이면 해당 플랫폼 이벤트 푸시를 차단합니다."
-        }
-    }
-
 }

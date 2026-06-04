@@ -61,18 +61,35 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertFalse(rows.contains { $0.title == "CHZZK 채팅" })
     }
 
+    func testSettingsNavigationRowsCenterTrailingSummaryAgainstFullRow() {
+        XCTAssertEqual(SettingsNavigationRowLayout.trailingSummaryVerticalAlignment, .center)
+        XCTAssertEqual(SettingsNavigationRowLayout.summaryLineLimit, 1)
+        XCTAssertLessThanOrEqual(SettingsNavigationRowLayout.summaryMinimumScaleFactor, 0.9)
+    }
+
     func testSettingsNavigationChildPagesKeepPolicySensitiveRows() {
         let store = MockHubStore()
 
         let eventRows = SettingsNavigationPolicy.eventTypeRows(settings: store.settings)
         XCTAssertEqual(eventRows.first { $0.title == "CHZZK 채팅" }?.isEnabled, false)
         XCTAssertEqual(eventRows.first { $0.title == "YouTube 라이브 시작" }?.isEnabled, false)
-        XCTAssertTrue(eventRows.first { $0.title == "YouTube 라이브 시작" }?.note.contains("공식 채널에는 적용하지 않음") == true)
+        XCTAssertNil(eventRows.first { $0.title == "CHZZK 채팅" }?.note)
+        XCTAssertNil(eventRows.first { $0.title == "YouTube 라이브 시작" }?.note)
+        XCTAssertTrue(SettingsNavigationPolicy.eventTypeSettingsCommonNotices.contains { $0.contains("공식 채널에는 YouTube 라이브 예정/시작/종료") })
+        XCTAssertTrue(SettingsNavigationPolicy.eventTypeSettingsCommonNotices.contains { $0.contains("조용한 시간") })
 
         let hubRows = SettingsNavigationPolicy.hubEventRows(settings: store.settings)
         XCTAssertEqual(hubRows.first { $0.title == "굿즈/행사 알림" }?.isEnabled, true)
         XCTAssertEqual(hubRows.first { $0.title == "변경 알림" }?.isEnabled, false)
         XCTAssertTrue(SettingsNavigationPolicy.hubEventPolicyNotice.contains("대표/강지 이벤트"))
+    }
+
+    func testSettingsSharedPlatformPolicyIsShownOncePerSection() {
+        XCTAssertNil(SettingsNavigationPolicy.platformPolicy(.chzzk))
+        XCTAssertNil(SettingsNavigationPolicy.platformPolicy(.youtube))
+        XCTAssertEqual(SettingsNavigationPolicy.platformPolicy(.naverCafe), "공식 API와 약관을 우선합니다. 무단 수집이나 로그인 쿠키 수집은 사용하지 않습니다.")
+        XCTAssertEqual(SettingsNavigationPolicy.platformPolicy(.hubEvent), "공식 출처가 있는 기간성 굿즈, 티켓, 오프라인 행사만 포함합니다.")
+        XCTAssertTrue(SettingsNavigationPolicy.platformSettingsCommonNotice.contains("플랫폼 OFF"))
     }
 
     func testRealtimeDisclosureMentionsPolicyLimits() {
@@ -96,6 +113,23 @@ final class PreferenceStateTests: XCTestCase {
         let store = MockHubStore()
         XCTAssertEqual(store.settings.appearanceMode, .system)
         XCTAssertEqual(AppearanceMode.allCases.map(\.displayName), ["자동", "라이트", "다크"])
+    }
+
+    func testIOSPrimaryNavigationMovesSettingsToToolbarAndAddsHubEventsTab() {
+        XCTAssertEqual(IOSPrimaryNavigationPolicy.bottomTabs.map(\.id), ["home", "live", "history", "hubEvents"])
+        XCTAssertEqual(IOSPrimaryNavigationPolicy.bottomTabs.map(\.title), ["홈", "라이브", "기록", "굿즈/행사"])
+        XCTAssertFalse(IOSPrimaryNavigationPolicy.bottomTabs.contains { $0.id == "settings" })
+        XCTAssertEqual(IOSPrimaryNavigationPolicy.titlelessPrimaryScreens, ["home", "hubEvents"])
+        XCTAssertEqual(IOSPrimaryNavigationPolicy.settingsAccess.placement, .topBarTrailing)
+        XCTAssertEqual(IOSPrimaryNavigationPolicy.settingsAccess.systemImage, "slider.horizontal.3")
+        XCTAssertTrue(IOSPrimaryNavigationPolicy.settingsAccess.appliesToAllPrimaryTabs)
+    }
+
+    func testSettingsToolbarPushesWithinPresenterNavigationStackOnlyFromPrimaryRoots() {
+        XCTAssertEqual(IOSPrimaryNavigationPolicy.settingsAccess.presentation, .navigationStackPush)
+        XCTAssertTrue(IOSPrimaryNavigationPolicy.settingsAccess.reusesPresenterNavigationStack)
+        XCTAssertTrue(IOSPrimaryNavigationPolicy.settingsAccess.showsOnlyOnPrimaryRoots)
+        XCTAssertTrue(IOSPrimaryNavigationPolicy.settingsAccess.suppressesPrimaryButtonWithinSettingsFlow)
     }
 
     func testHomeSummaryCountsLiveMembersAndRecentNotifications() {
@@ -122,12 +156,39 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertFalse(store.deliveryModeSummary.isEmpty)
     }
 
+    func testHubEventStatusBadgesCenterAgainstFullRowContent() {
+        XCTAssertEqual(HubEventStatusRowLayout.trailingStatusVerticalAlignment, .center)
+        XCTAssertEqual(HubEventStatusRowLayout.statusLineLimit, 1)
+        XCTAssertLessThanOrEqual(HubEventStatusRowLayout.statusMinimumScaleFactor, 0.9)
+        XCTAssertTrue(HubEventStatusRowLayout.preservesStatusIntrinsicWidth)
+    }
+
     func testHomePreviewKeepsPolicyContentOutOfHomeSelectors() {
         let store = MockHubStore()
 
         XCTAssertFalse(store.recentHistoryPreview.contains { $0.eventType.localizedCaseInsensitiveContains("youtube_live") })
         XCTAssertFalse(store.closingSoonHubEvents.contains { $0.memberId == "gangzi" })
         XCTAssertFalse(store.closingSoonHubEvents.contains { $0.generationId == "gamja" })
+    }
+
+    func testIOSGroupedScreenPolicyKeepsSecondaryScreensOnGroupedSurfaces() {
+        XCTAssertEqual(IOSGroupedScreenPolicy.groupedScreens.map(\.id), ["live", "history", "hubEvents"])
+        XCTAssertTrue(IOSGroupedScreenPolicy.groupedScreens.allSatisfy(\.usesInsetGroupedList))
+        XCTAssertTrue(IOSGroupedScreenPolicy.groupedScreens.allSatisfy(\.wrapsRowsInGroupedCards))
+        XCTAssertEqual(IOSGroupedScreenPolicy.headerHorizontalContentInset, 0)
+        XCTAssertEqual(IOSGroupedScreenPolicy.hubEventsFilterPlacement, .groupedSection)
+        XCTAssertTrue(IOSGroupedScreenPolicy.darkModeGuidance.contains("plain list"))
+    }
+
+    func testHistoryPresentationMetadataUsesReaderFriendlyLabels() {
+        let store = MockHubStore()
+        let realtimeItem = store.history.first { $0.deliveryMode == .realtimeBestEffort }!
+        let standardItem = store.history.first { $0.deliveryMode == .standard }!
+
+        XCTAssertEqual(HistoryPresentationPolicy.metadataText(for: realtimeItem), "실시간 · 1.8초")
+        XCTAssertEqual(HistoryPresentationPolicy.metadataText(for: standardItem), "표준 · 방금")
+        XCTAssertFalse(HistoryPresentationPolicy.metadataText(for: realtimeItem).contains("realtime_best_effort"))
+        XCTAssertFalse(HistoryPresentationPolicy.metadataText(for: standardItem).contains("event_deadline_soon"))
     }
 
     func testHubEventsExcludeGangziAndGamja() {

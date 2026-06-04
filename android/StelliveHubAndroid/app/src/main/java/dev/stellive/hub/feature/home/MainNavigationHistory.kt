@@ -29,6 +29,11 @@ class MainNavigationHistory(initialScreen: HubScreen = HubScreen.HOME) {
         currentScreen = screen
     }
 
+    fun selectRoot(screen: HubScreen) {
+        previousScreens.clear()
+        currentScreen = screen
+    }
+
     fun goBack(): HubScreen? {
         val previous = previousScreens.removeLastOrNull() ?: return null
         currentScreen = previous

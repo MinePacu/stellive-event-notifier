@@ -2,9 +2,10 @@ import SwiftUI
 
 struct LiveView: View {
     @EnvironmentObject private var store: MockHubStore
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 HubHeaderCard(
                     iconText: "ON",
@@ -16,7 +17,7 @@ struct LiveView: View {
                         .init(value: "\(store.offlineChzzkTargetCount)", label: "오프라인")
                     ]
                 )
-                .listRowInsets(EdgeInsets(top: 18, leading: 16, bottom: 10, trailing: 16))
+                .listRowInsets(IOSGroupedScreenPolicy.headerRowInsets)
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
 
@@ -30,8 +31,8 @@ struct LiveView: View {
                     Text("최대한 실시간 모드는 즉시성을 보장하지 않으며 플랫폼/OS/네트워크 정책에 따라 지연될 수 있습니다.")
                 }
             }
-            .listStyle(.plain)
-            .toolbar(.hidden, for: .navigationBar)
+            .listStyle(.insetGrouped)
+            .settingsToolbar(path: $path)
         }
     }
 }

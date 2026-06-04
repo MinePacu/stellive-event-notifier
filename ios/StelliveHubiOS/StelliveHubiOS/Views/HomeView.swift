@@ -2,9 +2,10 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject private var store: MockHubStore
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 Section("지금 라이브") {
                     if store.liveMembers.isEmpty {
@@ -57,7 +58,7 @@ struct HomeView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("홈")
+            .settingsToolbar(path: $path)
             .navigationDestination(for: HubMember.self) { member in
                 MemberDetailView(member: member)
             }
@@ -92,23 +93,29 @@ private struct HomeHubEventRow: View {
     let event: HubEvent
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(event.title)
                     .font(.headline)
                     .lineLimit(2)
                     .minimumScaleFactor(0.86)
-                Spacer(minLength: 8)
-                Text(event.status.displayName)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(event.status == .closingSoon ? Color.red : Color.teal)
-                    .lineLimit(1)
+                Text([event.category.displayName, event.participationMode.displayName, event.sourceLabel].joined(separator: " · "))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.84)
             }
-            Text([event.category.displayName, event.participationMode.displayName, event.sourceLabel].joined(separator: " · "))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.84)
+            .layoutPriority(1)
+
+            Spacer(minLength: 8)
+
+            Text(event.status.displayName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(event.status == .closingSoon ? Color.red : Color.teal)
+                .lineLimit(HubEventStatusRowLayout.statusLineLimit)
+                .minimumScaleFactor(HubEventStatusRowLayout.statusMinimumScaleFactor)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: HubEventStatusRowLayout.preservesStatusIntrinsicWidth, vertical: false)
         }
         .accessibilityElement(children: .combine)
     }
@@ -161,6 +168,40 @@ struct HubHeaderMetric: Identifiable {
     let label: String
 
     var id: String { label }
+}
+
+struct IOSGroupedScreenPolicy {
+    struct Screen: Equatable {
+        let id: String
+        let usesInsetGroupedList: Bool
+        let wrapsRowsInGroupedCards: Bool
+    }
+
+    enum FilterPlacement {
+        case groupedSection
+    }
+
+    static let groupedScreens: [Screen] = [
+        .init(id: "live", usesInsetGroupedList: true, wrapsRowsInGroupedCards: true),
+        .init(id: "history", usesInsetGroupedList: true, wrapsRowsInGroupedCards: true),
+        .init(id: "hubEvents", usesInsetGroupedList: true, wrapsRowsInGroupedCards: true)
+    ]
+
+    static let headerHorizontalContentInset = 0.0
+    static let headerRowInsets = EdgeInsets(top: 18, leading: headerHorizontalContentInset, bottom: 10, trailing: headerHorizontalContentInset)
+    static let hubEventsFilterPlacement: FilterPlacement = .groupedSection
+    static let darkModeGuidance = "Avoid placing secondary content in a plain list on dark backgrounds; wrap summaries, filters, rows, and notices in grouped card surfaces."
+}
+
+enum HubEventStatusRowVerticalAlignment: Equatable {
+    case center
+}
+
+enum HubEventStatusRowLayout {
+    static let trailingStatusVerticalAlignment: HubEventStatusRowVerticalAlignment = .center
+    static let statusLineLimit = 1
+    static let statusMinimumScaleFactor = 0.85
+    static let preservesStatusIntrinsicWidth = true
 }
 
 struct HubHeaderCard: View {

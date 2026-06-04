@@ -58,6 +58,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         setupTopBarScrollBehavior()
         setupBackNavigation()
+        setupTopBarActions()
         setupBottomNavigation()
         renderHome()
         updateSelectedBottomNavigation(HubScreen.HOME)
@@ -73,8 +74,14 @@ class MainActivity : AppCompatActivity() {
     private fun setupBottomNavigation() {
         bottomNavigationItems().forEach { item ->
             item.setOnClickListener {
-                navigateTo(screenForItem(item.id), addToBackStack = true)
+                navigateToRoot(screenForItem(item.id))
             }
+        }
+    }
+
+    private fun setupTopBarActions() {
+        binding.topBarSettings.setOnClickListener {
+            navigateTo(HubScreen.SETTINGS, addToBackStack = true)
         }
     }
 
@@ -97,6 +104,14 @@ class MainActivity : AppCompatActivity() {
         if (addToBackStack) {
             navigationHistory.select(screen)
         }
+        renderScreen(screen)
+        updateSelectedBottomNavigation(screen)
+        updateNavigationChrome()
+    }
+
+    private fun navigateToRoot(screen: HubScreen) {
+        if (screen == navigationHistory.currentScreen && !navigationHistory.canGoBack) return
+        navigationHistory.selectRoot(screen)
         renderScreen(screen)
         updateSelectedBottomNavigation(screen)
         updateNavigationChrome()
@@ -128,7 +143,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateSelectedBottomNavigation(screen: HubScreen) {
-        val selectedItem = itemForScreen(screen)
+        val selectedItem = itemForScreen(screen) ?: return
         bottomNavigationItems().forEach { item ->
             setSelectedState(item, item.id == selectedItem)
         }
@@ -138,7 +153,7 @@ class MainActivity : AppCompatActivity() {
         binding.tabHome,
         binding.tabLive,
         binding.tabHistory,
-        binding.tabSettings
+        binding.tabGoodsEvents
     )
 
     private fun setSelectedState(view: View, selected: Boolean) {
@@ -159,28 +174,35 @@ class MainActivity : AppCompatActivity() {
             binding.topBarTitleGroup.paddingEnd,
             binding.topBarTitleGroup.paddingBottom
         )
+        binding.topBarSettings.visibility = if (
+            MainUiPolicy.showsSettingsTopBarAction(navigationHistory.currentScreen.id, canGoBack)
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
     }
 
     private fun screenForItem(itemId: Int): HubScreen = when (itemId) {
         R.id.tab_live -> HubScreen.LIVE
         R.id.tab_history -> HubScreen.HISTORY
-        R.id.tab_settings -> HubScreen.SETTINGS
+        R.id.tab_goods_events -> HubScreen.GOODS_EVENTS
         else -> HubScreen.HOME
     }
 
-    private fun itemForScreen(screen: HubScreen): Int = when (screen) {
+    private fun itemForScreen(screen: HubScreen): Int? = when (screen) {
         HubScreen.HOME -> R.id.tab_home
-        HubScreen.GOODS_EVENTS -> R.id.tab_home
-        HubScreen.GOODS_EVENT_DETAIL -> R.id.tab_home
+        HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
+        HubScreen.GOODS_EVENT_DETAIL -> R.id.tab_goods_events
         HubScreen.LIVE -> R.id.tab_live
         HubScreen.HISTORY -> R.id.tab_history
-        HubScreen.SETTINGS -> R.id.tab_settings
-        HubScreen.SETTINGS_DELIVERY -> R.id.tab_settings
-        HubScreen.SETTINGS_TARGETS -> R.id.tab_settings
-        HubScreen.SETTINGS_PLATFORMS -> R.id.tab_settings
-        HubScreen.SETTINGS_EVENT_TYPES -> R.id.tab_settings
-        HubScreen.SETTINGS_HUB_EVENTS -> R.id.tab_settings
-        HubScreen.SETTINGS_ADVANCED -> R.id.tab_settings
+        HubScreen.SETTINGS -> null
+        HubScreen.SETTINGS_DELIVERY -> null
+        HubScreen.SETTINGS_TARGETS -> null
+        HubScreen.SETTINGS_PLATFORMS -> null
+        HubScreen.SETTINGS_EVENT_TYPES -> null
+        HubScreen.SETTINGS_HUB_EVENTS -> null
+        HubScreen.SETTINGS_ADVANCED -> null
     }
 
     private fun startScreen(screenId: String, title: String, role: String) {
@@ -200,15 +222,6 @@ class MainActivity : AppCompatActivity() {
             screenId = "home",
             title = getString(R.string.home_title),
             role = "지금 라이브, 최근 알림, 마감 임박 굿즈/행사를 확인합니다."
-        )
-        binding.contentList.addView(
-            summaryGrid(
-                MainUiPolicy.homeStatusSummary(
-                    liveCount = repository.liveMembers.size,
-                    recentCount = repository.recentHistoryPreview.size,
-                    closingSoonCount = repository.closingSoonHubEvents.size
-                )
-            )
         )
         binding.contentList.addView(sectionLabel("지금 라이브"))
         if (repository.liveMembers.isEmpty()) {
@@ -245,7 +258,7 @@ class MainActivity : AppCompatActivity() {
                     isClickable = true
                     isFocusable = true
                     setOnClickListener {
-                        navigateTo(HubScreen.GOODS_EVENTS, addToBackStack = true)
+                        navigateToRoot(HubScreen.GOODS_EVENTS)
                     }
                 }
             )
@@ -262,7 +275,7 @@ class MainActivity : AppCompatActivity() {
                     isClickable = true
                     isFocusable = true
                     setOnClickListener {
-                        navigateTo(HubScreen.GOODS_EVENTS, addToBackStack = true)
+                        navigateToRoot(HubScreen.GOODS_EVENTS)
                     }
                 }
             )
@@ -519,7 +532,7 @@ class MainActivity : AppCompatActivity() {
         startScreen(
             screenId = "settings_platforms",
             title = "플랫폼별 알림",
-            role = "플랫폼 OFF는 해당 플랫폼 이벤트 푸시를 차단합니다."
+            role = "플랫폼별 허용 여부"
         )
         binding.contentList.addView(
             settingsPanel(
@@ -527,14 +540,17 @@ class MainActivity : AppCompatActivity() {
                 rows = NotificationPlatform.entries.map { platform ->
                     SettingRow(
                         title = platform.displayName,
-                        body = if (platform == NotificationPlatform.NAVER_CAFE) {
-                            "공식 API와 약관을 우선합니다. 무단 수집이나 로그인 쿠키 수집은 사용하지 않습니다."
-                        } else {
-                            "플랫폼 OFF이면 해당 플랫폼 이벤트 푸시를 차단합니다."
-                        },
+                        body = MainUiPolicy.settingsPlatformPolicy(platform),
                         checked = settings.platformEnabled[platform] == true
                     )
                 }
+            )
+        )
+        binding.contentList.addView(
+            compactEventCard(
+                title = "공통 안내",
+                body = MainUiPolicy.settingsPlatformCommonNotice(),
+                pills = listOf("플랫폼 OFF", "푸시 차단")
             )
         )
     }
@@ -544,7 +560,7 @@ class MainActivity : AppCompatActivity() {
         startScreen(
             screenId = "settings_event_types",
             title = "이벤트 타입별 알림",
-            role = "사용자 설정, 조용한 시간, 차단 키워드, rate limit은 항상 적용됩니다."
+            role = "이벤트 종류별 허용 여부"
         )
         binding.contentList.addView(
             settingsPanel(
@@ -559,6 +575,13 @@ class MainActivity : AppCompatActivity() {
             )
         )
         binding.contentList.addView(
+            compactEventCard(
+                title = "공통 안내",
+                body = MainUiPolicy.settingsEventTypeCommonNotices().first(),
+                pills = listOf("조용한 시간", "차단 키워드", "rate limit")
+            )
+        )
+        binding.contentList.addView(
             settingsPanel(
                 title = "채팅 알림",
                 rows = listOf(
@@ -570,7 +593,7 @@ class MainActivity : AppCompatActivity() {
         binding.contentList.addView(
             compactEventCard(
                 title = "공식 채널 제한",
-                body = "공식 YouTube는 업로드 알림만 지원합니다. 라이브 예정, 시작, 종료 이벤트는 생성하지 않습니다.",
+                body = MainUiPolicy.settingsEventTypeCommonNotices().last(),
                 pills = listOf("공식 X 게시글", "공식 YouTube 업로드", "공식 YouTube live 제외")
             )
         )
@@ -1155,12 +1178,14 @@ class MainActivity : AppCompatActivity() {
                 textSize = 14f
                 typeface = Typeface.DEFAULT_BOLD
             })
-            addView(TextView(context).apply {
-                text = row.body
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 12f
-                setLineSpacing(0f, 1.1f)
-            })
+            row.body?.takeIf { it.isNotBlank() }?.let { body ->
+                addView(TextView(context).apply {
+                    text = body
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 12f
+                    setLineSpacing(0f, 1.1f)
+                })
+            }
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
             marginEnd = dp(12)
         })
@@ -1266,7 +1291,7 @@ class MainActivity : AppCompatActivity() {
 
 private data class SettingRow(
     val title: String,
-    val body: String,
+    val body: String?,
     val checked: Boolean? = null,
     val badge: String? = null
 )
