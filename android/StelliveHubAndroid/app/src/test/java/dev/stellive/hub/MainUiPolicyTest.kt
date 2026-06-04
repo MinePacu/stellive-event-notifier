@@ -2,6 +2,7 @@ package dev.stellive.hub
 
 import dev.stellive.hub.feature.home.MainUiPolicy
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
@@ -62,5 +63,39 @@ class MainUiPolicyTest {
         assertTrue(lines[0].contains("플랫폼/OS/네트워크"))
         assertTrue(lines[1].contains("배터리와 데이터"))
         assertTrue(lines[2].contains("rate limit"))
+    }
+
+    @Test
+    fun settingsHubRowsSummarizeChildPages() {
+        val rows = MainUiPolicy.settingsHubRows(
+            deliveryMode = "STANDARD",
+            enabledTargets = 15,
+            totalTargets = 16,
+            enabledPlatforms = 4,
+            totalPlatforms = 5,
+            enabledEventTypes = 12,
+            totalEventTypes = 16,
+            hubEventsEnabled = true,
+            deadlineSoonEnabled = true
+        )
+
+        assertEquals(listOf("delivery", "targets", "platforms", "event_types", "hub_events", "advanced"), rows.map { it.screenId })
+        assertEquals("표준", rows.first { it.screenId == "delivery" }.value)
+        assertEquals("4/5", rows.first { it.screenId == "platforms" }.value)
+        assertEquals("켜짐 · 마감 임박 ON", rows.first { it.screenId == "hub_events" }.value)
+        assertFalse(rows.any { it.title == "CHZZK 채팅" })
+    }
+
+    @Test
+    fun settingsChildRowsKeepPolicySensitiveDefaults() {
+        val eventRows = MainUiPolicy.settingsEventTypeRows()
+        val hubRows = MainUiPolicy.settingsHubEventRows(hubEventsEnabled = true, deadlineSoonEnabled = true)
+
+        assertEquals(false, eventRows.first { it.title == "CHZZK 채팅" }.checked)
+        assertEquals(false, eventRows.first { it.title == "YouTube 라이브 시작" }.checked)
+        assertTrue(eventRows.first { it.title == "YouTube 라이브 시작" }.body.contains("공식 채널에는 적용하지 않음"))
+        assertEquals(true, hubRows.first { it.title == "굿즈/행사 알림" }.checked)
+        assertEquals(false, hubRows.first { it.title == "변경 알림" }.checked)
+        assertTrue(MainUiPolicy.hubEventPolicyNotice().contains("대표/강지 이벤트"))
     }
 }

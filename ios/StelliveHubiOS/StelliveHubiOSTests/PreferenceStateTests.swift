@@ -50,6 +50,31 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertEqual(settings.rateLimit.maxNotificationsPerMinute, 10)
     }
 
+    func testSettingsNavigationHubSummarizesChildPages() {
+        let store = MockHubStore()
+        let rows = SettingsNavigationPolicy.hubRows(settings: store.settings, members: store.members)
+
+        XCTAssertEqual(rows.map(\.route), [.delivery, .targets, .platforms, .eventTypes, .hubEvents, .advanced])
+        XCTAssertEqual(rows.first { $0.route == .delivery }?.summary, "표준")
+        XCTAssertEqual(rows.first { $0.route == .platforms }?.summary, "4/5")
+        XCTAssertEqual(rows.first { $0.route == .hubEvents }?.summary, "켜짐 · 마감 임박 ON")
+        XCTAssertFalse(rows.contains { $0.title == "CHZZK 채팅" })
+    }
+
+    func testSettingsNavigationChildPagesKeepPolicySensitiveRows() {
+        let store = MockHubStore()
+
+        let eventRows = SettingsNavigationPolicy.eventTypeRows(settings: store.settings)
+        XCTAssertEqual(eventRows.first { $0.title == "CHZZK 채팅" }?.isEnabled, false)
+        XCTAssertEqual(eventRows.first { $0.title == "YouTube 라이브 시작" }?.isEnabled, false)
+        XCTAssertTrue(eventRows.first { $0.title == "YouTube 라이브 시작" }?.note.contains("공식 채널에는 적용하지 않음") == true)
+
+        let hubRows = SettingsNavigationPolicy.hubEventRows(settings: store.settings)
+        XCTAssertEqual(hubRows.first { $0.title == "굿즈/행사 알림" }?.isEnabled, true)
+        XCTAssertEqual(hubRows.first { $0.title == "변경 알림" }?.isEnabled, false)
+        XCTAssertTrue(SettingsNavigationPolicy.hubEventPolicyNotice.contains("대표/강지 이벤트"))
+    }
+
     func testRealtimeDisclosureMentionsPolicyLimits() {
         XCTAssertEqual(NotificationSettingsState.realtimeDisclosureLines, [
             "최대한 실시간 모드는 가능한 한 빠르게 알림을 받도록 시도하지만, 플랫폼/OS/네트워크 사정으로 지연될 수 있습니다.",
