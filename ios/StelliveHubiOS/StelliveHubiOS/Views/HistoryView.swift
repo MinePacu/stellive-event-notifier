@@ -32,6 +32,7 @@ struct HistoryView: View {
 
                 Section {
                     Text("공식 YouTube 라이브 알림 기록은 생성하지 않습니다.")
+                        .secondaryNoticeTextStyle()
                 }
             }
             .listStyle(.insetGrouped)
@@ -45,44 +46,17 @@ private struct HistoryNotificationRow: View {
     let member: HubMember?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            if let member {
-                MemberAvatarView(member: member, size: 40)
-            } else {
-                HistoryFallbackAvatarView(label: String(item.memberName.prefix(2)))
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.title)
-                    .font(.headline)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.88)
-                Text(item.body)
-                    .font(.body)
-                    .lineLimit(2)
-                    .foregroundStyle(.primary)
-            }
-
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 4) {
-                ForEach(HistoryPresentationPolicy.metadataParts(for: item), id: \.self) { part in
-                    Text(part)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(part == "실시간" ? Color.teal : Color.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                }
-            }
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
+        HistoryNotificationRowContent(item: item, member: member)
     }
 }
 
 struct HistoryPresentationPolicy {
-    static func metadataParts(for item: NotificationHistoryItem) -> [String] {
-        metadataText(for: item).components(separatedBy: " · ")
+    static func titleText(for item: NotificationHistoryItem) -> String {
+        item.title
+    }
+
+    static func subtitleText(for item: NotificationHistoryItem) -> String {
+        item.body
     }
 
     static func metadataText(for item: NotificationHistoryItem) -> String {
@@ -113,6 +87,40 @@ struct HistoryPresentationPolicy {
         }
 
         return String(format: "%.1f초", seconds)
+    }
+}
+
+struct HistoryNotificationRowContent: View {
+    let item: NotificationHistoryItem
+    let member: HubMember?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            if let member {
+                MemberAvatarView(member: member, size: 40)
+            } else {
+                HistoryFallbackAvatarView(label: String(item.memberName.prefix(2)))
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(HistoryPresentationPolicy.titleText(for: item))
+                    .font(.headline)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.86)
+                Text(HistoryPresentationPolicy.subtitleText(for: item))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.84)
+                Text(HistoryPresentationPolicy.metadataText(for: item))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.84)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 }
 

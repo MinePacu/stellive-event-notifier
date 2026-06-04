@@ -29,6 +29,7 @@ struct LiveView: View {
 
                 Section {
                     Text("최대한 실시간 모드는 즉시성을 보장하지 않으며 플랫폼/OS/네트워크 정책에 따라 지연될 수 있습니다.")
+                        .secondaryNoticeTextStyle()
                 }
             }
             .listStyle(.insetGrouped)

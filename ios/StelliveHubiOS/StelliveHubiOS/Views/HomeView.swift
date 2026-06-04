@@ -28,7 +28,10 @@ struct HomeView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(store.recentHistoryPreview) { item in
-                            HomeHistoryRow(item: item)
+                            HomeHistoryRow(
+                                item: item,
+                                member: store.member(for: item)
+                            )
                         }
                     }
                 }
@@ -68,24 +71,13 @@ struct HomeView: View {
 
 private struct HomeHistoryRow: View {
     let item: NotificationHistoryItem
+    let member: HubMember?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(item.title)
-                .font(.headline)
-                .lineLimit(2)
-                .minimumScaleFactor(0.86)
-            Text(item.body)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.84)
-            Text([item.eventType, item.deliveryMode.displayName].joined(separator: " · "))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .accessibilityElement(children: .combine)
+        HistoryNotificationRowContent(
+            item: item,
+            member: member
+        )
     }
 }
 
@@ -181,6 +173,10 @@ struct IOSGroupedScreenPolicy {
         case groupedSection
     }
 
+    enum SecondaryNoticeStyle: Equatable {
+        case settingsFootnoteSecondary
+    }
+
     static let groupedScreens: [Screen] = [
         .init(id: "live", usesInsetGroupedList: true, wrapsRowsInGroupedCards: true),
         .init(id: "history", usesInsetGroupedList: true, wrapsRowsInGroupedCards: true),
@@ -188,9 +184,24 @@ struct IOSGroupedScreenPolicy {
     ]
 
     static let headerHorizontalContentInset = 0.0
-    static let headerRowInsets = EdgeInsets(top: 18, leading: headerHorizontalContentInset, bottom: 10, trailing: headerHorizontalContentInset)
+    static let headerRowInsets = EdgeInsets(top: 0, leading: headerHorizontalContentInset, bottom: 10, trailing: headerHorizontalContentInset)
     static let hubEventsFilterPlacement: FilterPlacement = .groupedSection
+    static let secondaryNoticeStyle: SecondaryNoticeStyle = .settingsFootnoteSecondary
     static let darkModeGuidance = "Avoid placing secondary content in a plain list on dark backgrounds; wrap summaries, filters, rows, and notices in grouped card surfaces."
+}
+
+private struct SecondaryNoticeTextModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+    }
+}
+
+extension View {
+    func secondaryNoticeTextStyle() -> some View {
+        modifier(SecondaryNoticeTextModifier())
+    }
 }
 
 enum HubEventStatusRowVerticalAlignment: Equatable {

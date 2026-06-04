@@ -176,7 +176,9 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertTrue(IOSGroupedScreenPolicy.groupedScreens.allSatisfy(\.usesInsetGroupedList))
         XCTAssertTrue(IOSGroupedScreenPolicy.groupedScreens.allSatisfy(\.wrapsRowsInGroupedCards))
         XCTAssertEqual(IOSGroupedScreenPolicy.headerHorizontalContentInset, 0)
+        XCTAssertEqual(IOSGroupedScreenPolicy.headerRowInsets.top, 0)
         XCTAssertEqual(IOSGroupedScreenPolicy.hubEventsFilterPlacement, .groupedSection)
+        XCTAssertEqual(IOSGroupedScreenPolicy.secondaryNoticeStyle, .settingsFootnoteSecondary)
         XCTAssertTrue(IOSGroupedScreenPolicy.darkModeGuidance.contains("plain list"))
     }
 
@@ -185,6 +187,10 @@ final class PreferenceStateTests: XCTestCase {
         let realtimeItem = store.history.first { $0.deliveryMode == .realtimeBestEffort }!
         let standardItem = store.history.first { $0.deliveryMode == .standard }!
 
+        XCTAssertEqual(HistoryPresentationPolicy.titleText(for: realtimeItem), "방송 시작")
+        XCTAssertEqual(HistoryPresentationPolicy.subtitleText(for: realtimeItem), "아야츠노 유니 CHZZK 방송 시작")
+        XCTAssertEqual(HistoryPresentationPolicy.titleText(for: standardItem), "마감 임박")
+        XCTAssertEqual(HistoryPresentationPolicy.subtitleText(for: standardItem), "스텔라이브 공식 굿즈 예약 마감 임박")
         XCTAssertEqual(HistoryPresentationPolicy.metadataText(for: realtimeItem), "실시간 · 1.8초")
         XCTAssertEqual(HistoryPresentationPolicy.metadataText(for: standardItem), "표준 · 방금")
         XCTAssertFalse(HistoryPresentationPolicy.metadataText(for: realtimeItem).contains("realtime_best_effort"))
@@ -302,6 +308,15 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertEqual(historyMembers.count, catalogHistoryItems.count)
         XCTAssertTrue(historyMembers.contains { $0.id == "ayatsuno-yuni" && $0.catalogRole == .member })
         XCTAssertTrue(historyMembers.contains { $0.id == "stellive-official" && $0.generationId == "official" && $0.catalogRole == .officialChannel })
+    }
+
+    func testRecentHistoryPreviewResolvesMembersOnlyForCatalogEntries() {
+        let store = MockHubStore()
+        let previewMembers = store.recentHistoryPreview.map { store.member(for: $0) }
+
+        XCTAssertNil(previewMembers[0])
+        XCTAssertEqual(previewMembers[1]?.id, "ayatsuno-yuni")
+        XCTAssertEqual(previewMembers[2]?.id, "stellive-official")
     }
 
     func testOfficialYoutubeLiveIsNotRepresentedInHistoryOrSettings() {
