@@ -17,6 +17,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
@@ -45,6 +46,8 @@ class MainActivity : AppCompatActivity() {
     private val repository = MockHubRepository()
     private val navigationHistory = MainNavigationHistory()
     private var selectedFilter = "all"
+    private var selectedHistoryEventTypeFilterId = "all"
+    private var selectedHistoryMemberFilterId = "all"
     private var selectedHubEventId: String? = null
     private var selectedAppearanceMode = AppearanceMode.SYSTEM
     private var notificationPermissionRequested = false
@@ -370,18 +373,68 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderHistory() {
+        val eventTypeOptions = repository.historyEventTypeFilters()
+        val memberOptions = repository.historyMemberFilters()
+        val filteredHistory = repository.filteredHistory(
+            eventTypeFilterId = selectedHistoryEventTypeFilterId,
+            memberFilterId = selectedHistoryMemberFilterId
+        )
         startScreen(
             screenId = "history",
             title = getString(R.string.history_title),
             role = "서버에서 허용, 중복 제거, 사용자 설정, rate limit을 통과한 이벤트만 표시합니다."
         )
-        repository.history.forEach {
-            binding.contentList.addView(
-                historyEventCard(
-                    item = it,
-                    member = repository.memberForHistory(it)
+        binding.contentList.addView(
+            historyFilterPanel(
+                rows = listOf(
+                    HistoryFilterSelectorRow(
+                        title = "알림 종류",
+                        selectedValue = eventTypeOptions.firstOrNull { it.id == selectedHistoryEventTypeFilterId }?.displayName ?: "전체",
+                        onClick = {
+                            showHistoryFilterDialog(
+                                title = "알림 종류",
+                                options = eventTypeOptions.map { it.id to it.displayName },
+                                selectedId = selectedHistoryEventTypeFilterId
+                            ) {
+                                selectedHistoryEventTypeFilterId = it
+                                renderHistory()
+                            }
+                        }
+                    ),
+                    HistoryFilterSelectorRow(
+                        title = "멤버",
+                        selectedValue = memberOptions.firstOrNull { it.id == selectedHistoryMemberFilterId }?.displayName ?: "전체",
+                        onClick = {
+                            showHistoryFilterDialog(
+                                title = "멤버",
+                                options = memberOptions.map { it.id to it.displayName },
+                                selectedId = selectedHistoryMemberFilterId
+                            ) {
+                                selectedHistoryMemberFilterId = it
+                                renderHistory()
+                            }
+                        }
+                    )
                 )
             )
+        )
+        if (filteredHistory.isEmpty()) {
+            binding.contentList.addView(
+                compactEventCard(
+                    "조건에 맞는 알림 없음",
+                    "다른 알림 종류나 멤버를 선택하면 해당 기록만 볼 수 있습니다.",
+                    listOf("필터")
+                )
+            )
+        } else {
+            filteredHistory.forEach {
+                binding.contentList.addView(
+                    historyEventCard(
+                        item = it,
+                        member = repository.memberForHistory(it)
+                    )
+                )
+            }
         }
         binding.contentList.addView(noticeCard(MainUiPolicy.historyPolicyNotice()))
     }
@@ -1140,6 +1193,72 @@ class MainActivity : AppCompatActivity() {
             addView(content)
         }
 
+    private fun historyFilterPanel(rows: List<HistoryFilterSelectorRow>): MaterialCardView =
+        baseCard().apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(12)
+            }
+            val content = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(15), dp(15), dp(15), dp(15))
+            }
+            content.addView(TextView(context).apply {
+                text = "보기 필터"
+                setTextColor(color(R.color.hub_text))
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(0, 0, 0, dp(10))
+            })
+            rows.forEachIndexed { index, row ->
+                if (index > 0) content.addView(divider())
+                content.addView(historyFilterSelectorRowView(row))
+            }
+            addView(content)
+        }
+
+    private fun historyFilterSelectorRowView(row: HistoryFilterSelectorRow): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, dp(10), 0, dp(10))
+        isClickable = true
+        isFocusable = true
+        setOnClickListener { row.onClick() }
+        addView(TextView(context).apply {
+            text = row.title
+            setTextColor(color(R.color.hub_text))
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            marginEnd = dp(12)
+        })
+        addView(TextView(context).apply {
+            text = row.selectedValue
+            setTextColor(color(R.color.hub_text_muted))
+            textSize = 13f
+            maxLines = 1
+        })
+    }
+
+    private fun showHistoryFilterDialog(
+        title: String,
+        options: List<Pair<String, String>>,
+        selectedId: String,
+        onSelected: (String) -> Unit
+    ) {
+        val selectedIndex = options.indexOfFirst { it.first == selectedId }.coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setSingleChoiceItems(
+                options.map { it.second }.toTypedArray(),
+                selectedIndex
+            ) { dialog, which ->
+                onSelected(options[which].first)
+                dialog.dismiss()
+            }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
     private fun settingRowView(row: SettingRow): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
@@ -1268,6 +1387,12 @@ private data class SettingRow(
     val body: String?,
     val checked: Boolean? = null,
     val badge: String? = null
+)
+
+private data class HistoryFilterSelectorRow(
+    val title: String,
+    val selectedValue: String,
+    val onClick: () -> Unit
 )
 
 private fun AppearanceMode.toNightMode(): Int = when (this) {

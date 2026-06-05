@@ -163,6 +163,11 @@ data class GenerationFilter(
     val notificationDefaultEnabled: Boolean
 )
 
+data class HistoryFilterOption(
+    val id: String,
+    val displayName: String
+)
+
 data class NotificationSettingState(
     val globalEnabled: Boolean = true,
     val deliveryMode: DeliveryMode = DeliveryMode.STANDARD,

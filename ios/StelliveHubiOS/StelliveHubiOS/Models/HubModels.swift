@@ -357,6 +357,11 @@ struct GenerationFilter: Identifiable, Hashable {
     let notificationDefaultEnabled: Bool
 }
 
+struct HistoryFilterOption: Identifiable, Hashable {
+    let id: String
+    let displayName: String
+}
+
 struct NotificationHistoryItem: Identifiable, Hashable {
     let id: String
     let title: String

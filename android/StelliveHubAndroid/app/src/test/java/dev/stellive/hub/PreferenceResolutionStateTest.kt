@@ -55,6 +55,45 @@ class PreferenceResolutionStateTest {
     }
 
     @Test
+    fun historyFiltersExposeOnlyVisibleEventTypesAndMembers() {
+        val repository = MockHubRepository()
+
+        assertEquals(
+            listOf("all", "event_deadline_soon", "chzzk_live_started", "official_youtube_upload"),
+            repository.historyEventTypeFilters().map { it.id }
+        )
+        assertEquals(
+            listOf("전체", "마감 임박", "CHZZK 방송 시작", "공식 YouTube 업로드"),
+            repository.historyEventTypeFilters().map { it.displayName }
+        )
+        assertEquals(
+            listOf("all", "hub-event:closing-official-goods", "ayatsuno-yuni", "stellive-official"),
+            repository.historyMemberFilters().map { it.id }
+        )
+        assertEquals(
+            listOf("전체", "굿즈/행사", "아야츠노 유니", "스텔라이브 공식"),
+            repository.historyMemberFilters().map { it.displayName }
+        )
+    }
+
+    @Test
+    fun historyFiltersCombineEventTypeAndMemberSelection() {
+        val repository = MockHubRepository()
+
+        assertEquals(
+            listOf("h3"),
+            repository.filteredHistory(eventTypeFilterId = "event_deadline_soon", memberFilterId = "all").map { it.id }
+        )
+        assertEquals(
+            listOf("h1"),
+            repository.filteredHistory(eventTypeFilterId = "all", memberFilterId = "ayatsuno-yuni").map { it.id }
+        )
+        assertTrue(
+            repository.filteredHistory(eventTypeFilterId = "event_deadline_soon", memberFilterId = "ayatsuno-yuni").isEmpty()
+        )
+    }
+
+    @Test
     fun settingsExposeRequiredPreferencePolicyStructures() {
         val settings = NotificationSettingState()
 

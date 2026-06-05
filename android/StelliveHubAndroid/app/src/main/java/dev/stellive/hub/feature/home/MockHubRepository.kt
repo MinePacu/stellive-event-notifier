@@ -4,12 +4,14 @@ import dev.stellive.hub.core.model.ActiveStatus
 import dev.stellive.hub.core.model.CatalogRole
 import dev.stellive.hub.core.model.DeliveryMode
 import dev.stellive.hub.core.model.GenerationFilter
+import dev.stellive.hub.core.model.HistoryFilterOption
 import dev.stellive.hub.core.model.HubEvent
 import dev.stellive.hub.core.model.HubEventCategory
 import dev.stellive.hub.core.model.HubEventParticipationMode
 import dev.stellive.hub.core.model.HubEventSourceType
 import dev.stellive.hub.core.model.HubEventStatus
 import dev.stellive.hub.core.model.HubMember
+import dev.stellive.hub.core.model.NotificationEventType
 import dev.stellive.hub.core.model.NotificationHistoryItem
 import dev.stellive.hub.core.model.NotificationSettingState
 import java.time.Instant
@@ -131,6 +133,29 @@ class MockHubRepository {
     fun memberForHistory(item: NotificationHistoryItem): HubMember? =
         members.firstOrNull { it.id == item.memberId }
 
+    fun historyEventTypeFilters(): List<HistoryFilterOption> =
+        listOf(HistoryFilterOption("all", "전체")) +
+            uniqueHistoryFilters { item ->
+                HistoryFilterOption(
+                    id = item.eventType,
+                    displayName = NotificationEventType.entries.firstOrNull { it.wireName == item.eventType }?.displayName
+                        ?: item.title
+                )
+            }
+
+    fun historyMemberFilters(): List<HistoryFilterOption> =
+        listOf(HistoryFilterOption("all", "전체")) +
+            uniqueHistoryFilters { item ->
+                HistoryFilterOption(item.memberId, item.memberName)
+            }
+
+    fun filteredHistory(eventTypeFilterId: String, memberFilterId: String): List<NotificationHistoryItem> =
+        history.filter { item ->
+            val matchesEventType = eventTypeFilterId == "all" || item.eventType == eventTypeFilterId
+            val matchesMember = memberFilterId == "all" || item.memberId == memberFilterId
+            matchesEventType && matchesMember
+        }
+
     fun hubEventsForFilter(filter: String): List<HubEvent> {
         val filtered = when (filter.lowercase()) {
             "goods" -> hubEvents.filter {
@@ -143,5 +168,16 @@ class MockHubRepository {
         }
 
         return filtered.sortedWith(hubEventComparator)
+    }
+
+    private fun uniqueHistoryFilters(
+        map: (NotificationHistoryItem) -> HistoryFilterOption
+    ): List<HistoryFilterOption> {
+        val seen = linkedSetOf<String>()
+
+        return history.mapNotNull { item ->
+            val option = map(item)
+            if (seen.add(option.id)) option else null
+        }
     }
 }
