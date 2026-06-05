@@ -2,76 +2,66 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject private var store: MockHubStore
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
-                HubHeaderCard(
-                    iconText: "SL",
-                    title: "스텔라이브 알림 허브",
-                    subtitle: "오늘 새 알림 \(store.recentNotificationCount)개",
-                    metrics: [
-                        .init(value: "\(store.liveMemberCount)", label: "라이브"),
-                        .init(value: "\(store.recentNotificationCount)", label: "새 알림"),
-                        .init(value: store.deliveryModeSummary, label: "전송 모드")
-                    ]
-                )
-                .listRowInsets(EdgeInsets(top: 18, leading: 16, bottom: 10, trailing: 16))
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
-
-                Section("굿즈/행사") {
-                    NavigationLink {
-                        HubEventsView()
-                    } label: {
-                        VStack(alignment: .leading, spacing: 10) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("공식 출처 기반 기간성 정보")
-                                    .font(.headline)
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(2)
-                                    .minimumScaleFactor(0.88)
-                                Text("진행 중 \(store.hubEventsSummary.openCount)개 · 마감 임박 \(store.hubEventsSummary.closingSoonCount)개")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                                    .minimumScaleFactor(0.84)
-                            }
-
-                            HStack(alignment: .top, spacing: 8) {
-                                ForEach(store.hubEventsSummary.preview) { event in
-                                    HubEventPreviewBadge(event: event)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(store.filters) { filter in
-                            FilterChip(
-                                title: filter.displayName,
-                                isSelected: store.selectedFilter == filter.id
-                            ) {
-                                store.selectedFilter = filter.id
+                Section("지금 라이브") {
+                    if store.liveMembers.isEmpty {
+                        Text("현재 라이브 없음")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(store.liveMembers) { member in
+                            NavigationLink(value: member) {
+                                MemberRow(member: member)
                             }
                         }
                     }
                 }
-                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
 
-                ForEach(store.filteredMembers) { member in
-                    NavigationLink(value: member) {
-                        MemberRow(member: member)
+                Section("최근 알림") {
+                    if store.recentHistoryPreview.isEmpty {
+                        Text("최근 알림 없음")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(store.recentHistoryPreview) { item in
+                            HomeHistoryRow(
+                                item: item,
+                                member: store.member(for: item)
+                            )
+                        }
+                    }
+                }
+
+                Section("마감 임박 굿즈/행사") {
+                    if store.closingSoonHubEvents.isEmpty {
+                        NavigationLink {
+                            HubEventsView()
+                        } label: {
+                            Text("마감 임박 항목 없음")
+                        }
+                    } else {
+                        ForEach(store.closingSoonHubEvents) { event in
+                            NavigationLink {
+                                HubEventDetailView(event: event)
+                            } label: {
+                                HomeHubEventRow(event: event)
+                            }
+                        }
+
+                        NavigationLink {
+                            HubEventsView()
+                        } label: {
+                            Text("굿즈/행사 전체 보기")
+                        }
                     }
                 }
             }
-            .listStyle(.plain)
-            .toolbar(.hidden, for: .navigationBar)
+            .listStyle(.insetGrouped)
+            .settingsToolbar(path: $path)
             .navigationDestination(for: HubMember.self) { member in
                 MemberDetailView(member: member)
             }
@@ -79,30 +69,58 @@ struct HomeView: View {
     }
 }
 
-private struct FilterChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
+private struct HomeHistoryRow: View {
+    let item: NotificationHistoryItem
+    let member: HubMember?
 
     var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(isSelected ? Color.teal : Color.secondary)
-                .lineLimit(1)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .fill(isSelected ? Color.teal.opacity(0.16) : Color(.tertiarySystemFill))
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(isSelected ? Color.teal.opacity(0.28) : Color.clear, lineWidth: 1)
-                )
+        HistoryNotificationRowContent(
+            item: item,
+            member: member
+        )
+    }
+}
+
+private struct HomeHubEventRow: View {
+    let event: HubEvent
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(event.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.86)
+                Text([event.category.displayName, event.participationMode.displayName, event.sourceLabel].joined(separator: " · "))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.84)
+            }
+            .layoutPriority(1)
+
+            Spacer(minLength: 8)
+
+            Text(event.status.displayName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(event.status == .closingSoon ? Color.red : Color.teal)
+                .lineLimit(HubEventStatusRowLayout.statusLineLimit)
+                .minimumScaleFactor(HubEventStatusRowLayout.statusMinimumScaleFactor)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: HubEventStatusRowLayout.preservesStatusIntrinsicWidth, vertical: false)
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private extension DeliveryMode {
+    var displayName: String {
+        switch self {
+        case .standard:
+            return "표준"
+        case .realtimeBestEffort:
+            return "실시간 우선"
+        }
     }
 }
 
@@ -142,6 +160,59 @@ struct HubHeaderMetric: Identifiable {
     let label: String
 
     var id: String { label }
+}
+
+struct IOSGroupedScreenPolicy {
+    struct Screen: Equatable {
+        let id: String
+        let usesInsetGroupedList: Bool
+        let wrapsRowsInGroupedCards: Bool
+    }
+
+    enum FilterPlacement {
+        case groupedSection
+    }
+
+    enum SecondaryNoticeStyle: Equatable {
+        case settingsFootnoteSecondary
+    }
+
+    static let groupedScreens: [Screen] = [
+        .init(id: "live", usesInsetGroupedList: true, wrapsRowsInGroupedCards: true),
+        .init(id: "history", usesInsetGroupedList: true, wrapsRowsInGroupedCards: true),
+        .init(id: "hubEvents", usesInsetGroupedList: true, wrapsRowsInGroupedCards: true)
+    ]
+
+    static let headerHorizontalContentInset = 0.0
+    static let headerRowInsets = EdgeInsets(top: 0, leading: headerHorizontalContentInset, bottom: 10, trailing: headerHorizontalContentInset)
+    static let hubEventsFilterPlacement: FilterPlacement = .groupedSection
+    static let secondaryNoticeStyle: SecondaryNoticeStyle = .settingsFootnoteSecondary
+    static let darkModeGuidance = "Avoid placing secondary content in a plain list on dark backgrounds; wrap summaries, filters, rows, and notices in grouped card surfaces."
+}
+
+private struct SecondaryNoticeTextModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+    }
+}
+
+extension View {
+    func secondaryNoticeTextStyle() -> some View {
+        modifier(SecondaryNoticeTextModifier())
+    }
+}
+
+enum HubEventStatusRowVerticalAlignment: Equatable {
+    case center
+}
+
+enum HubEventStatusRowLayout {
+    static let trailingStatusVerticalAlignment: HubEventStatusRowVerticalAlignment = .center
+    static let statusLineLimit = 1
+    static let statusMinimumScaleFactor = 0.85
+    static let preservesStatusIntrinsicWidth = true
 }
 
 struct HubHeaderCard: View {

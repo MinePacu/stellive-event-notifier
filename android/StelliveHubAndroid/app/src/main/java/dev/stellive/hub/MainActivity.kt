@@ -36,6 +36,7 @@ import dev.stellive.hub.feature.home.HubScreen
 import dev.stellive.hub.feature.home.MainUiPolicy
 import dev.stellive.hub.feature.home.MainNavigationHistory
 import dev.stellive.hub.feature.home.MockHubRepository
+import dev.stellive.hub.feature.home.SettingsHubRow
 import dev.stellive.hub.feature.home.StatusSummaryItem
 
 @AndroidEntryPoint
@@ -44,6 +45,7 @@ class MainActivity : AppCompatActivity() {
     private val repository = MockHubRepository()
     private val navigationHistory = MainNavigationHistory()
     private var selectedFilter = "all"
+    private var selectedHubEventId: String? = null
     private var selectedAppearanceMode = AppearanceMode.SYSTEM
     private var notificationPermissionRequested = false
     private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -56,6 +58,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         setupTopBarScrollBehavior()
         setupBackNavigation()
+        setupTopBarActions()
         setupBottomNavigation()
         renderHome()
         updateSelectedBottomNavigation(HubScreen.HOME)
@@ -71,8 +74,14 @@ class MainActivity : AppCompatActivity() {
     private fun setupBottomNavigation() {
         bottomNavigationItems().forEach { item ->
             item.setOnClickListener {
-                navigateTo(screenForItem(item.id), addToBackStack = true)
+                navigateToRoot(screenForItem(item.id))
             }
+        }
+    }
+
+    private fun setupTopBarActions() {
+        binding.topBarSettings.setOnClickListener {
+            navigateTo(HubScreen.SETTINGS, addToBackStack = true)
         }
     }
 
@@ -100,6 +109,14 @@ class MainActivity : AppCompatActivity() {
         updateNavigationChrome()
     }
 
+    private fun navigateToRoot(screen: HubScreen) {
+        if (screen == navigationHistory.currentScreen && !navigationHistory.canGoBack) return
+        navigationHistory.selectRoot(screen)
+        renderScreen(screen)
+        updateSelectedBottomNavigation(screen)
+        updateNavigationChrome()
+    }
+
     private fun navigateBack(): Boolean {
         val previous = navigationHistory.goBack() ?: return false
         renderScreen(previous)
@@ -112,14 +129,21 @@ class MainActivity : AppCompatActivity() {
         when (screen) {
             HubScreen.HOME -> renderHome()
             HubScreen.GOODS_EVENTS -> renderGoodsEvents()
+            HubScreen.GOODS_EVENT_DETAIL -> renderHubEventDetail()
             HubScreen.LIVE -> renderLive()
             HubScreen.HISTORY -> renderHistory()
             HubScreen.SETTINGS -> renderSettings()
+            HubScreen.SETTINGS_DELIVERY -> renderSettingsDelivery()
+            HubScreen.SETTINGS_TARGETS -> renderSettingsTargets()
+            HubScreen.SETTINGS_PLATFORMS -> renderSettingsPlatforms()
+            HubScreen.SETTINGS_EVENT_TYPES -> renderSettingsEventTypes()
+            HubScreen.SETTINGS_HUB_EVENTS -> renderSettingsHubEvents()
+            HubScreen.SETTINGS_ADVANCED -> renderSettingsAdvanced()
         }
     }
 
     private fun updateSelectedBottomNavigation(screen: HubScreen) {
-        val selectedItem = itemForScreen(screen)
+        val selectedItem = itemForScreen(screen) ?: return
         bottomNavigationItems().forEach { item ->
             setSelectedState(item, item.id == selectedItem)
         }
@@ -129,7 +153,7 @@ class MainActivity : AppCompatActivity() {
         binding.tabHome,
         binding.tabLive,
         binding.tabHistory,
-        binding.tabSettings
+        binding.tabGoodsEvents
     )
 
     private fun setSelectedState(view: View, selected: Boolean) {
@@ -150,21 +174,35 @@ class MainActivity : AppCompatActivity() {
             binding.topBarTitleGroup.paddingEnd,
             binding.topBarTitleGroup.paddingBottom
         )
+        binding.topBarSettings.visibility = if (
+            MainUiPolicy.showsSettingsTopBarAction(navigationHistory.currentScreen.id, canGoBack)
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
     }
 
     private fun screenForItem(itemId: Int): HubScreen = when (itemId) {
         R.id.tab_live -> HubScreen.LIVE
         R.id.tab_history -> HubScreen.HISTORY
-        R.id.tab_settings -> HubScreen.SETTINGS
+        R.id.tab_goods_events -> HubScreen.GOODS_EVENTS
         else -> HubScreen.HOME
     }
 
-    private fun itemForScreen(screen: HubScreen): Int = when (screen) {
+    private fun itemForScreen(screen: HubScreen): Int? = when (screen) {
         HubScreen.HOME -> R.id.tab_home
-        HubScreen.GOODS_EVENTS -> R.id.tab_home
+        HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
+        HubScreen.GOODS_EVENT_DETAIL -> R.id.tab_goods_events
         HubScreen.LIVE -> R.id.tab_live
         HubScreen.HISTORY -> R.id.tab_history
-        HubScreen.SETTINGS -> R.id.tab_settings
+        HubScreen.SETTINGS -> null
+        HubScreen.SETTINGS_DELIVERY -> null
+        HubScreen.SETTINGS_TARGETS -> null
+        HubScreen.SETTINGS_PLATFORMS -> null
+        HubScreen.SETTINGS_EVENT_TYPES -> null
+        HubScreen.SETTINGS_HUB_EVENTS -> null
+        HubScreen.SETTINGS_ADVANCED -> null
     }
 
     private fun startScreen(screenId: String, title: String, role: String) {
@@ -183,30 +221,65 @@ class MainActivity : AppCompatActivity() {
         startScreen(
             screenId = "home",
             title = getString(R.string.home_title),
-            role = "활성 멤버, 강지, 공식 채널만 표시합니다. Former 멤버와 무단 이미지는 제외합니다."
+            role = "지금 라이브, 최근 알림, 마감 임박 굿즈/행사를 확인합니다."
         )
-        binding.contentList.addView(summaryGrid(MainUiPolicy.homeStatusSummary()))
-        binding.contentList.addView(
-            compactEventCard(
-                title = "굿즈/행사",
-                body = "공식 출처 기반 진행 중 ${repository.hubEventsSummary.openCount}개 · 마감 임박 ${repository.hubEventsSummary.closingSoonCount}개",
-                pills = listOf("굿즈", "티켓", "오프라인")
-            ).apply {
-                isClickable = true
-                isFocusable = true
-                setOnClickListener {
-                    navigateTo(HubScreen.GOODS_EVENTS, addToBackStack = true)
-                }
+        binding.contentList.addView(sectionLabel("지금 라이브"))
+        if (repository.liveMembers.isEmpty()) {
+            binding.contentList.addView(
+                compactEventCard("현재 라이브 없음", "서버 갱신 기준으로 표시합니다.", listOf("대기"))
+            )
+        } else {
+            repository.liveMembers.forEach { binding.contentList.addView(liveMemberRow(it)) }
+        }
+        binding.contentList.addView(sectionLabel("최근 알림"))
+        if (repository.recentHistoryPreview.isEmpty()) {
+            binding.contentList.addView(
+                compactEventCard("최근 알림 없음", "허용된 알림이 도착하면 여기에 표시됩니다.", listOf("기록"))
+            )
+        } else {
+            repository.recentHistoryPreview.forEach {
+                binding.contentList.addView(
+                    historyEventCard(
+                        item = it,
+                        member = repository.memberForHistory(it)
+                    )
+                )
             }
-        )
-        binding.contentList.addView(filterChips())
-        binding.contentList.addView(
-            noticeCard("공식 YouTube는 업로드 알림만 지원합니다. 라이브 예정, 시작, 종료 이벤트는 기록과 푸시에 만들지 않습니다.")
-        )
-        repository.members
-            .filter { selectedFilter == "all" || it.generationId == selectedFilter }
-            .filter { it.catalogRole != CatalogRole.PLACEHOLDER || selectedFilter == "gen4-upcoming" }
-            .forEach { binding.contentList.addView(memberCard(it)) }
+        }
+        binding.contentList.addView(sectionLabel("마감 임박 굿즈/행사"))
+        val hubEventsListAction = MainUiPolicy.homeHubEventsListAction(repository.closingSoonHubEvents.size)
+        if (repository.closingSoonHubEvents.isEmpty()) {
+            binding.contentList.addView(
+                compactEventCard(
+                    hubEventsListAction.title,
+                    hubEventsListAction.body,
+                    hubEventsListAction.pills
+                ).apply {
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        navigateToRoot(HubScreen.GOODS_EVENTS)
+                    }
+                }
+            )
+        } else {
+            repository.closingSoonHubEvents.forEach {
+                binding.contentList.addView(hubEventCard(it))
+            }
+            binding.contentList.addView(
+                compactEventCard(
+                    hubEventsListAction.title,
+                    hubEventsListAction.body,
+                    hubEventsListAction.pills
+                ).apply {
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        navigateToRoot(HubScreen.GOODS_EVENTS)
+                    }
+                }
+            )
+        }
     }
 
     private fun renderGoodsEvents() {
@@ -225,17 +298,60 @@ class MainActivity : AppCompatActivity() {
             )
         )
         binding.contentList.addView(staticChips("전체", "굿즈", "티켓", "오프라인", "마감 임박"))
-        repository.hubEvents.forEach { event ->
-            binding.contentList.addView(
-                compactEventCard(
-                    title = event.title,
-                    body = listOfNotNull(event.status.displayName, event.sourceLabel, event.venueName).joinToString(" · "),
-                    pills = listOf(event.category.displayName, event.participationMode.displayName)
-                )
-            )
+        repository.hubEventsForFilter("all").forEach { event ->
+            binding.contentList.addView(hubEventCard(event))
         }
         binding.contentList.addView(
             noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
+        )
+    }
+
+    private fun renderHubEventDetail() {
+        val event = repository.hubEvents.firstOrNull { it.id == selectedHubEventId }
+        if (event == null) {
+            startScreen(
+                screenId = "goods_event_detail",
+                title = "상세",
+                role = "선택한 굿즈/행사를 찾을 수 없습니다."
+            )
+            binding.contentList.addView(compactEventCard("항목 없음", "목록에서 다시 선택해 주세요.", listOf("굿즈/행사")))
+            return
+        }
+
+        startScreen(
+            screenId = "goods_event_detail",
+            title = "상세",
+            role = "공식 출처와 일정 정보를 확인합니다."
+        )
+        binding.contentList.addView(
+            compactEventCard(
+                title = event.title,
+                body = event.summary ?: "공식 출처 기반 굿즈/행사 정보입니다.",
+                pills = listOf(event.status.displayName, event.category.displayName, event.participationMode.displayName)
+            )
+        )
+        binding.contentList.addView(
+            settingsPanel(
+                title = "정보",
+                rows = listOfNotNull(
+                    SettingRow("분류", event.category.displayName, null, event.category.displayName),
+                    SettingRow("참여 방식", event.participationMode.displayName, null, event.participationMode.displayName),
+                    SettingRow("출처", event.sourceLabel, null, "공식"),
+                    event.venueName?.let { SettingRow("장소", it, null, "오프라인") },
+                    event.endsAt?.let { SettingRow("종료", it.toString(), null, "일정") }
+                )
+            )
+        )
+        val linkRows = listOfNotNull(
+            httpsLinkRow("출처", event.sourceUrl),
+            httpsLinkRow("구매", event.purchaseUrl),
+            httpsLinkRow("티켓", event.ticketUrl)
+        )
+        if (linkRows.isNotEmpty()) {
+            binding.contentList.addView(settingsPanel(title = "링크", rows = linkRows))
+        }
+        binding.contentList.addView(
+            noticeCard("공식 이미지, 로고, 포스터는 앱에 저장하거나 재사용하지 않습니다.")
         )
     }
 
@@ -245,32 +361,12 @@ class MainActivity : AppCompatActivity() {
             title = getString(R.string.live_title),
             role = "Foreground 상태 갱신은 화면 표시용입니다. 백그라운드 알림은 서버 중심 푸시로 처리합니다."
         )
-        binding.contentList.addView(staticChips("방송 중", "CHZZK", "실시간 우선", "표준"))
-        binding.contentList.addView(
-            settingsPanel(
-                title = "실시간 모드 안내",
-                rows = MainUiPolicy.realtimeDisclosureLines().mapIndexed { index, line ->
-                    SettingRow(
-                        title = if (index == 0) "최대한 실시간으로 알림 받기" else "정책 제한",
-                        body = line,
-                        checked = if (index == 0) repository.settings.deliveryMode == DeliveryMode.REALTIME_BEST_EFFORT else null,
-                        badge = if (index == 0) null else "적용"
-                    )
-                }
-            )
-        )
+        binding.contentList.addView(staticChips("방송 중", "CHZZK 대상", "서버 푸시"))
         repository.members
             .filter { it.catalogRole != CatalogRole.OFFICIAL_CHANNEL && it.chzzkChannelId != null }
             .forEach { member ->
                 binding.contentList.addView(liveMemberRow(member))
             }
-        binding.contentList.addView(
-            compactEventCard(
-                title = "CHZZK chat",
-                body = "기본 OFF입니다. 키워드나 명시 필터가 없으면 푸시 전송 대상으로 쓰지 않습니다.",
-                pills = listOf("푸시 OFF", "필터 필요")
-            )
-        )
     }
 
     private fun renderHistory() {
@@ -287,13 +383,7 @@ class MainActivity : AppCompatActivity() {
                 )
             )
         }
-        binding.contentList.addView(
-            compactEventCard(
-                title = "차단된 이벤트",
-                body = "공식 YouTube 라이브 예정, 시작, 종료 이벤트는 생성하지 않아 기록에 나타나지 않습니다.",
-                pills = listOf("official_youtube_live unsupported")
-            )
-        )
+        binding.contentList.addView(noticeCard(MainUiPolicy.historyPolicyNotice()))
     }
 
     private fun renderSettings() {
@@ -301,18 +391,89 @@ class MainActivity : AppCompatActivity() {
         startScreen(
             screenId = "settings",
             title = getString(R.string.settings_title),
-            role = "전체, 플랫폼, 이벤트 타입, 카테고리, 개별 항목, 조합 순서로 설정을 좁혀갑니다."
+            role = "핵심 상태만 보고, 세부 설정은 항목별 화면에서 변경합니다."
         )
         binding.contentList.addView(
             settingsPanel(
                 title = "전체 알림",
                 rows = listOf(
                     SettingRow("마스터 알림", "OFF이면 모든 푸시와 기록 생성 대상 알림을 차단합니다.", settings.globalEnabled),
-                    SettingRow("전달 방식", "표준 또는 realtime_best_effort. 비활성 알림을 다시 켜지는 않습니다.", null, settings.deliveryMode.name)
+                    SettingRow("터치 동작", "알림을 눌렀을 때 열 위치입니다.", null, settings.tapAction.name)
                 )
             )
         )
         binding.contentList.addView(appearanceModePanel())
+        val targetValues = settings.generationEnabled.values.toList() +
+            repository.members.filter { it.catalogRole != CatalogRole.PLACEHOLDER }.map { member ->
+                settings.memberEnabled[member.id] ?: member.notificationEnabled
+            }
+        val hubRows = MainUiPolicy.settingsHubRows(
+            deliveryMode = settings.deliveryMode.name,
+            enabledTargets = targetValues.count { it },
+            totalTargets = targetValues.size,
+            enabledPlatforms = NotificationPlatform.entries.count { settings.platformEnabled[it] == true },
+            totalPlatforms = NotificationPlatform.entries.size,
+            enabledEventTypes = NotificationEventType.entries.count { settings.eventTypeEnabled[it] == true },
+            totalEventTypes = NotificationEventType.entries.size,
+            hubEventsEnabled = settings.platformEnabled[NotificationPlatform.HUB_EVENT] == true,
+            deadlineSoonEnabled = settings.eventTypeEnabled[NotificationEventType.EVENT_DEADLINE_SOON] == true
+        )
+        binding.contentList.addView(sectionLabel("설정 항목"))
+        hubRows.forEach { row ->
+            binding.contentList.addView(settingsNavigationCard(row))
+        }
+        binding.contentList.addView(
+            settingsPanel(
+                title = "표시 정책",
+                rows = listOf(
+                    SettingRow("Former 멤버", "MVP 카탈로그, 알림 대상, 필터, seed data에 포함하지 않습니다.", null, "제외"),
+                    SettingRow("강지", "감자 카테고리의 대표 항목으로 유지하되 굿즈/행사 MVP에는 표시하지 않습니다.", null, "대표"),
+                    SettingRow("이미지/로고/포스터", "공식 이미지, 로고, 포스터, 캡처, 팬아트는 저장하거나 재사용하지 않습니다.", null, "텍스트")
+                )
+            )
+        )
+        if (!notificationPermissionRequested) {
+            notificationPermissionRequested = true
+            requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    private fun renderSettingsDelivery() {
+        val settings = repository.settings
+        startScreen(
+            screenId = "settings_delivery",
+            title = "전달 방식",
+            role = "실시간 우선은 OS와 플랫폼 정책을 우회하지 않습니다."
+        )
+        binding.contentList.addView(
+            settingsPanel(
+                title = "전달 방식",
+                rows = listOf(
+                    SettingRow("전달 방식", "표준 또는 realtime_best_effort. 비활성 알림을 다시 켜지는 않습니다.", null, settings.deliveryMode.name),
+                    SettingRow("최대한 실시간으로 알림 받기", MainUiPolicy.realtimeDisclosureLines().joinToString(" "), settings.deliveryMode == DeliveryMode.REALTIME_BEST_EFFORT)
+                )
+            )
+        )
+        binding.contentList.addView(
+            settingsPanel(
+                title = "조용한 시간, 키워드, rate limit",
+                rows = listOf(
+                    SettingRow("조용한 시간", "${settings.quietHours.start}-${settings.quietHours.end} ${settings.quietHours.timezone}", settings.quietHours.enabled),
+                    SettingRow("키워드 필터", "CHZZK chat 푸시는 명시 필터가 있어야 허용됩니다.", settings.keywordFilters.hasExplicitFilters),
+                    SettingRow("분당 제한", "사용자 설정과 서버 rate limit은 realtime_best_effort에서도 계속 적용됩니다.", null, "${settings.rateLimit.maxNotificationsPerMinute}/min"),
+                    SettingRow("CHZZK chat 푸시", "기본 OFF이며 명시 필터 없이는 푸시 전송 대상으로 쓰지 않습니다.", settings.canEnableChzzkChatPush)
+                )
+            )
+        )
+    }
+
+    private fun renderSettingsTargets() {
+        val settings = repository.settings
+        startScreen(
+            screenId = "settings_targets",
+            title = "대상별 알림",
+            role = "기수/카테고리와 개별 항목을 분리해서 제어합니다."
+        )
         binding.contentList.addView(
             settingsPanel(
                 title = "카테고리",
@@ -324,33 +485,120 @@ class MainActivity : AppCompatActivity() {
                 )
             )
         )
+        binding.contentList.addView(sectionLabel("개별 항목"))
+        repository.members.filter { it.catalogRole != CatalogRole.PLACEHOLDER }.forEach { member ->
+            binding.contentList.addView(
+                compactEventCard(
+                    title = member.koreanName,
+                    body = when (member.catalogRole) {
+                        CatalogRole.REPRESENTATIVE -> "감자 카테고리의 대표 항목입니다."
+                        CatalogRole.OFFICIAL_CHANNEL -> "기타 카테고리의 공식 채널입니다."
+                        else -> "${member.generationName} · ${member.roleLabel ?: "멤버"}"
+                    },
+                    pills = listOf(if (settings.memberEnabled[member.id] ?: member.notificationEnabled) "ON" else "OFF")
+                )
+            )
+        }
+    }
+
+    private fun renderSettingsPlatforms() {
+        val settings = repository.settings
+        startScreen(
+            screenId = "settings_platforms",
+            title = "플랫폼별 알림",
+            role = "플랫폼별 허용 여부"
+        )
         binding.contentList.addView(
             settingsPanel(
                 title = "플랫폼별 알림",
                 rows = NotificationPlatform.entries.map { platform ->
                     SettingRow(
                         title = platform.displayName,
-                        body = if (platform == NotificationPlatform.NAVER_CAFE) {
-                            "공식 API와 약관을 우선합니다. 무단 수집이나 로그인 쿠키 수집은 사용하지 않습니다."
-                        } else {
-                            "플랫폼 OFF이면 해당 플랫폼 이벤트 푸시를 차단합니다."
-                        },
+                        body = MainUiPolicy.settingsPlatformPolicy(platform),
                         checked = settings.platformEnabled[platform] == true
                     )
                 }
             )
         )
         binding.contentList.addView(
+            compactEventCard(
+                title = "공통 안내",
+                body = MainUiPolicy.settingsPlatformCommonNotice(),
+                pills = listOf("플랫폼 OFF", "푸시 차단")
+            )
+        )
+    }
+
+    private fun renderSettingsEventTypes() {
+        val settings = repository.settings
+        startScreen(
+            screenId = "settings_event_types",
+            title = "이벤트 타입별 알림",
+            role = "이벤트 종류별 허용 여부"
+        )
+        binding.contentList.addView(
             settingsPanel(
                 title = "이벤트 타입별 알림",
-                rows = NotificationEventType.entries.map { eventType ->
+                rows = MainUiPolicy.settingsEventTypeRows(settings).map { row ->
                     SettingRow(
-                        title = eventType.displayName,
-                        body = eventTypePolicy(eventType),
-                        checked = settings.eventTypeEnabled[eventType] == true
+                        title = row.title,
+                        body = row.body,
+                        checked = row.checked
                     )
                 }
             )
+        )
+        binding.contentList.addView(
+            compactEventCard(
+                title = "공통 안내",
+                body = MainUiPolicy.settingsEventTypeCommonNotices().first(),
+                pills = listOf("조용한 시간", "차단 키워드", "rate limit")
+            )
+        )
+        binding.contentList.addView(
+            settingsPanel(
+                title = "채팅 알림",
+                rows = listOf(
+                    SettingRow("치지직 채팅 알림", "기본 OFF입니다. 키워드 또는 역할 필터를 설정한 경우에만 제한적으로 사용합니다.", settings.chatEnabled),
+                    SettingRow("Push 전달 가능", "명시 필터가 있을 때만 푸시 전송 대상으로 쓸 수 있습니다.", null, if (settings.canEnableChzzkChatPush) "필터 설정됨" else "필터 필요")
+                )
+            )
+        )
+        binding.contentList.addView(
+            compactEventCard(
+                title = "공식 채널 제한",
+                body = MainUiPolicy.settingsEventTypeCommonNotices().last(),
+                pills = listOf("공식 X 게시글", "공식 YouTube 업로드", "공식 YouTube live 제외")
+            )
+        )
+    }
+
+    private fun renderSettingsHubEvents() {
+        val settings = repository.settings
+        startScreen(
+            screenId = "settings_hub_events",
+            title = "굿즈/행사",
+            role = "온라인 한정 굿즈와 오프라인 공식 행사를 중심으로 봅니다."
+        )
+        binding.contentList.addView(
+            settingsPanel(
+                title = "굿즈/행사",
+                rows = MainUiPolicy.settingsHubEventRows(
+                    hubEventsEnabled = settings.platformEnabled[NotificationPlatform.HUB_EVENT] == true,
+                    deadlineSoonEnabled = settings.eventTypeEnabled[NotificationEventType.EVENT_DEADLINE_SOON] == true
+                ).map { row -> SettingRow(row.title, row.body, row.checked) }
+            )
+        )
+        binding.contentList.addView(noticeCard(MainUiPolicy.hubEventPolicyNotice()))
+        binding.contentList.addView(noticeCard("공식 이미지, 로고, 포스터는 앱에 저장하거나 재사용하지 않습니다."))
+    }
+
+    private fun renderSettingsAdvanced() {
+        val settings = repository.settings
+        startScreen(
+            screenId = "settings_advanced",
+            title = "고급 조합 설정",
+            role = "복잡한 예외 규칙은 필요할 때만 조정합니다."
         )
         binding.contentList.addView(
             settingsPanel(
@@ -365,38 +613,66 @@ class MainActivity : AppCompatActivity() {
             )
         )
         binding.contentList.addView(
-            settingsPanel(
-                title = "조용한 시간, 키워드, rate limit",
-                rows = listOf(
-                    SettingRow("조용한 시간", "${settings.quietHours.start}-${settings.quietHours.end} ${settings.quietHours.timezone}", settings.quietHours.enabled),
-                    SettingRow("키워드 필터", "CHZZK chat 푸시는 명시 필터가 있어야 허용됩니다.", settings.keywordFilters.hasExplicitFilters),
-                    SettingRow("분당 제한", "사용자 설정과 서버 rate limit은 realtime_best_effort에서도 계속 적용됩니다.", null, "${settings.rateLimit.maxNotificationsPerMinute}/min"),
-                    SettingRow("CHZZK chat 푸시", "기본 OFF이며 명시 필터 없이는 푸시 전송 대상으로 쓰지 않습니다.", settings.canEnableChzzkChatPush)
-                )
-            )
+            noticeCard("개별 명시 설정은 카테고리 설정을 덮어쓸 수 있습니다. 플랫폼, 이벤트 타입, 조용한 시간, 키워드, rate limit은 이후에도 계속 적용됩니다.")
         )
-        binding.contentList.addView(
-            compactEventCard(
-                title = "공식 채널 제한",
-                body = "공식 YouTube는 업로드 알림만 지원합니다. 라이브 예정, 시작, 종료 이벤트는 생성하지 않습니다.",
-                pills = listOf("공식 X 게시글", "공식 YouTube 업로드", "공식 YouTube live 제외")
-            )
-        )
-        if (!notificationPermissionRequested) {
-            notificationPermissionRequested = true
-            requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
     }
 
-    private fun eventTypePolicy(eventType: NotificationEventType): String = when (eventType) {
-        NotificationEventType.CHZZK_CHAT -> "기본 OFF입니다. 명시 필터가 없으면 푸시 전송 대상으로 쓰지 않습니다."
-        NotificationEventType.YOUTUBE_LIVE_SCHEDULED,
-        NotificationEventType.YOUTUBE_LIVE_STARTED,
-        NotificationEventType.YOUTUBE_LIVE_ENDED -> "공식 YouTube 채널에는 적용하지 않으며 기본 OFF입니다."
-        NotificationEventType.OFFICIAL_YOUTUBE_UPLOAD -> "스텔라이브 공식 YouTube는 업로드 알림만 지원합니다."
-        NotificationEventType.CAFE_POST -> "무단 수집, 로그인 쿠키 수집, 비공개 접근 우회 없이 공식 경로만 사용합니다."
-        else -> "사용자 설정, 조용한 시간, 차단 키워드, rate limit 적용 후 전송합니다."
+    private fun httpsLinkRow(title: String, url: String?): SettingRow? {
+        val value = url ?: return null
+        return if (value.startsWith("https://")) SettingRow(title, value, null, "열기") else null
     }
+
+    private fun settingsScreenForRow(screenId: String): HubScreen = when (screenId) {
+        "delivery" -> HubScreen.SETTINGS_DELIVERY
+        "targets" -> HubScreen.SETTINGS_TARGETS
+        "platforms" -> HubScreen.SETTINGS_PLATFORMS
+        "event_types" -> HubScreen.SETTINGS_EVENT_TYPES
+        "hub_events" -> HubScreen.SETTINGS_HUB_EVENTS
+        "advanced" -> HubScreen.SETTINGS_ADVANCED
+        else -> HubScreen.SETTINGS
+    }
+
+    private fun settingsNavigationCard(row: SettingsHubRow): MaterialCardView =
+        baseCard().apply {
+            isClickable = true
+            isFocusable = true
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(10)
+            }
+            val content = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(15), dp(15), dp(15), dp(15))
+            }
+            content.addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(context).apply {
+                    text = row.title
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                })
+                addView(TextView(context).apply {
+                    text = row.body
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 12f
+                    setPadding(0, dp(5), 0, 0)
+                    setLineSpacing(0f, 1.1f)
+                })
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = dp(12)
+            })
+            content.addView(TextView(context).apply {
+                text = "${row.value} ›"
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 13f
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            addView(content)
+            setOnClickListener {
+                navigateTo(settingsScreenForRow(row.screenId), addToBackStack = true)
+            }
+        }
 
     private fun appearanceModePanel(): MaterialCardView =
         baseCard().apply {
@@ -487,6 +763,14 @@ class MainActivity : AppCompatActivity() {
         textSize = 13f
         setLineSpacing(0f, 1.12f)
         setPadding(0, 0, 0, dp(16))
+    }
+
+    private fun sectionLabel(text: String): TextView = TextView(this).apply {
+        this.text = text
+        setTextColor(color(R.color.hub_text_muted))
+        textSize = 13f
+        typeface = Typeface.DEFAULT_BOLD
+        setPadding(0, dp(4), 0, dp(8))
     }
 
     private fun summaryGrid(items: List<StatusSummaryItem>): LinearLayout {
@@ -767,6 +1051,20 @@ class MainActivity : AppCompatActivity() {
             addView(content)
         }
 
+    private fun hubEventCard(event: dev.stellive.hub.core.model.HubEvent): MaterialCardView =
+        compactEventCard(
+            title = event.title,
+            body = listOfNotNull(event.status.displayName, event.sourceLabel, event.venueName).joinToString(" · "),
+            pills = listOf(event.category.displayName, event.participationMode.displayName)
+        ).apply {
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                selectedHubEventId = event.id
+                navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
+            }
+        }
+
     private fun historyEventCard(item: NotificationHistoryItem, member: HubMember?): MaterialCardView =
         baseCard().apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -854,12 +1152,14 @@ class MainActivity : AppCompatActivity() {
                 textSize = 14f
                 typeface = Typeface.DEFAULT_BOLD
             })
-            addView(TextView(context).apply {
-                text = row.body
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 12f
-                setLineSpacing(0f, 1.1f)
-            })
+            row.body?.takeIf { it.isNotBlank() }?.let { body ->
+                addView(TextView(context).apply {
+                    text = body
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 12f
+                    setLineSpacing(0f, 1.1f)
+                })
+            }
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
             marginEnd = dp(12)
         })
@@ -965,7 +1265,7 @@ class MainActivity : AppCompatActivity() {
 
 private data class SettingRow(
     val title: String,
-    val body: String,
+    val body: String?,
     val checked: Boolean? = null,
     val badge: String? = null
 )

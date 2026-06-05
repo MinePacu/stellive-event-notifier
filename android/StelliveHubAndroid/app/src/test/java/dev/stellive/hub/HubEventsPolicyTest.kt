@@ -51,6 +51,25 @@ class HubEventsPolicyTest {
     }
 
     @Test
+    fun homePreviewSelectorsSurfaceCurrentStatus() {
+        val repository = MockHubRepository()
+
+        assertEquals(listOf("ayatsuno-yuni"), repository.liveMembers.map { it.id })
+        assertEquals(listOf("h3", "h1", "h2"), repository.recentHistoryPreview.map { it.id })
+        assertEquals(listOf("closing-official-goods"), repository.closingSoonHubEvents.map { it.id })
+    }
+
+    @Test
+    fun hubEventsForFilterUsesStatusFirstStableOrdering() {
+        val repository = MockHubRepository()
+
+        assertEquals(
+            listOf("closing-official-goods", "open-gen3-goods", "upcoming-offline-popup"),
+            repository.hubEventsForFilter("all").map { it.id }
+        )
+    }
+
+    @Test
     fun goodsEventsLabelDoesNotImplyBroadcasts() {
         assertEquals("굿즈/행사", MainUiPolicy.topBarTitle("goods_events"))
         assertEquals("공식 출처의 기간성 굿즈와 행사", MainUiPolicy.topBarRole("goods_events"))

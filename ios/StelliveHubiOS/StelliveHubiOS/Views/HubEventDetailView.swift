@@ -6,25 +6,26 @@ struct HubEventDetailView: View {
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                HStack(alignment: .center, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 10) {
                         Text(event.title)
                             .font(.title3.weight(.bold))
                             .foregroundStyle(.primary)
                             .lineLimit(3)
                             .minimumScaleFactor(0.84)
 
-                        Spacer(minLength: 8)
-
-                        HubEventStatusBadge(status: event.status)
+                        if let summary = event.summary, !summary.isEmpty {
+                            Text(summary)
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(nil)
+                        }
                     }
+                    .layoutPriority(1)
 
-                    if let summary = event.summary, !summary.isEmpty {
-                        Text(summary)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(nil)
-                    }
+                    Spacer(minLength: 8)
+
+                    HubEventStatusBadge(status: event.status)
                 }
                 .padding(.vertical, 2)
             }
@@ -73,12 +74,15 @@ private struct HubEventStatusBadge: View {
         Text(status.displayName)
             .font(.caption.weight(.semibold))
             .foregroundStyle(status == .closingSoon ? Color.red : Color.teal)
-            .lineLimit(1)
+            .lineLimit(HubEventStatusRowLayout.statusLineLimit)
+            .minimumScaleFactor(HubEventStatusRowLayout.statusMinimumScaleFactor)
+            .multilineTextAlignment(.trailing)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(
                 Capsule()
                     .fill((status == .closingSoon ? Color.red : Color.teal).opacity(0.14))
             )
+            .fixedSize(horizontal: HubEventStatusRowLayout.preservesStatusIntrinsicWidth, vertical: false)
     }
 }
