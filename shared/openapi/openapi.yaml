@@ -34,6 +34,29 @@ paths:
       responses:
         "200":
           description: CHZZK live status for member and gamja entries. Live entries include startedAt normalized from CHZZK openDate when available.
+  /v1/hub-events:
+    get:
+      responses:
+        "200":
+          description: Official-source goods and event feed with filters.
+  /v1/hub-events/{id}:
+    get:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Single hub event detail.
+        "404":
+          description: Hub event not found.
+  /v1/hub-events/summary:
+    get:
+      responses:
+        "200":
+          description: Compact home preview metrics and up to three hub events.
   /v1/preferences:
     get:
       responses:

@@ -14,6 +14,8 @@ Former members are excluded from the MVP. No unauthorized images, official logos
 
 API-first lightweight control plane with adapters for CHZZK, X, and YouTube. Naver Cafe automatic collection is deferred. The MVP default path should not require self-hosted PostgreSQL/Redis, but Docker Compose is supported for local development and optional self-hosting. Use managed storage or local Docker PostgreSQL for devices, server-visible preferences, normalized events, dedupe keys, notification jobs, short-lived delivery attempts, live status, and delivery state. User-visible notification history is stored on device by default. Start the managed-first path with database-backed jobs; add Redis/BullMQ only if traffic requires it. Mobile foreground refresh is for UI updates, not background push replacement.
 
+The `굿즈/행사` feed is planned as a separate hub event model for official-source, time-bound goods, ticketing, and offline event information. It excludes routine livestreams, uploads, ordinary posts, fan-hosted events, Gangzi/representative events, and unauthorized images/logos/posters.
+
 ## Member Catalog Policy
 
 Catalog entries are only `active` or `upcoming`. Former entries are not seeded. Unknown external handles stay `verify_required`.

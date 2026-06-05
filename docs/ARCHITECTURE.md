@@ -27,6 +27,12 @@ Production adapters should use official APIs. Mock adapters mark `verify_require
 
 Naver Cafe automatic collection is deferred. If it is reintroduced, it must be limited to public Search API results or another clearly allowed official path and treated as standard, not realtime, delivery.
 
+## Hub Events
+
+The `굿즈/행사` feed is separate from normalized platform activity. It contains official-source, time-bound goods, ticketing, and offline event information only. Routine CHZZK live status, YouTube uploads, and ordinary X posts remain in live status, platform events, and notification history.
+
+The MVP uses repository-managed seed data or a maintainer-controlled workflow. Future official API adapters must submit candidate hub events through the same validation boundary, including source URL, source label, source type, catalog checks, Gangzi/gamja exclusion, and asset-field rejection.
+
 ## Official Channel Handling
 
 `stellive-official` is an `official_channel` item under `official`/`기타`. It supports `official_x_post` and `official_youtube_upload`. Official YouTube live scheduled/started/ended events are dropped before storage by `shouldDropEventBeforeStorage`.
