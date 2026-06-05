@@ -1,6 +1,7 @@
 package dev.stellive.hub.feature.home
 
 import dev.stellive.hub.core.model.NotificationSettingState
+import dev.stellive.hub.core.model.HubEventStatus
 import java.time.Duration
 import java.time.Instant
 
@@ -16,6 +17,7 @@ object MainUiPolicy {
         "live" -> "라이브"
         "history" -> "기록"
         "settings" -> "설정"
+        "goods_events" -> "굿즈/행사"
         else -> "홈"
     }
 
@@ -23,6 +25,7 @@ object MainUiPolicy {
         "live" -> "방송 상태와 실시간 best-effort"
         "history" -> "허용된 알림과 차단된 이벤트"
         "settings" -> "전체, 카테고리, 플랫폼, 이벤트, 조합 설정"
+        "goods_events" -> "공식 출처의 기간성 굿즈와 행사"
         else -> "활성 멤버와 공식 채널 상태"
     }
 
@@ -30,6 +33,15 @@ object MainUiPolicy {
         if (canGoBack) 0 else ROOT_TOP_BAR_TITLE_START_INSET_DP
 
     fun realtimeDisclosureLines(): List<String> = NotificationSettingState.REALTIME_DISCLOSURE_LINES
+
+    fun hubEventStatusRank(status: HubEventStatus): Int = when (status) {
+        HubEventStatus.CLOSING_SOON -> 0
+        HubEventStatus.OPEN -> 1
+        HubEventStatus.UPCOMING -> 2
+        HubEventStatus.ANNOUNCED -> 3
+        HubEventStatus.CANCELLED -> 4
+        HubEventStatus.ENDED -> 5
+    }
 
     fun homeStatusSummary(): List<StatusSummaryItem> = listOf(
         StatusSummaryItem("1", "현재 CHZZK 방송 중"),

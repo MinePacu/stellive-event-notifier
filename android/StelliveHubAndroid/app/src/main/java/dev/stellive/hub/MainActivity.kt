@@ -111,6 +111,7 @@ class MainActivity : AppCompatActivity() {
     private fun renderScreen(screen: HubScreen) {
         when (screen) {
             HubScreen.HOME -> renderHome()
+            HubScreen.GOODS_EVENTS -> renderGoodsEvents()
             HubScreen.LIVE -> renderLive()
             HubScreen.HISTORY -> renderHistory()
             HubScreen.SETTINGS -> renderSettings()
@@ -160,6 +161,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun itemForScreen(screen: HubScreen): Int = when (screen) {
         HubScreen.HOME -> R.id.tab_home
+        HubScreen.GOODS_EVENTS -> R.id.tab_home
         HubScreen.LIVE -> R.id.tab_live
         HubScreen.HISTORY -> R.id.tab_history
         HubScreen.SETTINGS -> R.id.tab_settings
@@ -184,6 +186,19 @@ class MainActivity : AppCompatActivity() {
             role = "활성 멤버, 강지, 공식 채널만 표시합니다. Former 멤버와 무단 이미지는 제외합니다."
         )
         binding.contentList.addView(summaryGrid(MainUiPolicy.homeStatusSummary()))
+        binding.contentList.addView(
+            compactEventCard(
+                title = "굿즈/행사",
+                body = "공식 출처 기반 진행 중 ${repository.hubEventsSummary.openCount}개 · 마감 임박 ${repository.hubEventsSummary.closingSoonCount}개",
+                pills = listOf("굿즈", "티켓", "오프라인")
+            ).apply {
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    navigateTo(HubScreen.GOODS_EVENTS, addToBackStack = true)
+                }
+            }
+        )
         binding.contentList.addView(filterChips())
         binding.contentList.addView(
             noticeCard("공식 YouTube는 업로드 알림만 지원합니다. 라이브 예정, 시작, 종료 이벤트는 기록과 푸시에 만들지 않습니다.")
@@ -192,6 +207,36 @@ class MainActivity : AppCompatActivity() {
             .filter { selectedFilter == "all" || it.generationId == selectedFilter }
             .filter { it.catalogRole != CatalogRole.PLACEHOLDER || selectedFilter == "gen4-upcoming" }
             .forEach { binding.contentList.addView(memberCard(it)) }
+    }
+
+    private fun renderGoodsEvents() {
+        startScreen(
+            screenId = "goods_events",
+            title = "굿즈/행사",
+            role = "공식/멤버/공식 콜라보 출처가 있는 기간성 정보만 표시합니다."
+        )
+        binding.contentList.addView(
+            summaryGrid(
+                listOf(
+                    StatusSummaryItem(repository.hubEventsSummary.openCount.toString(), "진행 중"),
+                    StatusSummaryItem(repository.hubEventsSummary.upcomingCount.toString(), "예정"),
+                    StatusSummaryItem(repository.hubEventsSummary.closingSoonCount.toString(), "마감 임박")
+                )
+            )
+        )
+        binding.contentList.addView(staticChips("전체", "굿즈", "티켓", "오프라인", "마감 임박"))
+        repository.hubEvents.forEach { event ->
+            binding.contentList.addView(
+                compactEventCard(
+                    title = event.title,
+                    body = listOfNotNull(event.status.displayName, event.sourceLabel, event.venueName).joinToString(" · "),
+                    pills = listOf(event.category.displayName, event.participationMode.displayName)
+                )
+            )
+        }
+        binding.contentList.addView(
+            noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
+        )
     }
 
     private fun renderLive() {

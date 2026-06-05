@@ -31,4 +31,15 @@ class MainNavigationHistoryTest {
         assertFalse(history.canGoBack)
         assertNull(history.goBack())
     }
+
+    @Test
+    fun goodsEventsScreenCanBePushedFromHomeWithoutBottomTab() {
+        val history = MainNavigationHistory()
+
+        history.select(HubScreen.GOODS_EVENTS)
+
+        assertEquals(HubScreen.GOODS_EVENTS, history.currentScreen)
+        assertTrue(history.canGoBack)
+        assertEquals(HubScreen.HOME, history.goBack())
+    }
 }

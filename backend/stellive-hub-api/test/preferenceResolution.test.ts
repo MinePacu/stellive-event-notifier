@@ -83,6 +83,41 @@ describe("PreferenceResolutionService", () => {
     expect(standard.deliveryMode).toBe("standard");
   });
 
+  it("global off blocks hub event notifications", () => {
+    const result = service.resolve(
+      event({
+        source: "hub_event",
+        type: "event_sales_open",
+        memberId: "stellive-official",
+        generationId: "official",
+        realtimeEligible: false
+      }),
+      "device-1",
+      [pref({ scope: "global", enabled: false })]
+    );
+
+    expect(result.shouldNotify).toBe(false);
+    expect(result.reason).toBe("global_off");
+  });
+
+  it("hub event notifications stay standard by default even with realtime_best_effort delivery mode", () => {
+    const result = service.resolve(
+      event({
+        source: "hub_event",
+        type: "event_deadline_soon",
+        memberId: "stellive-official",
+        generationId: "official",
+        realtimeEligible: false
+      }),
+      "device-1",
+      [pref({ scope: "global", deliveryMode: "realtime_best_effort" })]
+    );
+
+    expect(result.shouldNotify).toBe(true);
+    expect(result.deliveryMode).toBe("standard");
+    expect(result.pushPriority).toBe("normal");
+  });
+
   it("chzzk chat is off by default", () => {
     const result = service.resolve(event({ type: "chzzk_chat", source: "chzzk" }), "device-1", []);
     expect(result.shouldNotify).toBe(false);

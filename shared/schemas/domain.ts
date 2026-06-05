@@ -1,7 +1,7 @@
 export type CatalogRole = "member" | "representative" | "official_channel" | "placeholder";
 export type ActiveStatus = "active" | "upcoming";
 export type GenerationType = "generation" | "gamja" | "official" | "upcoming";
-export type PlatformSource = "x" | "naver_cafe" | "chzzk" | "youtube";
+export type PlatformSource = "x" | "naver_cafe" | "chzzk" | "youtube" | "hub_event";
 export type DeliveryMode = "standard" | "realtime_best_effort";
 export type PushPriority = "normal" | "high";
 export type TapAction = "open_app" | "open_platform";
@@ -18,7 +18,12 @@ export type PlatformEventType =
   | "youtube_live_started"
   | "youtube_live_ended"
   | "official_x_post"
-  | "official_youtube_upload";
+  | "official_youtube_upload"
+  | "event_announced"
+  | "event_sales_open"
+  | "event_deadline_soon"
+  | "event_updated"
+  | "event_cancelled";
 
 export type NotificationPreferenceScope =
   | "global"
@@ -174,4 +179,49 @@ export interface LiveStatus {
   platformUrl?: string;
   lastCheckedAt: string;
   realtimeObservedAt?: string;
+}
+
+export type HubEventCategory =
+  | "online_goods"
+  | "online_collab"
+  | "offline_concert"
+  | "offline_collab"
+  | "offline_popup"
+  | "ticketing";
+
+export type HubEventParticipationMode = "online" | "offline" | "hybrid";
+
+export type HubEventStatus = "announced" | "upcoming" | "open" | "closing_soon" | "ended" | "cancelled";
+
+export type HubEventSourceType = "official" | "member" | "official_collab";
+
+export interface HubEvent {
+  id: string;
+  category: HubEventCategory;
+  participationMode: HubEventParticipationMode;
+  status: HubEventStatus;
+  title: string;
+  summary?: string;
+  memberId?: string;
+  generationId: string;
+  sourceUrl: string;
+  sourceLabel: string;
+  sourceType: HubEventSourceType;
+  announcedAt?: string;
+  startsAt?: string;
+  endsAt?: string;
+  purchaseUrl?: string;
+  ticketUrl?: string;
+  venueName?: string;
+  venueAddress?: string;
+  notificationEligible: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HubEventsSummary {
+  openCount: number;
+  upcomingCount: number;
+  closingSoonCount: number;
+  preview: HubEvent[];
 }

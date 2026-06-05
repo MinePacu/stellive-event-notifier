@@ -1,16 +1,25 @@
 import type { FastifyInstance } from "fastify";
 import { CatalogService } from "../catalog/catalog.js";
+import { HubEventService } from "../hub-events/hubEventService.js";
 import { shouldDropEventBeforeStorage } from "../events/eventGuards.js";
 import { PreferenceResolutionService } from "../preferences/preferenceResolution.js";
 import { RealtimeDeliveryService } from "../realtime/realtimeDeliveryService.js";
 import type { DeliveryAttempt, PlatformEvent, UserNotificationPreference } from "../types.js";
 
 const catalog = new CatalogService();
+const hubEvents = new HubEventService(catalog);
 const preferenceResolution = new PreferenceResolutionService();
 const realtime = new RealtimeDeliveryService();
 const preferences = new Map<string, UserNotificationPreference[]>();
 const deliveryAttempts: DeliveryAttempt[] = [];
 const devDeviceId = "dev-device";
+
+function parseHubEventLimit(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+  return parsed;
+}
 
 function sampleEvent(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
   const now = new Date().toISOString();
@@ -39,6 +48,7 @@ export async function registerRoutes(app: FastifyInstance) {
     const deviceId = String((request.query as { deviceId?: string }).deviceId ?? "dev-device");
     return {
       appConfig: { unofficialProject: true, catalogVersion: "seed-2026-06-01", officialYoutubeLiveExcluded: true },
+      hubEventsSummary: hubEvents.summary(),
       generations: catalog.getGenerations(),
       members: catalog.getMembers(),
       preferences: preferences.get(deviceId) ?? [],
@@ -95,6 +105,43 @@ export async function registerRoutes(app: FastifyInstance) {
         lastCheckedAt: new Date().toISOString()
       }))
   );
+
+  app.get("/v1/hub-events/summary", async () => hubEvents.summary());
+  app.get("/v1/hub-events", async (request) => {
+    type HubEventListFilters = NonNullable<Parameters<typeof hubEvents.list>[0]>;
+    const query = request.query as {
+      category?: HubEventListFilters["category"];
+      participationMode?: HubEventListFilters["participationMode"];
+      status?: HubEventListFilters["status"];
+      generationId?: string;
+      memberId?: string;
+      from?: string;
+      to?: string;
+      cursor?: string;
+      limit?: string | number;
+    };
+
+    return hubEvents.list(
+      {
+        category: query.category,
+        participationMode: query.participationMode,
+        status: query.status,
+        generationId: query.generationId,
+        memberId: query.memberId,
+        from: query.from,
+        to: query.to,
+        cursor: query.cursor,
+        limit: parseHubEventLimit(query.limit)
+      },
+      new Date()
+    );
+  });
+  app.get("/v1/hub-events/:id", async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const event = hubEvents.getById(id);
+    if (!event) return reply.notFound("hub event not found");
+    return event;
+  });
 
   app.get("/v1/realtime/status", async () => realtime.status());
   app.get("/v1/events/stream", async (_request, reply) => {
