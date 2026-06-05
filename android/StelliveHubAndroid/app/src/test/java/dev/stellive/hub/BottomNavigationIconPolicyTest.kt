@@ -22,7 +22,7 @@ class BottomNavigationIconPolicyTest {
         assertEquals("@drawable/ic_tab_home", iconsById["@+id/tab_home"])
         assertEquals("@drawable/ic_tab_live", iconsById["@+id/tab_live"])
         assertEquals("@drawable/ic_tab_history", iconsById["@+id/tab_history"])
-        assertEquals("@drawable/ic_tab_settings", iconsById["@+id/tab_settings"])
+        assertEquals("@drawable/ic_tab_goods_events", iconsById["@+id/tab_goods_events"])
         assertEquals(4, iconsById.values.toSet().size)
     }
 }

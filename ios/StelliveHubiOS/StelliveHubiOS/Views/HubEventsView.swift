@@ -24,39 +24,39 @@ struct HubEventsView: View {
                     .init(value: "\(store.hubEventsSummary.closingSoonCount)", label: "마감 임박")
                 ]
             )
-            .listRowInsets(EdgeInsets(top: 18, leading: 16, bottom: 10, trailing: 16))
+            .listRowInsets(IOSGroupedScreenPolicy.headerRowInsets)
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(filters, id: \.id) { filter in
-                        Button {
-                            selectedFilter = filter.id
-                        } label: {
-                            Text(filter.title)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(selectedFilter == filter.id ? Color.teal : Color.secondary)
-                                .lineLimit(1)
-                                .padding(.horizontal, 13)
-                                .padding(.vertical, 8)
-                                .background(
-                                    Capsule()
-                                        .fill(selectedFilter == filter.id ? Color.teal.opacity(0.16) : Color(.tertiarySystemFill))
-                                )
-                                .overlay(
-                                    Capsule()
-                                        .stroke(selectedFilter == filter.id ? Color.teal.opacity(0.28) : Color.clear, lineWidth: 1)
-                                )
+            Section("필터") {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(filters, id: \.id) { filter in
+                            Button {
+                                selectedFilter = filter.id
+                            } label: {
+                                Text(filter.title)
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(selectedFilter == filter.id ? Color.teal : Color.secondary)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 13)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        Capsule()
+                                            .fill(selectedFilter == filter.id ? Color.teal.opacity(0.16) : Color(.tertiarySystemFill))
+                                    )
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(selectedFilter == filter.id ? Color.teal.opacity(0.28) : Color.clear, lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(selectedFilter == filter.id ? .isSelected : [])
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(selectedFilter == filter.id ? .isSelected : [])
                     }
                 }
+                .listRowInsets(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
             }
-            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
 
             Section("목록") {
                 ForEach(store.hubEvents(for: selectedFilter)) { event in
@@ -72,8 +72,7 @@ struct HubEventsView: View {
                 Text("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
             }
         }
-        .listStyle(.plain)
-        .navigationTitle("굿즈/행사")
+        .listStyle(.insetGrouped)
     }
 }
 
@@ -81,33 +80,34 @@ private struct HubEventRow: View {
     let event: HubEvent
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(event.title)
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .minimumScaleFactor(0.88)
 
-                Spacer(minLength: 8)
-
-                HubEventStatusBadge(status: event.status)
-            }
-
-            Text([event.category.displayName, event.participationMode.displayName, event.sourceLabel]
-                .joined(separator: " · "))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.82)
-
-            if let summary = event.summary, !summary.isEmpty {
-                Text(summary)
-                    .font(.caption)
+                Text([event.category.displayName, event.participationMode.displayName, event.sourceLabel]
+                    .joined(separator: " · "))
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .minimumScaleFactor(0.82)
+
+                if let summary = event.summary, !summary.isEmpty {
+                    Text(summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.82)
+                }
             }
+            .layoutPriority(1)
+
+            Spacer(minLength: 8)
+
+            HubEventStatusBadge(status: event.status)
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
@@ -121,13 +121,15 @@ private struct HubEventStatusBadge: View {
         Text(status.displayName)
             .font(.caption2.weight(.semibold))
             .foregroundStyle(status == .closingSoon ? Color.red : Color.teal)
-            .lineLimit(1)
+            .lineLimit(HubEventStatusRowLayout.statusLineLimit)
+            .minimumScaleFactor(HubEventStatusRowLayout.statusMinimumScaleFactor)
+            .multilineTextAlignment(.trailing)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(
                 Capsule()
                     .fill((status == .closingSoon ? Color.red : Color.teal).opacity(0.14))
             )
+            .fixedSize(horizontal: HubEventStatusRowLayout.preservesStatusIntrinsicWidth, vertical: false)
     }
 }
-

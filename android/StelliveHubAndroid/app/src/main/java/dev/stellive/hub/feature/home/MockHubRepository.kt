@@ -95,38 +95,53 @@ class MockHubRepository {
         )
     )
 
+    private val hubEventComparator = compareBy<HubEvent>(
+        { MainUiPolicy.hubEventStatusRank(it.status) },
+        { it.endsAt ?: it.startsAt ?: it.updatedAt },
+        { it.id }
+    )
+
     val hubEventsSummary = dev.stellive.hub.core.model.HubEventsSummary(
         openCount = hubEvents.count { it.status == HubEventStatus.OPEN },
         upcomingCount = hubEvents.count { it.status == HubEventStatus.UPCOMING },
         closingSoonCount = hubEvents.count { it.status == HubEventStatus.CLOSING_SOON },
-        preview = hubEvents
-            .sortedWith(
-                compareBy<HubEvent>(
-                    { MainUiPolicy.hubEventStatusRank(it.status) },
-                    { it.endsAt ?: it.startsAt ?: it.updatedAt },
-                    { it.updatedAt }
-                )
-            )
-            .take(3)
+        preview = hubEvents.sortedWith(hubEventComparator).take(3)
     )
 
     val settings = NotificationSettingState()
 
     val history = listOf(
+        NotificationHistoryItem("h3", "마감 임박", "스텔라이브 공식 굿즈 예약 마감 임박", "hub-event:closing-official-goods", "굿즈/행사", "event_deadline_soon", DeliveryMode.STANDARD, null),
         NotificationHistoryItem("h1", "방송 시작", "아야츠노 유니 CHZZK 방송 시작", "ayatsuno-yuni", "아야츠노 유니", "chzzk_live_started", DeliveryMode.REALTIME_BEST_EFFORT, 1800),
         NotificationHistoryItem("h2", "공식 업로드", "스텔라이브 공식 YouTube 업로드", "stellive-official", "스텔라이브 공식", "official_youtube_upload", DeliveryMode.REALTIME_BEST_EFFORT, 2400)
     )
 
+    val liveMembers: List<HubMember> =
+        members
+            .filter { it.catalogRole != CatalogRole.OFFICIAL_CHANNEL && it.isLive }
+            .sortedBy { it.koreanName }
+
+    val recentHistoryPreview: List<NotificationHistoryItem> = history.take(3)
+
+    val closingSoonHubEvents: List<HubEvent> =
+        hubEvents
+            .filter { it.status == HubEventStatus.CLOSING_SOON }
+            .sortedWith(hubEventComparator)
+
     fun memberForHistory(item: NotificationHistoryItem): HubMember? =
         members.firstOrNull { it.id == item.memberId }
 
-    fun hubEventsForFilter(filter: String): List<HubEvent> = when (filter.lowercase()) {
-        "goods" -> hubEvents.filter {
-            it.category == HubEventCategory.ONLINE_GOODS || it.category == HubEventCategory.ONLINE_COLLAB
+    fun hubEventsForFilter(filter: String): List<HubEvent> {
+        val filtered = when (filter.lowercase()) {
+            "goods" -> hubEvents.filter {
+                it.category == HubEventCategory.ONLINE_GOODS || it.category == HubEventCategory.ONLINE_COLLAB
+            }
+            "ticketing" -> hubEvents.filter { it.category == HubEventCategory.TICKETING }
+            "offline" -> hubEvents.filter { it.participationMode.isOffline }
+            "closing" -> hubEvents.filter { it.status == HubEventStatus.CLOSING_SOON }
+            else -> hubEvents
         }
-        "ticketing" -> hubEvents.filter { it.category == HubEventCategory.TICKETING }
-        "offline" -> hubEvents.filter { it.participationMode.isOffline }
-        "closing" -> hubEvents.filter { it.status == HubEventStatus.CLOSING_SOON }
-        else -> hubEvents
+
+        return filtered.sortedWith(hubEventComparator)
     }
 }
