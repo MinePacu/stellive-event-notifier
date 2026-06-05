@@ -37,6 +37,10 @@ Hub event notifications are standard delivery by default. Global off, generation
 
 Global off blocks all notifications. Member explicit overrides can override generation/category settings. Platform and event-type settings apply to the event. More specific member/generation platform and event-type rules can override broader platform/event-type rules. Quiet hours, keyword block, and rate limit always apply last.
 
+## Load Reduction
+
+Notification noise and push-volume reduction policies are defined in [Notification Load Reduction Policy](NOTIFICATION_LOAD_REDUCTION_POLICY.md). These policies may downgrade delivery to summary push or app-history-only delivery, but they must not bypass user preferences, quiet hours, keyword rules, rate limits, or unsupported official YouTube live exclusions.
+
 ## Examples
 
 - `global=false` means every notification is off.

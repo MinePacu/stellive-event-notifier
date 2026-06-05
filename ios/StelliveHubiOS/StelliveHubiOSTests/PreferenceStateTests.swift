@@ -197,6 +197,51 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertFalse(HistoryPresentationPolicy.metadataText(for: standardItem).contains("event_deadline_soon"))
     }
 
+    func testHistoryFiltersExposeOnlyVisibleEventTypesAndMembers() {
+        let store = MockHubStore()
+
+        XCTAssertEqual(store.historyEventTypeFilters.map(\.id), [
+            "all",
+            "event_deadline_soon",
+            "chzzk_live_started",
+            "official_youtube_upload"
+        ])
+        XCTAssertEqual(store.historyEventTypeFilters.map(\.displayName), [
+            "전체",
+            "마감 임박",
+            "CHZZK 방송 시작",
+            "공식 YouTube 업로드"
+        ])
+        XCTAssertEqual(store.historyMemberFilters.map(\.id), [
+            "all",
+            "hub-event:closing-official-goods",
+            "ayatsuno-yuni",
+            "stellive-official"
+        ])
+        XCTAssertEqual(store.historyMemberFilters.map(\.displayName), [
+            "전체",
+            "굿즈/행사",
+            "아야츠노 유니",
+            "스텔라이브 공식"
+        ])
+    }
+
+    func testHistoryFiltersCombineEventTypeAndMemberSelection() {
+        let store = MockHubStore()
+
+        XCTAssertEqual(
+            store.filteredHistory(eventTypeFilterId: "event_deadline_soon", memberFilterId: "all").map(\.id),
+            ["h3"]
+        )
+        XCTAssertEqual(
+            store.filteredHistory(eventTypeFilterId: "all", memberFilterId: "ayatsuno-yuni").map(\.id),
+            ["h1"]
+        )
+        XCTAssertTrue(
+            store.filteredHistory(eventTypeFilterId: "event_deadline_soon", memberFilterId: "ayatsuno-yuni").isEmpty
+        )
+    }
+
     func testHubEventsExcludeGangziAndGamja() {
         let store = MockHubStore()
 

@@ -36,6 +36,8 @@ Repository assets must not include member/profile images, official logos, fan ar
 
 Support global, generation/category, individual item, platform, event type, generation-platform, generation-event-type, member-platform, and member-event-type preferences. Global off always wins. Individual explicit overrides can override generation/category settings. Quiet hours, keyword block, and rate limit always apply.
 
+Notification load reduction is documented in `docs/NOTIFICATION_LOAD_REDUCTION_POLICY.md`. Future backend, Android, and iOS notification work must preserve the three delivery levels, spike downgrade controls, Android channel/group/update behavior, iOS thread/collapse/cleanup behavior, and the future 10-minute push cap consideration.
+
 ## Realtime Delivery Policy
 
 `realtime_best_effort` is best-effort and never guaranteed. It applies only to allowed and realtime-eligible events such as CHZZK live started, X posts, YouTube uploads, official X posts, and official YouTube uploads. Naver Cafe is deferred; if reintroduced, it falls back to standard.
