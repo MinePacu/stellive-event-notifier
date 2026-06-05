@@ -106,6 +106,25 @@ final class MockHubStore: ObservableObject {
         .init(id: "h2", title: "공식 업로드", body: "스텔라이브 공식 YouTube 업로드", memberId: "stellive-official", memberName: "스텔라이브 공식", eventType: "official_youtube_upload", deliveryMode: .realtimeBestEffort, deliveryLatencyMs: 2400)
     ]
 
+    var historyEventTypeFilters: [HistoryFilterOption] {
+        let filters = uniqueHistoryFilters { item in
+            .init(
+                id: item.eventType,
+                displayName: NotificationEventType(rawValue: item.eventType)?.displayName ?? item.title
+            )
+        }
+
+        return [.init(id: "all", displayName: "전체")] + filters
+    }
+
+    var historyMemberFilters: [HistoryFilterOption] {
+        let filters = uniqueHistoryFilters { item in
+            .init(id: item.memberId, displayName: item.memberName)
+        }
+
+        return [.init(id: "all", displayName: "전체")] + filters
+    }
+
     var filteredMembers: [HubMember] {
         members.filter { selectedFilter == "all" || $0.generationId == selectedFilter }
     }
@@ -209,6 +228,26 @@ final class MockHubStore: ObservableObject {
 
     func member(for historyItem: NotificationHistoryItem) -> HubMember? {
         members.first { $0.id == historyItem.memberId }
+    }
+
+    func filteredHistory(eventTypeFilterId: String, memberFilterId: String) -> [NotificationHistoryItem] {
+        history.filter { item in
+            let matchesEventType = eventTypeFilterId == "all" || item.eventType == eventTypeFilterId
+            let matchesMember = memberFilterId == "all" || item.memberId == memberFilterId
+            return matchesEventType && matchesMember
+        }
+    }
+
+    private func uniqueHistoryFilters(
+        map: (NotificationHistoryItem) -> HistoryFilterOption
+    ) -> [HistoryFilterOption] {
+        var seen = Set<String>()
+
+        return history.compactMap { item in
+            let option = map(item)
+            guard seen.insert(option.id).inserted else { return nil }
+            return option
+        }
     }
 
     private static func hubEventStatusRank(_ status: HubEventStatus) -> Int {

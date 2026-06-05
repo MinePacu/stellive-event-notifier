@@ -3,6 +3,15 @@ import SwiftUI
 struct HistoryView: View {
     @EnvironmentObject private var store: MockHubStore
     @State private var path = NavigationPath()
+    @State private var selectedEventTypeFilterId = "all"
+    @State private var selectedMemberFilterId = "all"
+
+    private var filteredHistory: [NotificationHistoryItem] {
+        store.filteredHistory(
+            eventTypeFilterId: selectedEventTypeFilterId,
+            memberFilterId: selectedMemberFilterId
+        )
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -10,23 +19,42 @@ struct HistoryView: View {
                 HubHeaderCard(
                     iconText: "기",
                     title: "알림 기록",
-                    subtitle: "최근 알림 \(store.recentNotificationCount)개",
+                    subtitle: historySubtitle,
                     metrics: [
                         .init(value: "\(store.recentNotificationCount)", label: "전체"),
-                        .init(value: "\(store.realtimeHistoryCount)", label: "실시간"),
-                        .init(value: store.averageHistoryLatencySummary, label: "평균 지연")
+                        .init(value: "\(filteredHistory.count)", label: "표시 중"),
+                        .init(value: "\(filteredHistory.filter { $0.deliveryMode == .realtimeBestEffort }.count)", label: "실시간")
                     ]
                 )
                 .listRowInsets(IOSGroupedScreenPolicy.headerRowInsets)
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
 
+                Section("보기 필터") {
+                    Picker("알림 종류", selection: $selectedEventTypeFilterId) {
+                        ForEach(store.historyEventTypeFilters) { filter in
+                            Text(filter.displayName).tag(filter.id)
+                        }
+                    }
+
+                    Picker("멤버", selection: $selectedMemberFilterId) {
+                        ForEach(store.historyMemberFilters) { filter in
+                            Text(filter.displayName).tag(filter.id)
+                        }
+                    }
+                }
+
                 Section("최근 알림") {
-                    ForEach(store.history) { item in
-                        HistoryNotificationRow(
-                            item: item,
-                            member: store.member(for: item)
-                        )
+                    if filteredHistory.isEmpty {
+                        Text("선택한 조건에 맞는 알림이 아직 없습니다.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(filteredHistory) { item in
+                            HistoryNotificationRow(
+                                item: item,
+                                member: store.member(for: item)
+                            )
+                        }
                     }
                 }
 
@@ -38,6 +66,14 @@ struct HistoryView: View {
             .listStyle(.insetGrouped)
             .settingsToolbar(path: $path)
         }
+    }
+
+    private var historySubtitle: String {
+        if filteredHistory.count == store.recentNotificationCount {
+            return "최근 알림 \(store.recentNotificationCount)개"
+        }
+
+        return "표시 중 \(filteredHistory.count)개 / 전체 \(store.recentNotificationCount)개"
     }
 }
 
