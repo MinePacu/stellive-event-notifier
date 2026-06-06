@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { CatalogService } from "../catalog/catalog.js";
 import { HubEventService } from "../hub-events/hubEventService.js";
 import { shouldDropEventBeforeStorage } from "../events/eventGuards.js";
+import { resolveNotificationDelivery } from "../notification/loadReductionPolicy.js";
 import { PreferenceResolutionService } from "../preferences/preferenceResolution.js";
 import { RealtimeDeliveryService } from "../realtime/realtimeDeliveryService.js";
 import type { DeliveryAttempt, PlatformEvent, UserNotificationPreference } from "../types.js";
@@ -168,15 +169,18 @@ export async function registerRoutes(app: FastifyInstance) {
     const resolution = preferenceResolution.resolve(event, devDeviceId, preferences.get(devDeviceId) ?? [], {
       recentNotificationsInLastMinute
     });
-    realtime.enqueue(event, resolution);
+    const deliveryDecision = resolveNotificationDelivery(event, resolution, {
+      recentPushCandidatesInWindow: recentNotificationsInLastMinute
+    });
+    realtime.enqueue(event, resolution, deliveryDecision.deliveryLevel);
     deliveryAttempts.push({
       id: `attempt_${Date.now()}`,
       eventId: event.id,
       deviceId: devDeviceId,
       attemptedAt: new Date().toISOString(),
-      deliveredAt: resolution.shouldNotify ? new Date().toISOString() : undefined,
-      status: resolution.shouldNotify ? "sent" : "skipped",
-      reason: resolution.reason,
+      deliveredAt: deliveryDecision.shouldEnqueuePush ? new Date().toISOString() : undefined,
+      status: resolution.shouldNotify ? (deliveryDecision.shouldEnqueuePush ? "sent" : "queued") : "skipped",
+      reason: deliveryDecision.loadReductionReason ?? resolution.reason,
       tapActionUsed: resolution.tapAction,
       title: event.title,
       body: event.body,
@@ -185,9 +189,11 @@ export async function registerRoutes(app: FastifyInstance) {
       generationId: event.generationId,
       memberId: event.memberId,
       deliveryMode: resolution.deliveryMode,
+      deliveryLevel: deliveryDecision.deliveryLevel,
+      loadReductionReason: deliveryDecision.loadReductionReason,
       pushPriority: resolution.pushPriority
     });
-    return { event, resolution };
+    return { event, resolution, deliveryDecision };
   });
   app.post("/v1/dev/mock-live-status", async () => ({ updated: true }));
   app.post("/v1/dev/mock-realtime-event", async () => ({ queued: true, status: realtime.status() }));
