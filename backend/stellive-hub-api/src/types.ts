@@ -10,6 +10,7 @@ export type {
   HubEventsSummary,
   LiveStatus,
   Member,
+  NotificationDeliveryLevel,
   PlatformEvent,
   PlatformEventType,
   PlatformSource,

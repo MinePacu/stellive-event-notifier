@@ -39,13 +39,13 @@
 		};
 		777777777777777777777777 = {
 			isa = PBXGroup;
-			children = (B00000000000000000000000, B00000000000000000000001, B00000000000000000000002, B00000000000000000000003, B00000000000000000000004, B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, B00000000000000000000008, B00000000000000000000009, B0000000000000000000000A, B0000000000000000000000B, B0000000000000000000000C);
+			children = (B00000000000000000000000, B00000000000000000000001, B00000000000000000000002, B00000000000000000000003, B00000000000000000000004, B0000000000000000000000D, B0000000000000000000000E, B0000000000000000000000F, B00000000000000000000010, B00000000000000000000011, B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, B00000000000000000000008, B00000000000000000000009, B0000000000000000000000A, B0000000000000000000000B, B0000000000000000000000C);
 			path = StelliveHubiOS;
 			sourceTree = "<group>";
 		};
 		888888888888888888888888 = {
 			isa = PBXGroup;
-			children = (C00000000000000000000000);
+			children = (C00000000000000000000000, C00000000000000000000001);
 			path = StelliveHubiOSTests;
 			sourceTree = "<group>";
 		};
@@ -54,6 +54,11 @@
 		B00000000000000000000002 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/MockHubStore.swift; sourceTree = "<group>"; };
 		B00000000000000000000003 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/RealtimeStreamClient.swift; sourceTree = "<group>"; };
 		B00000000000000000000004 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/NotificationPermissionService.swift; sourceTree = "<group>"; };
+		B0000000000000000000000D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/NotificationPayload.swift; sourceTree = "<group>"; };
+		B0000000000000000000000E = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/NotificationThreadPolicy.swift; sourceTree = "<group>"; };
+		B0000000000000000000000F = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/NotificationCollapsePolicy.swift; sourceTree = "<group>"; };
+		B00000000000000000000010 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/NotificationSummaryTextPolicy.swift; sourceTree = "<group>"; };
+		B00000000000000000000011 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/DeliveredNotificationCleanupService.swift; sourceTree = "<group>"; };
 		B00000000000000000000005 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ContentView.swift; sourceTree = "<group>"; };
 		B00000000000000000000006 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/HomeView.swift; sourceTree = "<group>"; };
 		B00000000000000000000007 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/LiveView.swift; sourceTree = "<group>"; };
@@ -63,6 +68,7 @@
 		B0000000000000000000000B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/HubEventsView.swift; sourceTree = "<group>"; };
 		B0000000000000000000000C = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/HubEventDetailView.swift; sourceTree = "<group>"; };
 		C00000000000000000000000 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceStateTests.swift; sourceTree = "<group>"; };
+		C00000000000000000000001 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationLoadReductionPolicyTests.swift; sourceTree = "<group>"; };
 		999999999999999999999999 = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StelliveHubiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AAAAAAAAAAAAAAAAAAAAAAAA = { isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StelliveHubiOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D00000000000000000000000 = { isa = PBXBuildFile; fileRef = B00000000000000000000000; };
@@ -78,7 +84,13 @@
 		D0000000000000000000000A = { isa = PBXBuildFile; fileRef = B0000000000000000000000A; };
 		D0000000000000000000000E = { isa = PBXBuildFile; fileRef = B0000000000000000000000B; };
 		D0000000000000000000000F = { isa = PBXBuildFile; fileRef = B0000000000000000000000C; };
+		D10000000000000000000001 = { isa = PBXBuildFile; fileRef = B0000000000000000000000D; };
+		D10000000000000000000002 = { isa = PBXBuildFile; fileRef = B0000000000000000000000E; };
+		D10000000000000000000003 = { isa = PBXBuildFile; fileRef = B0000000000000000000000F; };
+		D10000000000000000000004 = { isa = PBXBuildFile; fileRef = B00000000000000000000010; };
+		D10000000000000000000005 = { isa = PBXBuildFile; fileRef = B00000000000000000000011; };
 		D0000000000000000000000B = { isa = PBXBuildFile; fileRef = C00000000000000000000000; };
+		D10000000000000000000006 = { isa = PBXBuildFile; fileRef = C00000000000000000000001; };
 		D0000000000000000000000C = { isa = PBXContainerItemProxy; containerPortal = 111111111111111111111111 /* Project object */; proxyType = 1; remoteGlobalIDString = 222222222222222222222222; remoteInfo = StelliveHubiOS; };
 		D0000000000000000000000D = { isa = PBXTargetDependency; target = 222222222222222222222222; targetProxy = D0000000000000000000000C; };
 		222222222222222222222222 = {
@@ -103,10 +115,10 @@
 			productReference = AAAAAAAAAAAAAAAAAAAAAAAA;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		F00000000000000000000000 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D00000000000000000000000, D00000000000000000000001, D00000000000000000000002, D00000000000000000000003, D00000000000000000000004, D00000000000000000000005, D00000000000000000000006, D00000000000000000000007, D00000000000000000000008, D00000000000000000000009, D0000000000000000000000A, D0000000000000000000000E, D0000000000000000000000F); runOnlyForDeploymentPostprocessing = 0; };
+		F00000000000000000000000 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D00000000000000000000000, D00000000000000000000001, D00000000000000000000002, D00000000000000000000003, D00000000000000000000004, D10000000000000000000001, D10000000000000000000002, D10000000000000000000003, D10000000000000000000004, D10000000000000000000005, D00000000000000000000005, D00000000000000000000006, D00000000000000000000007, D00000000000000000000008, D00000000000000000000009, D0000000000000000000000A, D0000000000000000000000E, D0000000000000000000000F); runOnlyForDeploymentPostprocessing = 0; };
 		F00000000000000000000001 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		F00000000000000000000002 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		F00000000000000000000003 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D0000000000000000000000B); runOnlyForDeploymentPostprocessing = 0; };
+		F00000000000000000000003 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D0000000000000000000000B, D10000000000000000000006); runOnlyForDeploymentPostprocessing = 0; };
 		F00000000000000000000004 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		F00000000000000000000005 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		444444444444444444444444 = { isa = XCConfigurationList; buildConfigurations = (E00000000000000000000002, E00000000000000000000003); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
