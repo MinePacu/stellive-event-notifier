@@ -1,8 +1,9 @@
-import type { PlatformEvent, ResolvedNotificationPreference } from "../types.js";
+import type { NotificationDeliveryLevel, PlatformEvent, ResolvedNotificationPreference } from "../types.js";
 
 export interface RealtimeQueueItem {
   event: PlatformEvent;
   resolution: ResolvedNotificationPreference;
+  deliveryLevel: NotificationDeliveryLevel;
   priority: number;
 }
 
@@ -18,10 +19,11 @@ export class RealtimeDeliveryService {
   private queue: RealtimeQueueItem[] = [];
   private lastEventAt?: string;
 
-  enqueue(event: PlatformEvent, resolution: ResolvedNotificationPreference) {
+  enqueue(event: PlatformEvent, resolution: ResolvedNotificationPreference, deliveryLevel: NotificationDeliveryLevel = "immediate_push") {
     if (!resolution.shouldNotify) return;
+    if (deliveryLevel !== "immediate_push") return;
     const priority = resolution.deliveryMode === "realtime_best_effort" ? priorityByType[event.type] ?? 4 : 10;
-    this.queue.push({ event, resolution, priority });
+    this.queue.push({ event, resolution, deliveryLevel, priority });
     this.queue.sort((a, b) => a.priority - b.priority);
     this.lastEventAt = new Date().toISOString();
   }
@@ -45,4 +47,3 @@ export class RealtimeDeliveryService {
     };
   }
 }
-

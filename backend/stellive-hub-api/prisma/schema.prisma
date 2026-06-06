@@ -70,6 +70,8 @@ model DeliveryAttempt {
   generationId      String
   memberId          String
   deliveryMode      String
+  deliveryLevel     String?
+  loadReductionReason String?
   pushPriority      String
   deliveryLatencyMs Int?
   retryCount        Int      @default(0)
