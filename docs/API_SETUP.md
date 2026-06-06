@@ -12,7 +12,7 @@ Use official or documented allowed endpoints for live status and session events.
 
 ## X
 
-Use X API v2 Filtered Stream when available. Rules should be based on verified handles such as `from:StelLive_kr`. If streaming is unavailable, fallback polling must respect rate limits.
+Design X integration as no-paid-API only. Use official X API paths only when the project can access them without paid API billing. If free official access is unavailable, unauthorized, rate-limited beyond usefulness, or requires paid billing, keep X disabled behind feature flags and do not generate X notifications. Do not implement scraping or login-cookie alternatives.
 
 ## YouTube
 
