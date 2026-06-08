@@ -362,7 +362,47 @@ export function renderAdminConsoleHtml(): string {
     const featureFlagsRoot = document.getElementById("feature-flags");
     const messageRoot = document.getElementById("message");
     const tokenInput = document.getElementById("internal-token");
+    const logoutForm = document.querySelector(".logout-form");
     const buttons = Array.from(document.querySelectorAll("button"));
+    const internalTokenStorageKey = "stellive.admin.internalApiToken";
+    let uptimeValueRoot = null;
+    let uptimeBaseSeconds = null;
+    let uptimeBaseTimestamp = 0;
+    let uptimeTimerId = null;
+
+    function readStoredInternalToken() {
+      try {
+        return window.sessionStorage.getItem(internalTokenStorageKey) || "";
+      } catch (_error) {
+        return "";
+      }
+    }
+
+    function persistInternalToken() {
+      try {
+        const token = tokenInput.value;
+        if (token.trim()) {
+          window.sessionStorage.setItem(internalTokenStorageKey, token);
+        } else {
+          window.sessionStorage.removeItem(internalTokenStorageKey);
+        }
+      } catch (_error) {
+        // Some browser privacy modes can reject sessionStorage access.
+      }
+    }
+
+    function clearStoredInternalToken() {
+      try {
+        window.sessionStorage.removeItem(internalTokenStorageKey);
+      } catch (_error) {
+        // Logout should continue even if browser storage is unavailable.
+      }
+    }
+
+    const storedInternalToken = readStoredInternalToken();
+    if (storedInternalToken) {
+      tokenInput.value = storedInternalToken;
+    }
 
     function setBusy(isBusy) {
       for (const button of buttons) {
@@ -425,12 +465,70 @@ export function renderAdminConsoleHtml(): string {
       return section;
     }
 
+    function formatUptime(seconds) {
+      const totalSeconds = Math.floor(Number(seconds));
+      if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
+        return "-";
+      }
+
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const remainingSeconds = totalSeconds % 60;
+
+      if (days > 0) {
+        return hours > 0 ? days + "d " + hours + "h" : days + "d";
+      }
+      if (hours > 0) {
+        return minutes > 0 ? hours + "h " + minutes + "m" : hours + "h";
+      }
+      if (minutes > 0) {
+        return minutes + "m " + remainingSeconds + "s";
+      }
+      return remainingSeconds + "s";
+    }
+
+    function renderUptimeTick() {
+      if (!uptimeValueRoot || uptimeBaseSeconds == null) {
+        return;
+      }
+
+      const elapsedSeconds = Math.floor((Date.now() - uptimeBaseTimestamp) / 1000);
+      uptimeValueRoot.textContent = formatUptime(uptimeBaseSeconds + elapsedSeconds);
+    }
+
+    function bindUptime(seconds) {
+      const parsedSeconds = Math.floor(Number(seconds));
+      if (!Number.isFinite(parsedSeconds) || parsedSeconds < 0) {
+        uptimeBaseSeconds = null;
+        uptimeBaseTimestamp = 0;
+        if (uptimeValueRoot) {
+          uptimeValueRoot.textContent = "-";
+        }
+        return;
+      }
+
+      uptimeBaseSeconds = parsedSeconds;
+      uptimeBaseTimestamp = Date.now();
+      renderUptimeTick();
+      if (uptimeTimerId == null) {
+        uptimeTimerId = window.setInterval(renderUptimeTick, 1000);
+      }
+    }
+
+    function createUptimeNode(seconds) {
+      const span = document.createElement("span");
+      uptimeValueRoot = span;
+      bindUptime(seconds);
+      return span;
+    }
+
     function renderOverview(data) {
       overviewRoot.replaceChildren(
         createOverviewPanel("Service", [
           ["name", data.service.name],
           ["environment", data.service.environment],
-          ["uptime", data.service.uptimeSeconds + "s"]
+          ["uptime", createUptimeNode(data.service.uptimeSeconds)]
         ]),
         createOverviewPanel("Database", [
           ["status", createPill(data.database.status)],
@@ -576,6 +674,10 @@ export function renderAdminConsoleHtml(): string {
     document.getElementById("poll-chzzk").addEventListener("click", function () {
       return runAction("Poll CHZZK", endpoints.pollChzzk, { method: "POST" });
     });
+    tokenInput.addEventListener("input", persistInternalToken);
+    if (logoutForm) {
+      logoutForm.addEventListener("submit", clearStoredInternalToken);
+    }
   </script>
 </body>
 </html>`;

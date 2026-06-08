@@ -396,6 +396,13 @@ describe("admin console routes", () => {
     expect(response.body).toContain("/v1/internal/schedulers/chzzk/live-status");
     expectAdminThemeSupport(response.body);
     expect(response.body).toContain("Not checked yet");
+    expect(response.body).toContain("stellive.admin.internalApiToken");
+    expect(response.body).toContain("window.sessionStorage");
+    expect(response.body).toContain('tokenInput.addEventListener("input", persistInternalToken)');
+    expect(response.body).toContain('logoutForm.addEventListener("submit", clearStoredInternalToken)');
+    expect(response.body).toContain("function formatUptime(seconds)");
+    expect(response.body).toContain("setInterval(renderUptimeTick, 1000)");
+    expect(response.body).toContain("Date.now() - uptimeBaseTimestamp");
   });
 
   it("serves a login form when enabled without leaking the admin token", async () => {
