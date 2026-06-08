@@ -27,11 +27,12 @@ The login screen already has limited `prefers-color-scheme: dark` styling. The m
 
 ## Selected Approach
 
-Use a shared three-state browser theme preference:
+Use a shared four-state browser theme preference:
 
 - `System`: follow `prefers-color-scheme`.
 - `Light`: force the light palette.
 - `Dark`: force the dark palette.
+- `Black`: force a near-pure-black palette for maintainers who prefer maximum darkness or OLED-friendly operation.
 
 The theme control appears on both `/admin/login` and `/admin`. The selected value is stored in browser `localStorage` under a non-sensitive key such as `stellive-admin-theme`. If no value exists, the default is `System`. If the stored value is invalid, the client falls back to `System` and replaces the invalid value on the next explicit selection.
 
@@ -45,7 +46,7 @@ The console would use only `@media (prefers-color-scheme: dark)`. This is the sm
 
 ### Toggle With Browser Persistence
 
-This is the selected approach. It adds a small inline script and a compact segmented control, but keeps the preference local to the browser and avoids any new backend surface.
+This is the selected approach. It adds a small inline script and a compact segmented control, but keeps the preference local to the browser and avoids any new backend surface. The selected control includes both `Dark` and `Black` so the normal dark theme can keep comfortable contrast while the black theme can serve users who want a fully dark background.
 
 ### Session-Only Toggle
 
@@ -60,18 +61,19 @@ The login page gets a compact theme control near the top of the form or page she
 Expected behavior:
 
 - First visit defaults to `System`.
-- Selecting `Dark` immediately applies the dark login palette.
+- Selecting `Dark` immediately applies the standard dark login palette.
+- Selecting `Black` immediately applies the black login palette.
 - After successful login, `/admin` opens with the same selected theme.
 - Logging out and returning to `/admin/login` preserves the local theme preference.
 
 ### Console Page
 
-The main console gets the same `Light / System / Dark` control in the header, near the logout action. The header remains compact and operational rather than marketing-like.
+The main console gets the same `Light / System / Dark / Black` control in the header, near the logout action. The header remains compact and operational rather than marketing-like.
 
 Expected behavior:
 
 - Changing theme updates the page immediately.
-- Refreshing the page preserves `Light` or `Dark`.
+- Refreshing the page preserves `Light`, `Dark`, or `Black`.
 - Choosing `System` follows live OS/browser scheme changes where the browser supports `matchMedia` change events.
 - The internal API bearer token field and operational buttons keep their existing behavior.
 
@@ -99,6 +101,16 @@ Dark token intent:
 - Border: `#334155`
 - Input border: `#475569`
 
+Black token intent:
+
+- Page background: `#000000`
+- Header and panels: `#050505`
+- Elevated or hover surface: `#111111`
+- Text: `#f2f5f8`
+- Muted text: `#a3aab5`
+- Border: `#262626`
+- Input border: `#3a3a3a`
+
 Status pills keep their semantic meaning but receive dark-safe variants for contrast. For example, enabled/configured remains green, missing/disabled remains neutral, degraded/failed remains red, and verify-required remains amber.
 
 The page must declare `color-scheme: light dark` so native form controls render correctly in both modes.
@@ -110,10 +122,11 @@ The page must declare `color-scheme: light dark` so native form controls render 
 Add a small inline script to both HTML documents. It should:
 
 1. Read `localStorage.getItem("stellive-admin-theme")`.
-2. Accept only `light`, `system`, or `dark`.
+2. Accept only `light`, `system`, `dark`, or `black`.
 3. Resolve the active theme:
    - `light` -> `light`
    - `dark` -> `dark`
+   - `black` -> `black`
    - `system` -> `dark` only when `window.matchMedia("(prefers-color-scheme: dark)").matches`
 4. Set `document.documentElement.dataset.themePreference`.
 5. Set `document.documentElement.dataset.theme`.
@@ -124,13 +137,14 @@ The script must not read, write, log, or transmit admin tokens or internal API t
 
 ### Shared Theme Markup
 
-Add a segmented control with three buttons:
+Add a segmented control with four buttons:
 
 ```html
 <div class="theme-control" role="group" aria-label="Theme">
   <button type="button" class="theme-option" data-theme-option="light">Light</button>
   <button type="button" class="theme-option" data-theme-option="system">System</button>
   <button type="button" class="theme-option" data-theme-option="dark">Dark</button>
+  <button type="button" class="theme-option" data-theme-option="black">Black</button>
 </div>
 ```
 
@@ -152,6 +166,12 @@ Convert fixed admin colors to CSS variables:
   --admin-bg: #0f172a;
   --admin-surface: #111827;
   --admin-text: #e5edf7;
+}
+
+:root[data-theme="black"] {
+  --admin-bg: #000000;
+  --admin-surface: #050505;
+  --admin-text: #f2f5f8;
 }
 ```
 
@@ -175,8 +195,8 @@ The script should be defensive. If `localStorage` is unavailable, it should sile
 - The theme control uses `role="group"` and a clear `aria-label`.
 - Each option is a real `button type="button"`.
 - The selected option uses `aria-pressed="true"` or `aria-current="true"` consistently.
-- Focus states must remain visible in both light and dark modes.
-- Text, borders, inputs, and status pills must maintain readable contrast in both themes.
+- Focus states must remain visible in light, dark, and black modes.
+- Text, borders, inputs, and status pills must maintain readable contrast in every theme.
 - The control must not resize or shift the header when selected states change.
 
 ## Security And Privacy
@@ -197,6 +217,7 @@ Add route-level HTML assertions in `backend/stellive-hub-api/test/adminInternalR
 
 - `/admin/login` contains the theme control and local storage key when enabled.
 - `/admin` contains the theme control and local storage key when authenticated.
+- Both HTML responses include the `black` theme option.
 - The HTML responses do not contain configured `ADMIN_CONSOLE_TOKEN` or `INTERNAL_API_TOKEN` values.
 - Existing redirect, cookie, no-store, CSP, no-CORS, and token separation tests continue to pass.
 
@@ -204,7 +225,8 @@ Manual browser verification should cover:
 
 - Login page default `System` behavior.
 - Selecting `Dark` on login and confirming `/admin` stays dark after login.
-- Selecting `Light`, `System`, and `Dark` on `/admin`.
+- Selecting `Black` on login and confirming `/admin` stays black after login.
+- Selecting `Light`, `System`, `Dark`, and `Black` on `/admin`.
 - Refresh persistence.
 - Logout persistence back to `/admin/login`.
 - Mobile-width header wrapping without overlap.
@@ -220,6 +242,6 @@ Do not introduce a frontend dependency for this feature. The current admin conso
 No open product decisions remain. The approved scope is:
 
 - Include both `/admin/login` and `/admin`.
-- Use a `Light / System / Dark` control.
+- Use a `Light / System / Dark / Black` control.
 - Persist the choice in browser local storage.
 - Default to `System`.
