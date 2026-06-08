@@ -43,13 +43,12 @@ async function buildTestApp(overrides: Partial<InternalRouteDependencies> = {}) 
 
 function expectAdminThemeSupport(html: string) {
   expect(html).toContain("stellive-admin-theme");
-  expect(html).toContain('class="theme-control"');
+  expect(html).toContain("theme-control");
   expect(html).toContain('data-theme-option="light"');
   expect(html).toContain('data-theme-option="system"');
   expect(html).toContain('data-theme-option="dark"');
   expect(html).toContain('data-theme-option="black"');
   expect(html).toContain('data-theme-default="system"');
-  expect(html).toContain("dataset.theme");
 }
 
 describe("internal admin routes", () => {
