@@ -472,11 +472,28 @@ export function renderAdminConsoleHtml(): string {
       }
     }
 
+    function formatLastCheckedAt(value) {
+      if (!value || value === "1970-01-01T00:00:00.000Z") {
+        return "Not checked yet";
+      }
+
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return "-";
+      }
+
+      return date.toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "medium",
+        timeZoneName: "short"
+      });
+    }
+
     function renderAdapters(adapters) {
       renderTableRows(
         adaptersRoot,
         adapters,
-        (adapter) => [adapter.source, createPill(adapter.status), adapter.reason, adapter.lastCheckedAt],
+        (adapter) => [adapter.source, createPill(adapter.status), adapter.reason, formatLastCheckedAt(adapter.lastCheckedAt)],
         "No adapter diagnostics available."
       );
     }

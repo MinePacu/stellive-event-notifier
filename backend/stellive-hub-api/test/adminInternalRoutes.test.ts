@@ -395,6 +395,7 @@ describe("admin console routes", () => {
     expect(response.body).toContain("/v1/internal/schedulers/youtube/renew-subscriptions");
     expect(response.body).toContain("/v1/internal/schedulers/chzzk/live-status");
     expectAdminThemeSupport(response.body);
+    expect(response.body).toContain("Not checked yet");
   });
 
   it("serves a login form when enabled without leaking the admin token", async () => {
