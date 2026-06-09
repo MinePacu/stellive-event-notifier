@@ -390,6 +390,15 @@ describe("admin console routes", () => {
     expect(response.headers["access-control-allow-origin"]).toBeUndefined();
     expect(response.body).toContain("Stellive Hub Admin");
     expect(response.body).toContain('action="/admin/logout"');
+    expect(response.body).toContain('id="refresh"');
+    expect(response.body).toContain(">Refresh<");
+    expect(response.body).toContain('id="auto-refresh"');
+    expect(response.body).toContain('type="checkbox"');
+    expect(response.body).toContain("Auto Refresh");
+    expect(response.body).toContain('id="auto-refresh-status"');
+    expect(response.body).toContain('aria-live="polite"');
+    expect(response.body).not.toContain("admin-token");
+    expect(response.body).not.toContain("internal-test-token");
     expect(response.body).toContain("/v1/internal/admin/overview");
     expect(response.body).toContain("/v1/internal/jobs/notifications/drain");
     expect(response.body).toContain("/v1/internal/schedulers/youtube/renew-subscriptions");

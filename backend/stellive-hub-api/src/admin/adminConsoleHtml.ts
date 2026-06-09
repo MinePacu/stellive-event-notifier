@@ -102,7 +102,7 @@ export function renderAdminConsoleHtml(): string {
     .toolbar {
       display: grid;
       gap: 10px;
-      grid-template-columns: minmax(0, 1.8fr) repeat(4, auto);
+      grid-template-columns: minmax(0, 1.8fr) repeat(6, auto);
       align-items: end;
     }
     .field {
@@ -125,6 +125,25 @@ export function renderAdminConsoleHtml(): string {
       font-size: 13px;
       background: var(--admin-surface);
       color: var(--admin-text);
+    }
+    .toggle-control {
+      align-items: center;
+      color: var(--admin-text);
+      display: inline-flex;
+      gap: 8px;
+      min-height: 32px;
+      white-space: nowrap;
+    }
+    .toggle-control input {
+      height: 16px;
+      margin: 0;
+      min-height: 0;
+      width: 16px;
+    }
+    .auto-refresh-status {
+      color: var(--admin-muted);
+      min-width: 112px;
+      white-space: nowrap;
     }
     button {
       border: 1px solid var(--admin-input-border);
@@ -297,6 +316,11 @@ export function renderAdminConsoleHtml(): string {
           <input id="internal-token" type="password" autocomplete="off" spellcheck="false" placeholder="Required for /v1/internal/* requests">
         </div>
         <button id="refresh" type="button">Refresh</button>
+        <label class="toggle-control">
+          <input id="auto-refresh" type="checkbox">
+          <span>Auto Refresh</span>
+        </label>
+        <span id="auto-refresh-status" class="auto-refresh-status" aria-live="polite">Off</span>
         <button id="drain" type="button">Drain jobs</button>
         <button id="renew-youtube" type="button">Renew YouTube</button>
         <button id="poll-chzzk" type="button">Poll CHZZK</button>
@@ -362,9 +386,15 @@ export function renderAdminConsoleHtml(): string {
     const featureFlagsRoot = document.getElementById("feature-flags");
     const messageRoot = document.getElementById("message");
     const tokenInput = document.getElementById("internal-token");
+    const autoRefreshInput = document.getElementById("auto-refresh");
+    const autoRefreshStatusRoot = document.getElementById("auto-refresh-status");
     const logoutForm = document.querySelector(".logout-form");
     const buttons = Array.from(document.querySelectorAll("button"));
     const internalTokenStorageKey = "stellive.admin.internalApiToken";
+    const autoRefreshIntervalMs = 5000;
+    let autoRefreshTimer = null;
+    let refreshInFlight = false;
+    let actionInFlight = false;
     let uptimeValueRoot = null;
     let uptimeBaseSeconds = null;
     let uptimeBaseTimestamp = 0;
@@ -413,6 +443,10 @@ export function renderAdminConsoleHtml(): string {
     function setMessage(text, isError) {
       messageRoot.textContent = text;
       messageRoot.className = isError ? "message error" : "message";
+    }
+
+    function setAutoRefreshStatus(text) {
+      autoRefreshStatusRoot.textContent = text;
     }
 
     function requireToken() {
@@ -630,38 +664,91 @@ export function renderAdminConsoleHtml(): string {
       return payload;
     }
 
-    async function refreshDashboard() {
-      setBusy(true);
-      setMessage("Loading overview...", false);
+    async function refreshDashboard(options) {
+      const source = options && options.source === "auto" ? "auto" : "manual";
+      if (actionInFlight) {
+        if (source === "auto") {
+          setAutoRefreshStatus("Paused while busy");
+        }
+        return;
+      }
+      if (refreshInFlight) {
+        if (source === "auto") {
+          setAutoRefreshStatus("Paused while busy");
+        }
+        return;
+      }
+
+      refreshInFlight = true;
+      if (source === "manual") {
+        setBusy(true);
+        setMessage("Loading overview...", false);
+      } else {
+        setAutoRefreshStatus("Every 5s");
+      }
+
       try {
         const overview = await api(endpoints.overview);
         renderOverview(overview);
         renderAdapters(overview.adapters || []);
         renderSecrets(overview.secrets || {});
         renderFeatureFlags(overview.featureFlags || {});
-        setMessage("Overview refreshed.", false);
+        if (source === "manual") {
+          setMessage("Overview refreshed.", false);
+        }
+        if (autoRefreshInput.checked) {
+          setAutoRefreshStatus("Every 5s");
+        }
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "unknown_error", true);
+        if (source === "auto" && autoRefreshInput.checked) {
+          setAutoRefreshStatus("Retrying");
+        }
       } finally {
+        refreshInFlight = false;
         setBusy(false);
       }
     }
 
+    function startAutoRefresh() {
+      if (autoRefreshTimer) {
+        return;
+      }
+      setAutoRefreshStatus("Every 5s");
+      autoRefreshTimer = window.setInterval(function () {
+        refreshDashboard({ source: "auto" });
+      }, autoRefreshIntervalMs);
+    }
+
+    function stopAutoRefresh() {
+      if (autoRefreshTimer) {
+        window.clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+      }
+      setAutoRefreshStatus("Off");
+    }
+
     async function runAction(label, path, init) {
+      actionInFlight = true;
       setBusy(true);
       setMessage(label + " in progress...", false);
       try {
         const result = await api(path, init);
         const status = result && typeof result === "object" && "status" in result ? result.status : "ok";
         setMessage(label + " completed (" + status + ").", false);
-        await refreshDashboard();
+        actionInFlight = false;
+        await refreshDashboard({ source: "manual" });
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "unknown_error", true);
+      } finally {
+        actionInFlight = false;
         setBusy(false);
       }
     }
 
-    document.getElementById("refresh").addEventListener("click", refreshDashboard);
+    document.getElementById("refresh").addEventListener("click", function () {
+      return refreshDashboard({ source: "manual" });
+    });
     document.getElementById("drain").addEventListener("click", function () {
       return runAction("Drain jobs", endpoints.drainJobs, {
         method: "POST",
@@ -674,6 +761,15 @@ export function renderAdminConsoleHtml(): string {
     document.getElementById("poll-chzzk").addEventListener("click", function () {
       return runAction("Poll CHZZK", endpoints.pollChzzk, { method: "POST" });
     });
+    autoRefreshInput.addEventListener("change", function () {
+      if (autoRefreshInput.checked) {
+        startAutoRefresh();
+        refreshDashboard({ source: "auto" });
+        return;
+      }
+      stopAutoRefresh();
+    });
+    window.addEventListener("beforeunload", stopAutoRefresh);
     tokenInput.addEventListener("input", persistInternalToken);
     if (logoutForm) {
       logoutForm.addEventListener("submit", clearStoredInternalToken);
