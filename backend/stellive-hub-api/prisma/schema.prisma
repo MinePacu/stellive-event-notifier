@@ -11,10 +11,13 @@ model Device {
   id                 String   @id
   platform           String
   deviceToken        String?
+  tokenStatus        String   @default("active")
   locale             String?
   timezone           String?
+  appVersion         String?
   realtimeEnabled    Boolean  @default(false)
   realtimeAcknowledged Boolean @default(false)
+  lastSeenAt         DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }
@@ -50,6 +53,9 @@ model PlatformEvent {
   dedupeKey           String   @unique
   realtimeEligible    Boolean
   deliveryMode        String
+  rawPayloadHash      String?
+  sourceVerificationState String @default("verified")
+  metadata            Json?
   ingestionLatencyMs  Int?
   deliveryRequestedAt DateTime?
 }
@@ -73,6 +79,8 @@ model DeliveryAttempt {
   deliveryLevel     String?
   loadReductionReason String?
   pushPriority      String
+  providerMessageId String?
+  providerErrorCode String?
   deliveryLatencyMs Int?
   retryCount        Int      @default(0)
   expiresAt         DateTime?
@@ -89,6 +97,55 @@ model LiveStatus {
   platformUrl         String?
   lastCheckedAt       DateTime
   realtimeObservedAt  DateTime?
+  sourceVerificationState String @default("verified")
+  lastTransitionAt    DateTime?
+}
+
+model PlatformApiState {
+  id        String   @id @default(cuid())
+  source    String
+  key       String
+  value     Json
+  status    String
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([source, key])
+  @@index([source, status])
+}
+
+model NotificationJob {
+  id        String   @id @default(cuid())
+  eventId   String
+  priority  Int
+  status    String
+  runAfter  DateTime @default(now())
+  lockedAt  DateTime?
+  lockedBy  String?
+  attempts  Int      @default(0)
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, runAfter, priority])
+  @@index([eventId])
+}
+
+model WebhookSubscription {
+  id             String   @id @default(cuid())
+  source         String
+  targetId       String
+  callbackUrl    String
+  topicUrl       String
+  status         String
+  leaseExpiresAt DateTime?
+  lastVerifiedAt DateTime?
+  lastError      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([source, targetId, topicUrl])
+  @@index([source, status])
 }
 
 model HubEvent {

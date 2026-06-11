@@ -6,7 +6,7 @@
 
 ## Lightweight Backend Strategy
 
-- X: use official API v2 Filtered Stream when available and affordable. Fall back to safe polling that respects rate limits, or disable behind a feature flag if access is not viable.
+- X: no-paid-API only. Use official X API paths only when free access is available and rate limits are viable. If official access requires paid billing, disable X integration behind feature flags and produce no X notifications.
 - YouTube: use WebSub for uploads. Use Data API fallback sparingly. Stellive official YouTube live events are excluded.
 - CHZZK: use official or documented allowed live-status/session mechanisms only. Unknown production methods remain `verify_required`.
 - Naver Cafe: automatic collection is deferred. If reintroduced, it must use public Search API results or another clearly allowed official path only. It is not realtime-eligible and falls back to standard delivery.

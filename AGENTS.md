@@ -26,4 +26,5 @@ Before starting new work, read:
 - `docs/PROJECT_RULES.md`
 - `docs/NOTIFICATION_POLICY.md`
 - `docs/REALTIME_DELIVERY.md`
+- `docs/API_IMPLEMENTATION_PLAN.md` before implementing backend/API integrations, ingestion adapters, notification jobs, or push delivery.
 - `docs/AI_HANDOFF.md`
