@@ -157,6 +157,35 @@ data class HubEventsSummary(
     val preview: List<HubEvent>
 )
 
+data class HubCalendarEntry(
+    val id: String,
+    val eventId: String,
+    val title: String,
+    val category: HubEventCategory,
+    val status: HubEventStatus,
+    val participationMode: HubEventParticipationMode,
+    val generationId: String,
+    val memberId: String? = null,
+    val startsAt: Instant? = null,
+    val endsAt: Instant? = null,
+    val displayDate: String,
+    val displayTimeText: String,
+    val sourceLabel: String,
+    val appDeepLink: String
+)
+
+data class HubCalendarDay(
+    val date: String,
+    val entries: List<HubCalendarEntry>
+)
+
+data class HubCalendarWidgetSnapshot(
+    val generatedAt: Instant,
+    val timezone: String,
+    val entries: List<HubCalendarEntry>,
+    val staleAfter: Instant
+)
+
 data class GenerationFilter(
     val id: String,
     val displayName: String,

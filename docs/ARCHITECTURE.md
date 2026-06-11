@@ -12,6 +12,24 @@ Redis/BullMQ is optional, not an MVP requirement. Initial queue behavior can be 
 
 See [API-First Lightweight Plan](API_FIRST_LIGHTWEIGHT_PLAN.md) for the current operating model.
 
+## Embedded Admin Console
+
+OCI admin operations live inside the existing Fastify backend rather than in a separate management app. `/admin` serves a lightweight same-origin console, and `/v1/internal/*` exposes bounded diagnostics and controlled trigger endpoints for overview, adapter health, notification job diagnostics, notification drain placeholders, WebSub subscription state, CHZZK/YouTube scheduler actions, live status cache, and recent delivery attempts.
+
+The auth topology is intentionally split. `ADMIN_CONSOLE_ENABLED` controls only whether `/admin`, `/admin/login`, and `/admin/logout` are mounted. `/v1/internal/*` does not depend on that flag and remains independently available whenever `INTERNAL_API_TOKEN` is configured. `/admin` accepts either a valid admin session cookie created by `/admin/login` or a Bearer token matching `ADMIN_CONSOLE_TOKEN`, while the embedded UI separately uses `INTERNAL_API_TOKEN` when it calls `/v1/internal/*`.
+
+Blank values and placeholders are not treated as valid configuration. Empty strings, `replace_with_*`, and `verify_required` leave the related admin route protection effectively unconfigured, so they do not enable `/admin` or authenticated `/v1/internal/*` access.
+
+This surface is for diagnostics and controlled operational nudges only. It must not bypass normal ingestion, event guards, preference resolution, load-reduction policy, quiet hours, keyword filters, rate limits, or push dispatch boundaries. Manual actions are limited to the same backend-owned services the application already uses.
+
+The admin surface also must not expose secrets or production device tokens. The overview route returns secret readiness only as configured-or-missing state, and diagnostics are limited to operational metadata rather than raw provider credentials or user device-token material.
+
+## CHZZK Credential Boundary
+
+CHZZK OAuth credentials, token refresh state, and Open API calls are backend-only. `chzzkAuthRoutes.ts` owns `/v1/auth/chzzk/connect` and `/v1/auth/chzzk/callback`, `chzzkApiClient.ts` reads token metadata from `PlatformApiState`, and `chzzkOpenApiAdapter.ts` produces normalized live-status updates and `chzzk_live_started`/`chzzk_live_ended` events through repository and ingestion boundaries.
+
+Android and iOS never store CHZZK client secrets, access tokens, refresh tokens, Naver login cookies, or direct CHZZK API hosts in app source. Mobile apps use backend responses such as `/v1/live-status`, settings, history, and foreground refresh only. Boundary tests in each mobile project scan app source for forbidden CHZZK credential and private-host strings.
+
 ## Adapter Model
 
 Adapters implement:
@@ -54,3 +72,8 @@ The MVP should prefer webhooks, safe polling, and database-backed jobs before lo
 ## Mobile Cache
 
 Android has Room/DataStore skeletons and FCM service placeholders. iOS has SwiftUI state and service skeletons; SwiftData/CoreData/SQLite can be added behind the same app-facing model boundary. User-visible notification history is stored on device by default. The server stores only normalized events, jobs, and short-lived delivery attempts needed for dedupe, retries, diagnostics, and rate-limit enforcement. Local storage is not the source of truth for server-side push authorization.
+## Goods/Events Calendar And Widgets
+
+The `굿즈/행사` calendar is a read-only projection of normalized `HubEvent` records. The backend exposes `GET /v1/hub-events/calendar` for date-grouped app views and `GET /v1/hub-events/widget-snapshot` for compact mobile widget caches. These DTOs intentionally exclude raw provider payloads, image URLs, official logos, posters, profile images, thumbnails, and copied media.
+
+Android and iOS calendar widgets must render only cached `HubCalendarWidgetSnapshot` data produced by the app/backend flow. Widgets do not call platform APIs directly, do not send push notifications, and do not bypass user notification preferences.

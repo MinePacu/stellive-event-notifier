@@ -182,6 +182,7 @@ export interface LiveStatus {
   platformUrl?: string;
   lastCheckedAt: string;
   realtimeObservedAt?: string;
+  sourceVerificationState?: string;
 }
 
 export type HubEventCategory =

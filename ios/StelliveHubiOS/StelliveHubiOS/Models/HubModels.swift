@@ -273,6 +273,108 @@ struct HubEventsSummary: Equatable {
     let preview: [HubEvent]
 }
 
+struct HubCalendarEntry: Identifiable, Codable, Equatable {
+    let id: String
+    let eventId: String
+    let title: String
+    let category: HubEventCategory
+    let status: HubEventStatus
+    let participationMode: HubEventParticipationMode
+    let generationId: String
+    let memberId: String?
+    let startsAt: Date?
+    let endsAt: Date?
+    let displayDate: String
+    let displayTimeText: String
+    let sourceLabel: String
+    let appDeepLink: String
+}
+
+struct HubCalendarDay: Identifiable, Codable, Equatable {
+    var id: String { date }
+
+    let date: String
+    let entries: [HubCalendarEntry]
+}
+
+struct HubCalendarWidgetSnapshot: Codable, Equatable {
+    let generatedAt: Date
+    let timezone: String
+    let entries: [HubCalendarEntry]
+    let staleAfter: Date
+}
+
+enum HubCalendarPolicy {
+    static let staleWidgetText = "최근 동기화 필요"
+    static let emptyWidgetText = "예정된 일정 없음"
+
+    private static let statusRank: [HubEventStatus: Int] = [
+        .closingSoon: 0,
+        .open: 1,
+        .upcoming: 2,
+        .announced: 3,
+        .cancelled: 4,
+        .ended: 5
+    ]
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "yyyy.MM.dd"
+        return formatter
+    }()
+
+    static func areInDisplayOrder(_ lhs: HubCalendarEntry, _ rhs: HubCalendarEntry) -> Bool {
+        let lhsRank = statusRank[lhs.status] ?? Int.max
+        let rhsRank = statusRank[rhs.status] ?? Int.max
+        if lhsRank != rhsRank {
+            return lhsRank < rhsRank
+        }
+
+        let lhsDate = lhs.endsAt ?? lhs.startsAt ?? .distantFuture
+        let rhsDate = rhs.endsAt ?? rhs.startsAt ?? .distantFuture
+        if lhsDate != rhsDate {
+            return lhsDate < rhsDate
+        }
+
+        return lhs.title.localizedCompare(rhs.title) == .orderedAscending
+    }
+
+    static func statusLabel(_ status: HubEventStatus) -> String {
+        switch status {
+        case .announced:
+            return "공개"
+        case .upcoming:
+            return "예정"
+        case .open:
+            return "진행중"
+        case .closingSoon:
+            return "마감 임박"
+        case .ended:
+            return "종료"
+        case .cancelled:
+            return "취소"
+        }
+    }
+
+    static func dateHeaderText(for date: Date, now: Date = Date()) -> String {
+        let calendar = Calendar(identifier: .gregorian)
+        if calendar.isDate(date, inSameDayAs: now) {
+            return "오늘"
+        }
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now),
+           calendar.isDate(date, inSameDayAs: tomorrow) {
+            return "내일"
+        }
+        return dateFormatter.string(from: date)
+    }
+
+    static func isWidgetSnapshotStale(_ snapshot: HubCalendarWidgetSnapshot, now: Date) -> Bool {
+        now >= snapshot.staleAfter
+    }
+}
+
 struct HubMember: Identifiable, Hashable {
     let id: String
     let koreanName: String

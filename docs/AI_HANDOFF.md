@@ -52,6 +52,16 @@ Resolve notification permission first, then resolve delivery mode. Realtime mode
 
 Secrets live only in environment variables. `.env.example` may name keys but must not include real values.
 
+## CHZZK Open API Status
+
+Backend OAuth, token metadata storage, live-status polling, live started/ended transition generation, repository-backed `/v1/live-status`, and the internal scheduler trigger are implemented on `codex/chzzk-open-api-code-implementation`. Main files are `chzzkAuthClient.ts`, `chzzkOAuthState.ts`, `chzzkApiClient.ts`, `chzzkOpenApiAdapter.ts`, `chzzkAuthRoutes.ts`, `internalRoutes.ts`, and `liveStatusRepository.ts` under `backend/stellive-hub-api/src`.
+
+Android and iOS boundary tests enforce that CHZZK credentials and direct CHZZK hosts stay out of app source. Mobile apps consume normalized backend DTOs only.
+
+Rollout tracking should update GitHub issue `#13` and GitLab work item `#8` with verification output, OAuth setup status, scheduler enablement status, and platform review notes before production enablement.
+
+Remaining operational checks: register `https://<backend-public-origin>/v1/auth/chzzk/callback` and `http://localhost:4000/v1/auth/chzzk/callback`, set backend-only CHZZK OAuth environment variables, connect OAuth through `/v1/auth/chzzk/connect`, confirm token metadata exists in `PlatformApiState`, run `POST /v1/internal/schedulers/chzzk/live-status` with `INTERNAL_API_TOKEN`, then enable `CHZZK_LIVE_POLLING_ENABLED=true` only after adapter health and live-status cache freshness are verified.
+
 ## Current TODOs
 
 - Verify latest official platform account IDs/handles from official sources.
@@ -61,3 +71,6 @@ Secrets live only in environment variables. `.env.example` may name keys but mus
 - Keep Docker Compose working as a local development/self-hosting option.
 - Add production authentication for preference sync and optional foreground refresh.
 - Add admin tooling for avatar placeholder enforcement and catalog reloads.
+`굿즈/행사` calendar implementation has started. Backend now exposes `GET /v1/hub-events/calendar` and `GET /v1/hub-events/widget-snapshot` as read-only projections of normalized `HubEvent` records, and bootstrap config exposes `hubCalendarEnabled: true` with X notifications disabled for MVP via `x_notifications_dropped_for_mvp`. Android and iOS now have shared calendar/widget DTOs and policy helpers for status ordering, date headers, and stale/empty widget text. Continue UI wiring from the existing Goods Events surfaces; do not add logos, posters, profile images, thumbnails, copied media, raw provider payloads, or direct widget platform API calls.
+
+Follow-up implementation update: Android `MockHubRepository` now derives `HubCalendarDay` and `HubCalendarWidgetSnapshot` from existing `HubEvent` seed data, the Goods Events tab renders date-grouped calendar sections, and a standard `AppWidgetProvider` + RemoteViews widget is registered. iOS `MockHubStore` now derives calendar days and widget snapshots, `HubEventsView` renders date-grouped sections, and `HubCalendarWidgetStore` persists compact snapshots through the `group.dev.stellive.hub` app group. `StelliveHubCalendarWidget` is now wired as a WidgetKit extension target, embedded in the app target, and verified with simulator tests plus a widget scheme build.

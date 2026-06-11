@@ -165,10 +165,23 @@ X_FREE_POLLING_ENABLED=false
 - Use CHZZK Developers/Open API or another documented allowed API only.
 - Keep production live status collection in `verify_required` until the allowed scope and endpoint are confirmed.
 - Do not implement unofficial private endpoints, login cookies, `NID_AUT`/`NID_SES`, or private WebSocket/session bypasses.
+- Keep CHZZK credentials and OAuth token state backend-only. Android and iOS receive normalized live-status DTOs from the backend and must not store CHZZK credential names, token values, or direct CHZZK host calls in app source.
+
+**Implemented files**
+
+- `backend/stellive-hub-api/src/adapters/chzzk/chzzkAuthClient.ts` builds the authorization URL and exchanges OAuth codes for tokens.
+- `backend/stellive-hub-api/src/adapters/chzzk/chzzkOAuthState.ts` signs and verifies OAuth state.
+- `backend/stellive-hub-api/src/routes/chzzkAuthRoutes.ts` exposes `/v1/auth/chzzk/connect` and `/v1/auth/chzzk/callback`.
+- `backend/stellive-hub-api/src/adapters/chzzk/chzzkApiClient.ts` reads token metadata from `PlatformApiState`, refreshes tokens when needed, and normalizes allowed live-status responses.
+- `backend/stellive-hub-api/src/adapters/chzzk/chzzkOpenApiAdapter.ts` polls catalog CHZZK channel IDs, updates live-status cache, and emits started/ended platform events.
+- `backend/stellive-hub-api/src/routes/internalRoutes.ts` exposes `POST /v1/internal/schedulers/chzzk/live-status`.
+- `backend/stellive-hub-api/src/repositories/liveStatusRepository.ts` stores normalized cache rows used by `/v1/live-status`.
+- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ChzzkBackendBoundaryTest.kt` and `ios/StelliveHubiOS/StelliveHubiOSTests/ChzzkBackendBoundaryTests.swift` enforce the mobile backend boundary.
 
 **Rules**
 
-- Query live status by catalog `chzzkChannelId`.
+- Query live status by catalog `chzzkChannelId` only for active/upcoming `member` and `representative` catalog entries.
+- Skip former entries, official channels, and catalog entries without CHZZK channel IDs.
 - Create `chzzk_live_started` when a live transition is detected.
 - Fill `LiveStatus.startedAt` only when the official API provides a broadcast start timestamp.
 - Create `chzzk_live_ended` by comparing cached `live_status.isLive=true` with the latest allowed API response.
@@ -180,8 +193,12 @@ X_FREE_POLLING_ENABLED=false
 ```env
 CHZZK_CLIENT_ID=
 CHZZK_CLIENT_SECRET=
+CHZZK_REDIRECT_URI=http://localhost:4000/v1/auth/chzzk/callback
+CHZZK_AUTH_STATE_SECRET=
+CHZZK_OAUTH_ENABLED=false
 CHZZK_ACCESS_TOKEN=
 CHZZK_REFRESH_TOKEN=
+CHZZK_TOKEN_REFRESH_SKEW_SECONDS=300
 CHZZK_LIVE_POLLING_ENABLED=false
 ```
 
@@ -240,7 +257,7 @@ Stores stream cursors, polling cursors, WebSub subscription state, and rate-limi
 
 ```prisma
 model PlatformApiState {
-  id        String   @id @default(cuid())
+  id        String   @id @default(cuid(2))
   source    String
   key       String
   value     Json
@@ -259,7 +276,7 @@ Database-backed notification queue. Redis/BullMQ can replace the internals later
 
 ```prisma
 model NotificationJob {
-  id        String   @id @default(cuid())
+  id        String   @id @default(cuid(2))
   eventId   String
   priority  Int
   status    String
@@ -282,7 +299,7 @@ Tracks YouTube WebSub renewal and diagnostics.
 
 ```prisma
 model WebhookSubscription {
-  id             String   @id @default(cuid())
+  id             String   @id @default(cuid(2))
   source         String
   targetId       String
   callbackUrl    String
@@ -520,3 +537,4 @@ Default MVP flags should minimize cost and platform-policy risk. X must remain d
 - [CHZZK Open API tips](https://chzzk.gitbook.io/chzzk/chzzk-api/tips)
 - [Firebase Cloud Messaging server environment](https://firebase.google.com/docs/cloud-messaging/server-environment)
 - [Firebase Cloud Messaging message priority](https://firebase.google.com/docs/cloud-messaging/customize-messages/setting-message-priority)
+Calendar update: `GET /v1/hub-events/calendar` and `GET /v1/hub-events/widget-snapshot` expose read-only `HubEvent` projections for the `굿즈/행사` app calendar and Android/iOS cached widgets. X notification ingestion and delivery remain disabled for MVP; keep no-paid API flags false unless a verified no-cost official path is confirmed. Calendar/widget DTOs must stay text-first and must not include raw payloads, provider responses, image URLs, logos, posters, profile images, thumbnails, or copied media.

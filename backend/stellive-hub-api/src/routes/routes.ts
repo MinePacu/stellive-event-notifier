@@ -1,10 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import { CatalogService } from "../catalog/catalog.js";
+import {
+  buildHubCalendarResponse,
+  buildHubCalendarWidgetSnapshot
+} from "../hub-events/hubEventCalendar.js";
 import { HubEventService } from "../hub-events/hubEventService.js";
 import { shouldDropEventBeforeStorage } from "../events/eventGuards.js";
 import { resolveNotificationDelivery } from "../notification/loadReductionPolicy.js";
 import { PreferenceResolutionService } from "../preferences/preferenceResolution.js";
 import { RealtimeDeliveryService } from "../realtime/realtimeDeliveryService.js";
+import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
 import type { DeliveryAttempt, PlatformEvent, UserNotificationPreference } from "../types.js";
 
 const catalog = new CatalogService();
@@ -15,11 +20,65 @@ const preferences = new Map<string, UserNotificationPreference[]>();
 const deliveryAttempts: DeliveryAttempt[] = [];
 const devDeviceId = "dev-device";
 
+export interface AppRouteDependencies {
+  liveStatus?: {
+    listDiagnostics(limit: number): Promise<
+      Array<{
+        memberId: string;
+        generationId: string;
+        isLive: boolean;
+        title?: string;
+        viewerCount?: number;
+        startedAt?: string;
+        platformUrl?: string;
+        lastCheckedAt: string;
+        sourceVerificationState: string;
+      }>
+    >;
+  };
+}
+
+export interface AppRouteOptions {
+  dependencies?: AppRouteDependencies;
+}
+
 function parseHubEventLimit(value: unknown): number | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
   return parsed;
+}
+
+function parseCalendarLimit(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 5;
+  return Math.min(10, Math.max(1, Math.trunc(parsed)));
+}
+
+function isSupportedTimezone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function parseCalendarTimezone(value: unknown): string {
+  const timezone = typeof value === "string" && value.trim() ? value.trim() : "Asia/Seoul";
+  return isSupportedTimezone(timezone) ? timezone : "Asia/Seoul";
+}
+
+function parseCalendarDate(value: unknown): Date | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function defaultCalendarWindow(now: Date): { from: Date; to: Date } {
+  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+  const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+  return { from, to };
 }
 
 function sampleEvent(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
@@ -42,13 +101,29 @@ function sampleEvent(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
   };
 }
 
-export async function registerRoutes(app: FastifyInstance) {
+export async function registerRoutes(app: FastifyInstance, options: AppRouteOptions = {}) {
+  const liveStatusRepository = options.dependencies?.liveStatus ?? new LiveStatusRepository();
   app.get("/health", async () => ({ ok: true, service: "stellive-hub-api" }));
 
   app.get("/v1/bootstrap", async (request) => {
     const deviceId = String((request.query as { deviceId?: string }).deviceId ?? "dev-device");
     return {
-      appConfig: { unofficialProject: true, catalogVersion: "seed-2026-06-01", officialYoutubeLiveExcluded: true },
+      config: {
+        unofficialProject: true,
+        catalogVersion: "seed-2026-06-01",
+        officialYoutubeLiveExcluded: true,
+        xNotificationsEnabled: false,
+        xDisabledReason: "x_notifications_dropped_for_mvp",
+        hubCalendarEnabled: true
+      },
+      appConfig: {
+        unofficialProject: true,
+        catalogVersion: "seed-2026-06-01",
+        officialYoutubeLiveExcluded: true,
+        xNotificationsEnabled: false,
+        xDisabledReason: "x_notifications_dropped_for_mvp",
+        hubCalendarEnabled: true
+      },
       hubEventsSummary: hubEvents.summary(),
       generations: catalog.getGenerations(),
       members: catalog.getMembers(),
@@ -90,8 +165,24 @@ export async function registerRoutes(app: FastifyInstance) {
     return preferenceResolution.resolve(event, query.deviceId ?? "dev-device", preferences.get(query.deviceId ?? "dev-device") ?? []);
   });
 
-  app.get("/v1/live-status", async () =>
-    catalog
+  app.get("/v1/live-status", async () => {
+    const persisted = await liveStatusRepository.listDiagnostics(100).catch(() => []);
+    if (persisted.length > 0) {
+      return persisted.map((status) => ({
+        memberId: status.memberId,
+        generationId: status.generationId,
+        platform: "chzzk",
+        isLive: status.isLive,
+        title: status.title,
+        viewerCount: status.viewerCount,
+        startedAt: status.startedAt,
+        platformUrl: status.platformUrl,
+        lastCheckedAt: status.lastCheckedAt,
+        sourceVerificationState: status.sourceVerificationState
+      }));
+    }
+
+    return catalog
       .getMembers()
       .filter((member) => member.catalogRole !== "official_channel" && member.platforms.chzzkChannelId)
       .map((member, index) => ({
@@ -103,9 +194,10 @@ export async function registerRoutes(app: FastifyInstance) {
         viewerCount: index === 0 ? 1234 : undefined,
         startedAt: index === 0 ? "2026-06-02T09:00:00.000Z" : undefined,
         platformUrl: index === 0 ? "https://chzzk.naver.com/live/45e71a76e949e16a34764deb962f9d9f" : undefined,
-        lastCheckedAt: new Date().toISOString()
-      }))
-  );
+        lastCheckedAt: new Date().toISOString(),
+        sourceVerificationState: "verified"
+      }));
+  });
 
   app.get("/v1/hub-events/summary", async () => hubEvents.summary());
   app.get("/v1/hub-events", async (request) => {
@@ -137,6 +229,31 @@ export async function registerRoutes(app: FastifyInstance) {
       new Date()
     );
   });
+  app.get("/v1/hub-events/calendar", async (request) => {
+    const query = request.query as { from?: string; to?: string; timezone?: string };
+    const now = new Date();
+    const fallbackWindow = defaultCalendarWindow(now);
+    const from = parseCalendarDate(query.from) ?? fallbackWindow.from;
+    const to = parseCalendarDate(query.to) ?? fallbackWindow.to;
+    const timezone = parseCalendarTimezone(query.timezone);
+    return buildHubCalendarResponse(hubEvents.list({ limit: 100 }).items, {
+      from,
+      to,
+      timezone,
+      now
+    });
+  });
+
+  app.get("/v1/hub-events/widget-snapshot", async (request) => {
+    const query = request.query as { timezone?: string; limit?: string };
+    const now = new Date();
+    return buildHubCalendarWidgetSnapshot(hubEvents.list({ limit: 100 }).items, {
+      timezone: parseCalendarTimezone(query.timezone),
+      now,
+      limit: parseCalendarLimit(query.limit)
+    });
+  });
+
   app.get("/v1/hub-events/:id", async (request, reply) => {
     const id = (request.params as { id: string }).id;
     const event = hubEvents.getById(id);

@@ -53,3 +53,4 @@ Notification noise and push-volume reduction policies are defined in [Notificati
 ## Tap Action
 
 `open_app` opens an app deep link. `open_platform` opens the original platform URL. Both values are included in push payloads and user-visible local history.
+MVP update: X-side notification ingestion and delivery are intentionally disabled for the current `굿즈/행사` calendar/widget scope. The calendar and widget surfaces are read-only schedule projections and do not send push notifications or bypass global, platform, event-type, generation, member, quiet-hours, keyword, or rate-limit preference resolution.

@@ -23,7 +23,7 @@ model Device {
 }
 
 model NotificationPreference {
-  id             String   @id @default(cuid())
+  id             String   @id @default(cuid(2))
   deviceId       String
   scope          String
   generationId   String?
@@ -61,7 +61,7 @@ model PlatformEvent {
 }
 
 model DeliveryAttempt {
-  id                String   @id @default(cuid())
+  id                String   @id @default(cuid(2))
   eventId           String
   deviceId          String?
   attemptedAt       DateTime @default(now())
@@ -102,7 +102,7 @@ model LiveStatus {
 }
 
 model PlatformApiState {
-  id        String   @id @default(cuid())
+  id        String   @id @default(cuid(2))
   source    String
   key       String
   value     Json
@@ -115,7 +115,7 @@ model PlatformApiState {
 }
 
 model NotificationJob {
-  id        String   @id @default(cuid())
+  id        String   @id @default(cuid(2))
   eventId   String
   priority  Int
   status    String
@@ -132,7 +132,7 @@ model NotificationJob {
 }
 
 model WebhookSubscription {
-  id             String   @id @default(cuid())
+  id             String   @id @default(cuid(2))
   source         String
   targetId       String
   callbackUrl    String

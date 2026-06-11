@@ -1,0 +1,149 @@
+import type { CatalogService } from "../../catalog/catalog.js";
+import { shouldDropEventBeforeStorage } from "../../events/eventGuards.js";
+import type { LiveStatusRepository, LiveStatusWriteInput } from "../../repositories/liveStatusRepository.js";
+import type { Member, PlatformEvent } from "../../types.js";
+import type { ChzzkApiClient, ChzzkNormalizedLiveStatus } from "./chzzkApiClient.js";
+
+export interface ChzzkLiveAdapterCounts {
+  checked: number;
+  updated: number;
+  eventsCreated: number;
+  skipped: number;
+  verifyRequired: number;
+}
+
+export interface ChzzkLiveAdapterOptions {
+  catalog: Pick<CatalogService, "getMembers" | "isSupportedEventForMember">;
+  apiClient: Pick<ChzzkApiClient, "getLiveStatus">;
+  liveStatusRepository: Pick<LiveStatusRepository, "getByMemberId" | "upsertLiveStatus">;
+  ingestEvent: (event: PlatformEvent) => Promise<unknown>;
+  clock?: () => Date;
+}
+
+const allowedCatalogRoles = new Set(["member", "representative"]);
+
+function hasChzzkChannel(member: Member): member is Member & { platforms: { chzzkChannelId: string } } {
+  return typeof member.platforms.chzzkChannelId === "string" && member.platforms.chzzkChannelId.length > 0;
+}
+
+function isPollableMember(member: Member): boolean {
+  return (
+    (member.activeStatus as string) !== "former" &&
+    allowedCatalogRoles.has(member.catalogRole) &&
+    hasChzzkChannel(member)
+  );
+}
+
+function bucketTimestamp(now: Date): string {
+  const bucket = new Date(now);
+  bucket.setSeconds(0, 0);
+  return bucket.toISOString();
+}
+
+function startedAtFrom(status: ChzzkNormalizedLiveStatus): Date | undefined {
+  return status.openDate ? new Date(status.openDate) : undefined;
+}
+
+function toLiveStatusInput(
+  member: Member,
+  status: ChzzkNormalizedLiveStatus,
+  now: Date,
+  previousIsLive: boolean | undefined
+): LiveStatusWriteInput {
+  const startedAt = startedAtFrom(status);
+  const transitioned = previousIsLive !== undefined && previousIsLive !== status.isLive;
+
+  return {
+    memberId: member.id,
+    generationId: member.generationId,
+    isLive: status.isLive,
+    title: status.title,
+    viewerCount: status.viewerCount,
+    startedAt,
+    platformUrl: status.platformUrl,
+    sourceVerificationState: status.sourceVerificationState,
+    lastCheckedAt: now,
+    lastTransitionAt: transitioned ? now : undefined
+  };
+}
+
+function toEvent(
+  member: Member,
+  status: ChzzkNormalizedLiveStatus,
+  type: "chzzk_live_started" | "chzzk_live_ended",
+  now: Date
+): PlatformEvent {
+  const observedKey = status.openDate ?? bucketTimestamp(now);
+
+  return {
+    id: `chzzk-${type}-${member.id}-${observedKey}`,
+    source: "chzzk",
+    type,
+    memberId: member.id,
+    generationId: member.generationId,
+    title: type === "chzzk_live_started" ? status.title ?? "CHZZK live started" : "CHZZK live ended",
+    body: type === "chzzk_live_started" ? "CHZZK live status changed to live." : "CHZZK live status changed to offline.",
+    platformUrl: status.platformUrl,
+    appDeepLink: `stellivehub://members/${member.id}`,
+    occurredAt: status.openDate ?? now.toISOString(),
+    receivedAt: now.toISOString(),
+    dedupeKey: `chzzk:${type}:${status.channelId}:${observedKey}`,
+    realtimeEligible: type === "chzzk_live_started",
+    deliveryMode: type === "chzzk_live_started" ? "realtime_best_effort" : "standard"
+  };
+}
+
+export class ChzzkOpenApiAdapter {
+  constructor(private readonly options: ChzzkLiveAdapterOptions) {}
+
+  async pollLiveStatuses(): Promise<ChzzkLiveAdapterCounts> {
+    const counts: ChzzkLiveAdapterCounts = {
+      checked: 0,
+      updated: 0,
+      eventsCreated: 0,
+      skipped: 0,
+      verifyRequired: 0
+    };
+
+    for (const member of this.options.catalog.getMembers()) {
+      if (!isPollableMember(member)) {
+        counts.skipped += 1;
+        continue;
+      }
+
+      const channelId = member.platforms.chzzkChannelId;
+      if (!channelId) {
+        counts.skipped += 1;
+        continue;
+      }
+      const previous = await this.options.liveStatusRepository.getByMemberId(member.id);
+      const now = this.options.clock?.() ?? new Date();
+      const status = await this.options.apiClient.getLiveStatus(channelId);
+
+      counts.checked += 1;
+      if (status.sourceVerificationState === "verify_required") counts.verifyRequired += 1;
+
+      await this.options.liveStatusRepository.upsertLiveStatus(toLiveStatusInput(member, status, now, previous?.isLive));
+      counts.updated += 1;
+
+      const eventType = previous?.isLive === false && status.isLive
+        ? "chzzk_live_started"
+        : previous?.isLive === true && !status.isLive
+          ? "chzzk_live_ended"
+          : undefined;
+
+      if (!eventType) continue;
+      if (!this.options.catalog.isSupportedEventForMember(member.id, eventType)) continue;
+
+      const event = toEvent(member, status, eventType, now);
+      if (shouldDropEventBeforeStorage(event)) continue;
+
+      await this.options.ingestEvent(event);
+      counts.eventsCreated += 1;
+    }
+
+    return counts;
+  }
+}
+
+export default ChzzkOpenApiAdapter;

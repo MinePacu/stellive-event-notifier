@@ -102,7 +102,7 @@ export function renderAdminConsoleHtml(): string {
     .toolbar {
       display: grid;
       gap: 10px;
-      grid-template-columns: minmax(0, 1.8fr) repeat(6, auto);
+      grid-template-columns: minmax(260px, 1.8fr) auto auto;
       align-items: end;
     }
     .field {
@@ -126,23 +126,63 @@ export function renderAdminConsoleHtml(): string {
       background: var(--admin-surface);
       color: var(--admin-text);
     }
-    .toggle-control {
+    .refresh-controls,
+    .action-controls {
       align-items: center;
-      color: var(--admin-text);
       display: inline-flex;
       gap: 8px;
-      min-height: 32px;
+    }
+    .action-controls {
+      justify-content: flex-end;
+    }
+    .switch-control {
+      align-items: center;
+      border: 1px solid var(--admin-input-border);
+      border-radius: 6px;
+      background: var(--admin-surface);
+      color: var(--admin-label);
+      display: inline-flex;
+      gap: 8px;
+      min-height: 36px;
+      padding: 0 10px;
       white-space: nowrap;
     }
-    .toggle-control input {
+    .auto-refresh-input {
+      height: 1px;
+      position: absolute;
+      opacity: 0;
+      width: 1px;
+    }
+    .auto-refresh-switch {
+      align-items: center;
+      background: var(--admin-hover);
+      border: 1px solid var(--admin-input-border);
+      border-radius: 999px;
+      display: inline-flex;
       height: 16px;
-      margin: 0;
-      min-height: 0;
-      width: 16px;
+      padding: 2px;
+      width: 30px;
+    }
+    .auto-refresh-switch::before {
+      background: var(--admin-muted);
+      border-radius: 999px;
+      content: "";
+      display: block;
+      height: 10px;
+      transition: margin-left 0.15s ease, background 0.15s ease;
+      width: 10px;
+    }
+    .auto-refresh-input:checked + .auto-refresh-switch::before {
+      background: var(--admin-accent);
+      margin-left: 14px;
+    }
+    .auto-refresh-input:focus-visible + .auto-refresh-switch {
+      outline: 2px solid var(--admin-accent);
+      outline-offset: 2px;
     }
     .auto-refresh-status {
-      color: var(--admin-muted);
-      min-width: 112px;
+      min-width: 48px;
+      text-align: center;
       white-space: nowrap;
     }
     button {
@@ -315,15 +355,20 @@ export function renderAdminConsoleHtml(): string {
           <label for="internal-token">Internal API bearer token</label>
           <input id="internal-token" type="password" autocomplete="off" spellcheck="false" placeholder="Required for /v1/internal/* requests">
         </div>
-        <button id="refresh" type="button">Refresh</button>
-        <label class="toggle-control">
-          <input id="auto-refresh" type="checkbox">
-          <span>Auto Refresh</span>
-        </label>
-        <span id="auto-refresh-status" class="auto-refresh-status" aria-live="polite">Off</span>
-        <button id="drain" type="button">Drain jobs</button>
-        <button id="renew-youtube" type="button">Renew YouTube</button>
-        <button id="poll-chzzk" type="button">Poll CHZZK</button>
+        <div class="refresh-controls">
+          <button id="refresh" type="button">Refresh</button>
+          <label class="switch-control">
+            <span>Auto refresh</span>
+            <input id="auto-refresh" class="auto-refresh-input" type="checkbox">
+            <span class="auto-refresh-switch" aria-hidden="true"></span>
+          </label>
+          <span id="auto-refresh-status" class="auto-refresh-status pill disabled" aria-live="polite">Off</span>
+        </div>
+        <div class="action-controls">
+          <button id="drain" type="button">Drain jobs</button>
+          <button id="renew-youtube" type="button">Renew YouTube</button>
+          <button id="poll-chzzk" type="button">Poll CHZZK</button>
+        </div>
       </div>
       <div id="message" class="message">Enter the internal API token, then refresh.</div>
     </section>
@@ -447,6 +492,9 @@ export function renderAdminConsoleHtml(): string {
 
     function setAutoRefreshStatus(text) {
       autoRefreshStatusRoot.textContent = text;
+      autoRefreshStatusRoot.className = "auto-refresh-status pill " + (
+        text === "Off" ? "disabled" : text === "Retrying" ? "verify-required" : "enabled"
+      );
     }
 
     function requireToken() {
