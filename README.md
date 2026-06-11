@@ -63,7 +63,7 @@ cp .env.example .env
 docker compose up
 ```
 
-Docker Compose는 PostgreSQL, Redis, API를 함께 띄우는 로컬 개발/자가호스팅 옵션입니다. 비용과 기존 OCI 서버 부하를 줄이는 기본 운영 방향은 managed storage, database-backed job, 경량 worker를 우선합니다.
+Docker Compose는 PostgreSQL, Redis, API를 함께 띄우는 로컬 개발/자가호스팅 옵션입니다. API 서비스는 `backend/stellive-hub-api/Dockerfile`로 빌드되며, OCI VM에서도 같은 이미지 빌드 흐름을 사용할 수 있습니다. 비용과 기존 OCI 서버 부하를 줄이는 기본 운영 방향은 managed storage, database-backed job, 경량 worker를 우선합니다.
 
 주요 endpoint:
 

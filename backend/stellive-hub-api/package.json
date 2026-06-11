@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
+    "start": "node dist/backend/stellive-hub-api/src/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
@@ -31,6 +31,8 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
+  },
+  "overrides": {
+    "uuid": "14.0.0"
   }
 }
-

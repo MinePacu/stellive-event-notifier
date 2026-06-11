@@ -1,0 +1,183 @@
+import { describe, expect, it } from "vitest";
+import Fastify from "fastify";
+import { createChzzkOAuthState, verifyChzzkOAuthState } from "../src/adapters/chzzk/chzzkOAuthState.js";
+import { registerChzzkAuthRoutes } from "../src/routes/chzzkAuthRoutes.js";
+
+const routeEnv = {
+  NODE_ENV: "test",
+  PORT: 4000,
+  DATABASE_URL: "postgresql://stellive:stellive@localhost:5432/stellive_hub_test",
+  YOUTUBE_WEBSUB_ENABLED: true,
+  YOUTUBE_DATA_API_FALLBACK_ENABLED: false,
+  X_API_COST_POLICY: "no_paid_api" as const,
+  X_FREE_API_ENABLED: false,
+  X_FREE_STREAM_ENABLED: false,
+  X_FREE_POLLING_ENABLED: false,
+  NAVER_CAFE_SEARCH_ENABLED: false,
+  CHZZK_CLIENT_ID: "client-id",
+  CHZZK_CLIENT_SECRET: "client-secret",
+  CHZZK_REDIRECT_URI: "http://localhost:4000/v1/auth/chzzk/callback",
+  CHZZK_AUTH_STATE_SECRET: "local-state-secret",
+  CHZZK_OAUTH_ENABLED: true,
+  CHZZK_OAUTH_CONFIGURED: true,
+  CHZZK_TOKEN_REFRESH_SKEW_SECONDS: 300,
+  CHZZK_LIVE_POLLING_ENABLED: false,
+  DB_NOTIFICATION_QUEUE_ENABLED: true,
+  FOREGROUND_SSE_ENABLED: false,
+  ADMIN_CONSOLE_ENABLED: false,
+  ADMIN_CONSOLE_COOKIE_SECURE: false
+};
+
+describe("CHZZK OAuth state signing", () => {
+  const secret = "local-state-secret";
+  const now = new Date("2026-06-11T00:00:00.000Z");
+
+  it("creates and verifies a URL-safe signed state", () => {
+    const state = createChzzkOAuthState(secret, now);
+
+    expect(state).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(verifyChzzkOAuthState(secret, state, now)).toEqual({ ok: true });
+  });
+
+  it("rejects a tampered state", () => {
+    const state = createChzzkOAuthState(secret, now);
+    const decoded = Buffer.from(state, "base64url").toString("utf8");
+    const [payload] = decoded.split(".");
+    const tampered = Buffer.from(`${payload}.invalid-signature`, "utf8").toString("base64url");
+
+    expect(verifyChzzkOAuthState(secret, tampered, now)).toEqual({ ok: false, reason: "invalid_signature" });
+  });
+
+  it("rejects an expired state", () => {
+    const state = createChzzkOAuthState(secret, now);
+    const tooLate = new Date(now.getTime() + 10 * 60 * 1000 + 1);
+
+    expect(verifyChzzkOAuthState(secret, state, tooLate)).toEqual({ ok: false, reason: "expired" });
+  });
+});
+
+describe("CHZZK OAuth routes", () => {
+  it("returns 503 when OAuth is disabled or not configured", async () => {
+    const app = Fastify();
+    await registerChzzkAuthRoutes(app, {
+      env: { ...routeEnv, CHZZK_OAUTH_ENABLED: false, CHZZK_OAUTH_CONFIGURED: false },
+      authClient: {
+        buildAuthorizeUrl: () => "https://chzzk.naver.com/account-interlock",
+        exchangeCodeForToken: async () => {
+          throw new Error("should_not_exchange");
+        }
+      },
+      stateRepository: {
+        upsertState: async () => undefined,
+        upsertAdapterHealth: async () => undefined
+      },
+      now: () => new Date("2026-06-11T00:00:00.000Z")
+    });
+
+    const response = await app.inject({ method: "GET", url: "/v1/auth/chzzk/start" });
+    await app.close();
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: "chzzk_oauth_not_configured" });
+  });
+
+  it("redirects to the CHZZK authorization URL when configured", async () => {
+    const app = Fastify();
+    await registerChzzkAuthRoutes(app, {
+      env: routeEnv,
+      authClient: {
+        buildAuthorizeUrl: ({ state }) => `https://chzzk.naver.com/account-interlock?state=${state}`,
+        exchangeCodeForToken: async () => {
+          throw new Error("should_not_exchange");
+        }
+      },
+      stateRepository: {
+        upsertState: async () => undefined,
+        upsertAdapterHealth: async () => undefined
+      },
+      now: () => new Date("2026-06-11T00:00:00.000Z")
+    });
+
+    const response = await app.inject({ method: "GET", url: "/v1/auth/chzzk/start" });
+    await app.close();
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toContain("https://chzzk.naver.com/account-interlock?state=");
+  });
+
+  it("rejects callback requests with missing code or invalid state", async () => {
+    const app = Fastify();
+    await registerChzzkAuthRoutes(app, {
+      env: routeEnv,
+      authClient: {
+        buildAuthorizeUrl: () => "https://chzzk.naver.com/account-interlock",
+        exchangeCodeForToken: async () => {
+          throw new Error("should_not_exchange");
+        }
+      },
+      stateRepository: {
+        upsertState: async () => undefined,
+        upsertAdapterHealth: async () => undefined
+      },
+      now: () => new Date("2026-06-11T00:00:00.000Z")
+    });
+
+    const missingCode = await app.inject({ method: "GET", url: "/v1/auth/chzzk/callback?state=invalid" });
+    const invalidState = await app.inject({ method: "GET", url: "/v1/auth/chzzk/callback?code=auth-code&state=invalid" });
+    await app.close();
+
+    expect(missingCode.statusCode).toBe(400);
+    expect(missingCode.json()).toEqual({ error: "chzzk_oauth_code_missing" });
+    expect(invalidState.statusCode).toBe(400);
+    expect(invalidState.json()).toEqual({ error: "invalid_oauth_state" });
+  });
+
+  it("exchanges valid callbacks and stores token metadata", async () => {
+    const app = Fastify();
+    const stored: Array<{ source: string; key: string; value: unknown; status: string }> = [];
+    const state = createChzzkOAuthState(routeEnv.CHZZK_AUTH_STATE_SECRET, new Date("2026-06-11T00:00:00.000Z"));
+
+    await registerChzzkAuthRoutes(app, {
+      env: routeEnv,
+      authClient: {
+        buildAuthorizeUrl: () => "https://chzzk.naver.com/account-interlock",
+        exchangeCodeForToken: async () => ({
+          accessToken: "access-token",
+          refreshToken: "refresh-token",
+          tokenType: "Bearer",
+          expiresIn: 86400,
+          scope: "channel"
+        })
+      },
+      stateRepository: {
+        upsertState: async (source, key, value, status) => {
+          stored.push({ source, key, value, status });
+        },
+        upsertAdapterHealth: async (source, health) => {
+          stored.push({ source, key: "health", value: health, status: health.status });
+        }
+      },
+      now: () => new Date("2026-06-11T00:00:00.000Z")
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/auth/chzzk/callback?code=auth-code&state=${state}`
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ connected: true, source: "chzzk" });
+    expect(stored).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: "chzzk", key: "oauth.accessToken", status: "enabled" }),
+        expect.objectContaining({ source: "chzzk", key: "oauth.refreshToken", status: "enabled" }),
+        expect.objectContaining({ source: "chzzk", key: "oauth.expiresAt", status: "enabled" }),
+        expect.objectContaining({ source: "chzzk", key: "oauth.scope", status: "enabled" }),
+        expect.objectContaining({ source: "chzzk", key: "oauth.tokenType", status: "enabled" }),
+        expect.objectContaining({ source: "chzzk", key: "oauth.lastRefreshedAt", status: "enabled" }),
+        expect.objectContaining({ source: "chzzk", key: "health", status: "verify_required" })
+      ])
+    );
+  });
+});

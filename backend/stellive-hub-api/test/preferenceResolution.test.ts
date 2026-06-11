@@ -190,3 +190,42 @@ describe("PreferenceResolutionService", () => {
     expect(response.json()).toEqual({ dropped: true, reason: "unsupported_event_for_member" });
   });
 });
+
+describe("CHZZK live notification policy", () => {
+  const liveStarted = () =>
+    event({
+      source: "chzzk",
+      type: "chzzk_live_started",
+      memberId: "ayatsuno-yuni",
+      generationId: "gen1",
+      title: "spoiler live",
+      body: "stream started"
+    });
+
+  it("applies global, platform, event type, generation, and member rules to chzzk_live_started", () => {
+    expect(service.resolve(liveStarted(), "device-1", [pref({ scope: "global", enabled: false })]).reason).toBe("global_off");
+    expect(service.resolve(liveStarted(), "device-1", [pref({ scope: "platform", source: "chzzk", enabled: false })]).shouldNotify).toBe(false);
+    expect(service.resolve(liveStarted(), "device-1", [pref({ scope: "event_type", eventType: "chzzk_live_started", enabled: false })]).shouldNotify).toBe(false);
+    expect(service.resolve(liveStarted(), "device-1", [pref({ scope: "generation", generationId: "gen1", enabled: false })]).shouldNotify).toBe(false);
+    expect(
+      service.resolve(liveStarted(), "device-1", [
+        pref({ scope: "member", memberId: "ayatsuno-yuni", enabled: false, explicitOverride: true })
+      ]).shouldNotify
+    ).toBe(false);
+  });
+
+  it("applies quiet hours, keyword block rules, and rate limits to chzzk_live_started", () => {
+    expect(
+      service.resolve(liveStarted(), "device-1", [
+        pref({ quietHours: { enabled: true, start: "00:00", end: "23:59", timezone: "UTC" } })
+      ]).reason
+    ).toBe("quiet_hours");
+
+    expect(service.resolve(liveStarted(), "device-1", [pref({ keywordsBlocklist: ["spoiler"] })]).reason).toBe("keyword_blocklist");
+    expect(
+      service.resolve(liveStarted(), "device-1", [pref({ maxNotificationsPerMinute: 1 })], {
+        recentNotificationsInLastMinute: 1
+      }).reason
+    ).toBe("rate_limited");
+  });
+});

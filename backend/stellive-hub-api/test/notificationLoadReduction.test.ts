@@ -54,6 +54,24 @@ describe("notification load reduction", () => {
     expect(decision.shouldEnqueuePush).toBe(true);
   });
 
+  it("keeps CHZZK live ended as standard summary delivery by default", () => {
+    const decision = resolveNotificationDelivery(event({ type: "chzzk_live_ended" }), resolution());
+
+    expect(decision.deliveryLevel).toBe("summary_push");
+    expect(decision.shouldEnqueuePush).toBe(false);
+  });
+
+  it("does not turn blocked CHZZK chat into push delivery", () => {
+    const decision = resolveNotificationDelivery(
+      event({ type: "chzzk_chat" }),
+      resolution({ shouldNotify: false, reason: "chzzk_chat_default_off" })
+    );
+
+    expect(decision.deliveryLevel).toBe("in_app_history_only");
+    expect(decision.loadReductionReason).toBe("chzzk_chat_default_off");
+    expect(decision.shouldEnqueuePush).toBe(false);
+  });
+
   it("treats post and upload events as summary candidates by default", () => {
     const decision = resolveNotificationDelivery(event({ source: "youtube", type: "official_youtube_upload" }), resolution());
 

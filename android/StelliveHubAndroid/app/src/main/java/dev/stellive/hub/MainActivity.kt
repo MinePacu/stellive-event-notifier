@@ -301,12 +301,25 @@ class MainActivity : AppCompatActivity() {
             )
         )
         binding.contentList.addView(staticChips("전체", "굿즈", "티켓", "오프라인", "마감 임박"))
-        repository.hubEventsForFilter("all").forEach { event ->
-            binding.contentList.addView(hubEventCard(event))
+        repository.calendarDaysForFilter("all").forEach { day ->
+            binding.contentList.addView(calendarDayHeader(day.date))
+            day.entries.forEach { entry ->
+                repository.hubEvents.firstOrNull { it.id == entry.eventId }?.let { event ->
+                    binding.contentList.addView(hubEventCard(event))
+                }
+            }
         }
         binding.contentList.addView(
             noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
         )
+    }
+
+    private fun calendarDayHeader(date: String): TextView = TextView(this).apply {
+        text = date
+        setTextColor(color(R.color.hub_text))
+        setTextSize(15f)
+        setTypeface(typeface, Typeface.BOLD)
+        setPadding(dp(2), dp(18), dp(2), dp(8))
     }
 
     private fun renderHubEventDetail() {

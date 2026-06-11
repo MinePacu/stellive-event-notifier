@@ -2,6 +2,24 @@ import Foundation
 
 @MainActor
 final class MockHubStore: ObservableObject {
+    private static let calendarTimeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+    private static let calendarDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = calendarTimeZone
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+    private static let calendarTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = calendarTimeZone
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
     @Published var selectedFilter = "all"
     @Published var settings = NotificationSettingsState()
 
@@ -224,6 +242,64 @@ final class MockHubStore: ObservableObject {
         }
 
         return orderedHubEvents(filtered)
+    }
+
+    func calendarDays(for filter: String) -> [HubCalendarDay] {
+        let entries = hubEvents(for: filter)
+            .map(calendarEntry(for:))
+            .sorted(by: HubCalendarPolicy.areInDisplayOrder)
+        let grouped = Dictionary(grouping: entries, by: \.displayDate)
+
+        return grouped.keys.sorted().map { date in
+            HubCalendarDay(date: date, entries: grouped[date] ?? [])
+        }
+    }
+
+    func calendarWidgetSnapshot(limit: Int = 5) -> HubCalendarWidgetSnapshot {
+        let now = Date()
+        let entries = hubEvents(for: "all")
+            .map(calendarEntry(for:))
+            .filter { $0.status != .ended && $0.status != .cancelled }
+            .sorted(by: HubCalendarPolicy.areInDisplayOrder)
+            .prefix(max(1, min(limit, 10)))
+
+        return HubCalendarWidgetSnapshot(
+            generatedAt: now,
+            timezone: "Asia/Seoul",
+            entries: Array(entries),
+            staleAfter: now.addingTimeInterval(6 * 60 * 60)
+        )
+    }
+
+    private func calendarEntry(for event: HubEvent) -> HubCalendarEntry {
+        let displayDate = Self.calendarDateFormatter.string(from: event.startsAt ?? event.endsAt ?? event.updatedAt)
+
+        return HubCalendarEntry(
+            id: "\(event.id):\(displayDate)",
+            eventId: event.id,
+            title: event.title,
+            category: event.category,
+            status: event.status,
+            participationMode: event.participationMode,
+            generationId: event.generationId,
+            memberId: event.memberId,
+            startsAt: event.startsAt,
+            endsAt: event.endsAt,
+            displayDate: displayDate,
+            displayTimeText: calendarTimeText(for: event),
+            sourceLabel: event.sourceLabel,
+            appDeepLink: "stellivehub://hub-events/\(event.id)"
+        )
+    }
+
+    private func calendarTimeText(for event: HubEvent) -> String {
+        if let startsAt = event.startsAt {
+            return "\(Self.calendarTimeFormatter.string(from: startsAt)) 시작"
+        }
+        if let endsAt = event.endsAt {
+            return "\(Self.calendarTimeFormatter.string(from: endsAt)) 마감"
+        }
+        return "종일"
     }
 
     func member(for historyItem: NotificationHistoryItem) -> HubMember? {

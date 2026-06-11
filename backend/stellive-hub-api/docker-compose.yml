@@ -16,20 +16,19 @@ services:
       - "6379:6379"
 
   api:
-    image: node:22-alpine
-    working_dir: /app
-    command: sh -c "npm install && npm run dev"
+    build:
+      context: ../..
+      dockerfile: backend/stellive-hub-api/Dockerfile
     env_file:
       - .env.example
+    environment:
+      DATABASE_URL: postgresql://stellive:stellive@postgres:5432/stellive_hub
+      REDIS_URL: redis://redis:6379
     ports:
       - "4000:4000"
-    volumes:
-      - .:/app
-      - ../../shared:/shared
     depends_on:
       - postgres
       - redis
 
 volumes:
   postgres-data:
-

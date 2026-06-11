@@ -58,12 +58,16 @@ struct HubEventsView: View {
                 .listRowInsets(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
             }
 
-            Section("목록") {
-                ForEach(store.hubEvents(for: selectedFilter)) { event in
-                    NavigationLink {
-                        HubEventDetailView(event: event)
-                    } label: {
-                        HubEventRow(event: event)
+            ForEach(store.calendarDays(for: selectedFilter)) { day in
+                Section(day.date) {
+                    ForEach(day.entries) { entry in
+                        if let event = store.hubEvents.first(where: { $0.id == entry.eventId }) {
+                            NavigationLink {
+                                HubEventDetailView(event: event)
+                            } label: {
+                                HubCalendarRow(entry: entry)
+                            }
+                        }
                     }
                 }
             }
@@ -108,6 +112,40 @@ private struct HubEventRow: View {
             Spacer(minLength: 8)
 
             HubEventStatusBadge(status: event.status)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct HubCalendarRow: View {
+    let entry: HubCalendarEntry
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(entry.title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.88)
+
+                Text([entry.category.displayName, entry.participationMode.displayName, entry.sourceLabel]
+                    .joined(separator: " · "))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+
+                Text(entry.displayTimeText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .layoutPriority(1)
+
+            Spacer(minLength: 8)
+
+            HubEventStatusBadge(status: entry.status)
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)

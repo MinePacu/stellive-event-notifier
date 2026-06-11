@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { adminSessionCookieName } from "../src/admin/adminAuth.js";
 import { buildApp } from "../src/app.js";
 import type { InternalRouteDependencies } from "../src/routes/internalRoutes.js";
@@ -28,7 +28,7 @@ function createFakeDependencies(overrides: Partial<InternalRouteDependencies> = 
     webhookSubscriptions: { listDiagnostics: async () => [] },
     liveStatus: { listDiagnostics: async () => [] },
     deliveryAttempts: { listRecent: async () => [] },
-    adapterHealth: { listAdapterHealth: async () => [] },
+    adapterHealth: { getState: async () => null, listAdapterHealth: async () => [] },
     ...overrides
   };
 }
@@ -124,6 +124,7 @@ describe("internal admin routes", () => {
   it("uses injected adapter health records over defaults", async () => {
     const app = await buildTestApp({
       adapterHealth: {
+        getState: async () => null,
         listAdapterHealth: async () => [
           {
             source: "x",
@@ -226,6 +227,74 @@ describe("internal admin routes", () => {
       status: "disabled",
       reason: "chzzk_live_polling_disabled"
     });
+  });
+
+  it("requires internal auth for CHZZK live-status scheduler", async () => {
+    const app = await buildTestApp();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/chzzk/live-status"
+    });
+
+    await app.close();
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("reports verify_required when CHZZK OAuth token state is missing", async () => {
+    const app = await buildApp({
+      env: { ...testEnv, CHZZK_LIVE_POLLING_ENABLED: "true" },
+      useProcessEnv: false,
+      internalRoutes: {
+        dependencies: createFakeDependencies({
+          adapterHealth: {
+            getState: async () => null,
+            listAdapterHealth: async () => []
+          }
+        })
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/chzzk/live-status",
+      headers: authHeaders
+    });
+
+    await app.close();
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: "verify_required", reason: "chzzk_oauth_token_missing" });
+  });
+
+  it("returns CHZZK live adapter counts when polling is enabled and token state exists", async () => {
+    const counts = { checked: 1, updated: 1, eventsCreated: 1, skipped: 0, verifyRequired: 0 };
+    const pollLiveStatuses = vi.fn(async () => counts);
+    const app = await buildApp({
+      env: { ...testEnv, CHZZK_LIVE_POLLING_ENABLED: "true" },
+      useProcessEnv: false,
+      internalRoutes: {
+        dependencies: createFakeDependencies({
+          adapterHealth: {
+            getState: async () => ({ value: "access-token" }),
+            listAdapterHealth: async () => []
+          },
+          chzzkLiveAdapter: {
+            pollLiveStatuses
+          }
+        })
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/chzzk/live-status",
+      headers: authHeaders
+    });
+
+    await app.close();
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: "ok", counts });
+    expect(pollLiveStatuses).toHaveBeenCalledTimes(1);
   });
 
   it("does not enable CORS on privileged internal routes", async () => {
@@ -390,12 +459,16 @@ describe("admin console routes", () => {
     expect(response.headers["access-control-allow-origin"]).toBeUndefined();
     expect(response.body).toContain("Stellive Hub Admin");
     expect(response.body).toContain('action="/admin/logout"');
+    expect(response.body).toContain('class="refresh-controls"');
     expect(response.body).toContain('id="refresh"');
     expect(response.body).toContain(">Refresh<");
+    expect(response.body).toContain('class="switch-control"');
+    expect(response.body).toContain('class="auto-refresh-switch"');
     expect(response.body).toContain('id="auto-refresh"');
     expect(response.body).toContain('type="checkbox"');
-    expect(response.body).toContain("Auto Refresh");
+    expect(response.body).toContain("Auto refresh");
     expect(response.body).toContain('id="auto-refresh-status"');
+    expect(response.body).toContain('class="auto-refresh-status pill disabled"');
     expect(response.body).toContain('aria-live="polite"');
     expect(response.body).not.toContain("admin-token");
     expect(response.body).not.toContain("internal-test-token");

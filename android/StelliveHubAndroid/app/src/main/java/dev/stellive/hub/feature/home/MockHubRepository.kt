@@ -5,6 +5,9 @@ import dev.stellive.hub.core.model.CatalogRole
 import dev.stellive.hub.core.model.DeliveryMode
 import dev.stellive.hub.core.model.GenerationFilter
 import dev.stellive.hub.core.model.HistoryFilterOption
+import dev.stellive.hub.core.model.HubCalendarDay
+import dev.stellive.hub.core.model.HubCalendarEntry
+import dev.stellive.hub.core.model.HubCalendarWidgetSnapshot
 import dev.stellive.hub.core.model.HubEvent
 import dev.stellive.hub.core.model.HubEventCategory
 import dev.stellive.hub.core.model.HubEventParticipationMode
@@ -13,10 +16,17 @@ import dev.stellive.hub.core.model.HubEventStatus
 import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.NotificationEventType
 import dev.stellive.hub.core.model.NotificationHistoryItem
-import dev.stellive.hub.core.model.NotificationSettingState
+import dev.stellive.hub.feature.calendar.CalendarUiPolicy
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import dev.stellive.hub.core.model.NotificationSettingState
 
 class MockHubRepository {
+    private val calendarZone = ZoneId.of("Asia/Seoul")
+    private val calendarDateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+    private val calendarTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
     val filters = listOf(
         GenerationFilter("all", "전체", true),
         GenerationFilter("gen1", "1기생", true),
@@ -168,6 +178,62 @@ class MockHubRepository {
         }
 
         return filtered.sortedWith(hubEventComparator)
+    }
+
+    fun calendarDaysForFilter(filter: String): List<HubCalendarDay> =
+        hubEventsForFilter(filter)
+            .map(::calendarEntryForEvent)
+            .sortedWith(CalendarUiPolicy.entryComparator)
+            .groupBy { it.displayDate }
+            .toSortedMap()
+            .map { (date, entries) -> HubCalendarDay(date = date, entries = entries) }
+
+    fun calendarWidgetSnapshot(limit: Int = 5): HubCalendarWidgetSnapshot {
+        val now = Instant.now()
+        val entries = hubEventsForFilter("all")
+            .map(::calendarEntryForEvent)
+            .filter { it.status != HubEventStatus.ENDED && it.status != HubEventStatus.CANCELLED }
+            .sortedWith(CalendarUiPolicy.entryComparator)
+            .take(limit.coerceIn(1, 10))
+
+        return HubCalendarWidgetSnapshot(
+            generatedAt = now,
+            timezone = calendarZone.id,
+            entries = entries,
+            staleAfter = now.plusSeconds(6 * 60 * 60)
+        )
+    }
+
+    private fun calendarEntryForEvent(event: HubEvent): HubCalendarEntry {
+        val displayInstant = event.startsAt ?: event.endsAt ?: event.updatedAt
+        val displayDate = calendarDateFormatter.format(displayInstant.atZone(calendarZone))
+
+        return HubCalendarEntry(
+            id = "${event.id}:$displayDate",
+            eventId = event.id,
+            title = event.title,
+            category = event.category,
+            status = event.status,
+            participationMode = event.participationMode,
+            generationId = event.generationId,
+            memberId = event.memberId,
+            startsAt = event.startsAt,
+            endsAt = event.endsAt,
+            displayDate = displayDate,
+            displayTimeText = calendarTimeText(event),
+            sourceLabel = event.sourceLabel,
+            appDeepLink = "stellivehub://hub-events/${event.id}"
+        )
+    }
+
+    private fun calendarTimeText(event: HubEvent): String {
+        val startsAt = event.startsAt
+        val endsAt = event.endsAt
+        return when {
+            startsAt != null -> "${calendarTimeFormatter.format(startsAt.atZone(calendarZone))} 시작"
+            endsAt != null -> "${calendarTimeFormatter.format(endsAt.atZone(calendarZone))} 마감"
+            else -> "종일"
+        }
     }
 
     private fun uniqueHistoryFilters(

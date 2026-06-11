@@ -1,0 +1,15 @@
+.git
+.github
+.gradle
+.superpowers
+.DS_Store
+qa-screenshots
+node_modules
+dist
+build
+.env
+.env.*
+!.env.example
+android/StelliveHubAndroid/.gradle
+android/StelliveHubAndroid/app/build
+ios/StelliveHubiOS/DerivedData

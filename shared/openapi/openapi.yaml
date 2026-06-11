@@ -39,6 +39,61 @@ paths:
       responses:
         "200":
           description: Official-source goods and event feed with filters.
+  /v1/hub-events/calendar:
+    get:
+      summary: Hub event calendar grouped by local date.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: timezone
+          in: query
+          required: false
+          schema:
+            type: string
+            default: Asia/Seoul
+      responses:
+        "200":
+          description: Goods and event calendar days.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HubCalendarResponse"
+  /v1/hub-events/widget-snapshot:
+    get:
+      summary: Compact hub event calendar snapshot for mobile widgets.
+      parameters:
+        - name: timezone
+          in: query
+          required: false
+          schema:
+            type: string
+            default: Asia/Seoul
+        - name: limit
+          in: query
+          required: false
+          schema:
+            oneOf:
+              - type: string
+              - type: integer
+            default: 5
+            maximum: 10
+      responses:
+        "200":
+          description: Cacheable compact calendar snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HubCalendarWidgetSnapshot"
   /v1/hub-events/{id}:
     get:
       parameters:
@@ -86,3 +141,667 @@ paths:
       responses:
         "200":
           description: Short-lived server delivery attempts for diagnostics. User-visible notification history is stored on device.
+  /v1/internal/admin/overview:
+    get:
+      security:
+        - internalBearerAuth: []
+      responses:
+        "200":
+          description: Internal admin overview for the embedded OCI admin console.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOverview"
+        "401":
+          $ref: "#/components/responses/InternalUnauthorized"
+  /v1/internal/adapters/health:
+    get:
+      security:
+        - internalBearerAuth: []
+      responses:
+        "200":
+          description: Adapter health for supported platform integrations.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdapterHealth"
+        "401":
+          $ref: "#/components/responses/InternalUnauthorized"
+  /v1/internal/jobs/notifications:
+    get:
+      security:
+        - internalBearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/InternalLimit25"
+      responses:
+        "200":
+          description: Notification job diagnostics with a bounded limit.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationJobDiagnostic"
+        "401":
+          $ref: "#/components/responses/InternalUnauthorized"
+  /v1/internal/jobs/notifications/drain:
+    post:
+      security:
+        - internalBearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationDrainRequest"
+      responses:
+        "200":
+          description: Bounded notification worker drain trigger placeholder.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationDrainPlaceholderResult"
+        "401":
+          $ref: "#/components/responses/InternalUnauthorized"
+  /v1/internal/webhooks/subscriptions:
+    get:
+      security:
+        - internalBearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/InternalLimit50"
+      responses:
+        "200":
+          description: Webhook subscription diagnostics for internal operations.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WebhookSubscriptionDiagnostic"
+        "401":
+          $ref: "#/components/responses/InternalUnauthorized"
+  /v1/internal/schedulers/youtube/renew-subscriptions:
+    post:
+      security:
+        - internalBearerAuth: []
+      responses:
+        "200":
+          description: Trigger result for YouTube WebSub subscription renewal.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalActionResult"
+        "401":
+          $ref: "#/components/responses/InternalUnauthorized"
+  /v1/internal/schedulers/chzzk/live-status:
+    post:
+      security:
+        - internalBearerAuth: []
+      responses:
+        "200":
+          description: Trigger result for CHZZK live status polling.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalActionResult"
+        "401":
+          $ref: "#/components/responses/InternalUnauthorized"
+  /v1/internal/live-status:
+    get:
+      security:
+        - internalBearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/InternalLimit50"
+      responses:
+        "200":
+          description: Internal live status diagnostics from the backend cache.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LiveStatusDiagnostic"
+        "401":
+          $ref: "#/components/responses/InternalUnauthorized"
+  /v1/internal/delivery-attempts:
+    get:
+      security:
+        - internalBearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/InternalLimit25"
+      responses:
+        "200":
+          description: Recent internal delivery attempt diagnostics with sensitive values omitted.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeliveryAttemptDiagnostic"
+        "401":
+          $ref: "#/components/responses/InternalUnauthorized"
+components:
+  securitySchemes:
+    internalBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: Bearer token protection for `/v1/internal/*` operational routes.
+  parameters:
+    InternalLimit25:
+      name: limit
+      in: query
+      required: false
+      description: Optional limit input for internal diagnostics. The server accepts string or numeric input, truncates decimals, clamps accepted values to 1..100, and falls back to the route default of 25 when the value is absent or invalid.
+      schema:
+        oneOf:
+          - type: string
+          - type: integer
+          - type: number
+    InternalLimit50:
+      name: limit
+      in: query
+      required: false
+      description: Optional limit input for internal diagnostics. The server accepts string or numeric input, truncates decimals, clamps accepted values to 1..100, and falls back to the route default of 50 when the value is absent or invalid.
+      schema:
+        oneOf:
+          - type: string
+          - type: integer
+          - type: number
+  responses:
+    InternalUnauthorized:
+      description: Missing, invalid, or unconfigured internal bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/InternalAuthError"
+  schemas:
+    HubCalendarEntry:
+      type: object
+      required:
+        - id
+        - eventId
+        - title
+        - category
+        - status
+        - participationMode
+        - generationId
+        - displayDate
+        - displayTimeText
+        - sourceLabel
+        - appDeepLink
+      properties:
+        id:
+          type: string
+        eventId:
+          type: string
+        title:
+          type: string
+        category:
+          type: string
+          enum:
+            - online_goods
+            - online_collab
+            - offline_concert
+            - offline_collab
+            - offline_popup
+            - ticketing
+        status:
+          type: string
+          enum:
+            - announced
+            - upcoming
+            - open
+            - closing_soon
+            - ended
+            - cancelled
+        participationMode:
+          type: string
+          enum:
+            - online
+            - offline
+            - hybrid
+        generationId:
+          type: string
+        memberId:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        displayDate:
+          type: string
+          format: date
+        displayTimeText:
+          type: string
+        sourceLabel:
+          type: string
+        appDeepLink:
+          type: string
+    HubCalendarDay:
+      type: object
+      required:
+        - date
+        - entries
+      properties:
+        date:
+          type: string
+          format: date
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/HubCalendarEntry"
+    HubCalendarResponse:
+      type: object
+      required:
+        - timezone
+        - from
+        - to
+        - days
+      properties:
+        timezone:
+          type: string
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/HubCalendarDay"
+    HubCalendarWidgetSnapshot:
+      type: object
+      required:
+        - generatedAt
+        - timezone
+        - entries
+        - staleAfter
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/HubCalendarEntry"
+        staleAfter:
+          type: string
+          format: date-time
+    InternalAuthError:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          enum:
+            - missing_authorization
+            - invalid_authorization_scheme
+            - invalid_token
+            - token_not_configured
+    AdminOverview:
+      type: object
+      required:
+        - service
+        - database
+        - featureFlags
+        - secrets
+        - queue
+        - adapters
+        - recentDelivery
+      properties:
+        service:
+          type: object
+          required:
+            - name
+            - environment
+            - uptimeSeconds
+          properties:
+            name:
+              type: string
+              const: stellive-hub-api
+            environment:
+              type: string
+            uptimeSeconds:
+              type: integer
+              minimum: 0
+        database:
+          type: object
+          required:
+            - status
+            - reason
+          properties:
+            status:
+              $ref: "#/components/schemas/AdminHealthStatus"
+            reason:
+              type: string
+        featureFlags:
+          type: object
+          additionalProperties:
+            oneOf:
+              - type: boolean
+              - type: string
+        secrets:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+              - configured
+              - missing
+        queue:
+          $ref: "#/components/schemas/NotificationJobSummary"
+        adapters:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdapterHealth"
+        recentDelivery:
+          $ref: "#/components/schemas/DeliveryAttemptSummary"
+    AdminHealthStatus:
+      type: string
+      enum:
+        - ok
+        - degraded
+        - disabled
+        - verify_required
+        - rate_limited
+    AdapterHealth:
+      type: object
+      required:
+        - source
+        - status
+        - reason
+        - lastCheckedAt
+      properties:
+        source:
+          type: string
+          enum:
+            - youtube
+            - chzzk
+            - x
+            - naver_cafe
+        status:
+          type: string
+          enum:
+            - enabled
+            - disabled
+            - verify_required
+            - rate_limited
+        reason:
+          type: string
+        lastCheckedAt:
+          type: string
+          format: date-time
+    NotificationJobSummary:
+      type: object
+      required:
+        - queued
+        - locked
+        - completed
+        - failed
+      properties:
+        queued:
+          type: integer
+          minimum: 0
+        locked:
+          type: integer
+          minimum: 0
+        completed:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        oldestQueuedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    DeliveryAttemptSummary:
+      type: object
+      required:
+        - sent
+        - queued
+        - skipped
+        - failed
+      properties:
+        sent:
+          type: integer
+          minimum: 0
+        queued:
+          type: integer
+          minimum: 0
+        skipped:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+    NotificationJobDiagnostic:
+      type: object
+      required:
+        - id
+        - eventId
+        - priority
+        - status
+        - runAfter
+        - attempts
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        eventId:
+          type: string
+        priority:
+          type: integer
+        status:
+          type: string
+        runAfter:
+          type: string
+          format: date-time
+        lockedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        attempts:
+          type: integer
+          minimum: 0
+        lastError:
+          type:
+            - string
+            - "null"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    NotificationDrainRequest:
+      type: object
+      description: JSON request body for the drain placeholder route. The handler reads `limit` from this JSON body, not from the query string.
+      properties:
+        limit:
+          description: Optional drain batch input. The server accepts string or numeric input, truncates decimals, clamps accepted values to 1..100, and falls back to 25 when the value is absent or invalid.
+          oneOf:
+            - type: string
+            - type: integer
+            - type: number
+    NotificationDrainPlaceholderResult:
+      type: object
+      required:
+        - claimed
+        - completed
+        - failed
+        - skipped
+        - status
+        - reason
+        - requestedLimit
+      properties:
+        claimed:
+          type: integer
+          minimum: 0
+        completed:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        skipped:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          const: not_available
+        reason:
+          type: string
+          const: notification_worker_not_available
+        requestedLimit:
+          type: integer
+          minimum: 1
+          maximum: 100
+    InternalActionResult:
+      type: object
+      required:
+        - status
+        - reason
+      properties:
+        status:
+          type: string
+          enum:
+            - disabled
+            - verify_required
+            - not_available
+        reason:
+          type: string
+    WebhookSubscriptionDiagnostic:
+      type: object
+      required:
+        - id
+        - source
+        - targetId
+        - topicUrl
+        - status
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+        targetId:
+          type: string
+        topicUrl:
+          type: string
+        status:
+          type: string
+        leaseExpiresAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        lastVerifiedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        lastError:
+          type:
+            - string
+            - "null"
+    LiveStatusDiagnostic:
+      type: object
+      required:
+        - memberId
+        - generationId
+        - isLive
+        - lastCheckedAt
+        - sourceVerificationState
+      properties:
+        memberId:
+          type: string
+        generationId:
+          type: string
+        isLive:
+          type: boolean
+        title:
+          type:
+            - string
+            - "null"
+        viewerCount:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        startedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        platformUrl:
+          type:
+            - string
+            - "null"
+        lastCheckedAt:
+          type: string
+          format: date-time
+        sourceVerificationState:
+          type: string
+    DeliveryAttemptDiagnostic:
+      type: object
+      required:
+        - id
+        - eventId
+        - attemptedAt
+        - status
+        - source
+        - eventType
+        - generationId
+        - memberId
+        - deliveryMode
+        - pushPriority
+      properties:
+        id:
+          type: string
+        eventId:
+          type: string
+        attemptedAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        status:
+          type: string
+        reason:
+          type:
+            - string
+            - "null"
+        source:
+          type: string
+        eventType:
+          type: string
+        generationId:
+          type: string
+        memberId:
+          type: string
+        deliveryMode:
+          type: string
+        deliveryLevel:
+          type:
+            - string
+            - "null"
+        pushPriority:
+          type: string
+        providerErrorCode:
+          type:
+            - string
+            - "null"

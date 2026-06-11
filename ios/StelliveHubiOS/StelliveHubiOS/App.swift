@@ -9,6 +9,9 @@ struct StelliveHubApp: App {
             ContentView()
                 .environmentObject(store)
                 .preferredColorScheme(store.settings.appearanceMode.preferredColorScheme)
+                .task {
+                    try? HubCalendarWidgetStore.saveToSharedContainer(store.calendarWidgetSnapshot())
+                }
         }
     }
 }
