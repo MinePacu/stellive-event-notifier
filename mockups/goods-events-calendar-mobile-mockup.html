@@ -1,0 +1,1219 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>굿즈/행사 캘린더 모바일 목업</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #ffffff;
+        --ink: #202124;
+        --muted: #6a707a;
+        --line: #dfe4ea;
+        --line-strong: #cbd4dd;
+        --surface: #ffffff;
+        --subtle: #f5f7f9;
+        --teal: #007f7a;
+        --teal-soft: #e3f4f2;
+        --blue: #2f6fd6;
+        --blue-soft: #e8f0ff;
+        --green: #1c7c48;
+        --green-soft: #e5f3ea;
+        --amber: #db6b12;
+        --amber-soft: #fff0df;
+        --red: #a33b33;
+        --red-soft: #fdebea;
+        --shadow: 0 18px 50px rgba(32, 33, 36, 0.12);
+        --radius-sm: 8px;
+        --radius-md: 18px;
+        --radius-lg: 28px;
+        --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--font);
+        letter-spacing: 0;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .page {
+        max-width: 1480px;
+        margin: 0 auto;
+        padding: 34px 28px 44px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 28px;
+      }
+
+      .title-block {
+        max-width: 640px;
+      }
+
+      .product-label {
+        color: var(--teal);
+        font-size: 14px;
+        font-weight: 760;
+        margin-bottom: 8px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(30px, 4vw, 52px);
+        line-height: 1.02;
+        letter-spacing: 0;
+      }
+
+      .summary {
+        margin: 14px 0 0;
+        max-width: 580px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      .canvas-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .canvas-chip {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: #3b4149;
+        border-radius: 999px;
+        padding: 9px 13px;
+        font-size: 13px;
+        font-weight: 680;
+      }
+
+      .review-grid {
+        display: grid;
+        grid-template-columns: 220px minmax(300px, 350px) minmax(300px, 350px) minmax(280px, 330px);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .notes {
+        display: grid;
+        gap: 14px;
+      }
+
+      .note {
+        border-top: 1px solid var(--line);
+        padding-top: 16px;
+      }
+
+      .note svg {
+        display: block;
+        color: var(--teal);
+        margin-bottom: 10px;
+      }
+
+      .note-title {
+        font-size: 15px;
+        font-weight: 800;
+        margin-bottom: 5px;
+      }
+
+      .note-body {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.58;
+      }
+
+      .legend {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .legend-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: #4b525c;
+      }
+
+      .surface-title {
+        margin: 0 0 12px;
+        font-size: 18px;
+        font-weight: 820;
+        text-align: center;
+      }
+
+      .phone {
+        width: min(100%, 350px);
+        min-height: 748px;
+        margin: 0 auto;
+        border: 1px solid var(--line-strong);
+        border-radius: 34px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        position: relative;
+      }
+
+      .phone.android {
+        border-radius: 30px;
+      }
+
+      .phone.ios {
+        border-width: 2px;
+        border-color: #111317;
+      }
+
+      .notch {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        width: 128px;
+        height: 27px;
+        border-radius: 0 0 18px 18px;
+        background: #111317;
+        transform: translateX(-50%);
+        z-index: 5;
+      }
+
+      .statusbar {
+        height: 44px;
+        padding: 14px 19px 0;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        font-size: 13px;
+        font-weight: 760;
+      }
+
+      .status-icons {
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+        color: #323842;
+      }
+
+      .app-shell {
+        min-height: calc(748px - 44px);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .app-header {
+        padding: 15px 17px 9px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .app-title {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.15;
+        font-weight: 860;
+      }
+
+      .icon-actions {
+        display: flex;
+        gap: 10px;
+      }
+
+      .icon-button {
+        width: 32px;
+        height: 32px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--ink);
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+      }
+
+      .filter-row {
+        display: flex;
+        gap: 8px;
+        padding: 8px 16px 12px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      .filter-row::-webkit-scrollbar {
+        display: none;
+      }
+
+      .filter-button {
+        min-width: 56px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: #3d4650;
+        background: var(--surface);
+        padding: 8px 14px;
+        font-size: 12px;
+        font-weight: 740;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .filter-button.is-active {
+        border-color: var(--teal);
+        background: var(--teal);
+        color: #fff;
+      }
+
+      .month-row {
+        display: grid;
+        grid-template-columns: 36px 1fr 36px;
+        align-items: center;
+        padding: 4px 16px 8px;
+      }
+
+      .month-row button {
+        border: 0;
+        background: transparent;
+        height: 34px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        color: #23272f;
+      }
+
+      .month-title {
+        text-align: center;
+        font-size: 17px;
+        font-weight: 840;
+      }
+
+      .week-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        padding: 0 16px 10px;
+        row-gap: 7px;
+      }
+
+      .week-label,
+      .date-cell {
+        text-align: center;
+      }
+
+      .week-label {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 720;
+      }
+
+      .date-button {
+        width: 35px;
+        height: 35px;
+        margin: 0 auto;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: #323842;
+        font-weight: 720;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        position: relative;
+      }
+
+      .date-button.has-event::after {
+        content: "";
+        position: absolute;
+        bottom: 3px;
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: var(--teal);
+      }
+
+      .date-button.is-selected {
+        background: var(--teal);
+        color: #fff;
+        box-shadow: 0 8px 18px rgba(0, 127, 122, 0.24);
+      }
+
+      .date-button.is-selected::after {
+        background: #fff;
+      }
+
+      .calendar-list {
+        flex: 1;
+        margin: 0 10px 10px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        overflow: hidden;
+        background: #fff;
+      }
+
+      .day-section + .day-section {
+        border-top: 1px solid var(--line);
+      }
+
+      .day-header {
+        background: var(--subtle);
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 820;
+        color: #40464f;
+      }
+
+      .event-row {
+        display: grid;
+        grid-template-columns: 48px 1fr auto;
+        align-items: center;
+        gap: 10px;
+        min-height: 69px;
+        padding: 10px 11px;
+        border-top: 1px solid var(--line);
+      }
+
+      .event-row:first-of-type {
+        border-top: 0;
+      }
+
+      .time {
+        color: #424a55;
+        font-size: 12px;
+        font-weight: 760;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .event-title {
+        font-size: 13px;
+        font-weight: 820;
+        line-height: 1.35;
+      }
+
+      .event-meta {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.3;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 148px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 52px;
+        min-height: 28px;
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 820;
+        white-space: nowrap;
+      }
+
+      .badge.upcoming {
+        color: var(--blue);
+        background: var(--blue-soft);
+        border: 1px solid #d5e3ff;
+      }
+
+      .badge.open {
+        color: var(--green);
+        background: var(--green-soft);
+        border: 1px solid #cfe8d7;
+      }
+
+      .badge.closing {
+        color: var(--amber);
+        background: var(--amber-soft);
+        border: 1px solid #ffd9af;
+      }
+
+      .badge.cancelled {
+        color: var(--red);
+        background: var(--red-soft);
+        border: 1px solid #f6c8c4;
+      }
+
+      .countdown {
+        display: block;
+        margin-top: 4px;
+        color: var(--amber);
+        font-size: 10px;
+        font-weight: 780;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .bottom-nav {
+        height: 66px;
+        border-top: 1px solid var(--line);
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        background: #fff;
+      }
+
+      .nav-item {
+        border: 0;
+        background: transparent;
+        display: grid;
+        place-items: center;
+        align-content: center;
+        gap: 4px;
+        color: #4e5662;
+        font-size: 11px;
+        font-weight: 720;
+      }
+
+      .nav-item.is-active {
+        color: var(--teal);
+      }
+
+      .fab {
+        position: absolute;
+        right: 17px;
+        bottom: 82px;
+        width: 49px;
+        height: 49px;
+        border: 0;
+        border-radius: 50%;
+        background: var(--teal);
+        color: #fff;
+        box-shadow: 0 12px 24px rgba(0, 127, 122, 0.28);
+        display: grid;
+        place-items: center;
+      }
+
+      .widgets {
+        display: grid;
+        gap: 24px;
+      }
+
+      .widget-card {
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background: #fff;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .android-widget {
+        min-height: 342px;
+      }
+
+      .ios-widget {
+        min-height: 298px;
+      }
+
+      .widget-header {
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .widget-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        font-weight: 840;
+      }
+
+      .widget-list {
+        display: grid;
+      }
+
+      .widget-row {
+        display: grid;
+        grid-template-columns: 52px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        min-height: 57px;
+        padding: 9px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .widget-row:last-child {
+        border-bottom: 0;
+      }
+
+      .widget-date {
+        font-size: 11px;
+        font-weight: 820;
+        line-height: 1.25;
+        color: #434b55;
+        text-align: center;
+      }
+
+      .widget-date span {
+        display: block;
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .widget-event-title {
+        font-size: 13px;
+        font-weight: 820;
+        line-height: 1.25;
+      }
+
+      .widget-event-meta {
+        color: var(--muted);
+        margin-top: 2px;
+        font-size: 11px;
+      }
+
+      .widget-size {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+      }
+
+      .empty-day {
+        padding: 22px 12px;
+        color: var(--muted);
+        text-align: center;
+        font-size: 12px;
+      }
+
+      svg {
+        width: 20px;
+        height: 20px;
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .small-icon {
+        width: 17px;
+        height: 17px;
+      }
+
+      @media (max-width: 1260px) {
+        .review-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .notes {
+          grid-column: 1 / -1;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 820px) {
+        .page {
+          padding: 22px 14px 34px;
+        }
+
+        .topbar {
+          display: block;
+        }
+
+        .canvas-actions {
+          justify-content: flex-start;
+          margin-top: 14px;
+        }
+
+        .review-grid {
+          grid-template-columns: 1fr;
+          gap: 28px;
+        }
+
+        .notes {
+          grid-template-columns: 1fr;
+        }
+
+        .phone {
+          min-height: 748px;
+        }
+
+        .app-shell {
+          min-height: calc(748px - 44px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="topbar" aria-labelledby="mockup-title">
+        <div class="title-block">
+          <div class="product-label">Stellive Notification Hub</div>
+          <h1 id="mockup-title">굿즈/행사 캘린더 모바일 목업</h1>
+          <p class="summary">
+            Android와 iPhone 앱 화면, 그리고 각 OS 홈 화면 위젯이 같은 `HubEvent` 일정 데이터를 어떻게 보여주는지 비교하는 브라우저 목업입니다.
+          </p>
+        </div>
+        <div class="canvas-actions" aria-label="목업 상태">
+          <span class="canvas-chip">X 알림 제외</span>
+          <span class="canvas-chip">이미지/로고 미사용</span>
+          <span class="canvas-chip">위젯은 캐시 기반</span>
+        </div>
+      </section>
+
+      <section class="review-grid">
+        <aside class="notes" aria-label="디자인 기준">
+          <div class="note">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 2v4M16 2v4M3 10h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
+            </svg>
+            <div class="note-title">일정 중심</div>
+            <div class="note-body">굿즈 판매, 티켓 오픈, 오프라인 행사만 날짜별로 정리합니다.</div>
+          </div>
+          <div class="note">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 4h18l-7 8v6l-4 2v-8L3 4Z" />
+            </svg>
+            <div class="note-title">빠른 필터</div>
+            <div class="note-body">전체, 굿즈, 티켓, 오프라인, 마감 임박을 같은 위치에 둡니다.</div>
+          </div>
+          <div class="note">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+              <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+            </svg>
+            <div class="note-title">상태 배지</div>
+            <div class="note-body">예정, 판매 중, 마감 임박, 취소를 색상과 짧은 문구로 구분합니다.</div>
+          </div>
+          <div class="legend" aria-label="상태 배지 안내">
+            <div class="legend-row"><span class="badge closing">마감 임박</span><span>24시간 이내</span></div>
+            <div class="legend-row"><span class="badge open">판매 중</span><span>현재 신청 가능</span></div>
+            <div class="legend-row"><span class="badge upcoming">예정</span><span>오픈 전 일정</span></div>
+            <div class="legend-row"><span class="badge cancelled">취소</span><span>취소된 일정</span></div>
+          </div>
+        </aside>
+
+        <section aria-labelledby="android-title">
+          <h2 class="surface-title" id="android-title">Android 앱</h2>
+          <div class="phone android" data-surface="android">
+            <div class="statusbar">
+              <span>12:30</span>
+              <span class="status-icons">
+                <svg class="small-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18h18" /><path d="M7 14h10" /><path d="M11 10h2" /></svg>
+                <svg class="small-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16L12 4 4 20Z" /></svg>
+              </span>
+            </div>
+            <div class="app-shell">
+              <header class="app-header">
+                <h3 class="app-title">굿즈/행사</h3>
+                <div class="icon-actions">
+                  <button class="icon-button" aria-label="검색">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+                  </button>
+                  <button class="icon-button" aria-label="알림">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>
+                  </button>
+                </div>
+              </header>
+              <div class="filter-row" data-filter-row>
+                <button class="filter-button is-active" data-filter="all">전체</button>
+                <button class="filter-button" data-filter="goods">굿즈</button>
+                <button class="filter-button" data-filter="ticketing">티켓</button>
+                <button class="filter-button" data-filter="offline">오프라인</button>
+                <button class="filter-button" data-filter="closing">마감</button>
+              </div>
+              <div class="month-row">
+                <button aria-label="이전 달"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg></button>
+                <div class="month-title">2026년 6월</div>
+                <button aria-label="다음 달"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></button>
+              </div>
+              <div class="week-grid" data-week-grid>
+                <div class="week-label">일</div>
+                <div class="week-label">월</div>
+                <div class="week-label">화</div>
+                <div class="week-label">수</div>
+                <div class="week-label">목</div>
+                <div class="week-label">금</div>
+                <div class="week-label">토</div>
+                <div class="date-cell"><button class="date-button has-event is-selected" data-date="14">14</button></div>
+                <div class="date-cell"><button class="date-button has-event" data-date="15">15</button></div>
+                <div class="date-cell"><button class="date-button has-event" data-date="16">16</button></div>
+                <div class="date-cell"><button class="date-button has-event" data-date="17">17</button></div>
+                <div class="date-cell"><button class="date-button" data-date="18">18</button></div>
+                <div class="date-cell"><button class="date-button has-event" data-date="19">19</button></div>
+                <div class="date-cell"><button class="date-button" data-date="20">20</button></div>
+              </div>
+              <div class="calendar-list" data-calendar-list>
+                <section class="day-section">
+                  <div class="day-header">6.14 (일)</div>
+                  <div class="event-row">
+                    <div class="time">20:00</div>
+                    <div>
+                      <div class="event-title">2026 콘서트 티켓 오픈</div>
+                      <div class="event-meta">올림픽공원 KSPO DOME</div>
+                    </div>
+                    <div><span class="badge upcoming">예정</span></div>
+                  </div>
+                </section>
+                <section class="day-section">
+                  <div class="day-header">6.15 (월)</div>
+                  <div class="event-row">
+                    <div class="time">10:00</div>
+                    <div>
+                      <div class="event-title">공식 굿즈 예약 판매</div>
+                      <div class="event-meta">SUMMER COLLECTION</div>
+                    </div>
+                    <div><span class="badge open">판매 중</span></div>
+                  </div>
+                  <div class="event-row">
+                    <div class="time">23:59</div>
+                    <div>
+                      <div class="event-title">콘서트 VIP 패키지 마감</div>
+                      <div class="event-meta">올림픽공원 KSPO DOME</div>
+                    </div>
+                    <div><span class="badge closing">마감 임박</span><span class="countdown">D-0 03:29:15</span></div>
+                  </div>
+                </section>
+              </div>
+              <button class="fab" aria-label="일정 추가">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              </button>
+              <nav class="bottom-nav" aria-label="Android 하단 탐색">
+                <button class="nav-item is-active">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4M16 2v4M3 10h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" /></svg>
+                  캘린더
+                </button>
+                <button class="nav-item">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>
+                  알림
+                </button>
+                <button class="nav-item">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21 12 17 5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z" /></svg>
+                  내 일정
+                </button>
+                <button class="nav-item">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.6 19a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1H4a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 5 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06A2 2 0 1 1 7.43 3.8l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6V4a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 15 5a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 .6 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-.6 1Z" /></svg>
+                  설정
+                </button>
+              </nav>
+            </div>
+          </div>
+        </section>
+
+        <section aria-labelledby="ios-title">
+          <h2 class="surface-title" id="ios-title">iPhone 앱</h2>
+          <div class="phone ios" data-surface="ios">
+            <div class="notch" aria-hidden="true"></div>
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="status-icons">
+                <svg class="small-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18h18" /><path d="M7 14h10" /><path d="M11 10h2" /></svg>
+                <svg class="small-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10H7z" /><path d="M17 10h2v4h-2" /></svg>
+              </span>
+            </div>
+            <div class="app-shell">
+              <header class="app-header">
+                <h3 class="app-title">굿즈/행사</h3>
+                <div class="icon-actions">
+                  <button class="icon-button" aria-label="검색">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+                  </button>
+                  <button class="icon-button" aria-label="알림">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>
+                  </button>
+                </div>
+              </header>
+              <div class="filter-row" data-filter-row>
+                <button class="filter-button is-active" data-filter="all">전체</button>
+                <button class="filter-button" data-filter="goods">굿즈</button>
+                <button class="filter-button" data-filter="ticketing">티켓</button>
+                <button class="filter-button" data-filter="offline">오프라인</button>
+                <button class="filter-button" data-filter="closing">마감</button>
+              </div>
+              <div class="month-row">
+                <button aria-label="이전 달"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg></button>
+                <div class="month-title">2026년 6월</div>
+                <button aria-label="다음 달"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></button>
+              </div>
+              <div class="week-grid" data-week-grid>
+                <div class="week-label">일</div>
+                <div class="week-label">월</div>
+                <div class="week-label">화</div>
+                <div class="week-label">수</div>
+                <div class="week-label">목</div>
+                <div class="week-label">금</div>
+                <div class="week-label">토</div>
+                <div class="date-cell"><button class="date-button has-event is-selected" data-date="14">14</button></div>
+                <div class="date-cell"><button class="date-button has-event" data-date="15">15</button></div>
+                <div class="date-cell"><button class="date-button has-event" data-date="16">16</button></div>
+                <div class="date-cell"><button class="date-button has-event" data-date="17">17</button></div>
+                <div class="date-cell"><button class="date-button" data-date="18">18</button></div>
+                <div class="date-cell"><button class="date-button has-event" data-date="19">19</button></div>
+                <div class="date-cell"><button class="date-button" data-date="20">20</button></div>
+              </div>
+              <div class="calendar-list" data-calendar-list>
+                <section class="day-section">
+                  <div class="day-header">6.14 (일)</div>
+                  <div class="event-row">
+                    <div class="time">20:00</div>
+                    <div>
+                      <div class="event-title">2026 콘서트 티켓 오픈</div>
+                      <div class="event-meta">올림픽공원 KSPO DOME</div>
+                    </div>
+                    <div><span class="badge upcoming">예정</span></div>
+                  </div>
+                </section>
+                <section class="day-section">
+                  <div class="day-header">6.15 (월)</div>
+                  <div class="event-row">
+                    <div class="time">10:00</div>
+                    <div>
+                      <div class="event-title">공식 굿즈 예약 판매</div>
+                      <div class="event-meta">SUMMER COLLECTION</div>
+                    </div>
+                    <div><span class="badge open">판매 중</span></div>
+                  </div>
+                  <div class="event-row">
+                    <div class="time">23:59</div>
+                    <div>
+                      <div class="event-title">콘서트 VIP 패키지 마감</div>
+                      <div class="event-meta">올림픽공원 KSPO DOME</div>
+                    </div>
+                    <div><span class="badge closing">마감 임박</span><span class="countdown">D-0 03:29:15</span></div>
+                  </div>
+                </section>
+              </div>
+              <button class="fab" aria-label="일정 추가">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              </button>
+              <nav class="bottom-nav" aria-label="iOS 탭 막대">
+                <button class="nav-item is-active">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4M16 2v4M3 10h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" /></svg>
+                  캘린더
+                </button>
+                <button class="nav-item">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>
+                  알림
+                </button>
+                <button class="nav-item">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21 12 17 5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z" /></svg>
+                  내 일정
+                </button>
+                <button class="nav-item">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.6 19a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1H4a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 5 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06A2 2 0 1 1 7.43 3.8l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6V4a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 15 5a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 .6 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-.6 1Z" /></svg>
+                  설정
+                </button>
+              </nav>
+            </div>
+          </div>
+        </section>
+
+        <section class="widgets" aria-labelledby="widget-title">
+          <h2 class="surface-title" id="widget-title">홈 화면 위젯</h2>
+          <div>
+            <div class="widget-card android-widget">
+              <div class="widget-header">
+                <div class="widget-title">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4M16 2v4M3 10h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" /></svg>
+                  굿즈/행사
+                </div>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              </div>
+              <div class="widget-list" data-widget-list="android">
+                <div class="widget-row">
+                  <div class="widget-date">06.14<span>(일)</span></div>
+                  <div>
+                    <div class="widget-event-title">2026 콘서트 티켓 오픈</div>
+                    <div class="widget-event-meta">20:00 · 올림픽공원 KSPO DOME</div>
+                  </div>
+                  <span class="badge upcoming">예정</span>
+                </div>
+                <div class="widget-row">
+                  <div class="widget-date">06.15<span>(월)</span></div>
+                  <div>
+                    <div class="widget-event-title">공식 굿즈 예약 판매</div>
+                    <div class="widget-event-meta">10:00 · SUMMER COLLECTION</div>
+                  </div>
+                  <span class="badge open">판매 중</span>
+                </div>
+                <div class="widget-row">
+                  <div class="widget-date">06.15<span>(월)</span></div>
+                  <div>
+                    <div class="widget-event-title">콘서트 VIP 패키지 마감</div>
+                    <div class="widget-event-meta">23:59 · 올림픽공원 KSPO DOME</div>
+                  </div>
+                  <span class="badge closing">마감 임박</span>
+                </div>
+              </div>
+            </div>
+            <div class="widget-size">Android 4x2 기준</div>
+          </div>
+
+          <div>
+            <div class="widget-card ios-widget">
+              <div class="widget-header">
+                <div class="widget-title">굿즈/행사</div>
+                <div style="display:flex;align-items:center;gap:4px;color:#4d5660;font-size:12px;font-weight:720;">
+                  더보기
+                  <svg class="small-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+                </div>
+              </div>
+              <div class="widget-list" data-widget-list="ios">
+                <div class="widget-row">
+                  <div class="widget-date">06.14<span>(일)</span></div>
+                  <div>
+                    <div class="widget-event-title">2026 콘서트 티켓 오픈</div>
+                    <div class="widget-event-meta">20:00 · 올림픽공원 KSPO DOME</div>
+                  </div>
+                  <span class="badge upcoming">예정</span>
+                </div>
+                <div class="widget-row">
+                  <div class="widget-date">06.15<span>(월)</span></div>
+                  <div>
+                    <div class="widget-event-title">공식 굿즈 예약 판매</div>
+                    <div class="widget-event-meta">10:00 · SUMMER COLLECTION</div>
+                  </div>
+                  <span class="badge open">판매 중</span>
+                </div>
+                <div class="widget-row">
+                  <div class="widget-date">06.15<span>(월)</span></div>
+                  <div>
+                    <div class="widget-event-title">콘서트 VIP 패키지 마감</div>
+                    <div class="widget-event-meta">23:59 · 올림픽공원 KSPO DOME</div>
+                  </div>
+                  <span class="badge closing">마감 임박</span>
+                </div>
+              </div>
+            </div>
+            <div class="widget-size">iOS WidgetKit medium 기준</div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const filters = [
+        { id: "all", label: "전체" },
+        { id: "goods", label: "굿즈" },
+        { id: "ticketing", label: "티켓" },
+        { id: "offline", label: "오프라인" },
+        { id: "closing", label: "마감" }
+      ];
+
+      const dates = [
+        { day: "일", date: 14, hasEvent: true },
+        { day: "월", date: 15, hasEvent: true },
+        { day: "화", date: 16, hasEvent: true },
+        { day: "수", date: 17, hasEvent: true },
+        { day: "목", date: 18, hasEvent: false },
+        { day: "금", date: 19, hasEvent: true },
+        { day: "토", date: 20, hasEvent: false }
+      ];
+
+      const events = [
+        {
+          date: "6.14 (일)",
+          day: "06.14",
+          weekday: "일",
+          time: "20:00",
+          title: "2026 콘서트 티켓 오픈",
+          meta: "올림픽공원 KSPO DOME",
+          status: "upcoming",
+          badge: "예정",
+          type: "ticketing"
+        },
+        {
+          date: "6.15 (월)",
+          day: "06.15",
+          weekday: "월",
+          time: "10:00",
+          title: "공식 굿즈 예약 판매",
+          meta: "SUMMER COLLECTION",
+          status: "open",
+          badge: "판매 중",
+          type: "goods"
+        },
+        {
+          date: "6.15 (월)",
+          day: "06.15",
+          weekday: "월",
+          time: "23:59",
+          title: "콘서트 VIP 패키지 마감",
+          meta: "올림픽공원 KSPO DOME",
+          status: "closing",
+          badge: "마감 임박",
+          countdown: "D-0 03:29:15",
+          type: "ticketing"
+        },
+        {
+          date: "6.16 (화)",
+          day: "06.16",
+          weekday: "화",
+          time: "11:00",
+          title: "팝업 스토어 현장 예약 오픈",
+          meta: "더현대 서울 B2 행사장",
+          status: "upcoming",
+          badge: "예정",
+          type: "offline"
+        },
+        {
+          date: "6.17 (수)",
+          day: "06.17",
+          weekday: "수",
+          time: "10:30",
+          title: "팬사인회 응모 마감",
+          meta: "6TH MINI ALBUM 발매 기념",
+          status: "closing",
+          badge: "마감 임박",
+          countdown: "D-1 21:29:15",
+          type: "goods"
+        },
+        {
+          date: "6.17 (수)",
+          day: "06.17",
+          weekday: "수",
+          time: "19:00",
+          title: "팝업 스토어 현장 입장 시작",
+          meta: "더현대 서울 B2 행사장",
+          status: "open",
+          badge: "판매 중",
+          type: "offline"
+        }
+      ];
+
+      let activeFilter = "all";
+      let selectedDate = 14;
+
+      function iconChevron() {
+        return '<svg class="small-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>';
+      }
+
+      function visibleEvents() {
+        return events.filter((event) => {
+          if (activeFilter === "all") return true;
+          if (activeFilter === "closing") return event.status === "closing";
+          return event.type === activeFilter;
+        });
+      }
+
+      function renderFilters(surface) {
+        const row = surface.querySelector("[data-filter-row]");
+        row.innerHTML = filters
+          .map(
+            (filter) =>
+              `<button class="filter-button ${filter.id === activeFilter ? "is-active" : ""}" data-filter="${filter.id}">${filter.label}</button>`
+          )
+          .join("");
+      }
+
+      function renderWeek(surface) {
+        const grid = surface.querySelector("[data-week-grid]");
+        grid.innerHTML = [
+          ...dates.map((date) => `<div class="week-label">${date.day}</div>`),
+          ...dates.map(
+            (date) =>
+              `<div class="date-cell"><button class="date-button ${date.hasEvent ? "has-event" : ""} ${date.date === selectedDate ? "is-selected" : ""}" data-date="${date.date}">${date.date}</button></div>`
+          )
+        ].join("");
+      }
+
+      function renderList(surface) {
+        const list = surface.querySelector("[data-calendar-list]");
+        const grouped = visibleEvents().reduce((acc, event) => {
+          acc[event.date] = acc[event.date] || [];
+          acc[event.date].push(event);
+          return acc;
+        }, {});
+
+        const html = Object.entries(grouped)
+          .map(([date, items]) => {
+            const rows = items
+              .map(
+                (event) => `
+                  <div class="event-row">
+                    <div class="time">${event.time}</div>
+                    <div>
+                      <div class="event-title">${event.title}</div>
+                      <div class="event-meta">${event.meta}</div>
+                    </div>
+                    <div>
+                      <span class="badge ${event.status}">${event.badge}</span>
+                      ${event.countdown ? `<span class="countdown">${event.countdown}</span>` : ""}
+                    </div>
+                  </div>
+                `
+              )
+              .join("");
+            return `<section class="day-section"><div class="day-header">${date}</div>${rows}</section>`;
+          })
+          .join("");
+
+        list.innerHTML = html || '<div class="empty-day">예정된 일정이 없습니다.</div>';
+      }
+
+      function renderWidgets() {
+        const widgetEvents = visibleEvents().slice(0, 5);
+        document.querySelectorAll("[data-widget-list]").forEach((list) => {
+          const limit = list.dataset.widgetList === "android" ? 5 : 4;
+          list.innerHTML = widgetEvents
+            .slice(0, limit)
+            .map(
+              (event) => `
+                <div class="widget-row">
+                  <div class="widget-date">${event.day}<span>(${event.weekday})</span></div>
+                  <div>
+                    <div class="widget-event-title">${event.title}</div>
+                    <div class="widget-event-meta">${event.time} · ${event.meta}</div>
+                  </div>
+                  <span class="badge ${event.status}">${event.badge}</span>
+                </div>
+              `
+            )
+            .join("");
+        });
+      }
+
+      function renderAll() {
+        document.querySelectorAll("[data-surface]").forEach((surface) => {
+          renderFilters(surface);
+          renderWeek(surface);
+          renderList(surface);
+        });
+        renderWidgets();
+      }
+
+      document.addEventListener("click", (event) => {
+        const filter = event.target.closest("[data-filter]");
+        if (filter) {
+          activeFilter = filter.dataset.filter;
+          renderAll();
+          return;
+        }
+
+        const date = event.target.closest("[data-date]");
+        if (date) {
+          selectedDate = Number(date.dataset.date);
+          renderAll();
+        }
+      });
+
+      renderAll();
+    </script>
+  </body>
+</html>
