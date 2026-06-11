@@ -14,11 +14,69 @@ paths:
       responses:
         "200":
           description: App config, catalog, preferences, and realtime summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BootstrapResponse"
   /v1/devices/register:
     post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterDeviceRequest"
       responses:
         "200":
           description: Anonymous device registration.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterDeviceResponse"
+  /v1/devices/token:
+    put:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDeviceTokenRequest"
+      responses:
+        "200":
+          description: Push provider token update.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateDeviceTokenResponse"
+  /v1/preferences:
+    get:
+      parameters:
+        - name: deviceId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Server-side device preferences.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreferencesResponse"
+    put:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePreferencesRequest"
+      responses:
+        "200":
+          description: Updated server-side device preferences.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdatePreferencesResponse"
   /v1/members:
     get:
       responses:
@@ -432,9 +490,251 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/HubCalendarEntry"
-        staleAfter:
+      staleAfter:
+        type: string
+        format: date-time
+    MobileConfig:
+      type: object
+      required:
+        - unofficialProject
+        - catalogVersion
+        - officialYoutubeLiveExcluded
+        - xNotificationsEnabled
+        - hubCalendarEnabled
+        - foregroundRealtimeEnabled
+      properties:
+        unofficialProject:
+          type: boolean
+          const: true
+        catalogVersion:
+          type: string
+        officialYoutubeLiveExcluded:
+          type: boolean
+          const: true
+        xNotificationsEnabled:
+          type: boolean
+        xDisabledReason:
+          type: string
+        hubCalendarEnabled:
+          type: boolean
+        foregroundRealtimeEnabled:
+          type: boolean
+    BootstrapDevice:
+      type: object
+      required:
+        - deviceId
+        - registered
+      properties:
+        deviceId:
+          type: string
+        registered:
+          type: boolean
+        tokenStatus:
+          type: string
+          enum:
+            - missing
+            - active
+            - invalid
+            - expired
+    BootstrapCatalog:
+      type: object
+      required:
+        - generations
+        - members
+      properties:
+        generations:
+          type: array
+          items:
+            type: object
+        members:
+          type: array
+          items:
+            type: object
+    HubEventsSummary:
+      type: object
+      required:
+        - openCount
+        - upcomingCount
+        - closingSoonCount
+        - preview
+      properties:
+        openCount:
+          type: integer
+          minimum: 0
+        upcomingCount:
+          type: integer
+          minimum: 0
+        closingSoonCount:
+          type: integer
+          minimum: 0
+        preview:
+          type: array
+          items:
+            type: object
+    BootstrapResponse:
+      type: object
+      required:
+        - config
+        - catalog
+        - preferences
+        - liveStatus
+        - hubEventsSummary
+        - serverTime
+      properties:
+        config:
+          $ref: "#/components/schemas/MobileConfig"
+        device:
+          $ref: "#/components/schemas/BootstrapDevice"
+        catalog:
+          $ref: "#/components/schemas/BootstrapCatalog"
+        preferences:
+          type: array
+          items:
+            type: object
+        liveStatus:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiveStatusDiagnostic"
+        hubEventsSummary:
+          $ref: "#/components/schemas/HubEventsSummary"
+        hubCalendarWidgetSnapshot:
+          $ref: "#/components/schemas/HubCalendarWidgetSnapshot"
+        serverTime:
           type: string
           format: date-time
+    RegisterDeviceRequest:
+      type: object
+      required:
+        - platform
+      properties:
+        deviceId:
+          type: string
+        platform:
+          type: string
+          enum:
+            - android
+            - ios
+        appVersion:
+          type: string
+        locale:
+          type: string
+        timezone:
+          type: string
+        installationId:
+          type: string
+    RegisterDeviceResponse:
+      type: object
+      required:
+        - deviceId
+        - registered
+        - serverTime
+      properties:
+        deviceId:
+          type: string
+        registered:
+          type: boolean
+          const: true
+        serverTime:
+          type: string
+          format: date-time
+    UpdateDeviceTokenRequest:
+      type: object
+      required:
+        - deviceId
+        - platform
+        - provider
+        - token
+      properties:
+        deviceId:
+          type: string
+        platform:
+          type: string
+          enum:
+            - android
+            - ios
+        provider:
+          type: string
+          enum:
+            - fcm
+            - apns_via_fcm
+        token:
+          type: string
+        appVersion:
+          type: string
+        locale:
+          type: string
+        timezone:
+          type: string
+    UpdateDeviceTokenResponse:
+      type: object
+      required:
+        - updated
+        - tokenStatus
+        - serverTime
+      properties:
+        updated:
+          type: boolean
+          const: true
+        tokenStatus:
+          type: string
+          enum:
+            - active
+        serverTime:
+          type: string
+          format: date-time
+    PreferencesResponse:
+      type: object
+      required:
+        - deviceId
+        - preferences
+        - updatedAt
+      properties:
+        deviceId:
+          type: string
+        preferences:
+          type: array
+          items:
+            type: object
+        updatedAt:
+          type: string
+          format: date-time
+    UpdatePreferencesRequest:
+      type: object
+      required:
+        - deviceId
+        - preferences
+        - clientUpdatedAt
+      properties:
+        deviceId:
+          type: string
+        preferences:
+          type: array
+          items:
+            type: object
+        clientUpdatedAt:
+          type: string
+          format: date-time
+    UpdatePreferencesResponse:
+      type: object
+      required:
+        - deviceId
+        - preferences
+        - updatedAt
+      properties:
+        deviceId:
+          type: string
+        preferences:
+          type: array
+          items:
+            type: object
+        updatedAt:
+          type: string
+          format: date-time
+        conflict:
+          type: string
+          enum:
+            - server_newer
+            - client_applied
     InternalAuthError:
       type: object
       required:

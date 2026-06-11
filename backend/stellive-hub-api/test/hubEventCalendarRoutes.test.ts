@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import type { HubCalendarResponse, HubCalendarWidgetSnapshot } from "../src/hub-events/hubEventCalendar.js";
+import type { HubEvent } from "../src/types.js";
 
 describe("hub event calendar routes", () => {
   it("exposes calendar support and X notification de-scope flags in bootstrap config", async () => {
@@ -56,5 +57,65 @@ describe("hub event calendar routes", () => {
     expect(body.entries.length).toBeLessThanOrEqual(2);
     expect(Date.parse(body.generatedAt)).not.toBeNaN();
     expect(Date.parse(body.staleAfter)).toBeGreaterThan(Date.parse(body.generatedAt));
+  });
+
+  it("uses the injected hub event read port for calendar and widget routes", async () => {
+    const injectedEvent: HubEvent = {
+      id: "injected-calendar-event",
+      category: "offline_collab",
+      participationMode: "offline",
+      status: "upcoming",
+      title: "Injected Calendar Event",
+      generationId: "official",
+      sourceUrl: "https://example.com/injected-calendar-event",
+      sourceLabel: "Stellive Official",
+      sourceType: "official",
+      startsAt: "2026-06-15T09:00:00.000Z",
+      endsAt: "2026-06-15T12:00:00.000Z",
+      notificationEligible: true,
+      createdAt: "2026-06-01T00:00:00.000Z",
+      updatedAt: "2026-06-01T00:00:00.000Z"
+    };
+    const calls: string[] = [];
+    const app = await buildApp({
+      appRoutes: {
+        dependencies: {
+          hubEvents: {
+            async list(filters) {
+              calls.push(`list:${filters?.limit ?? "default"}`);
+              return { items: [injectedEvent] };
+            },
+            async getById() {
+              return undefined;
+            },
+            async summary() {
+              return {
+                openCount: 0,
+                upcomingCount: 1,
+                closingSoonCount: 0,
+                preview: [injectedEvent]
+              };
+            }
+          }
+        }
+      }
+    });
+
+    const calendarResponse = await app.inject({
+      method: "GET",
+      url: "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul"
+    });
+    const widgetResponse = await app.inject({
+      method: "GET",
+      url: "/v1/hub-events/widget-snapshot?timezone=Asia/Seoul&limit=1"
+    });
+
+    expect(calendarResponse.statusCode).toBe(200);
+    expect(JSON.stringify(calendarResponse.json())).toContain("Injected Calendar Event");
+    expect(widgetResponse.statusCode).toBe(200);
+    expect(JSON.stringify(widgetResponse.json())).toContain("Injected Calendar Event");
+    expect(calls).toEqual(["list:100", "list:100"]);
+
+    await app.close();
   });
 });

@@ -22,7 +22,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import dev.stellive.hub.core.model.NotificationSettingState
 
-class MockHubRepository {
+class MockHubRepository : HubRepository {
     private val calendarZone = ZoneId.of("Asia/Seoul")
     private val calendarDateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
     private val calendarTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
@@ -246,4 +246,15 @@ class MockHubRepository {
             if (seen.add(option.id)) option else null
         }
     }
+
+    override suspend fun bootstrap(): HubDataState =
+        HubDataState(
+            filters = filters,
+            members = members,
+            settings = settings,
+            hubEventsSummary = hubEventsSummary,
+        )
+
+    override suspend fun updatePreferences(settings: dev.stellive.hub.core.model.NotificationSettingState): HubDataState =
+        bootstrap()
 }

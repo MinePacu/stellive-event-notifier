@@ -42,6 +42,7 @@ const envSchema = z
     PORT: z.coerce.number().int().positive().default(4000),
     DATABASE_URL: z.string().min(1),
     REDIS_URL: optionalString(),
+    HUB_EVENTS_STORAGE_MODE: z.enum(["memory", "prisma"]).default("memory"),
 
     FCM_PROJECT_ID: optionalString(),
     FCM_CLIENT_EMAIL: optionalString(),

@@ -28,3 +28,60 @@ Before starting new work, read:
 - `docs/REALTIME_DELIVERY.md`
 - `docs/API_IMPLEMENTATION_PLAN.md` before implementing backend/API integrations, ingestion adapters, notification jobs, or push delivery.
 - `docs/AI_HANDOFF.md`
+
+
+<!-- headroom:rtk-instructions -->
+# RTK (Rust Token Killer) - Token-Optimized Commands
+
+When running shell commands, **always prefix with `rtk`**. This reduces context
+usage by 60-90% with zero behavior change. If rtk has no filter for a command,
+it passes through unchanged — so it is always safe to use.
+
+## Key Commands
+```bash
+# Git (59-80% savings)
+rtk git status          rtk git diff            rtk git log
+
+# Files & Search (60-75% savings)
+rtk ls <path>           rtk read <file>         rtk grep <pattern>
+rtk find <pattern>      rtk diff <file>
+
+# Test (90-99% savings) — shows failures only
+rtk pytest tests/       rtk cargo test          rtk test <cmd>
+
+# Build & Lint (80-90% savings) — shows errors only
+rtk tsc                 rtk lint                rtk cargo build
+rtk prettier --check    rtk mypy                rtk ruff check
+
+# Analysis (70-90% savings)
+rtk err <cmd>           rtk log <file>          rtk json <file>
+rtk summary <cmd>       rtk deps                rtk env
+
+# GitHub (26-87% savings)
+rtk gh pr view <n>      rtk gh run list         rtk gh issue list
+
+# Infrastructure (85% savings)
+rtk docker ps           rtk kubectl get         rtk docker logs <c>
+
+# Package managers (70-90% savings)
+rtk pip list            rtk pnpm install        rtk npm run <script>
+```
+
+## Rules
+- In command chains, prefix each segment: `rtk git add . && rtk git commit -m "msg"`
+- For debugging, use raw command without rtk prefix
+- `rtk proxy <cmd>` runs command without filtering but tracks usage
+<!-- /headroom:rtk-instructions -->
+
+## Internal Backend Test Server
+
+Use the internal server computer `minepacu@192.168.50.9` for later Codex backend test automation when a Docker-hosted backend is needed.
+
+- The test service port is fixed to `4000`.
+- Connect by SSH and run Docker directly on the server computer.
+- Test URLs should use `http://192.168.50.9:4000` plus the required path.
+- Transfer required project files to the server computer by command before building there.
+- On the server computer, the project must live at `~/StelLiveNoti`.
+- The contents of `~/StelLiveNoti` must mirror the current workspace structure, excluding dependency/build-heavy folders such as `node_modules`.
+- If the server computer has insufficient disk space, clear build caches and other safe generated caches, then retry the transfer/build/run step.
+- Do not transfer secrets, production credentials, production device tokens, profile image binaries, official logos, fan art, captured images, copied media assets, or other files prohibited by the project rules.
