@@ -12,9 +12,11 @@ Former members are excluded from the MVP. No unauthorized images, official logos
 
 ## Architecture Summary
 
-API-first lightweight control plane with adapters for CHZZK, X, and YouTube. Naver Cafe automatic collection is deferred. The MVP default path should not require self-hosted PostgreSQL/Redis, but Docker Compose is supported for local development and optional self-hosting. Use managed storage or local Docker PostgreSQL for devices, server-visible preferences, normalized events, dedupe keys, notification jobs, short-lived delivery attempts, live status, and delivery state. User-visible notification history is stored on device by default. Start the managed-first path with database-backed jobs; add Redis/BullMQ only if traffic requires it. Mobile foreground refresh is for UI updates, not background push replacement.
+API-first lightweight control plane with adapters for CHZZK, optional no-paid-API X support, and YouTube. Naver Cafe automatic collection is deferred. The MVP default path should not require self-hosted PostgreSQL/Redis, but Docker Compose is supported for local development and optional self-hosting. Use managed storage or local Docker PostgreSQL for devices, server-visible preferences, normalized events, dedupe keys, notification jobs, short-lived delivery attempts, live status, and delivery state. User-visible notification history is stored on device by default. Start the managed-first path with database-backed jobs; add Redis/BullMQ only if traffic requires it. Mobile foreground refresh is for UI updates, not background push replacement.
 
 The `굿즈/행사` feed is planned as a separate hub event model for official-source, time-bound goods, ticketing, and offline event information. It excludes routine livestreams, uploads, ordinary posts, fan-hosted events, Gangzi/representative events, and unauthorized images/logos/posters.
+
+For backend/API implementation work, use `docs/API_IMPLEMENTATION_PLAN.md` as the primary structure and sequencing reference before changing adapters, ingestion, database jobs, push delivery, or mobile-facing API contracts.
 
 ## Member Catalog Policy
 
@@ -53,7 +55,7 @@ Secrets live only in environment variables. `.env.example` may name keys but mus
 ## Current TODOs
 
 - Verify latest official platform account IDs/handles from official sources.
-- Replace mock adapters with official API integrations.
+- Replace mock adapters with official API integrations. X must remain disabled unless a no-cost official API path is confirmed.
 - Connect Firebase projects for Android/iOS.
 - Choose the first managed storage provider and database-backed job implementation.
 - Keep Docker Compose working as a local development/self-hosting option.
