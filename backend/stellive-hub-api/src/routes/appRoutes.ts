@@ -1,5 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import type { BootstrapResponse, MobilePlatform } from "../../../../shared/schemas/mobileApi.js";
+import type {
+  BootstrapResponse,
+  MobilePlatform,
+  PushTokenProvider
+} from "../../../../shared/schemas/mobileApi.js";
 import { mobileError } from "../mobile/mobileError.js";
 import type { UserNotificationPreference } from "../types.js";
 
@@ -55,6 +59,11 @@ export interface RegisterAppRouteOptions {
 
 function parsePlatform(value: string | undefined): MobilePlatform {
   return value === "ios" ? "ios" : "android";
+}
+
+function parsePushTokenProvider(value: string | undefined): PushTokenProvider | undefined {
+  if (value === "fcm" || value === "apns_via_fcm") return value;
+  return undefined;
 }
 
 function latestPreferenceUpdatedAt(preferences: UserNotificationPreference[]): string {
@@ -129,12 +138,18 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       return reply.code(error.statusCode).send(error.payload);
     }
 
+    const provider = parsePushTokenProvider(body.provider);
+    if (!provider) {
+      const error = mobileError("device_token_provider_invalid", 400);
+      return reply.code(error.statusCode).send(error.payload);
+    }
+
     const updateToken = options.dependencies?.devices?.updateToken;
     const result = updateToken
       ? await updateToken({
           deviceId: body.deviceId,
           platform: parsePlatform(body.platform),
-          provider: body.provider === "apns_via_fcm" ? "apns_via_fcm" : "fcm",
+          provider,
           token: body.token,
           locale: body.locale,
           timezone: body.timezone,
