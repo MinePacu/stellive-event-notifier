@@ -288,6 +288,7 @@ struct HubCalendarEntry: Identifiable, Codable, Equatable {
     let displayTimeText: String
     let sourceLabel: String
     let appDeepLink: String
+    let platformUrl: String
 }
 
 struct HubCalendarDay: Identifiable, Codable, Equatable {

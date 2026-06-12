@@ -94,51 +94,109 @@ paths:
           description: CHZZK live status for member and gamja entries. Live entries include startedAt normalized from CHZZK openDate when available.
   /v1/hub-events:
     get:
+      summary: Official-source goods and event feed with filters.
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [online_goods, online_collab, offline_concert, offline_collab, offline_popup, ticketing]
+        - name: participationMode
+          in: query
+          schema:
+            type: string
+            enum: [online, offline, hybrid]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [announced, upcoming, open, closing_soon, ended, cancelled]
+        - name: generationId
+          in: query
+          schema:
+            type: string
+        - name: memberId
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            oneOf:
+              - type: string
+              - type: integer
+            default: 25
+            maximum: 100
       responses:
         "200":
-          description: Official-source goods and event feed with filters.
+          description: HubEvent list response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HubEventListResponse"
+        "400":
+          description: Invalid HubEvent query.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HubEventQueryError"
   /v1/hub-events/calendar:
     get:
       summary: Hub event calendar grouped by local date.
       parameters:
         - name: from
           in: query
-          required: false
           schema:
             type: string
             format: date-time
         - name: to
           in: query
-          required: false
           schema:
             type: string
             format: date-time
         - name: timezone
           in: query
-          required: false
           schema:
             type: string
             default: Asia/Seoul
       responses:
         "200":
-          description: Goods and event calendar days.
+          description: Goods event calendar days.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HubCalendarResponse"
+        "400":
+          description: Invalid calendar query, date range, or timezone.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HubEventQueryError"
   /v1/hub-events/widget-snapshot:
     get:
       summary: Compact hub event calendar snapshot for mobile widgets.
       parameters:
         - name: timezone
           in: query
-          required: false
           schema:
             type: string
             default: Asia/Seoul
         - name: limit
           in: query
-          required: false
           schema:
             oneOf:
               - type: string
@@ -147,13 +205,20 @@ paths:
             maximum: 10
       responses:
         "200":
-          description: Cacheable compact calendar snapshot.
+          description: Compact widget snapshot.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HubCalendarWidgetSnapshot"
+        "400":
+          description: Invalid widget snapshot query.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HubEventQueryError"
   /v1/hub-events/{id}:
     get:
+      summary: HubEvent detail by id.
       parameters:
         - name: id
           in: path
@@ -162,9 +227,22 @@ paths:
             type: string
       responses:
         "200":
-          description: Single hub event detail.
+          description: HubEvent detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HubEvent"
         "404":
           description: Hub event not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+                    enum: [hub_event_not_found]
   /v1/hub-events/summary:
     get:
       responses:
@@ -569,6 +647,29 @@ components:
           schema:
             $ref: "#/components/schemas/InternalAuthError"
   schemas:
+    HubEventListResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/HubEvent"
+        nextCursor:
+          type: string
+    HubEventQueryError:
+      type: object
+      required:
+        - error
+        - field
+      properties:
+        error:
+          type: string
+          enum:
+            - invalid_hub_event_query
+        field:
+          type: string
     HubCalendarEntry:
       type: object
       required:
@@ -583,6 +684,7 @@ components:
         - displayTimeText
         - sourceLabel
         - appDeepLink
+        - platformUrl
       properties:
         id:
           type: string
@@ -632,6 +734,8 @@ components:
         sourceLabel:
           type: string
         appDeepLink:
+          type: string
+        platformUrl:
           type: string
     HubCalendarDay:
       type: object

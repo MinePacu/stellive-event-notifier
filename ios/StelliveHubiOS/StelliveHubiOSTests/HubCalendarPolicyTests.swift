@@ -58,7 +58,8 @@ final class HubCalendarPolicyTests: XCTestCase {
             displayDate: "2026-06-11",
             displayTimeText: "10:00 시작",
             sourceLabel: "Stellive Official",
-            appDeepLink: "stellivehub://hub-events/\(eventId)"
+            appDeepLink: "stellivehub://hub-events/\(eventId)",
+            platformUrl: "https://example.com/hub-events/\(eventId)"
         )
     }
 }

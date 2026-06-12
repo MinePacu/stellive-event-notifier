@@ -1,5 +1,6 @@
 import type {
   Generation,
+  HubCalendarWidgetSnapshot,
   HubEventsSummary,
   LiveStatus,
   Member,
@@ -11,12 +12,6 @@ export const mobileApiContractVersion = "mobile-api-v1";
 export type MobilePlatform = "android" | "ios";
 export type PushTokenProvider = "fcm" | "apns_via_fcm";
 export type DeviceTokenStatus = "missing" | "active" | "invalid" | "expired";
-
-export interface HubCalendarWidgetSnapshot {
-  timezone: string;
-  generatedAt: string;
-  items: unknown[];
-}
 
 export interface MobileConfig {
   unofficialProject: true;

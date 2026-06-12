@@ -24,6 +24,7 @@ ios/StelliveHubiOS/GoogleService-Info.plist
 
 # Local design mockups
 .superpowers/
+qa-screenshots/
 
 # Secrets
 .env

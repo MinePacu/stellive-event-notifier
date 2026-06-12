@@ -71,7 +71,8 @@ class CalendarUiPolicyTest {
             endsAt = Instant.parse("2026-06-11T12:00:00Z"),
             displayDate = "2026-06-11",
             displayTimeText = "10:00 시작",
-            sourceLabel = "Stellive Official",
-            appDeepLink = "stellivehub://hub-events/$eventId"
-        )
+        sourceLabel = "Stellive Official",
+        appDeepLink = "stellivehub://hub-events/$eventId",
+        platformUrl = "https://example.com/hub-events/$eventId"
+    )
 }

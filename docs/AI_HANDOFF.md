@@ -87,3 +87,10 @@ Follow-up implementation update: Android `MockHubRepository` now derives `HubCal
 ## Mobile API Backend Status
 
 `shared/schemas/mobileApi.ts` now defines the mobile bootstrap, device registration, push token, and preference DTOs. `backend/stellive-hub-api/src/routes/appRoutes.ts` owns the mobile-facing routes and is delegated from `routes.ts`. `DeviceRepository`, `PreferenceRepository`, and `BootstrapService` provide repository/service boundaries for server-mediated mobile communication. Backend verification passed with `rtk npm run build` and `rtk npm test` from `backend/stellive-hub-api`.
+## HubEvent Read API Contract Status
+
+GitHub issue `#18` and GitLab work item `#12` are implemented as public HubEvent read API contract work.
+`backend/stellive-hub-api/src/routes/hubEventReadRoutes.ts` owns `/v1/hub-events`, `/v1/hub-events/:id`, `/v1/hub-events/calendar`, `/v1/hub-events/widget-snapshot`, and `/v1/hub-events/summary` route registration and query validation.
+`backend/stellive-hub-api/test/hubEventReadRoutes.test.ts` covers list/detail/calendar/widget responses, invalid enum/date query errors, missing detail ids, allowed generation ids, and missing-image tolerance.
+Calendar/widget DTOs are shared from `shared/schemas/domain.ts`; Android and iOS `HubCalendarEntry` models include `platformUrl`.
+`shared/openapi/openapi.yaml` now documents public HubEvent list/detail/calendar/widget paths, `HubEventListResponse`, `HubEventQueryError`, and `HubCalendarEntry.platformUrl`.

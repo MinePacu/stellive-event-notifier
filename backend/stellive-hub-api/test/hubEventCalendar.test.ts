@@ -100,4 +100,40 @@ describe("hub event calendar projection", () => {
     expect(snapshot.staleAfter).toBe("2026-06-12T10:00:00.000Z");
     expect(snapshot.entries.map((entry) => entry.eventId)).toEqual(["closing", "upcoming"]);
   });
+
+  it("keeps calendar entries sufficient for mobile deep links", () => {
+    const response = buildHubCalendarResponse([hubEvent({ id: "deep-link-event" })], {
+      from: new Date("2026-06-01T00:00:00.000Z"),
+      to: new Date("2026-06-30T23:59:59.999Z"),
+      timezone: "Asia/Seoul",
+      now: new Date("2026-06-10T00:00:00.000Z")
+    });
+
+    const entry = response.days.flatMap((day) => day.entries).find((item) => item.eventId === "deep-link-event");
+    expect(entry).toMatchObject({
+      eventId: "deep-link-event",
+      appDeepLink: "stellivehub://hub-events/deep-link-event",
+      platformUrl: "https://example.com/events/goods",
+      displayDate: expect.any(String),
+      displayTimeText: expect.any(String)
+    });
+  });
+
+  it("limits widget snapshots while prioritizing actionable entries", () => {
+    const snapshot = buildHubCalendarWidgetSnapshot(
+      [
+        hubEvent({ id: "ended", status: "ended", startsAt: "2026-06-01T00:00:00.000Z", endsAt: "2026-06-02T00:00:00.000Z" }),
+        hubEvent({ id: "open", status: "open", startsAt: "2026-06-12T00:00:00.000Z", endsAt: "2026-06-15T00:00:00.000Z" }),
+        hubEvent({ id: "upcoming", status: "announced", startsAt: "2026-06-20T00:00:00.000Z", endsAt: "2026-06-21T00:00:00.000Z" })
+      ],
+      {
+        timezone: "Asia/Seoul",
+        now: new Date("2026-06-12T04:00:00.000Z"),
+        limit: 1
+      }
+    );
+
+    expect(snapshot.entries).toHaveLength(1);
+    expect(snapshot.entries[0]).toMatchObject({ eventId: "open", status: "open" });
+  });
 });
