@@ -222,7 +222,8 @@ class MockHubRepository : HubRepository {
             displayDate = displayDate,
             displayTimeText = calendarTimeText(event),
             sourceLabel = event.sourceLabel,
-            appDeepLink = "stellivehub://hub-events/${event.id}"
+            appDeepLink = "stellivehub://hub-events/${event.id}",
+            platformUrl = event.purchaseUrl ?: event.ticketUrl ?: event.sourceUrl
         )
     }
 

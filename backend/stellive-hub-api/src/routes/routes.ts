@@ -1,9 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { CatalogService } from "../catalog/catalog.js";
-import {
-  buildHubCalendarResponse,
-  buildHubCalendarWidgetSnapshot
-} from "../hub-events/hubEventCalendar.js";
 import { HubEventService, type HubEventReadPort } from "../hub-events/hubEventService.js";
 import { shouldDropEventBeforeStorage } from "../events/eventGuards.js";
 import { resolveNotificationDelivery } from "../notification/loadReductionPolicy.js";
@@ -11,6 +7,7 @@ import { PreferenceResolutionService } from "../preferences/preferenceResolution
 import { RealtimeDeliveryService } from "../realtime/realtimeDeliveryService.js";
 import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
 import { registerAppRoutes } from "./appRoutes.js";
+import registerHubEventReadRoutes from "./hubEventReadRoutes.js";
 import type { DeliveryAttempt, PlatformEvent, UserNotificationPreference } from "../types.js";
 import type { BootstrapResponse, MobilePlatform } from "../../../../shared/schemas/mobileApi.js";
 
@@ -80,47 +77,9 @@ export interface AppRouteOptions {
   dependencies?: AppRouteDependencies;
 }
 
-function parseHubEventLimit(value: unknown): number | undefined {
-  if (value === undefined || value === null || value === "") return undefined;
-  const parsed = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
-  return parsed;
-}
-
-function parseCalendarLimit(value: unknown): number {
-  const parsed = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 5;
-  return Math.min(10, Math.max(1, Math.trunc(parsed)));
-}
-
-function isSupportedTimezone(value: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function parseCalendarTimezone(value: unknown): string {
-  const timezone = typeof value === "string" && value.trim() ? value.trim() : "Asia/Seoul";
-  return isSupportedTimezone(timezone) ? timezone : "Asia/Seoul";
-}
-
-function parseCalendarDate(value: unknown): Date | undefined {
-  if (typeof value !== "string" || !value.trim()) return undefined;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-}
-
-function defaultCalendarWindow(now: Date): { from: Date; to: Date } {
-  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
-  const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999));
-  return { from, to };
-}
-
 function sampleEvent(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
   const now = new Date().toISOString();
+
   return {
     id: overrides.id ?? "sample-event",
     source: overrides.source ?? "chzzk",
@@ -128,14 +87,15 @@ function sampleEvent(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
     memberId: overrides.memberId ?? "ayatsuno-yuni",
     generationId: overrides.generationId ?? "gen1",
     title: overrides.title ?? "방송 시작",
-    body: overrides.body ?? "mock event",
-    appDeepLink: "stellivehub://events/sample-event",
-    platformUrl: "https://example.com",
-    occurredAt: now,
-    receivedAt: now,
-    dedupeKey: "sample-event",
+    body: overrides.body ?? "Mock live event",
+    appDeepLink: overrides.appDeepLink ?? "stellivehub://events/sample-event",
+    platformUrl: overrides.platformUrl ?? "https://example.com",
+    occurredAt: overrides.occurredAt ?? now,
+    receivedAt: overrides.receivedAt ?? now,
+    dedupeKey: overrides.dedupeKey ?? "sample-event",
     realtimeEligible: overrides.realtimeEligible ?? true,
-    deliveryMode: overrides.deliveryMode ?? "standard"
+    deliveryMode: overrides.deliveryMode ?? "standard",
+    rawPayload: overrides.rawPayload
   };
 }
 
@@ -228,69 +188,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
       }));
   });
 
-  app.get("/v1/hub-events/summary", async () => await hubEvents.summary());
-  app.get("/v1/hub-events", async (request) => {
-    type HubEventListFilters = NonNullable<Parameters<typeof hubEvents.list>[0]>;
-    const query = request.query as {
-      category?: HubEventListFilters["category"];
-      participationMode?: HubEventListFilters["participationMode"];
-      status?: HubEventListFilters["status"];
-      generationId?: string;
-      memberId?: string;
-      from?: string;
-      to?: string;
-      cursor?: string;
-      limit?: string | number;
-    };
-
-    return await hubEvents.list(
-      {
-        category: query.category,
-        participationMode: query.participationMode,
-        status: query.status,
-        generationId: query.generationId,
-        memberId: query.memberId,
-        from: query.from,
-        to: query.to,
-        cursor: query.cursor,
-        limit: parseHubEventLimit(query.limit)
-      },
-      new Date()
-    );
-  });
-  app.get("/v1/hub-events/calendar", async (request) => {
-    const query = request.query as { from?: string; to?: string; timezone?: string };
-    const now = new Date();
-    const fallbackWindow = defaultCalendarWindow(now);
-    const from = parseCalendarDate(query.from) ?? fallbackWindow.from;
-    const to = parseCalendarDate(query.to) ?? fallbackWindow.to;
-    const timezone = parseCalendarTimezone(query.timezone);
-    const events = await hubEvents.list({ limit: 100 });
-    return buildHubCalendarResponse(events.items, {
-      from,
-      to,
-      timezone,
-      now
-    });
-  });
-
-  app.get("/v1/hub-events/widget-snapshot", async (request) => {
-    const query = request.query as { timezone?: string; limit?: string };
-    const now = new Date();
-    const events = await hubEvents.list({ limit: 100 });
-    return buildHubCalendarWidgetSnapshot(events.items, {
-      timezone: parseCalendarTimezone(query.timezone),
-      now,
-      limit: parseCalendarLimit(query.limit)
-    });
-  });
-
-  app.get("/v1/hub-events/:id", async (request, reply) => {
-    const id = (request.params as { id: string }).id;
-    const event = await hubEvents.getById(id);
-    if (!event) return reply.notFound("hub event not found");
-    return event;
-  });
+  registerHubEventReadRoutes(app, { hubEvents });
 
   app.get("/v1/realtime/status", async () => realtime.status());
   app.get("/v1/events/stream", async (_request, reply) => {

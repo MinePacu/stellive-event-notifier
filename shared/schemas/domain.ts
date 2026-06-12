@@ -229,3 +229,40 @@ export interface HubEventsSummary {
   closingSoonCount: number;
   preview: HubEvent[];
 }
+
+export interface HubCalendarEntry {
+  id: string;
+  eventId: string;
+  title: string;
+  category: HubEventCategory;
+  status: HubEventStatus;
+  participationMode: HubEventParticipationMode;
+  generationId: string;
+  memberId?: string;
+  startsAt?: string;
+  endsAt?: string;
+  displayDate: string;
+  displayTimeText: string;
+  sourceLabel: string;
+  appDeepLink: string;
+  platformUrl: string;
+}
+
+export interface HubCalendarDay {
+  date: string;
+  entries: HubCalendarEntry[];
+}
+
+export interface HubCalendarResponse {
+  timezone: string;
+  from: string;
+  to: string;
+  days: HubCalendarDay[];
+}
+
+export interface HubCalendarWidgetSnapshot {
+  generatedAt: string;
+  timezone: string;
+  entries: HubCalendarEntry[];
+  staleAfter: string;
+}

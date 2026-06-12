@@ -171,7 +171,8 @@ data class HubCalendarEntry(
     val displayDate: String,
     val displayTimeText: String,
     val sourceLabel: String,
-    val appDeepLink: String
+    val appDeepLink: String,
+    val platformUrl: String
 )
 
 data class HubCalendarDay(
