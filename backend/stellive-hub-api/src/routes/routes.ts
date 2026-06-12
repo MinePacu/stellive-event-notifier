@@ -4,16 +4,18 @@ import {
   buildHubCalendarResponse,
   buildHubCalendarWidgetSnapshot
 } from "../hub-events/hubEventCalendar.js";
-import { HubEventService } from "../hub-events/hubEventService.js";
+import { HubEventService, type HubEventReadPort } from "../hub-events/hubEventService.js";
 import { shouldDropEventBeforeStorage } from "../events/eventGuards.js";
 import { resolveNotificationDelivery } from "../notification/loadReductionPolicy.js";
 import { PreferenceResolutionService } from "../preferences/preferenceResolution.js";
 import { RealtimeDeliveryService } from "../realtime/realtimeDeliveryService.js";
 import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
+import { registerAppRoutes } from "./appRoutes.js";
 import type { DeliveryAttempt, PlatformEvent, UserNotificationPreference } from "../types.js";
+import type { BootstrapResponse, MobilePlatform } from "../../../../shared/schemas/mobileApi.js";
 
 const catalog = new CatalogService();
-const hubEvents = new HubEventService(catalog);
+const defaultHubEvents = new HubEventService(catalog);
 const preferenceResolution = new PreferenceResolutionService();
 const realtime = new RealtimeDeliveryService();
 const preferences = new Map<string, UserNotificationPreference[]>();
@@ -21,6 +23,42 @@ const deliveryAttempts: DeliveryAttempt[] = [];
 const devDeviceId = "dev-device";
 
 export interface AppRouteDependencies {
+  hubEvents?: HubEventReadPort;
+  bootstrap?: {
+    getBootstrap(input: {
+      deviceId?: string;
+      platform?: MobilePlatform;
+      appVersion?: string;
+      locale?: string;
+      timezone?: string;
+    }): Promise<BootstrapResponse>;
+  };
+  devices?: {
+    register?(input: {
+      deviceId?: string;
+      platform: "android" | "ios";
+      locale?: string;
+      timezone?: string;
+      appVersion?: string;
+    }): Promise<{ deviceId: string; registered: true }>;
+    updateToken?(input: {
+      deviceId: string;
+      platform: "android" | "ios";
+      provider: "fcm" | "apns_via_fcm";
+      token: string;
+      locale?: string;
+      timezone?: string;
+      appVersion?: string;
+    }): Promise<{ updated: true; tokenStatus: "active" }>;
+  };
+  preferences?: {
+    listForDevice?(deviceId: string): Promise<UserNotificationPreference[]>;
+    replaceForDevice?(input: {
+      deviceId: string;
+      preferences: UserNotificationPreference[];
+      clientUpdatedAt: string;
+    }): Promise<{ preferences: UserNotificationPreference[]; updatedAt: string }>;
+  };
   liveStatus?: {
     listDiagnostics(limit: number): Promise<
       Array<{
@@ -103,41 +141,39 @@ function sampleEvent(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
 
 export async function registerRoutes(app: FastifyInstance, options: AppRouteOptions = {}) {
   const liveStatusRepository = options.dependencies?.liveStatus ?? new LiveStatusRepository();
+  const hubEvents = options.dependencies?.hubEvents ?? defaultHubEvents;
   app.get("/health", async () => ({ ok: true, service: "stellive-hub-api" }));
 
-  app.get("/v1/bootstrap", async (request) => {
-    const deviceId = String((request.query as { deviceId?: string }).deviceId ?? "dev-device");
-    return {
-      config: {
-        unofficialProject: true,
-        catalogVersion: "seed-2026-06-01",
-        officialYoutubeLiveExcluded: true,
-        xNotificationsEnabled: false,
-        xDisabledReason: "x_notifications_dropped_for_mvp",
-        hubCalendarEnabled: true
-      },
-      appConfig: {
-        unofficialProject: true,
-        catalogVersion: "seed-2026-06-01",
-        officialYoutubeLiveExcluded: true,
-        xNotificationsEnabled: false,
-        xDisabledReason: "x_notifications_dropped_for_mvp",
-        hubCalendarEnabled: true
-      },
-      hubEventsSummary: hubEvents.summary(),
-      generations: catalog.getGenerations(),
-      members: catalog.getMembers(),
-      preferences: preferences.get(deviceId) ?? [],
-      realtime: realtime.status()
-    };
+  await registerAppRoutes(app, {
+    dependencies: options.dependencies,
+    fallbackPreferences: preferences,
+    fallbackBootstrap: async (query) => {
+      const deviceId = String(query.deviceId ?? "dev-device");
+      return {
+        config: {
+          unofficialProject: true,
+          catalogVersion: "seed-2026-06-01",
+          officialYoutubeLiveExcluded: true,
+          xNotificationsEnabled: false,
+          xDisabledReason: "x_notifications_dropped_for_mvp",
+          hubCalendarEnabled: true,
+        },
+        appConfig: {
+          unofficialProject: true,
+          catalogVersion: "seed-2026-06-01",
+          officialYoutubeLiveExcluded: true,
+          xNotificationsEnabled: false,
+          xDisabledReason: "x_notifications_dropped_for_mvp",
+          hubCalendarEnabled: true,
+        },
+        hubEventsSummary: await hubEvents.summary(),
+        generations: catalog.getGenerations(),
+        members: catalog.getMembers(),
+        preferences: preferences.get(deviceId) ?? [],
+        realtime: realtime.status(),
+      };
+    },
   });
-
-  app.post("/v1/devices/register", async (request) => {
-    const body = request.body as { deviceId?: string; platform?: string; locale?: string; timezone?: string };
-    return { deviceId: body.deviceId ?? `device_${Date.now()}`, platform: body.platform ?? "android", registered: true };
-  });
-
-  app.put("/v1/devices/token", async () => ({ updated: true }));
 
   app.get("/v1/generations", async () => catalog.getGenerations());
   app.get("/v1/members", async () => catalog.getMembers());
@@ -147,13 +183,6 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
     return member;
   });
 
-  app.get("/v1/preferences", async (request) => preferences.get(String((request.query as { deviceId?: string }).deviceId ?? "dev-device")) ?? []);
-  app.put("/v1/preferences", async (request) => {
-    const body = request.body as { deviceId?: string; preferences?: UserNotificationPreference[] };
-    const deviceId = body.deviceId ?? "dev-device";
-    preferences.set(deviceId, body.preferences ?? []);
-    return { deviceId, preferences: preferences.get(deviceId) };
-  });
   app.get("/v1/preferences/resolved", async (request) => {
     const query = request.query as { deviceId?: string; memberId?: string; generationId?: string; source?: PlatformEvent["source"]; eventType?: PlatformEvent["type"] };
     const event = sampleEvent({
@@ -199,7 +228,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
       }));
   });
 
-  app.get("/v1/hub-events/summary", async () => hubEvents.summary());
+  app.get("/v1/hub-events/summary", async () => await hubEvents.summary());
   app.get("/v1/hub-events", async (request) => {
     type HubEventListFilters = NonNullable<Parameters<typeof hubEvents.list>[0]>;
     const query = request.query as {
@@ -214,7 +243,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
       limit?: string | number;
     };
 
-    return hubEvents.list(
+    return await hubEvents.list(
       {
         category: query.category,
         participationMode: query.participationMode,
@@ -236,7 +265,8 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
     const from = parseCalendarDate(query.from) ?? fallbackWindow.from;
     const to = parseCalendarDate(query.to) ?? fallbackWindow.to;
     const timezone = parseCalendarTimezone(query.timezone);
-    return buildHubCalendarResponse(hubEvents.list({ limit: 100 }).items, {
+    const events = await hubEvents.list({ limit: 100 });
+    return buildHubCalendarResponse(events.items, {
       from,
       to,
       timezone,
@@ -247,7 +277,8 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
   app.get("/v1/hub-events/widget-snapshot", async (request) => {
     const query = request.query as { timezone?: string; limit?: string };
     const now = new Date();
-    return buildHubCalendarWidgetSnapshot(hubEvents.list({ limit: 100 }).items, {
+    const events = await hubEvents.list({ limit: 100 });
+    return buildHubCalendarWidgetSnapshot(events.items, {
       timezone: parseCalendarTimezone(query.timezone),
       now,
       limit: parseCalendarLimit(query.limit)
@@ -256,7 +287,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
 
   app.get("/v1/hub-events/:id", async (request, reply) => {
     const id = (request.params as { id: string }).id;
-    const event = hubEvents.getById(id);
+    const event = await hubEvents.getById(id);
     if (!event) return reply.notFound("hub event not found");
     return event;
   });

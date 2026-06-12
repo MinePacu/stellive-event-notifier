@@ -26,6 +26,12 @@ export type HubEventListResult = {
   nextCursor?: string;
 };
 
+export interface HubEventReadPort {
+  list(filters?: HubEventFilters, now?: Date): Promise<HubEventListResult> | HubEventListResult;
+  getById(id: string): Promise<HubEvent | undefined> | HubEvent | undefined;
+  summary(now?: Date): Promise<HubEventsSummary> | HubEventsSummary;
+}
+
 const closingSoonWindowMs = 24 * 60 * 60 * 1000;
 const statusRank: Record<HubEventStatus, number> = {
   closing_soon: 0,

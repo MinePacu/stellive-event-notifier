@@ -1,5 +1,13 @@
 # AI Handoff
 
+## Hub Event Admin CRUD Status
+
+Backend admin CRUD for `굿즈/행사` schedules is implemented on `/v1/admin/hub-events*` with admin session or `ADMIN_CONSOLE_TOKEN` authentication. It supports draft create/update, publish, cancel, deactivate, soft delete, validation, audit logs, and an `/admin` console section. Do not add image upload inputs or copied media fields.
+
+Public hub event reads use `HUB_EVENTS_STORAGE_MODE=memory` by default. Set `HUB_EVENTS_STORAGE_MODE=prisma` only after applying the Prisma migration; Prisma mode returns published, non-deleted `HubEvent` rows.
+
+Admin publish/update/cancel actions enqueue normalized `hub_event` notification candidates through `PlatformEvent` and `NotificationJob`; they do not send push directly and must still pass through preference resolution and delivery policy.
+
 Copy this prompt into another Codex, ChatGPT, Copilot, or AI coding session before continuing work.
 
 ## Project Summary
@@ -74,3 +82,6 @@ Remaining operational checks: register `https://<backend-public-origin>/v1/auth/
 `굿즈/행사` calendar implementation has started. Backend now exposes `GET /v1/hub-events/calendar` and `GET /v1/hub-events/widget-snapshot` as read-only projections of normalized `HubEvent` records, and bootstrap config exposes `hubCalendarEnabled: true` with X notifications disabled for MVP via `x_notifications_dropped_for_mvp`. Android and iOS now have shared calendar/widget DTOs and policy helpers for status ordering, date headers, and stale/empty widget text. Continue UI wiring from the existing Goods Events surfaces; do not add logos, posters, profile images, thumbnails, copied media, raw provider payloads, or direct widget platform API calls.
 
 Follow-up implementation update: Android `MockHubRepository` now derives `HubCalendarDay` and `HubCalendarWidgetSnapshot` from existing `HubEvent` seed data, the Goods Events tab renders date-grouped calendar sections, and a standard `AppWidgetProvider` + RemoteViews widget is registered. iOS `MockHubStore` now derives calendar days and widget snapshots, `HubEventsView` renders date-grouped sections, and `HubCalendarWidgetStore` persists compact snapshots through the `group.dev.stellive.hub` app group. `StelliveHubCalendarWidget` is now wired as a WidgetKit extension target, embedded in the app target, and verified with simulator tests plus a widget scheme build.
+## Mobile API Backend Status
+
+`shared/schemas/mobileApi.ts` now defines the mobile bootstrap, device registration, push token, and preference DTOs. `backend/stellive-hub-api/src/routes/appRoutes.ts` owns the mobile-facing routes and is delegated from `routes.ts`. `DeviceRepository`, `PreferenceRepository`, and `BootstrapService` provide repository/service boundaries for server-mediated mobile communication. Backend verification passed with `rtk npm run build` and `rtk npm test` from `backend/stellive-hub-api`.

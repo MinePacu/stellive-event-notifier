@@ -7,6 +7,7 @@ const routeEnv = {
   NODE_ENV: "test",
   PORT: 4000,
   DATABASE_URL: "postgresql://stellive:stellive@localhost:5432/stellive_hub_test",
+  HUB_EVENTS_STORAGE_MODE: "memory" as const,
   YOUTUBE_WEBSUB_ENABLED: true,
   YOUTUBE_DATA_API_FALLBACK_ENABLED: false,
   X_API_COST_POLICY: "no_paid_api" as const,

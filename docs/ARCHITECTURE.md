@@ -1,5 +1,13 @@
 # Architecture
 
+## Hub Event Admin CRUD
+
+`굿즈/행사` admin CRUD writes normalized `HubEvent` rows through the backend admin boundary. Drafts may be incomplete, but publishing requires policy validation for source, catalog scope, allowed categories/statuses, date windows, HTTPS URLs, asset-field rejection, Gangzi/gamja exclusion, and official YouTube live exclusion.
+
+Public APIs return only published, non-deleted hub events. `HUB_EVENTS_STORAGE_MODE=memory` preserves seed-backed reads for local/test use, while `HUB_EVENTS_STORAGE_MODE=prisma` switches public reads to Prisma-backed `HubEvent` storage after migration.
+
+Admin actions never send push directly. Publish/update/cancel create normalized `hub_event` `PlatformEvent` candidates and enqueue notification jobs only through the existing preference-resolving worker path.
+
 The MVP uses an API-first lightweight control plane as the default operating model. The backend still mediates event ingestion, normalization, dedupe, preference resolution, and push dispatch, but it should not require a self-hosted PostgreSQL/Redis stack for initial operation. Docker Compose remains supported for local development and optional self-hosting. Mobile apps own settings UI, local history/cache, live-status display, foreground refresh, and deep-link handling. Managed services may own storage, scheduled jobs, and push infrastructure.
 
 ## Backend

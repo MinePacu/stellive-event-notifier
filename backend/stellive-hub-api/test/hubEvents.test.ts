@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { CatalogService } from "../src/catalog/catalog.js";
 import { HubEventService } from "../src/hub-events/hubEventService.js";
-import { validateHubEvent } from "../src/hub-events/hubEventPolicy.js";
+import { validateHubEvent, validateHubEventForAdmin } from "../src/hub-events/hubEventPolicy.js";
 import type { HubEvent, HubEventCategory, HubEventStatus } from "../src/types.js";
 
 describe("HubEvent types", () => {
@@ -282,6 +282,67 @@ describe("hub event routes", () => {
     expect(body.items).toHaveLength(1);
     expect(body.nextCursor).toBeDefined();
   });
+  it("uses the injected hub event read port for public list, detail, and summary routes", async () => {
+    const event: HubEvent = {
+      id: "injected-public-event",
+      category: "online_goods",
+      participationMode: "online",
+      status: "announced",
+      title: "Injected Public Event",
+      generationId: "official",
+      sourceUrl: "https://example.com/injected-public-event",
+      sourceLabel: "Stellive Official",
+      sourceType: "official",
+      announcedAt: "2026-06-03T00:00:00.000Z",
+      notificationEligible: true,
+      createdAt: "2026-06-03T00:00:00.000Z",
+      updatedAt: "2026-06-03T00:00:00.000Z"
+    };
+    const calls: string[] = [];
+    const app = await buildApp({
+      appRoutes: {
+        dependencies: {
+          hubEvents: {
+            async list(filters) {
+              calls.push(`list:${filters?.limit ?? "default"}`);
+              return { items: [event] };
+            },
+            async getById(id) {
+              calls.push(`get:${id}`);
+              return id === event.id ? event : undefined;
+            },
+            async summary() {
+              calls.push("summary");
+              return {
+                openCount: 1,
+                upcomingCount: 0,
+                closingSoonCount: 0,
+                preview: [event]
+              };
+            }
+          }
+        }
+      }
+    });
+
+    const listResponse = await app.inject({ method: "GET", url: "/v1/hub-events?limit=7" });
+    expect(listResponse.statusCode).toBe(200);
+    expect((listResponse.json() as { items: HubEvent[] }).items).toEqual([event]);
+
+    const detailResponse = await app.inject({ method: "GET", url: `/v1/hub-events/${event.id}` });
+    expect(detailResponse.statusCode).toBe(200);
+    expect(detailResponse.json()).toMatchObject({ id: event.id, title: "Injected Public Event" });
+
+    const missingResponse = await app.inject({ method: "GET", url: "/v1/hub-events/missing" });
+    expect(missingResponse.statusCode).toBe(404);
+
+    const summaryResponse = await app.inject({ method: "GET", url: "/v1/hub-events/summary" });
+    expect(summaryResponse.statusCode).toBe(200);
+    expect(summaryResponse.json()).toMatchObject({ openCount: 1, preview: [{ id: event.id }] });
+    expect(calls).toEqual(["list:7", `get:${event.id}`, "get:missing", "summary"]);
+
+    await app.close();
+  });
 });
 
 describe("validateHubEvent", () => {
@@ -366,6 +427,80 @@ describe("validateHubEvent", () => {
     expect(validateHubEvent({ ...hubEvent(), profileImageUrl: "https://example.com/profile.png" } as HubEvent, catalog)).toEqual({
       valid: false,
       reason: "asset_fields_not_allowed"
+    });
+  });
+
+  it("allows drafts without a date window but rejects publish without any date", () => {
+    expect(validateHubEventForAdmin(hubEvent(), catalog, "draft")).toEqual({ valid: true, errors: [] });
+    expect(validateHubEventForAdmin(hubEvent(), catalog, "publish")).toEqual({
+      valid: false,
+      errors: [
+        {
+          field: "dateWindow",
+          reason: "date_window_required",
+          message: "A published hub event requires announcedAt, startsAt, or endsAt."
+        }
+      ]
+    });
+  });
+
+  it("rejects invalid admin date windows", () => {
+    const result = validateHubEventForAdmin(
+      hubEvent({
+        startsAt: "2026-06-20T00:00:00.000Z",
+        endsAt: "2026-06-10T00:00:00.000Z"
+      }),
+      catalog,
+      "publish"
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContainEqual({
+      field: "endsAt",
+      reason: "date_window_invalid",
+      message: "endsAt must be greater than or equal to startsAt."
+    });
+  });
+
+  it("rejects non-https admin URLs", () => {
+    const result = validateHubEventForAdmin(
+      hubEvent({
+        announcedAt: "2026-06-03T00:00:00.000Z",
+        sourceUrl: "http://example.com/source",
+        purchaseUrl: "http://example.com/store",
+        ticketUrl: "http://example.com/ticket"
+      }),
+      catalog,
+      "publish"
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: "sourceUrl", reason: "url_not_https" }),
+        expect.objectContaining({ field: "purchaseUrl", reason: "url_not_https" }),
+        expect.objectContaining({ field: "ticketUrl", reason: "url_not_https" })
+      ])
+    );
+  });
+
+  it("rejects official YouTube live admin inputs", () => {
+    const result = validateHubEventForAdmin(
+      hubEvent({
+        announcedAt: "2026-06-03T00:00:00.000Z",
+        generationId: "official",
+        sourceType: "official",
+        sourceUrl: "https://www.youtube.com/live/live-video-id"
+      }),
+      catalog,
+      "publish"
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContainEqual({
+      field: "sourceUrl",
+      reason: "official_youtube_live_excluded",
+      message: "Official YouTube live scheduled, started, and ended events are excluded."
     });
   });
 });

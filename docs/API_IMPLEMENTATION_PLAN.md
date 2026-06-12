@@ -354,6 +354,12 @@ model WebhookSubscription {
 - `GET /v1/events/stream`: foreground SSE. Add authentication and device validation.
 - `GET /v1/notifications/delivery-attempts`: protect as dev diagnostics only.
 
+Current mobile API backend status:
+- Shared mobile DTOs live in `shared/schemas/mobileApi.ts` and OpenAPI includes bootstrap, device, token, and preference schemas.
+- `backend/stellive-hub-api/src/routes/appRoutes.ts` owns `GET /v1/bootstrap`, `POST /v1/devices/register`, `PUT /v1/devices/token`, `GET /v1/preferences`, and `PUT /v1/preferences`.
+- `DeviceRepository`, `PreferenceRepository`, and `BootstrapService` provide the server-side boundaries for mobile registration, preference snapshots, and bootstrap assembly.
+- Verified with `rtk npm run build` and `rtk npm test` in `backend/stellive-hub-api`.
+
 ### New endpoints
 
 - `GET /v1/webhooks/youtube`: verify WebSub challenge.

@@ -39,13 +39,13 @@
 		};
 		777777777777777777777777 = {
 			isa = PBXGroup;
-			children = (B00000000000000000000000, B00000000000000000000001, B00000000000000000000002, B00000000000000000000003, B00000000000000000000004, B0000000000000000000000D, B0000000000000000000000E, B0000000000000000000000F, B00000000000000000000010, B00000000000000000000011, B00000000000000000000012, B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, B00000000000000000000008, B00000000000000000000009, B0000000000000000000000A, B0000000000000000000000B, B0000000000000000000000C);
+			children = (B00000000000000000000000, B00000000000000000000001, B00000000000000000000002, B00000000000000000000003, B00000000000000000000004, B0000000000000000000000D, B0000000000000000000000E, B0000000000000000000000F, B00000000000000000000010, B00000000000000000000011, B00000000000000000000012, B00000000000000000000013, B00000000000000000000014, B00000000000000000000015, B00000000000000000000016, B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, B00000000000000000000008, B00000000000000000000009, B0000000000000000000000A, B0000000000000000000000B, B0000000000000000000000C);
 			path = StelliveHubiOS;
 			sourceTree = "<group>";
 		};
 		888888888888888888888888 = {
 			isa = PBXGroup;
-			children = (C00000000000000000000000, C00000000000000000000001, C00000000000000000000002);
+			children = (C00000000000000000000000, C00000000000000000000001, C00000000000000000000002, C00000000000000000000003);
 			path = StelliveHubiOSTests;
 			sourceTree = "<group>";
 		};
@@ -60,6 +60,10 @@
 		B00000000000000000000010 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/NotificationSummaryTextPolicy.swift; sourceTree = "<group>"; };
 		B00000000000000000000011 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/DeliveredNotificationCleanupService.swift; sourceTree = "<group>"; };
 B00000000000000000000012 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/HubCalendarWidgetStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000013 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/HubAPIClient.swift; sourceTree = "<group>"; };
+		B00000000000000000000014 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/DeviceIDStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000015 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/PushTokenSyncer.swift; sourceTree = "<group>"; };
+		B00000000000000000000016 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ServerHubStore.swift; sourceTree = "<group>"; };
 		B00000000000000000000005 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ContentView.swift; sourceTree = "<group>"; };
 		B00000000000000000000006 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/HomeView.swift; sourceTree = "<group>"; };
 		B00000000000000000000007 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/LiveView.swift; sourceTree = "<group>"; };
@@ -71,6 +75,7 @@ B00000000000000000000012 = { isa = PBXFileReference; lastKnownFileType = sourcec
 		C00000000000000000000000 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceStateTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000001 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationLoadReductionPolicyTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000002 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChzzkBackendBoundaryTests.swift; sourceTree = "<group>"; };
+		C00000000000000000000003 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubAPIClientTests.swift; sourceTree = "<group>"; };
 		999999999999999999999999 = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StelliveHubiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AAAAAAAAAAAAAAAAAAAAAAAA = { isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StelliveHubiOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D00000000000000000000000 = { isa = PBXBuildFile; fileRef = B00000000000000000000000; };

@@ -168,9 +168,18 @@ model HubEvent {
   venueName             String?
   venueAddress          String?
   notificationEligible  Boolean  @default(true)
+  publicationState      String   @default("draft")
+  publishedAt           DateTime?
+  cancelledAt           DateTime?
+  deactivatedAt         DateTime?
+  deletedAt             DateTime?
+  revision              Int      @default(1)
+  createdBy             String?
+  updatedBy             String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
+  @@index([publicationState, deletedAt])
   @@index([status])
   @@index([category])
   @@index([participationMode])
@@ -179,4 +188,18 @@ model HubEvent {
   @@index([startsAt])
   @@index([endsAt])
   @@index([updatedAt])
+}
+
+model HubEventAuditLog {
+  id         String   @id @default(cuid(2))
+  hubEventId String
+  action     String
+  actorId    String?
+  reason     String?
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([hubEventId, createdAt])
+  @@index([action, createdAt])
 }
