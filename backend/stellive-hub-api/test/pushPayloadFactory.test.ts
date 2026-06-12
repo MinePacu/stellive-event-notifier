@@ -139,4 +139,25 @@ describe("buildPushPayload", () => {
     expect(payload.data.appDeepLink).toBe("");
     expect(payload.data.platformUrl).toBe("");
   });
+
+  it("does not include HubEvent image metadata in push payload data", () => {
+    const payload = buildPushPayload({
+      event: event({
+        rawPayload: {
+          image: {
+            policyState: "official_runtime_url",
+            url: "https://example.com/event.jpg",
+            bytes: "not-allowed"
+          }
+        }
+      }),
+      resolution: resolution(),
+      deliveryLevel: "immediate_push" as NotificationDeliveryLevel
+    });
+
+    expect(JSON.stringify(payload.data)).not.toContain("event.jpg");
+    expect(JSON.stringify(payload.data)).not.toContain("bytes");
+    expect(payload.data).not.toHaveProperty("image");
+    expect(payload.data).not.toHaveProperty("thumbnailUrl");
+  });
 });

@@ -1402,6 +1402,31 @@ components:
           type:
             - string
             - "null"
+    HubEventImagePolicyState:
+      type: string
+      enum:
+        - none
+        - official_runtime_url
+        - third_party_allowed
+        - verify_required
+        - blocked
+    HubEventImage:
+      type: object
+      required:
+        - policyState
+      properties:
+        policyState:
+          $ref: "#/components/schemas/HubEventImagePolicyState"
+        url:
+          type: string
+          format: uri
+        sourceLabel:
+          type: string
+        sourceUrl:
+          type: string
+          format: uri
+        altText:
+          type: string
     HubEvent:
       type: object
       required:
@@ -1460,6 +1485,8 @@ components:
           type: string
         venueAddress:
           type: string
+        image:
+          $ref: "#/components/schemas/HubEventImage"
         notificationEligible:
           type: boolean
         createdAt:

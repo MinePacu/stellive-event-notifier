@@ -16,7 +16,22 @@ const allowedCategories = new Set<HubEventCategory>([
   "ticketing"
 ]);
 const allowedStatuses = new Set<HubEventStatus>(["announced", "upcoming", "open", "closing_soon", "ended", "cancelled"]);
+const displayableImagePolicyStates = new Set(["official_runtime_url", "third_party_allowed"]);
+
+export function canDisplayHubEventImage(image: HubEvent["image"]): boolean {
+  if (!image?.url || !displayableImagePolicyStates.has(image.policyState)) {
+    return false;
+  }
+
+  try {
+    return new URL(image.url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 const assetFields = ["imageUrl", "logoUrl", "posterUrl", "thumbnailUrl", "profileImageUrl"] as const;
+const imageAssetFields = ["bytes", "base64", "assetPath", "filePath", "localPath"] as const;
+const allowedImagePolicyStates = new Set(["none", "official_runtime_url", "third_party_allowed", "verify_required", "blocked"]);
 
 export type HubEventValidationResult =
   | { valid: true }
@@ -69,6 +84,50 @@ function addHttpsUrlErrorIfNeeded(errors: HubEventValidationError[], input: Reco
   if (!value) return;
   if (!hasHttpsUrl(value)) {
     addError(errors, field, "url_not_https", `${field} must be an HTTPS URL.`);
+  }
+}
+
+function validateHubEventImageForAdmin(errors: HubEventValidationError[], input: Record<string, unknown>) {
+  if (!("image" in input) || input.image === undefined || input.image === null) {
+    return;
+  }
+
+  if (!isRecord(input.image)) {
+    addError(errors, "image", "image_policy_state_not_allowed", "image must be an object.");
+    return;
+  }
+
+  const image = input.image;
+  const policyState = stringField(image, "policyState");
+  if (!policyState || !allowedImagePolicyStates.has(policyState)) {
+    addError(errors, "image.policyState", "image_policy_state_not_allowed", "image policyState is not allowed.");
+    return;
+  }
+
+  for (const field of imageAssetFields) {
+    if (field in image) {
+      addError(errors, `image.${field}`, "image_asset_fields_not_allowed", "Image binary or local asset fields are not allowed.");
+    }
+  }
+
+  if (!displayableImagePolicyStates.has(policyState)) {
+    return;
+  }
+
+  const url = stringField(image, "url")?.trim();
+  const sourceLabel = stringField(image, "sourceLabel")?.trim();
+  const sourceUrl = stringField(image, "sourceUrl")?.trim();
+
+  if (!url) {
+    addError(errors, "image.url", "image_url_not_https", "Displayable image metadata requires an HTTPS image URL.");
+  } else if (!hasHttpsUrl(url)) {
+    addError(errors, "image.url", "image_url_not_https", "Image URL must be HTTPS.");
+  }
+
+  if (!sourceLabel || !sourceUrl) {
+    addError(errors, "image.source", "image_source_required", "Displayable image metadata requires sourceLabel and sourceUrl.");
+  } else if (!hasHttpsUrl(sourceUrl)) {
+    addError(errors, "image.sourceUrl", "image_url_not_https", "Image sourceUrl must be HTTPS.");
   }
 }
 
@@ -204,6 +263,7 @@ export function validateHubEventForAdmin(
   addHttpsUrlErrorIfNeeded(errors, input, "sourceUrl");
   addHttpsUrlErrorIfNeeded(errors, input, "purchaseUrl");
   addHttpsUrlErrorIfNeeded(errors, input, "ticketUrl");
+  validateHubEventImageForAdmin(errors, input);
 
   const startsAt = asTime(stringField(input, "startsAt"));
   const endsAt = asTime(stringField(input, "endsAt"));

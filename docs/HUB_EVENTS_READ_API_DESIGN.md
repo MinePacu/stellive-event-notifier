@@ -261,3 +261,12 @@ Optional fields:
 - Cursor values should be treated as opaque even if the initial implementation uses event ids.
 - Effective status should be computed server-side so mobile clients do not duplicate closing-soon/open/ended logic.
 - The backend remains the authority for filtering; mobile-side filters are display controls, not security or policy enforcement.
+## HubEvent Image Metadata
+
+`HubEvent.image` is optional metadata only. The backend never stores or returns image binaries, app-bundled copied assets, official logos, fan art, screenshots, or copied CDN assets.
+
+Allowed `policyState` values are `none`, `official_runtime_url`, `third_party_allowed`, `verify_required`, and `blocked`.
+
+Mobile clients may attempt image rendering only for `official_runtime_url` and `third_party_allowed` with a valid HTTPS URL. `none`, `verify_required`, `blocked`, missing URL, invalid URL, and image load failure must render the normal text-first layout without “이미지가 없습니다” copy.
+
+`HubCalendarEntry`, widget snapshots, and push payloads intentionally do not include image metadata. They remain compact schedule/notification projections and must not depend on image loading.
