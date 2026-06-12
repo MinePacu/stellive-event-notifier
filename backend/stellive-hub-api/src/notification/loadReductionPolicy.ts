@@ -15,7 +15,12 @@ export interface NotificationDeliveryDecision {
   shouldEnqueuePush: boolean;
 }
 
-const immediateEventTypes = new Set<PlatformEvent["type"]>(["chzzk_live_started"]);
+const immediateEventTypes = new Set<PlatformEvent["type"]>([
+  "chzzk_live_started",
+  "event_sales_open",
+  "event_deadline_soon",
+  "event_cancelled"
+]);
 
 function baseDeliveryLevel(event: PlatformEvent, resolution: ResolvedNotificationPreference): NotificationDeliveryLevel {
   if (!resolution.shouldNotify) return "in_app_history_only";

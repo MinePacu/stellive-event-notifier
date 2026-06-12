@@ -8,6 +8,8 @@ Public hub event reads use `HUB_EVENTS_STORAGE_MODE=memory` by default. Set `HUB
 
 Admin publish/update/cancel actions enqueue normalized `hub_event` notification candidates through `PlatformEvent` and `NotificationJob`; they do not send push directly and must still pass through preference resolution and delivery policy.
 
+Current branch `feat/hub-event-notification-worker` adds backend notification job draining for HubEvent changes: `NotificationWorker`, `pushPayloadFactory`, disabled-safe `fcmClient`, `FcmPushSender`, worker repository methods, and `/v1/internal/jobs/notifications/drain` worker delegation. It records device-level delivery attempts for sent/skipped/failed decisions and keeps push payloads limited to normalized event IDs, type, generation/member IDs, tap action, deep link, and source URL.
+
 Copy this prompt into another Codex, ChatGPT, Copilot, or AI coding session before continuing work.
 
 ## Project Summary

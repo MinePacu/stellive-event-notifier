@@ -105,6 +105,62 @@ describe("notification load reduction", () => {
   });
 });
 
+describe("HubEvent notification delivery levels", () => {
+  it.each(["event_sales_open", "event_deadline_soon", "event_cancelled"] as const)(
+    "treats %s as immediate push when preferences allow notification",
+    (type) => {
+      const decision = resolveNotificationDelivery(
+        event({
+          source: "hub_event",
+          type,
+          memberId: "stellive-official",
+          generationId: "official",
+          title: "공식 굿즈 알림"
+        }),
+        resolution()
+      );
+
+      expect(decision.deliveryLevel).toBe("immediate_push");
+      expect(decision.shouldEnqueuePush).toBe(true);
+    }
+  );
+
+  it.each(["event_announced", "event_updated"] as const)(
+    "keeps %s as summary push by default",
+    (type) => {
+      const decision = resolveNotificationDelivery(
+        event({
+          source: "hub_event",
+          type,
+          memberId: "stellive-official",
+          generationId: "official",
+          title: "공식 굿즈 알림"
+        }),
+        resolution()
+      );
+
+      expect(decision.deliveryLevel).toBe("summary_push");
+      expect(decision.shouldEnqueuePush).toBe(false);
+    }
+  );
+
+  it("keeps blocked HubEvent notifications in app history only", () => {
+    const decision = resolveNotificationDelivery(
+      event({
+        source: "hub_event",
+        type: "event_cancelled",
+        memberId: "stellive-official",
+        generationId: "official",
+        title: "공식 굿즈 취소"
+      }),
+      resolution({ shouldNotify: false, reason: "global_off" })
+    );
+
+    expect(decision.deliveryLevel).toBe("in_app_history_only");
+    expect(decision.shouldEnqueuePush).toBe(false);
+  });
+});
+
 describe("push cap policy", () => {
   it("keeps the original delivery level below the cap", () => {
     const decision = applyPushCap(

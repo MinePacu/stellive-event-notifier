@@ -16,6 +16,7 @@ import type {
   WebhookSubscriptionDiagnostic
 } from "../admin/adminTypes.js";
 import type { ChzzkLiveAdapterCounts } from "../adapters/chzzk/chzzkOpenApiAdapter.js";
+import type { NotificationWorkerDrainInput, NotificationWorkerDrainResult } from "../jobs/notificationWorker.js";
 import type { AppEnv } from "../config/env.js";
 import { NotificationJobRepository } from "../jobs/notificationJobRepository.js";
 import { DeliveryAttemptRepository } from "../repositories/deliveryAttemptRepository.js";
@@ -52,6 +53,9 @@ export interface InternalRouteDependencies {
   adapterHealth: {
     getState(source: string, key: string): MaybePromise<{ value: unknown } | null>;
     listAdapterHealth(): MaybePromise<AdapterHealth[]>;
+  };
+  notificationWorker?: {
+    drain(input: NotificationWorkerDrainInput): MaybePromise<NotificationWorkerDrainResult>;
   };
   chzzkLiveAdapter?: {
     pollLiveStatuses(): MaybePromise<ChzzkLiveAdapterCounts>;
@@ -144,14 +148,19 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
     const body = request.body as { limit?: unknown } | undefined;
     const requestedLimit = parseInternalLimit(body?.limit ?? (request.query as LimitQuery).limit, 25);
 
+    if (dependencies.notificationWorker) {
+      return dependencies.notificationWorker.drain({ limit: requestedLimit });
+    }
+
     return {
       claimed: 0,
       completed: 0,
       failed: 0,
       skipped: 0,
-      status: "not_available",
-      reason: "notification_worker_not_available",
-      requestedLimit
+      sent: 0,
+      queued: 0,
+      status: "disabled",
+      reason: "notification_worker_not_configured"
     };
   });
 
