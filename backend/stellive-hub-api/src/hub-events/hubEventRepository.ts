@@ -1,5 +1,5 @@
 import { getPrismaClient } from "../storage/prisma.js";
-import type { HubEvent, HubEventsSummary, HubEventStatus } from "../types.js";
+import type { HubEvent, HubEventImage, HubEventsSummary, HubEventStatus } from "../types.js";
 import type { AdminHubEvent, HubEventAdminAction, HubEventPublicationState } from "./hubEventAdminTypes.js";
 import type { HubEventFilters, HubEventListResult } from "./hubEventService.js";
 
@@ -22,6 +22,7 @@ interface HubEventRecord {
   ticketUrl: string | null;
   venueName: string | null;
   venueAddress: string | null;
+  image?: unknown | null;
   notificationEligible: boolean;
   publicationState: string;
   publishedAt: Date | null;
@@ -117,6 +118,36 @@ function stripUndefined(input: Record<string, unknown>): Record<string, unknown>
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeHubEventImage(value: unknown): HubEventImage | undefined {
+  if (!isRecord(value)) return undefined;
+  const policyState = stringValue(value.policyState);
+  if (
+    policyState !== "none" &&
+    policyState !== "official_runtime_url" &&
+    policyState !== "third_party_allowed" &&
+    policyState !== "verify_required" &&
+    policyState !== "blocked"
+  ) {
+    return undefined;
+  }
+
+  return stripUndefined({
+    policyState,
+    url: stringValue(value.url),
+    sourceLabel: stringValue(value.sourceLabel),
+    sourceUrl: stringValue(value.sourceUrl),
+    altText: stringValue(value.altText)
+  }) as unknown as HubEventImage;
+}
+
 function toPublicHubEvent(record: HubEventRecord): HubEvent {
   return stripUndefined({
     id: record.id,
@@ -137,6 +168,7 @@ function toPublicHubEvent(record: HubEventRecord): HubEvent {
     ticketUrl: record.ticketUrl ?? undefined,
     venueName: record.venueName ?? undefined,
     venueAddress: record.venueAddress ?? undefined,
+    image: normalizeHubEventImage(record.image),
     notificationEligible: record.notificationEligible,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString()
@@ -181,6 +213,7 @@ function toWriteData(input: AdminHubEventWriteInput): Record<string, unknown> {
     ticketUrl: input.ticketUrl,
     venueName: input.venueName,
     venueAddress: input.venueAddress,
+    image: input.image,
     notificationEligible: input.notificationEligible
   });
 }

@@ -8,6 +8,8 @@ export type {
   HubCalendarWidgetSnapshot,
   HubEvent,
   HubEventCategory,
+  HubEventImage,
+  HubEventImagePolicyState,
   HubEventParticipationMode,
   HubEventSourceType,
   HubEventStatus,

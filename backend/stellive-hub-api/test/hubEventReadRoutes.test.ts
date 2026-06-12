@@ -120,6 +120,26 @@ describe("HubEvent read routes", () => {
     expect(response.json()).toEqual({ error: "hub_event_not_found" });
   });
 
+  it("returns allowed image metadata on list and detail responses", async () => {
+    const image = {
+      policyState: "official_runtime_url" as const,
+      url: "https://example.com/event.jpg",
+      sourceLabel: "공식 공지",
+      sourceUrl: "https://example.com/notice",
+      altText: "공식 굿즈 이미지"
+    };
+    const app = await buildRouteApp([hubEvent({ id: "image-event", image })]);
+
+    const listResponse = await app.inject({ method: "GET", url: "/v1/hub-events" });
+    const detailResponse = await app.inject({ method: "GET", url: "/v1/hub-events/image-event" });
+
+    await app.close();
+    expect(listResponse.statusCode).toBe(200);
+    expect(detailResponse.statusCode).toBe(200);
+    expect(listResponse.json().items[0].image).toEqual(image);
+    expect(detailResponse.json().image).toEqual(image);
+  });
+
   it("rejects invalid HubEvent enum filters", async () => {
     const app = await buildRouteApp([hubEvent()]);
     const response = await app.inject({ method: "GET", url: "/v1/hub-events?category=livestream" });
@@ -200,5 +220,27 @@ describe("HubEvent read routes", () => {
     expect(body.items.every((event: HubEvent) => allowedGenerationIds.has(event.generationId))).toBe(true);
     expect(body.items[0]).not.toHaveProperty("imageUrl");
     expect(body.items[0]).toMatchObject({ title: expect.any(String), sourceUrl: expect.any(String) });
+  });
+
+  it("does not expose image metadata on calendar or widget entries", async () => {
+    const image = {
+      policyState: "official_runtime_url" as const,
+      url: "https://example.com/event.jpg",
+      sourceLabel: "공식 공지",
+      sourceUrl: "https://example.com/notice"
+    };
+    const app = await buildRouteApp([hubEvent({ id: "compact-image-event", image })]);
+
+    const calendarResponse = await app.inject({
+      method: "GET",
+      url: "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul"
+    });
+    const widgetResponse = await app.inject({ method: "GET", url: "/v1/hub-events/widget-snapshot?timezone=Asia/Seoul&limit=1" });
+
+    await app.close();
+    expect(calendarResponse.statusCode).toBe(200);
+    expect(widgetResponse.statusCode).toBe(200);
+    expect(calendarResponse.json().days[0].entries[0]).not.toHaveProperty("image");
+    expect(widgetResponse.json().entries[0]).not.toHaveProperty("image");
   });
 });

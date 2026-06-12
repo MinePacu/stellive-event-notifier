@@ -43,6 +43,31 @@ final class HubCalendarPolicyTests: XCTestCase {
         XCTAssertEqual(HubCalendarPolicy.emptyWidgetText, "예정된 일정 없음")
     }
 
+    func testHubEventImagePolicyAllowsOnlyDisplayableHttpsPolicies() {
+        XCTAssertEqual(
+            HubEventImagePolicy.displayURL(
+                for: HubEventImage(policyState: .officialRuntimeUrl, url: "https://example.com/event.jpg", sourceLabel: nil, sourceUrl: nil, altText: nil)
+            )?.absoluteString,
+            "https://example.com/event.jpg"
+        )
+        XCTAssertEqual(
+            HubEventImagePolicy.displayURL(
+                for: HubEventImage(policyState: .thirdPartyAllowed, url: "https://example.com/event.jpg", sourceLabel: nil, sourceUrl: nil, altText: nil)
+            )?.absoluteString,
+            "https://example.com/event.jpg"
+        )
+    }
+
+    func testHubEventImagePolicyRejectsHiddenPoliciesAndInvalidURLs() {
+        XCTAssertNil(HubEventImagePolicy.displayURL(for: nil))
+        XCTAssertNil(HubEventImagePolicy.displayURL(for: HubEventImage(policyState: .none, url: "https://example.com/event.jpg", sourceLabel: nil, sourceUrl: nil, altText: nil)))
+        XCTAssertNil(HubEventImagePolicy.displayURL(for: HubEventImage(policyState: .verifyRequired, url: "https://example.com/event.jpg", sourceLabel: nil, sourceUrl: nil, altText: nil)))
+        XCTAssertNil(HubEventImagePolicy.displayURL(for: HubEventImage(policyState: .blocked, url: "https://example.com/event.jpg", sourceLabel: nil, sourceUrl: nil, altText: nil)))
+        XCTAssertNil(HubEventImagePolicy.displayURL(for: HubEventImage(policyState: .officialRuntimeUrl, url: nil, sourceLabel: nil, sourceUrl: nil, altText: nil)))
+        XCTAssertNil(HubEventImagePolicy.displayURL(for: HubEventImage(policyState: .officialRuntimeUrl, url: "not-a-url", sourceLabel: nil, sourceUrl: nil, altText: nil)))
+        XCTAssertNil(HubEventImagePolicy.displayURL(for: HubEventImage(policyState: .officialRuntimeUrl, url: "http://example.com/event.jpg", sourceLabel: nil, sourceUrl: nil, altText: nil)))
+    }
+
     private func entry(eventId: String, status: HubEventStatus) -> HubCalendarEntry {
         HubCalendarEntry(
             id: "\(eventId):2026-06-11",

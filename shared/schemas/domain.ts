@@ -199,6 +199,21 @@ export type HubEventStatus = "announced" | "upcoming" | "open" | "closing_soon" 
 
 export type HubEventSourceType = "official" | "member" | "official_collab";
 
+export type HubEventImagePolicyState =
+  | "none"
+  | "official_runtime_url"
+  | "third_party_allowed"
+  | "verify_required"
+  | "blocked";
+
+export interface HubEventImage {
+  policyState: HubEventImagePolicyState;
+  url?: string;
+  sourceLabel?: string;
+  sourceUrl?: string;
+  altText?: string;
+}
+
 export interface HubEvent {
   id: string;
   category: HubEventCategory;
@@ -218,6 +233,7 @@ export interface HubEvent {
   ticketUrl?: string;
   venueName?: string;
   venueAddress?: string;
+  image?: HubEventImage;
   notificationEligible: boolean;
   createdAt: string;
   updatedAt: string;

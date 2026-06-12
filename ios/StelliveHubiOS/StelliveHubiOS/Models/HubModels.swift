@@ -243,6 +243,38 @@ enum HubEventSourceType: String, Codable, Hashable {
     case officialCollab = "official_collab"
 }
 
+enum HubEventImagePolicyState: String, Codable, Hashable {
+    case none
+    case officialRuntimeUrl = "official_runtime_url"
+    case thirdPartyAllowed = "third_party_allowed"
+    case verifyRequired = "verify_required"
+    case blocked
+}
+
+struct HubEventImage: Codable, Hashable {
+    let policyState: HubEventImagePolicyState
+    let url: String?
+    let sourceLabel: String?
+    let sourceUrl: String?
+    let altText: String?
+}
+
+enum HubEventImagePolicy {
+    static func displayURL(for image: HubEventImage?) -> URL? {
+        guard
+            let image,
+            image.policyState == .officialRuntimeUrl || image.policyState == .thirdPartyAllowed,
+            let rawURL = image.url,
+            let url = URL(string: rawURL),
+            url.scheme == "https"
+        else {
+            return nil
+        }
+
+        return url
+    }
+}
+
 struct HubEvent: Identifiable, Hashable {
     let id: String
     let category: HubEventCategory
@@ -262,6 +294,7 @@ struct HubEvent: Identifiable, Hashable {
     let ticketUrl: String?
     let venueName: String?
     let venueAddress: String?
+    var image: HubEventImage? = nil
     let notificationEligible: Bool
     let updatedAt: Date
 }
