@@ -20,7 +20,6 @@ cache:
     files:
       - android/StelliveHubAndroid/gradle/wrapper/gradle-wrapper.properties
       - android/StelliveHubAndroid/build.gradle.kts
-      - android/StelliveHubAndroid/app/build.gradle.kts
   paths:
     - .gradle/caches/
     - .gradle/wrapper/
