@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import PlatformEventRepository from "../src/repositories/platformEventRepository.js";
+import DeviceRepository from "../src/repositories/deviceRepository.js";
+import { DeliveryAttemptRepository } from "../src/repositories/deliveryAttemptRepository.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -21,6 +24,74 @@ describe("Prisma hub event admin schema", () => {
     expect(prismaSchema).toContain("model HubEventAuditLog");
     expect(prismaSchema).toContain("@@index([hubEventId, createdAt])");
     expect(prismaSchema).toContain("@@index([action, createdAt])");
+  });
+});
+
+describe("PlatformEventRepository", () => {
+  it("loads a normalized platform event by id", async () => {
+    const prisma = {
+      platformEvent: {
+        async create() {
+          return {};
+        },
+        async findUnique(args: { where: { id: string } }) {
+          expect(args.where.id).toBe("event-1");
+          return {
+            id: "event-1",
+            source: "hub_event",
+            type: "event_cancelled",
+            memberId: "stellive-official",
+            generationId: "official",
+            title: "공식 굿즈 취소",
+            body: "일정이 취소됐습니다.",
+            platformUrl: "https://example.com/source",
+            appDeepLink: "stellivehub://hub-events/event-1",
+            occurredAt: new Date("2026-06-12T00:00:00.000Z"),
+            receivedAt: new Date("2026-06-12T00:00:01.000Z"),
+            dedupeKey: "hub_event:event-1:event_cancelled:2026-06-12T00:00:00.000Z",
+            realtimeEligible: false,
+            deliveryMode: "standard",
+            metadata: { hubEventId: "event-1" }
+          };
+        }
+      }
+    };
+    const repository = new PlatformEventRepository(prisma);
+
+    const event = await repository.findById("event-1");
+
+    expect(event).toEqual({
+      id: "event-1",
+      source: "hub_event",
+      type: "event_cancelled",
+      memberId: "stellive-official",
+      generationId: "official",
+      title: "공식 굿즈 취소",
+      body: "일정이 취소됐습니다.",
+      platformUrl: "https://example.com/source",
+      appDeepLink: "stellivehub://hub-events/event-1",
+      occurredAt: "2026-06-12T00:00:00.000Z",
+      receivedAt: "2026-06-12T00:00:01.000Z",
+      dedupeKey: "hub_event:event-1:event_cancelled:2026-06-12T00:00:00.000Z",
+      rawPayload: { hubEventId: "event-1" },
+      realtimeEligible: false,
+      deliveryMode: "standard"
+    });
+  });
+
+  it("returns undefined when a platform event does not exist", async () => {
+    const repository = new PlatformEventRepository({
+      platformEvent: {
+        async create() {
+          return {};
+        },
+        async findUnique() {
+          return null;
+        }
+      }
+    });
+
+    await expect(repository.findById("missing-event")).resolves.toBeUndefined();
   });
 });
 
@@ -63,6 +134,161 @@ describe("PlatformApiStateRepository", () => {
   });
 });
 
+describe("DeviceRepository push targets", () => {
+  it("lists active devices with push tokens and derives push provider from platform", async () => {
+    const repository = new DeviceRepository({
+      device: {
+        async findMany(args: unknown) {
+          expect(args).toEqual({
+            where: {
+              tokenStatus: "active",
+              deviceToken: { not: null }
+            },
+            select: {
+              id: true,
+              platform: true,
+              deviceToken: true,
+              tokenStatus: true,
+              timezone: true,
+              locale: true,
+              appVersion: true
+            }
+          });
+          return [
+            {
+              id: "android-device",
+              platform: "android",
+              deviceToken: "android-token",
+              tokenStatus: "active",
+              timezone: "Asia/Seoul",
+              locale: "ko-KR",
+              appVersion: "1.0.0"
+            },
+            {
+              id: "ios-device",
+              platform: "ios",
+              deviceToken: "ios-token",
+              tokenStatus: "active",
+              timezone: "Asia/Seoul",
+              locale: "ko-KR",
+              appVersion: "1.0.0"
+            }
+          ];
+        }
+      }
+    });
+
+    await expect(repository.listPushTargets()).resolves.toEqual([
+      {
+        deviceId: "android-device",
+        platform: "android",
+        pushProvider: "fcm",
+        pushToken: "android-token",
+        tokenStatus: "active",
+        timezone: "Asia/Seoul",
+        locale: "ko-KR",
+        appVersion: "1.0.0"
+      },
+      {
+        deviceId: "ios-device",
+        platform: "ios",
+        pushProvider: "apns_via_fcm",
+        pushToken: "ios-token",
+        tokenStatus: "active",
+        timezone: "Asia/Seoul",
+        locale: "ko-KR",
+        appVersion: "1.0.0"
+      }
+    ]);
+  });
+
+  it("marks push tokens invalid without storing provider response bodies", async () => {
+    const calls: unknown[] = [];
+    const repository = new DeviceRepository({
+      device: {
+        async update(args: unknown) {
+          calls.push(args);
+          return {};
+        }
+      }
+    });
+
+    await repository.markTokenInvalid("device-1", "messaging/registration-token-not-registered");
+
+    expect(calls).toEqual([
+      {
+        where: { id: "device-1" },
+        data: {
+          tokenStatus: "invalid",
+          lastSeenAt: expect.any(Date)
+        }
+      }
+    ]);
+  });
+});
+
+describe("DeliveryAttemptRepository worker writes", () => {
+  it("creates delivery attempts with normalized worker fields", async () => {
+    const calls: unknown[] = [];
+    const attemptedAt = new Date("2026-06-12T00:00:00.000Z");
+    const deliveredAt = new Date("2026-06-12T00:00:01.000Z");
+    const repository = new DeliveryAttemptRepository({
+      deliveryAttempt: {
+        async create(args: unknown) {
+          calls.push(args);
+          return {};
+        }
+      }
+    });
+
+    await repository.create({
+      eventId: "event-1",
+      deviceId: "device-1",
+      attemptedAt,
+      deliveredAt,
+      status: "sent",
+      reason: "allowed",
+      source: "hub_event",
+      eventType: "event_cancelled",
+      generationId: "official",
+      memberId: "stellive-official",
+      deliveryMode: "realtime_best_effort",
+      deliveryLevel: "immediate_push",
+      pushPriority: "high",
+      providerMessageId: "provider-message-1",
+      providerErrorCode: undefined,
+      retryCount: 1
+    });
+
+    expect(calls).toEqual([
+      {
+        data: {
+          eventId: "event-1",
+          deviceId: "device-1",
+          attemptedAt,
+          deliveredAt,
+          status: "sent",
+          reason: "allowed",
+          tapActionUsed: "open_app",
+          title: "",
+          body: "",
+          source: "hub_event",
+          eventType: "event_cancelled",
+          generationId: "official",
+          memberId: "stellive-official",
+          deliveryMode: "realtime_best_effort",
+          deliveryLevel: "immediate_push",
+          pushPriority: "high",
+          providerMessageId: "provider-message-1",
+          providerErrorCode: undefined,
+          retryCount: 1,
+          expiresAt: undefined
+        }
+      }
+    ]);
+  });
+});
+
 describe("NotificationJobRepository", () => {
   it("enqueues notification jobs with queued status", async () => {
     const calls: unknown[] = [];
@@ -85,6 +311,190 @@ describe("NotificationJobRepository", () => {
           eventId: "event-1",
           priority: 3,
           status: "queued"
+        }
+      }
+    ]);
+  });
+});
+
+describe("NotificationJobRepository worker operations", () => {
+  const lockedAt = new Date("2026-06-12T00:00:00.000Z");
+  const runAfter = new Date("2026-06-11T23:59:00.000Z");
+
+  it("claims ready queued jobs in priority order", async () => {
+    const calls: unknown[] = [];
+    const prisma = {
+      notificationJob: {
+        async findMany(args: unknown) {
+          calls.push({ method: "findMany", args });
+          return [
+            {
+              id: "job-1",
+              eventId: "event-1",
+              priority: 1,
+              status: "queued",
+              runAfter,
+              lockedAt: null,
+              attempts: 0,
+              lastError: null,
+              createdAt: runAfter,
+              updatedAt: runAfter
+            }
+          ];
+        },
+        async updateMany(args: unknown) {
+          calls.push({ method: "updateMany", args });
+          return { count: 1 };
+        }
+      }
+    };
+    const repository = new NotificationJobRepository(prisma);
+
+    const jobs = await repository.claimReady({ limit: 10, lockedBy: "worker-1", now: lockedAt });
+
+    expect(jobs).toEqual([
+      {
+        id: "job-1",
+        eventId: "event-1",
+        priority: 1,
+        attempts: 0,
+        runAfter,
+        lockedAt,
+        lockedBy: "worker-1"
+      }
+    ]);
+    expect(calls).toEqual([
+      {
+        method: "findMany",
+        args: {
+          where: { status: "queued", runAfter: { lte: lockedAt } },
+          orderBy: [{ priority: "asc" }, { runAfter: "asc" }, { createdAt: "asc" }],
+          take: 10
+        }
+      },
+      {
+        method: "updateMany",
+        args: {
+          where: { id: { in: ["job-1"] }, status: "queued" },
+          data: { status: "locked", lockedAt, lockedBy: "worker-1" }
+        }
+      }
+    ]);
+  });
+
+  it("does not return jobs that another worker claimed first", async () => {
+    const repository = new NotificationJobRepository({
+      notificationJob: {
+        async findMany() {
+          return [
+            {
+              id: "job-1",
+              eventId: "event-1",
+              priority: 1,
+              status: "queued",
+              runAfter,
+              lockedAt: null,
+              attempts: 0,
+              lastError: null,
+              createdAt: runAfter,
+              updatedAt: runAfter
+            }
+          ];
+        },
+        async updateMany() {
+          return { count: 0 };
+        }
+      }
+    });
+
+    const jobs = await repository.claimReady({ limit: 10, lockedBy: "worker-1", now: lockedAt });
+
+    expect(jobs).toEqual([]);
+  });
+
+  it("completes locked jobs", async () => {
+    const calls: unknown[] = [];
+    const repository = new NotificationJobRepository({
+      notificationJob: {
+        async update(args: unknown) {
+          calls.push(args);
+          return {};
+        }
+      }
+    });
+
+    await repository.complete("job-1");
+
+    expect(calls).toEqual([
+      {
+        where: { id: "job-1" },
+        data: { status: "completed", lockedAt: null, lockedBy: null }
+      }
+    ]);
+  });
+
+  it("requeues transient failures with retry time", async () => {
+    const calls: unknown[] = [];
+    const retryAt = new Date("2026-06-12T00:01:00.000Z");
+    const repository = new NotificationJobRepository({
+      notificationJob: {
+        async update(args: unknown) {
+          calls.push(args);
+          return {};
+        }
+      }
+    });
+
+    await repository.fail({
+      jobId: "job-1",
+      attempts: 0,
+      reason: "transient_push_failure",
+      retryAt,
+      terminal: false
+    });
+
+    expect(calls).toEqual([
+      {
+        where: { id: "job-1" },
+        data: {
+          status: "queued",
+          lockedAt: null,
+          lockedBy: null,
+          attempts: { increment: 1 },
+          lastError: "transient_push_failure",
+          runAfter: retryAt
+        }
+      }
+    ]);
+  });
+
+  it("marks terminal failures as failed", async () => {
+    const calls: unknown[] = [];
+    const repository = new NotificationJobRepository({
+      notificationJob: {
+        async update(args: unknown) {
+          calls.push(args);
+          return {};
+        }
+      }
+    });
+
+    await repository.fail({
+      jobId: "job-1",
+      attempts: 4,
+      reason: "max_attempts_exceeded",
+      terminal: true
+    });
+
+    expect(calls).toEqual([
+      {
+        where: { id: "job-1" },
+        data: {
+          status: "failed",
+          lockedAt: null,
+          lockedBy: null,
+          attempts: { increment: 1 },
+          lastError: "max_attempts_exceeded"
         }
       }
     ]);

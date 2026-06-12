@@ -220,9 +220,10 @@ describe("internal admin routes", () => {
       completed: 0,
       failed: 0,
       skipped: 0,
-      status: "not_available",
-      reason: "notification_worker_not_available",
-      requestedLimit: 100
+      sent: 0,
+      queued: 0,
+      status: "disabled",
+      reason: "notification_worker_not_configured"
     });
   });
 
@@ -801,5 +802,47 @@ describe("admin console routes", () => {
     expect(consoleResponse.body).not.toContain(internalToken);
     expect(loginResponse.body).not.toContain(adminToken);
     expect(loginResponse.body).not.toContain(internalToken);
+  });
+});
+describe("notification worker drain route", () => {
+  it("calls an injected notification worker with the clamped body limit", async () => {
+    const drainCalls: unknown[] = [];
+    const app = await buildTestApp({
+      notificationWorker: {
+        async drain(input: unknown) {
+          drainCalls.push(input);
+          return {
+            claimed: 2,
+            completed: 1,
+            failed: 0,
+            skipped: 3,
+            sent: 4,
+            queued: 1,
+            status: "partial" as const
+          };
+        }
+      }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/jobs/notifications/drain?limit=7",
+      headers: { ...authHeaders, "content-type": "application/json" },
+      payload: JSON.stringify({ limit: "250" })
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      claimed: 2,
+      completed: 1,
+      failed: 0,
+      skipped: 3,
+      sent: 4,
+      queued: 1,
+      status: "partial"
+    });
+    expect(drainCalls).toEqual([{ limit: 100 }]);
   });
 });

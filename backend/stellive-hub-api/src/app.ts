@@ -5,6 +5,15 @@ import swaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyRequest } from "fastify";
 import { loadEnv } from "./config/env.js";
 import { HubEventRepository } from "./hub-events/hubEventRepository.js";
+import NotificationJobRepository from "./jobs/notificationJobRepository.js";
+import NotificationWorker from "./jobs/notificationWorker.js";
+import { PreferenceResolutionService } from "./preferences/preferenceResolution.js";
+import { createFcmClient } from "./push/fcmClient.js";
+import { FcmPushSender } from "./push/pushSender.js";
+import { DeliveryAttemptRepository } from "./repositories/deliveryAttemptRepository.js";
+import DeviceRepository from "./repositories/deviceRepository.js";
+import PlatformEventRepository from "./repositories/platformEventRepository.js";
+import PreferenceRepository from "./repositories/preferenceRepository.js";
 import { type AdminHubEventRouteDependencies, registerAdminHubEventRoutes } from "./routes/adminHubEventRoutes.js";
 import { registerAdminRoutes } from "./routes/adminRoutes.js";
 import registerChzzkAuthRoutes, { type ChzzkAuthRouteOptions } from "./routes/chzzkAuthRoutes.js";
@@ -33,6 +42,26 @@ export interface BuildAppOptions {
 const testDatabaseUrl = "postgresql://stellive:stellive@localhost:5432/stellive_hub_test";
 const publicCorsOptions = { origin: "*" };
 const privilegedCorsOptions = { origin: false };
+
+type AppEnv = ReturnType<typeof loadEnv>;
+
+function createDefaultNotificationWorker(env: AppEnv): NotificationWorker {
+  const fcmClient = createFcmClient({
+    projectId: env.FCM_PROJECT_ID,
+    clientEmail: env.FCM_CLIENT_EMAIL,
+    privateKey: env.FCM_PRIVATE_KEY
+  });
+
+  return new NotificationWorker({
+    notificationJobs: new NotificationJobRepository(),
+    platformEvents: new PlatformEventRepository(),
+    devices: new DeviceRepository(),
+    preferences: new PreferenceRepository(),
+    deliveryAttempts: new DeliveryAttemptRepository(),
+    preferenceResolution: new PreferenceResolutionService(),
+    pushSender: new FcmPushSender(fcmClient)
+  });
+}
 
 function isPrivilegedRoutePath(url: string): boolean {
   return (
@@ -80,7 +109,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
     env,
     ...options.chzzkAuthRoutes?.dependencies
   });
-  await registerInternalRoutes(app, { env, dependencies: options.internalRoutes?.dependencies });
+  const internalRouteDependencies: Partial<InternalRouteDependencies> = options.internalRoutes?.dependencies ?? {
+    notificationWorker: createDefaultNotificationWorker(env)
+  };
+  await registerInternalRoutes(app, { env, dependencies: internalRouteDependencies });
   await registerAdminRoutes(app, { env });
   await registerAdminHubEventRoutes(app, { env, dependencies: options.adminHubEventRoutes?.dependencies });
   return app;

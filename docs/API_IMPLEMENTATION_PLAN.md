@@ -230,6 +230,8 @@ NAVER_CAFE_SEARCH_ENABLED=false
 
 - Use Firebase Admin SDK from the trusted backend.
 - Send iOS pushes through FCM/APNs first.
+- `push/fcmClient.ts` is disabled-safe when Firebase env vars are unset or placeholder values; tests inject fake senders and do not call provider APIs.
+- `push/pushPayloadFactory.ts` builds payloads from normalized `PlatformEvent` plus resolved notification policy only.
 
 **Rules**
 
@@ -371,6 +373,8 @@ Current mobile API backend status:
 - `GET /v1/internal/adapters/health`: report adapter health as `enabled`, `disabled`, `verify_required`, or `rate_limited`.
 
 Internal endpoints require `INTERNAL_API_TOKEN` or deployment-platform IAM protection.
+
+`POST /v1/internal/jobs/notifications/drain` delegates to `jobs/notificationWorker.ts` when configured. The worker claims queued jobs, loads `PlatformEvent`, lists active push targets, calls `PreferenceResolutionService`, applies load-reduction policy, sends through `PushSender`, writes `DeliveryAttempt` records for sent/skipped/failed decisions, completes successful jobs, and requeues transient provider failures with backoff. The route does not accept caller-supplied push payloads, device filters, or preference override flags.
 
 ## Implementation Phases
 
