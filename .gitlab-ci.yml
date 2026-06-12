@@ -7,6 +7,7 @@ stages:
 
 variables:
   ANDROID_PROJECT_DIR: "android/StelliveHubAndroid"
+  BACKEND_PROJECT_DIR: "backend/stellive-hub-api"
   GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
   GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.caching=true -Dkotlin.incremental=false"
 
@@ -31,9 +32,22 @@ cache:
     - chmod +x ./gradlew
     - ./gradlew --version
 
+.backend_node_job:
+  image: node:22-alpine
+  cache:
+    key:
+      files:
+        - backend/stellive-hub-api/package-lock.json
+    paths:
+      - backend/stellive-hub-api/.npm/
+    policy: pull-push
+  before_script:
+    - cd "$BACKEND_PROJECT_DIR"
+    - npm ci --cache .npm --prefer-offline
+
 lint:android:
-  extends: .android_gradle_job
   stage: validate
+  extends: .android_gradle_job
   script:
     - ./gradlew --no-daemon lintDebug
   artifacts:
@@ -44,8 +58,8 @@ lint:android:
       - android/StelliveHubAndroid/app/build/reports/lint-results-debug.xml
 
 test:android:
-  extends: .android_gradle_job
   stage: test
+  extends: .android_gradle_job
   script:
     - ./gradlew --no-daemon testDebugUnitTest
   artifacts:
@@ -53,16 +67,29 @@ test:android:
     expire_in: 1 week
     paths:
       - android/StelliveHubAndroid/app/build/reports/tests/
-      - android/StelliveHubAndroid/app/build/test-results/
+      - android/StelliveHubAndroid/app/build/test-results/testDebugUnitTest/*.xml
     reports:
-      junit: android/StelliveHubAndroid/app/build/test-results/testDebugUnitTest/*.xml
+      junit:
+        - android/StelliveHubAndroid/app/build/test-results/testDebugUnitTest/*.xml
 
 build:android:
-  extends: .android_gradle_job
   stage: build
+  extends: .android_gradle_job
   script:
     - ./gradlew --no-daemon assembleDebug
   artifacts:
     expire_in: 1 week
     paths:
       - android/StelliveHubAndroid/app/build/outputs/apk/debug/*.apk
+
+build:backend:
+  stage: build
+  extends: .backend_node_job
+  script:
+    - npm run build
+
+test:backend:
+  stage: test
+  extends: .backend_node_job
+  script:
+    - npm test
