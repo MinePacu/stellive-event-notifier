@@ -1,5 +1,13 @@
 # AI Handoff
 
+## Hub Event Admin CRUD Status
+
+Backend admin CRUD for `굿즈/행사` schedules is implemented on `/v1/admin/hub-events*` with admin session or `ADMIN_CONSOLE_TOKEN` authentication. It supports draft create/update, publish, cancel, deactivate, soft delete, validation, audit logs, and an `/admin` console section. Do not add image upload inputs or copied media fields.
+
+Public hub event reads use `HUB_EVENTS_STORAGE_MODE=memory` by default. Set `HUB_EVENTS_STORAGE_MODE=prisma` only after applying the Prisma migration; Prisma mode returns published, non-deleted `HubEvent` rows.
+
+Admin publish/update/cancel actions enqueue normalized `hub_event` notification candidates through `PlatformEvent` and `NotificationJob`; they do not send push directly and must still pass through preference resolution and delivery policy.
+
 Copy this prompt into another Codex, ChatGPT, Copilot, or AI coding session before continuing work.
 
 ## Project Summary

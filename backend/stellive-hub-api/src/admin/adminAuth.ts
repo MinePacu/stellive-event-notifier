@@ -134,7 +134,7 @@ function normalizeConfiguredSecret(value: string | undefined): string | undefine
 function serializeAdminSessionCookie(value: string, maxAgeSeconds: number, secure: boolean): string {
   const attributes = [
     `${adminSessionCookieName}=${value}`,
-    "Path=/admin",
+    "Path=/",
     `Max-Age=${maxAgeSeconds}`,
     "HttpOnly",
     "SameSite=Strict"

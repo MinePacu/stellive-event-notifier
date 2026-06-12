@@ -184,6 +184,199 @@ paths:
       responses:
         "200":
           description: Resolved notification decision for a sample event.
+  /v1/admin/hub-events:
+    get:
+      summary: List admin hub events
+      responses:
+        "200":
+          description: Admin hub event list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventListResponse"
+        "401":
+          description: Admin authentication required.
+    post:
+      summary: Create a draft hub event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventCreateRequest"
+      responses:
+        "201":
+          description: Draft hub event created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "400":
+          description: Validation failed.
+        "401":
+          description: Admin authentication required.
+  /v1/admin/hub-events/{id}:
+    get:
+      summary: Get an admin hub event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Admin hub event detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "404":
+          description: Hub event not found.
+    put:
+      summary: Update an admin hub event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventUpdateRequest"
+      responses:
+        "200":
+          description: Hub event updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "400":
+          description: Validation failed.
+    delete:
+      summary: Soft delete an admin hub event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Hub event soft deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+  /v1/admin/hub-events/{id}/publish:
+    post:
+      summary: Publish a hub event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Hub event published.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+  /v1/admin/hub-events/{id}/cancel:
+    post:
+      summary: Cancel a published hub event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Hub event cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+  /v1/admin/hub-events/{id}/deactivate:
+    post:
+      summary: Deactivate a hub event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Hub event deactivated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+  /v1/admin/hub-events/{id}/audit-log:
+    get:
+      summary: List hub event audit log entries
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Hub event audit log.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/HubEventAuditLogEntry"
+  /v1/admin/hub-events/validate:
+    post:
+      summary: Validate a hub event write payload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - input
+              properties:
+                mode:
+                  type: string
+                  enum: [draft, publish]
+                  default: draft
+                input:
+                  $ref: "#/components/schemas/AdminHubEventCreateRequest"
+      responses:
+        "200":
+          description: Validation result.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - valid
+                  - errors
+                properties:
+                  valid:
+                    type: boolean
+                  errors:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminHubEventValidationError"
   /v1/realtime/status:
     get:
       responses:
@@ -1105,3 +1298,213 @@ components:
           type:
             - string
             - "null"
+    HubEvent:
+      type: object
+      required:
+        - id
+        - category
+        - participationMode
+        - status
+        - title
+        - generationId
+        - sourceUrl
+        - sourceLabel
+        - sourceType
+        - notificationEligible
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+        participationMode:
+          type: string
+        status:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        generationId:
+          type: string
+        memberId:
+          type: string
+        sourceUrl:
+          type: string
+          format: uri
+        sourceLabel:
+          type: string
+        sourceType:
+          type: string
+        announcedAt:
+          type: string
+          format: date-time
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        purchaseUrl:
+          type: string
+          format: uri
+        ticketUrl:
+          type: string
+          format: uri
+        venueName:
+          type: string
+        venueAddress:
+          type: string
+        notificationEligible:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    HubEventPublicationState:
+      type: string
+      enum:
+        - draft
+        - published
+        - inactive
+        - deleted
+    AdminHubEventCreateRequest:
+      type: object
+      required:
+        - title
+        - category
+        - participationMode
+        - status
+        - generationId
+        - sourceUrl
+        - sourceLabel
+        - sourceType
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        category:
+          type: string
+        participationMode:
+          type: string
+        status:
+          type: string
+        generationId:
+          type: string
+        memberId:
+          type: string
+        sourceUrl:
+          type: string
+          format: uri
+        sourceLabel:
+          type: string
+        sourceType:
+          type: string
+        announcedAt:
+          type: string
+          format: date-time
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        purchaseUrl:
+          type: string
+          format: uri
+        ticketUrl:
+          type: string
+          format: uri
+        venueName:
+          type: string
+        venueAddress:
+          type: string
+        notificationEligible:
+          type: boolean
+    AdminHubEventUpdateRequest:
+      allOf:
+        - $ref: "#/components/schemas/AdminHubEventCreateRequest"
+    AdminHubEventResponse:
+      allOf:
+        - $ref: "#/components/schemas/HubEvent"
+        - type: object
+          required:
+            - publicationState
+            - revision
+          properties:
+            publicationState:
+              $ref: "#/components/schemas/HubEventPublicationState"
+            publishedAt:
+              type: string
+              format: date-time
+            cancelledAt:
+              type: string
+              format: date-time
+            deactivatedAt:
+              type: string
+              format: date-time
+            deletedAt:
+              type: string
+              format: date-time
+            revision:
+              type: integer
+              minimum: 1
+            createdBy:
+              type: string
+            updatedBy:
+              type: string
+    AdminHubEventListResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminHubEventResponse"
+        nextCursor:
+          type: string
+    AdminHubEventValidationError:
+      type: object
+      required:
+        - field
+        - reason
+        - message
+      properties:
+        field:
+          type: string
+        reason:
+          type: string
+        message:
+          type: string
+    HubEventAuditLogEntry:
+      type: object
+      required:
+        - id
+        - hubEventId
+        - action
+        - createdAt
+      properties:
+        id:
+          type: string
+        hubEventId:
+          type: string
+        action:
+          type: string
+        actorId:
+          type: string
+        reason:
+          type: string
+        before:
+          type: object
+        after:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
