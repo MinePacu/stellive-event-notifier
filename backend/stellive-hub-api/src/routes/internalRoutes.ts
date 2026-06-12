@@ -83,6 +83,12 @@ function parseInternalLimit(value: unknown, defaultLimit: number): number {
   return Math.min(100, Math.max(1, Math.trunc(parsed)));
 }
 
+function hasOnlyNotificationDrainFields(body: unknown): boolean {
+  if (body === undefined || body === null) return true;
+  if (typeof body !== "object" || Array.isArray(body)) return false;
+  return Object.keys(body).every((key) => key === "limit");
+}
+
 function readAuthorizationHeader(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -144,8 +150,11 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
     return dependencies.webhookSubscriptions.listDiagnostics(limit);
   });
 
-  app.post("/v1/internal/jobs/notifications/drain", async (request) => {
+  app.post("/v1/internal/jobs/notifications/drain", async (request, reply) => {
     const body = request.body as { limit?: unknown } | undefined;
+    if (!hasOnlyNotificationDrainFields(body)) {
+      return reply.code(400).send({ error: "notification_drain_body_invalid" });
+    }
     const requestedLimit = parseInternalLimit(body?.limit ?? (request.query as LimitQuery).limit, 25);
 
     if (dependencies.notificationWorker) {
