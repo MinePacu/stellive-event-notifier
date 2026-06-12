@@ -251,26 +251,21 @@ describe("hub event routes", () => {
     expect(body.hubEventsSummary?.preview.length).toBeLessThanOrEqual(3);
   });
 
-  it("falls back to the default list when limit is invalid", async () => {
+  it("rejects invalid limit values", async () => {
     const response = await injectHubEvents("/v1/hub-events?limit=foo");
 
-    expect(response.statusCode).toBe(200);
-    const body = response.json() as { items: HubEvent[] };
-    expect(body.items.length).toBeGreaterThan(0);
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "invalid_hub_event_query", field: "limit" });
   });
 
-  it("falls back to the default list when limit is zero or negative", async () => {
+  it("rejects zero or negative limit values", async () => {
     const zeroResponse = await injectHubEvents("/v1/hub-events?limit=0");
     const negativeResponse = await injectHubEvents("/v1/hub-events?limit=-1");
 
-    expect(zeroResponse.statusCode).toBe(200);
-    expect(negativeResponse.statusCode).toBe(200);
-
-    const zeroBody = zeroResponse.json() as { items: HubEvent[] };
-    const negativeBody = negativeResponse.json() as { items: HubEvent[] };
-
-    expect(zeroBody.items.length).toBeGreaterThan(0);
-    expect(negativeBody.items.length).toBeGreaterThan(0);
+    expect(zeroResponse.statusCode).toBe(400);
+    expect(zeroResponse.json()).toEqual({ error: "invalid_hub_event_query", field: "limit" });
+    expect(negativeResponse.statusCode).toBe(400);
+    expect(negativeResponse.json()).toEqual({ error: "invalid_hub_event_query", field: "limit" });
   });
 
   it("returns one event and a next cursor for limit=1", async () => {

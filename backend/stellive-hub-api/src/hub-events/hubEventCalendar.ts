@@ -1,54 +1,24 @@
 import type {
+  HubCalendarDay,
+  HubCalendarEntry,
+  HubCalendarResponse,
+  HubCalendarWidgetSnapshot,
   HubEvent,
   HubEventCategory,
   HubEventParticipationMode,
   HubEventStatus
 } from "../types.js";
 
-export interface HubCalendarEntry {
-  id: string;
-  eventId: string;
-  title: string;
-  category: HubEventCategory;
-  status: HubEventStatus;
-  participationMode: HubEventParticipationMode;
-  generationId: string;
-  memberId?: string;
-  startsAt?: string;
-  endsAt?: string;
-  displayDate: string;
-  displayTimeText: string;
-  sourceLabel: string;
-  appDeepLink: string;
-}
+export type { HubCalendarDay, HubCalendarEntry, HubCalendarResponse, HubCalendarWidgetSnapshot } from "../types.js";
 
-export interface HubCalendarDay {
-  date: string;
-  entries: HubCalendarEntry[];
-}
-
-export interface HubCalendarResponse {
-  timezone: string;
-  from: string;
-  to: string;
-  days: HubCalendarDay[];
-}
-
-export interface HubCalendarWidgetSnapshot {
-  generatedAt: string;
-  timezone: string;
-  entries: HubCalendarEntry[];
-  staleAfter: string;
-}
-
-interface CalendarResponseOptions {
+export interface CalendarResponseOptions {
   from: Date;
   to: Date;
   timezone: string;
   now: Date;
 }
 
-interface WidgetSnapshotOptions {
+export interface WidgetSnapshotOptions {
   timezone: string;
   now: Date;
   limit: number;
@@ -184,7 +154,8 @@ function toEntry(event: HubEvent, date: string, status: HubEventStatus, timezone
     displayDate: date,
     displayTimeText: displayTimeText(event, date, timezone),
     sourceLabel: event.sourceLabel,
-    appDeepLink: `stellivehub://hub-events/${event.id}`
+    appDeepLink: `stellivehub://hub-events/${event.id}`,
+    platformUrl: event.purchaseUrl ?? event.ticketUrl ?? event.sourceUrl
   };
 }
 

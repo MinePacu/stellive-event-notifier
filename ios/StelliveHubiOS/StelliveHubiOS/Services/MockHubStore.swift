@@ -288,7 +288,8 @@ final class MockHubStore: ObservableObject {
             displayDate: displayDate,
             displayTimeText: calendarTimeText(for: event),
             sourceLabel: event.sourceLabel,
-            appDeepLink: "stellivehub://hub-events/\(event.id)"
+            appDeepLink: "stellivehub://hub-events/\(event.id)",
+            platformUrl: event.purchaseUrl ?? event.ticketUrl ?? event.sourceUrl
         )
     }
 

@@ -25,7 +25,8 @@ class CalendarWidgetTextFormatterTest {
             displayDate = "2026-06-11",
             displayTimeText = "10:00 시작",
             sourceLabel = "Stellive Official",
-            appDeepLink = "stellivehub://hub-events/event"
+            appDeepLink = "stellivehub://hub-events/event",
+            platformUrl = "https://example.com/hub-events/event"
         )
 
         assertEquals("마감 임박 · 2026-06-11 · 10:00 시작", CalendarWidgetTextFormatter.subtitle(entry))
