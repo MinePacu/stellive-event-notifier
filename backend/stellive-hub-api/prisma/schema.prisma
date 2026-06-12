@@ -167,6 +167,7 @@ model HubEvent {
   ticketUrl             String?
   venueName             String?
   venueAddress          String?
+  image                 Json?
   notificationEligible  Boolean  @default(true)
   publicationState      String   @default("draft")
   publishedAt           DateTime?

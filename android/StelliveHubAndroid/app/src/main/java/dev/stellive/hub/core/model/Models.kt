@@ -69,6 +69,22 @@ enum class HubEventSourceType {
     OFFICIAL_COLLAB
 }
 
+enum class HubEventImagePolicyState(val apiValue: String) {
+    NONE("none"),
+    OFFICIAL_RUNTIME_URL("official_runtime_url"),
+    THIRD_PARTY_ALLOWED("third_party_allowed"),
+    VERIFY_REQUIRED("verify_required"),
+    BLOCKED("blocked")
+}
+
+data class HubEventImage(
+    val policyState: HubEventImagePolicyState,
+    val url: String? = null,
+    val sourceLabel: String? = null,
+    val sourceUrl: String? = null,
+    val altText: String? = null,
+)
+
 enum class NotificationPreferenceScope {
     GLOBAL,
     GENERATION,
@@ -146,6 +162,7 @@ data class HubEvent(
     val ticketUrl: String? = null,
     val venueName: String? = null,
     val venueAddress: String? = null,
+    val image: HubEventImage? = null,
     val notificationEligible: Boolean = true,
     val updatedAt: Instant
 )

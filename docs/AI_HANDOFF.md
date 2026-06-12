@@ -1,5 +1,31 @@
 # AI Handoff
 
+## Hub Event Image Policy Status
+
+GitHub issue `#19` and GitLab work item `#13` image policy work is implemented as metadata-only support.
+
+Implemented:
+- `shared/schemas/domain.ts` defines `HubEventImagePolicyState`, `HubEventImage`, and optional `HubEvent.image`.
+- Backend admin policy validates displayable image metadata, rejects non-HTTPS image/source URLs, and rejects nested binary/local asset fields such as `bytes`, `base64`, `assetPath`, `filePath`, and `localPath`.
+- Prisma `HubEvent` stores image metadata as nullable `Json`; repository mapping normalizes and strips unknown image fields before public/admin DTO output.
+- `/v1/hub-events` list/detail responses can include optional `image`; calendar/widget entries intentionally omit image metadata.
+- Push payload tests confirm HubEvent image metadata is not included in FCM data payloads.
+- Android domain model and `HubEventImagePolicy` support optional image metadata and display only `official_runtime_url` or `third_party_allowed` HTTPS URLs.
+- iOS domain model and `HubEventImagePolicy` support optional image metadata and display only `official_runtime_url` or `third_party_allowed` HTTPS URLs.
+- OpenAPI and docs describe the metadata-only contract and image-free calendar/widget/push behavior.
+
+Verification completed:
+- `rtk npm run prisma:generate` in `backend/stellive-hub-api`
+- `rtk npm run build` in `backend/stellive-hub-api`
+- `rtk npm test` in `backend/stellive-hub-api` passed: 27 files, 252 tests.
+- `rtk ./gradlew :app:testDebugUnitTest` in `android/StelliveHubAndroid` passed.
+- `rtk xcodebuild test -project ios/StelliveHubiOS/StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination 'platform=iOS Simulator,name=iPhone 17'` passed before moving the new iOS image policy assertions into the existing included test file. A fresh rerun after that move was blocked by the execution environment usage limit on escalated commands.
+
+Known follow-up:
+- Re-run the iOS test command above when escalation is available to verify the newly added `HubEventImagePolicy` assertions in `HubCalendarPolicyTests.swift`.
+- The current Android UI remains text-first and does not add a remote image slot; this preserves the required image-free fallback. Add remote image rendering separately only if product explicitly wants visible images in cards/details.
+
+
 ## Hub Event Admin CRUD Status
 
 Backend admin CRUD for `굿즈/행사` schedules is implemented on `/v1/admin/hub-events*` with admin session or `ADMIN_CONSOLE_TOKEN` authentication. It supports draft create/update, publish, cancel, deactivate, soft delete, validation, audit logs, and an `/admin` console section. Do not add image upload inputs or copied media fields.
