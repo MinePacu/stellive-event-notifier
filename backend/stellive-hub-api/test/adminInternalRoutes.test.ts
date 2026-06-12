@@ -51,6 +51,19 @@ function expectAdminThemeSupport(html: string) {
   expect(html).toContain('data-theme-default="system"');
 }
 
+function expectHubEventAdminConsoleSupport(html: string) {
+  expect(html).toContain('data-admin-section="hub-events"');
+  expect(html).toContain('data-hub-event-action="save-draft"');
+  expect(html).toContain('data-hub-event-action="publish"');
+  expect(html).toContain('data-hub-event-action="cancel"');
+  expect(html).toContain('data-hub-event-action="deactivate"');
+  expect(html).toContain('data-hub-event-action="delete"');
+  expect(html).not.toContain('type="file"');
+  expect(html).not.toContain('name="imageUrl"');
+  expect(html).not.toContain('name="logoUrl"');
+  expect(html).not.toContain('name="posterUrl"');
+}
+
 describe("internal admin routes", () => {
   it("rejects missing internal bearer tokens", async () => {
     const app = await buildTestApp();
@@ -477,6 +490,7 @@ describe("admin console routes", () => {
     expect(response.body).toContain("/v1/internal/schedulers/youtube/renew-subscriptions");
     expect(response.body).toContain("/v1/internal/schedulers/chzzk/live-status");
     expectAdminThemeSupport(response.body);
+    expectHubEventAdminConsoleSupport(response.body);
     expect(response.body).toContain("Not checked yet");
     expect(response.body).toContain("stellive.admin.internalApiToken");
     expect(response.body).toContain("window.sessionStorage");
@@ -560,7 +574,7 @@ describe("admin console routes", () => {
     expect(setCookie).toEqual(expect.stringContaining(`${adminSessionCookieName}=`));
     expect(setCookie).toEqual(expect.stringContaining("HttpOnly"));
     expect(setCookie).toEqual(expect.stringContaining("SameSite=Strict"));
-    expect(setCookie).toEqual(expect.stringContaining("Path=/admin"));
+    expect(setCookie).toEqual(expect.stringContaining("Path=/"));
     expect(setCookie).not.toEqual(expect.stringContaining("Secure"));
     expect(setCookie).not.toEqual(expect.stringContaining("admin-token"));
   });

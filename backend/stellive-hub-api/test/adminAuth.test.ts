@@ -172,7 +172,7 @@ describe("admin session cookies", () => {
     expect(cookie?.header).toContain(`${adminSessionCookieName}=`);
     expect(cookie?.header).toContain("HttpOnly");
     expect(cookie?.header).toContain("SameSite=Strict");
-    expect(cookie?.header).toContain("Path=/admin");
+    expect(cookie?.header).toContain("Path=/");
     expect(cookie?.header).toContain("Max-Age=28800");
     expect(cookie?.header).not.toContain("Secure");
   });

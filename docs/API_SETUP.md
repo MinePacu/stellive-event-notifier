@@ -106,3 +106,11 @@ Use FCM for Android and iOS push delivery. iOS APNs is connected through Firebas
 ## Realtime Mode
 
 Realtime mode still respects API rate limits, platform terms, user settings, quiet hours, keyword filters, and rate limits.
+
+## Hub Events Admin Storage
+
+`HUB_EVENTS_STORAGE_MODE=memory` is the default for local development and tests. It keeps public `GET /v1/hub-events*` reads on the existing seed-backed service.
+
+Set `HUB_EVENTS_STORAGE_MODE=prisma` only after the Prisma schema migration has been applied. In Prisma mode, public hub event reads return published, non-deleted `HubEvent` rows, while `/v1/admin/hub-events*` performs authenticated CRUD, validation, publication state changes, soft delete, and audit logging.
+
+Admin publish/update/cancel actions may create normalized `PlatformEvent` notification candidates and enqueue `NotificationJob` rows. They do not send push directly and must still flow through preference resolution, quiet hours, load reduction, and worker delivery.

@@ -4,6 +4,8 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyRequest } from "fastify";
 import { loadEnv } from "./config/env.js";
+import { HubEventRepository } from "./hub-events/hubEventRepository.js";
+import { type AdminHubEventRouteDependencies, registerAdminHubEventRoutes } from "./routes/adminHubEventRoutes.js";
 import { registerAdminRoutes } from "./routes/adminRoutes.js";
 import registerChzzkAuthRoutes, { type ChzzkAuthRouteOptions } from "./routes/chzzkAuthRoutes.js";
 import { type InternalRouteDependencies, registerInternalRoutes } from "./routes/internalRoutes.js";
@@ -20,6 +22,9 @@ export interface BuildAppOptions {
   internalRoutes?: {
     dependencies?: Partial<InternalRouteDependencies>;
   };
+  adminHubEventRoutes?: {
+    dependencies?: Partial<AdminHubEventRouteDependencies>;
+  };
   appRoutes?: {
     dependencies?: AppRouteDependencies;
   };
@@ -30,7 +35,13 @@ const publicCorsOptions = { origin: "*" };
 const privilegedCorsOptions = { origin: false };
 
 function isPrivilegedRoutePath(url: string): boolean {
-  return url === "/admin" || url.startsWith("/admin?") || url.startsWith("/admin/") || url.startsWith("/v1/internal/");
+  return (
+    url === "/admin" ||
+    url.startsWith("/admin?") ||
+    url.startsWith("/admin/") ||
+    url.startsWith("/v1/admin/") ||
+    url.startsWith("/v1/internal/")
+  );
 }
 
 function corsDelegator(request: FastifyRequest, callback: (error: Error | null, options?: { origin: string | boolean }) => void) {
@@ -59,12 +70,18 @@ export async function buildApp(options: BuildAppOptions = {}) {
     }
   });
   await app.register(swaggerUi, { routePrefix: "/docs" });
-  await registerRoutes(app, { dependencies: options.appRoutes?.dependencies });
+  const appRouteDependencies: AppRouteDependencies = { ...options.appRoutes?.dependencies };
+  if (!appRouteDependencies.hubEvents && env.HUB_EVENTS_STORAGE_MODE === "prisma") {
+    appRouteDependencies.hubEvents = new HubEventRepository();
+  }
+
+  await registerRoutes(app, { dependencies: appRouteDependencies });
   await registerChzzkAuthRoutes(app, {
     env,
     ...options.chzzkAuthRoutes?.dependencies
   });
   await registerInternalRoutes(app, { env, dependencies: options.internalRoutes?.dependencies });
   await registerAdminRoutes(app, { env });
+  await registerAdminHubEventRoutes(app, { env, dependencies: options.adminHubEventRoutes?.dependencies });
   return app;
 }

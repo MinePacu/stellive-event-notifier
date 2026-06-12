@@ -415,15 +415,92 @@ export function renderAdminConsoleHtml(): string {
         <tbody id="feature-flags"></tbody>
       </table>
     </section>
-  </main>
+      <section class="panel stack" data-admin-section="hub-events">
+        <div class="section-heading">
+          <div>
+            <h2>Hub events</h2>
+            <p class="subtle">Goods and event schedule publishing controls.</p>
+          </div>
+          <div class="action-controls">
+            <button id="hub-event-refresh" type="button">Refresh events</button>
+            <button id="hub-event-validate" type="button">Validate</button>
+            <button data-hub-event-action="save-draft" id="hub-event-save-draft" type="button">Save draft</button>
+            <button data-hub-event-action="publish" id="hub-event-publish" type="button">Publish</button>
+            <button data-hub-event-action="cancel" id="hub-event-cancel" type="button">Cancel</button>
+            <button data-hub-event-action="deactivate" id="hub-event-deactivate" type="button">Deactivate</button>
+            <button data-hub-event-action="delete" id="hub-event-delete" type="button">Delete</button>
+          </div>
+        </div>
+        <div class="grid two-column">
+          <div class="stack">
+            <div class="field">
+              <label for="hub-event-state-filter">Publication state</label>
+              <select id="hub-event-state-filter">
+                <option value="">All</option>
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="inactive">Inactive</option>
+                <option value="deleted">Deleted</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="hub-event-status-filter">Public status</label>
+              <select id="hub-event-status-filter">
+                <option value="">All</option>
+                <option value="announced">Announced</option>
+                <option value="upcoming">Upcoming</option>
+                <option value="open">Open</option>
+                <option value="closing_soon">Closing soon</option>
+                <option value="ended">Ended</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="hub-event-search">Search</label>
+              <input id="hub-event-search" type="search" autocomplete="off" spellcheck="false">
+            </div>
+            <table>
+              <thead><tr><th>Title</th><th>State</th><th>Status</th><th>Updated</th></tr></thead>
+              <tbody id="hub-event-list"></tbody>
+            </table>
+          </div>
+          <form id="hub-event-form" class="stack">
+            <input id="hub-event-id" type="hidden">
+            <div class="field"><label for="hub-event-title">Title</label><input id="hub-event-title" name="title" autocomplete="off"></div>
+            <div class="field"><label for="hub-event-summary">Summary</label><textarea id="hub-event-summary" name="summary" rows="3"></textarea></div>
+            <div class="field"><label for="hub-event-category">Category</label><select id="hub-event-category" name="category"><option value="online_goods">Online goods</option><option value="online_collab">Online collab</option><option value="offline_event">Offline event</option><option value="offline_collab">Offline collab</option></select></div>
+            <div class="field"><label for="hub-event-participation-mode">Participation mode</label><select id="hub-event-participation-mode" name="participationMode"><option value="online">Online</option><option value="offline">Offline</option><option value="hybrid">Hybrid</option></select></div>
+            <div class="field"><label for="hub-event-status">Status</label><select id="hub-event-status" name="status"><option value="announced">Announced</option><option value="upcoming">Upcoming</option><option value="open">Open</option><option value="closing_soon">Closing soon</option><option value="ended">Ended</option><option value="cancelled">Cancelled</option></select></div>
+            <div class="field"><label for="hub-event-generation">Generation</label><input id="hub-event-generation" name="generationId" autocomplete="off" value="official"></div>
+            <div class="field"><label for="hub-event-member">Member</label><input id="hub-event-member" name="memberId" autocomplete="off"></div>
+            <div class="field"><label for="hub-event-source-url">Source URL</label><input id="hub-event-source-url" name="sourceUrl" type="url" autocomplete="off"></div>
+            <div class="field"><label for="hub-event-source-label">Source label</label><input id="hub-event-source-label" name="sourceLabel" autocomplete="off"></div>
+            <div class="field"><label for="hub-event-source-type">Source type</label><select id="hub-event-source-type" name="sourceType"><option value="official">Official</option><option value="official_collab">Official collab</option><option value="venue">Venue</option><option value="ticketing">Ticketing</option><option value="store">Store</option></select></div>
+            <div class="field"><label for="hub-event-announced-at">Announced at</label><input id="hub-event-announced-at" name="announcedAt" type="datetime-local"></div>
+            <div class="field"><label for="hub-event-starts-at">Starts at</label><input id="hub-event-starts-at" name="startsAt" type="datetime-local"></div>
+            <div class="field"><label for="hub-event-ends-at">Ends at</label><input id="hub-event-ends-at" name="endsAt" type="datetime-local"></div>
+            <div class="field"><label for="hub-event-purchase-url">Purchase URL</label><input id="hub-event-purchase-url" name="purchaseUrl" type="url" autocomplete="off"></div>
+            <div class="field"><label for="hub-event-ticket-url">Ticket URL</label><input id="hub-event-ticket-url" name="ticketUrl" type="url" autocomplete="off"></div>
+            <div class="field"><label for="hub-event-venue-name">Venue name</label><input id="hub-event-venue-name" name="venueName" autocomplete="off"></div>
+            <div class="field"><label for="hub-event-venue-address">Venue address</label><input id="hub-event-venue-address" name="venueAddress" autocomplete="off"></div>
+            <label class="switch-control"><input id="hub-event-notification-eligible" name="notificationEligible" type="checkbox" checked> Notification eligible</label>
+          </form>
+        </div>
+        <div class="grid two-column">
+          <div><h3>Validation</h3><ul id="hub-event-validation" class="message-list"></ul></div>
+          <div><h3>Audit log</h3><ul id="hub-event-audit-log" class="message-list"></ul></div>
+        </div>
+      </section>
+    </main>
   ${renderAdminThemeBehaviorScript()}
   <script>
     const endpoints = {
       overview: "/v1/internal/admin/overview",
       drainJobs: "/v1/internal/jobs/notifications/drain",
       renewYoutube: "/v1/internal/schedulers/youtube/renew-subscriptions",
-      pollChzzk: "/v1/internal/schedulers/chzzk/live-status"
-    };
+        pollChzzk: "/v1/internal/schedulers/chzzk/live-status",
+        hubEvents: "/v1/admin/hub-events"
+      };
 
     const overviewRoot = document.getElementById("overview");
     const adaptersRoot = document.getElementById("adapters");
@@ -793,6 +870,220 @@ export function renderAdminConsoleHtml(): string {
         setBusy(false);
       }
     }
+
+    const hubEventFields = {
+      id: document.getElementById("hub-event-id"),
+      title: document.getElementById("hub-event-title"),
+      summary: document.getElementById("hub-event-summary"),
+      category: document.getElementById("hub-event-category"),
+      participationMode: document.getElementById("hub-event-participation-mode"),
+      status: document.getElementById("hub-event-status"),
+      generationId: document.getElementById("hub-event-generation"),
+      memberId: document.getElementById("hub-event-member"),
+      sourceUrl: document.getElementById("hub-event-source-url"),
+      sourceLabel: document.getElementById("hub-event-source-label"),
+      sourceType: document.getElementById("hub-event-source-type"),
+      announcedAt: document.getElementById("hub-event-announced-at"),
+      startsAt: document.getElementById("hub-event-starts-at"),
+      endsAt: document.getElementById("hub-event-ends-at"),
+      purchaseUrl: document.getElementById("hub-event-purchase-url"),
+      ticketUrl: document.getElementById("hub-event-ticket-url"),
+      venueName: document.getElementById("hub-event-venue-name"),
+      venueAddress: document.getElementById("hub-event-venue-address"),
+      notificationEligible: document.getElementById("hub-event-notification-eligible")
+    };
+    const hubEventListRoot = document.getElementById("hub-event-list");
+    const hubEventValidationRoot = document.getElementById("hub-event-validation");
+    const hubEventAuditRoot = document.getElementById("hub-event-audit-log");
+    const hubEventStateFilter = document.getElementById("hub-event-state-filter");
+    const hubEventStatusFilter = document.getElementById("hub-event-status-filter");
+    const hubEventSearch = document.getElementById("hub-event-search");
+
+    function toIsoFromLocal(value) {
+      if (!value) return undefined;
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+    }
+
+    function toLocalDateTime(value) {
+      if (!value) return "";
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return "";
+      return new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+
+    function collectHubEventInput() {
+      const input = {};
+      Object.entries(hubEventFields).forEach(function ([key, element]) {
+        if (!element || key === "id") return;
+        if (key === "notificationEligible") {
+          input[key] = element.checked;
+          return;
+        }
+        if (["announcedAt", "startsAt", "endsAt"].includes(key)) {
+          const iso = toIsoFromLocal(element.value);
+          if (iso) input[key] = iso;
+          return;
+        }
+        const value = element.value.trim();
+        if (value) input[key] = value;
+      });
+      return input;
+    }
+
+    async function adminApi(path, init) {
+      const response = await fetch(path, {
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        ...init
+      });
+      const contentType = response.headers.get("content-type") || "";
+      const payload = contentType.includes("application/json") ? await response.json() : await response.text();
+      if (!response.ok) {
+        const reason = payload && typeof payload === "object" && "error" in payload ? payload.error : "request_failed";
+        throw new Error(String(reason));
+      }
+      return payload;
+    }
+
+    function renderHubEventValidation(result) {
+      const errors = result && result.errors ? result.errors : [];
+      hubEventValidationRoot.replaceChildren();
+      if (errors.length === 0) {
+        const item = document.createElement("li");
+        item.textContent = result && result.valid === false ? "Validation failed." : "No validation errors.";
+        hubEventValidationRoot.appendChild(item);
+        return;
+      }
+      errors.forEach(function (error) {
+        const item = document.createElement("li");
+        item.textContent = [error.field, error.reason, error.message].filter(Boolean).join(" - ");
+        hubEventValidationRoot.appendChild(item);
+      });
+    }
+
+    function bindHubEventForm(event) {
+      hubEventFields.id.value = event.id || "";
+      hubEventFields.title.value = event.title || "";
+      hubEventFields.summary.value = event.summary || "";
+      hubEventFields.category.value = event.category || "online_goods";
+      hubEventFields.participationMode.value = event.participationMode || "online";
+      hubEventFields.status.value = event.status || "announced";
+      hubEventFields.generationId.value = event.generationId || "official";
+      hubEventFields.memberId.value = event.memberId || "";
+      hubEventFields.sourceUrl.value = event.sourceUrl || "";
+      hubEventFields.sourceLabel.value = event.sourceLabel || "";
+      hubEventFields.sourceType.value = event.sourceType || "official";
+      hubEventFields.announcedAt.value = toLocalDateTime(event.announcedAt);
+      hubEventFields.startsAt.value = toLocalDateTime(event.startsAt);
+      hubEventFields.endsAt.value = toLocalDateTime(event.endsAt);
+      hubEventFields.purchaseUrl.value = event.purchaseUrl || "";
+      hubEventFields.ticketUrl.value = event.ticketUrl || "";
+      hubEventFields.venueName.value = event.venueName || "";
+      hubEventFields.venueAddress.value = event.venueAddress || "";
+      hubEventFields.notificationEligible.checked = event.notificationEligible !== false;
+    }
+
+    function renderHubEvents(events) {
+      hubEventListRoot.replaceChildren();
+      if (!events.length) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 4;
+        cell.textContent = "No hub events found.";
+        row.appendChild(cell);
+        hubEventListRoot.appendChild(row);
+        return;
+      }
+      events.forEach(function (event) {
+        const row = document.createElement("tr");
+        [event.title, event.publicationState, event.status, formatLastCheckedAt(event.updatedAt)].forEach(function (value) {
+          const cell = document.createElement("td");
+          cell.textContent = value || "-";
+          row.appendChild(cell);
+        });
+        row.addEventListener("click", function () {
+          bindHubEventForm(event);
+          loadHubEventAuditLog(event.id);
+        });
+        hubEventListRoot.appendChild(row);
+      });
+    }
+
+    async function refreshHubEvents() {
+      const params = new URLSearchParams();
+      if (hubEventStateFilter.value) params.set("publicationState", hubEventStateFilter.value);
+      if (hubEventStatusFilter.value) params.set("status", hubEventStatusFilter.value);
+      if (hubEventSearch.value.trim()) params.set("query", hubEventSearch.value.trim());
+      const path = endpoints.hubEvents + (params.toString() ? "?" + params.toString() : "");
+      const result = await adminApi(path);
+      renderHubEvents(result.items || []);
+    }
+
+    async function validateHubEvent(mode) {
+      const result = await adminApi(endpoints.hubEvents + "/validate", {
+        method: "POST",
+        body: JSON.stringify({ mode, input: collectHubEventInput() })
+      });
+      renderHubEventValidation(result);
+      return result;
+    }
+
+    async function saveHubEventDraft() {
+      const id = hubEventFields.id.value;
+      const input = collectHubEventInput();
+      const result = id
+        ? await adminApi(endpoints.hubEvents + "/" + encodeURIComponent(id), { method: "PUT", body: JSON.stringify(input) })
+        : await adminApi(endpoints.hubEvents, { method: "POST", body: JSON.stringify(input) });
+      bindHubEventForm(result);
+      await refreshHubEvents();
+    }
+
+    async function runHubEventAction(action) {
+      const id = hubEventFields.id.value;
+      if (!id) throw new Error("hub_event_required");
+      await adminApi(endpoints.hubEvents + "/" + encodeURIComponent(id) + "/" + action, { method: "POST" });
+      await refreshHubEvents();
+      await loadHubEventAuditLog(id);
+    }
+
+    async function deleteHubEvent() {
+      const id = hubEventFields.id.value;
+      if (!id) throw new Error("hub_event_required");
+      await adminApi(endpoints.hubEvents + "/" + encodeURIComponent(id), { method: "DELETE" });
+      hubEventFields.id.value = "";
+      await refreshHubEvents();
+    }
+
+    async function loadHubEventAuditLog(id) {
+      const result = await adminApi(endpoints.hubEvents + "/" + encodeURIComponent(id) + "/audit-log");
+      hubEventAuditRoot.replaceChildren();
+      (result.items || []).forEach(function (entry) {
+        const item = document.createElement("li");
+        item.textContent = [formatLastCheckedAt(entry.createdAt), entry.action, entry.actorId || "unknown"].join(" - ");
+        hubEventAuditRoot.appendChild(item);
+      });
+    }
+
+    async function runHubEventUiAction(label, action) {
+      try {
+        setBusy(true);
+        await action();
+        setMessage(label + " completed.", false);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "unknown_error", true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    document.getElementById("hub-event-refresh").addEventListener("click", function () { return runHubEventUiAction("Refresh hub events", refreshHubEvents); });
+    document.getElementById("hub-event-validate").addEventListener("click", function () { return runHubEventUiAction("Validate hub event", function () { return validateHubEvent("publish"); }); });
+    document.getElementById("hub-event-save-draft").addEventListener("click", function () { return runHubEventUiAction("Save hub event", saveHubEventDraft); });
+    document.getElementById("hub-event-publish").addEventListener("click", function () { return runHubEventUiAction("Publish hub event", function () { return runHubEventAction("publish"); }); });
+    document.getElementById("hub-event-cancel").addEventListener("click", function () { return runHubEventUiAction("Cancel hub event", function () { return runHubEventAction("cancel"); }); });
+    document.getElementById("hub-event-deactivate").addEventListener("click", function () { return runHubEventUiAction("Deactivate hub event", function () { return runHubEventAction("deactivate"); }); });
+    document.getElementById("hub-event-delete").addEventListener("click", function () { return runHubEventUiAction("Delete hub event", deleteHubEvent); });
 
     document.getElementById("refresh").addEventListener("click", function () {
       return refreshDashboard({ source: "manual" });
