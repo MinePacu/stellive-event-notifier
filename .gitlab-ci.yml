@@ -1,0 +1,68 @@
+image: ghcr.io/cirruslabs/android-sdk:36
+
+stages:
+  - validate
+  - test
+  - build
+
+variables:
+  ANDROID_PROJECT_DIR: "android/StelliveHubAndroid"
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.caching=true -Dkotlin.incremental=false"
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+
+cache:
+  key:
+    files:
+      - android/StelliveHubAndroid/gradle/wrapper/gradle-wrapper.properties
+      - android/StelliveHubAndroid/build.gradle.kts
+  paths:
+    - .gradle/caches/
+    - .gradle/wrapper/
+  policy: pull-push
+
+.android_gradle_job:
+  before_script:
+    - cd "$ANDROID_PROJECT_DIR"
+    - chmod +x ./gradlew
+    - ./gradlew --version
+
+lint:android:
+  extends: .android_gradle_job
+  stage: validate
+  script:
+    - ./gradlew --no-daemon lintDebug
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - android/StelliveHubAndroid/app/build/reports/lint-results-debug.html
+      - android/StelliveHubAndroid/app/build/reports/lint-results-debug.xml
+
+test:android:
+  extends: .android_gradle_job
+  stage: test
+  script:
+    - ./gradlew --no-daemon testDebugUnitTest
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - android/StelliveHubAndroid/app/build/reports/tests/
+      - android/StelliveHubAndroid/app/build/test-results/
+    reports:
+      junit: android/StelliveHubAndroid/app/build/test-results/testDebugUnitTest/*.xml
+
+build:android:
+  extends: .android_gradle_job
+  stage: build
+  script:
+    - ./gradlew --no-daemon assembleDebug
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - android/StelliveHubAndroid/app/build/outputs/apk/debug/*.apk
