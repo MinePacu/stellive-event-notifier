@@ -168,4 +168,25 @@ describe("mobile device routes", () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: "device_token_invalid" });
   });
+
+  it("rejects device token updates with unsupported push providers", async () => {
+    const app = await buildApp({ env: routeEnv, useProcessEnv: false });
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/devices/token",
+      headers: { "content-type": "application/json" },
+      payload: JSON.stringify({
+        deviceId: "device-1",
+        platform: "android",
+        provider: "firebase_topic",
+        token: "runtime-token"
+      })
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "device_token_provider_invalid" });
+  });
 });

@@ -227,6 +227,27 @@ describe("internal admin routes", () => {
     });
   });
 
+  it("rejects notification drain request bodies with caller-controlled delivery fields", async () => {
+    const app = await buildTestApp();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/jobs/notifications/drain",
+      headers: { ...authHeaders, "content-type": "application/json" },
+      payload: JSON.stringify({
+        limit: 5,
+        payload: { title: "caller supplied" },
+        deviceIds: ["device-1"],
+        preferenceOverride: { global: true }
+      })
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "notification_drain_body_invalid" });
+  });
+
   it("does not run CHZZK live-status polling when the feature flag is disabled", async () => {
     const app = await buildTestApp();
     const response = await app.inject({
