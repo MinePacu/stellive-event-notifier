@@ -33,6 +33,8 @@ Hub event notification types are `event_announced`, `event_sales_open`, `event_d
 
 Hub event notifications are standard delivery by default. Global off, generation/category, member, event type, quiet hours, keyword filters, and rate limits still apply. Realtime best-effort does not enable disabled hub event notifications.
 
+Hub event worker delivery treats `event_sales_open`, `event_deadline_soon`, and `event_cancelled` as immediate-push candidates only after preference resolution allows the event. `event_announced` and `event_updated` remain summary/default delivery unless later policy changes explicitly promote them. Disabled preferences, global off, quiet hours, keyword blocks, and rate limits still downgrade to app-history-only or skipped delivery before any FCM/APNs send.
+
 ## Resolution
 
 Global off blocks all notifications. Member explicit overrides can override generation/category settings. Platform and event-type settings apply to the event. More specific member/generation platform and event-type rules can override broader platform/event-type rules. Quiet hours, keyword block, and rate limit always apply last.

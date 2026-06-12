@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import NotificationWorker from "../src/jobs/notificationWorker.js";
+import type { ClaimedNotificationJob } from "../src/jobs/notificationJobRepository.js";
+import type { PushTargetDevice } from "../src/push/pushSender.js";
+import type { ResolvedNotificationPreference, UserNotificationPreference } from "../src/types.js";
 import { CatalogService } from "../src/catalog/catalog.js";
 import { HubEventAdminService } from "../src/hub-events/hubEventAdminService.js";
 import type { AdminHubEvent } from "../src/hub-events/hubEventAdminTypes.js";
@@ -151,5 +155,179 @@ describe("hub event notification candidates", () => {
     expect(platformEvents.map((event) => event.type)).toEqual(["event_announced", "event_sales_open"]);
     expect(jobs).toEqual(platformEvents.map((event) => ({ eventId: event.id, priority: 5 })));
     expect(platformEvents.every((event) => event.rawPayload && typeof event.rawPayload === "object")).toBe(true);
+  });
+});
+
+describe("HubEvent notification job delivery flow", () => {
+  const now = new Date("2026-06-12T12:00:00.000Z");
+
+  function allowedResolution(eventId: string, deviceId: string): ResolvedNotificationPreference {
+    return {
+      eventId,
+      deviceId,
+      shouldNotify: true,
+      reason: "allowed",
+      matchedRules: ["global:on"],
+      tapAction: "open_app",
+      deliveryMode: "standard",
+      pushPriority: "normal",
+      foregroundStreamEligible: false
+    };
+  }
+
+  function blockedResolution(eventId: string, deviceId: string): ResolvedNotificationPreference {
+    return {
+      ...allowedResolution(eventId, deviceId),
+      shouldNotify: false,
+      reason: "global_off",
+      matchedRules: ["global:off"]
+    };
+  }
+
+  it("drains admin-created HubEvent jobs through preference-gated delivery attempts", async () => {
+    const fake = createRepository(adminEvent());
+    const platformEvents: PlatformEvent[] = [];
+    const jobs: Array<{ eventId: string; priority: number }> = [];
+    const service = new HubEventAdminService({
+      catalog: new CatalogService(),
+      repository: fake.repository,
+      platformEvents: {
+        async createIfNotExists(event) {
+          platformEvents.push(event);
+          return { created: true };
+        }
+      },
+      notificationJobs: {
+        async enqueue(input) {
+          jobs.push(input);
+        }
+      },
+      now: () => now
+    });
+
+    await service.publish("event-1", { actorId: "admin" });
+
+    const eventById = new Map(platformEvents.map((event) => [event.id, event]));
+    const claimedJobs: ClaimedNotificationJob[] = jobs.map((job, index) => ({
+      id: `job-${index + 1}`,
+      eventId: job.eventId,
+      priority: job.priority,
+      attempts: 0,
+      runAfter: now,
+      lockedAt: now,
+      lockedBy: "test-worker"
+    }));
+    const attempts: unknown[] = [];
+    const sent: unknown[] = [];
+    const completed: string[] = [];
+    const devices: PushTargetDevice[] = [
+      {
+        deviceId: "allowed-device",
+        platform: "android",
+        pushProvider: "fcm",
+        pushToken: "allowed-token",
+        tokenStatus: "active",
+        timezone: "Asia/Seoul"
+      },
+      {
+        deviceId: "global-off-device",
+        platform: "ios",
+        pushProvider: "apns_via_fcm",
+        pushToken: "blocked-token",
+        tokenStatus: "active",
+        timezone: "Asia/Seoul"
+      }
+    ];
+
+    const worker = new NotificationWorker({
+      notificationJobs: {
+        async claimReady() {
+          return claimedJobs;
+        },
+        async complete(jobId) {
+          completed.push(jobId);
+        },
+        async fail(input) {
+          throw new Error(`unexpected fail ${JSON.stringify(input)}`);
+        }
+      },
+      platformEvents: {
+        async findById(eventId) {
+          return eventById.get(eventId);
+        }
+      },
+      devices: {
+        async listPushTargets() {
+          return devices;
+        },
+        async markTokenInvalid() {
+          throw new Error("unexpected token invalidation");
+        }
+      },
+      preferences: {
+        async listForDevices() {
+          return [] as UserNotificationPreference[];
+        }
+      },
+      deliveryAttempts: {
+        async create(input) {
+          attempts.push(input);
+        }
+      },
+      preferenceResolution: {
+        resolve(event, deviceId) {
+          return deviceId === "global-off-device"
+            ? blockedResolution(event.id, deviceId)
+            : allowedResolution(event.id, deviceId);
+        }
+      },
+      pushSender: {
+        async sendToDevice(input) {
+          sent.push(input);
+          return { status: "sent", providerMessageId: "provider-message-1" };
+        }
+      },
+      now: () => now
+    });
+
+    const result = await worker.drain({ limit: 10, lockedBy: "test-worker", now });
+
+    expect(platformEvents.map((event) => event.type)).toEqual(["event_announced", "event_sales_open"]);
+    expect(jobs).toEqual(platformEvents.map((event) => ({ eventId: event.id, priority: 5 })));
+    expect(result).toMatchObject({
+      claimed: 2,
+      completed: 2,
+      failed: 0,
+      sent: 1,
+      skipped: 3,
+      queued: 0,
+      status: "ok"
+    });
+    expect(completed).toEqual(["job-1", "job-2"]);
+    expect(sent).toHaveLength(1);
+    expect(attempts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventId: expect.stringContaining("event_announced"),
+          deviceId: "allowed-device",
+          status: "skipped",
+          reason: "push_not_enqueued",
+          deliveryLevel: "summary_push"
+        }),
+        expect.objectContaining({
+          eventId: expect.stringContaining("event_sales_open"),
+          deviceId: "allowed-device",
+          status: "sent",
+          deliveryLevel: "immediate_push",
+          providerMessageId: "provider-message-1"
+        }),
+        expect.objectContaining({
+          deviceId: "global-off-device",
+          status: "skipped",
+          reason: "global_off",
+          deliveryLevel: "in_app_history_only"
+        })
+      ])
+    );
   });
 });
