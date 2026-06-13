@@ -1,5 +1,6 @@
 package dev.stellive.hub.feature.calendar
 
+import android.app.DatePickerDialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
@@ -51,6 +52,7 @@ class HubEventsCalendarView(
         content.addView(scopeSwitch())
 
         if (viewModel.uiState.viewMode == HubEventsViewMode.LIST) {
+            content.addView(listDateNavigationHeader())
             content.addView(entryList(viewModel.uiState.visibleEntries))
             return
         }
@@ -98,6 +100,97 @@ class HubEventsCalendarView(
             },
         ),
     )
+
+    private fun listDateNavigationHeader(): View = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        background = rounded(color(R.color.hub_surface), dp(18), color(R.color.hub_line))
+        setPadding(dp(10), dp(10), dp(10), dp(10))
+        layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(10)
+        }
+
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+
+            val isDayMode = viewModel.uiState.scopeMode == HubCalendarScopeMode.DAY
+            addView(monthButton(if (isDayMode) "이전 날짜" else "이전 기간") {
+                if (isDayMode) viewModel.goToPreviousDay() else viewModel.goToPreviousRange()
+            })
+
+            addView(TextView(context).apply {
+                text = listNavigationTitle()
+                setTextColor(color(R.color.hub_text))
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+            })
+
+            addView(monthButton(if (isDayMode) "다음 날짜" else "다음 기간") {
+                if (isDayMode) viewModel.goToNextDay() else viewModel.goToNextRange()
+            })
+        })
+
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, 0)
+
+            if (viewModel.uiState.scopeMode == HubCalendarScopeMode.DAY) {
+                addView(monthButton("오늘") { viewModel.goToToday() })
+                addView(monthButton("날짜 선택") { showDayPicker() })
+            } else {
+                addView(monthButton("이번 주") { viewModel.goToCurrentWeek() })
+                addView(monthButton("기간 선택") { showRangeStartPicker() })
+            }
+        })
+    }
+
+    private fun listNavigationTitle(): String =
+        if (viewModel.uiState.scopeMode == HubCalendarScopeMode.DAY) {
+            selectedDateFormatter.format(viewModel.uiState.selectedDay)
+        } else {
+            val start = viewModel.uiState.rangeStart ?: viewModel.uiState.selectedDay
+            val end = viewModel.uiState.rangeEnd ?: start.plusDays(6)
+            "${rangeDateFormatter.format(start)} - ${rangeDateFormatter.format(end)}"
+        }
+
+    private fun showDayPicker() {
+        showDatePicker(viewModel.uiState.selectedDay, "날짜 선택") { selectedDate ->
+            viewModel.applySelectedDay(selectedDate)
+            render()
+        }
+    }
+
+    private fun showRangeStartPicker() {
+        val initialStart = viewModel.uiState.rangeStart ?: viewModel.uiState.selectedDay
+        showDatePicker(initialStart, "시작일 선택") { startDate ->
+            val initialEnd = viewModel.uiState.rangeEnd ?: startDate.plusDays(6)
+            showDatePicker(initialEnd, "종료일 선택") { endDate ->
+                viewModel.applySelectedRange(startDate, endDate)
+                render()
+            }
+        }
+    }
+
+    private fun showDatePicker(
+        initialDate: LocalDate,
+        title: String,
+        onDateSelected: (LocalDate) -> Unit,
+    ) {
+        DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                onDateSelected(LocalDate.of(year, month + 1, dayOfMonth))
+            },
+            initialDate.year,
+            initialDate.monthValue - 1,
+            initialDate.dayOfMonth,
+        ).apply {
+            setTitle(title)
+        }.show()
+    }
 
     private fun monthControl(): View = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
@@ -344,5 +437,7 @@ class HubEventsCalendarView(
 
     private companion object {
         val monthFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREAN)
+        val selectedDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("M월 d일 EEEE", Locale.KOREAN)
+        val rangeDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("M.d", Locale.KOREAN)
     }
 }
