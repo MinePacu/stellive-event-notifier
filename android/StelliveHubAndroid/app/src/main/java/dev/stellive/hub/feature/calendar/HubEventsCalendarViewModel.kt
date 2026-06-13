@@ -84,6 +84,56 @@ class HubEventsCalendarViewModel(
         selectMonth(uiState.selectedMonth.plusMonths(1))
     }
 
+    fun goToPreviousDay() {
+        selectDay(CalendarUiPolicy.previousDay(uiState.selectedDay))
+    }
+
+    fun goToNextDay() {
+        selectDay(CalendarUiPolicy.nextDay(uiState.selectedDay))
+    }
+
+    fun goToToday() {
+        selectDay(today)
+    }
+
+    fun goToPreviousRange() {
+        shiftSelectedRange(direction = -1)
+    }
+
+    fun goToNextRange() {
+        shiftSelectedRange(direction = 1)
+    }
+
+    fun goToCurrentWeek() {
+        val week = CalendarUiPolicy.currentWeek(today)
+        uiState = recalculate(
+            uiState.copy(
+                scopeMode = HubCalendarScopeMode.RANGE,
+                selectedMonth = YearMonth.from(week.start),
+                selectedDay = week.start,
+                rangeStart = week.start,
+                rangeEnd = week.endInclusive,
+            ),
+        )
+    }
+
+    fun applySelectedDay(date: LocalDate) {
+        selectDay(date)
+    }
+
+    fun applySelectedRange(start: LocalDate, end: LocalDate) {
+        val range = CalendarUiPolicy.normalizeRange(start, end) ?: (start..end)
+        uiState = recalculate(
+            uiState.copy(
+                scopeMode = HubCalendarScopeMode.RANGE,
+                selectedMonth = YearMonth.from(range.start),
+                selectedDay = range.start,
+                rangeStart = range.start,
+                rangeEnd = range.endInclusive,
+            ),
+        )
+    }
+
     fun selectDay(date: LocalDate) {
         uiState = recalculate(
             uiState.copy(
@@ -116,6 +166,23 @@ class HubEventsCalendarViewModel(
             )
         }
         uiState = recalculate(nextState)
+    }
+
+    private fun shiftSelectedRange(direction: Int) {
+        val (start, end) = CalendarUiPolicy.shiftRange(
+            start = uiState.rangeStart ?: uiState.selectedDay,
+            end = uiState.rangeEnd,
+            direction = direction,
+        )
+        uiState = recalculate(
+            uiState.copy(
+                scopeMode = HubCalendarScopeMode.RANGE,
+                selectedMonth = YearMonth.from(start),
+                selectedDay = start,
+                rangeStart = start,
+                rangeEnd = end,
+            ),
+        )
     }
 
     fun setFilter(filterId: String) {

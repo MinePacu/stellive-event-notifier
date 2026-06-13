@@ -3,6 +3,7 @@ import SwiftUI
 struct HubEventsCalendarView: View {
     private let days: [HubCalendarDay]
     @StateObject private var viewModel: HubEventsCalendarViewModel
+    @State private var presentedPicker: CalendarPickerPresentation?
 
     init(days: [HubCalendarDay]) {
         self.days = days
@@ -41,6 +42,8 @@ struct HubEventsCalendarView: View {
                 monthControl
                 weekdayHeader
                 monthGrid
+            } else {
+                listDateNavigationHeader
             }
 
             eventList
@@ -48,6 +51,33 @@ struct HubEventsCalendarView: View {
         .padding(.vertical, 6)
         .onChange(of: days) { newDays in
             viewModel.replaceDays(newDays)
+        }
+        .sheet(item: $presentedPicker) { picker in
+            switch picker {
+            case .day:
+                DayPickerSheet(
+                    initialDate: viewModel.selectedDay,
+                    onApply: { date in
+                        viewModel.applySelectedDay(date)
+                        presentedPicker = nil
+                    },
+                    onCancel: {
+                        presentedPicker = nil
+                    }
+                )
+            case .range:
+                RangePickerSheet(
+                    initialStart: viewModel.rangeStart ?? viewModel.selectedDay,
+                    initialEnd: viewModel.rangeEnd ?? Calendar.current.date(byAdding: .day, value: 6, to: viewModel.selectedDay) ?? viewModel.selectedDay,
+                    onApply: { start, end in
+                        viewModel.applySelectedRange(start: start, end: end)
+                        presentedPicker = nil
+                    },
+                    onCancel: {
+                        presentedPicker = nil
+                    }
+                )
+            }
         }
     }
 
@@ -73,6 +103,213 @@ struct HubEventsCalendarView: View {
             .controlSize(.small)
         }
         .padding(.top, 2)
+    }
+
+    private var listDateNavigationHeader: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                dateNavigationButton(
+                    systemName: "chevron.left",
+                    accessibilityLabel: previousNavigationAccessibilityLabel
+                ) {
+                    if viewModel.scopeMode == .day {
+                        viewModel.goToPreviousDay()
+                    } else {
+                        viewModel.goToPreviousRange()
+                    }
+                }
+
+                if viewModel.scopeMode == .day {
+                    dayNavigationCard
+                } else {
+                    rangeNavigationCard
+                }
+
+                dateNavigationButton(
+                    systemName: "chevron.right",
+                    accessibilityLabel: nextNavigationAccessibilityLabel
+                ) {
+                    if viewModel.scopeMode == .day {
+                        viewModel.goToNextDay()
+                    } else {
+                        viewModel.goToNextRange()
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                if viewModel.scopeMode == .day {
+                    Button("오늘") {
+                        viewModel.goToToday()
+                    }
+                    .accessibilityLabel("오늘로 이동, \(selectedDateFormatter.string(from: Date()))")
+
+                    Button("날짜 선택") {
+                        presentedPicker = .day
+                    }
+                    .accessibilityLabel("날짜 선택, \(selectedDateFormatter.string(from: viewModel.selectedDay))")
+                } else {
+                    Button("이번 주") {
+                        viewModel.goToCurrentWeek()
+                    }
+                    .accessibilityLabel("이번 주로 이동")
+
+                    Button("기간 선택") {
+                        presentedPicker = .range
+                    }
+                    .accessibilityLabel(rangeSelectionAccessibilityLabel)
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(.separator).opacity(0.3), lineWidth: 1)
+        )
+        .accessibilityElement(children: .contain)
+    }
+
+    private func dateNavigationButton(
+        systemName: String,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 34, height: 34)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var dayNavigationCard: some View {
+        Button {
+            presentedPicker = .day
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(Color(.systemBackground)))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(selectedDateFormatter.string(from: viewModel.selectedDay))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.84)
+
+                    Text(dayNavigationSubtitle)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tint)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: 58)
+            .padding(.horizontal, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.12))
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("날짜 선택, \(selectedDateFormatter.string(from: viewModel.selectedDay)), \(dayNavigationSubtitle)")
+    }
+
+    private var rangeNavigationCard: some View {
+        Button {
+            presentedPicker = .range
+        } label: {
+            HStack(spacing: 8) {
+                rangeDateColumn(label: "시작", date: selectedRangeStart)
+
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
+                rangeDateColumn(label: "종료", date: selectedRangeEnd)
+            }
+            .frame(maxWidth: .infinity, minHeight: 62)
+            .padding(.horizontal, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.12))
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(rangeSelectionAccessibilityLabel)
+    }
+
+    private func rangeDateColumn(label: String, date: Date) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.tint)
+            Text(rangeDateFormatter.string(from: date))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.86)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var listNavigationTitle: String {
+        if viewModel.scopeMode == .day {
+            return selectedDateFormatter.string(from: viewModel.selectedDay)
+        }
+
+        let start = viewModel.rangeStart ?? viewModel.selectedDay
+        let end = viewModel.rangeEnd ?? Calendar.current.date(byAdding: .day, value: 6, to: start) ?? start
+        return "\(rangeDateFormatter.string(from: start)) - \(rangeDateFormatter.string(from: end))"
+    }
+
+    private var dayNavigationSubtitle: String {
+        let eventText = "일정 \(viewModel.visibleEntries().count)개"
+        if Calendar.current.isDateInToday(viewModel.selectedDay) {
+            return "오늘 · \(eventText)"
+        }
+        return eventText
+    }
+
+    private var selectedRangeStart: Date {
+        viewModel.rangeStart ?? viewModel.selectedDay
+    }
+
+    private var selectedRangeEnd: Date {
+        viewModel.rangeEnd ?? Calendar.current.date(byAdding: .day, value: 6, to: selectedRangeStart) ?? selectedRangeStart
+    }
+
+    private var previousNavigationAccessibilityLabel: String {
+        if viewModel.scopeMode == .day {
+            let target = Calendar.current.date(byAdding: .day, value: -1, to: viewModel.selectedDay) ?? viewModel.selectedDay
+            return "이전 날짜, \(selectedDateFormatter.string(from: target))로 이동"
+        }
+        return "이전 기간으로 이동"
+    }
+
+    private var nextNavigationAccessibilityLabel: String {
+        if viewModel.scopeMode == .day {
+            let target = Calendar.current.date(byAdding: .day, value: 1, to: viewModel.selectedDay) ?? viewModel.selectedDay
+            return "다음 날짜, \(selectedDateFormatter.string(from: target))로 이동"
+        }
+        return "다음 기간으로 이동"
+    }
+
+    private var rangeSelectionAccessibilityLabel: String {
+        "기간 선택, \(selectedDateFormatter.string(from: selectedRangeStart))부터 \(selectedDateFormatter.string(from: selectedRangeEnd))까지"
     }
 
     private var weekdayHeader: some View {
@@ -150,6 +387,103 @@ struct HubEventsCalendarView: View {
         formatter.locale = Locale(identifier: "ko_KR")
         formatter.dateFormat = "yyyy년 M월"
         return formatter
+    }
+
+    private var selectedDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "M월 d일 EEEE"
+        return formatter
+    }
+
+    private var rangeDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "M.d"
+        return formatter
+    }
+}
+
+private enum CalendarPickerPresentation: String, Identifiable {
+    case day
+    case range
+
+    var id: String { rawValue }
+}
+
+private struct DayPickerSheet: View {
+    @State private var selectedDate: Date
+    let onApply: (Date) -> Void
+    let onCancel: () -> Void
+
+    init(initialDate: Date, onApply: @escaping (Date) -> Void, onCancel: @escaping () -> Void) {
+        _selectedDate = State(initialValue: initialDate)
+        self.onApply = onApply
+        self.onCancel = onCancel
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                DatePicker("날짜", selection: $selectedDate, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+            }
+            .navigationTitle("날짜 선택")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("취소", action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("적용") {
+                        onApply(selectedDate)
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+private struct RangePickerSheet: View {
+    @State private var startDate: Date
+    @State private var endDate: Date
+    let onApply: (Date, Date) -> Void
+    let onCancel: () -> Void
+
+    init(initialStart: Date, initialEnd: Date, onApply: @escaping (Date, Date) -> Void, onCancel: @escaping () -> Void) {
+        _startDate = State(initialValue: initialStart)
+        _endDate = State(initialValue: initialEnd)
+        self.onApply = onApply
+        self.onCancel = onCancel
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("시작일") {
+                    DatePicker("시작일", selection: $startDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                }
+                Section("종료일") {
+                    DatePicker("종료일", selection: $endDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                }
+            }
+            .navigationTitle("기간 선택")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("취소", action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("적용") {
+                        onApply(startDate, endDate)
+                    }
+                }
+            }
+        }
+        .presentationDetents([.large])
     }
 }
 

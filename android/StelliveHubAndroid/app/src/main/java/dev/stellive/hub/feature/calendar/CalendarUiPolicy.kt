@@ -7,6 +7,7 @@ import dev.stellive.hub.core.model.HubEventStatus
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 enum class HubCalendarScopeMode {
     DAY,
@@ -70,6 +71,34 @@ object CalendarUiPolicy {
     fun normalizeRange(start: LocalDate?, end: LocalDate?): ClosedRange<LocalDate>? {
         if (start == null || end == null) return null
         return if (start <= end) start..end else end..start
+    }
+
+    fun previousDay(selectedDay: LocalDate): LocalDate = selectedDay.minusDays(1)
+
+    fun nextDay(selectedDay: LocalDate): LocalDate = selectedDay.plusDays(1)
+
+    fun currentWeek(today: LocalDate): ClosedRange<LocalDate> {
+        val start = today.minusDays((today.dayOfWeek.value - 1).toLong())
+        return start..start.plusDays(6)
+    }
+
+    fun shiftRange(start: LocalDate?, end: LocalDate?, direction: Int): Pair<LocalDate, LocalDate> {
+        val rangeStart = start ?: LocalDate.now()
+        val rangeEnd = end ?: rangeStart.plusDays(6)
+        val normalized = normalizeRange(rangeStart, rangeEnd) ?: (rangeStart..rangeStart.plusDays(6))
+        val dayCount = ChronoUnit.DAYS.between(normalized.start, normalized.endInclusive) + 1
+        val offset = dayCount * direction
+        return normalized.start.plusDays(offset) to normalized.endInclusive.plusDays(offset)
+    }
+
+    fun needsCalendarFetch(
+        targetFrom: LocalDate,
+        targetTo: LocalDate,
+        loadedFrom: LocalDate?,
+        loadedTo: LocalDate?,
+    ): Boolean {
+        if (loadedFrom == null || loadedTo == null) return true
+        return targetFrom < loadedFrom || targetTo > loadedTo
     }
 
     fun entriesForDay(days: List<HubCalendarDay>, date: LocalDate): List<HubCalendarEntry> =
