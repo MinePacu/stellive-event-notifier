@@ -173,6 +173,17 @@ paths:
           schema:
             type: string
             default: Asia/Seoul
+        - name: includeSpecialDays
+          in: query
+          schema:
+            type: boolean
+            default: true
+        - name: entryKind
+          in: query
+          schema:
+            type: string
+            description: Comma-separated calendar entry kinds.
+            example: hub_event,member_birthday
       responses:
         "200":
           description: Goods event calendar days.
@@ -195,6 +206,17 @@ paths:
           schema:
             type: string
             default: Asia/Seoul
+        - name: includeSpecialDays
+          in: query
+          schema:
+            type: boolean
+            default: true
+        - name: entryKind
+          in: query
+          schema:
+            type: string
+            description: Comma-separated calendar entry kinds.
+            example: hub_event,member_birthday
         - name: limit
           in: query
           schema:
@@ -675,6 +697,7 @@ components:
       required:
         - id
         - eventId
+        - entryKind
         - title
         - category
         - status
@@ -684,11 +707,23 @@ components:
         - displayTimeText
         - sourceLabel
         - appDeepLink
-        - platformUrl
       properties:
         id:
           type: string
         eventId:
+          type: string
+        entryKind:
+          type: string
+          enum:
+            - hub_event
+            - member_birthday
+            - generation_anniversary
+        specialDayKind:
+          type: string
+          enum:
+            - member_birthday
+            - generation_anniversary
+        specialDayLabel:
           type: string
         title:
           type: string

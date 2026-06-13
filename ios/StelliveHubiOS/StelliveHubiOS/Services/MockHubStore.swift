@@ -277,6 +277,9 @@ final class MockHubStore: ObservableObject {
         return HubCalendarEntry(
             id: "\(event.id):\(displayDate)",
             eventId: event.id,
+            entryKind: .hubEvent,
+            specialDayKind: nil,
+            specialDayLabel: nil,
             title: event.title,
             category: event.category,
             status: event.status,

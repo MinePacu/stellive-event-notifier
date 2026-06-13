@@ -45,6 +45,17 @@ enum class HubEventCategory(val displayName: String) {
     TICKETING("티켓")
 }
 
+enum class HubCalendarEntryKind {
+    HUB_EVENT,
+    MEMBER_BIRTHDAY,
+    GENERATION_ANNIVERSARY
+}
+
+enum class HubCalendarSpecialDayKind {
+    MEMBER_BIRTHDAY,
+    GENERATION_ANNIVERSARY
+}
+
 enum class HubEventParticipationMode(val displayName: String) {
     ONLINE("온라인"),
     OFFLINE("오프라인"),
@@ -177,6 +188,9 @@ data class HubEventsSummary(
 data class HubCalendarEntry(
     val id: String,
     val eventId: String,
+    val entryKind: HubCalendarEntryKind = HubCalendarEntryKind.HUB_EVENT,
+    val specialDayKind: HubCalendarSpecialDayKind? = null,
+    val specialDayLabel: String? = null,
     val title: String,
     val category: HubEventCategory,
     val status: HubEventStatus,
@@ -189,7 +203,7 @@ data class HubCalendarEntry(
     val displayTimeText: String,
     val sourceLabel: String,
     val appDeepLink: String,
-    val platformUrl: String
+    val platformUrl: String?
 )
 
 data class HubCalendarDay(

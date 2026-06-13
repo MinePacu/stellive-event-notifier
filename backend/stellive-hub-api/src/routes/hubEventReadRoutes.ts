@@ -3,10 +3,16 @@ import {
   buildHubCalendarResponse,
   buildHubCalendarWidgetSnapshot,
   type CalendarResponseOptions,
-  type WidgetSnapshotOptions,
+  type WidgetSnapshotOptions
 } from "../hub-events/hubEventCalendar.js";
 import type { HubEventFilters, HubEventReadPort } from "../hub-events/hubEventService.js";
-import type { HubEventCategory, HubEventParticipationMode, HubEventStatus } from "../types.js";
+import type {
+  HubCalendarEntryKind,
+  HubCalendarSpecialDay,
+  HubEventCategory,
+  HubEventParticipationMode,
+  HubEventStatus
+} from "../types.js";
 
 const hubEventCategories = new Set<HubEventCategory>([
   "online_goods",
@@ -14,14 +20,15 @@ const hubEventCategories = new Set<HubEventCategory>([
   "offline_concert",
   "offline_collab",
   "offline_popup",
-  "ticketing",
+  "ticketing"
 ]);
-
 const participationModes = new Set<HubEventParticipationMode>(["online", "offline", "hybrid"]);
 const hubEventStatuses = new Set<HubEventStatus>(["announced", "upcoming", "open", "closing_soon", "ended", "cancelled"]);
+const hubCalendarEntryKinds = new Set<HubCalendarEntryKind>(["hub_event", "member_birthday", "generation_anniversary"]);
 
 export interface RegisterHubEventReadRouteOptions {
   hubEvents: HubEventReadPort;
+  hubCalendarSpecialDays?: HubCalendarSpecialDay[];
 }
 
 type ParseResult<T> = { ok: true; value: T } | { ok: false; response: FastifyReply };
@@ -29,7 +36,7 @@ type ParseResult<T> = { ok: true; value: T } | { ok: false; response: FastifyRep
 function invalidQuery(reply: FastifyReply, field: string): ParseResult<never> {
   return {
     ok: false,
-    response: reply.code(400).send({ error: "invalid_hub_event_query", field }),
+    response: reply.code(400).send({ error: "invalid_hub_event_query", field })
   };
 }
 
@@ -58,26 +65,39 @@ function parseLimitQuery(value: unknown, defaultLimit: number, maxLimit: number,
   return { ok: true, value: Math.min(Math.trunc(parsed), maxLimit) };
 }
 
-function isSupportedTimezone(value: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
-    return true;
-  } catch {
-    return false;
+function parseBooleanQuery(value: unknown, field: string, reply: FastifyReply): ParseResult<boolean | undefined> {
+  const raw = firstQueryValue(value);
+  if (!raw) return { ok: true, value: undefined };
+  if (raw === "true") return { ok: true, value: true };
+  if (raw === "false") return { ok: true, value: false };
+  return invalidQuery(reply, field);
+}
+
+function parseEntryKindsQuery(value: unknown, reply: FastifyReply): ParseResult<HubCalendarEntryKind[] | undefined> {
+  const raw = firstQueryValue(value);
+  if (!raw) return { ok: true, value: undefined };
+
+  const entryKinds = raw.split(",").map((entryKind) => entryKind.trim()).filter(Boolean);
+  if (entryKinds.length === 0 || entryKinds.some((entryKind) => !hubCalendarEntryKinds.has(entryKind as HubCalendarEntryKind))) {
+    return invalidQuery(reply, "entryKind");
   }
+
+  return { ok: true, value: entryKinds as HubCalendarEntryKind[] };
 }
 
 function parseTimezoneQuery(value: unknown, reply: FastifyReply): ParseResult<string> {
   const timezone = firstQueryValue(value) ?? "Asia/Seoul";
-  if (!isSupportedTimezone(timezone)) return invalidQuery(reply, "timezone");
-
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format(new Date());
+  } catch {
+    return invalidQuery(reply, "timezone");
+  }
   return { ok: true, value: timezone };
 }
 
 function defaultCalendarWindow(now: Date): { from: Date; to: Date } {
   const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
   const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999));
-
   return { from, to };
 }
 
@@ -102,7 +122,7 @@ function parseHubEventListQuery(query: unknown, reply: FastifyReply): ParseResul
 
   if (from.value && to.value && from.value.getTime() > to.value.getTime()) return invalidQuery(reply, "date_range");
 
-  const limit = parseLimitQuery(input.limit, 25, 100, reply);
+  const limit = parseLimitQuery(input.limit, 20, 50, reply);
   if (!limit.ok) return limit;
 
   return {
@@ -116,8 +136,8 @@ function parseHubEventListQuery(query: unknown, reply: FastifyReply): ParseResul
       from: from.value,
       to: to.value,
       cursor: firstQueryValue(input.cursor),
-      limit: limit.value,
-    },
+      limit: limit.value
+    }
   };
 }
 
@@ -136,6 +156,12 @@ function parseHubCalendarQuery(query: unknown, reply: FastifyReply): ParseResult
   const timezone = parseTimezoneQuery(input.timezone, reply);
   if (!timezone.ok) return timezone;
 
+  const includeSpecialDays = parseBooleanQuery(input.includeSpecialDays, "includeSpecialDays", reply);
+  if (!includeSpecialDays.ok) return includeSpecialDays;
+
+  const entryKinds = parseEntryKindsQuery(input.entryKind, reply);
+  if (!entryKinds.ok) return entryKinds;
+
   return {
     ok: true,
     value: {
@@ -143,7 +169,11 @@ function parseHubCalendarQuery(query: unknown, reply: FastifyReply): ParseResult
       to: to.value ?? fallbackWindow.to,
       timezone: timezone.value,
       now,
-    },
+      includeSpecialDays: includeSpecialDays.value,
+      entryKinds: entryKinds.value,
+      generationId: firstQueryValue(input.generationId),
+      memberId: firstQueryValue(input.memberId)
+    }
   };
 }
 
@@ -155,18 +185,28 @@ function parseHubWidgetSnapshotQuery(query: unknown, reply: FastifyReply): Parse
   const limit = parseLimitQuery(input.limit, 5, 10, reply);
   if (!limit.ok) return limit;
 
+  const includeSpecialDays = parseBooleanQuery(input.includeSpecialDays, "includeSpecialDays", reply);
+  if (!includeSpecialDays.ok) return includeSpecialDays;
+
+  const entryKinds = parseEntryKindsQuery(input.entryKind, reply);
+  if (!entryKinds.ok) return entryKinds;
+
   return {
     ok: true,
     value: {
       timezone: timezone.value,
       limit: limit.value,
       now: new Date(),
-    },
+      includeSpecialDays: includeSpecialDays.value,
+      entryKinds: entryKinds.value,
+      generationId: firstQueryValue(input.generationId),
+      memberId: firstQueryValue(input.memberId)
+    }
   };
 }
 
 export default function registerHubEventReadRoutes(app: FastifyInstance, options: RegisterHubEventReadRouteOptions): void {
-  const { hubEvents } = options;
+  const { hubEvents, hubCalendarSpecialDays = [] } = options;
 
   app.get("/v1/hub-events/summary", async () => hubEvents.summary());
 
@@ -181,23 +221,30 @@ export default function registerHubEventReadRoutes(app: FastifyInstance, options
     const parsed = parseHubCalendarQuery(request.query, reply);
     if (!parsed.ok) return parsed.response;
 
-    const events = await hubEvents.list({ limit: 100 }, parsed.value.now);
-    return buildHubCalendarResponse(events.items, parsed.value);
+    const events = await hubEvents.list({
+      limit: 100,
+      generationId: parsed.value.generationId,
+      memberId: parsed.value.memberId
+    }, parsed.value.now);
+    return buildHubCalendarResponse(events.items, parsed.value, hubCalendarSpecialDays);
   });
 
   app.get("/v1/hub-events/widget-snapshot", async (request, reply) => {
     const parsed = parseHubWidgetSnapshotQuery(request.query, reply);
     if (!parsed.ok) return parsed.response;
 
-    const events = await hubEvents.list({ limit: 100 }, parsed.value.now);
-    return buildHubCalendarWidgetSnapshot(events.items, parsed.value);
+    const events = await hubEvents.list({
+      limit: 100,
+      generationId: parsed.value.generationId,
+      memberId: parsed.value.memberId
+    }, parsed.value.now);
+    return buildHubCalendarWidgetSnapshot(events.items, parsed.value, hubCalendarSpecialDays);
   });
 
   app.get("/v1/hub-events/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
     const event = await hubEvents.getById(id);
     if (!event) return reply.code(404).send({ error: "hub_event_not_found" });
-
     return event;
   });
 }

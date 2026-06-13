@@ -323,16 +323,18 @@ iOS:
 
 기존 클라이언트 호환성을 우선한다면 `entryKind`는 optional로 시작하고, 모바일 앱 업데이트 이후 required로 전환한다.
 
-## 구현 단계 제안
+## 구현 단계 현황
 
-- [ ] shared schema에 `entryKind` 및 기념일 관련 enum을 추가한다.
-- [ ] backend에 special day catalog와 projection 함수를 추가한다.
-- [ ] projection 단위 테스트로 생일, n주년, Former member 제외, official 제외, Gangzi 분류를 검증한다.
-- [ ] calendar route와 widget snapshot route에 special day projection 병합을 추가한다.
-- [ ] OpenAPI 문서와 fixture 응답을 갱신한다.
-- [ ] Android DTO, mock repository, calendar policy, widget formatter를 갱신한다.
-- [ ] iOS DTO와 캘린더/위젯 렌더링을 갱신한다.
-- [ ] `docs/AI_HANDOFF.md`에 구현 상태와 검증 결과를 기록한다.
+- [x] shared schema에 `entryKind` 및 기념일 관련 enum을 추가했다.
+- [x] backend에 special day catalog와 projection 함수를 추가했다.
+- [x] projection 단위 테스트로 생일, n주년, 검증 필요 항목, official 제외, Gangzi/representative 분류를 검증했다.
+- [x] calendar route와 widget snapshot route에 special day projection 병합을 추가했다.
+- [x] OpenAPI 문서와 fixture 응답을 갱신했다.
+- [x] Android DTO, mock repository, calendar policy, widget formatter를 갱신했다.
+- [x] iOS DTO와 캘린더/위젯 렌더링을 갱신했다.
+- [x] `docs/AI_HANDOFF.md`에 구현 상태와 검증 결과를 기록했다.
+
+현재 production catalog에는 공식 프로필로 확인된 active 멤버 생일 10개만 포함한다. Gen1 기념일과 강지 생일은 검증 및 명시 승인 전까지 제외한다.
 
 ## 위험과 완화
 

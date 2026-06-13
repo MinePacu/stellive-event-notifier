@@ -1,13 +1,16 @@
 import type {
   HubCalendarDay,
   HubCalendarEntry,
+  HubCalendarEntryKind,
   HubCalendarResponse,
+  HubCalendarSpecialDay,
   HubCalendarWidgetSnapshot,
   HubEvent,
   HubEventCategory,
   HubEventParticipationMode,
   HubEventStatus
 } from "../types.js";
+import { buildSpecialDayEntries } from "./hubCalendarSpecialDays.js";
 
 export type { HubCalendarDay, HubCalendarEntry, HubCalendarResponse, HubCalendarWidgetSnapshot } from "../types.js";
 
@@ -16,12 +19,20 @@ export interface CalendarResponseOptions {
   to: Date;
   timezone: string;
   now: Date;
+  includeSpecialDays?: boolean;
+  entryKinds?: HubCalendarEntryKind[];
+  generationId?: string;
+  memberId?: string;
 }
 
 export interface WidgetSnapshotOptions {
   timezone: string;
   now: Date;
   limit: number;
+  includeSpecialDays?: boolean;
+  entryKinds?: HubCalendarEntryKind[];
+  generationId?: string;
+  memberId?: string;
 }
 
 const closingSoonWindowMs = 24 * 60 * 60 * 1000;
@@ -143,6 +154,7 @@ function toEntry(event: HubEvent, date: string, status: HubEventStatus, timezone
   return {
     id: `${event.id}:${date}`,
     eventId: event.id,
+    entryKind: "hub_event",
     title: event.title,
     category: event.category,
     status,
@@ -170,7 +182,11 @@ export function compareCalendarEntries(left: HubCalendarEntry, right: HubCalenda
   return left.title.localeCompare(right.title, "ko-KR");
 }
 
-export function buildHubCalendarResponse(events: HubEvent[], options: CalendarResponseOptions): HubCalendarResponse {
+export function buildHubCalendarResponse(
+  events: HubEvent[],
+  options: CalendarResponseOptions,
+  specialDays: HubCalendarSpecialDay[] = []
+): HubCalendarResponse {
   const days = new Map<string, HubCalendarEntry[]>();
 
   for (const event of events) {
@@ -180,6 +196,31 @@ export function buildHubCalendarResponse(events: HubEvent[], options: CalendarRe
       const entries = days.get(date) ?? [];
       entries.push(toEntry(event, date, status, options.timezone));
       days.set(date, entries);
+    }
+  }
+
+  const specialDayEntries = options.includeSpecialDays === false
+    ? []
+    : buildSpecialDayEntries(specialDays, {
+      from: options.from,
+      to: options.to,
+      timezone: options.timezone,
+      now: options.now,
+      generationId: options.generationId,
+      memberId: options.memberId
+    });
+
+  for (const entry of specialDayEntries) {
+    const entries = days.get(entry.displayDate) ?? [];
+    entries.push(entry);
+    days.set(entry.displayDate, entries);
+  }
+
+  if (options.entryKinds?.length) {
+    for (const [date, entries] of days) {
+      const filtered = entries.filter((entry) => options.entryKinds?.includes(entry.entryKind));
+      if (filtered.length === 0) days.delete(date);
+      else days.set(date, filtered);
     }
   }
 
@@ -195,12 +236,26 @@ export function buildHubCalendarResponse(events: HubEvent[], options: CalendarRe
 
 export function buildHubCalendarWidgetSnapshot(
   events: HubEvent[],
-  options: WidgetSnapshotOptions
+  options: WidgetSnapshotOptions,
+  specialDays: HubCalendarSpecialDay[] = []
 ): HubCalendarWidgetSnapshot {
-  const entries = events.map((event) => {
+  const hubEventEntries = events.map((event) => {
     const date = localDateString(primaryStart(event), options.timezone);
     return toEntry(event, date, effectiveStatus(event, options.now), options.timezone);
   });
+  const specialDayEntries = options.includeSpecialDays === false
+    ? []
+    : buildSpecialDayEntries(specialDays, {
+      from: options.now,
+      to: new Date(options.now.getTime() + 90 * 24 * 60 * 60 * 1000),
+      timezone: options.timezone,
+      now: options.now,
+      generationId: options.generationId,
+      memberId: options.memberId
+    });
+  const entries = options.entryKinds?.length
+    ? [...hubEventEntries, ...specialDayEntries].filter((entry) => options.entryKinds?.includes(entry.entryKind))
+    : [...hubEventEntries, ...specialDayEntries];
   const actionableEntries = entries.filter((entry) => entry.status !== "ended" && entry.status !== "cancelled");
   const sourceEntries = actionableEntries.length >= options.limit ? actionableEntries : entries;
 

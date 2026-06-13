@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
-import type { HubEvent } from "../src/types.js";
+import type { HubCalendarSpecialDay, HubEvent } from "../src/types.js";
 import type { HubEventFilters, HubEventReadPort } from "../src/hub-events/hubEventService.js";
 
 const routeEnv = {
@@ -62,13 +62,14 @@ function createHubEvents(events: HubEvent[]): HubEventReadPort {
   };
 }
 
-async function buildRouteApp(events: HubEvent[]) {
+async function buildRouteApp(events: HubEvent[], specialDays: HubCalendarSpecialDay[] = []) {
   return buildApp({
     env: routeEnv,
     useProcessEnv: false,
     appRoutes: {
       dependencies: {
         hubEvents: createHubEvents(events),
+        hubCalendarSpecialDays: specialDays,
       },
     },
   });
@@ -240,7 +241,77 @@ describe("HubEvent read routes", () => {
     await app.close();
     expect(calendarResponse.statusCode).toBe(200);
     expect(widgetResponse.statusCode).toBe(200);
-    expect(calendarResponse.json().days[0].entries[0]).not.toHaveProperty("image");
-    expect(widgetResponse.json().entries[0]).not.toHaveProperty("image");
+  expect(calendarResponse.json().days[0].entries[0]).not.toHaveProperty("image");
+  expect(widgetResponse.json().entries[0]).not.toHaveProperty("image");
+});
+
+it("includes verified special days in calendar responses", async () => {
+  const app = await buildRouteApp(
+    [hubEvent({ id: "calendar-event" })],
+    [
+      {
+        id: "birthday:member-yuni",
+        kind: "member_birthday",
+        title: "아야츠노 유니 생일",
+        generationId: "gen1",
+        memberId: "member-yuni",
+        month: 6,
+        day: 12,
+        activeStatus: "active",
+        catalogRole: "member",
+        sourceLabel: "카탈로그",
+        policyState: "catalog_verified"
+      }
+    ]
+  );
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul"
   });
+  await app.close();
+
+  expect(response.statusCode).toBe(200);
+  const entries = response.json().days.flatMap((day: { entries: unknown[] }) => day.entries);
+  expect(entries).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: "birthday:member-yuni:2026-06-12",
+        entryKind: "member_birthday",
+        specialDayKind: "member_birthday",
+        displayTimeText: "종일"
+      })
+    ])
+  );
+});
+
+it("filters calendar responses by entryKind", async () => {
+  const app = await buildRouteApp(
+    [hubEvent({ id: "calendar-event" })],
+    [
+      {
+        id: "birthday:member-yuni",
+        kind: "member_birthday",
+        title: "아야츠노 유니 생일",
+        generationId: "gen1",
+        memberId: "member-yuni",
+        month: 6,
+        day: 12,
+        activeStatus: "active",
+        catalogRole: "member",
+        sourceLabel: "카탈로그",
+        policyState: "catalog_verified"
+      }
+    ]
+  );
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul&entryKind=member_birthday"
+  });
+  await app.close();
+
+  expect(response.statusCode).toBe(200);
+  const entries = response.json().days.flatMap((day: { entries: Array<{ entryKind: string }> }) => day.entries);
+  expect(entries).toHaveLength(1);
+  expect(entries[0].entryKind).toBe("member_birthday");
+});
 });
