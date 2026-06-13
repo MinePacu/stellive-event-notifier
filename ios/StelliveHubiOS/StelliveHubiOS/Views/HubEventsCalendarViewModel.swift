@@ -90,6 +90,59 @@ final class HubEventsCalendarViewModel: ObservableObject {
         selectedMonth = calendar.startOfDay(for: month)
     }
 
+    func goToPreviousDay() {
+        guard let day = calendar.date(byAdding: .day, value: -1, to: selectedDay) else { return }
+        selectDate(day)
+    }
+
+    func goToNextDay() {
+        guard let day = calendar.date(byAdding: .day, value: 1, to: selectedDay) else { return }
+        selectDate(day)
+    }
+
+    func goToToday() {
+        selectDate(todayProvider())
+    }
+
+    func goToPreviousRange() {
+        shiftSelectedRange(direction: -1)
+    }
+
+    func goToNextRange() {
+        shiftSelectedRange(direction: 1)
+    }
+
+    func goToCurrentWeek() {
+        let today = calendar.startOfDay(for: todayProvider())
+        let weekday = calendar.component(.weekday, from: today)
+        let daysFromMonday = (weekday + 5) % 7
+        guard
+            let start = calendar.date(byAdding: .day, value: -Int(daysFromMonday), to: today),
+            let end = calendar.date(byAdding: .day, value: 6, to: start)
+        else { return }
+
+        scopeMode = .range
+        selectedMonth = calendar.startOfDay(for: start)
+        selectedDay = calendar.startOfDay(for: start)
+        rangeStart = calendar.startOfDay(for: start)
+        rangeEnd = calendar.startOfDay(for: end)
+    }
+
+    func applySelectedDay(_ date: Date) {
+        scopeMode = .day
+        selectDate(date)
+    }
+
+    func applySelectedRange(start: Date, end: Date) {
+        let normalizedStart = calendar.startOfDay(for: min(start, end))
+        let normalizedEnd = calendar.startOfDay(for: max(start, end))
+        scopeMode = .range
+        selectedMonth = normalizedStart
+        selectedDay = normalizedStart
+        rangeStart = normalizedStart
+        rangeEnd = normalizedEnd
+    }
+
     func selectDate(_ date: Date) {
         let normalizedDate = calendar.startOfDay(for: date)
         switch scopeMode {
@@ -98,6 +151,24 @@ final class HubEventsCalendarViewModel: ObservableObject {
         case .range:
             selectRangeBoundary(normalizedDate)
         }
+    }
+
+    private func shiftSelectedRange(direction: Int) {
+        let start = calendar.startOfDay(for: rangeStart ?? selectedDay)
+        let end = calendar.startOfDay(for: rangeEnd ?? calendar.date(byAdding: .day, value: 6, to: start) ?? start)
+        let lower = min(start, end)
+        let upper = max(start, end)
+        let dayCount = (calendar.dateComponents([.day], from: lower, to: upper).day ?? 0) + 1
+        guard
+            let shiftedStart = calendar.date(byAdding: .day, value: dayCount * direction, to: lower),
+            let shiftedEnd = calendar.date(byAdding: .day, value: dayCount * direction, to: upper)
+        else { return }
+
+        scopeMode = .range
+        selectedMonth = calendar.startOfDay(for: shiftedStart)
+        selectedDay = calendar.startOfDay(for: shiftedStart)
+        rangeStart = calendar.startOfDay(for: shiftedStart)
+        rangeEnd = calendar.startOfDay(for: shiftedEnd)
     }
 
     func setFilter(_ filterId: String) {

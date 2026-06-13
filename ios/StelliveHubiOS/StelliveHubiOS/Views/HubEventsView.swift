@@ -80,7 +80,8 @@ struct HubEventsView: View {
             }
 
             Section {
-                Text("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
+                Text("팬 주최 이벤트는 추후 추가를 검토 중에 있습니다.")
+                    .secondaryNoticeTextStyle()
             }
         }
         .listStyle(.insetGrouped)

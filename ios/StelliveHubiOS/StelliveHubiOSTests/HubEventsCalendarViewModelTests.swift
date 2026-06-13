@@ -112,6 +112,89 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.accessibilityLabel(for: date("2026-06-14")), "6월 14일, 기간 포함, 일정 1개")
     }
 
+    func testListDayNavigationUpdatesSelectedDayAndVisibleEntries() {
+        let viewModel = makeViewModel(selectedDay: date("2026-06-14"), days: [
+            day("2026-06-14", entries: []),
+            day("2026-06-15", entries: [entry(id: "goods-open")])
+        ])
+
+        viewModel.setViewMode(.list)
+        viewModel.goToNextDay()
+
+        XCTAssertEqual(viewModel.selectedDay, date("2026-06-15"))
+        XCTAssertEqual(viewModel.visibleEntries().map(\.id), ["goods-open"])
+
+        viewModel.goToPreviousDay()
+
+        XCTAssertEqual(viewModel.selectedDay, date("2026-06-14"))
+        XCTAssertTrue(viewModel.visibleEntries().isEmpty)
+    }
+
+    func testTodayActionKeepsListModeAndSelectsToday() {
+        let viewModel = makeViewModel(selectedDay: date("2026-06-20"), days: [])
+
+        viewModel.setViewMode(.list)
+        viewModel.goToToday()
+
+        XCTAssertEqual(viewModel.viewMode, .list)
+        XCTAssertEqual(viewModel.selectedDay, date("2026-06-13"))
+    }
+
+    func testListRangeNavigationKeepsRangeLength() {
+        let viewModel = makeViewModel(days: [])
+
+        viewModel.setViewMode(.list)
+        viewModel.setScopeMode(.range)
+        viewModel.selectDate(date("2026-06-16"))
+        viewModel.selectDate(date("2026-06-22"))
+        viewModel.goToNextRange()
+
+        XCTAssertEqual(viewModel.rangeStart, date("2026-06-23"))
+        XCTAssertEqual(viewModel.rangeEnd, date("2026-06-29"))
+
+        viewModel.goToPreviousRange()
+
+        XCTAssertEqual(viewModel.rangeStart, date("2026-06-16"))
+        XCTAssertEqual(viewModel.rangeEnd, date("2026-06-22"))
+    }
+
+    func testCurrentWeekActionSelectsMondayThroughSundayRange() {
+        let viewModel = makeViewModel(days: [])
+
+        viewModel.setViewMode(.list)
+        viewModel.goToCurrentWeek()
+
+        XCTAssertEqual(viewModel.scopeMode, .range)
+        XCTAssertEqual(viewModel.rangeStart, date("2026-06-08"))
+        XCTAssertEqual(viewModel.rangeEnd, date("2026-06-14"))
+    }
+
+    func testApplyingSelectedDayKeepsListModeAndUpdatesEntries() {
+        let viewModel = makeViewModel(days: [
+            day("2026-06-15", entries: [entry(id: "goods-open")])
+        ])
+
+        viewModel.setViewMode(.list)
+        viewModel.applySelectedDay(date("2026-06-15"))
+
+        XCTAssertEqual(viewModel.viewMode, .list)
+        XCTAssertEqual(viewModel.scopeMode, .day)
+        XCTAssertEqual(viewModel.selectedDay, date("2026-06-15"))
+        XCTAssertEqual(viewModel.visibleEntries().map(\.id), ["goods-open"])
+    }
+
+    func testApplyingSelectedRangeKeepsListModeAndNormalizesDates() {
+        let viewModel = makeViewModel(days: [])
+
+        viewModel.setViewMode(.list)
+        viewModel.applySelectedRange(start: date("2026-06-22"), end: date("2026-06-16"))
+
+        XCTAssertEqual(viewModel.viewMode, .list)
+        XCTAssertEqual(viewModel.scopeMode, .range)
+        XCTAssertEqual(viewModel.rangeStart, date("2026-06-16"))
+        XCTAssertEqual(viewModel.rangeEnd, date("2026-06-22"))
+    }
+
     private func makeViewModel(
         selectedDay: Date? = nil,
         days: [HubCalendarDay]
