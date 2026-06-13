@@ -46,28 +46,62 @@ struct IOSPrimaryNavigationPolicy {
 }
 
 struct ContentView: View {
+    @State private var selectedTab = "home"
+    @State private var pendingHubEventId: String?
+
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             HomeView()
                 .tabItem { Label(IOSPrimaryNavigationPolicy.bottomTabs[0].title, systemImage: IOSPrimaryNavigationPolicy.bottomTabs[0].systemImage) }
+                .tag("home")
             LiveView()
                 .tabItem { Label(IOSPrimaryNavigationPolicy.bottomTabs[1].title, systemImage: IOSPrimaryNavigationPolicy.bottomTabs[1].systemImage) }
+                .tag("live")
             HistoryView()
                 .tabItem { Label(IOSPrimaryNavigationPolicy.bottomTabs[2].title, systemImage: IOSPrimaryNavigationPolicy.bottomTabs[2].systemImage) }
-            HubEventsTabView()
+                .tag("history")
+            HubEventsTabView(deepLinkedEventId: $pendingHubEventId)
                 .tabItem { Label(IOSPrimaryNavigationPolicy.bottomTabs[3].title, systemImage: IOSPrimaryNavigationPolicy.bottomTabs[3].systemImage) }
+                .tag("hubEvents")
+        }
+        .onOpenURL { url in
+            guard let eventId = HubCalendarDeepLinkPolicy.eventId(from: url) else { return }
+            selectedTab = "hubEvents"
+            pendingHubEventId = eventId
         }
     }
 }
 
 private struct HubEventsTabView: View {
+    @EnvironmentObject private var store: MockHubStore
+    @Binding var deepLinkedEventId: String?
     @State private var path = NavigationPath()
 
     var body: some View {
         NavigationStack(path: $path) {
             HubEventsView()
                 .settingsToolbar(path: $path)
+                .navigationDestination(for: HubEvent.self) { event in
+                    HubEventDetailView(event: event)
+                }
+                .onAppear(perform: openPendingHubEvent)
+                .onChange(of: deepLinkedEventId) { _ in
+                    openPendingHubEvent()
+                }
         }
+    }
+
+    private func openPendingHubEvent() {
+        guard
+            let eventId = deepLinkedEventId,
+            let event = store.hubEvents.first(where: { $0.id == eventId })
+        else {
+            return
+        }
+
+        path.removeLast(path.count)
+        path.append(event)
+        deepLinkedEventId = nil
     }
 }
 

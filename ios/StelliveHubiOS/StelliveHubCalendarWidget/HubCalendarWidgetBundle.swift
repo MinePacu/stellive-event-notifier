@@ -72,5 +72,17 @@ struct HubCalendarWidgetView: View {
         }
         .padding()
         .background(Color(.systemBackground))
+        .widgetURL(widgetDeepLink)
+    }
+
+    private var widgetDeepLink: URL? {
+        guard
+            let first = entry.snapshot?.entries.first,
+            HubCalendarDeepLinkPolicy.canNavigateToDetail(first)
+        else {
+            return nil
+        }
+
+        return URL(string: first.appDeepLink)
     }
 }

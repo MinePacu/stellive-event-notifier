@@ -1,0 +1,348 @@
+package dev.stellive.hub.feature.calendar
+
+import android.content.Context
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
+import android.view.View
+import android.widget.GridLayout
+import android.widget.LinearLayout
+import android.widget.TextView
+import com.google.android.material.card.MaterialCardView
+import dev.stellive.hub.R
+import dev.stellive.hub.core.model.HubCalendarDay
+import dev.stellive.hub.core.model.HubCalendarEntry
+import java.time.Clock
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+class HubEventsCalendarView(
+    context: Context,
+    days: List<HubCalendarDay>,
+    clock: Clock = Clock.systemDefaultZone(),
+    private val onEntryClick: (String) -> Unit = {},
+) : MaterialCardView(context) {
+    private val viewModel = HubEventsCalendarViewModel(days, clock)
+    private val content = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(14), dp(14), dp(14), dp(14))
+    }
+
+    init {
+        radius = dp(18).toFloat()
+        cardElevation = 0f
+        strokeWidth = dp(1)
+        strokeColor = color(R.color.hub_line)
+        setCardBackgroundColor(color(R.color.hub_card))
+        layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(12)
+        }
+        addView(content)
+        render()
+    }
+
+    private fun render() {
+        content.removeAllViews()
+        content.addView(titleBlock())
+        content.addView(modeSwitch())
+        content.addView(scopeSwitch())
+
+        if (viewModel.uiState.viewMode == HubEventsViewMode.LIST) {
+            content.addView(entryList(viewModel.uiState.visibleEntries))
+            return
+        }
+
+        content.addView(monthControl())
+        content.addView(weekdayHeader())
+        content.addView(monthGrid())
+        content.addView(entryList(viewModel.uiState.visibleEntries))
+    }
+
+    private fun titleBlock(): View = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(TextView(context).apply {
+            text = "굿즈/행사 캘린더"
+            setTextColor(color(R.color.hub_text))
+            textSize = 17f
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        addView(TextView(context).apply {
+            text = "서버에서 동기화된 일정만 표시합니다."
+            setTextColor(color(R.color.hub_text_muted))
+            textSize = 12f
+            setPadding(0, dp(3), 0, dp(10))
+        })
+    }
+
+    private fun modeSwitch(): View = segmentedRow(
+        listOf(
+            Segment("목록", viewModel.uiState.viewMode == HubEventsViewMode.LIST) {
+                viewModel.setViewMode(HubEventsViewMode.LIST)
+            },
+            Segment("캘린더", viewModel.uiState.viewMode == HubEventsViewMode.CALENDAR) {
+                viewModel.setViewMode(HubEventsViewMode.CALENDAR)
+            },
+        ),
+    )
+
+    private fun scopeSwitch(): View = segmentedRow(
+        listOf(
+            Segment("일별", viewModel.uiState.scopeMode == HubCalendarScopeMode.DAY) {
+                viewModel.setScopeMode(HubCalendarScopeMode.DAY)
+            },
+            Segment("기간별", viewModel.uiState.scopeMode == HubCalendarScopeMode.RANGE) {
+                viewModel.setScopeMode(HubCalendarScopeMode.RANGE)
+            },
+        ),
+    )
+
+    private fun monthControl(): View = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, dp(8), 0, dp(8))
+
+        addView(monthButton("이전") {
+            viewModel.goToPreviousMonth()
+        })
+        addView(TextView(context).apply {
+            text = monthFormatter.format(viewModel.uiState.selectedMonth)
+            setTextColor(color(R.color.hub_text))
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+        })
+        addView(monthButton("다음") {
+            viewModel.goToNextMonth()
+        })
+    }
+
+    private fun weekdayHeader(): View = GridLayout(context).apply {
+        columnCount = 7
+        listOf("일", "월", "화", "수", "목", "금", "토").forEach { label ->
+            addView(TextView(context).apply {
+                text = label
+                gravity = Gravity.CENTER
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 11f
+                layoutParams = GridLayout.LayoutParams().apply {
+                    width = 0
+                    height = dp(24)
+                    columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                }
+            })
+        }
+    }
+
+    private fun monthGrid(): View = GridLayout(context).apply {
+        columnCount = 7
+        val month = viewModel.uiState.selectedMonth
+        val firstDay = month.atDay(1)
+        val leadingDays = firstDay.dayOfWeek.value % 7
+        val totalCells = ((leadingDays + month.lengthOfMonth() + 6) / 7) * 7
+
+        repeat(totalCells) { index ->
+            val date = firstDay.minusDays(leadingDays.toLong()).plusDays(index.toLong())
+            addView(dateCell(date, YearMonth.from(date) == month))
+        }
+    }
+
+    private fun dateCell(date: LocalDate, inSelectedMonth: Boolean): View {
+        val marker = viewModel.markerForDate(date)
+        val entryCount = viewModel.uiState.days
+            .firstOrNull { it.date == date.toString() }
+            ?.entries
+            ?.size ?: 0
+        val cell = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            minimumHeight = dp(54)
+            contentDescription = CalendarUiPolicy.accessibilityLabelForDate(date, marker, entryCount)
+            background = cellBackground(marker)
+            alpha = if (inSelectedMonth) 1f else 0.36f
+            setOnClickListener {
+                if (viewModel.uiState.scopeMode == HubCalendarScopeMode.DAY) {
+                    viewModel.selectDay(date)
+                } else {
+                    viewModel.selectRangeBoundary(date)
+                }
+                render()
+            }
+            layoutParams = GridLayout.LayoutParams().apply {
+                width = 0
+                height = dp(58)
+                setMargins(dp(1), dp(2), dp(1), dp(2))
+                columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+            }
+        }
+
+        cell.addView(TextView(context).apply {
+            text = date.dayOfMonth.toString()
+            gravity = Gravity.CENTER
+            textSize = 13f
+            typeface = if (marker == CalendarDateMarker.SELECTED_DAY ||
+                marker == CalendarDateMarker.RANGE_START ||
+                marker == CalendarDateMarker.RANGE_END
+            ) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            setTextColor(dateTextColor(marker))
+        })
+        cell.addView(TextView(context).apply {
+            text = if (entryCount > 0) "•" else ""
+            gravity = Gravity.CENTER
+            textSize = 13f
+            setTextColor(dotColor(marker))
+        })
+        return cell
+    }
+
+    private fun entryList(entries: List<HubCalendarEntry>): View = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(0, dp(10), 0, 0)
+        if (entries.isEmpty()) {
+            addView(TextView(context).apply {
+                text = "선택한 범위에 표시할 일정이 없습니다."
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 13f
+                gravity = Gravity.CENTER
+                setPadding(0, dp(14), 0, dp(8))
+            })
+            return@apply
+        }
+
+        entries.forEach { entry ->
+            addView(entryRow(entry))
+        }
+    }
+
+    private fun entryRow(entry: HubCalendarEntry): View = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        val canNavigate = HubCalendarDeepLinkPolicy.canNavigateToDetail(entry)
+        isClickable = canNavigate
+        isFocusable = canNavigate
+        background = rounded(color(R.color.hub_surface), dp(14), color(R.color.hub_line))
+        setPadding(dp(12), dp(10), dp(12), dp(10))
+        if (canNavigate) {
+            setOnClickListener { onEntryClick(entry.eventId) }
+        }
+        layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(8)
+        }
+
+        addView(TextView(context).apply {
+            text = entry.title
+            setTextColor(color(R.color.hub_text))
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        addView(TextView(context).apply {
+            text = listOf(entry.category.displayName, entry.participationMode.displayName, entry.sourceLabel)
+                .filter { it.isNotBlank() }
+                .joinToString(" · ")
+            setTextColor(color(R.color.hub_text_muted))
+            textSize = 12f
+            setPadding(0, dp(3), 0, 0)
+        })
+        addView(TextView(context).apply {
+            text = "${CalendarUiPolicy.entryLabel(entry)} · ${entry.displayDate} · ${entry.displayTimeText}"
+            setTextColor(color(R.color.hub_success))
+            textSize = 12f
+            setPadding(0, dp(4), 0, 0)
+        })
+    }
+
+    private fun segmentedRow(segments: List<Segment>): View = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        background = rounded(color(R.color.hub_surface), dp(18), color(R.color.hub_line))
+        setPadding(dp(3), dp(3), dp(3), dp(3))
+        layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(8)
+        }
+
+        segments.forEach { segment ->
+            addView(TextView(context).apply {
+                text = segment.label
+                gravity = Gravity.CENTER
+                textSize = 13f
+                typeface = if (segment.selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                setTextColor(if (segment.selected) Color.WHITE else color(R.color.hub_text_muted))
+                background = if (segment.selected) rounded(color(R.color.hub_success), dp(15), Color.TRANSPARENT) else null
+                setPadding(0, dp(7), 0, dp(7))
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    segment.onClick()
+                    render()
+                }
+                layoutParams = LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+            })
+        }
+    }
+
+    private fun monthButton(label: String, onClick: () -> Unit): View = TextView(context).apply {
+        text = label
+        gravity = Gravity.CENTER
+        textSize = 12f
+        typeface = Typeface.DEFAULT_BOLD
+        setTextColor(color(R.color.hub_text))
+        background = rounded(color(R.color.hub_surface), dp(14), color(R.color.hub_line))
+        setPadding(dp(12), dp(7), dp(12), dp(7))
+        isClickable = true
+        isFocusable = true
+        setOnClickListener {
+            onClick()
+            render()
+        }
+    }
+
+    private fun cellBackground(marker: CalendarDateMarker): GradientDrawable? = when (marker) {
+        CalendarDateMarker.SELECTED_DAY,
+        CalendarDateMarker.RANGE_START,
+        CalendarDateMarker.RANGE_END -> rounded(color(R.color.hub_success), dp(16), color(R.color.hub_success))
+        CalendarDateMarker.RANGE_MIDDLE_WITH_EVENT,
+        CalendarDateMarker.RANGE_MIDDLE_EMPTY -> rounded(color(R.color.hub_accent_soft), dp(10), Color.TRANSPARENT)
+        CalendarDateMarker.TODAY -> rounded(Color.TRANSPARENT, dp(16), color(R.color.hub_success))
+        CalendarDateMarker.OUTSIDE -> null
+    }
+
+    private fun dateTextColor(marker: CalendarDateMarker): Int = when (marker) {
+        CalendarDateMarker.SELECTED_DAY,
+        CalendarDateMarker.RANGE_START,
+        CalendarDateMarker.RANGE_END -> Color.WHITE
+        else -> color(R.color.hub_text)
+    }
+
+    private fun dotColor(marker: CalendarDateMarker): Int = when (marker) {
+        CalendarDateMarker.SELECTED_DAY,
+        CalendarDateMarker.RANGE_START,
+        CalendarDateMarker.RANGE_END -> Color.WHITE
+        else -> color(R.color.hub_success)
+    }
+
+    private fun rounded(fill: Int, radius: Int, stroke: Int): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = radius.toFloat()
+            if (stroke != Color.TRANSPARENT) {
+                setStroke(dp(1), stroke)
+            }
+        }
+
+    private fun color(id: Int): Int = context.getColor(id)
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private data class Segment(
+        val label: String,
+        val selected: Boolean,
+        val onClick: () -> Unit,
+    )
+
+    private companion object {
+        val monthFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREAN)
+    }
+}

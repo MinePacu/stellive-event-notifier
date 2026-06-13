@@ -2,6 +2,7 @@ package dev.stellive.hub
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -33,6 +34,8 @@ import dev.stellive.hub.core.model.NotificationEventType
 import dev.stellive.hub.core.model.NotificationHistoryItem
 import dev.stellive.hub.core.model.NotificationPlatform
 import dev.stellive.hub.databinding.ActivityMainBinding
+import dev.stellive.hub.feature.calendar.HubCalendarDeepLinkPolicy
+import dev.stellive.hub.feature.calendar.HubEventsCalendarView
 import dev.stellive.hub.feature.home.HubScreen
 import dev.stellive.hub.feature.home.MainUiPolicy
 import dev.stellive.hub.feature.home.MainNavigationHistory
@@ -63,9 +66,25 @@ class MainActivity : AppCompatActivity() {
         setupBackNavigation()
         setupTopBarActions()
         setupBottomNavigation()
-        renderHome()
-        updateSelectedBottomNavigation(HubScreen.HOME)
-        updateNavigationChrome()
+        if (!handleAppDeepLink(intent)) {
+            renderHome()
+            updateSelectedBottomNavigation(HubScreen.HOME)
+            updateNavigationChrome()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleAppDeepLink(intent)
+    }
+
+    private fun handleAppDeepLink(intent: Intent?): Boolean {
+        val eventId = HubCalendarDeepLinkPolicy.eventIdFromAppDeepLink(intent?.dataString) ?: return false
+        selectedHubEventId = eventId
+        navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
+        navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
+        return true
     }
 
     private fun setupTopBarScrollBehavior() {
@@ -301,6 +320,16 @@ class MainActivity : AppCompatActivity() {
             )
         )
         binding.contentList.addView(staticChips("전체", "굿즈", "티켓", "오프라인", "마감 임박"))
+        binding.contentList.addView(
+            HubEventsCalendarView(
+                context = this,
+                days = repository.calendarDaysForFilter("all"),
+            ) { eventId ->
+                selectedHubEventId = eventId
+                navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
+            }
+        )
+
         repository.calendarDaysForFilter("all").forEach { day ->
             binding.contentList.addView(calendarDayHeader(day.date))
             day.entries.forEach { entry ->

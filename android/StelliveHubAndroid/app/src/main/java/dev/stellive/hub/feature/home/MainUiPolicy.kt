@@ -37,7 +37,7 @@ data class SettingsPolicyRow(
 )
 
 object MainUiPolicy {
-    private const val ROOT_TOP_BAR_TITLE_START_INSET_DP = 10
+    private const val BACK_BUTTON_WIDTH_DP = 44
 
     fun primaryNavigationItems(): List<MainNavigationItem> = listOf(
         MainNavigationItem("home", "홈"),
@@ -80,7 +80,7 @@ object MainUiPolicy {
     }
 
     fun topBarTitleStartInsetDp(canGoBack: Boolean): Int =
-        if (canGoBack) 0 else ROOT_TOP_BAR_TITLE_START_INSET_DP
+        if (canGoBack) BACK_BUTTON_WIDTH_DP else 0
 
     fun realtimeDisclosureLines(): List<String> = NotificationSettingState.REALTIME_DISCLOSURE_LINES
 
