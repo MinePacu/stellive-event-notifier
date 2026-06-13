@@ -1,4 +1,11 @@
 import cors from "@fastify/cors";
+import { ChzzkAuthClient } from "./adapters/chzzk/chzzkAuthClient.js";
+import ChzzkApiClient from "./adapters/chzzk/chzzkApiClient.js";
+import ChzzkOpenApiAdapter from "./adapters/chzzk/chzzkOpenApiAdapter.js";
+import { CatalogService } from "./catalog/catalog.js";
+import ChzzkEventIngestor from "./events/chzzkEventIngestor.js";
+import { LiveStatusRepository } from "./repositories/liveStatusRepository.js";
+import { PlatformApiStateRepository } from "./repositories/platformApiStateRepository.js";
 import sensible from "@fastify/sensible";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
@@ -25,6 +32,7 @@ type EnvOverrides = Record<string, string | boolean | number | undefined>;
 export interface BuildAppOptions {
   env?: EnvOverrides;
   useProcessEnv?: boolean;
+  chzzkLiveApiFetch?: typeof fetch;
   chzzkAuthRoutes?: {
     dependencies?: Partial<Omit<ChzzkAuthRouteOptions, "env">>;
   };
@@ -61,6 +69,62 @@ function createDefaultNotificationWorker(env: AppEnv): NotificationWorker {
     preferenceResolution: new PreferenceResolutionService(),
     pushSender: new FcmPushSender(fcmClient)
   });
+}
+
+function createDefaultChzzkLiveAdapter(
+  env: AppEnv,
+  dependencies: Partial<InternalRouteDependencies> | undefined,
+  fetchImpl?: typeof fetch
+): Pick<InternalRouteDependencies, "chzzkLiveAdapter"> {
+  if (dependencies?.chzzkLiveAdapter) return {};
+  if (!env.CHZZK_CLIENT_ID || !env.CHZZK_CLIENT_SECRET || !env.CHZZK_REDIRECT_URI) return {};
+
+  const stateRepository = hasChzzkStateRepository(dependencies?.adapterHealth)
+    ? dependencies.adapterHealth
+    : new PlatformApiStateRepository();
+  const liveStatusRepository = hasChzzkLiveStatusRepository(dependencies?.liveStatus)
+    ? dependencies.liveStatus
+    : new LiveStatusRepository();
+  const authClient = new ChzzkAuthClient({
+    clientId: env.CHZZK_CLIENT_ID,
+    clientSecret: env.CHZZK_CLIENT_SECRET,
+    redirectUri: env.CHZZK_REDIRECT_URI
+  });
+  const apiClient = new ChzzkApiClient(
+    authClient,
+    stateRepository,
+    { tokenRefreshSkewSeconds: env.CHZZK_TOKEN_REFRESH_SKEW_SECONDS },
+    { fetch: fetchImpl }
+  );
+  const ingestor = new ChzzkEventIngestor();
+
+  return {
+    chzzkLiveAdapter: new ChzzkOpenApiAdapter({
+      catalog: new CatalogService(),
+      apiClient,
+      liveStatusRepository,
+      ingestEvent: (event) => ingestor.ingest(event)
+    })
+  };
+}
+
+function hasChzzkStateRepository(value: unknown): value is Pick<PlatformApiStateRepository, "getState" | "upsertState" | "upsertAdapterHealth"> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "getState" in value &&
+    "upsertState" in value &&
+    "upsertAdapterHealth" in value
+  );
+}
+
+function hasChzzkLiveStatusRepository(value: unknown): value is Pick<LiveStatusRepository, "getByMemberId" | "upsertLiveStatus"> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "getByMemberId" in value &&
+    "upsertLiveStatus" in value
+  );
 }
 
 function isPrivilegedRoutePath(url: string): boolean {
@@ -109,9 +173,15 @@ export async function buildApp(options: BuildAppOptions = {}) {
     env,
     ...options.chzzkAuthRoutes?.dependencies
   });
-  const internalRouteDependencies: Partial<InternalRouteDependencies> = options.internalRoutes?.dependencies ?? {
-    notificationWorker: createDefaultNotificationWorker(env)
-  };
+  const internalRouteDependencies: Partial<InternalRouteDependencies> = options.internalRoutes?.dependencies
+    ? {
+        ...createDefaultChzzkLiveAdapter(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
+        ...options.internalRoutes.dependencies
+      }
+    : {
+        notificationWorker: createDefaultNotificationWorker(env),
+        ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch)
+      };
   await registerInternalRoutes(app, { env, dependencies: internalRouteDependencies });
   await registerAdminRoutes(app, { env });
   await registerAdminHubEventRoutes(app, { env, dependencies: options.adminHubEventRoutes?.dependencies });
