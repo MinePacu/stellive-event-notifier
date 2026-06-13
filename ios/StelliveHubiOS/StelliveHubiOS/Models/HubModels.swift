@@ -345,6 +345,35 @@ struct HubCalendarDay: Identifiable, Codable, Equatable {
     let entries: [HubCalendarEntry]
 }
 
+enum HubCalendarDeepLinkPolicy {
+    private static let scheme = "stellivehub"
+    private static let hubEventsHost = "hub-events"
+
+    static func appDeepLink(forEventId eventId: String) -> URL {
+        URL(string: "\(scheme)://\(hubEventsHost)/\(eventId)")!
+    }
+
+    static func eventId(from url: URL?) -> String? {
+        guard
+            let url,
+            url.scheme == scheme,
+            url.host == hubEventsHost
+        else {
+            return nil
+        }
+
+        let eventId = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !eventId.isEmpty, !eventId.contains("/") else { return nil }
+        return eventId
+    }
+
+    static func canNavigateToDetail(_ entry: HubCalendarEntry) -> Bool {
+        entry.entryKind == .hubEvent &&
+            eventId(from: URL(string: entry.appDeepLink)) == entry.eventId &&
+            !entry.eventId.isEmpty
+    }
+}
+
 struct HubCalendarWidgetSnapshot: Codable, Equatable {
     let generatedAt: Date
     let timezone: String

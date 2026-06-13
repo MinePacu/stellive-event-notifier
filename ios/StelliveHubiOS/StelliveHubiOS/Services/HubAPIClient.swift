@@ -48,6 +48,13 @@ struct HubEventsSummaryResponse: Codable, Equatable {
     let closingSoonCount: Int
 }
 
+struct HubCalendarResponse: Codable, Equatable {
+    let timezone: String
+    let from: String
+    let to: String
+    let days: [HubCalendarDay]
+}
+
 struct RegisterDeviceRequest: Codable, Equatable {
     let deviceId: String?
     let platform: String
@@ -124,6 +131,16 @@ final class HubAPIClient {
             URLQueryItem(name: "platform", value: "ios"),
         ].filter { $0.value != nil }
         return try await send(URLRequest(url: components.url!), responseType: BootstrapResponse.self)
+    }
+
+    func hubEventsCalendar(from: String, to: String, timezone: String) async throws -> HubCalendarResponse {
+        var components = URLComponents(url: baseURL.appendingPathComponent("v1/hub-events/calendar"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "from", value: from),
+            URLQueryItem(name: "to", value: to),
+            URLQueryItem(name: "timezone", value: timezone)
+        ]
+        return try await send(URLRequest(url: components.url!), responseType: HubCalendarResponse.self)
     }
 
     func registerDevice(_ request: RegisterDeviceRequest) async throws -> RegisterDeviceResponse {

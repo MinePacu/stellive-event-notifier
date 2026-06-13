@@ -34,9 +34,9 @@ class MainUiPolicyTest {
     }
 
     @Test
-    fun topBarTitleStartInsetAlignsRootScreensWithContentPadding() {
-        assertEquals(10, MainUiPolicy.topBarTitleStartInsetDp(canGoBack = false))
-        assertEquals(0, MainUiPolicy.topBarTitleStartInsetDp(canGoBack = true))
+    fun topBarTitleStartInsetAlignsRootScreensWithChromePadding() {
+        assertEquals(0, MainUiPolicy.topBarTitleStartInsetDp(canGoBack = false))
+        assertEquals(44, MainUiPolicy.topBarTitleStartInsetDp(canGoBack = true))
     }
 
     @Test

@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.RemoteViews
 import dev.stellive.hub.MainActivity
 import dev.stellive.hub.R
@@ -21,7 +22,11 @@ class HubCalendarWidgetProvider : AppWidgetProvider() {
         val snapshot = MockHubRepository().calendarWidgetSnapshot(limit = 1)
         val entry = snapshot.entries.firstOrNull()
         val views = RemoteViews(context.packageName, R.layout.widget_hub_calendar)
-        val intent = Intent(context, MainActivity::class.java)
+        val intent = Intent(context, MainActivity::class.java).apply {
+            if (entry != null && HubCalendarDeepLinkPolicy.canNavigateToDetail(entry)) {
+                data = Uri.parse(entry.appDeepLink)
+            }
+        }
         val pendingIntent = PendingIntent.getActivity(
             context,
             0,
