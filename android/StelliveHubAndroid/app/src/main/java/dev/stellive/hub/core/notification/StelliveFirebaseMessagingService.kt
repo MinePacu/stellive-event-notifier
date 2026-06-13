@@ -2,6 +2,7 @@ package dev.stellive.hub.core.notification
 
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import dev.stellive.hub.BuildConfig
 import dev.stellive.hub.core.device.PushTokenSyncer
 import dev.stellive.hub.core.network.HubApiClient
 import kotlinx.coroutines.CoroutineScope
@@ -27,5 +28,5 @@ class StelliveFirebaseMessagingService : FirebaseMessagingService() {
         // TODO: Persist payload to Room and route tapAction to app deep link or platform URL.
     }
 
-    private fun defaultHubBaseUrl(): String = "http://10.0.2.2:4000/"
+    private fun defaultHubBaseUrl(): String = BuildConfig.HUB_BASE_URL
 }

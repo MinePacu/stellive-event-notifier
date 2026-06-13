@@ -9,7 +9,7 @@ final class ServerHubStore: ObservableObject {
     init(
         api: HubAPIClient,
         deviceIDStore: DeviceIDStore = DeviceIDStore(),
-        fallback: MockHubStore = MockHubStore()
+        fallback: MockHubStore
     ) {
         self.api = api
         self.deviceIDStore = deviceIDStore

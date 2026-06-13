@@ -1,3 +1,14 @@
+import java.util.Properties
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use(::load)
+    }
+}
+
+val hubBaseUrl = localProperties.getProperty("HUB_BASE_URL") ?: "http://10.0.2.2:4000/"
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -15,10 +26,12 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("String", "HUB_BASE_URL", "\"$hubBaseUrl\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
+        buildConfig = true
         viewBinding = true
     }
 

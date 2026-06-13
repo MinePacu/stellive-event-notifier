@@ -10,9 +10,28 @@ struct StelliveHubApp: App {
                 .environmentObject(store)
                 .preferredColorScheme(store.settings.appearanceMode.preferredColorScheme)
                 .task {
+                    if let baseURL = Bundle.main.hubBaseURL {
+                        _ = await ServerHubStore(
+                            api: HubAPIClient(baseURL: baseURL),
+                            fallback: store
+                        ).bootstrap()
+                    }
                     try? HubCalendarWidgetStore.saveToSharedContainer(store.calendarWidgetSnapshot())
                 }
         }
+    }
+}
+
+private extension Bundle {
+    var hubBaseURL: URL? {
+        guard
+            let value = object(forInfoDictionaryKey: "HubBaseURL") as? String,
+            value.isEmpty == false,
+            value.contains("$(") == false
+        else {
+            return nil
+        }
+        return URL(string: value)
     }
 }
 

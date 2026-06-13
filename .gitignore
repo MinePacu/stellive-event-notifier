@@ -21,6 +21,7 @@ DerivedData/
 *.xcuserstate
 *.xcuserdata/
 ios/StelliveHubiOS/GoogleService-Info.plist
+ios/StelliveHubiOS/Config/Local.xcconfig
 
 # Local design mockups
 .superpowers/
