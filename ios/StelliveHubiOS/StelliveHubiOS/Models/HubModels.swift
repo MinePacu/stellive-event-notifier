@@ -211,6 +211,17 @@ enum HubEventParticipationMode: String, Codable, Hashable {
     }
 }
 
+enum HubCalendarEntryKind: String, Codable, Hashable {
+    case hubEvent = "hub_event"
+    case memberBirthday = "member_birthday"
+    case generationAnniversary = "generation_anniversary"
+}
+
+enum HubCalendarSpecialDayKind: String, Codable, Hashable {
+    case memberBirthday = "member_birthday"
+    case generationAnniversary = "generation_anniversary"
+}
+
 enum HubEventStatus: String, Codable, Hashable {
     case announced
     case upcoming
@@ -309,6 +320,9 @@ struct HubEventsSummary: Equatable {
 struct HubCalendarEntry: Identifiable, Codable, Equatable {
     let id: String
     let eventId: String
+    let entryKind: HubCalendarEntryKind
+    let specialDayKind: HubCalendarSpecialDayKind?
+    let specialDayLabel: String?
     let title: String
     let category: HubEventCategory
     let status: HubEventStatus
@@ -321,7 +335,7 @@ struct HubCalendarEntry: Identifiable, Codable, Equatable {
     let displayTimeText: String
     let sourceLabel: String
     let appDeepLink: String
-    let platformUrl: String
+    let platformUrl: String?
 }
 
 struct HubCalendarDay: Identifiable, Codable, Equatable {
@@ -390,6 +404,10 @@ enum HubCalendarPolicy {
         case .cancelled:
             return "취소"
         }
+    }
+
+    static func entryLabel(_ entry: HubCalendarEntry) -> String {
+        entry.specialDayLabel ?? statusLabel(entry.status)
     }
 
     static func dateHeaderText(for date: Date, now: Date = Date()) -> String {

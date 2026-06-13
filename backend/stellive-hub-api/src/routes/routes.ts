@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { CatalogService } from "../catalog/catalog.js";
+import { productionHubCalendarSpecialDays } from "../hub-events/hubCalendarSpecialDayCatalog.js";
 import { HubEventService, type HubEventReadPort } from "../hub-events/hubEventService.js";
 import { shouldDropEventBeforeStorage } from "../events/eventGuards.js";
 import { resolveNotificationDelivery } from "../notification/loadReductionPolicy.js";
@@ -8,7 +9,7 @@ import { RealtimeDeliveryService } from "../realtime/realtimeDeliveryService.js"
 import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
 import { registerAppRoutes } from "./appRoutes.js";
 import registerHubEventReadRoutes from "./hubEventReadRoutes.js";
-import type { DeliveryAttempt, PlatformEvent, UserNotificationPreference } from "../types.js";
+import type { DeliveryAttempt, HubCalendarSpecialDay, PlatformEvent, UserNotificationPreference } from "../types.js";
 import type { BootstrapResponse, MobilePlatform } from "../../../../shared/schemas/mobileApi.js";
 
 const catalog = new CatalogService();
@@ -21,6 +22,7 @@ const devDeviceId = "dev-device";
 
 export interface AppRouteDependencies {
   hubEvents?: HubEventReadPort;
+  hubCalendarSpecialDays?: HubCalendarSpecialDay[];
   bootstrap?: {
     getBootstrap(input: {
       deviceId?: string;
@@ -188,7 +190,10 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
       }));
   });
 
-  registerHubEventReadRoutes(app, { hubEvents });
+  registerHubEventReadRoutes(app, {
+    hubEvents,
+    hubCalendarSpecialDays: options.dependencies?.hubCalendarSpecialDays ?? productionHubCalendarSpecialDays
+  });
 
   app.get("/v1/realtime/status", async () => realtime.status());
   app.get("/v1/events/stream", async (_request, reply) => {

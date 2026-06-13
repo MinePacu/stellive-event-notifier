@@ -58,7 +58,7 @@ struct HubCalendarWidgetView: View {
                 Text(first.title)
                     .font(.headline)
                     .lineLimit(2)
-                Text("\(HubCalendarPolicy.statusLabel(first.status)) · \(first.displayDate) · \(first.displayTimeText)")
+                    Text("\(HubCalendarPolicy.entryLabel(first)) · \(first.displayDate) · \(first.displayTimeText)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

@@ -199,6 +199,27 @@ export type HubEventStatus = "announced" | "upcoming" | "open" | "closing_soon" 
 
 export type HubEventSourceType = "official" | "member" | "official_collab";
 
+export type HubCalendarEntryKind = "hub_event" | "member_birthday" | "generation_anniversary";
+
+export type HubCalendarSpecialDayKind = "member_birthday" | "generation_anniversary";
+
+export type HubCalendarSpecialDayPolicyState = "catalog_verified" | "verify_required";
+
+export interface HubCalendarSpecialDay {
+  id: string;
+  kind: HubCalendarSpecialDayKind;
+  title: string;
+  generationId: "gen1" | "gen2" | "gen3" | "gamja" | "gen4-upcoming";
+  memberId?: string;
+  month: number;
+  day: number;
+  startYear?: number;
+  activeStatus: ActiveStatus;
+  catalogRole?: "member" | "representative";
+  sourceLabel: "카탈로그";
+  policyState: HubCalendarSpecialDayPolicyState;
+}
+
 export type HubEventImagePolicyState =
   | "none"
   | "official_runtime_url"
@@ -249,6 +270,9 @@ export interface HubEventsSummary {
 export interface HubCalendarEntry {
   id: string;
   eventId: string;
+  entryKind: HubCalendarEntryKind;
+  specialDayKind?: HubCalendarSpecialDayKind;
+  specialDayLabel?: string;
   title: string;
   category: HubEventCategory;
   status: HubEventStatus;
@@ -261,7 +285,7 @@ export interface HubCalendarEntry {
   displayTimeText: string;
   sourceLabel: string;
   appDeepLink: string;
-  platformUrl: string;
+  platformUrl?: string;
 }
 
 export interface HubCalendarDay {

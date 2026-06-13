@@ -37,6 +37,8 @@ object CalendarUiPolicy {
         HubEventStatus.CANCELLED -> "취소"
     }
 
+    fun entryLabel(entry: HubCalendarEntry): String = entry.specialDayLabel ?: statusLabel(entry.status)
+
     fun dateHeaderText(date: LocalDate, now: LocalDate = LocalDate.now()): String = when (date) {
         now -> "오늘"
         now.plusDays(1) -> "내일"

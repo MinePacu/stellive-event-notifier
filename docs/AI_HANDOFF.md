@@ -120,3 +120,11 @@ GitHub issue `#18` and GitLab work item `#12` are implemented as public HubEvent
 `backend/stellive-hub-api/test/hubEventReadRoutes.test.ts` covers list/detail/calendar/widget responses, invalid enum/date query errors, missing detail ids, allowed generation ids, and missing-image tolerance.
 Calendar/widget DTOs are shared from `shared/schemas/domain.ts`; Android and iOS `HubCalendarEntry` models include `platformUrl`.
 `shared/openapi/openapi.yaml` now documents public HubEvent list/detail/calendar/widget paths, `HubEventListResponse`, `HubEventQueryError`, and `HubCalendarEntry.platformUrl`.
+## Hub Calendar Special Days Status
+
+GitHub issue `#28` and GitLab work item `#15` track member birthday and generation anniversary support for the goods/events calendar. `docs/HUB_EVENT_ANNIVERSARY_CALENDAR_DESIGN.md` and `docs/HUB_EVENT_ANNIVERSARY_CALENDAR_CODE_DESIGN.md` define the feature and code plan. Initial implementation adds `HubCalendarEntry.entryKind`, optional `specialDayKind`, optional `specialDayLabel`, and optional `platformUrl` in `shared/schemas/domain.ts`.
+
+Backend `hubCalendarSpecialDays.ts` projects verified catalog special days into read-only calendar entries and keeps them out of `PlatformEvent`, `NotificationJob`, push payloads, realtime streams, and notification history. `hubEventReadRoutes.ts` accepts `includeSpecialDays` and `entryKind` query parameters and can receive `hubCalendarSpecialDays` through app route dependencies.
+
+Production special-day seed data now includes the 10 verified active member birthdays from the official Stellive talent profiles in `backend/stellive-hub-api/src/hub-events/hubCalendarSpecialDayCatalog.ts`. Gen1 anniversary and Gangzi birthday remain excluded until an allowed source is confirmed and explicitly approved. No Former members, official channel anniversaries, images, logos, or copied media were added.
+Latest verification on this branch: backend `rtk npm run build` and `rtk npm test` passed with 28 files and 260 tests; iOS `test_sim` passed on `iPhone 17` with 38 tests; Android `rtk ./gradlew testDebugUnitTest --tests dev.stellive.hub.CalendarWidgetTextFormatterTest --tests dev.stellive.hub.CalendarUiPolicyTest` and full `rtk ./gradlew testDebugUnitTest` passed from `android/StelliveHubAndroid`.
