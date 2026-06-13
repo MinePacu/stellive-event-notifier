@@ -58,15 +58,22 @@ struct HubEventsView: View {
                 .listRowInsets(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
             }
 
+            Section("캘린더") {
+                HubEventsCalendarView(days: store.calendarDays(for: selectedFilter))
+            }
+
             ForEach(store.calendarDays(for: selectedFilter)) { day in
                 Section(day.date) {
                     ForEach(day.entries) { entry in
-                        if let event = store.hubEvents.first(where: { $0.id == entry.eventId }) {
+                        if HubCalendarDeepLinkPolicy.canNavigateToDetail(entry),
+                           let event = store.hubEvents.first(where: { $0.id == entry.eventId }) {
                             NavigationLink {
                                 HubEventDetailView(event: event)
                             } label: {
                                 HubCalendarRow(entry: entry)
                             }
+                        } else {
+                            HubCalendarRow(entry: entry)
                         }
                     }
                 }

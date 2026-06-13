@@ -1,0 +1,946 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>굿즈/행사 캘린더 메뉴 목업</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172027;
+      --muted: #65727d;
+      --line: #d9e1e7;
+      --paper: #f4f8fa;
+      --surface: #ffffff;
+      --teal: #007b75;
+      --teal-soft: #d9f0ec;
+      --blue: #295fba;
+      --blue-soft: #ddeaff;
+      --rose: #bd4a55;
+      --rose-soft: #ffe1e3;
+      --gold: #8c641a;
+      --gold-soft: #fff0c8;
+      --green: #236b4e;
+      --green-soft: #dff1e7;
+      --shadow: 0 24px 70px rgba(17, 31, 42, .16);
+      font-family: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        linear-gradient(115deg, rgba(0, 123, 117, .09), transparent 38%),
+        linear-gradient(245deg, rgba(41, 95, 186, .1), transparent 42%),
+        var(--paper);
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 42px 24px 56px;
+    }
+
+    .brief {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 28px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    .brief h1 {
+      margin: 0 0 10px;
+      font-size: 34px;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    .brief p {
+      margin: 0;
+      max-width: 700px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .issue-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .issue-links a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 7px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: #26323b;
+      background: rgba(255, 255, 255, .74);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(320px, 1fr));
+      gap: 30px;
+      align-items: start;
+    }
+
+    .phone-card {
+      display: grid;
+      gap: 14px;
+      justify-items: center;
+    }
+
+    .caption {
+      width: min(100%, 408px);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .caption strong {
+      color: var(--ink);
+      font-size: 15px;
+    }
+
+    .phone {
+      position: relative;
+      width: min(100%, 408px);
+      aspect-ratio: 408 / 836;
+      overflow: hidden;
+      border: 10px solid #151a1f;
+      border-radius: 34px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .phone.ios {
+      border-width: 9px;
+      border-radius: 48px;
+    }
+
+    .notch {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      z-index: 5;
+      width: 116px;
+      height: 28px;
+      border-radius: 999px;
+      transform: translateX(-50%);
+      background: #11151a;
+    }
+
+    .statusbar {
+      height: 44px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      padding: 0 22px 9px;
+      color: #29313a;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .status-icons span {
+      display: block;
+      width: 17px;
+      height: 8px;
+      border: 1.8px solid currentColor;
+      border-radius: 3px;
+    }
+
+    .status-icons span::after {
+      content: "";
+      display: block;
+      width: 10px;
+      height: 4px;
+      margin: 1px;
+      border-radius: 2px;
+      background: currentColor;
+    }
+
+    .screen {
+      height: calc(100% - 44px);
+      display: grid;
+      grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+      background: var(--surface);
+    }
+
+    .topbar {
+      padding: 14px 18px 9px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .topbar h2 {
+      margin: 0;
+      font-size: 23px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .icon-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .icon-button {
+      width: 36px;
+      height: 36px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      color: #35414b;
+      background: #fff;
+    }
+
+    .icon-button svg,
+    .nav-item svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .view-switch {
+      margin: 0 18px 12px;
+      padding: 4px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #edf3f5;
+    }
+
+    .view-switch button {
+      min-height: 36px;
+      border: 0;
+      border-radius: 10px;
+      color: #53616b;
+      background: transparent;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .view-switch button[aria-selected="true"] {
+      color: var(--teal);
+      background: #fff;
+      box-shadow: 0 5px 15px rgba(30, 52, 65, .1);
+    }
+
+    .scope-switch {
+      margin: 0 18px 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .scope-switch button {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: #4e5a64;
+      background: #fff;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .scope-switch button[aria-pressed="true"] {
+      border-color: rgba(0, 123, 117, .28);
+      color: var(--teal);
+      background: var(--teal-soft);
+    }
+
+    .content {
+      min-height: 0;
+      overflow: auto;
+      padding: 0 18px 16px;
+    }
+
+    .month-control {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 0 14px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+    }
+
+    .month-control strong {
+      flex: 1;
+      font-size: 18px;
+      letter-spacing: 0;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .month-control button {
+      flex: 0 0 auto;
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      color: #35414b;
+    }
+
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 6px;
+      padding-bottom: 14px;
+    }
+
+    .weekday {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .day {
+      position: relative;
+      z-index: 0;
+      min-height: 46px;
+      padding: 7px 3px 5px;
+      border: 1px solid transparent;
+      border-radius: 14px;
+      color: #303a43;
+      background: #f7fafb;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .day.is-muted {
+      color: #a5adb4;
+      background: #fbfcfd;
+    }
+
+    .day.is-today {
+      border-color: var(--teal);
+      background: var(--teal-soft);
+      color: var(--teal);
+    }
+
+    .day.is-selected {
+      background: var(--teal);
+      color: #fff;
+    }
+
+    .day.is-range {
+      background: #eaf5f1;
+      color: var(--green);
+      border-radius: 4px;
+      box-shadow: -6px 0 0 #eaf5f1, 6px 0 0 #eaf5f1;
+    }
+
+    .day.is-range-start,
+    .day.is-range-end {
+      background: var(--green);
+      color: #fff;
+    }
+
+    .day.is-range-start {
+      border-radius: 999px 4px 4px 999px;
+      box-shadow: 6px 0 0 #eaf5f1;
+    }
+
+    .day.is-range-end {
+      border-radius: 4px 999px 999px 4px;
+      box-shadow: -6px 0 0 #eaf5f1;
+    }
+
+    .day.is-range .dots i {
+      background: var(--green);
+    }
+
+    .dots {
+      position: absolute;
+      bottom: 7px;
+      left: 50%;
+      z-index: 1;
+      display: flex;
+      gap: 3px;
+      transform: translateX(-50%);
+    }
+
+    .dots i {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 5px 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .section-title span:last-child {
+      color: var(--teal);
+    }
+
+    .event-list {
+      display: grid;
+      gap: 9px;
+    }
+
+    .range-summary {
+      margin: 3px 0 12px;
+      padding: 12px;
+      border: 1px solid rgba(0, 123, 117, .2);
+      border-radius: 8px;
+      background: linear-gradient(135deg, #eef8f5, #ffffff);
+    }
+
+    .range-summary strong {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .range-summary p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .range-rule {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      color: #48626b;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    .range-rule::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .event {
+      display: grid;
+      grid-template-columns: 48px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 72px;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .event-date {
+      display: grid;
+      place-items: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      background: #edf5f4;
+      color: var(--teal);
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1.1;
+    }
+
+    .event h3 {
+      margin: 0 0 4px;
+      font-size: 14px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    .event p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .badge {
+      min-width: 56px;
+      padding: 6px 8px;
+      border-radius: 999px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .badge.open {
+      color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .badge.soon {
+      color: var(--gold);
+      background: var(--gold-soft);
+    }
+
+    .badge.deadline {
+      color: var(--rose);
+      background: var(--rose-soft);
+    }
+
+    .bottom-nav {
+      height: 68px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid var(--line);
+      background: rgba(255, 255, 255, .94);
+    }
+
+    .nav-item {
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 4px;
+      border: 0;
+      color: #66727c;
+      background: transparent;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .nav-item.is-active {
+      color: var(--teal);
+    }
+
+    .ios .screen {
+      background: #f6f8fb;
+    }
+
+    .ios .topbar {
+      padding-top: 18px;
+      background: #f6f8fb;
+    }
+
+    .ios .topbar h2 {
+      font-size: 25px;
+    }
+
+    .ios .view-switch {
+      margin-bottom: 14px;
+      border-radius: 12px;
+      background: #e7edf2;
+    }
+
+    .ios .view-switch button {
+      border-radius: 9px;
+    }
+
+    .ios .scope-switch button[aria-pressed="true"] {
+      border-color: rgba(41, 95, 186, .26);
+      color: var(--blue);
+      background: var(--blue-soft);
+    }
+
+    .ios .content {
+      padding-bottom: 18px;
+    }
+
+    .ios .calendar {
+      padding: 14px 10px 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .ios .day {
+      border-radius: 50%;
+      background: transparent;
+      min-height: 40px;
+    }
+
+    .ios .day.is-today {
+      background: var(--blue-soft);
+      color: var(--blue);
+      border-color: transparent;
+    }
+
+    .ios .day.is-selected {
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .ios .day.is-range {
+      background: #edf3ff;
+      color: var(--blue);
+      border-radius: 4px;
+      box-shadow: -6px 0 0 #edf3ff, 6px 0 0 #edf3ff;
+    }
+
+    .ios .day.is-range-start,
+    .ios .day.is-range-end {
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .ios .day.is-range-start {
+      border-radius: 999px 4px 4px 999px;
+      box-shadow: 6px 0 0 #edf3ff;
+    }
+
+    .ios .day.is-range-end {
+      border-radius: 4px 999px 999px 4px;
+      box-shadow: -6px 0 0 #edf3ff;
+    }
+
+    .ios .day.is-range .dots i {
+      background: var(--blue);
+    }
+
+    .ios .event {
+      border-color: transparent;
+      border-bottom-color: var(--line);
+      border-radius: 0;
+      background: #fff;
+    }
+
+    .ios .event:first-child {
+      border-radius: 8px 8px 0 0;
+    }
+
+    .ios .event:last-child {
+      border-bottom-color: transparent;
+      border-radius: 0 0 8px 8px;
+    }
+
+    .ios .event-date {
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .ios .range-summary {
+      border-color: rgba(41, 95, 186, .2);
+      background: linear-gradient(135deg, #eef4ff, #ffffff);
+    }
+
+    .ios .range-rule {
+      color: var(--blue);
+    }
+
+    .ios .nav-item.is-active,
+    .ios .section-title span:last-child,
+    .ios .view-switch button[aria-selected="true"] {
+      color: var(--blue);
+    }
+
+    .notes {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 26px;
+    }
+
+    .note {
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .76);
+    }
+
+    .note strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .note p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 920px) {
+      .brief {
+        grid-template-columns: 1fr;
+      }
+
+      .issue-links {
+        justify-content: flex-start;
+      }
+
+      .stage,
+      .notes {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 460px) {
+      .page {
+        padding: 28px 12px 40px;
+      }
+
+      .brief h1 {
+        font-size: 27px;
+      }
+
+      .phone {
+        border-width: 7px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="brief" aria-labelledby="title">
+      <div>
+        <h1 id="title">굿즈/행사 캘린더 보기 메뉴 목업</h1>
+        <p>굿즈/행사 페이지에 목록 보기와 캘린더 보기를 함께 두는 방향입니다. 캘린더는 읽기 전용 일정 화면이며, 일별 선택과 기간별 선택을 모두 제공해 하루 일정과 여러 날에 걸친 행사 흐름을 함께 확인합니다.</p>
+      </div>
+      <nav class="issue-links" aria-label="관련 이슈">
+        <a href="https://github.com/MinePacu/stellive-event-notifier/issues/30">GitHub #30</a>
+        <a href="https://gitlab.com/minepacu-group/stellive-event-notifier/-/work_items/16">GitLab #16</a>
+      </nav>
+    </section>
+
+    <section class="stage" aria-label="모바일 앱 목업">
+      <article class="phone-card">
+        <div class="caption">
+          <strong>Android</strong>
+          <span>하단 탭의 굿즈/행사 진입 후 상단 보기 전환</span>
+        </div>
+        <div class="phone android">
+          <div class="statusbar">
+            <span>10:24</span>
+            <div class="status-icons" aria-hidden="true"><span></span></div>
+          </div>
+          <div class="screen">
+            <header class="topbar">
+              <h2>굿즈/행사</h2>
+              <div class="icon-row">
+                <button class="icon-button" aria-label="검색">
+                  <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.4-3.4"></path></svg>
+                </button>
+                <button class="icon-button" aria-label="필터">
+                  <svg viewBox="0 0 24 24"><path d="M4 6h16"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></svg>
+                </button>
+              </div>
+            </header>
+            <div class="view-switch" role="tablist" aria-label="보기 전환">
+              <button type="button" role="tab">목록</button>
+              <button type="button" role="tab" aria-selected="true">캘린더</button>
+            </div>
+            <div class="scope-switch" aria-label="캘린더 범위">
+              <button type="button" aria-pressed="true">일별</button>
+              <button type="button" aria-pressed="false">기간별</button>
+            </div>
+            <div class="content">
+              <div class="month-control">
+                <button aria-label="이전 달">‹</button>
+                <strong>2026년 6월</strong>
+                <button aria-label="다음 달">›</button>
+              </div>
+              <div class="calendar" aria-label="2026년 6월 캘린더">
+                <div class="weekday">일</div><div class="weekday">월</div><div class="weekday">화</div><div class="weekday">수</div><div class="weekday">목</div><div class="weekday">금</div><div class="weekday">토</div>
+                <div class="day is-muted">31</div><div class="day">1</div><div class="day">2</div><div class="day">3</div><div class="day">4</div><div class="day">5</div><div class="day">6</div>
+                <div class="day">7</div><div class="day">8</div><div class="day">9</div><div class="day">10</div><div class="day">11</div><div class="day">12</div><div class="day">13</div>
+                <div class="day is-today">14<span class="dots"><i></i></span></div><div class="day is-selected">15<span class="dots"><i></i><i></i></span></div><div class="day">16<span class="dots"><i></i></span></div><div class="day">17<span class="dots"><i></i><i></i></span></div><div class="day">18</div><div class="day">19<span class="dots"><i></i></span></div><div class="day">20</div>
+                <div class="day">21</div><div class="day">22</div><div class="day">23</div><div class="day">24</div><div class="day">25</div><div class="day">26</div><div class="day">27</div>
+                <div class="day">28</div><div class="day">29</div><div class="day">30</div><div class="day is-muted">1</div><div class="day is-muted">2</div><div class="day is-muted">3</div><div class="day is-muted">4</div>
+              </div>
+              <div class="range-summary">
+                <strong>일별 보기 · 6월 15일</strong>
+                <p>선택한 하루의 판매 오픈, 마감, 현장 행사만 모아 보여줍니다.</p>
+              </div>
+              <div class="section-title"><span>6월 15일 월요일</span><span>2개 일정</span></div>
+              <div class="event-list">
+                <article class="event">
+                  <div class="event-date">10:00</div>
+                  <div>
+                    <h3>공식 굿즈 예약 판매 오픈</h3>
+                    <p>SUMMER COLLECTION · 온라인</p>
+                  </div>
+                  <span class="badge open">판매 중</span>
+                </article>
+                <article class="event">
+                  <div class="event-date">23:59</div>
+                  <div>
+                    <h3>콘서트 VIP 패키지 접수 마감</h3>
+                    <p>티켓 패키지 · D-0</p>
+                  </div>
+                  <span class="badge deadline">마감</span>
+                </article>
+              </div>
+            </div>
+            <nav class="bottom-nav" aria-label="Android 주요 메뉴">
+              <button class="nav-item"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"></path><path d="M5 10.5V20h14v-9.5"></path></svg>홈</button>
+              <button class="nav-item"><svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h10"></path></svg>라이브</button>
+              <button class="nav-item is-active"><svg viewBox="0 0 24 24"><path d="M7 3v4"></path><path d="M17 3v4"></path><rect x="4" y="5" width="16" height="15" rx="3"></rect><path d="M4 10h16"></path></svg>굿즈/행사</button>
+              <button class="nav-item"><svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"></path><circle cx="12" cy="12" r="9"></circle></svg>기록</button>
+            </nav>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-card">
+        <div class="caption">
+          <strong>iPhone</strong>
+          <span>상단 메뉴에서 캘린더 선택, 그룹형 일정 목록 유지</span>
+        </div>
+        <div class="phone ios">
+          <div class="notch" aria-hidden="true"></div>
+          <div class="statusbar">
+            <span>10:24</span>
+            <div class="status-icons" aria-hidden="true"><span></span></div>
+          </div>
+          <div class="screen">
+            <header class="topbar">
+              <h2>굿즈/행사</h2>
+              <div class="icon-row">
+                <button class="icon-button" aria-label="보기 메뉴">
+                  <svg viewBox="0 0 24 24"><path d="M5 7h14"></path><path d="M5 12h14"></path><path d="M5 17h14"></path></svg>
+                </button>
+              </div>
+            </header>
+            <div class="view-switch" role="tablist" aria-label="보기 전환">
+              <button type="button" role="tab">목록</button>
+              <button type="button" role="tab" aria-selected="true">캘린더</button>
+            </div>
+            <div class="scope-switch" aria-label="캘린더 범위">
+              <button type="button" aria-pressed="false">일별</button>
+              <button type="button" aria-pressed="true">기간별</button>
+            </div>
+            <div class="content">
+              <div class="month-control">
+                <button aria-label="이전 달">‹</button>
+                <strong>2026년 6월</strong>
+                <button aria-label="다음 달">›</button>
+              </div>
+              <div class="calendar" aria-label="2026년 6월 캘린더">
+                <div class="weekday">일</div><div class="weekday">월</div><div class="weekday">화</div><div class="weekday">수</div><div class="weekday">목</div><div class="weekday">금</div><div class="weekday">토</div>
+                <div class="day is-muted">31</div><div class="day">1</div><div class="day">2</div><div class="day">3</div><div class="day">4</div><div class="day">5</div><div class="day">6</div>
+                <div class="day">7</div><div class="day">8</div><div class="day">9</div><div class="day">10</div><div class="day">11</div><div class="day">12</div><div class="day">13</div>
+                <div class="day is-today">14<span class="dots"><i></i></span></div><div class="day is-range-start">15<span class="dots"><i></i><i></i></span></div><div class="day is-range">16<span class="dots"><i></i></span></div><div class="day is-range-end">17<span class="dots"><i></i><i></i></span></div><div class="day">18</div><div class="day">19<span class="dots"><i></i></span></div><div class="day">20</div>
+                <div class="day">21</div><div class="day">22</div><div class="day">23</div><div class="day">24</div><div class="day">25</div><div class="day">26</div><div class="day">27</div>
+                <div class="day">28</div><div class="day">29</div><div class="day">30</div><div class="day is-muted">1</div><div class="day is-muted">2</div><div class="day is-muted">3</div><div class="day is-muted">4</div>
+              </div>
+              <div class="range-summary">
+                <strong>기간별 보기 · 6월 15일 - 6월 17일</strong>
+                <p>선택 기간 안의 굿즈 판매, 티켓 마감, 오프라인 행사를 날짜순으로 묶어 보여줍니다.</p>
+                <div class="range-rule">기간 내부 날짜는 색 반전 없이, 일정이 있는 날만 점으로 표시</div>
+              </div>
+              <div class="section-title"><span>6월 15일 - 17일</span><span>5개 일정</span></div>
+              <div class="event-list">
+                <article class="event">
+                  <div class="event-date">10:00</div>
+                  <div>
+                    <h3>공식 굿즈 예약 판매 오픈</h3>
+                    <p>SUMMER COLLECTION · 온라인</p>
+                  </div>
+                  <span class="badge open">판매 중</span>
+                </article>
+                <article class="event">
+                  <div class="event-date">23:59</div>
+                  <div>
+                    <h3>콘서트 VIP 패키지 접수 마감</h3>
+                    <p>티켓 패키지 · D-0</p>
+                  </div>
+                  <span class="badge deadline">마감</span>
+                </article>
+                <article class="event">
+                  <div class="event-date">6.16</div>
+                  <div>
+                    <h3>팝업 스토어 현장 예약 오픈</h3>
+                    <p>더현대 서울 B2 · 11:00</p>
+                  </div>
+                  <span class="badge soon">예정</span>
+                </article>
+                <article class="event">
+                  <div class="event-date">6.17</div>
+                  <div>
+                    <h3>팬사인회 응모 마감</h3>
+                    <p>앨범 발매 기념 · 10:30</p>
+                  </div>
+                  <span class="badge deadline">마감</span>
+                </article>
+                <article class="event">
+                  <div class="event-date">6.17</div>
+                  <div>
+                    <h3>팝업 스토어 입장 시작</h3>
+                    <p>현장 운영 · 19:00</p>
+                  </div>
+                  <span class="badge open">진행</span>
+                </article>
+              </div>
+            </div>
+            <nav class="bottom-nav" aria-label="iPhone 주요 메뉴">
+              <button class="nav-item"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"></path><path d="M5 10.5V20h14v-9.5"></path></svg>홈</button>
+              <button class="nav-item"><svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h10"></path></svg>라이브</button>
+              <button class="nav-item is-active"><svg viewBox="0 0 24 24"><path d="M7 3v4"></path><path d="M17 3v4"></path><rect x="4" y="5" width="16" height="15" rx="3"></rect><path d="M4 10h16"></path></svg>행사</button>
+              <button class="nav-item"><svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"></path><circle cx="12" cy="12" r="9"></circle></svg>기록</button>
+            </nav>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="notes" aria-label="설계 메모">
+      <article class="note">
+        <strong>메뉴 위치</strong>
+        <p>기존 굿즈/행사 화면 안에서 목록/캘린더 전환을 둬 탐색 위치를 바꾸지 않습니다.</p>
+      </article>
+      <article class="note">
+        <strong>데이터 표현</strong>
+        <p>날짜 점은 일정 존재를 표시하고, 기간 선택 시 시작일과 종료일 사이를 이어 보여줍니다.</p>
+      </article>
+      <article class="note">
+        <strong>정책 반영</strong>
+        <p>캘린더는 읽기 전용 화면이며 무단 이미지, 로고, 프로필 자산을 포함하지 않습니다.</p>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

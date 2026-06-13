@@ -16,6 +16,7 @@ import dev.stellive.hub.core.model.HubEventStatus
 import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.NotificationEventType
 import dev.stellive.hub.core.model.NotificationHistoryItem
+import dev.stellive.hub.feature.calendar.HubCalendarDeepLinkPolicy
 import dev.stellive.hub.feature.calendar.CalendarUiPolicy
 import java.time.Instant
 import java.time.ZoneId
@@ -222,7 +223,7 @@ class MockHubRepository : HubRepository {
             displayDate = displayDate,
             displayTimeText = calendarTimeText(event),
             sourceLabel = event.sourceLabel,
-            appDeepLink = "stellivehub://hub-events/${event.id}",
+            appDeepLink = HubCalendarDeepLinkPolicy.appDeepLinkForEvent(event.id),
             platformUrl = event.purchaseUrl ?: event.ticketUrl ?: event.sourceUrl
         )
     }

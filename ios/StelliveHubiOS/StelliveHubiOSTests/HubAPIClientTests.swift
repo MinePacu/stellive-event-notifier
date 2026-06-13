@@ -44,6 +44,64 @@ final class HubAPIClientTests: XCTestCase {
         XCTAssertEqual(response.serverTime, "2026-06-11T03:00:00.000Z")
     }
 
+    func testHubEventsCalendarSendsExpectedPathAndDecodesResponse() async throws {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/v1/hub-events/calendar")
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+            let queryItems = Dictionary(uniqueKeysWithValues: (components?.queryItems ?? []).map { ($0.name, $0.value) })
+            XCTAssertEqual(queryItems["from"], "2026-06-01")
+            XCTAssertEqual(queryItems["to"], "2026-06-30")
+            XCTAssertEqual(queryItems["timezone"], "Asia/Seoul")
+            return jsonResponse(
+                statusCode: 200,
+                body: """
+                {
+                  "timezone": "Asia/Seoul",
+                  "from": "2026-06-01",
+                  "to": "2026-06-30",
+                  "days": [
+                    {
+                      "date": "2026-06-13",
+                      "entries": [
+                        {
+                          "id": "calendar-entry-1",
+                          "eventId": "event-1",
+                          "entryKind": "hub_event",
+                          "specialDayKind": null,
+                          "specialDayLabel": null,
+                          "title": "온라인 굿즈 판매",
+                          "category": "online_goods",
+                          "status": "open",
+                          "participationMode": "online",
+                          "generationId": "official",
+                          "memberId": null,
+                          "startsAt": null,
+                          "endsAt": null,
+                          "displayDate": "2026-06-13",
+                          "displayTimeText": "종일",
+                          "sourceLabel": "Stellive Official",
+                          "appDeepLink": "stellivehub://hub-events/event-1",
+                          "platformUrl": "https://example.com/events/1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """
+            )
+        }
+
+        let response = try await client.hubEventsCalendar(
+            from: "2026-06-01",
+            to: "2026-06-30",
+            timezone: "Asia/Seoul"
+        )
+
+        XCTAssertEqual(response.timezone, "Asia/Seoul")
+        XCTAssertEqual(response.days.first?.date, "2026-06-13")
+        XCTAssertEqual(response.days.first?.entries.first?.title, "온라인 굿즈 판매")
+    }
+
     func testTokenUpdateErrorDoesNotExposeTokenValue() async {
         let token = "secret-apns-token"
         let client = makeClient { _ in
