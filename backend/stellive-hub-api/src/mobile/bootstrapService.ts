@@ -33,7 +33,7 @@ interface LiveStatusLike {
 }
 
 interface HubEventsLike {
-  summary(): HubEventsSummary;
+  summary(): Promise<HubEventsSummary> | HubEventsSummary;
 }
 
 export interface BootstrapServiceDependencies {
@@ -106,7 +106,7 @@ export default class BootstrapService {
       },
       preferences,
       liveStatus,
-      hubEventsSummary: this.dependencies.hubEvents.summary(),
+      hubEventsSummary: await this.dependencies.hubEvents.summary(),
       serverTime: this.clock().toISOString(),
     };
   }

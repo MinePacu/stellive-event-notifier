@@ -14,6 +14,7 @@ import { loadEnv } from "./config/env.js";
 import { HubEventRepository } from "./hub-events/hubEventRepository.js";
 import NotificationJobRepository from "./jobs/notificationJobRepository.js";
 import NotificationWorker from "./jobs/notificationWorker.js";
+import BootstrapService from "./mobile/bootstrapService.js";
 import { PreferenceResolutionService } from "./preferences/preferenceResolution.js";
 import { createFcmClient } from "./push/fcmClient.js";
 import { FcmPushSender } from "./push/pushSender.js";
@@ -52,6 +53,10 @@ const publicCorsOptions = { origin: "*" };
 const privilegedCorsOptions = { origin: false };
 
 type AppEnv = ReturnType<typeof loadEnv>;
+type BootstrapDevicePort = Pick<DeviceRepository, "getDevice">;
+type BootstrapPreferencePort = Pick<PreferenceRepository, "listForDevice">;
+type BootstrapLiveStatusPort = Pick<LiveStatusRepository, "listDiagnostics">;
+type BootstrapHubEventsPort = Pick<HubEventRepository, "summary">;
 
 function createDefaultNotificationWorker(env: AppEnv): NotificationWorker {
   const fcmClient = createFcmClient({
@@ -127,6 +132,22 @@ function hasChzzkLiveStatusRepository(value: unknown): value is Pick<LiveStatusR
   );
 }
 
+function hasBootstrapDevicePort(value: unknown): value is BootstrapDevicePort {
+  return typeof value === "object" && value !== null && "getDevice" in value;
+}
+
+function hasBootstrapPreferencePort(value: unknown): value is BootstrapPreferencePort {
+  return typeof value === "object" && value !== null && "listForDevice" in value;
+}
+
+function hasBootstrapLiveStatusPort(value: unknown): value is BootstrapLiveStatusPort {
+  return typeof value === "object" && value !== null && "listDiagnostics" in value;
+}
+
+function hasBootstrapHubEventsPort(value: unknown): value is BootstrapHubEventsPort {
+  return typeof value === "object" && value !== null && "summary" in value;
+}
+
 function isPrivilegedRoutePath(url: string): boolean {
   return (
     url === "/admin" ||
@@ -166,6 +187,35 @@ export async function buildApp(options: BuildAppOptions = {}) {
   const appRouteDependencies: AppRouteDependencies = { ...options.appRoutes?.dependencies };
   if (!appRouteDependencies.hubEvents && env.HUB_EVENTS_STORAGE_MODE === "prisma") {
     appRouteDependencies.hubEvents = new HubEventRepository();
+  }
+  if (env.HUB_EVENTS_STORAGE_MODE === "prisma" && !appRouteDependencies.bootstrap) {
+    const devices = hasBootstrapDevicePort(appRouteDependencies.devices)
+      ? appRouteDependencies.devices
+      : new DeviceRepository();
+    const preferences = hasBootstrapPreferencePort(appRouteDependencies.preferences)
+      ? appRouteDependencies.preferences
+      : new PreferenceRepository();
+    const liveStatus = hasBootstrapLiveStatusPort(appRouteDependencies.liveStatus)
+      ? appRouteDependencies.liveStatus
+      : new LiveStatusRepository();
+    const hubEvents = hasBootstrapHubEventsPort(appRouteDependencies.hubEvents)
+      ? appRouteDependencies.hubEvents
+      : new HubEventRepository();
+    appRouteDependencies.bootstrap = new BootstrapService({
+      catalog: new CatalogService(),
+      devices,
+      preferences,
+      liveStatus: {
+        listDiagnostics: async () =>
+          (await liveStatus.listDiagnostics(50)).map((status) => ({
+            ...status,
+            platform: "chzzk" as const
+          }))
+      },
+      hubEvents: {
+        summary: async () => hubEvents.summary()
+      }
+    });
   }
 
   await registerRoutes(app, { dependencies: appRouteDependencies });

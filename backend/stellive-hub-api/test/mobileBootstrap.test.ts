@@ -146,6 +146,72 @@ describe("mobile bootstrap routes", () => {
       serverTime: "2026-06-11T03:00:00.000Z",
     });
   });
+
+  it("builds a repository-backed bootstrap service with mobile-safe live status", async () => {
+    const app = await buildApp({
+      env: { ...routeEnv, HUB_EVENTS_STORAGE_MODE: "prisma" },
+      useProcessEnv: false,
+      appRoutes: {
+        dependencies: {
+          devices: {
+            getDevice: async () => ({ deviceId: "device-1", tokenStatus: "active" as const })
+          },
+          preferences: {
+            listForDevice: async () => []
+          },
+          liveStatus: {
+            listDiagnostics: async () => [
+              {
+                memberId: "ayatsuno-yuni",
+                generationId: "gen1",
+                isLive: true,
+                title: "Live title",
+                viewerCount: 123,
+                startedAt: "2026-06-11T03:00:00.000Z",
+                platformUrl: "https://chzzk.naver.com/live/chzzk-channel-id",
+                lastCheckedAt: "2026-06-11T03:01:00.000Z",
+                sourceVerificationState: "verified" as const
+              }
+            ]
+          },
+          hubEvents: {
+            list: async () => ({ items: [], total: 0 }),
+            getById: async () => undefined,
+            summary: async () => ({ openCount: 0, upcomingCount: 0, closingSoonCount: 0, preview: [] })
+          }
+        }
+      }
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/bootstrap?deviceId=device-1&platform=android&appVersion=0.1.0"
+    });
+
+    await app.close();
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      device: {
+        deviceId: "device-1",
+        tokenStatus: "active"
+      },
+      liveStatus: [
+        {
+          memberId: "ayatsuno-yuni",
+          generationId: "gen1",
+          isLive: true,
+          title: "Live title",
+          viewerCount: 123,
+          startedAt: "2026-06-11T03:00:00.000Z",
+          platformUrl: "https://chzzk.naver.com/live/chzzk-channel-id",
+          lastCheckedAt: "2026-06-11T03:01:00.000Z",
+          sourceVerificationState: "verified"
+        }
+      ]
+    });
+    expect(JSON.stringify(response.json())).not.toContain("accessToken");
+    expect(JSON.stringify(response.json())).not.toContain("raw");
+  });
 });
 
 describe("BootstrapService", () => {

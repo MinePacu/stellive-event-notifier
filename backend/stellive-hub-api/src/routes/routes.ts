@@ -33,6 +33,7 @@ export interface AppRouteDependencies {
     }): Promise<BootstrapResponse>;
   };
   devices?: {
+    getDevice?(deviceId: string): Promise<{ deviceId: string; tokenStatus: string | undefined } | undefined>;
     register?(input: {
       deviceId?: string;
       platform: "android" | "ios";
