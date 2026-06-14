@@ -106,6 +106,25 @@ describe("CHZZK OAuth routes", () => {
     expect(response.headers.location).toContain("https://chzzk.naver.com/account-interlock?state=");
   });
 
+  it("adds configured OAuth scopes to the default authorization redirect", async () => {
+    const app = Fastify();
+    await registerChzzkAuthRoutes(app, {
+      env: { ...routeEnv, CHZZK_OAUTH_SCOPES: "user:read channel:read live:read" },
+      stateRepository: {
+        upsertState: async () => undefined,
+        upsertAdapterHealth: async () => undefined
+      },
+      now: () => new Date("2026-06-11T00:00:00.000Z")
+    });
+
+    const response = await app.inject({ method: "GET", url: "/v1/auth/chzzk/start" });
+    await app.close();
+
+    const location = new URL(response.headers.location as string);
+    expect(response.statusCode).toBe(302);
+    expect(location.searchParams.get("scope")).toBe("user:read channel:read live:read");
+  });
+
   it("rejects callback requests with missing code or invalid state", async () => {
     const app = Fastify();
     await registerChzzkAuthRoutes(app, {

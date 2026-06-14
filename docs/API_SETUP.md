@@ -61,6 +61,7 @@ Backend environment variables:
 CHZZK_CLIENT_ID=
 CHZZK_CLIENT_SECRET=
 CHZZK_REDIRECT_URI=http://localhost:4000/v1/auth/chzzk/callback
+CHZZK_OAUTH_SCOPES=
 CHZZK_AUTH_STATE_SECRET=
 CHZZK_OAUTH_ENABLED=false
 CHZZK_ACCESS_TOKEN=
@@ -69,13 +70,29 @@ CHZZK_TOKEN_REFRESH_SKEW_SECONDS=300
 CHZZK_LIVE_POLLING_ENABLED=false
 ```
 
+OCI server-app CHZZK test:
+
+1. Prepare the OCI instance on Oracle Linux. Run the backend on `PORT=4000`; for app testing, prefer a HTTPS reverse-proxied public origin.
+2. In CHZZK Developers, confirm the application ID matches the app that owns the client ID/secret. The backend does not consume application ID as an env var; keep it as console verification metadata only.
+3. Register `https://<oci-public-origin>/v1/auth/chzzk/callback` in CHZZK Developers. Add `http://localhost:4000/v1/auth/chzzk/callback` only for SSH-tunnel tests.
+4. On the OCI backend, set server-only env values: `CHZZK_CLIENT_ID`, `CHZZK_CLIENT_SECRET`, `CHZZK_REDIRECT_URI=https://<oci-public-origin>/v1/auth/chzzk/callback`, `CHZZK_OAUTH_SCOPES` with the official CHZZK scope string selected in Developers, `CHZZK_AUTH_STATE_SECRET`, `CHZZK_OAUTH_ENABLED=true`, `INTERNAL_API_TOKEN`, and `PORT=4000`.
+5. Keep `CHZZK_LIVE_POLLING_ENABLED=false` for first verification. Do not leave secrets in shell history, Git, app config, or logs.
+6. Confirm Oracle Linux firewall, OCI Security List/NSG, and reverse proxy allow the app-facing public origin. `/v1/internal/*` is not for public browser calls and must require maintainer token access.
+7. Build and restart the deployed backend after syncing source: `npm install`, `npm run build`, then `npm start` or the equivalent systemd/Docker restart. The running process uses `dist/backend/stellive-hub-api/src/index.js`; syncing source alone is not enough.
+8. Open `https://<oci-public-origin>/v1/auth/chzzk/start` in a maintainer-controlled browser and complete OAuth. Current code registers `/start`, not `/connect`.
+9. Call `POST https://<oci-public-origin>/v1/internal/schedulers/chzzk/live-status` with `Authorization: Bearer <INTERNAL_API_TOKEN>`.
+10. Confirm `GET https://<oci-public-origin>/v1/live-status` and `GET https://<oci-public-origin>/v1/bootstrap?platform=ios` or `?platform=android` return normalized `liveStatus` rows without CHZZK tokens, OAuth state, or raw provider payloads.
+11. Put no CHZZK credentials in apps. Set Android `HUB_BASE_URL` and iOS `HUB_BASE_URL` to `https://<oci-public-origin>/` only.
+12. Launch the app and check the live page. If bootstrap succeeds, app state comes from server `liveStatus`; if the API fails, fallback mock state remains.
+13. Enable `CHZZK_LIVE_POLLING_ENABLED=true` only after OAuth metadata exists, scheduler health is not `verify_required`, and live-status cache freshness is verified.
+
 OAuth connect flow:
 
-1. Set `CHZZK_CLIENT_ID`, `CHZZK_CLIENT_SECRET`, `CHZZK_REDIRECT_URI`, and `CHZZK_AUTH_STATE_SECRET` on the backend.
+1. Set `CHZZK_CLIENT_ID`, `CHZZK_CLIENT_SECRET`, `CHZZK_REDIRECT_URI`, `CHZZK_OAUTH_SCOPES`, and `CHZZK_AUTH_STATE_SECRET` on the backend. Re-run OAuth after changing scopes because existing tokens do not gain new permissions.
 2. Set `CHZZK_OAUTH_ENABLED=true` only after the redirect URL is registered.
-3. Open `/v1/auth/chzzk/connect` from a maintainer-controlled browser session or the private admin console.
+3. Open `/v1/auth/chzzk/start` from a maintainer-controlled browser session or the private admin console.
 4. CHZZK redirects to `/v1/auth/chzzk/callback`; the backend exchanges the code and stores token metadata in `PlatformApiState`.
-5. Confirm `/v1/internal/overview` reports CHZZK credential readiness without exposing token values.
+5. Confirm `/v1/internal/admin/overview` reports CHZZK credential readiness without exposing token values.
 
 Scheduler enablement order:
 

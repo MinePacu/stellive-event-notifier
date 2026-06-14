@@ -15,6 +15,9 @@ const tokenResponseSchema = z
     message: "expiresIn must be a positive number",
     path: ["expiresIn"]
   });
+const tokenEnvelopeResponseSchema = z.object({
+  content: tokenResponseSchema
+});
 
 export type ChzzkTokenResponse = z.infer<typeof tokenResponseSchema>;
 
@@ -22,6 +25,7 @@ export interface ChzzkAuthConfig {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
+  scopes?: string;
 }
 
 export interface ChzzkAuthClientOptions {
@@ -53,6 +57,7 @@ export class ChzzkAuthClient {
     url.searchParams.set("clientId", this.config.clientId);
     url.searchParams.set("redirectUri", this.config.redirectUri);
     url.searchParams.set("state", state);
+    if (this.config.scopes) url.searchParams.set("scope", this.config.scopes);
     return url.toString();
   }
 
@@ -89,6 +94,10 @@ export class ChzzkAuthClient {
       });
       const payload = await response.json();
       const parsed = tokenResponseSchema.safeParse(payload);
+      if (!parsed.success) {
+        const envelopeParsed = tokenEnvelopeResponseSchema.safeParse(payload);
+        if (envelopeParsed.success) return envelopeParsed.data.content;
+      }
       if (!parsed.success) throw new ChzzkTokenResponseError();
       return parsed.data;
     } finally {

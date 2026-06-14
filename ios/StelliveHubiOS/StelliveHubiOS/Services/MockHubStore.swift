@@ -48,9 +48,17 @@ final class MockHubStore: ObservableObject {
         .init(id: "stellive-official", koreanName: "스텔라이브 공식", englishName: "Stellive Official", generationId: "official", generationName: "기타", unitName: "공식 채널", catalogRole: .officialChannel, roleLabel: "스텔라이브 공식 채널", isPerson: false, chzzkChannelId: nil, youtubeHandle: "@stellive_official", xHandle: "StelLive_kr", isLive: false, notificationEnabled: true, realtimeEnabled: true),
         .init(id: "gen4-placeholder", koreanName: "4기생 placeholder", englishName: "Generation 4 Placeholder", generationId: "gen4-upcoming", generationName: "4기생", unitName: "upcoming", catalogRole: .placeholder, roleLabel: nil, activeStatus: .upcoming, isPerson: false, chzzkChannelId: nil, youtubeHandle: nil, xHandle: nil, isLive: false, notificationEnabled: false, realtimeEnabled: false)
     ]
+    @Published private(set) var liveStatusSourceLabel = "앱 내 목업"
+    @Published private(set) var serverConnectionDebugLogs = ["bootstrap: 대기 중"]
 
     func applyBootstrap(_ response: BootstrapResponse) {
-        guard response.liveStatus.isEmpty == false else { return }
+        guard response.liveStatus.isEmpty == false else {
+            liveStatusSourceLabel = "서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음"
+            recordServerConnectionDebugLog("bootstrap: \(liveStatusSourceLabel)")
+            return
+        }
+        liveStatusSourceLabel = "서버 liveStatus"
+        recordServerConnectionDebugLog("bootstrap: \(liveStatusSourceLabel) · \(response.liveStatus.count)개")
         let liveStatusByMemberID = Dictionary(uniqueKeysWithValues: response.liveStatus.map { ($0.memberId, $0) })
         members = members.map { member in
             guard let status = liveStatusByMemberID[member.id] else {
@@ -64,6 +72,18 @@ final class MockHubStore: ObservableObject {
             updatedMember.isLive = status.isLive
             updatedMember.liveStartedAt = status.startedAt.flatMap(Self.parseInstant)
             return updatedMember
+        }
+    }
+
+    func markBootstrapFailed() {
+        liveStatusSourceLabel = "서버 연결 실패 · 앱 내 목업"
+        recordServerConnectionDebugLog("bootstrap: \(liveStatusSourceLabel)")
+    }
+
+    private func recordServerConnectionDebugLog(_ message: String) {
+        serverConnectionDebugLogs.append(message)
+        if serverConnectionDebugLogs.count > 8 {
+            serverConnectionDebugLogs.removeFirst(serverConnectionDebugLogs.count - 8)
         }
     }
 

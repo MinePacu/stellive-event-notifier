@@ -19,13 +19,14 @@ final class ServerHubStore: ObservableObject {
     func bootstrap() async -> MockHubStore {
         do {
             let response = try await api.bootstrap(deviceId: deviceIDStore.loadDeviceID())
-            if response.serverTime.isEmpty == false, deviceIDStore.loadDeviceID() == nil {
-                try await registerDevice()
-            }
+    if deviceIDStore.loadDeviceID() == nil {
+      try? await registerDevice()
+    }
             fallback.applyBootstrap(response)
             try? HubCalendarWidgetStore.saveToSharedContainer(fallback.calendarWidgetSnapshot())
             return fallback
         } catch {
+            fallback.markBootstrapFailed()
             return fallback
         }
     }

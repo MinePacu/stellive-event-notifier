@@ -93,7 +93,8 @@ function createDefaultChzzkLiveAdapter(
   const authClient = new ChzzkAuthClient({
     clientId: env.CHZZK_CLIENT_ID,
     clientSecret: env.CHZZK_CLIENT_SECRET,
-    redirectUri: env.CHZZK_REDIRECT_URI
+    redirectUri: env.CHZZK_REDIRECT_URI,
+    scopes: env.CHZZK_OAUTH_SCOPES
   });
   const apiClient = new ChzzkApiClient(
     authClient,

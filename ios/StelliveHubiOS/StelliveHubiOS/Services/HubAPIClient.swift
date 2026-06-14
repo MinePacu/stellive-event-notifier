@@ -7,16 +7,84 @@ struct MobileConfigResponse: Codable, Equatable {
     let xNotificationsEnabled: Bool
     let xDisabledReason: String?
     let hubCalendarEnabled: Bool
-    let foregroundRealtimeEnabled: Bool
+    let foregroundRealtimeEnabled: Bool?
 }
 
 struct BootstrapResponse: Codable, Equatable {
     let config: MobileConfigResponse
+    let catalog: BootstrapCatalogResponse?
+    let generations: [GenerationResponse]
+    let members: [MemberResponse]
     let preferences: [PreferenceResponse]
     let liveStatus: [LiveStatusResponse]
     let hubEventsSummary: HubEventsSummaryResponse?
     let hubCalendarWidgetSnapshot: HubCalendarWidgetSnapshot?
-    let serverTime: String
+    let serverTime: String?
+
+    var effectiveCatalog: BootstrapCatalogResponse {
+        catalog ?? BootstrapCatalogResponse(generations: generations, members: members)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case config
+        case catalog
+        case generations
+        case members
+        case preferences
+        case liveStatus
+        case hubEventsSummary
+        case hubCalendarWidgetSnapshot
+        case serverTime
+    }
+
+    init(
+        config: MobileConfigResponse,
+        catalog: BootstrapCatalogResponse? = nil,
+        generations: [GenerationResponse] = [],
+        members: [MemberResponse] = [],
+        preferences: [PreferenceResponse] = [],
+        liveStatus: [LiveStatusResponse] = [],
+        hubEventsSummary: HubEventsSummaryResponse? = nil,
+        hubCalendarWidgetSnapshot: HubCalendarWidgetSnapshot? = nil,
+        serverTime: String? = nil
+    ) {
+        self.config = config
+        self.catalog = catalog
+        self.generations = generations
+        self.members = members
+        self.preferences = preferences
+        self.liveStatus = liveStatus
+        self.hubEventsSummary = hubEventsSummary
+        self.hubCalendarWidgetSnapshot = hubCalendarWidgetSnapshot
+        self.serverTime = serverTime
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.config = try container.decode(MobileConfigResponse.self, forKey: .config)
+        self.catalog = try container.decodeIfPresent(BootstrapCatalogResponse.self, forKey: .catalog)
+        self.generations = try container.decodeIfPresent([GenerationResponse].self, forKey: .generations) ?? []
+        self.members = try container.decodeIfPresent([MemberResponse].self, forKey: .members) ?? []
+        self.preferences = try container.decodeIfPresent([PreferenceResponse].self, forKey: .preferences) ?? []
+        self.liveStatus = try container.decodeIfPresent([LiveStatusResponse].self, forKey: .liveStatus) ?? []
+        self.hubEventsSummary = try container.decodeIfPresent(HubEventsSummaryResponse.self, forKey: .hubEventsSummary)
+        self.hubCalendarWidgetSnapshot = try container.decodeIfPresent(HubCalendarWidgetSnapshot.self, forKey: .hubCalendarWidgetSnapshot)
+        self.serverTime = try container.decodeIfPresent(String.self, forKey: .serverTime)
+    }
+}
+
+struct BootstrapCatalogResponse: Codable, Equatable {
+    let generations: [GenerationResponse]
+    let members: [MemberResponse]
+}
+
+struct GenerationResponse: Codable, Equatable {
+    let id: String
+    let displayName: String
+}
+
+struct MemberResponse: Codable, Equatable {
+    let id: String
 }
 
 struct PreferenceResponse: Codable, Equatable {
@@ -32,7 +100,7 @@ struct PreferenceResponse: Codable, Equatable {
 struct LiveStatusResponse: Codable, Equatable {
     let memberId: String
     let generationId: String
-    let platform: String
+    let platform: String?
     let isLive: Bool
     let title: String?
     let viewerCount: Int?

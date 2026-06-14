@@ -371,4 +371,15 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertEqual(store.settings.eventTypeEnabled[.youtubeLiveStarted], false)
         XCTAssertEqual(store.settings.eventTypeEnabled[.youtubeLiveEnded], false)
     }
+
+    func testDebugServerConnectionLogsOnlyRenderWhenDebugModeIsEnabled() {
+        let logs = [
+            "bootstrap: 서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음",
+            "device: registration skipped"
+        ]
+
+        XCTAssertTrue(SettingsNavigationPolicy.debugServerConnectionLogs(debugModeEnabled: false, logs: logs).isEmpty)
+        XCTAssertEqual(SettingsNavigationPolicy.debugServerConnectionLogs(debugModeEnabled: true, logs: logs), logs)
+    }
+
 }

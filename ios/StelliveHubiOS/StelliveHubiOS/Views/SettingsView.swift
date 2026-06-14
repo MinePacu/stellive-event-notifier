@@ -43,6 +43,10 @@ enum SettingsNavigationPolicy {
         "공식 채널에는 YouTube 라이브 예정/시작/종료를 적용하지 않으며, 공식 YouTube는 업로드 알림만 지원합니다."
     ]
 
+    static func debugServerConnectionLogs(debugModeEnabled: Bool, logs: [String]) -> [String] {
+        debugModeEnabled ? logs : []
+    }
+
     static func hubRows(settings: NotificationSettingsState, members: [HubMember]) -> [SettingsHubRow] {
         [
             SettingsHubRow(
@@ -184,6 +188,7 @@ struct SettingsView: View {
 
 struct SettingsContentView: View {
     @EnvironmentObject private var store: MockHubStore
+    @State private var debugModeEnabled = false
 
     var body: some View {
         Form {
@@ -197,6 +202,25 @@ struct SettingsContentView: View {
 
             Section("화면 모드") {
                 appearanceModePicker
+            }
+
+            Section("디버그") {
+                Toggle("디버그 모드", isOn: $debugModeEnabled)
+                Text("켜면 이 설정 화면에 서버 연결 상태 로그를 임시로 표시합니다.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                ForEach(
+                    Array(SettingsNavigationPolicy.debugServerConnectionLogs(
+                        debugModeEnabled: debugModeEnabled,
+                        logs: store.serverConnectionDebugLogs
+                    ).enumerated()),
+                    id: \.offset
+                ) { _, log in
+                    Text(log)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("알림 설정") {

@@ -29,7 +29,8 @@ function createDefaultAuthClient(env: AppEnv): ChzzkAuthClient | undefined {
   return new ChzzkAuthClient({
     clientId: env.CHZZK_CLIENT_ID,
     clientSecret: env.CHZZK_CLIENT_SECRET,
-    redirectUri: env.CHZZK_REDIRECT_URI
+    redirectUri: env.CHZZK_REDIRECT_URI,
+    scopes: env.CHZZK_OAUTH_SCOPES
   });
 }
 

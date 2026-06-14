@@ -67,6 +67,7 @@ const envSchema = z
     CHZZK_CLIENT_ID: optionalString(),
     CHZZK_CLIENT_SECRET: optionalString(),
     CHZZK_REDIRECT_URI: optionalUrl(),
+    CHZZK_OAUTH_SCOPES: optionalString(),
     CHZZK_AUTH_STATE_SECRET: optionalString(),
     CHZZK_ACCESS_TOKEN: optionalString(),
     CHZZK_REFRESH_TOKEN: optionalString(),

@@ -29,6 +29,13 @@ describe("ChzzkAuthClient", () => {
     expect(url.toString()).not.toContain("client-secret");
   });
 
+  it("adds configured OAuth scopes to the authorization URL", () => {
+    const client = new ChzzkAuthClient({ ...authConfig, scopes: "user:read channel:read live:read" });
+    const url = new URL(client.buildAuthorizeUrl({ state: "signed-state" }));
+
+    expect(url.searchParams.get("scope")).toBe("user:read channel:read live:read");
+  });
+
   it("exchanges an authorization code server-side", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
@@ -55,6 +62,31 @@ describe("ChzzkAuthClient", () => {
     expect(body.clientId).toBe(authConfig.clientId);
     expect(body.clientSecret).toBe(authConfig.clientSecret);
     expect(body.redirectUri).toBe(authConfig.redirectUri);
+  });
+
+  it("accepts CHZZK token responses wrapped in content", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        code: 200,
+        message: "OK",
+        content: {
+          accessToken: "access-token",
+          refreshToken: "refresh-token",
+          tokenType: "Bearer",
+          expiresIn: "86400",
+          scope: "live"
+        }
+      })
+    );
+    const client = new ChzzkAuthClient(authConfig, { fetch: fetchMock });
+
+    await expect(client.exchangeCodeForToken({ code: "auth-code", state: "signed-state" })).resolves.toMatchObject({
+      accessToken: "access-token",
+      refreshToken: "refresh-token",
+      tokenType: "Bearer",
+      expiresIn: 86400,
+      scope: "live"
+    });
   });
 
   it("refreshes access tokens server-side", async () => {

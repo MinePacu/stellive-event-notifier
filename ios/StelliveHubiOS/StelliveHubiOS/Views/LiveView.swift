@@ -10,7 +10,7 @@ struct LiveView: View {
                 HubHeaderCard(
                     iconText: "ON",
                     title: "라이브 상태",
-                    subtitle: "현재 방송 중 \(store.liveMemberCount)명",
+                subtitle: "현재 방송 중 \(store.liveMemberCount)명 · \(store.liveStatusSourceLabel)",
                     metrics: [
                         .init(value: "\(store.liveMemberCount)", label: "라이브"),
                         .init(value: "\(store.chzzkLiveTargetCount)", label: "대상"),
