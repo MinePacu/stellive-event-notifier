@@ -25,6 +25,7 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.switchmaterial.SwitchMaterial
 import dagger.hilt.android.AndroidEntryPoint
+import dev.stellive.hub.core.device.DeviceIdStore
 import dev.stellive.hub.core.datastore.PreferenceKeys
 import dev.stellive.hub.core.model.AppearanceMode
 import dev.stellive.hub.core.model.CatalogRole
@@ -37,9 +38,14 @@ import dev.stellive.hub.databinding.ActivityMainBinding
 import dev.stellive.hub.feature.calendar.HubCalendarDeepLinkPolicy
 import dev.stellive.hub.feature.calendar.HubEventsCalendarView
 import dev.stellive.hub.feature.home.HubScreen
+import dev.stellive.hub.core.network.HubApiClient
 import dev.stellive.hub.feature.home.MainUiPolicy
 import dev.stellive.hub.feature.home.MainNavigationHistory
 import dev.stellive.hub.feature.home.MockHubRepository
+import dev.stellive.hub.feature.home.ServerHubRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import dev.stellive.hub.feature.home.SettingsHubRow
 import dev.stellive.hub.feature.home.StatusSummaryItem
 
@@ -47,6 +53,10 @@ import dev.stellive.hub.feature.home.StatusSummaryItem
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val repository = MockHubRepository()
+    private var serverMembers: List<HubMember>? = null
+    private var liveStatusSourceLabel = "앱 내 목업"
+    private var debugModeEnabled = false
+    private val serverConnectionDebugLogs = mutableListOf("bootstrap: 대기 중")
     private val navigationHistory = MainNavigationHistory()
     private var selectedFilter = "all"
     private var selectedHistoryEventTypeFilterId = "all"
@@ -69,9 +79,34 @@ class MainActivity : AppCompatActivity() {
         if (!handleAppDeepLink(intent)) {
             renderHome()
             updateSelectedBottomNavigation(HubScreen.HOME)
-            updateNavigationChrome()
+        }
+        updateNavigationChrome()
+        loadServerBootstrap()
+    }
+
+    private fun loadServerBootstrap() {
+        CoroutineScope(Dispatchers.Main).launch {
+            val state = ServerHubRepository(
+                remoteDataSource = ServerHubRepository.HubApiRemoteDataSource(HubApiClient.create(BuildConfig.HUB_BASE_URL)),
+                deviceIdStore = DeviceIdStore(this@MainActivity),
+                fallback = repository,
+            ).bootstrap()
+            serverMembers = state.members
+            liveStatusSourceLabel = state.liveStatusSourceLabel
+            recordServerConnectionLog("bootstrap: $liveStatusSourceLabel")
+            renderScreen(navigationHistory.currentScreen)
         }
     }
+
+    private fun recordServerConnectionLog(message: String) {
+        serverConnectionDebugLogs.add(message)
+        while (serverConnectionDebugLogs.size > 8) {
+            serverConnectionDebugLogs.removeAt(0)
+        }
+    }
+
+    private fun visibleServerConnectionDebugLogs(): List<String> =
+        MainUiPolicy.debugServerConnectionLogs(debugModeEnabled, serverConnectionDebugLogs)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -239,6 +274,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun liveMembersForUi(): List<HubMember> =
+        (serverMembers ?: repository.members)
+            .filter { it.catalogRole != CatalogRole.OFFICIAL_CHANNEL && it.isLive }
+            .sortedBy { it.koreanName }
+
+    private fun chzzkMembersForUi(): List<HubMember> =
+        (serverMembers ?: repository.members)
+            .filter { it.catalogRole != CatalogRole.OFFICIAL_CHANNEL && it.chzzkChannelId != null }
+
     private fun renderHome() {
         startScreen(
             screenId = "home",
@@ -246,12 +290,13 @@ class MainActivity : AppCompatActivity() {
             role = "지금 라이브, 최근 알림, 마감 임박 굿즈/행사를 확인합니다."
         )
         binding.contentList.addView(sectionLabel("지금 라이브"))
-        if (repository.liveMembers.isEmpty()) {
+        binding.contentList.addView(compactEventCard("라이브 데이터", liveStatusSourceLabel, listOf("상태")))
+        if (liveMembersForUi().isEmpty()) {
             binding.contentList.addView(
                 compactEventCard("현재 라이브 없음", "서버 갱신 기준으로 표시합니다.", listOf("대기"))
             )
         } else {
-            repository.liveMembers.forEach { binding.contentList.addView(liveMemberRow(it)) }
+            liveMembersForUi().forEach { binding.contentList.addView(liveMemberRow(it)) }
         }
         binding.contentList.addView(sectionLabel("최근 알림"))
         if (repository.recentHistoryPreview.isEmpty()) {
@@ -407,8 +452,8 @@ class MainActivity : AppCompatActivity() {
             role = "Foreground 상태 갱신은 화면 표시용입니다. 백그라운드 알림은 서버 중심 푸시로 처리합니다."
         )
         binding.contentList.addView(staticChips("방송 중", "CHZZK 대상", "서버 푸시"))
-        repository.members
-            .filter { it.catalogRole != CatalogRole.OFFICIAL_CHANNEL && it.chzzkChannelId != null }
+        binding.contentList.addView(compactEventCard("라이브 데이터", liveStatusSourceLabel, listOf("상태")))
+        chzzkMembersForUi()
             .forEach { member ->
                 binding.contentList.addView(liveMemberRow(member))
             }
@@ -498,6 +543,16 @@ class MainActivity : AppCompatActivity() {
             )
         )
         binding.contentList.addView(appearanceModePanel())
+        binding.contentList.addView(debugModePanel())
+        visibleServerConnectionDebugLogs().takeIf { it.isNotEmpty() }?.let { logs ->
+            binding.contentList.addView(
+                compactEventCard(
+                    title = "서버 연결 로그",
+                    body = logs.joinToString("\n"),
+                    pills = listOf("임시", "디버그")
+                )
+            )
+        }
         val targetValues = settings.generationEnabled.values.toList() +
             repository.members.filter { it.catalogRole != CatalogRole.PLACEHOLDER }.map { member ->
                 settings.memberEnabled[member.id] ?: member.notificationEnabled
@@ -797,6 +852,56 @@ class MainActivity : AppCompatActivity() {
                 addView(appearanceModeChip(AppearanceMode.LIGHT, "라이트"))
                 addView(appearanceModeChip(AppearanceMode.DARK, "다크"))
             })
+            addView(content)
+        }
+
+    private fun debugModePanel(): MaterialCardView =
+        baseCard().apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dp(12)
+            }
+
+            val content = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(15), dp(15), dp(15), dp(15))
+            }
+
+            content.addView(
+                LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(TextView(context).apply {
+                        text = "디버그 모드"
+                        setTextColor(color(R.color.hub_text))
+                        textSize = 15f
+                        typeface = Typeface.DEFAULT_BOLD
+                    })
+                    addView(TextView(context).apply {
+                        text = "켜면 이 설정 화면에 서버 연결 상태 로그를 임시로 표시합니다."
+                        setTextColor(color(R.color.hub_text_muted))
+                        textSize = 12f
+                        setPadding(0, dp(6), 0, 0)
+                    })
+                },
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = dp(12)
+                }
+            )
+
+            content.addView(SwitchMaterial(context).apply {
+                isChecked = debugModeEnabled
+                setOnCheckedChangeListener { _, checked ->
+                    debugModeEnabled = checked
+                    recordServerConnectionLog(
+                        if (checked) "debug: 서버 연결 로그 표시 켜짐" else "debug: 서버 연결 로그 표시 꺼짐"
+                    )
+                    renderSettings()
+                }
+            })
+
             addView(content)
         }
 
