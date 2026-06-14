@@ -7,7 +7,7 @@ data class MobileConfigDto(
     val xNotificationsEnabled: Boolean,
     val xDisabledReason: String? = null,
     val hubCalendarEnabled: Boolean,
-    val foregroundRealtimeEnabled: Boolean,
+    val foregroundRealtimeEnabled: Boolean? = null,
 )
 
 data class BootstrapDeviceDto(
@@ -24,7 +24,7 @@ data class BootstrapCatalogDto(
 data class GenerationDto(
     val id: String,
     val displayName: String,
-    val unitName: String,
+    val unitName: String? = null,
     val sortOrder: Int,
     val type: String,
     val notificationDefaultEnabled: Boolean,
@@ -64,7 +64,7 @@ data class PreferenceDto(
 data class LiveStatusDto(
     val memberId: String,
     val generationId: String,
-    val platform: String,
+    val platform: String? = null,
     val isLive: Boolean,
     val title: String? = null,
     val viewerCount: Int? = null,
@@ -96,12 +96,17 @@ data class BootstrapResponseDto(
     val config: MobileConfigDto,
     val device: BootstrapDeviceDto? = null,
     val catalog: BootstrapCatalogDto? = null,
+    val generations: List<GenerationDto> = emptyList(),
+    val members: List<MemberDto> = emptyList(),
     val preferences: List<PreferenceDto> = emptyList(),
     val liveStatus: List<LiveStatusDto> = emptyList(),
     val hubEventsSummary: HubEventsSummaryDto? = null,
     val hubCalendarWidgetSnapshot: HubCalendarWidgetSnapshotDto? = null,
-    val serverTime: String,
-)
+    val serverTime: String? = null,
+) {
+    val effectiveCatalog: BootstrapCatalogDto
+        get() = catalog ?: BootstrapCatalogDto(generations = generations, members = members)
+}
 
 data class RegisterDeviceRequestDto(
     val deviceId: String? = null,

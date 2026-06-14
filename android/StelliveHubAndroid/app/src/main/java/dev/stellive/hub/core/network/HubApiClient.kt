@@ -1,6 +1,8 @@
 package dev.stellive.hub.core.network
 
 import okhttp3.OkHttpClient
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 
@@ -62,9 +64,13 @@ class HubApiClient(
             val retrofit = Retrofit.Builder()
                 .baseUrl(baseUrl)
                 .client(okHttpClient)
-                .addConverterFactory(MoshiConverterFactory.create())
+                .addConverterFactory(MoshiConverterFactory.create(moshi()))
                 .build()
             return HubApiClient(retrofit.create(HubApi::class.java))
         }
+
+        fun moshi(): Moshi = Moshi.Builder()
+            .addLast(KotlinJsonAdapterFactory())
+            .build()
     }
 }

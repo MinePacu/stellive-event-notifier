@@ -10,6 +10,7 @@ data class HubDataState(
     val members: List<HubMember>,
     val settings: NotificationSettingState,
     val hubEventsSummary: HubEventsSummary,
+    val liveStatusSourceLabel: String = "앱 내 목업",
 )
 
 interface HubRepository {

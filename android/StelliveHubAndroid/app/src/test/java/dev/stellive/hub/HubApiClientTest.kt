@@ -52,6 +52,34 @@ class HubApiClientTest {
     }
 
     @Test
+    fun bootstrapDtoDecodesRealServerShapeWithMissingOptionalFields() {
+        val json = """
+            {
+              "config": {
+                "unofficialProject": true,
+                "catalogVersion": "seed-2026-06-01",
+                "officialYoutubeLiveExcluded": true,
+                "xNotificationsEnabled": false,
+                "xDisabledReason": "x_notifications_dropped_for_mvp",
+                "hubCalendarEnabled": true
+              },
+              "generations": [{"id":"gen1","displayName":"1기생","sortOrder":1,"type":"member","notificationDefaultEnabled":true}],
+              "members": [],
+              "preferences": [],
+              "liveStatus": [],
+              "hubEventsSummary": {"openCount":1,"upcomingCount":0,"closingSoonCount":0}
+            }
+        """.trimIndent()
+
+        val decoded = HubApiClient.moshi().adapter(BootstrapResponseDto::class.java).fromJson(json)
+
+        assertEquals("seed-2026-06-01", decoded?.config?.catalogVersion)
+        assertEquals(false, decoded?.config?.foregroundRealtimeEnabled ?: false)
+        assertEquals(1, decoded?.effectiveCatalog?.generations?.size)
+        assertEquals(0, decoded?.liveStatus?.size)
+    }
+
+    @Test
     fun tokenUpdateFailureDoesNotExposeTokenValue() = runTest {
         val token = "secret-fcm-token"
         val client = HubApiClient(api = FakeHubApi(failure = IOException("network failed")))

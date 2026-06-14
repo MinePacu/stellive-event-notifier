@@ -138,6 +138,17 @@ class MainUiPolicyTest {
     }
 
     @Test
+    fun debugServerConnectionLogsOnlyRenderWhenDebugModeIsEnabled() {
+        val logs = listOf(
+            "bootstrap: 서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음",
+            "device: registration skipped"
+        )
+
+        assertTrue(MainUiPolicy.debugServerConnectionLogs(debugModeEnabled = false, logs = logs).isEmpty())
+        assertEquals(logs, MainUiPolicy.debugServerConnectionLogs(debugModeEnabled = true, logs = logs))
+    }
+
+    @Test
     fun policyNoticesMatchScreenResponsibilities() {
         assertTrue(MainUiPolicy.hubEventPolicyNotice().contains("팬 주최 이벤트"))
         assertTrue(MainUiPolicy.historyPolicyNotice().contains("공식 YouTube 라이브 예정, 시작, 종료"))

@@ -218,6 +218,9 @@ object MainUiPolicy {
     fun settingsPlatformCommonNotice(): String =
         "플랫폼 OFF이면 해당 플랫폼 이벤트 푸시를 차단합니다."
 
+    fun debugServerConnectionLogs(debugModeEnabled: Boolean, logs: List<String>): List<String> =
+        if (debugModeEnabled) logs else emptyList()
+
     fun settingsEventTypePolicy(eventType: NotificationEventType): String? = when (eventType) {
         NotificationEventType.CHZZK_CHAT,
         NotificationEventType.YOUTUBE_LIVE_SCHEDULED,

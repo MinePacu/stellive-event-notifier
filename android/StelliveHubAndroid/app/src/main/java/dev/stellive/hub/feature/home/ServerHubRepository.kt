@@ -24,7 +24,7 @@ class ServerHubRepository(
             }
             return fallback.bootstrap().mergeLiveStatus(response.value.liveStatus)
         }
-        return fallback.bootstrap()
+        return fallback.bootstrap().copy(liveStatusSourceLabel = "서버 연결 실패 · 앱 내 목업")
     }
 
     override suspend fun updatePreferences(settings: NotificationSettingState): HubDataState =
@@ -43,10 +43,11 @@ class ServerHubRepository(
     }
 
     private fun HubDataState.mergeLiveStatus(liveStatus: List<LiveStatusDto>): HubDataState {
-        if (liveStatus.isEmpty()) return this
-        val liveStatusByMemberId = liveStatus.associateBy { it.memberId }
-        return copy(
-            members = members.map { member ->
+        if (liveStatus.isEmpty()) return copy(liveStatusSourceLabel = "서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음")
+    val liveStatusByMemberId = liveStatus.associateBy { it.memberId }
+    return copy(
+        liveStatusSourceLabel = "서버 liveStatus",
+        members = members.map { member ->
                 val status = liveStatusByMemberId[member.id] ?: return@map member.copy(isLive = false, liveStartedAt = null)
                 member.copy(
                     isLive = status.isLive,
