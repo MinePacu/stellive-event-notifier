@@ -33,7 +33,7 @@ final class MockHubStore: ObservableObject {
         .init(id: "gen4-upcoming", displayName: "upcoming", notificationDefaultEnabled: false)
     ]
 
-    let members: [HubMember] = [
+    private(set) var members: [HubMember] = [
         .init(id: "ayatsuno-yuni", koreanName: "아야츠노 유니", englishName: "Ayatsuno Yuni", generationId: "gen1", generationName: "1기생", unitName: "Everys", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: "45e71a76e949e16a34764deb962f9d9f", youtubeHandle: "@ayatsunoyuni", xHandle: "AyatsunoYuni", isLive: true, notificationEnabled: true, realtimeEnabled: true, liveStartedAt: Date(timeIntervalSince1970: 1_780_390_800)),
         .init(id: "sakihane-huya", koreanName: "사키하네 후야", englishName: "Sakihane Huya", generationId: "gen1", generationName: "1기생", unitName: "Everys", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: "36ddb9bb4f17593b60f1b63cec86611d", youtubeHandle: "@Sakihanechannel", xHandle: "verify_required", isLive: false, notificationEnabled: true, realtimeEnabled: false),
         .init(id: "shirayuki-hina", koreanName: "시라유키 히나", englishName: "Shirayuki Hina", generationId: "gen2", generationName: "2기생", unitName: "Universe", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: "b044e3a3b9259246bc92e863e7d3f3b8", youtubeHandle: "verify_required", xHandle: "verify_required", isLive: false, notificationEnabled: true, realtimeEnabled: false),
@@ -48,6 +48,33 @@ final class MockHubStore: ObservableObject {
         .init(id: "stellive-official", koreanName: "스텔라이브 공식", englishName: "Stellive Official", generationId: "official", generationName: "기타", unitName: "공식 채널", catalogRole: .officialChannel, roleLabel: "스텔라이브 공식 채널", isPerson: false, chzzkChannelId: nil, youtubeHandle: "@stellive_official", xHandle: "StelLive_kr", isLive: false, notificationEnabled: true, realtimeEnabled: true),
         .init(id: "gen4-placeholder", koreanName: "4기생 placeholder", englishName: "Generation 4 Placeholder", generationId: "gen4-upcoming", generationName: "4기생", unitName: "upcoming", catalogRole: .placeholder, roleLabel: nil, activeStatus: .upcoming, isPerson: false, chzzkChannelId: nil, youtubeHandle: nil, xHandle: nil, isLive: false, notificationEnabled: false, realtimeEnabled: false)
     ]
+
+    func applyBootstrap(_ response: BootstrapResponse) {
+        guard response.liveStatus.isEmpty == false else { return }
+        let liveStatusByMemberID = Dictionary(uniqueKeysWithValues: response.liveStatus.map { ($0.memberId, $0) })
+        members = members.map { member in
+            guard let status = liveStatusByMemberID[member.id] else {
+                var offlineMember = member
+                offlineMember.isLive = false
+                offlineMember.liveStartedAt = nil
+                return offlineMember
+            }
+
+            var updatedMember = member
+            updatedMember.isLive = status.isLive
+            updatedMember.liveStartedAt = status.startedAt.flatMap(Self.parseInstant)
+            return updatedMember
+        }
+    }
+
+    private static func parseInstant(_ value: String) -> Date? {
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractionalFormatter.date(from: value) {
+            return date
+        }
+        return ISO8601DateFormatter().date(from: value)
+    }
 
     let hubEvents: [HubEvent] = [
         .init(
