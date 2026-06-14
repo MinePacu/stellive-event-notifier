@@ -5,8 +5,10 @@ import dev.stellive.hub.core.model.NotificationSettingState
 import dev.stellive.hub.core.network.BootstrapResponseDto
 import dev.stellive.hub.core.network.HubApiClient
 import dev.stellive.hub.core.network.HubNetworkResult
+import dev.stellive.hub.core.network.LiveStatusDto
 import dev.stellive.hub.core.network.RegisterDeviceRequestDto
 import dev.stellive.hub.core.network.RegisterDeviceResponseDto
+import java.time.Instant
 
 class ServerHubRepository(
     private val remoteDataSource: RemoteDataSource,
@@ -16,8 +18,11 @@ class ServerHubRepository(
     override suspend fun bootstrap(): HubDataState {
         val deviceId = deviceIdStore.getDeviceId()
         val response = remoteDataSource.bootstrap(deviceId)
-        if (response is HubNetworkResult.Success && response.value.device == null) {
-            registerDevice()
+        if (response is HubNetworkResult.Success) {
+            if (response.value.device == null) {
+                registerDevice()
+            }
+            return fallback.bootstrap().mergeLiveStatus(response.value.liveStatus)
         }
         return fallback.bootstrap()
     }
@@ -36,6 +41,23 @@ class ServerHubRepository(
             deviceIdStore.saveDeviceId(response.value.deviceId)
         }
     }
+
+    private fun HubDataState.mergeLiveStatus(liveStatus: List<LiveStatusDto>): HubDataState {
+        if (liveStatus.isEmpty()) return this
+        val liveStatusByMemberId = liveStatus.associateBy { it.memberId }
+        return copy(
+            members = members.map { member ->
+                val status = liveStatusByMemberId[member.id] ?: return@map member.copy(isLive = false, liveStartedAt = null)
+                member.copy(
+                    isLive = status.isLive,
+                    liveStartedAt = status.startedAt?.let(::parseInstantOrNull),
+                )
+            }
+        )
+    }
+
+    private fun parseInstantOrNull(value: String): Instant? =
+        runCatching { Instant.parse(value) }.getOrNull()
 
     interface RemoteDataSource {
         suspend fun bootstrap(deviceId: String?): HubNetworkResult<BootstrapResponseDto>

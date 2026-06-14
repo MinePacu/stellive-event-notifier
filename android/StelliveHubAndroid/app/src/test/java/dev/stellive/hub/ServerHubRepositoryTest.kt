@@ -3,6 +3,7 @@ package dev.stellive.hub
 import dev.stellive.hub.core.device.DeviceIdStore
 import dev.stellive.hub.core.network.BootstrapResponseDto
 import dev.stellive.hub.core.network.HubNetworkResult
+import dev.stellive.hub.core.network.LiveStatusDto
 import dev.stellive.hub.core.network.MobileConfigDto
 import dev.stellive.hub.core.network.RegisterDeviceRequestDto
 import dev.stellive.hub.core.network.RegisterDeviceResponseDto
@@ -27,6 +28,9 @@ class ServerHubRepositoryTest {
 
         assertEquals(1, remote.bootstrapCalls)
         assertTrue(state.filters.isNotEmpty())
+        val yuni = state.members.first { it.id == "ayatsuno-yuni" }
+        assertTrue(yuni.isLive)
+        assertEquals("2026-06-11T03:00:00Z", yuni.liveStartedAt.toString())
     }
 
     @Test
@@ -60,11 +64,23 @@ class ServerHubRepositoryTest {
                         xNotificationsEnabled = false,
                         xDisabledReason = "x_notifications_dropped_for_mvp",
                         hubCalendarEnabled = true,
-                        foregroundRealtimeEnabled = false,
-                    ),
-                    device = null,
-                    serverTime = "2026-06-11T03:00:00.000Z",
+                    foregroundRealtimeEnabled = false,
                 ),
+                device = null,
+                liveStatus = listOf(
+                    LiveStatusDto(
+                        memberId = "ayatsuno-yuni",
+                        generationId = "gen1",
+                        platform = "chzzk",
+                        isLive = true,
+                        startedAt = "2026-06-11T03:00:00.000Z",
+                        platformUrl = "https://chzzk.naver.com/live/chzzk-channel-id",
+                        lastCheckedAt = "2026-06-11T03:01:00.000Z",
+                        sourceVerificationState = "verified",
+                    ),
+                ),
+                serverTime = "2026-06-11T03:00:00.000Z",
+            ),
             )
         }
 
