@@ -1,5 +1,13 @@
 # AI Handoff
 
+## CHZZK Live API Wiring Status
+
+- Branch `feat/chzzk-live-api-wiring` wires backend CHZZK live polling, mobile bootstrap live status, Android live-page mapping, and iOS live-page mapping.
+- Passed: backend focused CHZZK/mobile tests, Android unit tests, iOS focused `ServerLiveStatusMappingTests`, and full iOS tests on local `iPhone 17` simulator.
+- OAuth setup is not complete in this workspace; keep `CHZZK_OAUTH_ENABLED=false` and `CHZZK_LIVE_POLLING_ENABLED=false` until maintainer credentials are configured.
+- Scheduler remains disabled. Run `POST /v1/internal/schedulers/chzzk/live-status` with `INTERNAL_API_TOKEN`; missing token metadata should leave adapter health at `verify_required`.
+- Android and iOS display server-normalized live status after successful `/v1/bootstrap`; API failure keeps fallback mock state.
+
 ## Hub Event Image Policy Status
 
 GitHub issue `#19` and GitLab work item `#13` image policy work is implemented as metadata-only support.

@@ -81,9 +81,10 @@ Scheduler enablement order:
 
 1. Keep `CHZZK_LIVE_POLLING_ENABLED=false` until OAuth is connected and the live-status endpoint scope is verified.
 2. Run `POST /v1/internal/schedulers/chzzk/live-status` with `INTERNAL_API_TOKEN`; it should return `verify_required` if token metadata is absent.
-3. Enable `CHZZK_LIVE_POLLING_ENABLED=true` only after the scheduler can read stored OAuth state and the adapter health is not `verify_required`.
-4. Use a platform scheduler or cron to call the internal route at the approved polling interval.
-5. Monitor adapter health, live-status cache freshness, dedupe counts, and notification job volume before enabling realtime fan-out broadly.
+3. Confirm `/v1/live-status` and `/v1/bootstrap` expose fresh normalized live status without provider token state or raw provider payloads.
+4. Enable `CHZZK_LIVE_POLLING_ENABLED=true` only after the scheduler can read stored OAuth state and the adapter health is not `verify_required`.
+5. Use a platform scheduler or cron to call the internal route at the approved polling interval.
+6. Monitor adapter health, live-status cache freshness, dedupe counts, and notification job volume before enabling realtime fan-out broadly.
 
 ## X
 
