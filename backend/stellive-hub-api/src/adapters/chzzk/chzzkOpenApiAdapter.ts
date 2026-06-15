@@ -22,6 +22,14 @@ export interface ChzzkLiveAdapterOptions {
 
 const allowedCatalogRoles = new Set(["member", "representative"]);
 
+function normalizeRuntimeImageUrl(url: string | undefined): string | undefined {
+  if (!url) {
+    return undefined;
+  }
+
+  return url.startsWith("https://") ? url : undefined;
+}
+
 function hasChzzkChannel(member: Member): member is Member & { platforms: { chzzkChannelId: string } } {
   return typeof member.platforms.chzzkChannelId === "string" && member.platforms.chzzkChannelId.length > 0;
 }
@@ -74,7 +82,7 @@ function toLiveStatusInput(
     generationId: member.generationId,
     isLive: status.isLive,
     title: status.title,
-    thumbnailUrl: status.channelImageUrl,
+    thumbnailUrl: normalizeRuntimeImageUrl(status.channelImageUrl),
     viewerCount: status.viewerCount,
     startedAt,
     platformUrl: status.platformUrl,

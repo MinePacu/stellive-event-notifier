@@ -50,12 +50,13 @@ describe("live status route", () => {
         generationId: "gen1",
         platform: "chzzk",
         isLive: true,
-        title: "Persisted live title",
-        viewerCount: 321,
-        startedAt: "2026-06-11T03:00:00.000Z",
-        platformUrl: "https://chzzk.naver.com/live/chzzk-channel-id",
-        lastCheckedAt: "2026-06-11T03:01:00.000Z",
-        sourceVerificationState: "verified"
+      title: "Persisted live title",
+      viewerCount: 321,
+      startedAt: "2026-06-11T03:00:00.000Z",
+      channelImageUrl: "https://img.example/yuni.jpg",
+      platformUrl: "https://chzzk.naver.com/live/chzzk-channel-id",
+      lastCheckedAt: "2026-06-11T03:01:00.000Z",
+      sourceVerificationState: "verified"
       }
     ]);
     expect(response.body).not.toContain("rawPayload");

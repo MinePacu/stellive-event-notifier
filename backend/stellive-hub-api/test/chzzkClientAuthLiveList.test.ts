@@ -15,6 +15,7 @@ function fakeStateRepository() {
     upsertState: vi.fn(),
     upsertAdapterHealth: vi.fn(async (_source: string, health: unknown) => {
       repository.health = health;
+      return repository.health;
     })
   };
 
@@ -32,18 +33,16 @@ function client(fetchMock: ReturnType<typeof vi.fn>) {
 }
 
 describe("ChzzkApiClient client-auth live list", () => {
-  it("uses client authentication and fetches the documented live list endpoint", async () => {
+  it("returns a verified live status from the live list", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         code: 200,
-        message: null,
         content: {
-          page: { next: null },
           data: [
             {
               channelId: "chzzk-channel-id",
-          liveTitle: "Live title",
-          channelImageUrl: "https://img.example/yuni.jpg",
+              liveTitle: "Live title",
+              channelImageUrl: "https://img.example/yuni.jpg",
               status: "OPEN",
               openDate: "2026-06-11T03:00:00.000Z",
               concurrentUserCount: 1234
@@ -63,35 +62,18 @@ describe("ChzzkApiClient client-auth live list", () => {
       platformUrl: "https://chzzk.naver.com/live/chzzk-channel-id",
       sourceVerificationState: "verified"
     });
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://openapi.chzzk.naver.com/open/v1/lives?size=20",
-      expect.objectContaining({
-        headers: {
-          "Client-Id": "client-id",
-          "Client-Secret": "client-secret",
-          "Content-Type": "application/json"
-        }
-      })
-    );
-    expect(fetchMock.mock.calls[0]?.[1]).not.toMatchObject({
-      headers: expect.objectContaining({ authorization: expect.any(String) })
-    });
   });
 
-  it("treats presence in the CHZZK live list as live when status is omitted", async () => {
+  it("treats a matching entry without explicit status as live", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         code: 200,
-        message: null,
         content: {
-          page: {},
           data: [
             {
               channelId: "chzzk-channel-id",
               liveTitle: "Live without status",
-              openDate: "2026-06-11T03:00:00.000Z",
-              concurrentUserCount: 1234
+              channelImageUrl: "https://img.example/live-without-status.jpg"
             }
           ]
         }
@@ -106,18 +88,91 @@ describe("ChzzkApiClient client-auth live list", () => {
     });
   });
 
-  it("returns verified offline when the live list does not include the catalog channel", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        code: 200,
-        message: null,
-        content: { page: { next: null }, data: [] }
-      })
-    );
+  it("returns offline status with channel metadata image fallback", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 200,
+          content: { data: [] }
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 200,
+          content: {
+            data: [
+              {
+                channelId: "chzzk-channel-id",
+                channelImageUrl: "https://img.example/offline-yuni.jpg"
+              }
+            ]
+          }
+        })
+      );
 
     await expect(client(fetchMock).getLiveStatus("chzzk-channel-id")).resolves.toEqual({
       channelId: "chzzk-channel-id",
       isLive: false,
+      channelImageUrl: "https://img.example/offline-yuni.jpg",
+      platformUrl: "https://chzzk.naver.com/live/chzzk-channel-id",
+      sourceVerificationState: "verified"
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://openapi.chzzk.naver.com/open/v1/channels?channelIds=chzzk-channel-id",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          "Client-Id": "client-id",
+          "Client-Secret": "client-secret",
+          "Content-Type": "application/json"
+        })
+      })
+    );
+  });
+
+  it("fills a missing live image from channel metadata", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 200,
+          content: {
+            data: [
+              {
+                channelId: "chzzk-channel-id",
+                liveTitle: "Live title",
+                status: "OPEN",
+                openDate: "2026-06-11T03:00:00.000Z",
+                concurrentUserCount: 1234
+              }
+            ]
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 200,
+          content: {
+            data: [
+              {
+                channelId: "chzzk-channel-id",
+                channelImageUrl: "https://img.example/live-fallback.jpg"
+              }
+            ]
+          }
+        })
+      );
+
+    await expect(client(fetchMock).getLiveStatus("chzzk-channel-id")).resolves.toEqual({
+      channelId: "chzzk-channel-id",
+      isLive: true,
+      title: "Live title",
+      channelImageUrl: "https://img.example/live-fallback.jpg",
+      openDate: "2026-06-11T03:00:00.000Z",
+      viewerCount: 1234,
       platformUrl: "https://chzzk.naver.com/live/chzzk-channel-id",
       sourceVerificationState: "verified"
     });
@@ -129,7 +184,6 @@ describe("ChzzkApiClient client-auth live list", () => {
       .mockResolvedValueOnce(
         jsonResponse({
           code: 200,
-        message: null,
           content: {
             page: { next: "cursor-2" },
             data: [{ channelId: "other-channel-id", status: "OPEN" }]
@@ -139,10 +193,15 @@ describe("ChzzkApiClient client-auth live list", () => {
       .mockResolvedValueOnce(
         jsonResponse({
           code: 200,
-        message: null,
           content: {
-            page: { next: null },
-            data: [{ channelId: "chzzk-channel-id", status: "OPEN", liveTitle: "Page 2" }]
+            data: [
+              {
+                channelId: "chzzk-channel-id",
+                status: "OPEN",
+                liveTitle: "Page 2",
+                channelImageUrl: "https://img.example/page-2.jpg"
+              }
+            ]
           }
         })
       );

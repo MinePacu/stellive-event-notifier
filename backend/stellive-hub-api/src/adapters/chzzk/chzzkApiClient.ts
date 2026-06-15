@@ -1,4 +1,4 @@
-import { z } from "zod";
+import z from "zod";
 import type { AdapterHealthStatus } from "../../admin/adminTypes.js";
 import type { PlatformApiStateRepository } from "../../repositories/platformApiStateRepository.js";
 
@@ -16,10 +16,10 @@ const liveItemSchema = z
     liveStatus: z.string().optional(),
     openDate: z.string().optional(),
     liveStartDate: z.string().optional(),
-    channelImageUrl: z.string().url().optional(),
+    channelImageUrl: z.string().nullable().optional(),
     concurrentUserCount: z.union([z.number(), z.string()]).optional(),
     viewerCount: z.union([z.number(), z.string()]).optional(),
-    liveUrl: z.string().url().optional()
+    liveUrl: z.string().nullable().optional()
   })
   .passthrough();
 
@@ -41,6 +41,25 @@ const liveListResponseSchema = z
   })
   .passthrough();
 
+const channelItemSchema = z
+  .object({
+    channelId: z.string().optional(),
+    channelImageUrl: z.string().nullable().optional()
+  })
+  .passthrough();
+
+const channelResponseSchema = z
+  .object({
+    code: z.union([z.number(), z.string()]).optional(),
+    message: z.string().nullable().optional(),
+    content: z
+      .object({
+        data: z.array(channelItemSchema).default([])
+      })
+      .passthrough()
+  })
+  .passthrough();
+
 export interface ChzzkNormalizedLiveStatus {
   channelId: string;
   isLive: boolean;
@@ -49,6 +68,12 @@ export interface ChzzkNormalizedLiveStatus {
   openDate?: string;
   viewerCount?: number;
   platformUrl?: string;
+  sourceVerificationState: "verified" | "verify_required";
+}
+
+interface ChzzkChannelMetadata {
+  channelId: string;
+  channelImageUrl?: string;
   sourceVerificationState: "verified" | "verify_required";
 }
 
@@ -66,13 +91,19 @@ function isLiveStatus(status: string | undefined): boolean {
 }
 
 function parseViewerCount(value: number | string | undefined): number | undefined {
-  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
-  if (typeof value !== "string") return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
 }
 
-function platformUrl(channelId: string): string {
+function buildPlatformUrl(channelId: string): string {
   return `${channelUrl}/${encodeURIComponent(channelId)}`;
 }
 
@@ -80,7 +111,7 @@ function verifiedOfflineStatus(channelId: string): ChzzkNormalizedLiveStatus {
   return {
     channelId,
     isLive: false,
-    platformUrl: platformUrl(channelId),
+    platformUrl: buildPlatformUrl(channelId),
     sourceVerificationState: "verified"
   };
 }
@@ -89,22 +120,32 @@ function unverifiedStatus(channelId: string): ChzzkNormalizedLiveStatus {
   return {
     channelId,
     isLive: false,
-    platformUrl: platformUrl(channelId),
+    platformUrl: buildPlatformUrl(channelId),
     sourceVerificationState: "verify_required"
   };
 }
 
-function normalizeLiveStatus(channelId: string, item: z.infer<typeof liveItemSchema>): ChzzkNormalizedLiveStatus {
-  const normalizedChannelId = item.channelId ?? channelId;
-  const status = item.status ?? item.liveStatus;
+function unverifiedChannelMetadata(channelId: string): ChzzkChannelMetadata {
   return {
-    channelId: normalizedChannelId,
+    channelId,
+    sourceVerificationState: "verify_required"
+  };
+}
+
+function normalizeLiveStatus(
+  channelId: string,
+  item: z.infer<typeof liveItemSchema>
+): ChzzkNormalizedLiveStatus {
+  const status = item.status ?? item.liveStatus;
+
+  return {
+    channelId,
     isLive: status ? isLiveStatus(status) : true,
     title: item.liveTitle ?? item.title,
-    channelImageUrl: item.channelImageUrl,
+    channelImageUrl: item.channelImageUrl ?? undefined,
     openDate: item.openDate ?? item.liveStartDate,
     viewerCount: parseViewerCount(item.concurrentUserCount ?? item.viewerCount),
-    platformUrl: item.liveUrl ?? platformUrl(normalizedChannelId),
+    platformUrl: item.liveUrl ?? buildPlatformUrl(channelId),
     sourceVerificationState: "verified"
   };
 }
@@ -121,11 +162,30 @@ export class ChzzkApiClient {
   }
 
   async getLiveStatus(channelId: string): Promise<ChzzkNormalizedLiveStatus> {
+    const liveStatus = await this.findLiveStatus(channelId);
+    if (liveStatus.sourceVerificationState !== "verified" || liveStatus.channelImageUrl) {
+      return liveStatus;
+    }
+
+    const metadata = await this.getChannelMetadata(channelId);
+    if (metadata.sourceVerificationState !== "verified") {
+      return liveStatus;
+    }
+
+    return {
+      ...liveStatus,
+      channelImageUrl: metadata.channelImageUrl
+    };
+  }
+
+  private async findLiveStatus(channelId: string): Promise<ChzzkNormalizedLiveStatus> {
     let next: string | undefined;
 
     do {
       const response = await this.fetchLiveList(next);
-      if (!response.ok) return this.handleLiveListError(channelId, response);
+      if (!response.ok) {
+        return this.handleLiveListError(channelId, response);
+      }
 
       const parsed = liveListResponseSchema.safeParse(await response.json());
       if (!parsed.success) {
@@ -136,7 +196,9 @@ export class ChzzkApiClient {
       await this.writeHealth("enabled", "chzzk_live_api_verified");
 
       const match = parsed.data.content.data.find((item) => item.channelId === channelId);
-      if (match) return normalizeLiveStatus(channelId, match);
+      if (match) {
+        return normalizeLiveStatus(channelId, match);
+      }
 
       next = parsed.data.content.page?.next ?? undefined;
     } while (next);
@@ -144,7 +206,35 @@ export class ChzzkApiClient {
     return verifiedOfflineStatus(channelId);
   }
 
-  private async handleLiveListError(channelId: string, response: Response): Promise<ChzzkNormalizedLiveStatus> {
+  private async getChannelMetadata(channelId: string): Promise<ChzzkChannelMetadata> {
+    const response = await this.fetchChannelMetadata(channelId);
+    if (!response.ok) {
+      return this.handleChannelMetadataError(channelId, response);
+    }
+
+    const parsed = channelResponseSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      await this.writeHealth("verify_required", "chzzk_channel_api_response_invalid");
+      return unverifiedChannelMetadata(channelId);
+    }
+
+    const match = parsed.data.content.data.find((item) => item.channelId === channelId);
+    if (!match) {
+      await this.writeHealth("verify_required", "chzzk_channel_api_channel_missing");
+      return unverifiedChannelMetadata(channelId);
+    }
+
+    return {
+      channelId,
+      channelImageUrl: match.channelImageUrl ?? undefined,
+      sourceVerificationState: "verified"
+    };
+  }
+
+  private async handleLiveListError(
+    channelId: string,
+    response: Response
+  ): Promise<ChzzkNormalizedLiveStatus> {
     if (response.status === 429) {
       await this.writeHealth("rate_limited", "chzzk_live_api_rate_limited");
       return unverifiedStatus(channelId);
@@ -159,12 +249,49 @@ export class ChzzkApiClient {
     return unverifiedStatus(channelId);
   }
 
+  private async handleChannelMetadataError(
+    channelId: string,
+    response: Response
+  ): Promise<ChzzkChannelMetadata> {
+    if (response.status === 429) {
+      await this.writeHealth("rate_limited", "chzzk_channel_api_rate_limited");
+      return unverifiedChannelMetadata(channelId);
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      await this.writeHealth("verify_required", "chzzk_channel_api_auth_required");
+      return unverifiedChannelMetadata(channelId);
+    }
+
+    await this.writeHealth("verify_required", `chzzk_channel_api_http_${response.status}`);
+    return unverifiedChannelMetadata(channelId);
+  }
+
   private async fetchLiveList(next?: string): Promise<Response> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     const url = new URL(liveListUrl);
     url.searchParams.set("size", String(this.liveListPageSize));
-    if (next) url.searchParams.set("next", next);
+    if (next) {
+      url.searchParams.set("next", next);
+    }
+
+    try {
+      return await this.fetchImpl(url.toString(), {
+        method: "GET",
+        headers: this.clientAuthHeaders(),
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async fetchChannelMetadata(channelId: string): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const url = new URL(channelsUrl);
+    url.searchParams.set("channelIds", channelId);
 
     try {
       return await this.fetchImpl(url.toString(), {

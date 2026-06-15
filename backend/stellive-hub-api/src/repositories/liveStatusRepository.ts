@@ -138,6 +138,10 @@ export class LiveStatusRepository {
 
   async upsertLiveStatus(input: LiveStatusWriteInput): Promise<LiveStatusRecord> {
     const data = toWriteData(input);
+    const existing =
+      input.thumbnailUrl === undefined
+        ? await this.getByMemberId(input.memberId)
+        : null;
 
     return this.prisma.liveStatus.upsert({
       where: { memberId: input.memberId },
@@ -146,12 +150,12 @@ export class LiveStatusRepository {
         generationId: data.generationId,
         isLive: data.isLive,
         title: data.title,
-        thumbnailUrl: data.thumbnailUrl,
         viewerCount: data.viewerCount,
         startedAt: data.startedAt,
         platformUrl: data.platformUrl,
         sourceVerificationState: data.sourceVerificationState,
         lastCheckedAt: data.lastCheckedAt,
+        thumbnailUrl: data.thumbnailUrl ?? existing?.thumbnailUrl ?? null,
         lastTransitionAt: data.lastTransitionAt
       }
     });

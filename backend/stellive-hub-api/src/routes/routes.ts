@@ -64,13 +64,14 @@ export interface AppRouteDependencies {
       Array<{
         memberId: string;
         generationId: string;
-        isLive: boolean;
-        title?: string;
-        viewerCount?: number;
-        startedAt?: string;
-        platformUrl?: string;
-        lastCheckedAt: string;
-        sourceVerificationState: string;
+          isLive: boolean;
+          title?: string;
+          viewerCount?: number;
+          startedAt?: string;
+          channelImageUrl?: string;
+          platformUrl?: string;
+          lastCheckedAt: string;
+          sourceVerificationState: string;
       }>
     >;
   };
@@ -169,6 +170,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
         title: status.title,
         viewerCount: status.viewerCount,
         startedAt: status.startedAt,
+        channelImageUrl: status.channelImageUrl,
         platformUrl: status.platformUrl,
         lastCheckedAt: status.lastCheckedAt,
         sourceVerificationState: status.sourceVerificationState
