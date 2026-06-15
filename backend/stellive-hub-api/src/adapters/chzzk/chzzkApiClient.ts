@@ -1,29 +1,42 @@
-import z from "zod";
-import type { AdapterHealth } from "../../admin/adminTypes.js";
+import { z } from "zod";
+import type { AdapterHealthStatus } from "../../admin/adminTypes.js";
 import type { PlatformApiStateRepository } from "../../repositories/platformApiStateRepository.js";
-import type { ChzzkAuthClient, ChzzkTokenResponse } from "./chzzkAuthClient.js";
 
-const liveStatusUrl = "https://openapi.chzzk.naver.com/open/v1/lives";
+const liveListUrl = "https://openapi.chzzk.naver.com/open/v1/lives";
+const channelsUrl = "https://openapi.chzzk.naver.com/open/v1/channels";
 const channelUrl = "https://chzzk.naver.com/live";
 
-const liveContentSchema = z
+const liveItemSchema = z
   .object({
     channelId: z.string().optional(),
+    liveId: z.union([z.string(), z.number()]).optional(),
     liveTitle: z.string().optional(),
     title: z.string().optional(),
     status: z.string().optional(),
     liveStatus: z.string().optional(),
     openDate: z.string().optional(),
-    concurrentUserCount: z.number().int().nonnegative().optional(),
-    viewerCount: z.number().int().nonnegative().optional(),
-    liveUrl: z.string().url().optional(),
-    platformUrl: z.string().url().optional()
+    liveStartDate: z.string().optional(),
+    concurrentUserCount: z.union([z.number(), z.string()]).optional(),
+    viewerCount: z.union([z.number(), z.string()]).optional(),
+    liveUrl: z.string().url().optional()
   })
   .passthrough();
 
-const liveResponseSchema = z
+const liveListResponseSchema = z
   .object({
-    content: liveContentSchema.optional()
+    code: z.union([z.number(), z.string()]).optional(),
+    message: z.string().nullable().optional(),
+    content: z
+      .object({
+        page: z
+          .object({
+            next: z.string().nullable().optional()
+          })
+          .passthrough()
+          .optional(),
+        data: z.array(liveItemSchema).default([])
+      })
+      .passthrough()
   })
   .passthrough();
 
@@ -38,50 +51,56 @@ export interface ChzzkNormalizedLiveStatus {
 }
 
 interface ChzzkApiClientOptions {
+  clientId: string;
+  clientSecret: string;
+  stateRepository: Pick<PlatformApiStateRepository, "upsertAdapterHealth">;
   fetch?: typeof fetch;
   timeoutMs?: number;
-}
-
-interface ChzzkApiClientConfig {
-  tokenRefreshSkewSeconds?: number;
-}
-
-function readStringValue(value: unknown): string | undefined {
-  if (typeof value === "string") return value;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-
-  const objectValue = value as Record<string, unknown>;
-  if (typeof objectValue.value === "string") return objectValue.value;
-  if (typeof objectValue.token === "string") return objectValue.token;
-  return undefined;
+  liveListPageSize?: number;
 }
 
 function isLiveStatus(status: string | undefined): boolean {
   return status === "OPEN" || status === "LIVE";
 }
 
+function parseViewerCount(value: number | string | undefined): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== "string") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function platformUrl(channelId: string): string {
+  return `${channelUrl}/${encodeURIComponent(channelId)}`;
+}
+
+function verifiedOfflineStatus(channelId: string): ChzzkNormalizedLiveStatus {
+  return {
+    channelId,
+    isLive: false,
+    platformUrl: platformUrl(channelId),
+    sourceVerificationState: "verified"
+  };
+}
+
 function unverifiedStatus(channelId: string): ChzzkNormalizedLiveStatus {
   return {
     channelId,
     isLive: false,
-    platformUrl: `${channelUrl}/${channelId}`,
+    platformUrl: platformUrl(channelId),
     sourceVerificationState: "verify_required"
   };
 }
 
-function normalizeLiveStatus(channelId: string, body: unknown): ChzzkNormalizedLiveStatus {
-  const parsed = liveResponseSchema.safeParse(body);
-  const content = parsed.success ? parsed.data.content : undefined;
-
-  if (!content) return unverifiedStatus(channelId);
-
+function normalizeLiveStatus(channelId: string, item: z.infer<typeof liveItemSchema>): ChzzkNormalizedLiveStatus {
+  const normalizedChannelId = item.channelId ?? channelId;
   return {
-    channelId: content.channelId ?? channelId,
-    isLive: isLiveStatus(content.status ?? content.liveStatus),
-    title: content.liveTitle ?? content.title,
-    openDate: content.openDate,
-    viewerCount: content.concurrentUserCount ?? content.viewerCount,
-    platformUrl: content.liveUrl ?? content.platformUrl ?? `${channelUrl}/${channelId}`,
+    channelId: normalizedChannelId,
+    isLive: isLiveStatus(item.status ?? item.liveStatus),
+    title: item.liveTitle ?? item.title,
+    openDate: item.openDate ?? item.liveStartDate,
+    viewerCount: parseViewerCount(item.concurrentUserCount ?? item.viewerCount),
+    platformUrl: item.liveUrl ?? platformUrl(normalizedChannelId),
     sourceVerificationState: "verified"
   };
 }
@@ -89,55 +108,64 @@ function normalizeLiveStatus(channelId: string, body: unknown): ChzzkNormalizedL
 export class ChzzkApiClient {
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
+  private readonly liveListPageSize: number;
 
-  constructor(
-    private readonly authClient: Pick<ChzzkAuthClient, "refreshAccessToken">,
-    private readonly stateRepository: Pick<PlatformApiStateRepository, "getState" | "upsertState" | "upsertAdapterHealth">,
-    private readonly config: ChzzkApiClientConfig = {},
-    options: ChzzkApiClientOptions = {}
-  ) {
-    void this.config;
+  constructor(private readonly options: ChzzkApiClientOptions) {
     this.fetchImpl = options.fetch ?? fetch;
     this.timeoutMs = options.timeoutMs ?? 10_000;
+    this.liveListPageSize = options.liveListPageSize ?? 20;
   }
 
   async getLiveStatus(channelId: string): Promise<ChzzkNormalizedLiveStatus> {
-    const token = await this.getAccessToken();
-    const response = await this.fetchLiveStatus(channelId, token);
+    let next: string | undefined;
 
-    if (response.status === 401) {
-      const refreshedToken = await this.refreshAccessToken();
-      const retryResponse = await this.fetchLiveStatus(channelId, refreshedToken);
-      return this.handleLiveResponse(channelId, retryResponse);
-    }
+    do {
+      const response = await this.fetchLiveList(next);
+      if (!response.ok) return this.handleLiveListError(channelId, response);
 
-    return this.handleLiveResponse(channelId, response);
+      const parsed = liveListResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        await this.writeHealth("verify_required", "chzzk_live_api_response_invalid");
+        return unverifiedStatus(channelId);
+      }
+
+      await this.writeHealth("enabled", "chzzk_live_api_verified");
+
+      const match = parsed.data.content.data.find((item) => item.channelId === channelId);
+      if (match) return normalizeLiveStatus(channelId, match);
+
+      next = parsed.data.content.page?.next ?? undefined;
+    } while (next);
+
+    return verifiedOfflineStatus(channelId);
   }
 
-  private async handleLiveResponse(channelId: string, response: Response): Promise<ChzzkNormalizedLiveStatus> {
+  private async handleLiveListError(channelId: string, response: Response): Promise<ChzzkNormalizedLiveStatus> {
     if (response.status === 429) {
       await this.writeHealth("rate_limited", "chzzk_live_api_rate_limited");
       return unverifiedStatus(channelId);
     }
 
-    if (!response.ok) {
-      await this.writeHealth("verify_required", `chzzk_live_api_http_${response.status}`);
+    if (response.status === 401 || response.status === 403) {
+      await this.writeHealth("verify_required", "chzzk_live_api_auth_required");
       return unverifiedStatus(channelId);
     }
 
-    return normalizeLiveStatus(channelId, await response.json());
+    await this.writeHealth("verify_required", `chzzk_live_api_http_${response.status}`);
+    return unverifiedStatus(channelId);
   }
 
-  private async fetchLiveStatus(channelId: string, accessToken: string): Promise<Response> {
+  private async fetchLiveList(next?: string): Promise<Response> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const url = new URL(liveListUrl);
+    url.searchParams.set("size", String(this.liveListPageSize));
+    if (next) url.searchParams.set("next", next);
 
     try {
-      return await this.fetchImpl(`${liveStatusUrl}/${encodeURIComponent(channelId)}`, {
+      return await this.fetchImpl(url.toString(), {
         method: "GET",
-        headers: {
-          authorization: `Bearer ${accessToken}`
-        },
+        headers: this.clientAuthHeaders(),
         signal: controller.signal
       });
     } finally {
@@ -145,40 +173,16 @@ export class ChzzkApiClient {
     }
   }
 
-  private async getAccessToken(): Promise<string> {
-    const state = await this.stateRepository.getState("chzzk", "oauth.accessToken");
-    const token = readStringValue(state?.value);
-    if (!token) throw new Error("chzzk_access_token_unavailable");
-    return token;
+  private clientAuthHeaders(): Record<string, string> {
+    return {
+      "Client-Id": this.options.clientId,
+      "Client-Secret": this.options.clientSecret,
+      "Content-Type": "application/json"
+    };
   }
 
-  private async refreshAccessToken(): Promise<string> {
-    const refreshState = await this.stateRepository.getState("chzzk", "oauth.refreshToken");
-    const refreshToken = readStringValue(refreshState?.value);
-    if (!refreshToken) throw new Error("chzzk_refresh_token_unavailable");
-
-    const token = await this.authClient.refreshAccessToken({ refreshToken });
-    await this.storeTokenResponse(token);
-    return token.accessToken;
-  }
-
-  private async storeTokenResponse(token: ChzzkTokenResponse): Promise<void> {
-    const refreshedAt = new Date();
-    const expiresAt = new Date(refreshedAt.getTime() + token.expiresIn * 1000);
-
-    await this.stateRepository.upsertState("chzzk", "oauth.accessToken", token.accessToken, "enabled");
-    await this.stateRepository.upsertState("chzzk", "oauth.refreshToken", token.refreshToken, "enabled");
-    await this.stateRepository.upsertState("chzzk", "oauth.expiresAt", expiresAt.toISOString(), "enabled");
-    await this.stateRepository.upsertState("chzzk", "oauth.tokenType", token.tokenType, "enabled");
-    await this.stateRepository.upsertState("chzzk", "oauth.lastRefreshedAt", refreshedAt.toISOString(), "enabled");
-
-    if (token.scope) {
-      await this.stateRepository.upsertState("chzzk", "oauth.scope", token.scope, "enabled");
-    }
-  }
-
-  private async writeHealth(status: AdapterHealth["status"], reason: string): Promise<void> {
-    await this.stateRepository.upsertAdapterHealth("chzzk", {
+  private async writeHealth(status: AdapterHealthStatus, reason: string): Promise<void> {
+    await this.options.stateRepository.upsertAdapterHealth("chzzk", {
       source: "chzzk",
       status,
       reason,

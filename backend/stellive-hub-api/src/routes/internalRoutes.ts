@@ -76,6 +76,11 @@ const fallbackAdapterHealth: AdapterHealth[] = [
   { source: "naver_cafe", status: "disabled", reason: "naver_cafe_collection_deferred", lastCheckedAt: neverCheckedAt }
 ];
 
+function mergeAdapterHealthWithFallback(health: AdapterHealth[]): AdapterHealth[] {
+  const healthBySource = new Map(health.map((adapter) => [adapter.source, adapter]));
+  return fallbackAdapterHealth.map((fallback) => healthBySource.get(fallback.source) ?? fallback);
+}
+
 function parseInternalLimit(value: unknown, defaultLimit: number): number {
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed)) return defaultLimit;
@@ -137,7 +142,7 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
 
   app.get<{ Querystring: LimitQuery }>("/v1/internal/adapters/health", async () => {
     const health = await dependencies.adapterHealth.listAdapterHealth();
-    return health.length ? health : fallbackAdapterHealth;
+    return mergeAdapterHealthWithFallback(health);
   });
 
   app.get<{ Querystring: LimitQuery }>("/v1/internal/jobs/notifications", async (request) => {

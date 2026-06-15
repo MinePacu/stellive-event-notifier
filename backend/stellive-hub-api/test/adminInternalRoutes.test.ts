@@ -168,6 +168,39 @@ describe("internal admin routes", () => {
     );
   });
 
+  it("merges partial adapter health records with fallback diagnostics", async () => {
+    const app = await buildTestApp({
+      adapterHealth: {
+        getState: vi.fn(),
+        listAdapterHealth: async () => [
+          {
+            source: "chzzk",
+            status: "enabled",
+            reason: "chzzk_live_api_verified",
+            lastCheckedAt: "2026-06-15T00:00:00.000Z"
+          }
+        ]
+      }
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/internal/adapters/health",
+      headers: authHeaders
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: "youtube", status: "disabled" }),
+        expect.objectContaining({ source: "chzzk", status: "enabled", reason: "chzzk_live_api_verified" }),
+        expect.objectContaining({ source: "x", status: "disabled" }),
+        expect.objectContaining({ source: "naver_cafe", status: "disabled" })
+      ])
+    );
+    expect(response.json()).toHaveLength(4);
+  });
+
   it("does not register the optional platform API state route without a distinct contract", async () => {
     const app = await buildTestApp();
     const response = await app.inject({
@@ -507,6 +540,8 @@ describe("admin console routes", () => {
     expect(response.body).toContain('aria-live="polite"');
     expect(response.body).not.toContain("admin-token");
     expect(response.body).not.toContain("internal-test-token");
+    expect(response.body).not.toContain('dateStyle: "medium"');
+    expect(response.body).toContain('timeZoneName: "short"');
     expect(response.body).toContain("/v1/internal/admin/overview");
     expect(response.body).toContain("/v1/internal/jobs/notifications/drain");
     expect(response.body).toContain("/v1/internal/schedulers/youtube/renew-subscriptions");

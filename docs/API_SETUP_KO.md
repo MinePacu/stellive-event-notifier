@@ -31,9 +31,9 @@ http://localhost:4000/admin/login
 
 ## CHZZK
 
-CHZZK Developers/Open API 또는 문서화된 허용 endpoint만 사용한다. 모바일 앱은 CHZZK를 직접 호출하지 않고, CHZZK credential을 저장하지 않는다. 로그인 쿠키, private endpoint, private WebSocket, `NID_AUT`, `NID_SES`는 사용하지 않는다.
+CHZZK Developers/Open API 또는 문서화된 허용 endpoint만 사용한다. 라이브 진행 시간은 공식 Live API 시작 시각을 백엔드가 `LiveStatus.startedAt`으로 정규화한 값에서 계산한다. 모바일 앱은 CHZZK를 직접 호출하지 않고 CHZZK credential을 저장하지 않는다. 라이브 polling은 Client 인증 Open API `GET /open/v1/lives`를 사용하고, 응답 `channelId`를 catalog와 매칭한다. 로그인 쿠키, private endpoint, private WebSocket, `NID_AUT`, `NID_SES`는 사용하지 않는다.
 
-CHZZK 개발자 콘솔 redirect URL:
+OAuth 연결 테스트가 필요할 때만 CHZZK 개발자 콘솔에 redirect URL을 등록한다:
 
 ```text
 https://<backend-public-origin>/v1/auth/chzzk/callback
@@ -54,6 +54,22 @@ CHZZK_REFRESH_TOKEN=
 CHZZK_TOKEN_REFRESH_SKEW_SECONDS=300
 CHZZK_LIVE_POLLING_ENABLED=false
 ```
+
+Client 인증 라이브 polling에는 `CHZZK_CLIENT_ID`와 `CHZZK_CLIENT_SECRET`가 필요하다. `CHZZK_OAUTH_SCOPES`, `CHZZK_ACCESS_TOKEN`, `CHZZK_REFRESH_TOKEN`은 live-list polling 경로에는 필요하지 않다. OAuth 값은 향후 사용자 인가 CHZZK endpoint 또는 수동 연결 테스트 용도로만 둔다.
+
+OCI 서버-앱 CHZZK 테스트:
+
+1. Oracle Linux 기준 인스턴스를 준비한다. `PORT=4000`에서 실행하고 가능하면 HTTPS reverse proxy를 둔다.
+2. CHZZK Developers 애플리케이션 ID가 사용할 client ID/secret의 앱과 일치하는지 확인한다. 백엔드는 application ID를 환경 변수로 사용하지 않는다.
+3. 백엔드에는 서버 전용 값 `CHZZK_CLIENT_ID`, `CHZZK_CLIENT_SECRET`, `INTERNAL_API_TOKEN`, `PORT=4000`을 설정한다. OAuth 연결 테스트가 필요할 때만 OAuth 관련 값을 설정한다.
+4. 첫 검증에서는 `CHZZK_LIVE_POLLING_ENABLED=false`를 유지한다. secret을 shell history, Git, 앱 설정, 로그에 남기지 않는다.
+5. firewall, Security List/NSG, reverse proxy가 앱 공개 origin을 허용하는지 확인한다. `/v1/internal/*`는 maintainer token 접근을 요구해야 한다.
+6. 백엔드를 build하고 재시작한다.
+7. `INTERNAL_API_TOKEN`으로 `POST /v1/internal/schedulers/chzzk/live-status`를 실행한다. 이 경로는 OAuth access token이 아니라 `CHZZK_CLIENT_ID`와 `CHZZK_CLIENT_SECRET`를 사용해야 한다.
+8. `/v1/live-status`와 `/v1/bootstrap`이 provider token state나 raw provider payload 없이 정규화된 live status를 노출하는지 확인한다.
+9. scheduler health가 `verify_required`가 아니고 live-status cache freshness가 확인된 뒤에만 `CHZZK_LIVE_POLLING_ENABLED=true`를 켠다.
+10. 플랫폼 scheduler 또는 cron으로 승인된 polling interval에 내부 route를 호출한다.
+11. adapter health, live-status cache freshness, dedupe count, notification job volume을 모니터링한 뒤 realtime fan-out을 넓힌다.
 
 ## OCI 서버-앱 CHZZK 테스트
 

@@ -2,6 +2,30 @@
 
 확인일: 2026-06-14
 
+추가 확인일: 2026-06-15
+
+- CHZZK Developers 공개 페이지는 JavaScript SPA이며, HTML은 `https://ssl.pstatic.net/static/nng/glive-open/resource/p/static/js/main.16e89f8a.js`를 참조한다.
+- 해당 공식 정적 번들에서 확인된 개발자센터 화면 라우트는 `/application`, `/service`이고, scope UI 관련 문자열은 `scopeGroups`, `scopeList`, `LIVE_SERVICE`, `LIVE_MANAGE`, `LIVE_COMMERCIAL`이다.
+- 같은 번들에서는 `open/v1/...` live-status endpoint path, 요청 파라미터 형식, 성공 응답 schema를 확정할 수 없었다.
+- 서버에서 대표 catalog channel 1개와 저장된 access token으로 현재 구현 endpoint `GET https://openapi.chzzk.naver.com/open/v1/lives/{channelId}`를 1회 probe했다. token, channel ID, raw provider body는 출력하지 않았다.
+- probe 결과는 HTTP `404`였고, adapter health의 `chzzk_live_api_http_404`와 일치한다.
+- 결론: 현재 증거만으로 endpoint/identifier/권한 중 어느 쪽이 원인인지 확정할 수 없다. 인증된 개발자 콘솔 문서/API 또는 공식 문서 페이지에서 live-status endpoint contract를 추가 확인해야 한다.
+- Catalog identifier 확인: `shared/member-catalog/members.seed.json` 기준 13명 중 `chzzkChannelId` 보유 항목은 11개이고, 모두 pollable CHZZK target이다. Pollable target은 `active` 상태의 `member` 또는 `representative`만 포함하며, `official_channel`과 `former`는 포함하지 않는다. Gangzi는 `gamja`의 `representative`로 포함된다.
+- 저장된 CHZZK ID 11개는 모두 32자 hex 형식이다. 대표 ID 1개는 공개 `https://chzzk.naver.com/live/{id}` URL에서 `HEAD` 200을 반환했다. 이는 현재 저장값이 공개 CHZZK live URL slug로는 유효함을 뜻하지만, Open API가 동일한 identifier type을 요구한다는 증거는 아니다.
+- App authorization/scope 확인: 서버 `.env`의 `CHZZK_OAUTH_SCOPES`와 `/v1/auth/chzzk/start` redirect는 3개 scope token으로 일치했다. token response에 저장된 `oauth.scope`는 8개 token으로, 설정값과 normalized set이 서로 subset 관계가 아니었다. scope 값은 문서와 로그에 출력하지 않았다.
+- CHZZK Developers 정적 번들에는 `/clients`, `/scopes`, `/user/getUserStatus`, `approvedScope` 같은 개발자센터 API/UI 문자열이 있으나, 비로그인 probe로는 앱 review state, endpoint entitlement, channel linkage, OAuth account/channel authorization을 확인할 수 없었다. 이 항목은 maintainer가 로그인된 CHZZK Developers console에서 확인해야 한다.
+- Phase 4 재검증 결과 scheduler는 `200`으로 실행되지만 `checked=11`, `updated=11`, `verifyRequired=11`, `eventsCreated=0`이며 adapter health는 계속 `verify_required / chzzk_live_api_http_404`다.
+
+추가 확인일: 2026-06-15 (공식 GitBook 문서 확인)
+
+- 공식 CHZZK GitBook 문서의 Live API는 `GET /open/v1/lives`를 라이브 목록 조회 endpoint로 명시한다. 특정 channel ID를 path parameter로 받는 `GET /open/v1/lives/{channelId}` endpoint는 Live 문서에 없다.
+- 공식 Live 문서에 따르면 라이브 목록 조회는 사용자 Access Token이 아니라 애플리케이션 등록 후 Client 인증이 필요하다.
+- 공식 참고사항 문서는 Open API 도메인을 `https://openapi.chzzk.naver.com`로 명시하고, Client 인증 API는 `Client-Id`, `Client-Secret`, `Content-Type: application/json` header를 사용한다고 설명한다.
+- 공식 Channel 문서의 채널 정보 조회 endpoint는 `GET /open/v1/channels`이며, `channelIds` query parameter로 최대 20개 channel ID를 받는다.
+- 서버에서 real secret 값을 출력하지 않고 공식 Client 인증 방식으로 probe한 결과 `GET /open/v1/lives?size=1`은 `status=200`, `code=200`, `dataCount=1`, `hasPage=true`를 반환했다.
+- 같은 방식으로 `GET /open/v1/channels?channelIds={catalogId}`는 `status=200`, `code=200`, `dataCount=1`을 반환했다.
+- 결론: 현재 `ChzzkApiClient`의 `GET /open/v1/lives/{channelId}` + Bearer Access Token 방식은 공식 문서와 맞지 않는다. 다음 코드 변경은 Client 인증 기반으로 `GET /open/v1/lives` 목록을 조회한 뒤 catalog `chzzkChannelId`와 response `channelId`를 매칭하는 방향이어야 한다. 개별 channel metadata 검증은 `GET /open/v1/channels?channelIds=...`를 사용할 수 있다.
+
 ## 현재 구현
 
 - 백엔드에는 CHZZK OAuth 연결 라우트가 있다: `/v1/auth/chzzk/connect`, `/v1/auth/chzzk/callback`.

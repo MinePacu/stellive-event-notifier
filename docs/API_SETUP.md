@@ -46,9 +46,9 @@ Do not pass either token in the URL query string. Query strings can appear in br
 
 ## CHZZK
 
-Use CHZZK Developers/Open API or another documented allowed endpoint only. Current live progress display derives elapsed time from the official Live API start timestamp, normalized by the backend as `LiveStatus.startedAt`; mobile apps must not call CHZZK directly or store CHZZK credentials. Do not use login cookies, private endpoints, private WebSockets, `NID_AUT`, or `NID_SES`.
+Use CHZZK Developers/Open API or another documented allowed endpoint only. Current live progress display derives elapsed time from the official Live API start timestamp, normalized by backend as `LiveStatus.startedAt`; mobile apps must not call CHZZK directly or store CHZZK credentials. Live polling uses the Client-authenticated Open API `GET /open/v1/lives` endpoint and matches response `channelId` values against the catalog. Do not use login cookies, private endpoints, private WebSockets, `NID_AUT`, or `NID_SES`.
 
-Register these redirect URLs in the CHZZK developer app:
+Register these redirect URLs in the CHZZK developer app only when OAuth connection testing is needed:
 
 ```text
 https://<backend-public-origin>/v1/auth/chzzk/callback
@@ -70,38 +70,21 @@ CHZZK_TOKEN_REFRESH_SKEW_SECONDS=300
 CHZZK_LIVE_POLLING_ENABLED=false
 ```
 
+`CHZZK_CLIENT_ID` and `CHZZK_CLIENT_SECRET` are required for Client-authenticated live polling. `CHZZK_OAUTH_SCOPES`, `CHZZK_ACCESS_TOKEN`, and `CHZZK_REFRESH_TOKEN` are not required for the live-list polling path; keep OAuth configured only for future user-authorized CHZZK endpoints and manual connection testing.
+
 OCI server-app CHZZK test:
 
-1. Prepare the OCI instance on Oracle Linux. Run the backend on `PORT=4000`; for app testing, prefer a HTTPS reverse-proxied public origin.
-2. In CHZZK Developers, confirm the application ID matches the app that owns the client ID/secret. The backend does not consume application ID as an env var; keep it as console verification metadata only.
-3. Register `https://<oci-public-origin>/v1/auth/chzzk/callback` in CHZZK Developers. Add `http://localhost:4000/v1/auth/chzzk/callback` only for SSH-tunnel tests.
-4. On the OCI backend, set server-only env values: `CHZZK_CLIENT_ID`, `CHZZK_CLIENT_SECRET`, `CHZZK_REDIRECT_URI=https://<oci-public-origin>/v1/auth/chzzk/callback`, `CHZZK_OAUTH_SCOPES` with the official CHZZK scope string selected in Developers, `CHZZK_AUTH_STATE_SECRET`, `CHZZK_OAUTH_ENABLED=true`, `INTERNAL_API_TOKEN`, and `PORT=4000`.
-5. Keep `CHZZK_LIVE_POLLING_ENABLED=false` for first verification. Do not leave secrets in shell history, Git, app config, or logs.
-6. Confirm Oracle Linux firewall, OCI Security List/NSG, and reverse proxy allow the app-facing public origin. `/v1/internal/*` is not for public browser calls and must require maintainer token access.
-7. Build and restart the deployed backend after syncing source: `npm install`, `npm run build`, then `npm start` or the equivalent systemd/Docker restart. The running process uses `dist/backend/stellive-hub-api/src/index.js`; syncing source alone is not enough.
-8. Open `https://<oci-public-origin>/v1/auth/chzzk/start` in a maintainer-controlled browser and complete OAuth. Current code registers `/start`, not `/connect`.
-9. Call `POST https://<oci-public-origin>/v1/internal/schedulers/chzzk/live-status` with `Authorization: Bearer <INTERNAL_API_TOKEN>`.
-10. Confirm `GET https://<oci-public-origin>/v1/live-status` and `GET https://<oci-public-origin>/v1/bootstrap?platform=ios` or `?platform=android` return normalized `liveStatus` rows without CHZZK tokens, OAuth state, or raw provider payloads.
-11. Put no CHZZK credentials in apps. Set Android `HUB_BASE_URL` and iOS `HUB_BASE_URL` to `https://<oci-public-origin>/` only.
-12. Launch the app and check the live page. If bootstrap succeeds, app state comes from server `liveStatus`; if the API fails, fallback mock state remains.
-13. Enable `CHZZK_LIVE_POLLING_ENABLED=true` only after OAuth metadata exists, scheduler health is not `verify_required`, and live-status cache freshness is verified.
-
-OAuth connect flow:
-
-1. Set `CHZZK_CLIENT_ID`, `CHZZK_CLIENT_SECRET`, `CHZZK_REDIRECT_URI`, `CHZZK_OAUTH_SCOPES`, and `CHZZK_AUTH_STATE_SECRET` on the backend. Re-run OAuth after changing scopes because existing tokens do not gain new permissions.
-2. Set `CHZZK_OAUTH_ENABLED=true` only after the redirect URL is registered.
-3. Open `/v1/auth/chzzk/start` from a maintainer-controlled browser session or the private admin console.
-4. CHZZK redirects to `/v1/auth/chzzk/callback`; the backend exchanges the code and stores token metadata in `PlatformApiState`.
-5. Confirm `/v1/internal/admin/overview` reports CHZZK credential readiness without exposing token values.
-
-Scheduler enablement order:
-
-1. Keep `CHZZK_LIVE_POLLING_ENABLED=false` until OAuth is connected and the live-status endpoint scope is verified.
-2. Run `POST /v1/internal/schedulers/chzzk/live-status` with `INTERNAL_API_TOKEN`; it should return `verify_required` if token metadata is absent.
-3. Confirm `/v1/live-status` and `/v1/bootstrap` expose fresh normalized live status without provider token state or raw provider payloads.
-4. Enable `CHZZK_LIVE_POLLING_ENABLED=true` only after the scheduler can read stored OAuth state and the adapter health is not `verify_required`.
-5. Use a platform scheduler or cron to call the internal route at the approved polling interval.
-6. Monitor adapter health, live-status cache freshness, dedupe counts, and notification job volume before enabling realtime fan-out broadly.
+1. Prepare the instance on Oracle Linux. Run on `PORT=4000`; prefer a HTTPS reverse-proxied public origin.
+2. Confirm the CHZZK Developers application ID matches the app that owns the client ID/secret. The backend does not consume the application ID as an environment variable.
+3. On the backend, set server-only values: `CHZZK_CLIENT_ID`, `CHZZK_CLIENT_SECRET`, `INTERNAL_API_TOKEN`, and `PORT=4000`. Set OAuth values only if OAuth connection testing is needed.
+4. Keep `CHZZK_LIVE_POLLING_ENABLED=false` for first verification. Do not leave secrets in shell history, Git, app config, or logs.
+5. Confirm firewall, Security List/NSG, and reverse proxy allow the app-facing public origin. `/v1/internal/*` must require maintainer token access.
+6. Build and restart the backend.
+7. Run `POST /v1/internal/schedulers/chzzk/live-status` with `INTERNAL_API_TOKEN`; it should use `CHZZK_CLIENT_ID` and `CHZZK_CLIENT_SECRET`, not OAuth access tokens.
+8. Confirm `/v1/live-status` and `/v1/bootstrap` expose fresh normalized live status without provider token state or raw provider payloads.
+9. Enable `CHZZK_LIVE_POLLING_ENABLED=true` only after scheduler health is not `verify_required` and live-status cache freshness is verified.
+10. Use a platform scheduler or cron to call the internal route at the approved polling interval.
+11. Monitor adapter health, live-status cache freshness, dedupe counts, and notification job volume before enabling realtime fan-out broadly.
 
 ## X
 

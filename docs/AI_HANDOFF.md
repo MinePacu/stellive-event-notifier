@@ -1,12 +1,23 @@
 # AI Handoff
 
+## CHZZK Live API Current Status
+
+- Backend CHZZK live polling uses the official Client-authenticated live-list flow: `GET /open/v1/lives` with `Client-Id` and `Client-Secret` headers.
+- It no longer polls `GET /open/v1/lives/{channelId}` and does not use Bearer OAuth access tokens for live polling.
+- `ChzzkApiClient` requests live-list pages with `size=20`, accepts `message: null` success responses, and matches returned `channelId` values against catalog `chzzkChannelId`.
+- A valid live list that omits a catalog channel is treated as verified offline, not `verify_required`.
+- OAuth routes remain separate. `CHZZK_OAUTH_SCOPES` and OAuth token metadata are not required for Client-authenticated live-list polling.
+- Android and iOS consume normalized backend DTOs from `/v1/bootstrap` and `/v1/live-status`; they must not call CHZZK directly or store CHZZK credentials.
+- Verification on 2026-06-15: local focused tests passed with 5 files and 52 tests; local build passed; remote API container rebuilt; remote scheduler returned `checked=11`, `updated=11`, `verifyRequired=0`; remote adapter health returned `status=enabled`, `reason=chzzk_live_api_verified`; remote public secret-pattern checks passed for `/health`, `/v1/bootstrap`, and `/v1/live-status`; remote focused tests and build passed.
+
 ## CHZZK Live API Wiring Status
 
-- Branch `feat/chzzk-live-api-wiring` wires backend CHZZK live polling, mobile bootstrap live status, Android live-page mapping, and iOS live-page mapping.
-- Passed: backend focused CHZZK/mobile tests, Android unit tests, iOS focused `ServerLiveStatusMappingTests`, and full iOS tests on local `iPhone 17` simulator.
-- OAuth setup is not complete in this workspace; keep `CHZZK_OAUTH_ENABLED=false` and `CHZZK_LIVE_POLLING_ENABLED=false` until maintainer credentials are configured.
-- Scheduler remains disabled. Run `POST /v1/internal/schedulers/chzzk/live-status` with `INTERNAL_API_TOKEN`; missing token metadata should leave adapter health at `verify_required`.
-- Android and iOS display server-normalized live status after successful `/v1/bootstrap`; API failure keeps fallback mock state.
+- Backend CHZZK live polling now uses the official Client-authenticated Open API live-list flow: `GET /open/v1/lives` with `Client-Id` and `Client-Secret` headers. It no longer polls `GET /open/v1/lives/{channelId}` and does not use Bearer OAuth access tokens for live polling.
+- `ChzzkApiClient` pages through live-list results and matches response `channelId` values against catalog `chzzkChannelId`. A valid live-list response without a matching row is treated as verified offline, not `verify_required`.
+- OAuth routes remain available for future user-authorized CHZZK endpoints and manual connection testing, but OAuth scope/token metadata is not required for the live-list polling path.
+- Keep CHZZK credentials backend-only. Android and iOS consume normalized backend DTOs from `/v1/bootstrap` and `/v1/live-status`; they must not call CHZZK directly or store CHZZK credentials.
+- Local verification on 2026-06-15: `rtk npm test -- chzzkApiClient chzzkClientAuthLiveList chzzkOpenApiAdapter chzzkLiveApiWiring adminInternalRoutes` passed with 5 files and 52 tests; `rtk npm run build` passed.
+- Remote verification still needs to be run after copying the source changes to `minepacu@192.168.50.9:~/StelLiveNoti`, rebuilding the API container, and calling `POST /v1/internal/schedulers/chzzk/live-status` with `INTERNAL_API_TOKEN`.
 
 ## Hub Event Image Policy Status
 

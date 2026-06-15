@@ -90,18 +90,12 @@ function createDefaultChzzkLiveAdapter(
   const liveStatusRepository = hasChzzkLiveStatusRepository(dependencies?.liveStatus)
     ? dependencies.liveStatus
     : new LiveStatusRepository();
-  const authClient = new ChzzkAuthClient({
+  const apiClient = new ChzzkApiClient({
     clientId: env.CHZZK_CLIENT_ID,
     clientSecret: env.CHZZK_CLIENT_SECRET,
-    redirectUri: env.CHZZK_REDIRECT_URI,
-    scopes: env.CHZZK_OAUTH_SCOPES
-  });
-  const apiClient = new ChzzkApiClient(
-    authClient,
     stateRepository,
-    { tokenRefreshSkewSeconds: env.CHZZK_TOKEN_REFRESH_SKEW_SECONDS },
-    { fetch: fetchImpl }
-  );
+    fetch: fetchImpl
+  });
   const ingestor = new ChzzkEventIngestor();
 
   return {
