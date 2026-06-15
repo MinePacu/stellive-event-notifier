@@ -11,6 +11,8 @@ import dev.stellive.hub.feature.home.MockHubRepository
 import dev.stellive.hub.feature.home.ServerHubRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -31,6 +33,18 @@ class ServerHubRepositoryTest {
         val yuni = state.members.first { it.id == "ayatsuno-yuni" }
         assertTrue(yuni.isLive)
         assertEquals("2026-06-11T03:00:00Z", yuni.liveStartedAt.toString())
+        assertEquals("유니랑 밤 산책 게임하고 노래 조금", yuni.liveTitle)
+        assertEquals(1234, yuni.liveViewerCount)
+        assertEquals("https://chzzk.naver.com/live/chzzk-channel-id", yuni.livePlatformUrl)
+        assertEquals("https://img.example/yuni.jpg", yuni.channelImageUrl)
+        assertEquals("2026-06-11T03:01:00Z", yuni.liveLastCheckedAt.toString())
+        val huya = state.members.first { it.id == "sakihane-huya" }
+        assertFalse(huya.isLive)
+        assertNull(huya.liveStartedAt)
+        assertNull(huya.liveTitle)
+        assertNull(huya.liveViewerCount)
+        assertNull(huya.livePlatformUrl)
+        assertNull(huya.liveLastCheckedAt)
     }
 
     @Test
@@ -71,10 +85,13 @@ class ServerHubRepositoryTest {
                     LiveStatusDto(
                         memberId = "ayatsuno-yuni",
                         generationId = "gen1",
-                        platform = "chzzk",
-                        isLive = true,
-                        startedAt = "2026-06-11T03:00:00.000Z",
-                        platformUrl = "https://chzzk.naver.com/live/chzzk-channel-id",
+                    platform = "chzzk",
+                    isLive = true,
+                    title = "유니랑 밤 산책 게임하고 노래 조금",
+                    viewerCount = 1234,
+                    startedAt = "2026-06-11T03:00:00.000Z",
+                    channelImageUrl = "https://img.example/yuni.jpg",
+                    platformUrl = "https://chzzk.naver.com/live/chzzk-channel-id",
                         lastCheckedAt = "2026-06-11T03:01:00.000Z",
                         sourceVerificationState = "verified",
                     ),

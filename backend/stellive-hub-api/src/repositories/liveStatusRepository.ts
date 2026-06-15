@@ -6,6 +6,7 @@ interface LiveStatusRecord {
   generationId: string;
   isLive: boolean;
   title: string | null;
+  thumbnailUrl: string | null;
   viewerCount: number | null;
   startedAt: Date | null;
   platformUrl: string | null;
@@ -19,6 +20,7 @@ interface LiveStatusDiagnosticSelect {
   generationId: true;
   isLive: true;
   title: true;
+  thumbnailUrl: true;
   viewerCount: true;
   startedAt: true;
   platformUrl: true;
@@ -35,6 +37,7 @@ interface LiveStatusWriteData {
   generationId: string;
   isLive: boolean;
   title: string | null;
+  thumbnailUrl: string | null;
   viewerCount: number | null;
   startedAt: Date | null;
   platformUrl: string | null;
@@ -67,6 +70,7 @@ export interface LiveStatusWriteInput {
   generationId: string;
   isLive: boolean;
   title?: string;
+  thumbnailUrl?: string;
   viewerCount?: number;
   startedAt?: Date;
   platformUrl?: string;
@@ -80,6 +84,7 @@ const liveStatusDiagnosticSelect: LiveStatusDiagnosticSelect = {
   generationId: true,
   isLive: true,
   title: true,
+  thumbnailUrl: true,
   viewerCount: true,
   startedAt: true,
   platformUrl: true,
@@ -103,6 +108,7 @@ function toDiagnostic(record: LiveStatusRecord): LiveStatusDiagnostic {
     generationId: record.generationId,
     isLive: record.isLive,
     title: record.title ?? undefined,
+    channelImageUrl: record.thumbnailUrl ?? undefined,
     viewerCount: record.viewerCount ?? undefined,
     startedAt: record.startedAt?.toISOString(),
     platformUrl: record.platformUrl ?? undefined,
@@ -117,6 +123,7 @@ function toWriteData(input: LiveStatusWriteInput): LiveStatusWriteData {
     generationId: input.generationId,
     isLive: input.isLive,
     title: input.title ?? null,
+    thumbnailUrl: input.thumbnailUrl ?? null,
     viewerCount: input.viewerCount ?? null,
     startedAt: input.startedAt ?? null,
     platformUrl: input.platformUrl ?? null,
@@ -139,6 +146,7 @@ export class LiveStatusRepository {
         generationId: data.generationId,
         isLive: data.isLive,
         title: data.title,
+        thumbnailUrl: data.thumbnailUrl,
         viewerCount: data.viewerCount,
         startedAt: data.startedAt,
         platformUrl: data.platformUrl,

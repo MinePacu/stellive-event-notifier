@@ -176,6 +176,7 @@ export interface LiveStatus {
   platform: "chzzk";
   isLive: boolean;
   title?: string;
+  channelImageUrl?: string;
   thumbnailUrl?: string;
   viewerCount?: number;
   startedAt?: string;

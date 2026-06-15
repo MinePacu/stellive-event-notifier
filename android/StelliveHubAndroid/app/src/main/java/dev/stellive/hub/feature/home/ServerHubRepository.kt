@@ -48,10 +48,23 @@ class ServerHubRepository(
     return copy(
         liveStatusSourceLabel = "서버 liveStatus",
         members = members.map { member ->
-                val status = liveStatusByMemberId[member.id] ?: return@map member.copy(isLive = false, liveStartedAt = null)
+            val status = liveStatusByMemberId[member.id] ?: return@map member.copy(
+                isLive = false,
+                liveStartedAt = null,
+                liveTitle = null,
+                        liveViewerCount = null,
+                        livePlatformUrl = null,
+                        liveLastCheckedAt = null,
+                        channelImageUrl = null,
+                    )
                 member.copy(
                     isLive = status.isLive,
-                    liveStartedAt = status.startedAt?.let(::parseInstantOrNull),
+                liveStartedAt = status.startedAt?.let(::parseInstantOrNull),
+                liveTitle = status.title,
+                    liveViewerCount = status.viewerCount,
+                    livePlatformUrl = status.platformUrl,
+                    liveLastCheckedAt = parseInstantOrNull(status.lastCheckedAt),
+                    channelImageUrl = status.channelImageUrl,
                 )
             }
         )

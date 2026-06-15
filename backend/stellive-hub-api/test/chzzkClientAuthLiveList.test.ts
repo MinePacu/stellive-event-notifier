@@ -42,7 +42,8 @@ describe("ChzzkApiClient client-auth live list", () => {
           data: [
             {
               channelId: "chzzk-channel-id",
-              liveTitle: "Live title",
+          liveTitle: "Live title",
+          channelImageUrl: "https://img.example/yuni.jpg",
               status: "OPEN",
               openDate: "2026-06-11T03:00:00.000Z",
               concurrentUserCount: 1234
@@ -56,6 +57,7 @@ describe("ChzzkApiClient client-auth live list", () => {
       channelId: "chzzk-channel-id",
       isLive: true,
       title: "Live title",
+      channelImageUrl: "https://img.example/yuni.jpg",
       openDate: "2026-06-11T03:00:00.000Z",
       viewerCount: 1234,
       platformUrl: "https://chzzk.naver.com/live/chzzk-channel-id",
@@ -74,6 +76,33 @@ describe("ChzzkApiClient client-auth live list", () => {
     );
     expect(fetchMock.mock.calls[0]?.[1]).not.toMatchObject({
       headers: expect.objectContaining({ authorization: expect.any(String) })
+    });
+  });
+
+  it("treats presence in the CHZZK live list as live when status is omitted", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        code: 200,
+        message: null,
+        content: {
+          page: {},
+          data: [
+            {
+              channelId: "chzzk-channel-id",
+              liveTitle: "Live without status",
+              openDate: "2026-06-11T03:00:00.000Z",
+              concurrentUserCount: 1234
+            }
+          ]
+        }
+      })
+    );
+
+    await expect(client(fetchMock).getLiveStatus("chzzk-channel-id")).resolves.toMatchObject({
+      channelId: "chzzk-channel-id",
+      isLive: true,
+      title: "Live without status",
+      sourceVerificationState: "verified"
     });
   });
 

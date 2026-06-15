@@ -7,6 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/backend/stellive-hub-api/src/index.js",
+    "start:chzzk-live-worker": "node dist/backend/stellive-hub-api/src/workers/chzzkLivePollWorker.js",
+    "dev:chzzk-live-worker": "tsx src/workers/chzzkLivePollWorker.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",

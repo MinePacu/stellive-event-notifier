@@ -40,30 +40,47 @@ function bucketTimestamp(now: Date): string {
   return bucket.toISOString();
 }
 
+function parseChzzkOpenDate(value: string): Date {
+  const normalized = value.trim().replace(" ", "T");
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+  return new Date(hasTimezone ? normalized : `${normalized}+09:00`);
+}
+
 function startedAtFrom(status: ChzzkNormalizedLiveStatus): Date | undefined {
-  return status.openDate ? new Date(status.openDate) : undefined;
+  return status.openDate ? parseChzzkOpenDate(status.openDate) : undefined;
 }
 
 function toLiveStatusInput(
   member: Member,
   status: ChzzkNormalizedLiveStatus,
   now: Date,
-  previousIsLive: boolean | undefined
+  previous:
+    | {
+        isLive: boolean;
+        startedAt?: Date | null;
+        lastTransitionAt?: Date | null;
+      }
+    | null
 ): LiveStatusWriteInput {
-  const startedAt = startedAtFrom(status);
-  const transitioned = previousIsLive !== undefined && previousIsLive !== status.isLive;
+  const providerStartedAt = startedAtFrom(status);
+  const transitioned = previous !== null && previous.isLive !== status.isLive;
+  const lastTransitionAt = transitioned ? now : (previous?.lastTransitionAt ?? undefined);
+  const startedAt = status.isLive
+    ? (providerStartedAt ?? previous?.startedAt ?? lastTransitionAt ?? now)
+    : undefined;
 
   return {
     memberId: member.id,
     generationId: member.generationId,
     isLive: status.isLive,
     title: status.title,
+    thumbnailUrl: status.channelImageUrl,
     viewerCount: status.viewerCount,
     startedAt,
     platformUrl: status.platformUrl,
     sourceVerificationState: status.sourceVerificationState,
     lastCheckedAt: now,
-    lastTransitionAt: transitioned ? now : undefined
+    lastTransitionAt
   };
 }
 
@@ -123,7 +140,7 @@ export class ChzzkOpenApiAdapter {
       counts.checked += 1;
       if (status.sourceVerificationState === "verify_required") counts.verifyRequired += 1;
 
-      await this.options.liveStatusRepository.upsertLiveStatus(toLiveStatusInput(member, status, now, previous?.isLive));
+      await this.options.liveStatusRepository.upsertLiveStatus(toLiveStatusInput(member, status, now, previous));
       counts.updated += 1;
 
       const eventType = previous?.isLive === false && status.isLive

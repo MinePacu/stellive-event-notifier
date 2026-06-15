@@ -4,8 +4,10 @@ import dev.stellive.hub.core.model.NotificationEventType
 import dev.stellive.hub.core.model.NotificationPlatform
 import dev.stellive.hub.core.model.NotificationSettingState
 import dev.stellive.hub.core.model.HubEventStatus
+import java.text.NumberFormat
 import java.time.Duration
 import java.time.Instant
+import java.util.Locale
 
 data class StatusSummaryItem(
     val value: String,
@@ -37,8 +39,8 @@ data class SettingsPolicyRow(
 )
 
 object MainUiPolicy {
-    private const val BACK_BUTTON_WIDTH_DP = 44
     private const val TOP_BAR_ACTION_ICON_INSET_DP = 10
+    private const val LIVE_CLOCK_REFRESH_DELAY_MILLIS = 1_000L
 
     fun primaryNavigationItems(): List<MainNavigationItem> = listOf(
         MainNavigationItem("home", "홈"),
@@ -46,6 +48,9 @@ object MainUiPolicy {
         MainNavigationItem("history", "기록"),
         MainNavigationItem("goods_events", "굿즈/행사")
     )
+
+    fun liveClockRefreshDelayMillis(screenId: String, hasLiveMembers: Boolean): Long? =
+        if (hasLiveMembers && screenId in setOf("home", "live")) LIVE_CLOCK_REFRESH_DELAY_MILLIS else null
 
     fun showsSettingsTopBarAction(screenId: String, canGoBack: Boolean): Boolean =
         !canGoBack && screenId in primaryNavigationItems().map { it.screenId }
@@ -81,7 +86,7 @@ object MainUiPolicy {
     }
 
     fun topBarTitleStartInsetDp(canGoBack: Boolean): Int =
-        if (canGoBack) BACK_BUTTON_WIDTH_DP else TOP_BAR_ACTION_ICON_INSET_DP
+        TOP_BAR_ACTION_ICON_INSET_DP
 
     fun realtimeDisclosureLines(): List<String> = NotificationSettingState.REALTIME_DISCLOSURE_LINES
 
@@ -261,4 +266,19 @@ object MainUiPolicy {
         }
         return "방송 중 · ${elapsedText} 진행 중"
     }
+
+    fun liveElapsedClockText(startedAt: Instant?, now: Instant = Instant.now()): String? {
+        if (startedAt == null || startedAt.isAfter(now)) return null
+        val elapsedSeconds = Duration.between(startedAt, now).seconds.coerceAtLeast(0)
+        val hours = elapsedSeconds / 3600
+        val minutes = (elapsedSeconds % 3600) / 60
+        val seconds = elapsedSeconds % 60
+        return "%d:%02d:%02d".format(Locale.US, hours, minutes, seconds)
+    }
+
+    fun viewerCountText(viewerCount: Int?): String? =
+        viewerCount?.takeIf { it >= 0 }?.let { NumberFormat.getIntegerInstance(Locale.KOREA).format(it) }
+
+    fun liveTitleText(title: String?): String =
+        title?.trim()?.takeIf { it.isNotEmpty() } ?: "방송 제목 확인 중"
 }

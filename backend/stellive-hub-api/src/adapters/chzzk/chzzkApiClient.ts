@@ -16,6 +16,7 @@ const liveItemSchema = z
     liveStatus: z.string().optional(),
     openDate: z.string().optional(),
     liveStartDate: z.string().optional(),
+    channelImageUrl: z.string().url().optional(),
     concurrentUserCount: z.union([z.number(), z.string()]).optional(),
     viewerCount: z.union([z.number(), z.string()]).optional(),
     liveUrl: z.string().url().optional()
@@ -44,6 +45,7 @@ export interface ChzzkNormalizedLiveStatus {
   channelId: string;
   isLive: boolean;
   title?: string;
+  channelImageUrl?: string;
   openDate?: string;
   viewerCount?: number;
   platformUrl?: string;
@@ -94,10 +96,12 @@ function unverifiedStatus(channelId: string): ChzzkNormalizedLiveStatus {
 
 function normalizeLiveStatus(channelId: string, item: z.infer<typeof liveItemSchema>): ChzzkNormalizedLiveStatus {
   const normalizedChannelId = item.channelId ?? channelId;
+  const status = item.status ?? item.liveStatus;
   return {
     channelId: normalizedChannelId,
-    isLive: isLiveStatus(item.status ?? item.liveStatus),
+    isLive: status ? isLiveStatus(status) : true,
     title: item.liveTitle ?? item.title,
+    channelImageUrl: item.channelImageUrl,
     openDate: item.openDate ?? item.liveStartDate,
     viewerCount: parseViewerCount(item.concurrentUserCount ?? item.viewerCount),
     platformUrl: item.liveUrl ?? platformUrl(normalizedChannelId),

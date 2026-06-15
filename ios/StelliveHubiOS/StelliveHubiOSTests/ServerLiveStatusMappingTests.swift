@@ -47,9 +47,10 @@ final class ServerLiveStatusMappingTests: XCTestCase {
                           "platform": "chzzk",
                           "isLive": true,
                           "title": "Live title",
-                          "viewerCount": 123,
-                          "startedAt": "2026-06-11T03:00:00.000Z",
-                          "platformUrl": "https://chzzk.naver.com/live/chzzk-channel-id",
+                      "viewerCount": 123,
+                      "startedAt": "2026-06-11T03:00:00.000Z",
+                      "channelImageUrl": "https://img.example/yuni.jpg",
+                      "platformUrl": "https://chzzk.naver.com/live/chzzk-channel-id",
                           "lastCheckedAt": "2026-06-11T03:01:00.000Z",
                           "sourceVerificationState": "verified"
                         }
@@ -74,6 +75,78 @@ final class ServerLiveStatusMappingTests: XCTestCase {
 
         XCTAssertTrue(yuni.isLive)
         XCTAssertEqual(yuni.liveStartedAt, ISO8601DateFormatter.withFractionalSeconds.date(from: "2026-06-11T03:00:00.000Z"))
+        XCTAssertEqual(yuni.liveTitle, "Live title")
+        XCTAssertEqual(yuni.liveViewerCount, 123)
+        XCTAssertEqual(yuni.channelImageURL, URL(string: "https://img.example/yuni.jpg"))
+        XCTAssertEqual(yuni.livePlatformURL, URL(string: "https://chzzk.naver.com/live/chzzk-channel-id"))
+        XCTAssertEqual(yuni.liveLastCheckedAt, ISO8601DateFormatter.withFractionalSeconds.date(from: "2026-06-11T03:01:00.000Z"))
+
+        let huya = try XCTUnwrap(result.members.first { $0.id == "sakihane-huya" })
+        XCTAssertFalse(huya.isLive)
+        XCTAssertNil(huya.liveStartedAt)
+        XCTAssertNil(huya.liveTitle)
+        XCTAssertNil(huya.liveViewerCount)
+        XCTAssertNil(huya.channelImageURL)
+        XCTAssertNil(huya.livePlatformURL)
+        XCTAssertNil(huya.liveLastCheckedAt)
+    }
+
+    func testLiveStatusFormattersMatchMockup() {
+        let now = ISO8601DateFormatter.withFractionalSeconds.date(from: "2026-06-15T11:03:00.000Z")!
+
+        XCTAssertEqual(
+            LiveStatusFormatter.elapsedClockText(
+                startedAt: ISO8601DateFormatter.withFractionalSeconds.date(from: "2026-06-15T09:40:00.000Z"),
+                now: now
+            ),
+            "1:23:00"
+        )
+        XCTAssertEqual(
+            LiveStatusFormatter.elapsedClockText(
+                startedAt: ISO8601DateFormatter.withFractionalSeconds.date(from: "2026-06-15T10:45:00.000Z"),
+                now: now
+            ),
+            "0:18:00"
+        )
+        XCTAssertNil(LiveStatusFormatter.elapsedClockText(startedAt: nil, now: now))
+        XCTAssertEqual(LiveStatusFormatter.viewerCountText(1234), "1,234")
+        XCTAssertNil(LiveStatusFormatter.viewerCountText(nil))
+        XCTAssertEqual(LiveStatusFormatter.liveTitleText(" "), "방송 제목 확인 중")
+        XCTAssertEqual(LiveStatusFormatter.liveTitleText("유니랑 밤 산책 게임하고 노래 조금"), "유니랑 밤 산책 게임하고 노래 조금")
+    }
+
+    func testOrderedLiveMembersUsesPriorityThenCatalogOrder() {
+        let members = MockHubStore().members
+            .filter { $0.chzzkChannelId != nil }
+            .prefix(4)
+            .map { member in
+                var updated = member
+                updated.isLive = true
+                return updated
+            }
+
+        let ordered = LiveMemberOrderingPolicy.orderedLiveMembers(
+            Array(members),
+            priorityMemberIDs: [members[2].id, members[0].id]
+        )
+
+        XCTAssertEqual(ordered.map(\.id), [members[2].id, members[0].id, members[1].id, members[3].id])
+    }
+
+    func testHomePreviewShowsTopThreeAndReportsOverflow() {
+        let members = MockHubStore().members
+            .filter { $0.chzzkChannelId != nil }
+            .prefix(4)
+            .map { member in
+                var updated = member
+                updated.isLive = true
+                return updated
+            }
+
+        let preview = LiveMemberOrderingPolicy.homeLivePreview(Array(members), priorityMemberIDs: [])
+
+        XCTAssertEqual(preview.map(\.id), members.prefix(3).map(\.id))
+        XCTAssertTrue(LiveMemberOrderingPolicy.hasHomeLiveOverflow(Array(members)))
     }
 
     private func makeClient(

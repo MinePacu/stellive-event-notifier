@@ -133,6 +133,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
         generations: catalog.getGenerations(),
         members: catalog.getMembers(),
         preferences: preferences.get(deviceId) ?? [],
+        liveStatus: await liveStatusRepository.listDiagnostics(50).catch(() => []),
         realtime: realtime.status(),
       };
     },

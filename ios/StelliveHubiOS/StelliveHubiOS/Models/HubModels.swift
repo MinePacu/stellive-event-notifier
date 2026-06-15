@@ -474,6 +474,11 @@ struct HubMember: Identifiable, Hashable {
     var notificationEnabled: Bool
     var realtimeEnabled: Bool
     var liveStartedAt: Date? = nil
+    var liveTitle: String? = nil
+    var liveViewerCount: Int? = nil
+    var channelImageURL: URL? = nil
+    var livePlatformURL: URL? = nil
+    var liveLastCheckedAt: Date? = nil
 
     init(
         id: String,
@@ -492,7 +497,12 @@ struct HubMember: Identifiable, Hashable {
         isLive: Bool,
         notificationEnabled: Bool,
         realtimeEnabled: Bool,
-        liveStartedAt: Date? = nil
+        liveStartedAt: Date? = nil,
+        liveTitle: String? = nil,
+        liveViewerCount: Int? = nil,
+        channelImageURL: URL? = nil,
+        livePlatformURL: URL? = nil,
+        liveLastCheckedAt: Date? = nil
     ) {
         self.id = id
         self.koreanName = koreanName
@@ -511,6 +521,11 @@ struct HubMember: Identifiable, Hashable {
         self.notificationEnabled = notificationEnabled
         self.realtimeEnabled = realtimeEnabled
         self.liveStartedAt = liveStartedAt
+        self.liveTitle = liveTitle
+        self.liveViewerCount = liveViewerCount
+        self.channelImageURL = channelImageURL
+        self.livePlatformURL = livePlatformURL
+        self.liveLastCheckedAt = liveLastCheckedAt
     }
 }
 
@@ -531,6 +546,25 @@ enum LiveStatusFormatter {
             elapsedText = "\(minutes)분"
         }
         return "방송 중 · \(elapsedText) 진행 중"
+    }
+
+    static func elapsedClockText(startedAt: Date?, now: Date = Date()) -> String? {
+        guard let startedAt, startedAt <= now else { return nil }
+        let elapsedSeconds = max(0, Int(now.timeIntervalSince(startedAt)))
+        let hours = elapsedSeconds / 3600
+        let minutes = (elapsedSeconds % 3600) / 60
+        let seconds = elapsedSeconds % 60
+        return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+    }
+
+    static func viewerCountText(_ viewerCount: Int?) -> String? {
+        guard let viewerCount, viewerCount >= 0 else { return nil }
+        return NumberFormatter.localizedString(from: NSNumber(value: viewerCount), number: .decimal)
+    }
+
+    static func liveTitleText(_ title: String?) -> String {
+        let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "방송 제목 확인 중" : trimmed
     }
 }
 

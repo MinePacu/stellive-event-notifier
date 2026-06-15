@@ -8,14 +8,21 @@ struct HomeView: View {
         NavigationStack(path: $path) {
             List {
                 Section("지금 라이브") {
-                    if store.liveMembers.isEmpty {
+                    if store.homeLiveMembers.isEmpty {
                         Text("현재 라이브 없음")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(store.liveMembers) { member in
+                        ForEach(store.homeLiveMembers) { member in
                             NavigationLink(value: member) {
                                 MemberRow(member: member)
+                            }
+                        }
+                        if store.hasHomeLiveOverflow {
+                            NavigationLink {
+                                LiveView()
+                            } label: {
+                                Label("더보기", systemImage: "chevron.right")
                             }
                         }
                     }
@@ -310,9 +317,9 @@ struct MemberRow: View {
                 Text([member.generationName, member.roleLabel].compactMap { $0 }.joined(separator: " · "))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Text(platformText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Text(platformText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Spacer()
@@ -320,9 +327,20 @@ struct MemberRow: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(member.catalogRole == .officialChannel ? "공식" : (member.isLive ? "LIVE" : "OFF"))
                     .font(.caption.weight(.semibold))
-                Text(member.realtimeEnabled ? "실시간 우선" : "표준")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                if member.isLive {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        if let elapsed = LiveStatusFormatter.elapsedClockText(startedAt: member.liveStartedAt, now: context.date) {
+                            LiveSideMetric(systemImage: "clock", value: elapsed, color: .secondary)
+                        }
+                    }
+                    if let viewers = LiveStatusFormatter.viewerCountText(member.liveViewerCount) {
+                        LiveSideMetric(systemImage: "eye", value: viewers, color: .teal)
+                    }
+                } else {
+                    Text(member.realtimeEnabled ? "실시간 우선" : "표준")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .accessibilityElement(children: .combine)
@@ -343,13 +361,25 @@ struct MemberAvatarView: View {
     var showsLiveRing = false
 
     var body: some View {
-        Text(label)
-            .font(.system(size: max(12, size * 0.34), weight: .bold))
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
+        ZStack {
+            Text(label)
+                .font(.system(size: max(12, size * 0.34), weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            if let channelImageURL = member.channelImageURL {
+                AsyncImage(url: channelImageURL) { phase in
+                    if let image = phase.image {
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    }
+                }
+            }
+        }
             .frame(width: size, height: size)
             .background(avatarShape.fill(backgroundColor))
+            .clipShape(avatarShape)
             .overlay {
                 if showsLiveRing && member.isLive {
                     avatarShape.stroke(Color.teal, lineWidth: 2)

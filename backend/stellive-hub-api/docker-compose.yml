@@ -21,6 +21,7 @@ services:
       dockerfile: backend/stellive-hub-api/Dockerfile
     env_file:
       - .env.example
+      - .env
     environment:
       DATABASE_URL: postgresql://stellive:stellive@postgres:5432/stellive_hub
       REDIS_URL: redis://redis:6379
@@ -29,6 +30,21 @@ services:
     depends_on:
       - postgres
       - redis
+
+  chzzk-live-worker:
+    build:
+      context: ../..
+      dockerfile: backend/stellive-hub-api/Dockerfile
+    env_file:
+      - .env.example
+      - .env
+    environment:
+      DATABASE_URL: postgresql://stellive:stellive@postgres:5432/stellive_hub
+      REDIS_URL: redis://redis:6379
+      CHZZK_LIVE_POLL_SCHEDULER_BASE_URL: http://api:4000
+    command: ["npm", "run", "start:chzzk-live-worker"]
+    depends_on:
+      - api
 
 volumes:
   postgres-data:

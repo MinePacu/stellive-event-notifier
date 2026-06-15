@@ -36,7 +36,7 @@ class MainUiPolicyTest {
     @Test
     fun topBarTitleStartInsetAlignsRootScreensWithChromePadding() {
         assertEquals(10, MainUiPolicy.topBarTitleStartInsetDp(canGoBack = false))
-        assertEquals(44, MainUiPolicy.topBarTitleStartInsetDp(canGoBack = true))
+        assertEquals(10, MainUiPolicy.topBarTitleStartInsetDp(canGoBack = true))
     }
 
     @Test
@@ -73,6 +73,14 @@ class MainUiPolicyTest {
         assertEquals("방송 중 · 1시간 23분 진행 중", MainUiPolicy.liveStatusText(true, startedAt, now))
         assertEquals("방송 중", MainUiPolicy.liveStatusText(true, null, now))
         assertEquals("오프라인", MainUiPolicy.liveStatusText(false, startedAt, now))
+    }
+
+    @Test
+    fun liveClockRefreshRunsOnlyOnHomeAndLiveWhenThereAreLiveMembers() {
+        assertEquals(1_000L, MainUiPolicy.liveClockRefreshDelayMillis("home", hasLiveMembers = true))
+        assertEquals(1_000L, MainUiPolicy.liveClockRefreshDelayMillis("live", hasLiveMembers = true))
+        assertEquals(null, MainUiPolicy.liveClockRefreshDelayMillis("history", hasLiveMembers = true))
+        assertEquals(null, MainUiPolicy.liveClockRefreshDelayMillis("home", hasLiveMembers = false))
     }
 
     @Test
@@ -135,6 +143,25 @@ class MainUiPolicyTest {
             MainUiPolicy.settingsPlatformPolicy(NotificationPlatform.HUB_EVENT)
         )
         assertTrue(MainUiPolicy.settingsPlatformCommonNotice().contains("플랫폼 OFF"))
+    }
+
+    @Test
+    fun livePageFormattersMatchServerUiMockup() {
+        val now = Instant.parse("2026-06-15T11:03:00Z")
+
+        assertEquals(
+            "1:23:00",
+            MainUiPolicy.liveElapsedClockText(Instant.parse("2026-06-15T09:40:00Z"), now),
+        )
+        assertEquals(
+            "0:18:00",
+            MainUiPolicy.liveElapsedClockText(Instant.parse("2026-06-15T10:45:00Z"), now),
+        )
+        assertNull(MainUiPolicy.liveElapsedClockText(null, now))
+        assertEquals("1,234", MainUiPolicy.viewerCountText(1234))
+        assertNull(MainUiPolicy.viewerCountText(null))
+        assertEquals("방송 제목 확인 중", MainUiPolicy.liveTitleText(" "))
+        assertEquals("유니랑 밤 산책 게임하고 노래 조금", MainUiPolicy.liveTitleText("유니랑 밤 산책 게임하고 노래 조금"))
     }
 
     @Test

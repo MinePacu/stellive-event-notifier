@@ -334,6 +334,17 @@ describe("BootstrapService", () => {
     ]);
     expect(bootstrap.preferences).toHaveLength(1);
     expect(bootstrap.liveStatus).toHaveLength(1);
+    expect(bootstrap.liveStatus[0]).toMatchObject({
+      memberId: "ayatsuno-yuni",
+      generationId: "gen1",
+      platform: "chzzk",
+      isLive: true,
+      title: "Live",
+      viewerCount: 100,
+      startedAt: "2026-06-11T00:00:00.000Z",
+      platformUrl: "https://chzzk.naver.com/live/channel",
+      lastCheckedAt: "2026-06-11T00:01:00.000Z",
+    });
     expect(bootstrap.hubEventsSummary.openCount).toBe(1);
     expect(bootstrap.serverTime).toBe("2026-06-11T03:00:00.000Z");
     expect(JSON.stringify(bootstrap)).not.toContain("rawPayload");

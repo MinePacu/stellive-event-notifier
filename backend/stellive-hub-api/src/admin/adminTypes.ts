@@ -48,6 +48,7 @@ export interface LiveStatusDiagnostic {
   generationId: string;
   isLive: boolean;
   title?: string;
+  channelImageUrl?: string;
   viewerCount?: number;
   startedAt?: string;
   platformUrl?: string;

@@ -1366,6 +1366,11 @@ components:
           type:
             - string
             - "null"
+        channelImageUrl:
+          type:
+            - string
+            - "null"
+          format: uri
         viewerCount:
           type:
             - integer

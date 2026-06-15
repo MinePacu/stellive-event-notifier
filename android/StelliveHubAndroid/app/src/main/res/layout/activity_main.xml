@@ -71,11 +71,16 @@
         android:alpha="0"
         android:background="@color/hub_line" />
 
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/contentRefresh"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
     <ScrollView
         android:id="@+id/contentScroll"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
         android:fillViewport="false"
         android:overScrollMode="ifContentScrolls"
         android:scrollbars="vertical">
@@ -90,6 +95,8 @@
             android:paddingEnd="18dp"
             android:paddingBottom="20dp" />
     </ScrollView>
+
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <LinearLayout
         android:id="@+id/bottomNavigation"

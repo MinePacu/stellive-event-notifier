@@ -151,7 +151,12 @@ data class HubMember(
     val isLive: Boolean = false,
     val notificationEnabled: Boolean = true,
     val realtimeEnabled: Boolean = false,
-    val liveStartedAt: Instant? = null
+    val liveStartedAt: Instant? = null,
+    val liveTitle: String? = null,
+    val liveViewerCount: Int? = null,
+    val livePlatformUrl: String? = null,
+    val liveLastCheckedAt: Instant? = null,
+    val channelImageUrl: String? = null,
 )
 
 data class HubEvent(

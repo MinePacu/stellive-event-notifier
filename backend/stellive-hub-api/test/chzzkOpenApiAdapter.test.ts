@@ -142,6 +142,7 @@ function previousRecord(isLive: boolean | undefined) {
     generationId: "gen1",
     isLive,
     title: null,
+    thumbnailUrl: null,
     viewerCount: null,
     startedAt: null,
     platformUrl: null,

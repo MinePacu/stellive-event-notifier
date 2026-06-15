@@ -3,15 +3,20 @@ package dev.stellive.hub
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
@@ -38,6 +43,7 @@ import dev.stellive.hub.databinding.ActivityMainBinding
 import dev.stellive.hub.feature.calendar.HubCalendarDeepLinkPolicy
 import dev.stellive.hub.feature.calendar.HubEventsCalendarView
 import dev.stellive.hub.feature.home.HubScreen
+import dev.stellive.hub.feature.home.LiveMemberOrderingPolicy
 import dev.stellive.hub.core.network.HubApiClient
 import dev.stellive.hub.feature.home.MainUiPolicy
 import dev.stellive.hub.feature.home.MainNavigationHistory
@@ -46,19 +52,37 @@ import dev.stellive.hub.feature.home.ServerHubRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.net.URL
+import java.time.Instant
+import kotlin.concurrent.thread
 import dev.stellive.hub.feature.home.SettingsHubRow
 import dev.stellive.hub.feature.home.StatusSummaryItem
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
+    private data class LiveClockTextView(
+        val startedAt: Instant,
+        val textView: TextView,
+    )
+
     private lateinit var binding: ActivityMainBinding
     private val repository = MockHubRepository()
+    private val liveClockHandler = Handler(Looper.getMainLooper())
+    private val liveClockTextViews = mutableListOf<LiveClockTextView>()
+    private val liveClockTicker = object : Runnable {
+        override fun run() {
+            updateLiveClockTextViews()
+            scheduleLiveClockRefresh()
+        }
+    }
     private var serverMembers: List<HubMember>? = null
     private var liveStatusSourceLabel = "앱 내 목업"
     private var debugModeEnabled = false
     private val serverConnectionDebugLogs = mutableListOf("bootstrap: 대기 중")
     private val navigationHistory = MainNavigationHistory()
     private var selectedFilter = "all"
+    private var selectedLiveStatusFilter = "live"
+    private var liveMemberPriorityIds: List<String> = emptyList()
     private var selectedHistoryEventTypeFilterId = "all"
     private var selectedHistoryMemberFilterId = "all"
     private var selectedHubEventId: String? = null
@@ -68,6 +92,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         selectedAppearanceMode = readAppearanceMode()
+        liveMemberPriorityIds = readLiveMemberPriorityIds()
         AppCompatDelegate.setDefaultNightMode(selectedAppearanceMode.toNightMode())
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -76,12 +101,29 @@ class MainActivity : AppCompatActivity() {
         setupBackNavigation()
         setupTopBarActions()
         setupBottomNavigation()
+        setupPullToRefresh()
         if (!handleAppDeepLink(intent)) {
             renderHome()
             updateSelectedBottomNavigation(HubScreen.HOME)
         }
         updateNavigationChrome()
         loadServerBootstrap()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        scheduleLiveClockRefresh()
+    }
+
+    override fun onPause() {
+        liveClockHandler.removeCallbacks(liveClockTicker)
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        liveClockHandler.removeCallbacks(liveClockTicker)
+        liveClockTextViews.clear()
+        super.onDestroy()
     }
 
     private fun loadServerBootstrap() {
@@ -94,11 +136,19 @@ class MainActivity : AppCompatActivity() {
             serverMembers = state.members
             liveStatusSourceLabel = state.liveStatusSourceLabel
             recordServerConnectionLog("bootstrap: $liveStatusSourceLabel")
-            renderScreen(navigationHistory.currentScreen)
-        }
-    }
+ renderScreen(navigationHistory.currentScreen)
+ binding.contentRefresh.isRefreshing = false
+ }
+ }
 
-    private fun recordServerConnectionLog(message: String) {
+ private fun setupPullToRefresh() {
+ binding.contentRefresh.isEnabled = false
+ binding.contentRefresh.setOnRefreshListener {
+ loadServerBootstrap()
+ }
+ }
+
+ private fun recordServerConnectionLog(message: String) {
         serverConnectionDebugLogs.add(message)
         while (serverConnectionDebugLogs.size > 8) {
             serverConnectionDebugLogs.removeAt(0)
@@ -197,6 +247,7 @@ class MainActivity : AppCompatActivity() {
             HubScreen.SETTINGS_HUB_EVENTS -> renderSettingsHubEvents()
             HubScreen.SETTINGS_ADVANCED -> renderSettingsAdvanced()
         }
+        binding.contentRefresh.isEnabled = screen == HubScreen.LIVE
     }
 
     private fun updateSelectedBottomNavigation(screen: HubScreen) {
@@ -263,6 +314,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startScreen(screenId: String, title: String, role: String) {
+        liveClockHandler.removeCallbacks(liveClockTicker)
+        liveClockTextViews.clear()
         binding.collapsedTitle.text = MainUiPolicy.topBarTitle(screenId)
         binding.collapsedRole.text = MainUiPolicy.topBarRole(screenId)
         binding.contentList.removeAllViews()
@@ -275,13 +328,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun liveMembersForUi(): List<HubMember> =
-        (serverMembers ?: repository.members)
-            .filter { it.catalogRole != CatalogRole.OFFICIAL_CHANNEL && it.isLive }
-            .sortedBy { it.koreanName }
+        LiveMemberOrderingPolicy.orderedLiveMembers(serverMembers ?: repository.members, liveMemberPriorityIds)
 
     private fun chzzkMembersForUi(): List<HubMember> =
-        (serverMembers ?: repository.members)
-            .filter { it.catalogRole != CatalogRole.OFFICIAL_CHANNEL && it.chzzkChannelId != null }
+        LiveMemberOrderingPolicy.orderedChzzkTargets(serverMembers ?: repository.members, liveMemberPriorityIds)
+
+    private fun liveStatusFilteredMembersForUi(): List<HubMember> =
+        chzzkMembersForUi()
+            .filter {
+                when (selectedLiveStatusFilter) {
+                    "live" -> it.isLive
+                    "offline" -> !it.isLive
+                    else -> true
+                }
+            }
 
     private fun renderHome() {
         startScreen(
@@ -296,7 +356,11 @@ class MainActivity : AppCompatActivity() {
                 compactEventCard("현재 라이브 없음", "서버 갱신 기준으로 표시합니다.", listOf("대기"))
             )
         } else {
-            liveMembersForUi().forEach { binding.contentList.addView(liveMemberRow(it)) }
+            LiveMemberOrderingPolicy.homeLivePreview(serverMembers ?: repository.members, liveMemberPriorityIds)
+                .forEach { binding.contentList.addView(liveMemberRow(it)) }
+            if (LiveMemberOrderingPolicy.hasHomeLiveOverflow(serverMembers ?: repository.members)) {
+                binding.contentList.addView(moreLiveMembersButton())
+            }
         }
         binding.contentList.addView(sectionLabel("최근 알림"))
         if (repository.recentHistoryPreview.isEmpty()) {
@@ -348,6 +412,28 @@ class MainActivity : AppCompatActivity() {
             )
         }
     }
+
+    private fun moreLiveMembersButton(): Chip =
+        Chip(this).apply {
+            text = "더보기"
+            isCheckable = false
+            chipMinHeight = dp(34).toFloat()
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_surface)
+            chipStrokeWidth = dp(1).toFloat()
+            chipStrokeColor = ContextCompat.getColorStateList(context, R.color.hub_line)
+            setTextColor(color(R.color.hub_text))
+            setOnClickListener {
+                navigateTo(HubScreen.LIVE, addToBackStack = false)
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                bottomMargin = dp(10)
+            }
+        }
 
     private fun renderGoodsEvents() {
         startScreen(
@@ -451,12 +537,16 @@ class MainActivity : AppCompatActivity() {
             title = getString(R.string.live_title),
             role = "Foreground 상태 갱신은 화면 표시용입니다. 백그라운드 알림은 서버 중심 푸시로 처리합니다."
         )
-        binding.contentList.addView(staticChips("방송 중", "CHZZK 대상", "서버 푸시"))
+        binding.contentList.addView(liveStatusChips())
         binding.contentList.addView(compactEventCard("라이브 데이터", liveStatusSourceLabel, listOf("상태")))
-        chzzkMembersForUi()
-            .forEach { member ->
-                binding.contentList.addView(liveMemberRow(member))
+        val members = liveStatusFilteredMembersForUi()
+        if (members.isEmpty()) {
+            binding.contentList.addView(compactEventCard("조건에 맞는 멤버 없음", "다른 라이브 상태 필터를 선택해 확인할 수 있습니다.", listOf("필터")))
+        } else {
+            members.forEach { member ->
+                binding.contentList.addView(liveMemberRow(member, showOrderControls = true))
             }
+        }
     }
 
     private fun renderHistory() {
@@ -940,6 +1030,55 @@ class MainActivity : AppCompatActivity() {
             .apply()
     }
 
+    private fun readLiveMemberPriorityIds(): List<String> =
+        getSharedPreferences("hub_preferences", Context.MODE_PRIVATE)
+            .getString(PreferenceKeys.LIVE_MEMBER_ORDER, null)
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
+
+    private fun writeLiveMemberPriorityIds(ids: List<String>) {
+        liveMemberPriorityIds = ids
+        getSharedPreferences("hub_preferences", Context.MODE_PRIVATE)
+            .edit()
+            .putString(PreferenceKeys.LIVE_MEMBER_ORDER, ids.joinToString(","))
+            .apply()
+    }
+
+    private fun moveLiveMember(member: HubMember, offset: Int) {
+        val members = liveStatusFilteredMembersForUi()
+        writeLiveMemberPriorityIds(
+            LiveMemberOrderingPolicy.movePriority(
+                priorityMemberIds = liveMemberPriorityIds,
+                orderedMembers = members,
+                memberId = member.id,
+                offset = offset,
+            ),
+        )
+        renderLive()
+    }
+
+    private fun registerLiveClockTextView(startedAt: Instant, textView: TextView) {
+        liveClockTextViews += LiveClockTextView(startedAt, textView)
+        scheduleLiveClockRefresh()
+    }
+
+    private fun scheduleLiveClockRefresh() {
+        liveClockHandler.removeCallbacks(liveClockTicker)
+        val delay = MainUiPolicy.liveClockRefreshDelayMillis(
+            screenId = navigationHistory.currentScreen.id,
+            hasLiveMembers = liveClockTextViews.isNotEmpty(),
+        ) ?: return
+        liveClockHandler.postDelayed(liveClockTicker, delay)
+    }
+
+    private fun updateLiveClockTextViews() {
+        liveClockTextViews.forEach { item ->
+            item.textView.text = MainUiPolicy.liveElapsedClockText(item.startedAt).orEmpty()
+        }
+    }
+
     private fun updateTopBarScrolled(scrolled: Boolean) {
         val alpha = if (scrolled) 1f else 0f
         binding.collapsedTitle.alpha = alpha
@@ -1052,6 +1191,31 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
+    private fun liveStatusChips(): HorizontalScrollView {
+        val filters = listOf(
+            "live" to "방송 중",
+            "all" to "전체",
+            "offline" to "오프라인"
+        )
+        return chipsContainer(filters.map { (id, label) ->
+            Chip(this).apply {
+                text = label
+                isCheckable = true
+                isChecked = id == selectedLiveStatusFilter
+                chipStrokeWidth = dp(1).toFloat()
+                chipStrokeColor = ContextCompat.getColorStateList(context, R.color.hub_line)
+                chipBackgroundColor = ContextCompat.getColorStateList(
+                    context,
+                    if (isChecked) R.color.hub_accent_soft else R.color.hub_card
+                )
+                setOnClickListener {
+                    selectedLiveStatusFilter = id
+                    renderLive()
+                }
+            }
+        })
+    }
+
     private fun chipsContainer(chips: List<Chip>): HorizontalScrollView =
         HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
@@ -1100,8 +1264,28 @@ class MainActivity : AppCompatActivity() {
                 avatarText(member, size),
                 FrameLayout.LayoutParams(size, size)
             )
+            member.channelImageUrl?.takeIf { it.startsWith("https://") }?.let { imageUrl ->
+                addView(
+                    channelImageAvatar(imageUrl, size),
+                    FrameLayout.LayoutParams(size, size)
+                )
+            }
             if (showsLiveIndicator && member.isLive) {
                 addView(liveIndicator(size), FrameLayout.LayoutParams(dp(12), dp(12), Gravity.BOTTOM or Gravity.END))
+            }
+        }
+
+    private fun channelImageAvatar(imageUrl: String, size: Int): ImageView =
+        ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = rounded(fill = color(R.color.hub_primary), radius = size / 2)
+            clipToOutline = true
+            thread {
+                runCatching {
+                    URL(imageUrl).openStream().use { BitmapFactory.decodeStream(it) }
+                }.getOrNull()?.let { bitmap ->
+                    runOnUiThread { setImageBitmap(bitmap) }
+                }
             }
         }
 
@@ -1173,6 +1357,7 @@ class MainActivity : AppCompatActivity() {
         setTextColor(if (positive) color(R.color.hub_success) else color(R.color.hub_text_muted))
         textSize = 11f
         typeface = Typeface.DEFAULT_BOLD
+        includeFontPadding = false
         background = rounded(
             fill = if (positive) color(R.color.hub_success_soft) else color(R.color.hub_surface),
             radius = dp(14),
@@ -1181,7 +1366,7 @@ class MainActivity : AppCompatActivity() {
         setPadding(dp(8), dp(5), dp(8), dp(5))
     }
 
-    private fun liveMemberRow(member: HubMember): MaterialCardView =
+    private fun liveMemberRow(member: HubMember, showOrderControls: Boolean = false): MaterialCardView =
         baseCard().apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
@@ -1196,8 +1381,43 @@ class MainActivity : AppCompatActivity() {
                 marginStart = dp(12)
                 marginEnd = dp(10)
             })
-            row.addView(statusBadge(if (member.isLive) "LIVE" else "OFF", member.isLive))
+            row.addView(liveMemberStatusBlock(member))
+            if (showOrderControls) {
+                row.addView(liveOrderControl(member), LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = dp(8)
+                })
+            }
             addView(row)
+        }
+
+    private fun liveOrderControl(member: HubMember): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            addView(orderButton("위") { moveLiveMember(member, -1) })
+            addView(orderButton("아래") { moveLiveMember(member, 1) })
+        }
+
+    private fun orderButton(label: String, onClick: () -> Unit): TextView =
+        TextView(this).apply {
+            text = label
+            setTextColor(color(R.color.hub_primary))
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+            setPadding(dp(6), dp(5), dp(6), dp(5))
+            background = rounded(
+                fill = color(R.color.hub_success_soft),
+                radius = dp(10)
+            )
+            setOnClickListener { onClick() }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                bottomMargin = dp(5)
+            }
         }
 
     private fun liveMemberTextBlock(member: HubMember): LinearLayout = LinearLayout(this).apply {
@@ -1210,12 +1430,37 @@ class MainActivity : AppCompatActivity() {
             setLineSpacing(0f, 1.08f)
         })
         addView(TextView(context).apply {
-            text = MainUiPolicy.liveStatusText(member.isLive, member.liveStartedAt)
+            text = "${member.generationName} · ${member.unitName}"
             setTextColor(color(R.color.hub_text_muted))
-            textSize = 12f
-            setPadding(0, dp(4), 0, 0)
+            textSize = 11f
+            setPadding(0, dp(3), 0, 0)
+        })
+        addView(TextView(context).apply {
+            text = if (member.isLive) MainUiPolicy.liveTitleText(member.liveTitle) else MainUiPolicy.liveStatusText(member.isLive, member.liveStartedAt)
+            setTextColor(if (member.isLive) color(R.color.hub_text) else color(R.color.hub_text_muted))
+            textSize = if (member.isLive) 13f else 12f
+            typeface = if (member.isLive) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            setPadding(0, dp(6), 0, 0)
             setLineSpacing(0f, 1.1f)
         })
+        if (member.isLive) {
+            member.livePlatformUrl?.takeIf { it.startsWith("https://") }?.let { url ->
+                addView(Chip(context).apply {
+                    text = "CHZZK 열기"
+                    isCheckable = false
+                    chipMinHeight = dp(28).toFloat()
+                    textSize = 12f
+                    typeface = Typeface.DEFAULT_BOLD
+                    chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_success_soft)
+                    setTextColor(color(R.color.hub_primary))
+                    setOnClickListener {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    topMargin = dp(4)
+                })
+            }
+        }
     }
 
     private fun liveIndicator(size: Int): View = View(this).apply {
@@ -1225,6 +1470,45 @@ class MainActivity : AppCompatActivity() {
             stroke = color(R.color.hub_card)
         )
     }
+
+    private fun liveMemberStatusBlock(member: HubMember): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.END
+        addView(statusBadge(if (member.isLive) "LIVE" else "OFF", member.isLive))
+        if (member.isLive) {
+            MainUiPolicy.liveElapsedClockText(member.liveStartedAt)?.let { elapsed ->
+                addView(liveSideMetricRow(R.drawable.ic_metric_clock, elapsed, color(R.color.hub_text_muted), member.liveStartedAt))
+            }
+            MainUiPolicy.viewerCountText(member.liveViewerCount)?.let { viewers ->
+                addView(liveSideMetricRow(R.drawable.ic_metric_viewers, viewers, color(R.color.hub_primary)))
+            }
+        }
+    }
+
+    private fun liveSideMetricRow(iconResId: Int, value: String, valueColor: Int, liveStartedAt: Instant? = null): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL or Gravity.END
+            setPadding(0, dp(5), 0, 0)
+            addView(ImageView(context).apply {
+                setImageResource(iconResId)
+                setColorFilter(valueColor)
+                contentDescription = null
+            }, LinearLayout.LayoutParams(dp(12), dp(12)))
+            val valueView = TextView(context).apply {
+                text = value
+                setTextColor(valueColor)
+                textSize = 11f
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            addView(valueView, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginStart = dp(4)
+            })
+            liveStartedAt?.let { registerLiveClockTextView(it, valueView) }
+        }
 
     private fun compactEventCard(title: String, body: String, pills: List<String>): MaterialCardView =
         baseCard().apply {

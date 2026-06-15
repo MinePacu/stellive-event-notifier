@@ -48,6 +48,7 @@ final class MockHubStore: ObservableObject {
         .init(id: "stellive-official", koreanName: "스텔라이브 공식", englishName: "Stellive Official", generationId: "official", generationName: "기타", unitName: "공식 채널", catalogRole: .officialChannel, roleLabel: "스텔라이브 공식 채널", isPerson: false, chzzkChannelId: nil, youtubeHandle: "@stellive_official", xHandle: "StelLive_kr", isLive: false, notificationEnabled: true, realtimeEnabled: true),
         .init(id: "gen4-placeholder", koreanName: "4기생 placeholder", englishName: "Generation 4 Placeholder", generationId: "gen4-upcoming", generationName: "4기생", unitName: "upcoming", catalogRole: .placeholder, roleLabel: nil, activeStatus: .upcoming, isPerson: false, chzzkChannelId: nil, youtubeHandle: nil, xHandle: nil, isLive: false, notificationEnabled: false, realtimeEnabled: false)
     ]
+    @Published var liveMemberPriorityIDs: [String] = []
     @Published private(set) var liveStatusSourceLabel = "앱 내 목업"
     @Published private(set) var serverConnectionDebugLogs = ["bootstrap: 대기 중"]
 
@@ -65,12 +66,22 @@ final class MockHubStore: ObservableObject {
                 var offlineMember = member
                 offlineMember.isLive = false
                 offlineMember.liveStartedAt = nil
+                offlineMember.liveTitle = nil
+                offlineMember.liveViewerCount = nil
+                offlineMember.channelImageURL = nil
+                offlineMember.livePlatformURL = nil
+                offlineMember.liveLastCheckedAt = nil
                 return offlineMember
             }
 
             var updatedMember = member
             updatedMember.isLive = status.isLive
             updatedMember.liveStartedAt = status.startedAt.flatMap(Self.parseInstant)
+            updatedMember.liveTitle = status.title
+            updatedMember.liveViewerCount = status.viewerCount
+            updatedMember.channelImageURL = status.channelImageUrl.flatMap(URL.init(string:))
+            updatedMember.livePlatformURL = status.platformUrl.flatMap(URL.init(string:))
+            updatedMember.liveLastCheckedAt = Self.parseInstant(status.lastCheckedAt)
             return updatedMember
         }
     }
@@ -195,9 +206,15 @@ final class MockHubStore: ObservableObject {
     }
 
     var liveMembers: [HubMember] {
-        members
-            .filter { $0.catalogRole != .officialChannel && $0.isLive }
-            .sorted { $0.koreanName < $1.koreanName }
+        LiveMemberOrderingPolicy.orderedLiveMembers(members, priorityMemberIDs: liveMemberPriorityIDs)
+    }
+
+    var homeLiveMembers: [HubMember] {
+        LiveMemberOrderingPolicy.homeLivePreview(members, priorityMemberIDs: liveMemberPriorityIDs)
+    }
+
+    var hasHomeLiveOverflow: Bool {
+        LiveMemberOrderingPolicy.hasHomeLiveOverflow(members)
     }
 
     var recentHistoryPreview: [NotificationHistoryItem] {
@@ -213,7 +230,16 @@ final class MockHubStore: ObservableObject {
     }
 
     var chzzkLiveTargets: [HubMember] {
-        members.filter { $0.catalogRole != .officialChannel && $0.chzzkChannelId != nil }
+        LiveMemberOrderingPolicy.orderedChzzkTargets(members, priorityMemberIDs: liveMemberPriorityIDs)
+    }
+
+    func moveLiveMember(_ member: HubMember, offset: Int) {
+        liveMemberPriorityIDs = LiveMemberOrderingPolicy.movedPriorityIDs(
+            current: liveMemberPriorityIDs,
+            orderedMembers: chzzkLiveTargets,
+            memberID: member.id,
+            offset: offset
+        )
     }
 
     var chzzkLiveTargetCount: Int {
@@ -391,6 +417,59 @@ final class MockHubStore: ObservableObject {
             return 4
         case .ended:
             return 5
+        }
+    }
+}
+
+enum LiveMemberOrderingPolicy {
+    private static let homePreviewLimit = 3
+
+    static func orderedLiveMembers(_ members: [HubMember], priorityMemberIDs: [String]) -> [HubMember] {
+        orderedMembers(
+            members.filter { $0.catalogRole != .officialChannel && $0.isLive },
+            priorityMemberIDs: priorityMemberIDs
+        )
+    }
+
+    static func orderedChzzkTargets(_ members: [HubMember], priorityMemberIDs: [String]) -> [HubMember] {
+        orderedMembers(
+            members.filter { $0.catalogRole != .officialChannel && $0.chzzkChannelId != nil },
+            priorityMemberIDs: priorityMemberIDs
+        )
+    }
+
+    static func homeLivePreview(_ members: [HubMember], priorityMemberIDs: [String]) -> [HubMember] {
+        Array(orderedLiveMembers(members, priorityMemberIDs: priorityMemberIDs).prefix(homePreviewLimit))
+    }
+
+    static func hasHomeLiveOverflow(_ members: [HubMember]) -> Bool {
+        members.filter { $0.catalogRole != .officialChannel && $0.isLive }.count > homePreviewLimit
+    }
+
+    static func movedPriorityIDs(
+        current priorityMemberIDs: [String],
+        orderedMembers: [HubMember],
+        memberID: String,
+        offset: Int
+    ) -> [String] {
+        var ids = orderedMembers.map(\.id)
+        guard let currentIndex = ids.firstIndex(of: memberID) else { return priorityMemberIDs }
+        let targetIndex = min(max(currentIndex + offset, 0), ids.count - 1)
+        guard currentIndex != targetIndex else { return priorityMemberIDs }
+        ids.remove(at: currentIndex)
+        ids.insert(memberID, at: targetIndex)
+        return ids
+    }
+
+    private static func orderedMembers(_ members: [HubMember], priorityMemberIDs: [String]) -> [HubMember] {
+        guard !priorityMemberIDs.isEmpty else { return members }
+        let fallbackOrder = Dictionary(uniqueKeysWithValues: members.enumerated().map { ($0.element.id, $0.offset) })
+        let priorityOrder = Dictionary(uniqueKeysWithValues: priorityMemberIDs.enumerated().map { ($0.element, $0.offset) })
+        return members.sorted {
+            let lhsPriority = priorityOrder[$0.id] ?? Int.max
+            let rhsPriority = priorityOrder[$1.id] ?? Int.max
+            if lhsPriority != rhsPriority { return lhsPriority < rhsPriority }
+            return (fallbackOrder[$0.id] ?? Int.max) < (fallbackOrder[$1.id] ?? Int.max)
         }
     }
 }
