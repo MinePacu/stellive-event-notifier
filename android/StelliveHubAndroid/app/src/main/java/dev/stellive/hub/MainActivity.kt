@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
@@ -27,6 +28,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
@@ -105,6 +110,7 @@ private var selectedHistoryEventTypeFilterId = "all"
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        configureTopBarGlass()
         setupTopBarScrollBehavior()
         setupBackNavigation()
         setupTopBarActions()
@@ -1099,7 +1105,28 @@ private fun moveLiveMember(member: HubMember, offset: Int) {
         binding.collapsedTitle.alpha = alpha
         binding.collapsedRole.alpha = alpha
         binding.topBarDivider.alpha = alpha
-        binding.topBar.elevation = if (scrolled) dp(2).toFloat() else 0f
+        binding.topBar.elevation = 0f
+        updateTopBarGlass(scrolled)
+    }
+
+    private fun configureTopBarGlass() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars =
+            resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK !=
+                Configuration.UI_MODE_NIGHT_YES
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            binding.topGlassOverlay.setPadding(0, bars.top, 0, 0)
+            binding.mainContent.setPadding(0, 0, 0, bars.bottom)
+            binding.contentList.setPadding(dp(18), bars.top + dp(70), dp(18), dp(20))
+            insets
+        }
+        ViewCompat.requestApplyInsets(binding.root)
+        updateTopBarGlass(scrolled = false)
+    }
+
+    private fun updateTopBarGlass(scrolled: Boolean) {
+        window.statusBarColor = Color.TRANSPARENT
     }
 
     private fun screenTitle(text: String): TextView = TextView(this).apply {

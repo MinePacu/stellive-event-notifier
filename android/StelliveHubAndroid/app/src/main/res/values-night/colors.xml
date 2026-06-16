@@ -9,6 +9,10 @@
     <color name="hub_text_muted">#AAB8BA</color>
     <color name="hub_text_subtle">#7E8C8F</color>
     <color name="hub_line">#2A363A</color>
+    <color name="hub_top_bar_glass">#D10E1416</color>
+    <color name="hub_top_bar_glass_scrolled">#F20E1416</color>
+    <color name="hub_top_bar_divider">#00000000</color>
+    <color name="hub_top_bar_button_glass">#4DFFFFFF</color>
     <color name="hub_accent_soft">#203A3B</color>
     <color name="hub_success">#83D8B2</color>
     <color name="hub_success_soft">#18362A</color>

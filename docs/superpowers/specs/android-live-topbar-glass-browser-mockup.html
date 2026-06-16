@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Android Live Top Bar Glass Mockup</title>
+  <style>
+    :root {
+      color-scheme: light only;
+      --phone-w: min(390px, 92vw);
+      --phone-h: min(844px, 92vh);
+      --ink: #111418;
+      --muted: rgba(17, 20, 24, .48);
+      --live: #ff2d47;
+      --glass: rgba(247, 248, 250, .74);
+      --glass-strong: rgba(247, 248, 250, .88);
+      --line: rgba(255, 255, 255, .58);
+      --shadow: rgba(18, 22, 28, .16);
+    }
+
+    * {
+      box-sizing: border-box;
+      forced-color-adjust: none;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: #101113;
+      color-scheme: light only;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .phone {
+      width: var(--phone-w);
+      height: var(--phone-h);
+      position: relative;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+
+    .content::-webkit-scrollbar {
+      display: none;
+      border: 4px solid #050607;
+      border-radius: 48px;
+      background: #f7f8fa;
+      color-scheme: light only;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, .52), inset 0 0 0 1px rgba(255,255,255,.18);
+      isolation: isolate;
+    }
+
+    .content {
+      position: absolute;
+      inset: 0;
+      padding: 52px 22px 96px;
+      overflow: hidden;
+    }
+
+    .row {
+      min-height: 94px;
+      display: grid;
+      grid-template-columns: 48px 1fr 48px;
+      gap: 12px;
+      align-items: start;
+      opacity: .96;
+    }
+
+    .row.faded { opacity: .36; }
+    .row.live { margin-top: 10px; }
+
+    .avatar {
+      width: 44px;
+      height: 44px;
+      margin-top: 2px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 68% 32%, #fff 0 12%, transparent 13%),
+        radial-gradient(circle at 35% 65%, #ff9db4 0 18%, transparent 19%),
+        linear-gradient(145deg, #9fc8ff, #f5d0dc 58%, #ffffff);
+      border: 1px solid rgba(0,0,0,.05);
+    }
+
+    .avatar.live {
+      background:
+        radial-gradient(circle at 70% 36%, #fff 0 10%, transparent 11%),
+        radial-gradient(circle at 36% 70%, #f15a73 0 18%, transparent 19%),
+        linear-gradient(145deg, #32b7e9, #f4b2c9 58%, #ffe5ef);
+      box-shadow: 0 0 0 2px #f7f8fa, 0 0 0 4px #23d184;
+    }
+
+    .name {
+      margin: 0;
+      color: var(--ink);
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .meta,
+    .offline {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .title {
+      margin-top: 6px;
+      color: rgba(17, 20, 24, .78);
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .status {
+      padding-top: 6px;
+      text-align: right;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .status.live { color: var(--live); }
+
+    .top-glass {
+      position: absolute;
+      inset: 0 0 auto;
+      height: 156px;
+      z-index: 5;
+      background:
+        linear-gradient(180deg, rgba(247, 248, 250, .96), rgba(247, 248, 250, .82) 62%, rgba(247, 248, 250, .34) 100%);
+      backdrop-filter: blur(24px) saturate(170%);
+      -webkit-backdrop-filter: blur(24px) saturate(170%);
+      border-bottom: 1px solid var(--line);
+      box-shadow: 0 18px 38px rgba(247, 248, 250, .58);
+      pointer-events: none;
+    }
+
+    .statusbar {
+      position: absolute;
+      inset: 18px 28px auto;
+      height: 24px;
+      z-index: 6;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--ink);
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .system-icons {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .dotbar {
+      width: 24px;
+      height: 4px;
+      border-radius: 99px;
+      background: repeating-linear-gradient(90deg, rgba(17,20,24,.16) 0 3px, transparent 3px 6px);
+    }
+
+    .wifi {
+      width: 18px;
+      height: 14px;
+      border: 3px solid var(--ink);
+      border-color: var(--ink) transparent transparent transparent;
+      border-radius: 50%;
+      transform: translateY(4px);
+      position: relative;
+    }
+
+    .wifi::after {
+      content: "";
+      position: absolute;
+      width: 5px;
+      height: 5px;
+      left: 3px;
+      top: 2px;
+      border-radius: 50%;
+      background: var(--ink);
+    }
+
+    .battery {
+      width: 25px;
+      height: 12px;
+      border: 2px solid var(--ink);
+      border-radius: 4px;
+      position: relative;
+    }
+
+    .battery::before {
+      content: "";
+      position: absolute;
+      inset: 2px 4px 2px 2px;
+      border-radius: 2px;
+      background: var(--ink);
+    }
+
+    .battery::after {
+      content: "";
+      position: absolute;
+      right: -5px;
+      top: 3px;
+      width: 3px;
+      height: 5px;
+      border-radius: 0 2px 2px 0;
+      background: var(--ink);
+    }
+
+    .camera-hole {
+      position: absolute;
+      top: 11px;
+      left: 50%;
+      z-index: 7;
+      width: 126px;
+      height: 36px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: #000;
+      box-shadow: inset 0 1px 2px rgba(255,255,255,.12);
+    }
+
+    .titlebar {
+      position: absolute;
+      z-index: 6;
+      inset: 60px 24px auto;
+      height: 58px;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .settings {
+      width: 46px;
+      height: 46px;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .72);
+      color: #171a1a;
+      box-shadow: 0 8px 22px var(--shadow), inset 0 0 0 1px rgba(255,255,255,.72);
+      display: grid;
+      place-items: center;
+    }
+
+    .sliders {
+      width: 24px;
+      height: 24px;
+      position: relative;
+    }
+
+    .sliders i,
+    .sliders::before,
+    .sliders::after {
+      content: "";
+      position: absolute;
+      left: 2px;
+      right: 2px;
+      height: 2px;
+      border-radius: 2px;
+      background: currentColor;
+    }
+
+    .sliders i { top: 5px; }
+    .sliders::before { top: 11px; }
+    .sliders::after { top: 17px; }
+
+    .sliders span {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border: 2px solid currentColor;
+      border-radius: 50%;
+      background: white;
+    }
+
+    .sliders span:nth-child(1) { top: 2px; left: 14px; }
+    .sliders span:nth-child(2) { top: 8px; left: 5px; }
+    .sliders span:nth-child(3) { top: 14px; left: 14px; }
+  </style>
+</head>
+<body>
+  <main class="phone" aria-label="Android live page top bar glass mockup">
+    <section class="content">
+      <article class="row faded">
+        <div class="avatar"></div>
+        <div>
+          <p class="name">시라유키 히나</p>
+          <div class="meta">2기생 · 멤버</div>
+          <div class="offline">오프라인</div>
+        </div>
+        <div class="status">OFF</div>
+      </article>
+
+      <article class="row live">
+        <div class="avatar live"></div>
+        <div>
+          <p class="name">네네코 마시로</p>
+          <div class="meta">2기생 · 멤버</div>
+          <div class="title">왜 주말같은 기분이 드는거지</div>
+        </div>
+        <div class="status live">LIVE</div>
+      </article>
+
+      <article class="row">
+        <div class="avatar"></div>
+        <div>
+          <p class="name">아카네 리제</p>
+          <div class="meta">2기생 · 멤버</div>
+          <div class="offline">오프라인</div>
+        </div>
+        <div class="status">OFF</div>
+      </article>
+
+      <article class="row faded">
+        <div class="avatar"></div>
+        <div>
+          <p class="name">아라하시 타비</p>
+          <div class="meta">2기생 · 멤버</div>
+          <div class="offline">오프라인</div>
+        </div>
+        <div class="status">OFF</div>
+      </article>
+
+      <article class="row">
+        <div class="avatar"></div>
+        <div>
+          <p class="name">텐코 시부키</p>
+          <div class="meta">3기생 · 멤버</div>
+          <div class="offline">오프라인</div>
+        </div>
+        <div class="status">OFF</div>
+      </article>
+
+      <article class="row live">
+        <div class="avatar live"></div>
+        <div>
+          <p class="name">강지</p>
+          <div class="meta">감자 · 대표</div>
+          <div class="title">잠깐 방송 켰어요</div>
+        </div>
+        <div class="status live">LIVE</div>
+      </article>
+
+      <article class="row">
+        <div class="avatar"></div>
+        <div>
+          <p class="name">아이리 칸나</p>
+          <div class="meta">1기생 · 멤버</div>
+          <div class="offline">오프라인</div>
+        </div>
+        <div class="status">OFF</div>
+      </article>
+    </section>
+
+    <div class="top-glass"></div>
+    <div class="camera-hole"></div>
+    <div class="statusbar">
+      <span>8:08</span>
+      <span class="system-icons">
+        <span class="dotbar"></span>
+        <span class="wifi"></span>
+        <span class="battery"></span>
+      </span>
+    </div>
+    <div class="titlebar">
+      <button class="settings" aria-label="설정">
+        <span class="sliders"><i></i><span></span><span></span><span></span></span>
+      </button>
+    </div>
+  </main>
+</body>
+</html>
