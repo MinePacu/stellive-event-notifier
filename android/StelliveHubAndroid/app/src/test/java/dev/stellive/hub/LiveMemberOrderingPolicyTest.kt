@@ -37,4 +37,61 @@ class LiveMemberOrderingPolicyTest {
         assertEquals(members.take(3).map { it.id }, preview.map { it.id })
         assertTrue(LiveMemberOrderingPolicy.hasHomeLiveOverflow(members))
     }
+
+    @Test
+    fun orderedChzzkTargetsIncludesAllMemberAndRepresentativeTargets() {
+        val targets = LiveMemberOrderingPolicy.orderedChzzkTargets(
+            members = MockHubRepository().members,
+            priorityMemberIds = emptyList(),
+        )
+
+        assertEquals(11, targets.size)
+        assertTrue(targets.any { it.id == "hanako-nana" })
+        assertTrue(targets.any { it.id == "gangzi" })
+    }
+
+    @Test
+    fun movedPriorityMovesVisibleMemberAndPreservesHiddenPriorityIds() {
+        val members = MockHubRepository().members
+            .filter { it.chzzkChannelId != null }
+            .take(4)
+
+        val reordered = LiveMemberOrderingPolicy.movedPriority(
+            priorityMemberIds = listOf("hidden-member"),
+            orderedMembers = members,
+            fromIndex = 2,
+            toIndex = 0,
+        )
+
+        assertEquals(
+            listOf(members[2].id, members[0].id, members[1].id, members[3].id, "hidden-member"),
+            reordered,
+        )
+    }
+
+    @Test
+    fun movedPriorityClampsTargetIndexAndNoopsWhenSameIndex() {
+        val members = MockHubRepository().members
+            .filter { it.chzzkChannelId != null }
+            .take(4)
+
+        val clamped = LiveMemberOrderingPolicy.movedPriority(
+            priorityMemberIds = emptyList(),
+            orderedMembers = members,
+            fromIndex = 0,
+            toIndex = 99,
+        )
+        val unchanged = LiveMemberOrderingPolicy.movedPriority(
+            priorityMemberIds = listOf("hidden-member"),
+            orderedMembers = members,
+            fromIndex = 1,
+            toIndex = 1,
+        )
+
+        assertEquals(
+            listOf(members[1].id, members[2].id, members[3].id, members[0].id),
+            clamped,
+        )
+        assertEquals(listOf("hidden-member"), unchanged)
+    }
 }

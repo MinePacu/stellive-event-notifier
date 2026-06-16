@@ -234,11 +234,22 @@ final class MockHubStore: ObservableObject {
     }
 
     func moveLiveMember(_ member: HubMember, offset: Int) {
+        guard let fromIndex = chzzkLiveTargets.firstIndex(where: { $0.id == member.id }) else { return }
+        moveLiveMember(fromIndex: fromIndex, toIndex: fromIndex + offset)
+    }
+
+    func moveLiveMember(fromOffsets: IndexSet, toOffset: Int) {
+        guard let fromIndex = fromOffsets.first else { return }
+        let adjustedToIndex = toOffset > fromIndex ? toOffset - 1 : toOffset
+        moveLiveMember(fromIndex: fromIndex, toIndex: adjustedToIndex)
+    }
+
+    func moveLiveMember(fromIndex: Int, toIndex: Int) {
         liveMemberPriorityIDs = LiveMemberOrderingPolicy.movedPriorityIDs(
             current: liveMemberPriorityIDs,
             orderedMembers: chzzkLiveTargets,
-            memberID: member.id,
-            offset: offset
+            fromIndex: fromIndex,
+            toIndex: toIndex
         )
     }
 
@@ -452,13 +463,34 @@ enum LiveMemberOrderingPolicy {
         memberID: String,
         offset: Int
     ) -> [String] {
-        var ids = orderedMembers.map(\.id)
-        guard let currentIndex = ids.firstIndex(of: memberID) else { return priorityMemberIDs }
-        let targetIndex = min(max(currentIndex + offset, 0), ids.count - 1)
-        guard currentIndex != targetIndex else { return priorityMemberIDs }
-        ids.remove(at: currentIndex)
-        ids.insert(memberID, at: targetIndex)
-        return ids
+        guard let fromIndex = orderedMembers.map(\.id).firstIndex(of: memberID) else { return priorityMemberIDs }
+        return movedPriorityIDs(
+            current: priorityMemberIDs,
+            orderedMembers: orderedMembers,
+            fromIndex: fromIndex,
+            toIndex: fromIndex + offset
+        )
+    }
+
+    static func movedPriorityIDs(
+        current priorityMemberIDs: [String],
+        orderedMembers: [HubMember],
+        fromIndex: Int,
+        toIndex: Int
+    ) -> [String] {
+        guard !orderedMembers.isEmpty else { return priorityMemberIDs }
+        let visibleIDs = orderedMembers.map(\.id)
+        let safeFromIndex = min(max(fromIndex, 0), visibleIDs.count - 1)
+        let safeToIndex = min(max(toIndex, 0), visibleIDs.count - 1)
+        guard safeFromIndex != safeToIndex else { return priorityMemberIDs }
+
+        var reorderedVisibleIDs = visibleIDs
+        let movedID = reorderedVisibleIDs.remove(at: safeFromIndex)
+        reorderedVisibleIDs.insert(movedID, at: safeToIndex)
+
+        let visibleIDSet = Set(visibleIDs)
+        let hiddenIDs = priorityMemberIDs.filter { !visibleIDSet.contains($0) }
+        return reorderedVisibleIDs + hiddenIDs
     }
 
     private static func orderedMembers(_ members: [HubMember], priorityMemberIDs: [String]) -> [HubMember] {

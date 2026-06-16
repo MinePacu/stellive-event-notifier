@@ -3,6 +3,7 @@ import SwiftUI
 struct LiveView: View {
     @EnvironmentObject private var store: MockHubStore
     @State private var path = NavigationPath()
+    @State private var showsSettings = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -10,11 +11,11 @@ struct LiveView: View {
                 HubHeaderCard(
                     iconText: "ON",
                     title: "라이브 상태",
-                subtitle: "현재 방송 중 \(store.liveMemberCount)명 · \(store.liveStatusSourceLabel)",
+                    subtitle: "현재 방송 중 \(store.liveMemberCount)명 · \(store.liveStatusSourceLabel)",
                     metrics: [
                         .init(value: "\(store.liveMemberCount)", label: "라이브"),
                         .init(value: "\(store.chzzkLiveTargetCount)", label: "CHZZK 대상"),
-                        .init(value: "\(store.offlineChzzkTargetCount)", label: "오프라인")
+                        .init(value: "\(store.offlineChzzkTargetCount)", label: "오프라인"),
                     ]
                 )
                 .listRowInsets(IOSGroupedScreenPolicy.headerRowInsets)
@@ -28,59 +29,53 @@ struct LiveView: View {
                             moveUp: { store.moveLiveMember(member, offset: -1) },
                             moveDown: { store.moveLiveMember(member, offset: 1) }
                         )
+                        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                        .listRowSeparator(.hidden)
+                        .accessibilityAction(named: "위로 이동") {
+                            store.moveLiveMember(member, offset: -1)
+                        }
+                        .accessibilityAction(named: "아래로 이동") {
+                            store.moveLiveMember(member, offset: 1)
+                        }
                     }
-                }
-
-                Section {
-                    Text("최대한 실시간 모드는 즉시성을 보장하지 않으며 플랫폼/OS/네트워크 정책에 따라 지연될 수 있습니다.")
-                        .secondaryNoticeTextStyle()
+                    .onMove(perform: store.moveLiveMember)
                 }
             }
             .refreshable {
                 await refreshLiveStatus()
             }
             .listStyle(.insetGrouped)
-            .settingsToolbar(path: $path)
+            .scrollContentBackground(.hidden)
+            .background(Color(uiColor: .systemGroupedBackground))
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showsSettings = true
+                    } label: {
+                        Image(systemName: IOSPrimaryNavigationPolicy.settingsAccess.systemImage)
+                    }
+                    .accessibilityLabel("설정")
+                }
+            }
+            .sheet(isPresented: $showsSettings) {
+                NavigationStack {
+                    SettingsView()
+                        .environmentObject(store)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
     private func refreshLiveStatus() async {
-        guard let baseURL = Bundle.main.liveViewHubBaseURL else { return }
-        _ = await ServerHubStore(
-            api: HubAPIClient(baseURL: baseURL),
-            fallback: store
-        ).bootstrap()
-    }
-}
+        guard
+            let value = Bundle.main.object(forInfoDictionaryKey: "HubBaseURL") as? String,
+            value.isEmpty == false,
+            value.contains("$(") == false,
+            let baseURL = URL(string: value)
+        else { return }
 
-struct LiveSideMetric: View {
-    let systemImage: String
-    let value: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: systemImage)
-                .font(.caption2.weight(.semibold))
-                .frame(width: 12)
-            Text(value)
-                .font(.caption2.weight(.semibold))
-                .monospacedDigit()
-        }
-        .foregroundStyle(color)
-        .lineLimit(1)
-    }
-}
-
-private extension Bundle {
-    var liveViewHubBaseURL: URL? {
-        guard let value = object(forInfoDictionaryKey: "HubBaseURL") as? String,
-              value.isEmpty == false,
-              value.contains("$(") == false
-        else {
-            return nil
-        }
-        return URL(string: value)
+        _ = await ServerHubStore(api: HubAPIClient(baseURL: baseURL), fallback: store).bootstrap()
     }
 }
 
@@ -90,63 +85,86 @@ private struct LiveMemberRow: View {
     let moveDown: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            MemberAvatarView(member: member, size: 42, showsLiveRing: true)
+        HStack(alignment: .top, spacing: 12) {
+            MemberAvatarView(member: member, size: 44, showsLiveRing: true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(member.koreanName)
-                    .font(.body)
-                    .lineLimit(1)
-                Text("\(member.generationName) · \(member.unitName)")
+                    .font(.headline)
+
+                Text("\(member.generationName) · \(member.roleLabel ?? "멤버")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            Text(member.isLive ? LiveStatusFormatter.liveTitleText(member.liveTitle) : LiveStatusFormatter.statusText(isLive: member.isLive, startedAt: member.liveStartedAt))
-                .font(.caption.weight(member.isLive ? .semibold : .regular))
-                .foregroundStyle(member.isLive ? .primary : .secondary)
-                .lineLimit(2)
-                .padding(.top, 2)
-            if member.isLive, let livePlatformURL = member.livePlatformURL {
-                Link("CHZZK에서 보기", destination: livePlatformURL)
-                    .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(Color.teal.opacity(0.14)))
+
+                Text(
+                    member.isLive
+                    ? LiveStatusFormatter.liveTitleText(member.liveTitle)
+                    : LiveStatusFormatter.statusText(isLive: member.isLive, startedAt: member.liveStartedAt)
+                )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                if member.isLive, let livePlatformURL = member.livePlatformURL {
+                    Link("CHZZK에서 보기", destination: livePlatformURL)
+                        .font(.caption.weight(.semibold))
                 }
             }
 
             Spacer(minLength: 8)
 
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 8) {
                 Text(member.isLive ? "LIVE" : "OFF")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(member.isLive ? Color.teal : Color.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(member.isLive ? Color.teal.opacity(0.14) : Color(.tertiarySystemFill))
-                    )
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(member.isLive ? .red : .secondary)
+
                 if member.isLive {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
-                        if let elapsed = LiveStatusFormatter.elapsedClockText(startedAt: member.liveStartedAt, now: context.date) {
-                            LiveSideMetric(systemImage: "clock", value: elapsed, color: .secondary)
+                        VStack(alignment: .trailing, spacing: 4) {
+                            if let elapsed = LiveStatusFormatter.elapsedClockText(
+                                startedAt: member.liveStartedAt,
+                                now: context.date
+                            ) {
+                                LiveSideMetric(systemImage: "clock", value: elapsed, color: .secondary)
+                            }
+
+                            if let viewers = LiveStatusFormatter.viewerCountText(member.liveViewerCount) {
+                                LiveSideMetric(systemImage: "eye", value: viewers, color: .teal)
+                            }
                         }
                     }
-                    if let viewers = LiveStatusFormatter.viewerCountText(member.liveViewerCount) {
-                        LiveSideMetric(systemImage: "eye", value: viewers, color: .teal)
-                    }
                 }
-            }
-            VStack(spacing: 5) {
-                Button("위", action: moveUp)
-                Button("아래", action: moveDown)
-            }
-            .font(.caption2.weight(.semibold))
-            .buttonStyle(.bordered)
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-    }
 
+                Image(systemName: "line.3.horizontal")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("길게 눌러 순서를 변경합니다.")
+    }
+}
+
+struct LiveSideMetric: View {
+    let systemImage: String
+    let value: String?
+    let color: Color
+
+    var body: some View {
+        if let value {
+            HStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .frame(width: 12, height: 12)
+                Text(value)
+                    .frame(height: 12)
+            }
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(color)
+            .frame(height: 14, alignment: .center)
+        }
+    }
 }

@@ -42,7 +42,7 @@ struct IOSPrimaryNavigationPolicy {
         suppressesPrimaryButtonWithinSettingsFlow: true
     )
 
-    static let titlelessPrimaryScreens: Set<String> = ["home", "hubEvents"]
+    static let titlelessPrimaryScreens: Set<String> = ["home", "live", "hubEvents"]
 }
 
 struct ContentView: View {

@@ -39,11 +39,33 @@ object LiveMemberOrderingPolicy {
         val ids = orderedMembers.map { it.id }.toMutableList()
         val currentIndex = ids.indexOf(memberId)
         if (currentIndex == -1) return priorityMemberIds
-        val targetIndex = (currentIndex + offset).coerceIn(0, ids.lastIndex)
-        if (currentIndex == targetIndex) return priorityMemberIds
-        ids.removeAt(currentIndex)
-        ids.add(targetIndex, memberId)
-        return ids
+        return movedPriority(
+            priorityMemberIds = priorityMemberIds,
+            orderedMembers = orderedMembers,
+            fromIndex = currentIndex,
+            toIndex = currentIndex + offset,
+        )
+    }
+
+    fun movedPriority(
+        priorityMemberIds: List<String>,
+        orderedMembers: List<HubMember>,
+        fromIndex: Int,
+        toIndex: Int,
+    ): List<String> {
+        if (orderedMembers.isEmpty()) return priorityMemberIds
+        val visibleIds = orderedMembers.map { it.id }
+        val safeFromIndex = fromIndex.coerceIn(0, visibleIds.lastIndex)
+        val safeToIndex = toIndex.coerceIn(0, visibleIds.lastIndex)
+        if (safeFromIndex == safeToIndex) return priorityMemberIds
+
+        val reorderedVisibleIds = visibleIds.toMutableList()
+        val movedId = reorderedVisibleIds.removeAt(safeFromIndex)
+        reorderedVisibleIds.add(safeToIndex, movedId)
+
+        val visibleIdSet = visibleIds.toSet()
+        val hiddenIds = priorityMemberIds.filter { it !in visibleIdSet }
+        return reorderedVisibleIds + hiddenIds
     }
 
     private fun orderedMembers(

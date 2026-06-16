@@ -1,6 +1,7 @@
 package dev.stellive.hub
 
 import android.Manifest
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -11,6 +12,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.DragEvent
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -60,12 +62,17 @@ import dev.stellive.hub.feature.home.StatusSummaryItem
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
-    private data class LiveClockTextView(
-        val startedAt: Instant,
-        val textView: TextView,
-    )
+private data class LiveClockTextView(
+    val startedAt: Instant,
+    val textView: TextView,
+)
 
-    private lateinit var binding: ActivityMainBinding
+private data class LiveDragPayload(
+    val memberId: String,
+    val fromIndex: Int,
+)
+
+private lateinit var binding: ActivityMainBinding
     private val repository = MockHubRepository()
     private val liveClockHandler = Handler(Looper.getMainLooper())
     private val liveClockTextViews = mutableListOf<LiveClockTextView>()
@@ -80,10 +87,11 @@ class MainActivity : AppCompatActivity() {
     private var debugModeEnabled = false
     private val serverConnectionDebugLogs = mutableListOf("bootstrap: 대기 중")
     private val navigationHistory = MainNavigationHistory()
-    private var selectedFilter = "all"
-    private var selectedLiveStatusFilter = "live"
-    private var liveMemberPriorityIds: List<String> = emptyList()
-    private var selectedHistoryEventTypeFilterId = "all"
+private var selectedFilter = "all"
+private var selectedLiveStatusFilter = "all"
+private var liveMemberPriorityIds: List<String> = emptyList()
+private var draggingLiveMemberId: String? = null
+private var selectedHistoryEventTypeFilterId = "all"
     private var selectedHistoryMemberFilterId = "all"
     private var selectedHubEventId: String? = null
     private var selectedAppearanceMode = AppearanceMode.SYSTEM
@@ -1038,26 +1046,33 @@ class MainActivity : AppCompatActivity() {
             ?.filter { it.isNotBlank() }
             ?: emptyList()
 
-    private fun writeLiveMemberPriorityIds(ids: List<String>) {
-        liveMemberPriorityIds = ids
-        getSharedPreferences("hub_preferences", Context.MODE_PRIVATE)
-            .edit()
-            .putString(PreferenceKeys.LIVE_MEMBER_ORDER, ids.joinToString(","))
-            .apply()
-    }
+private fun writeLiveMemberPriorityIds(ids: List<String>) {
+    liveMemberPriorityIds = ids
+    getSharedPreferences("hub_preferences", Context.MODE_PRIVATE)
+        .edit()
+        .putString(PreferenceKeys.LIVE_MEMBER_ORDER, ids.joinToString(","))
+        .apply()
+}
 
-    private fun moveLiveMember(member: HubMember, offset: Int) {
-        val members = liveStatusFilteredMembersForUi()
-        writeLiveMemberPriorityIds(
-            LiveMemberOrderingPolicy.movePriority(
-                priorityMemberIds = liveMemberPriorityIds,
-                orderedMembers = members,
-                memberId = member.id,
-                offset = offset,
-            ),
-        )
-        renderLive()
-    }
+private fun moveLiveMember(fromIndex: Int, toIndex: Int) {
+    val members = liveStatusFilteredMembersForUi()
+    writeLiveMemberPriorityIds(
+        LiveMemberOrderingPolicy.movedPriority(
+            priorityMemberIds = liveMemberPriorityIds,
+            orderedMembers = members,
+            fromIndex = fromIndex,
+            toIndex = toIndex,
+        ),
+    )
+    renderLive()
+}
+
+private fun moveLiveMember(member: HubMember, offset: Int) {
+    val members = liveStatusFilteredMembersForUi()
+    val index = members.indexOfFirst { it.id == member.id }
+    if (index == -1) return
+    moveLiveMember(index, index + offset)
+}
 
     private fun registerLiveClockTextView(startedAt: Instant, textView: TextView) {
         liveClockTextViews += LiveClockTextView(startedAt, textView)
@@ -1392,31 +1407,98 @@ class MainActivity : AppCompatActivity() {
 
     private fun liveOrderControl(member: HubMember): LinearLayout =
         LinearLayout(this).apply {
+            val orderedMembers = liveStatusFilteredMembersForUi()
+            val currentIndex = orderedMembers.indexOfFirst { it.id == member.id }
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            addView(orderButton("위") { moveLiveMember(member, -1) })
-            addView(orderButton("아래") { moveLiveMember(member, 1) })
-        }
+            contentDescription = "${member.koreanName}, ${currentIndex + 1}번째, 길게 눌러 순서 변경"
 
-    private fun orderButton(label: String, onClick: () -> Unit): TextView =
-        TextView(this).apply {
-            text = label
-            setTextColor(color(R.color.hub_primary))
-            textSize = 11f
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            includeFontPadding = false
-            setPadding(dp(6), dp(5), dp(6), dp(5))
-            background = rounded(
-                fill = color(R.color.hub_success_soft),
-                radius = dp(10)
+            addView(
+                TextView(context).apply {
+                    text = "≡"
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 18f
+                    typeface = Typeface.DEFAULT_BOLD
+                    gravity = Gravity.CENTER
+                    includeFontPadding = false
+                    setPadding(dp(8), dp(6), dp(8), dp(6))
+                    background = rounded(
+                        fill = color(R.color.hub_success_soft),
+                        radius = dp(10),
+                    )
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    )
+                },
             )
-            setOnClickListener { onClick() }
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply {
-                bottomMargin = dp(5)
+            setOnLongClickListener {
+                if (currentIndex == -1) return@setOnLongClickListener false
+                draggingLiveMemberId = member.id
+                val payload = ClipData.newPlainText("live-member-id", member.id)
+                val shadow = View.DragShadowBuilder(this)
+                startDragAndDrop(payload, shadow, LiveDragPayload(member.id, currentIndex), 0)
+                performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                true
+            }
+            setOnDragListener { _, event ->
+                when (event.action) {
+                    DragEvent.ACTION_DRAG_STARTED -> event.localState is LiveDragPayload
+                    DragEvent.ACTION_DRAG_ENTERED -> {
+                        alpha = 0.72f
+                        true
+                    }
+                    DragEvent.ACTION_DRAG_EXITED -> {
+                        alpha = 1f
+                        true
+                    }
+                    DragEvent.ACTION_DROP -> {
+                        val payload = event.localState as? LiveDragPayload ?: return@setOnDragListener false
+                        if (payload.memberId != member.id && currentIndex != -1) {
+                            moveLiveMember(payload.fromIndex, currentIndex)
+                        }
+                        true
+                    }
+                    DragEvent.ACTION_DRAG_ENDED -> {
+                        alpha = 1f
+                        draggingLiveMemberId = null
+                        true
+                    }
+                    else -> true
+                }
+            }
+            accessibilityDelegate = object : View.AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(
+                    host: View,
+                    info: android.view.accessibility.AccessibilityNodeInfo,
+                ) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.addAction(
+                        android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
+                            android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,
+                            "위로 이동",
+                        ),
+                    )
+                    info.addAction(
+                        android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
+                            android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,
+                            "아래로 이동",
+                        ),
+                    )
+                }
+
+                override fun performAccessibilityAction(host: View, action: Int, args: Bundle?): Boolean =
+                    when (action) {
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> {
+                            moveLiveMember(member, -1)
+                            true
+                        }
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> {
+                            moveLiveMember(member, 1)
+                            true
+                        }
+                        else -> super.performAccessibilityAction(host, action, args)
+                    }
             }
         }
 
