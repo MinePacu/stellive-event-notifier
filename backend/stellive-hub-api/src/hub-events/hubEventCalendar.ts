@@ -256,13 +256,17 @@ export function buildHubCalendarWidgetSnapshot(
   const entries = options.entryKinds?.length
     ? [...hubEventEntries, ...specialDayEntries].filter((entry) => options.entryKinds?.includes(entry.entryKind))
     : [...hubEventEntries, ...specialDayEntries];
-  const actionableEntries = entries.filter((entry) => entry.status !== "ended" && entry.status !== "cancelled");
-  const sourceEntries = actionableEntries.length >= options.limit ? actionableEntries : entries;
+  const hubEntries = entries.filter((entry) => entry.entryKind === "hub_event").sort(compareCalendarEntries);
+  const fallbackEntries = entries.filter((entry) => entry.entryKind !== "hub_event").sort(compareCalendarEntries);
+  const sourceEntries = [
+    ...hubEntries,
+    ...fallbackEntries,
+  ];
 
   return {
     generatedAt: options.now.toISOString(),
     timezone: options.timezone,
-    entries: sourceEntries.sort(compareCalendarEntries).slice(0, Math.max(1, options.limit)),
+    entries: sourceEntries.slice(0, Math.max(1, options.limit)),
     staleAfter: new Date(options.now.getTime() + widgetStaleAfterMs).toISOString()
   };
 }
