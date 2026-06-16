@@ -13,18 +13,12 @@ variables:
 
 workflow:
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       changes:
         - android/StelliveHubAndroid/**/*
         - backend/stellive-hub-api/**/*
         - shared/**/*
         - .gitlab-ci.yml
-  - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-    changes:
-      - android/StelliveHubAndroid/**/*
-      - backend/stellive-hub-api/**/*
-      - shared/**/*
-      - .gitlab-ci.yml
     - when: never
 
 cache:
@@ -87,7 +81,6 @@ lint:android:
 verify:backend:
   stage: test
   extends: .backend_node_job
-  needs: []
   script:
     - npm run build
     - npm test
