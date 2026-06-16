@@ -19,12 +19,12 @@ workflow:
         - backend/stellive-hub-api/**/*
         - shared/**/*
         - .gitlab-ci.yml
-    - if: '$CI_COMMIT_BRANCH'
-      changes:
-        - android/StelliveHubAndroid/**/*
-        - backend/stellive-hub-api/**/*
-        - shared/**/*
-        - .gitlab-ci.yml
+  - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    changes:
+      - android/StelliveHubAndroid/**/*
+      - backend/stellive-hub-api/**/*
+      - shared/**/*
+      - .gitlab-ci.yml
     - when: never
 
 cache:
