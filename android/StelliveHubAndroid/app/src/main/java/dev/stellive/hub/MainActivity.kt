@@ -56,6 +56,7 @@ import dev.stellive.hub.feature.home.MainUiPolicy
 import dev.stellive.hub.feature.home.MainNavigationHistory
 import dev.stellive.hub.feature.home.MockHubRepository
 import dev.stellive.hub.feature.home.ServerHubRepository
+import dev.stellive.hub.feature.hubevents.HubEventImagePolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -1619,7 +1620,7 @@ private fun moveLiveMember(member: HubMember, offset: Int) {
             liveStartedAt?.let { registerLiveClockTextView(it, valueView) }
         }
 
-    private fun compactEventCard(title: String, body: String, pills: List<String>): MaterialCardView =
+    private fun compactEventCard(title: String, body: String, pills: List<String>, thumbnailUrl: String? = null): MaterialCardView =
         baseCard().apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
@@ -1628,6 +1629,7 @@ private fun moveLiveMember(member: HubMember, offset: Int) {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(13), dp(13), dp(13), dp(13))
             }
+            thumbnailUrl?.let { content.addView(hubEventThumbnail(it)) }
             content.addView(TextView(context).apply {
                 text = title
                 setTextColor(color(R.color.hub_text))
@@ -1644,11 +1646,36 @@ private fun moveLiveMember(member: HubMember, offset: Int) {
             addView(content)
         }
 
+    private fun hubEventThumbnail(imageUrl: String): ImageView =
+        ImageView(this).apply {
+            visibility = View.GONE
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = rounded(color(R.color.hub_surface), dp(10))
+            clipToOutline = true
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(128)).apply {
+                bottomMargin = dp(10)
+            }
+            thread {
+                val bitmap = runCatching {
+                    URL(imageUrl).openStream().use(BitmapFactory::decodeStream)
+                }.getOrNull()
+                runOnUiThread {
+                    if (bitmap != null) {
+                        setImageBitmap(bitmap)
+                        visibility = View.VISIBLE
+                    } else {
+                        visibility = View.GONE
+                    }
+                }
+            }
+        }
+
     private fun hubEventCard(event: dev.stellive.hub.core.model.HubEvent): MaterialCardView =
         compactEventCard(
             title = event.title,
             body = listOfNotNull(event.status.displayName, event.sourceLabel, event.venueName).joinToString(" · "),
-            pills = listOf(event.category.displayName, event.participationMode.displayName)
+            pills = listOf(event.category.displayName, event.participationMode.displayName),
+            thumbnailUrl = event.image?.takeIf(HubEventImagePolicy::canDisplay)?.url
         ).apply {
             isClickable = true
             isFocusable = true

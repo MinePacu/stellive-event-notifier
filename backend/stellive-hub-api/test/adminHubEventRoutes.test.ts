@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAdminSessionCookie } from "../src/admin/adminAuth.js";
+import { renderAdminConsoleHtml } from "../src/admin/adminConsoleHtml.js";
 import { buildApp } from "../src/app.js";
 import type { AdminHubEvent, HubEventAdminValidationResult } from "../src/hub-events/hubEventAdminTypes.js";
 
@@ -57,6 +58,40 @@ async function buildTestApp(service = createFakeService()) {
 }
 
 describe("admin hub event routes", () => {
+  it("renders hub event image metadata fields in the admin form", () => {
+    const html = renderAdminConsoleHtml();
+
+    expect(html).toContain('id="hub-event-image-policy-state"');
+    expect(html).toContain('id="hub-event-image-url"');
+    expect(html).toContain('id="hub-event-image-source-label"');
+    expect(html).toContain('id="hub-event-image-source-url"');
+    expect(html).toContain('value="official_runtime_url"');
+    expect(html).toContain('value="third_party_allowed"');
+  });
+
+  it("renders backend-supported hub event option values and operator guidance", () => {
+    const html = renderAdminConsoleHtml();
+
+    for (const value of ["online_goods", "online_collab", "offline_concert", "offline_collab", "offline_popup", "ticketing"]) {
+      expect(html).toContain(`value="${value}"`);
+    }
+    for (const value of ["official", "member", "official_collab"]) {
+      expect(html).toContain(`value="${value}"`);
+    }
+    for (const value of ["offline_event", "venue", "store"]) {
+      expect(html).not.toContain(`value="${value}"`);
+    }
+    expect(html).toContain("Use the member's matching generation");
+    expect(html).toContain("Example: akane-lize");
+  });
+
+  it("sends the collected hub event input directly for admin validation", () => {
+    const html = renderAdminConsoleHtml();
+
+    expect(html).toContain("body: JSON.stringify(collectHubEventInput())");
+    expect(html).not.toContain("JSON.stringify({ mode, input: collectHubEventInput() })");
+  });
+
   it("rejects missing admin auth", async () => {
     const { app } = await buildTestApp();
     const response = await app.inject({ method: "GET", url: "/v1/admin/hub-events" });

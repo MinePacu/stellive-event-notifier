@@ -468,14 +468,18 @@ export function renderAdminConsoleHtml(): string {
             <input id="hub-event-id" type="hidden">
             <div class="field"><label for="hub-event-title">Title</label><input id="hub-event-title" name="title" autocomplete="off"></div>
             <div class="field"><label for="hub-event-summary">Summary</label><textarea id="hub-event-summary" name="summary" rows="3"></textarea></div>
-            <div class="field"><label for="hub-event-category">Category</label><select id="hub-event-category" name="category"><option value="online_goods">Online goods</option><option value="online_collab">Online collab</option><option value="offline_event">Offline event</option><option value="offline_collab">Offline collab</option></select></div>
+            <div class="field"><label for="hub-event-category">Category</label><select id="hub-event-category" name="category"><option value="online_goods">Online goods</option><option value="online_collab">Online collab</option><option value="offline_concert">Offline concert</option><option value="offline_collab">Offline collab</option><option value="offline_popup">Offline popup</option><option value="ticketing">Ticketing</option></select></div>
             <div class="field"><label for="hub-event-participation-mode">Participation mode</label><select id="hub-event-participation-mode" name="participationMode"><option value="online">Online</option><option value="offline">Offline</option><option value="hybrid">Hybrid</option></select></div>
             <div class="field"><label for="hub-event-status">Status</label><select id="hub-event-status" name="status"><option value="announced">Announced</option><option value="upcoming">Upcoming</option><option value="open">Open</option><option value="closing_soon">Closing soon</option><option value="ended">Ended</option><option value="cancelled">Cancelled</option></select></div>
-            <div class="field"><label for="hub-event-generation">Generation</label><input id="hub-event-generation" name="generationId" autocomplete="off" value="official"></div>
-            <div class="field"><label for="hub-event-member">Member</label><input id="hub-event-member" name="memberId" autocomplete="off"></div>
+            <div class="field"><label for="hub-event-generation">Generation</label><input id="hub-event-generation" name="generationId" autocomplete="off" value="official" placeholder="official, gen1, gen2, gen3"><p class="subtle">Examples: official, gen1, gen2, gen3. Use the member's matching generation for member-scoped events.</p></div>
+            <div class="field"><label for="hub-event-member">Member</label><input id="hub-event-member" name="memberId" autocomplete="off" placeholder="akane-lize"><p class="subtle">Example: akane-lize. Leave blank for generation-wide or official events.</p></div>
             <div class="field"><label for="hub-event-source-url">Source URL</label><input id="hub-event-source-url" name="sourceUrl" type="url" autocomplete="off"></div>
             <div class="field"><label for="hub-event-source-label">Source label</label><input id="hub-event-source-label" name="sourceLabel" autocomplete="off"></div>
-            <div class="field"><label for="hub-event-source-type">Source type</label><select id="hub-event-source-type" name="sourceType"><option value="official">Official</option><option value="official_collab">Official collab</option><option value="venue">Venue</option><option value="ticketing">Ticketing</option><option value="store">Store</option></select></div>
+            <div class="field"><label for="hub-event-source-type">Source type</label><select id="hub-event-source-type" name="sourceType"><option value="official">Official</option><option value="member">Member</option><option value="official_collab">Official collab</option></select></div>
+            <div class="field"><label for="hub-event-image-policy-state">Image policy state</label><select id="hub-event-image-policy-state" name="imagePolicyState"><option value="none">None</option><option value="official_runtime_url">Official runtime URL</option><option value="third_party_allowed">Third-party allowed</option><option value="verify_required">Verify required</option><option value="blocked">Blocked</option></select></div>
+            <div class="field"><label for="hub-event-image-url">Image URL</label><input id="hub-event-image-url" name="imageUrl" type="url" autocomplete="off"></div>
+            <div class="field"><label for="hub-event-image-source-label">Image source label</label><input id="hub-event-image-source-label" name="imageSourceLabel" autocomplete="off"></div>
+            <div class="field"><label for="hub-event-image-source-url">Image source URL</label><input id="hub-event-image-source-url" name="imageSourceUrl" type="url" autocomplete="off"></div>
             <div class="field"><label for="hub-event-announced-at">Announced at</label><input id="hub-event-announced-at" name="announcedAt" type="datetime-local"></div>
             <div class="field"><label for="hub-event-starts-at">Starts at</label><input id="hub-event-starts-at" name="startsAt" type="datetime-local"></div>
             <div class="field"><label for="hub-event-ends-at">Ends at</label><input id="hub-event-ends-at" name="endsAt" type="datetime-local"></div>
@@ -887,6 +891,10 @@ export function renderAdminConsoleHtml(): string {
       sourceUrl: document.getElementById("hub-event-source-url"),
       sourceLabel: document.getElementById("hub-event-source-label"),
       sourceType: document.getElementById("hub-event-source-type"),
+      imagePolicyState: document.getElementById("hub-event-image-policy-state"),
+      imageUrl: document.getElementById("hub-event-image-url"),
+      imageSourceLabel: document.getElementById("hub-event-image-source-label"),
+      imageSourceUrl: document.getElementById("hub-event-image-source-url"),
       announcedAt: document.getElementById("hub-event-announced-at"),
       startsAt: document.getElementById("hub-event-starts-at"),
       endsAt: document.getElementById("hub-event-ends-at"),
@@ -920,6 +928,7 @@ export function renderAdminConsoleHtml(): string {
       const input = {};
       Object.entries(hubEventFields).forEach(function ([key, element]) {
         if (!element || key === "id") return;
+        if (["imagePolicyState", "imageUrl", "imageSourceLabel", "imageSourceUrl"].includes(key)) return;
         if (key === "notificationEligible") {
           input[key] = element.checked;
           return;
@@ -932,6 +941,19 @@ export function renderAdminConsoleHtml(): string {
         const value = element.value.trim();
         if (value) input[key] = value;
       });
+      const imagePolicyState = hubEventFields.imagePolicyState.value;
+      if (imagePolicyState === "none") {
+        input.image = null;
+      } else {
+        const image = { policyState: imagePolicyState };
+        const imageUrl = hubEventFields.imageUrl.value.trim();
+        const imageSourceLabel = hubEventFields.imageSourceLabel.value.trim();
+        const imageSourceUrl = hubEventFields.imageSourceUrl.value.trim();
+        if (imageUrl) image.url = imageUrl;
+        if (imageSourceLabel) image.sourceLabel = imageSourceLabel;
+        if (imageSourceUrl) image.sourceUrl = imageSourceUrl;
+        input.image = image;
+      }
       return input;
     }
 
@@ -978,6 +1000,10 @@ export function renderAdminConsoleHtml(): string {
       hubEventFields.sourceUrl.value = event.sourceUrl || "";
       hubEventFields.sourceLabel.value = event.sourceLabel || "";
       hubEventFields.sourceType.value = event.sourceType || "official";
+      hubEventFields.imagePolicyState.value = event.image?.policyState || "none";
+      hubEventFields.imageUrl.value = event.image?.url || "";
+      hubEventFields.imageSourceLabel.value = event.image?.sourceLabel || "";
+      hubEventFields.imageSourceUrl.value = event.image?.sourceUrl || "";
       hubEventFields.announcedAt.value = toLocalDateTime(event.announcedAt);
       hubEventFields.startsAt.value = toLocalDateTime(event.startsAt);
       hubEventFields.endsAt.value = toLocalDateTime(event.endsAt);
@@ -1027,7 +1053,7 @@ export function renderAdminConsoleHtml(): string {
     async function validateHubEvent(mode) {
       const result = await adminApi(endpoints.hubEvents + "/validate", {
         method: "POST",
-        body: JSON.stringify({ mode, input: collectHubEventInput() })
+        body: JSON.stringify(collectHubEventInput())
       });
       renderHubEventValidation(result);
       return result;

@@ -6,6 +6,10 @@ struct HubEventDetailView: View {
     var body: some View {
         List {
             Section {
+                if let thumbnailURL = HubEventImagePolicy.displayURL(for: event.image) {
+                    HubEventRemoteImage(url: thumbnailURL)
+                }
+
                 HStack(alignment: .center, spacing: 10) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(event.title)

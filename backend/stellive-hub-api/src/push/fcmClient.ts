@@ -94,7 +94,8 @@ function toFirebaseMessage(input: FcmSendInput): Message {
     notification: input.payload.notification,
     data: input.payload.data,
     android: {
-      priority: input.payload.android.priority
+      priority: input.payload.android.priority,
+      ...(input.payload.android.notification ? { notification: input.payload.android.notification } : {})
     },
     apns: input.payload.apns
   };

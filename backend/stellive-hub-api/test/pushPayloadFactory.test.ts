@@ -24,6 +24,7 @@ function event(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
     generationId: overrides.generationId ?? "official",
     title: overrides.title ?? "공식 굿즈 판매",
     body: overrides.body ?? "판매가 시작됐습니다.",
+    thumbnailUrl: overrides.thumbnailUrl,
     platformUrl: Object.hasOwn(overrides, "platformUrl")
       ? (overrides.platformUrl ?? "")
       : "https://example.com/source",
@@ -138,6 +139,34 @@ describe("buildPushPayload", () => {
     expect(payload.data.tapAction).toBe("open_platform");
     expect(payload.data.appDeepLink).toBe("");
     expect(payload.data.platformUrl).toBe("");
+  });
+
+  it("includes allowed HTTPS thumbnail URLs in provider image fields", () => {
+    const payload = buildPushPayload({
+      event: event({ thumbnailUrl: "https://example.com/event.jpg" }),
+      resolution: resolution(),
+      deliveryLevel: "immediate_push" as NotificationDeliveryLevel
+    });
+
+    expect(payload.notification.imageUrl).toBe("https://example.com/event.jpg");
+    expect(payload.android.notification?.imageUrl).toBe("https://example.com/event.jpg");
+    expect(payload.apns.fcmOptions?.imageUrl).toBe("https://example.com/event.jpg");
+    expect(payload.data).not.toHaveProperty("thumbnailUrl");
+  });
+
+  it("omits unsafe thumbnail URLs from provider image fields", () => {
+    for (const thumbnailUrl of ["http://example.com/event.jpg", "not-a-url"]) {
+      const payload = buildPushPayload({
+        event: event({ thumbnailUrl }),
+        resolution: resolution(),
+        deliveryLevel: "immediate_push" as NotificationDeliveryLevel
+      });
+
+      expect(payload.notification).not.toHaveProperty("imageUrl");
+      expect(payload.android).not.toHaveProperty("notification");
+      expect(payload.apns).not.toHaveProperty("fcmOptions");
+      expect(payload.data).not.toHaveProperty("thumbnailUrl");
+    }
   });
 
   it("does not include HubEvent image metadata in push payload data", () => {
