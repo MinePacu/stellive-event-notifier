@@ -71,7 +71,34 @@ rtk pip list            rtk pnpm install        rtk npm run <script>
 - In command chains, prefix each segment: `rtk git add . && rtk git commit -m "msg"`
 - For debugging, use raw command without rtk prefix
 - `rtk proxy <cmd>` runs command without filtering but tracks usage
+
+## Search Tool Selection
+- When exploring files, consult `CODEMAP.md` alongside direct filesystem search to identify relevant files and avoid unnecessary traversal.
+- Use `fd` for file and directory discovery instead of `find`.
+- Use `rg` before `grep` when fast text search is the priority.
+- Use `ast-grep` when deeper analysis requires understanding syntax structure rather than plain text matching.
 <!-- /headroom:rtk-instructions -->
+
+## Commit Message Formatting
+
+When the user asks for a commit message that lists changed items, write the body as consecutive bullet lines with no blank line between bullets.
+
+- Use real line breaks between bullet items.
+- Do not write literal `\n` characters in commit messages.
+- Do not pass each bullet as a separate `git commit -m` body paragraph, because Git renders blank lines between paragraphs.
+- Prefer a message file for multi-line commit bodies:
+
+```bash
+rtk sh -lc "printf '%s\n' 'commit subject' '- First changed item' '- Second changed item' '- Third changed item' > /private/tmp/commit_msg && rtk git commit -F /private/tmp/commit_msg"
+```
+
+- The rendered commit body should look like this:
+
+```text
+- First changed item
+- Second changed item
+- Third changed item
+```
 
 ## Internal Backend Test Server
 

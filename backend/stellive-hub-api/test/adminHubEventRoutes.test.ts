@@ -79,6 +79,19 @@ describe("admin hub event routes", () => {
     expect(html).toContain("Source and thumbnail");
     expect(html).toContain("Schedule");
     expect(html).toContain("Links and venue");
+
+    for (const anchors of [
+      ["hub-event-generation", "hub-event-member", "hub-event-source-type"],
+      ["hub-event-source-type", "hub-event-image-policy-state", "hub-event-source-url"],
+      ["hub-event-source-url", "hub-event-source-label", "hub-event-image-url"],
+      ["hub-event-image-url", "hub-event-image-source-label", "hub-event-image-source-url"],
+      ["hub-event-announced-at", "hub-event-starts-at", "hub-event-ends-at"],
+      ["hub-event-purchase-url", "hub-event-ticket-url", "hub-event-venue-name", "hub-event-venue-address"],
+    ]) {
+      const positions = anchors.map((anchor) => html.indexOf(`id="${anchor}"`));
+      expect(positions.every((position) => position >= 0)).toBe(true);
+      expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    }
   });
 
   it("preserves hub event ids used by admin console scripts", () => {
@@ -90,6 +103,23 @@ describe("admin hub event routes", () => {
       "hub-event-search",
       "hub-event-list",
       "hub-event-form",
+      "hub-event-generation",
+      "hub-event-member",
+      "hub-event-source-type",
+      "hub-event-image-policy-state",
+      "hub-event-source-url",
+      "hub-event-source-label",
+      "hub-event-image-url",
+      "hub-event-image-source-label",
+      "hub-event-image-source-url",
+      "hub-event-announced-at",
+      "hub-event-starts-at",
+      "hub-event-ends-at",
+      "hub-event-purchase-url",
+      "hub-event-ticket-url",
+      "hub-event-venue-name",
+      "hub-event-venue-address",
+      "hub-event-notification-eligible",
       "hub-event-validation",
       "hub-event-audit-log"
     ]) {
