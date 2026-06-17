@@ -69,6 +69,34 @@ describe("admin hub event routes", () => {
     expect(html).toContain('value="third_party_allowed"');
   });
 
+  it("renders the redesigned hub event console layout", () => {
+    const html = renderAdminConsoleHtml();
+
+    expect(html).toContain('class="hub-events-workspace"');
+    expect(html).toContain('class="hub-events-sidebar"');
+    expect(html).toContain('class="hub-events-editor"');
+    expect(html).toContain("Basic information");
+    expect(html).toContain("Source and thumbnail");
+    expect(html).toContain("Schedule");
+    expect(html).toContain("Links and venue");
+  });
+
+  it("preserves hub event ids used by admin console scripts", () => {
+    const html = renderAdminConsoleHtml();
+
+    for (const id of [
+      "hub-event-state-filter",
+      "hub-event-status-filter",
+      "hub-event-search",
+      "hub-event-list",
+      "hub-event-form",
+      "hub-event-validation",
+      "hub-event-audit-log"
+    ]) {
+      expect(html).toContain(`id="${id}"`);
+    }
+  });
+
   it("renders backend-supported hub event option values and operator guidance", () => {
     const html = renderAdminConsoleHtml();
 

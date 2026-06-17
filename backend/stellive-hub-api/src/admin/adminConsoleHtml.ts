@@ -307,6 +307,96 @@ export function renderAdminConsoleHtml(): string {
       color: var(--admin-muted);
       font-style: italic;
     }
+    .hub-events-workspace {
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .hub-events-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0 14px;
+    }
+
+    .hub-events-sidebar,
+    .hub-events-editor,
+    .hub-events-section {
+      border: 1px solid var(--admin-border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--admin-surface) 94%, black);
+    }
+
+    .hub-events-sidebar {
+      overflow: hidden;
+    }
+
+    .hub-events-sidebar-header,
+    .hub-events-section-title {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--admin-border);
+      font-weight: 700;
+    }
+
+    .hub-events-filters {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border-bottom: 1px solid var(--admin-border);
+    }
+
+    .hub-events-filter-row,
+    .hub-events-two {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .hub-events-three {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .hub-events-list {
+      max-height: 460px;
+      overflow: auto;
+      padding: 12px;
+    }
+
+    .hub-events-editor {
+      padding: 14px;
+    }
+
+    .hub-events-editor-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+      gap: 14px;
+    }
+
+    .hub-events-section-body {
+      display: grid;
+      gap: 11px;
+      padding: 12px;
+    }
+
+    .hub-events-footer {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 1040px) {
+      .hub-events-workspace,
+      .hub-events-editor-grid,
+      .hub-events-footer {
+        grid-template-columns: 1fr;
+      }
+    }
+
     @media (max-width: 860px) {
       .toolbar {
         grid-template-columns: 1fr 1fr;
@@ -421,7 +511,7 @@ export function renderAdminConsoleHtml(): string {
             <h2>Hub events</h2>
             <p class="subtle">Goods and event schedule publishing controls.</p>
           </div>
-          <div class="action-controls">
+          <div class="hub-events-toolbar action-controls">
             <button id="hub-event-refresh" type="button">Refresh events</button>
             <button id="hub-event-validate" type="button">Validate</button>
             <button data-hub-event-action="save-draft" id="hub-event-save-draft" type="button">Save draft</button>
@@ -431,68 +521,114 @@ export function renderAdminConsoleHtml(): string {
             <button data-hub-event-action="delete" id="hub-event-delete" type="button">Delete</button>
           </div>
         </div>
-        <div class="grid two-column">
-          <div class="stack">
-            <div class="field">
-              <label for="hub-event-state-filter">Publication state</label>
-              <select id="hub-event-state-filter">
-                <option value="">All</option>
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="inactive">Inactive</option>
-                <option value="deleted">Deleted</option>
-              </select>
+        <div class="hub-events-workspace">
+          <div class="hub-events-sidebar">
+            <div>
+              <h3>Events</h3>
+              <p class="subtle">Filter and select existing Hub events.</p>
             </div>
-            <div class="field">
-              <label for="hub-event-status-filter">Public status</label>
-              <select id="hub-event-status-filter">
-                <option value="">All</option>
-                <option value="announced">Announced</option>
-                <option value="upcoming">Upcoming</option>
-                <option value="open">Open</option>
-                <option value="closing_soon">Closing soon</option>
-                <option value="ended">Ended</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+            <div class="hub-events-filters">
+              <div class="hub-events-filter-row">
+                <div class="field">
+                  <label for="hub-event-state-filter">Publication state</label>
+                  <select id="hub-event-state-filter">
+                    <option value="">All</option>
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="deleted">Deleted</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="hub-event-status-filter">Public status</label>
+                  <select id="hub-event-status-filter">
+                    <option value="">All</option>
+                    <option value="announced">Announced</option>
+                    <option value="upcoming">Upcoming</option>
+                    <option value="open">Open</option>
+                    <option value="closing_soon">Closing soon</option>
+                    <option value="ended">Ended</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+              <div class="field">
+                <label for="hub-event-search">Search</label>
+                <input id="hub-event-search" type="search" autocomplete="off" spellcheck="false">
+              </div>
             </div>
-            <div class="field">
-              <label for="hub-event-search">Search</label>
-              <input id="hub-event-search" type="search" autocomplete="off" spellcheck="false">
+            <div class="hub-events-list">
+              <table>
+                <thead><tr><th>Title</th><th>State</th><th>Status</th><th>Updated</th></tr></thead>
+                <tbody id="hub-event-list"></tbody>
+              </table>
             </div>
-            <table>
-              <thead><tr><th>Title</th><th>State</th><th>Status</th><th>Updated</th></tr></thead>
-              <tbody id="hub-event-list"></tbody>
-            </table>
           </div>
-          <form id="hub-event-form" class="stack">
+          <div class="hub-events-editor">
+          <form id="hub-event-form" class="hub-events-editor-grid">
             <input id="hub-event-id" type="hidden">
-            <div class="field"><label for="hub-event-title">Title</label><input id="hub-event-title" name="title" autocomplete="off"></div>
-            <div class="field"><label for="hub-event-summary">Summary</label><textarea id="hub-event-summary" name="summary" rows="3"></textarea></div>
-            <div class="field"><label for="hub-event-category">Category</label><select id="hub-event-category" name="category"><option value="online_goods">Online goods</option><option value="online_collab">Online collab</option><option value="offline_concert">Offline concert</option><option value="offline_collab">Offline collab</option><option value="offline_popup">Offline popup</option><option value="ticketing">Ticketing</option></select></div>
-            <div class="field"><label for="hub-event-participation-mode">Participation mode</label><select id="hub-event-participation-mode" name="participationMode"><option value="online">Online</option><option value="offline">Offline</option><option value="hybrid">Hybrid</option></select></div>
-            <div class="field"><label for="hub-event-status">Status</label><select id="hub-event-status" name="status"><option value="announced">Announced</option><option value="upcoming">Upcoming</option><option value="open">Open</option><option value="closing_soon">Closing soon</option><option value="ended">Ended</option><option value="cancelled">Cancelled</option></select></div>
-            <div class="field"><label for="hub-event-generation">Generation</label><input id="hub-event-generation" name="generationId" autocomplete="off" value="official" placeholder="official, gen1, gen2, gen3"><p class="subtle">Examples: official, gen1, gen2, gen3. Use the member's matching generation for member-scoped events.</p></div>
-            <div class="field"><label for="hub-event-member">Member</label><input id="hub-event-member" name="memberId" autocomplete="off" placeholder="akane-lize"><p class="subtle">Example: akane-lize. Leave blank for generation-wide or official events.</p></div>
-            <div class="field"><label for="hub-event-source-url">Source URL</label><input id="hub-event-source-url" name="sourceUrl" type="url" autocomplete="off"></div>
-            <div class="field"><label for="hub-event-source-label">Source label</label><input id="hub-event-source-label" name="sourceLabel" autocomplete="off"></div>
-            <div class="field"><label for="hub-event-source-type">Source type</label><select id="hub-event-source-type" name="sourceType"><option value="official">Official</option><option value="member">Member</option><option value="official_collab">Official collab</option></select></div>
-            <div class="field"><label for="hub-event-image-policy-state">Image policy state</label><select id="hub-event-image-policy-state" name="imagePolicyState"><option value="none">None</option><option value="official_runtime_url">Official runtime URL</option><option value="third_party_allowed">Third-party allowed</option><option value="verify_required">Verify required</option><option value="blocked">Blocked</option></select></div>
-            <div class="field"><label for="hub-event-image-url">Image URL</label><input id="hub-event-image-url" name="imageUrl" type="url" autocomplete="off"></div>
-            <div class="field"><label for="hub-event-image-source-label">Image source label</label><input id="hub-event-image-source-label" name="imageSourceLabel" autocomplete="off"></div>
-            <div class="field"><label for="hub-event-image-source-url">Image source URL</label><input id="hub-event-image-source-url" name="imageSourceUrl" type="url" autocomplete="off"></div>
-            <div class="field"><label for="hub-event-announced-at">Announced at</label><input id="hub-event-announced-at" name="announcedAt" type="datetime-local"></div>
-            <div class="field"><label for="hub-event-starts-at">Starts at</label><input id="hub-event-starts-at" name="startsAt" type="datetime-local"></div>
-            <div class="field"><label for="hub-event-ends-at">Ends at</label><input id="hub-event-ends-at" name="endsAt" type="datetime-local"></div>
-            <div class="field"><label for="hub-event-purchase-url">Purchase URL</label><input id="hub-event-purchase-url" name="purchaseUrl" type="url" autocomplete="off"></div>
-            <div class="field"><label for="hub-event-ticket-url">Ticket URL</label><input id="hub-event-ticket-url" name="ticketUrl" type="url" autocomplete="off"></div>
-            <div class="field"><label for="hub-event-venue-name">Venue name</label><input id="hub-event-venue-name" name="venueName" autocomplete="off"></div>
-            <div class="field"><label for="hub-event-venue-address">Venue address</label><input id="hub-event-venue-address" name="venueAddress" autocomplete="off"></div>
-            <label class="switch-control"><input id="hub-event-notification-eligible" name="notificationEligible" type="checkbox" checked> Notification eligible</label>
+            <div class="hub-events-section">
+              <h3 class="hub-events-section-title">Basic information</h3>
+              <div class="hub-events-section-body">
+                <div class="field"><label for="hub-event-title">Title</label><input id="hub-event-title" name="title" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-summary">Summary</label><textarea id="hub-event-summary" name="summary" rows="3"></textarea></div>
+                <div class="hub-events-three">
+                  <div class="field"><label for="hub-event-category">Category</label><select id="hub-event-category" name="category"><option value="online_goods">Online goods</option><option value="online_collab">Online collab</option><option value="offline_concert">Offline concert</option><option value="offline_collab">Offline collab</option><option value="offline_popup">Offline popup</option><option value="ticketing">Ticketing</option></select></div>
+                  <div class="field"><label for="hub-event-participation-mode">Participation mode</label><select id="hub-event-participation-mode" name="participationMode"><option value="online">Online</option><option value="offline">Offline</option><option value="hybrid">Hybrid</option></select></div>
+                  <div class="field"><label for="hub-event-status">Status</label><select id="hub-event-status" name="status"><option value="announced">Announced</option><option value="upcoming">Upcoming</option><option value="open">Open</option><option value="closing_soon">Closing soon</option><option value="ended">Ended</option><option value="cancelled">Cancelled</option></select></div>
+                </div>
+                <div class="hub-events-two">
+                  <div class="field"><label for="hub-event-generation">Generation</label><input id="hub-event-generation" name="generationId" autocomplete="off" value="official" placeholder="official, gen1, gen2, gen3"><p class="subtle">Examples: official, gen1, gen2, gen3. Use the member's matching generation for member-scoped events.</p></div>
+                  <div class="field"><label for="hub-event-member">Member</label><input id="hub-event-member" name="memberId" autocomplete="off" placeholder="akane-lize"><p class="subtle">Example: akane-lize. Leave blank for generation-wide or official events.</p></div>
+                </div>
+              </div>
+            </div>
+            <div class="hub-events-section">
+              <h3 class="hub-events-section-title">Source and thumbnail</h3>
+              <div class="hub-events-section-body">
+                <div class="hub-events-three">
+                  <div class="field"><label for="hub-event-source-url">Source URL</label><input id="hub-event-source-url" name="sourceUrl" type="url" autocomplete="off"></div>
+                  <div class="field"><label for="hub-event-source-label">Source label</label><input id="hub-event-source-label" name="sourceLabel" autocomplete="off"></div>
+                  <div class="field"><label for="hub-event-source-type">Source type</label><select id="hub-event-source-type" name="sourceType"><option value="official">Official</option><option value="member">Member</option><option value="official_collab">Official collab</option></select></div>
+                </div>
+                <div class="hub-events-two">
+                  <div class="field"><label for="hub-event-image-policy-state">Image policy state</label><select id="hub-event-image-policy-state" name="imagePolicyState"><option value="none">None</option><option value="official_runtime_url">Official runtime URL</option><option value="third_party_allowed">Third-party allowed</option><option value="verify_required">Verify required</option><option value="blocked">Blocked</option></select></div>
+                  <div class="field"><label for="hub-event-image-url">Image URL</label><input id="hub-event-image-url" name="imageUrl" type="url" autocomplete="off"></div>
+                </div>
+                <div class="hub-events-two">
+                  <div class="field"><label for="hub-event-image-source-label">Image source label</label><input id="hub-event-image-source-label" name="imageSourceLabel" autocomplete="off"></div>
+                  <div class="field"><label for="hub-event-image-source-url">Image source URL</label><input id="hub-event-image-source-url" name="imageSourceUrl" type="url" autocomplete="off"></div>
+                </div>
+              </div>
+            </div>
+            <div class="hub-events-section">
+              <h3 class="hub-events-section-title">Schedule</h3>
+              <div class="hub-events-section-body hub-events-three">
+                <div class="field"><label for="hub-event-announced-at">Announced at</label><input id="hub-event-announced-at" name="announcedAt" type="datetime-local"></div>
+                <div class="field"><label for="hub-event-starts-at">Starts at</label><input id="hub-event-starts-at" name="startsAt" type="datetime-local"></div>
+                <div class="field"><label for="hub-event-ends-at">Ends at</label><input id="hub-event-ends-at" name="endsAt" type="datetime-local"></div>
+              </div>
+            </div>
+            <div class="hub-events-section">
+              <h3 class="hub-events-section-title">Links and venue</h3>
+              <div class="hub-events-section-body">
+                <div class="hub-events-two">
+                  <div class="field"><label for="hub-event-purchase-url">Purchase URL</label><input id="hub-event-purchase-url" name="purchaseUrl" type="url" autocomplete="off"></div>
+                  <div class="field"><label for="hub-event-ticket-url">Ticket URL</label><input id="hub-event-ticket-url" name="ticketUrl" type="url" autocomplete="off"></div>
+                </div>
+                <div class="hub-events-two">
+                  <div class="field"><label for="hub-event-venue-name">Venue name</label><input id="hub-event-venue-name" name="venueName" autocomplete="off"></div>
+                  <div class="field"><label for="hub-event-venue-address">Venue address</label><input id="hub-event-venue-address" name="venueAddress" autocomplete="off"></div>
+                </div>
+                <label class="switch-control"><input id="hub-event-notification-eligible" name="notificationEligible" type="checkbox" checked> Notification eligible</label>
+              </div>
+            </div>
           </form>
+          </div>
         </div>
-        <div class="grid two-column">
-          <div><h3>Validation</h3><ul id="hub-event-validation" class="message-list"></ul></div>
-          <div><h3>Audit log</h3><ul id="hub-event-audit-log" class="message-list"></ul></div>
+        <div class="hub-events-footer">
+          <div class="hub-events-section"><h3>Validation</h3><ul id="hub-event-validation" class="message-list"></ul></div>
+          <div class="hub-events-section"><h3>Audit log</h3><ul id="hub-event-audit-log" class="message-list"></ul></div>
         </div>
       </section>
     </main>
