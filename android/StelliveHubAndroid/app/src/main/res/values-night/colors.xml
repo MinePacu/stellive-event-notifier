@@ -1,16 +1,16 @@
 <resources>
     <color name="hub_primary">#9FCED1</color>
     <color name="hub_secondary">#D6B56B</color>
-    <color name="hub_surface">#202626</color>
+    <color name="hub_surface">#202020</color>
     <color name="hub_surface_dark">#111515</color>
-    <color name="hub_background">#0E1416</color>
-    <color name="hub_card">#151D20</color>
+    <color name="hub_background">#000000</color>
+    <color name="hub_card">#181818</color>
     <color name="hub_text">#ECF2F2</color>
     <color name="hub_text_muted">#AAB8BA</color>
     <color name="hub_text_subtle">#7E8C8F</color>
-    <color name="hub_line">#2A363A</color>
-    <color name="hub_top_bar_glass">#D10E1416</color>
-    <color name="hub_top_bar_glass_scrolled">#F20E1416</color>
+    <color name="hub_line">#2A2A2A</color>
+    <color name="hub_top_bar_glass">#D1000000</color>
+    <color name="hub_top_bar_glass_scrolled">#F2000000</color>
     <color name="hub_top_bar_divider">#00000000</color>
     <color name="hub_top_bar_button_glass">#4DFFFFFF</color>
     <color name="hub_accent_soft">#203A3B</color>

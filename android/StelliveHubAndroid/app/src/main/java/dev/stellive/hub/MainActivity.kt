@@ -99,10 +99,11 @@ private var selectedFilter = "all"
 private var selectedLiveStatusFilter = "all"
 private var liveMemberPriorityIds: List<String> = emptyList()
 private var draggingLiveMemberId: String? = null
-private var selectedHistoryEventTypeFilterId = "all"
+    private var selectedHistoryEventTypeFilterId = "all"
     private var selectedHistoryMemberFilterId = "all"
     private var selectedHubEventId: String? = null
     private var selectedAppearanceMode = AppearanceMode.SYSTEM
+    private val targetNotificationEnabledOverrides = mutableMapOf<String, Boolean>()
     private var notificationPermissionRequested = false
     private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -299,6 +300,8 @@ private var selectedHistoryEventTypeFilterId = "all"
             binding.topBarTitleGroup.paddingEnd,
             binding.topBarTitleGroup.paddingBottom
         )
+        binding.topBarTitleGroup.visibility =
+            if (MainUiPolicy.showsTopBarText(navigationHistory.currentScreen.id)) View.VISIBLE else View.INVISIBLE
         binding.topBarSettings.visibility = if (
             MainUiPolicy.showsSettingsTopBarAction(navigationHistory.currentScreen.id, canGoBack)
         ) {
@@ -346,7 +349,7 @@ private var selectedHistoryEventTypeFilterId = "all"
     }
 
     private fun applyContentTopPadding(underTopBar: Boolean) {
-        val topPadding = if (underTopBar) 0 else systemTopInsetPx + dp(70)
+        val topPadding = if (underTopBar) 0 else systemTopInsetPx + dp(86)
         val horizontalPadding = if (underTopBar) 0 else dp(18)
         binding.contentList.setPadding(horizontalPadding, topPadding, horizontalPadding, dp(20))
     }
@@ -523,6 +526,8 @@ private var selectedHistoryEventTypeFilterId = "all"
             title = event.title,
             role = "공식 출처와 일정 정보를 확인합니다."
         )
+        binding.collapsedTitle.text = MainUiPolicy.goodsEventDetailTopBarTitle(event.title)
+        binding.collapsedRole.text = MainUiPolicy.goodsEventDetailTopBarRole()
         binding.contentList.removeAllViews()
         applyContentTopPadding(underTopBar = true)
         binding.contentList.addView(hubEventDetailHero(event))
@@ -782,14 +787,19 @@ private var selectedHistoryEventTypeFilterId = "all"
         binding.contentList.addView(sectionLabel("개별 항목"))
         repository.members.filter { it.catalogRole != CatalogRole.PLACEHOLDER }.forEach { member ->
             binding.contentList.addView(
-                compactEventCard(
+                targetToggleCard(
                     title = member.koreanName,
                     body = when (member.catalogRole) {
                         CatalogRole.REPRESENTATIVE -> "감자 카테고리의 대표 항목입니다."
                         CatalogRole.OFFICIAL_CHANNEL -> "기타 카테고리의 공식 채널입니다."
                         else -> "${member.generationName} · ${member.roleLabel ?: "멤버"}"
                     },
-                    pills = listOf(if (settings.memberEnabled[member.id] ?: member.notificationEnabled) "ON" else "OFF")
+                    checked = targetNotificationEnabledOverrides[member.id]
+                        ?: settings.memberEnabled[member.id]
+                        ?: member.notificationEnabled,
+                    onCheckedChange = { checked ->
+                        targetNotificationEnabledOverrides[member.id] = checked
+                    }
                 )
             )
         }
@@ -1793,8 +1803,51 @@ private fun moveLiveMember(member: HubMember, offset: Int) {
                 textSize = 12f
                 setPadding(0, dp(6), 0, 0)
             })
-            content.addView(pillRow(pills))
-            addView(content)
+        content.addView(pillRow(pills))
+        addView(content)
+    }
+
+    private fun targetToggleCard(
+        title: String,
+        body: String,
+        checked: Boolean,
+        onCheckedChange: (Boolean) -> Unit
+    ): MaterialCardView =
+        baseCard().apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(10)
+            }
+
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(13), dp(13), dp(13), dp(13))
+
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(TextView(context).apply {
+                        text = title
+                        setTextColor(color(R.color.hub_text))
+                        textSize = 15f
+                        typeface = Typeface.DEFAULT_BOLD
+                    })
+                    addView(TextView(context).apply {
+                        text = body
+                        setTextColor(color(R.color.hub_text_muted))
+                        textSize = 12f
+                        setPadding(0, dp(6), 0, 0)
+                    })
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = dp(12)
+                })
+
+                addView(SwitchMaterial(context).apply {
+                    isChecked = checked
+                    setOnCheckedChangeListener { _, isChecked ->
+                        onCheckedChange(isChecked)
+                    }
+                })
+            })
         }
 
     private fun hubEventThumbnail(imageUrl: String): ImageView =
