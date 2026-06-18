@@ -71,7 +71,34 @@ rtk pip list            rtk pnpm install        rtk npm run <script>
 - In command chains, prefix each segment: `rtk git add . && rtk git commit -m "msg"`
 - For debugging, use raw command without rtk prefix
 - `rtk proxy <cmd>` runs command without filtering but tracks usage
+
+## Search Tool Selection
+- When exploring files, consult `CODEMAP.md` alongside direct filesystem search to identify relevant files and avoid unnecessary traversal.
+- Use `fd` for file and directory discovery instead of `find`.
+- Use `rg` before `grep` when fast text search is the priority.
+- Use `ast-grep` when deeper analysis requires understanding syntax structure rather than plain text matching.
 <!-- /headroom:rtk-instructions -->
+
+## Commit Message Formatting
+
+When the user asks for a commit message that lists changed items, write the body as consecutive bullet lines with no blank line between bullets.
+
+- Use real line breaks between bullet items.
+- Do not write literal `\n` characters in commit messages.
+- Do not pass each bullet as a separate `git commit -m` body paragraph, because Git renders blank lines between paragraphs.
+- Prefer a message file for multi-line commit bodies:
+
+```bash
+rtk sh -lc "printf '%s\n' 'commit subject' '- First changed item' '- Second changed item' '- Third changed item' > /private/tmp/commit_msg && rtk git commit -F /private/tmp/commit_msg"
+```
+
+- The rendered commit body should look like this:
+
+```text
+- First changed item
+- Second changed item
+- Third changed item
+```
 
 ## Internal Backend Test Server
 
@@ -80,8 +107,55 @@ Use the internal server computer `minepacu@192.168.50.9` for later Codex backend
 - The test service port is fixed to `4000`.
 - Connect by SSH and run Docker directly on the server computer.
 - Test URLs should use `http://192.168.50.9:4000` plus the required path.
+- The admin console URL is `http://192.168.50.9:4000/admin`.
 - Transfer required project files to the server computer by command before building there.
 - On the server computer, the project must live at `~/StelLiveNoti`.
 - The contents of `~/StelLiveNoti` must mirror the current workspace structure, excluding dependency/build-heavy folders such as `node_modules`.
 - If the server computer has insufficient disk space, clear build caches and other safe generated caches, then retry the transfer/build/run step.
 - Do not transfer secrets, production credentials, production device tokens, profile image binaries, official logos, fan art, captured images, copied media assets, or other files prohibited by the project rules.
+
+### Server Sync, Rebuild, And Test Flow
+
+Use this flow when a later Codex session needs to test backend or admin-console changes on the internal server.
+
+1. Sync the current workspace to the server, excluding generated and secret-heavy paths:
+
+```bash
+rtk rsync -az --delete \
+  --exclude '.git/' \
+  --exclude '.gradle/' \
+  --exclude 'node_modules/' \
+  --exclude 'dist/' \
+  --exclude 'build/' \
+  --exclude 'qa-screenshots/' \
+  --exclude '.DS_Store' \
+  --exclude '.env' \
+  --exclude '.env.*' \
+  ./ minepacu@192.168.50.9:~/StelLiveNoti/
+```
+
+2. Rebuild and recreate the Docker services on the server:
+
+```bash
+rtk ssh minepacu@192.168.50.9 'cd ~/StelLiveNoti && docker compose -f backend/stellive-hub-api/docker-compose.yml up -d --build --force-recreate'
+```
+
+3. Confirm all containers are running:
+
+```bash
+rtk ssh minepacu@192.168.50.9 'docker ps --format "table {{.Names}}\t{{.Status}}" | grep stellive-hub-api'
+```
+
+4. Check API startup logs:
+
+```bash
+rtk ssh minepacu@192.168.50.9 'cd ~/StelLiveNoti && docker compose -f backend/stellive-hub-api/docker-compose.yml logs --no-color --tail=40 api'
+```
+
+5. For admin-console work, open `http://192.168.50.9:4000/admin`, sign in with the admin session, enter the internal API bearer token from the operator's local environment, and verify the target form or route manually.
+
+Notes:
+
+- If `up -d --build --force-recreate` builds images but leaves old containers running, run the same compose file with `up -d --no-build --force-recreate --remove-orphans`.
+- Never write real admin tokens, internal API tokens, Firebase credentials, OAuth credentials, or production device tokens into this file, shell history snippets, commits, issues, or logs.
+- Keep server testing scoped to the requested backend/admin behavior. Do not deploy unrelated local experiments unless the user explicitly asks for them.

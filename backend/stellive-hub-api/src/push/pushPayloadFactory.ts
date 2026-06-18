@@ -17,6 +17,7 @@ export interface MinimalPushPayload {
   notification: {
     title: string;
     body: string;
+    imageUrl?: string;
   };
   data: {
     eventId: string;
@@ -30,6 +31,9 @@ export interface MinimalPushPayload {
   };
   android: {
     priority: FcmPriority;
+    notification?: {
+      imageUrl: string;
+    };
   };
   apns: {
     headers: {
@@ -39,6 +43,9 @@ export interface MinimalPushPayload {
       aps: {
         sound?: "default";
       };
+    };
+    fcmOptions?: {
+      imageUrl: string;
     };
   };
 }
@@ -67,14 +74,26 @@ function highPriority(input: PushPayloadInput): boolean {
   );
 }
 
+function safeThumbnailUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" ? parsed.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function buildPushPayload(input: PushPayloadInput): MinimalPushPayload {
   const priority = highPriority(input) ? "high" : "normal";
   const apnsPriority = highPriority(input) ? "10" : "5";
+  const imageUrl = safeThumbnailUrl(input.event.thumbnailUrl);
 
   return {
     notification: {
       title: pushTitle(input.event),
-      body: pushBody(input.event)
+      body: pushBody(input.event),
+      ...(imageUrl ? { imageUrl } : {})
     },
     data: {
       eventId: input.event.id,
@@ -87,7 +106,8 @@ export function buildPushPayload(input: PushPayloadInput): MinimalPushPayload {
       platformUrl: input.event.platformUrl ?? ""
     },
     android: {
-      priority
+      priority,
+      ...(imageUrl ? { notification: { imageUrl } } : {})
     },
     apns: {
       headers: {
@@ -95,7 +115,8 @@ export function buildPushPayload(input: PushPayloadInput): MinimalPushPayload {
       },
       payload: {
         aps: highPriority(input) ? { sound: "default" } : {}
-      }
+      },
+      ...(imageUrl ? { fcmOptions: { imageUrl } } : {})
     }
   };
 }

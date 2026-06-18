@@ -94,6 +94,10 @@ private struct HubEventRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 8) {
+                if let thumbnailURL = HubEventImagePolicy.displayURL(for: event.image) {
+                    HubEventRemoteImage(url: thumbnailURL)
+                }
+
                 Text(event.title)
                     .font(.headline)
                     .foregroundStyle(.primary)
@@ -123,6 +127,24 @@ private struct HubEventRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+}
+
+struct HubEventRemoteImage: View {
+    let url: URL
+
+    var body: some View {
+        AsyncImage(url: url) { phase in
+            if case let .success(image) = phase {
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 132)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .clipped()
+            }
+        }
     }
 }
 

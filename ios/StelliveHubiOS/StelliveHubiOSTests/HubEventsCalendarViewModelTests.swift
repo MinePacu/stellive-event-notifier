@@ -195,6 +195,56 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.rangeEnd, date("2026-06-22"))
     }
 
+    func testHubEventDetailRowsUseSharedOrder() {
+        let rows = HubEventDetailFormatting.rows(for: detailEvent())
+
+        XCTAssertEqual(rows.map(\.label), ["장소", "시작", "기간", "참여 방식", "분류", "출처"])
+    }
+
+    func testHubEventDetailNoticeCopyMatchesDesignSource() {
+        XCTAssertEqual(
+            HubEventDetailFormatting.noticeText,
+            "일정, 장소, 판매/입장 조건은 공식 공지 변경에 따라 달라질 수 있습니다. 앱은 확인용 요약만 제공하므로 참여 전 반드시 출처 링크에서 최신 공지를 확인하세요."
+        )
+    }
+
+    func testHubEventDetailSummaryLabelDoesNotRepeatTitle() {
+        let event = detailEvent()
+
+        XCTAssertEqual(HubEventDetailFormatting.summaryLabel, "핵심 안내")
+        XCTAssertFalse(HubEventDetailFormatting.summaryLabel.contains(event.title))
+    }
+
+    private func detailEvent() -> HubEvent {
+        HubEvent(
+            id: "popup-store",
+            category: .onlineGoods,
+            participationMode: .offline,
+            status: .open,
+            title: "팝업 스토어 현장 입장 시작",
+            summary: "현장 입장과 굿즈 판매가 함께 진행됩니다.",
+            memberId: nil,
+            generationId: "official",
+            sourceUrl: "https://example.com/source",
+            sourceLabel: "공식 공지 기반 HubEvent",
+            sourceType: .official,
+            announcedAt: dateTime("2026-06-10T01:00:00Z"),
+            startsAt: dateTime("2026-06-17T10:00:00Z"),
+            endsAt: dateTime("2026-06-23T12:00:00Z"),
+            purchaseUrl: nil,
+            ticketUrl: nil,
+            venueName: "더현대 서울 B2 아이코닉 스퀘어",
+            venueAddress: nil,
+            image: nil,
+            notificationEligible: true,
+            updatedAt: dateTime("2026-06-10T01:00:00Z")
+        )
+    }
+
+    private func dateTime(_ value: String) -> Date {
+        ISO8601DateFormatter().date(from: value)!
+    }
+
     private func makeViewModel(
         selectedDay: Date? = nil,
         days: [HubCalendarDay]
