@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAdminSessionCookie } from "../src/admin/adminAuth.js";
+import { renderAdminConsoleHtml } from "../src/admin/adminConsoleHtml.js";
 import { buildApp } from "../src/app.js";
 import type { AdminHubEvent, HubEventAdminValidationResult } from "../src/hub-events/hubEventAdminTypes.js";
 
@@ -57,6 +58,111 @@ async function buildTestApp(service = createFakeService()) {
 }
 
 describe("admin hub event routes", () => {
+  it("renders hub event image metadata fields in the admin form", () => {
+    const html = renderAdminConsoleHtml();
+
+    expect(html).toContain('id="hub-event-image-policy-state"');
+    expect(html).toContain('id="hub-event-image-url"');
+    expect(html).toContain('id="hub-event-image-source-label"');
+    expect(html).toContain('id="hub-event-image-source-url"');
+    expect(html).toContain('value="official_runtime_url"');
+    expect(html).toContain('value="third_party_allowed"');
+  });
+
+  it("renders the redesigned hub event console layout", () => {
+    const html = renderAdminConsoleHtml();
+
+    expect(html).toContain('class="hub-events-workspace"');
+    expect(html).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));");
+    expect(html).toContain("grid-column: 1 / -1;");
+    expect(html).toContain('class="hub-events-sidebar"');
+    expect(html).toContain('class="hub-events-editor"');
+    expect(html).toContain("Basic information");
+    expect(html).toContain("Source and thumbnail");
+    expect(html).toContain("Schedule");
+    expect(html).toContain("Links and venue");
+
+    for (const anchors of [
+      ["hub-event-generation", "hub-event-member", "hub-event-source-type"],
+      ["hub-event-source-type", "hub-event-image-policy-state", "hub-event-source-url"],
+      ["hub-event-source-url", "hub-event-source-label", "hub-event-image-url"],
+      ["hub-event-image-url", "hub-event-image-source-label", "hub-event-image-source-url"],
+      ["hub-event-announced-at", "hub-event-starts-at", "hub-event-ends-at"],
+      ["hub-event-purchase-url", "hub-event-ticket-url", "hub-event-venue-name", "hub-event-venue-address"],
+    ]) {
+      const positions = anchors.map((anchor) => html.indexOf(`id="${anchor}"`));
+      expect(positions.every((position) => position >= 0)).toBe(true);
+      expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    }
+  });
+
+  it("preserves hub event ids used by admin console scripts", () => {
+    const html = renderAdminConsoleHtml();
+
+    for (const id of [
+      "hub-event-state-filter",
+      "hub-event-status-filter",
+      "hub-event-search",
+      "hub-event-list",
+      "hub-event-form",
+      "hub-event-generation",
+      "hub-event-member",
+      "hub-event-source-type",
+      "hub-event-image-policy-state",
+      "hub-event-source-url",
+      "hub-event-source-label",
+      "hub-event-image-url",
+      "hub-event-image-source-label",
+      "hub-event-image-source-url",
+      "hub-event-announced-at",
+      "hub-event-starts-at",
+      "hub-event-ends-at",
+      "hub-event-purchase-url",
+      "hub-event-ticket-url",
+      "hub-event-venue-name",
+      "hub-event-venue-address",
+      "hub-event-notification-eligible",
+      "hub-event-validation",
+      "hub-event-audit-log"
+    ]) {
+      expect(html).toContain(`id="${id}"`);
+    }
+  });
+
+  it("renders backend-supported hub event option values and operator guidance", () => {
+    const html = renderAdminConsoleHtml();
+
+    for (const value of ["online_goods", "online_collab", "offline_concert", "offline_collab", "offline_popup", "ticketing"]) {
+      expect(html).toContain(`value="${value}"`);
+    }
+    for (const value of ["official", "member", "official_collab"]) {
+      expect(html).toContain(`value="${value}"`);
+    }
+    for (const value of ["offline_event", "venue", "store"]) {
+      expect(html).not.toContain(`value="${value}"`);
+    }
+    expect(html).toContain("Use the member's matching generation");
+    expect(html).toContain("Example: akane-lize");
+  });
+
+  it("sends the collected hub event input directly for admin validation", () => {
+    const html = renderAdminConsoleHtml();
+
+    expect(html).toContain('const headers = init && init.body ? { "content-type": "application/json" } : undefined;');
+    expect(html).toContain("body: JSON.stringify(collectHubEventInput())");
+    expect(html).not.toContain("JSON.stringify({ mode, input: collectHubEventInput() })");
+  });
+
+  it("renders single-select checkboxes for hub event rows", () => {
+    const html = renderAdminConsoleHtml();
+
+    expect(html).toContain('data-hub-event-select="true"');
+    expect(html).toContain('<th aria-label="Select"></th>');
+    expect(html).toContain(".hub-events-list th:first-child");
+    expect(html).toContain('selectedHubEventId');
+    expect(html).toContain('cell.colSpan = 5');
+  });
+
   it("rejects missing admin auth", async () => {
     const { app } = await buildTestApp();
     const response = await app.inject({ method: "GET", url: "/v1/admin/hub-events" });

@@ -59,7 +59,8 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain('data-hub-event-action="deactivate"');
   expect(html).toContain('data-hub-event-action="delete"');
   expect(html).not.toContain('type="file"');
-  expect(html).not.toContain('name="imageUrl"');
+  expect(html).toContain('id="hub-event-image-url"');
+  expect(html).toContain('id="hub-event-image-policy-state"');
   expect(html).not.toContain('name="logoUrl"');
   expect(html).not.toContain('name="posterUrl"');
 }

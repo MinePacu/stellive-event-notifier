@@ -349,7 +349,6 @@ export class HubEventRepository {
     const record = await create({
       data: {
         ...toWriteData(input),
-        id: input.id,
         publicationState: "draft",
         revision: 1,
         createdBy: input.actorId,

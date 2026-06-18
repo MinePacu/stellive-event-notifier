@@ -14,6 +14,7 @@ const prismaSchema = readFileSync(resolve(__dirname, "../prisma/schema.prisma"),
 
 describe("Prisma hub event admin schema", () => {
   it("defines publication state, revision, soft-delete timestamps, and audit logs", () => {
+    expect(prismaSchema).toContain("id                    String   @id @default(cuid(2))");
     expect(prismaSchema).toContain("publicationState");
     expect(prismaSchema).toContain("publishedAt");
     expect(prismaSchema).toContain("cancelledAt");
@@ -619,6 +620,7 @@ describe("HubEventRepository", () => {
         })
       })
     ]);
+    expect((calls[0] as { data: Record<string, unknown> }).data).not.toHaveProperty("id");
     expect(created.createdAt).toBe("2026-06-12T00:00:00.000Z");
     expect(created.publicationState).toBe("draft");
   });
