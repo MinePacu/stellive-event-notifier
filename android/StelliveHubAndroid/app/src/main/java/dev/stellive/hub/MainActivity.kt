@@ -56,6 +56,7 @@ import dev.stellive.hub.feature.home.MainUiPolicy
 import dev.stellive.hub.feature.home.MainNavigationHistory
 import dev.stellive.hub.feature.home.MockHubRepository
 import dev.stellive.hub.feature.home.ServerHubRepository
+import dev.stellive.hub.feature.hubevents.HubEventDetailFormatting
 import dev.stellive.hub.feature.hubevents.HubEventImagePolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -91,6 +92,7 @@ private lateinit var binding: ActivityMainBinding
     private var serverMembers: List<HubMember>? = null
     private var liveStatusSourceLabel = "앱 내 목업"
     private var debugModeEnabled = false
+    private var systemTopInsetPx = 0
     private val serverConnectionDebugLogs = mutableListOf("bootstrap: 대기 중")
     private val navigationHistory = MainNavigationHistory()
 private var selectedFilter = "all"
@@ -334,12 +336,19 @@ private var selectedHistoryEventTypeFilterId = "all"
         binding.collapsedTitle.text = MainUiPolicy.topBarTitle(screenId)
         binding.collapsedRole.text = MainUiPolicy.topBarRole(screenId)
         binding.contentList.removeAllViews()
+        applyContentTopPadding(underTopBar = false)
         binding.contentList.addView(screenTitle(title))
         binding.contentList.addView(screenCopy(role))
         binding.contentScroll.post {
             binding.contentScroll.scrollTo(0, 0)
             updateTopBarScrolled(false)
         }
+    }
+
+    private fun applyContentTopPadding(underTopBar: Boolean) {
+        val topPadding = if (underTopBar) 0 else systemTopInsetPx + dp(70)
+        val horizontalPadding = if (underTopBar) 0 else dp(18)
+        binding.contentList.setPadding(horizontalPadding, topPadding, horizontalPadding, dp(20))
     }
 
     private fun liveMembersForUi(): List<HubMember> =
@@ -511,9 +520,39 @@ private var selectedHistoryEventTypeFilterId = "all"
 
         startScreen(
             screenId = "goods_event_detail",
-            title = "상세",
+            title = event.title,
             role = "공식 출처와 일정 정보를 확인합니다."
         )
+        binding.contentList.removeAllViews()
+        applyContentTopPadding(underTopBar = true)
+        binding.contentList.addView(hubEventDetailHero(event))
+        binding.contentList.addView(
+            compactEventCard(
+                title = event.title,
+                body = listOfNotNull(
+                    event.venueName,
+                    event.startsAt?.let { HubEventDetailFormatting.formatDateTime(it) },
+                ).joinToString(" · ").ifBlank { event.sourceLabel },
+                pills = listOf(event.status.displayName, event.category.displayName, event.participationMode.displayName)
+            ).withDetailHorizontalMargins()
+        )
+        binding.contentList.addView(
+            compactEventCard(
+                title = HubEventDetailFormatting.SummaryLabel,
+                body = event.summary ?: "공식 출처 기반 굿즈/행사 정보입니다.",
+                pills = listOf(event.status.displayName)
+            ).withDetailHorizontalMargins()
+        )
+        binding.contentList.addView(
+            settingsPanel(
+                title = "행사 정보",
+                rows = HubEventDetailFormatting.rows(event).map { row ->
+                    SettingRow(row.label, row.value, null, null)
+                }
+            ).withDetailHorizontalMargins()
+        )
+        binding.contentList.addView(noticeCard(HubEventDetailFormatting.NoticeText).withDetailHorizontalMargins())
+        return
         binding.contentList.addView(
             compactEventCard(
                 title = event.title,
@@ -1117,9 +1156,10 @@ private fun moveLiveMember(member: HubMember, offset: Int) {
                 Configuration.UI_MODE_NIGHT_YES
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            systemTopInsetPx = bars.top
             binding.topGlassOverlay.setPadding(0, bars.top, 0, 0)
             binding.mainContent.setPadding(0, 0, 0, bars.bottom)
-            binding.contentList.setPadding(dp(18), bars.top + dp(70), dp(18), dp(20))
+            applyContentTopPadding(underTopBar = navigationHistory.currentScreen == HubScreen.GOODS_EVENT_DETAIL)
             insets
         }
         ViewCompat.requestApplyInsets(binding.root)
@@ -1618,6 +1658,117 @@ private fun moveLiveMember(member: HubMember, offset: Int) {
                 marginStart = dp(4)
             })
             liveStartedAt?.let { registerLiveClockTextView(it, valueView) }
+        }
+
+    private fun View.withDetailHorizontalMargins(): View {
+        val params = (layoutParams as? LinearLayout.LayoutParams)
+            ?: LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        params.leftMargin = dp(18)
+        params.rightMargin = dp(18)
+        layoutParams = params
+        return this
+    }
+
+    private fun hubEventDetailHero(event: dev.stellive.hub.core.model.HubEvent): FrameLayout =
+        FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                systemTopInsetPx + dp(338)
+            ).apply {
+                leftMargin = 0
+                rightMargin = 0
+                bottomMargin = dp(8)
+            }
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(
+                    Color.rgb(54, 79, 99),
+                    Color.rgb(16, 43, 53),
+                    Color.rgb(15, 20, 23)
+                )
+            )
+
+            event.image?.takeIf(HubEventImagePolicy::canDisplay)?.url?.let { imageUrl ->
+                val imageView = ImageView(context).apply {
+                    visibility = View.GONE
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                }
+                addView(
+                    imageView,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                )
+                thread {
+                    val bitmap = runCatching {
+                        URL(imageUrl).openStream().use(BitmapFactory::decodeStream)
+                    }.getOrNull()
+                    runOnUiThread {
+                        if (bitmap != null) {
+                            imageView.setImageBitmap(bitmap)
+                            imageView.visibility = View.VISIBLE
+                        }
+                    }
+                }
+            }
+
+            addView(
+                View(context).apply {
+                    background = GradientDrawable(
+                        GradientDrawable.Orientation.TOP_BOTTOM,
+                        intArrayOf(Color.TRANSPARENT, Color.argb(184, 0, 0, 0))
+                    )
+                },
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
+
+            addView(
+                LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(18), 0, dp(18), dp(10))
+                    addView(TextView(context).apply {
+                        text = event.category.displayName
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        )
+                        setTextColor(Color.WHITE)
+                        textSize = 12f
+                        typeface = Typeface.DEFAULT_BOLD
+                        background = rounded(Color.argb(46, 255, 255, 255), dp(12))
+                        setPadding(dp(8), dp(4), dp(8), dp(4))
+                    })
+                    addView(TextView(context).apply {
+                        text = event.title
+                        setTextColor(Color.WHITE)
+                        textSize = 25f
+                        typeface = Typeface.DEFAULT_BOLD
+                        setPadding(0, dp(10), 0, 0)
+                        setLineSpacing(0f, 1.06f)
+                    })
+                    addView(TextView(context).apply {
+                        text = listOfNotNull(event.venueName, HubEventDetailFormatting.rows(event).firstOrNull { it.label == "기간" }?.value)
+                            .joinToString(" · ")
+                            .ifBlank { event.sourceLabel }
+                        setTextColor(Color.argb(214, 255, 255, 255))
+                        textSize = 13f
+                        typeface = Typeface.DEFAULT_BOLD
+                        setPadding(0, dp(7), 0, 0)
+                    })
+                },
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM or Gravity.START
+                )
+            )
         }
 
     private fun compactEventCard(title: String, body: String, pills: List<String>, thumbnailUrl: String? = null): MaterialCardView =

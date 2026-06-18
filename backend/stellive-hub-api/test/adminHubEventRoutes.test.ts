@@ -73,6 +73,8 @@ describe("admin hub event routes", () => {
     const html = renderAdminConsoleHtml();
 
     expect(html).toContain('class="hub-events-workspace"');
+    expect(html).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));");
+    expect(html).toContain("grid-column: 1 / -1;");
     expect(html).toContain('class="hub-events-sidebar"');
     expect(html).toContain('class="hub-events-editor"');
     expect(html).toContain("Basic information");
@@ -146,8 +148,19 @@ describe("admin hub event routes", () => {
   it("sends the collected hub event input directly for admin validation", () => {
     const html = renderAdminConsoleHtml();
 
+    expect(html).toContain('const headers = init && init.body ? { "content-type": "application/json" } : undefined;');
     expect(html).toContain("body: JSON.stringify(collectHubEventInput())");
     expect(html).not.toContain("JSON.stringify({ mode, input: collectHubEventInput() })");
+  });
+
+  it("renders single-select checkboxes for hub event rows", () => {
+    const html = renderAdminConsoleHtml();
+
+    expect(html).toContain('data-hub-event-select="true"');
+    expect(html).toContain('<th aria-label="Select"></th>');
+    expect(html).toContain(".hub-events-list th:first-child");
+    expect(html).toContain('selectedHubEventId');
+    expect(html).toContain('cell.colSpan = 5');
   });
 
   it("rejects missing admin auth", async () => {

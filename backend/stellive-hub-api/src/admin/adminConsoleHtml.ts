@@ -309,7 +309,7 @@ export function renderAdminConsoleHtml(): string {
     }
     .hub-events-workspace {
       display: grid;
-      grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 16px;
       align-items: start;
     }
@@ -330,6 +330,7 @@ export function renderAdminConsoleHtml(): string {
     }
 
     .hub-events-sidebar {
+      grid-column: 1 / -1;
       overflow: hidden;
     }
 
@@ -366,14 +367,24 @@ export function renderAdminConsoleHtml(): string {
       padding: 12px;
     }
 
+    .hub-events-list th:first-child,
+    .hub-events-list td:first-child {
+      width: 34px;
+      text-align: center;
+    }
+
     .hub-events-editor {
-      padding: 14px;
+      grid-column: 1 / -1;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      overflow: visible;
     }
 
     .hub-events-editor-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
-      gap: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
     }
 
     .hub-events-section-body {
@@ -559,7 +570,7 @@ export function renderAdminConsoleHtml(): string {
             </div>
             <div class="hub-events-list">
               <table>
-                <thead><tr><th>Title</th><th>State</th><th>Status</th><th>Updated</th></tr></thead>
+                <thead><tr><th aria-label="Select"></th><th>Title</th><th>State</th><th>Status</th><th>Updated</th></tr></thead>
                 <tbody id="hub-event-list"></tbody>
               </table>
             </div>
@@ -1036,6 +1047,7 @@ export function renderAdminConsoleHtml(): string {
     const hubEventStateFilter = document.getElementById("hub-event-state-filter");
     const hubEventStatusFilter = document.getElementById("hub-event-status-filter");
     const hubEventSearch = document.getElementById("hub-event-search");
+    let selectedHubEventId = "";
 
     function toIsoFromLocal(value) {
       if (!value) return undefined;
@@ -1048,6 +1060,13 @@ export function renderAdminConsoleHtml(): string {
       const parsed = new Date(value);
       if (Number.isNaN(parsed.getTime())) return "";
       return new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+
+    function setSelectedHubEventId(id) {
+      selectedHubEventId = id || "";
+      hubEventListRoot.querySelectorAll('input[data-hub-event-select="true"]').forEach(function (checkbox) {
+        checkbox.checked = checkbox.getAttribute("data-hub-event-id") === selectedHubEventId;
+      });
     }
 
     function collectHubEventInput() {
@@ -1084,9 +1103,10 @@ export function renderAdminConsoleHtml(): string {
     }
 
     async function adminApi(path, init) {
+      const headers = init && init.body ? { "content-type": "application/json" } : undefined;
       const response = await fetch(path, {
         credentials: "same-origin",
-        headers: { "content-type": "application/json" },
+        headers: headers,
         ...init
       });
       const contentType = response.headers.get("content-type") || "";
@@ -1145,7 +1165,7 @@ export function renderAdminConsoleHtml(): string {
       if (!events.length) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
-        cell.colSpan = 4;
+        cell.colSpan = 5;
         cell.textContent = "No hub events found.";
         row.appendChild(cell);
         hubEventListRoot.appendChild(row);
@@ -1153,12 +1173,35 @@ export function renderAdminConsoleHtml(): string {
       }
       events.forEach(function (event) {
         const row = document.createElement("tr");
+        const selectCell = document.createElement("td");
+        const select = document.createElement("input");
+        select.type = "checkbox";
+        select.dataset.hubEventSelect = "true";
+        select.dataset.hubEventId = event.id;
+        select.checked = event.id === selectedHubEventId;
+        select.addEventListener("click", function (clickEvent) {
+          clickEvent.stopPropagation();
+        });
+        select.addEventListener("change", function () {
+          if (select.checked) {
+            setSelectedHubEventId(event.id);
+            bindHubEventForm(event);
+            loadHubEventAuditLog(event.id);
+            return;
+          }
+          if (selectedHubEventId === event.id) {
+            setSelectedHubEventId("");
+          }
+        });
+        selectCell.appendChild(select);
+        row.appendChild(selectCell);
         [event.title, event.publicationState, event.status, formatLastCheckedAt(event.updatedAt)].forEach(function (value) {
           const cell = document.createElement("td");
           cell.textContent = value || "-";
           row.appendChild(cell);
         });
         row.addEventListener("click", function () {
+          setSelectedHubEventId(event.id);
           bindHubEventForm(event);
           loadHubEventAuditLog(event.id);
         });
@@ -1186,7 +1229,7 @@ export function renderAdminConsoleHtml(): string {
     }
 
     async function saveHubEventDraft() {
-      const id = hubEventFields.id.value;
+      const id = selectedHubEventId || hubEventFields.id.value;
       const input = collectHubEventInput();
       const result = id
         ? await adminApi(endpoints.hubEvents + "/" + encodeURIComponent(id), { method: "PUT", body: JSON.stringify(input) })
@@ -1196,7 +1239,7 @@ export function renderAdminConsoleHtml(): string {
     }
 
     async function runHubEventAction(action) {
-      const id = hubEventFields.id.value;
+      const id = selectedHubEventId || hubEventFields.id.value;
       if (!id) throw new Error("hub_event_required");
       await adminApi(endpoints.hubEvents + "/" + encodeURIComponent(id) + "/" + action, { method: "POST" });
       await refreshHubEvents();
@@ -1204,9 +1247,10 @@ export function renderAdminConsoleHtml(): string {
     }
 
     async function deleteHubEvent() {
-      const id = hubEventFields.id.value;
+      const id = selectedHubEventId || hubEventFields.id.value;
       if (!id) throw new Error("hub_event_required");
       await adminApi(endpoints.hubEvents + "/" + encodeURIComponent(id), { method: "DELETE" });
+      setSelectedHubEventId("");
       hubEventFields.id.value = "";
       await refreshHubEvents();
     }
