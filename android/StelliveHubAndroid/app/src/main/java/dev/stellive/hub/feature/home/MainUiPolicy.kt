@@ -55,6 +55,13 @@ object MainUiPolicy {
     fun showsSettingsTopBarAction(screenId: String, canGoBack: Boolean): Boolean =
         !canGoBack && screenId in primaryNavigationItems().map { it.screenId }
 
+    fun showsTopBarText(screenId: String): Boolean =
+        screenId == "goods_event_detail" || screenId == "settings" || screenId.startsWith("settings_")
+
+    fun goodsEventDetailTopBarTitle(eventTitle: String): String = eventTitle
+
+    fun goodsEventDetailTopBarRole(): String = "상세"
+
     fun topBarTitle(screenId: String): String = when (screenId) {
         "live" -> "라이브"
         "history" -> "기록"
@@ -81,7 +88,7 @@ object MainUiPolicy {
         "settings_hub_events" -> "공식 출처 굿즈와 행사"
         "settings_advanced" -> "조합 예외 규칙"
         "goods_events" -> "공식 출처의 기간성 굿즈와 행사"
-        "goods_event_detail" -> "공식 출처와 일정 정보"
+        "goods_event_detail" -> "상세"
         else -> "라이브 현황과 최근 알림"
     }
 
