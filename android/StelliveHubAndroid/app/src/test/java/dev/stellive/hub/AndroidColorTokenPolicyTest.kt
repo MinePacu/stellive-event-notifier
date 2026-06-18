@@ -19,9 +19,11 @@ class AndroidColorTokenPolicyTest {
     fun darkThemeSeparatesBackgroundFromCards() {
         val colors = colorsFrom("src/main/res/values-night/colors.xml")
 
-        assertEquals("#0E1416", colors["hub_background"])
-        assertEquals("#151D20", colors["hub_card"])
-        assertEquals("#2A363A", colors["hub_line"])
+        assertEquals("#000000", colors["hub_background"])
+        assertEquals("#181818", colors["hub_card"])
+        assertEquals("#2A2A2A", colors["hub_line"])
+        assertEquals("#D1000000", colors["hub_top_bar_glass"])
+        assertEquals("#F2000000", colors["hub_top_bar_glass_scrolled"])
     }
 
     private fun colorsFrom(path: String): Map<String, String> {

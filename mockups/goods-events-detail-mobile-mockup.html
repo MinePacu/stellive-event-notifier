@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>굿즈/행사 상세 모바일 목업</title>
+    <style>
+      :root {
+        --bg: #eef3f1;
+        --phone: #f8faf8;
+        --text: #141819;
+        --muted: #687271;
+        --line: rgba(20, 24, 25, 0.11);
+        --teal: #087b73;
+        --green: #16805f;
+        --amber: #a75d00;
+        --card: rgba(255, 255, 255, 0.82);
+        --shadow: 0 28px 70px rgba(23, 34, 35, 0.18);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 12% 12%, rgba(8, 123, 115, 0.18), transparent 30%),
+          linear-gradient(135deg, #f7faf7 0%, var(--bg) 48%, #e5ece9 100%);
+      }
+
+      .page { width: min(1180px, calc(100vw - 32px)); margin: 0 auto; padding: 36px 0 48px; }
+      .topbar { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin-bottom: 24px; }
+      h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 44px); letter-spacing: -0.045em; }
+      .lead { margin: 0; max-width: 720px; color: var(--muted); line-height: 1.65; }
+      .legend { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+      .chip { border: 1px solid var(--line); background: rgba(255,255,255,.65); border-radius: 999px; padding: 8px 12px; font-size: 13px; color: #3f4948; }
+      .phones { display: grid; grid-template-columns: repeat(2, minmax(320px, 1fr)); gap: 28px; align-items: start; }
+      .phone-wrap > h2 { margin: 0 0 12px; font-size: 16px; letter-spacing: -0.02em; color: #34403f; }
+      .phone {
+        position: relative;
+        width: min(390px, 100%);
+        height: 844px;
+        margin: 0 auto;
+        overflow: hidden;
+        border: 10px solid #111517;
+        border-radius: 36px;
+        background: var(--phone);
+        box-shadow: var(--shadow);
+      }
+      .phone.ios { border-width: 3px; border-color: #0f1214; }
+      .notch { position: absolute; z-index: 10; top: 0; left: 50%; width: 132px; height: 30px; transform: translateX(-50%); border-radius: 0 0 18px 18px; background: #0f1214; }
+      .status { position: absolute; z-index: 9; top: 0; left: 0; right: 0; height: 44px; padding: 13px 20px 0; display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: rgba(10,14,15,.8); }
+      .phone.ios .status { padding-top: 15px; }
+      .detail { height: 100%; overflow-y: auto; scroll-snap-type: y proximity; background: #f6f8f6; }
+      .detail::-webkit-scrollbar { width: 0; }
+      .hero {
+        position: relative;
+        min-height: 282px;
+        padding: 56px 18px 18px;
+        display: flex;
+        align-items: end;
+        overflow: hidden;
+        color: #fff;
+        background:
+          radial-gradient(circle at 18% 24%, rgba(255,255,255,.42) 0 8%, transparent 9%),
+          radial-gradient(circle at 84% 22%, rgba(255,205,111,.5) 0 10%, transparent 11%),
+          linear-gradient(145deg, #0b7e77 0%, #12383a 52%, #121719 100%);
+      }
+      .hero:after {
+        content: "";
+        position: absolute;
+        inset: auto -28px -54px 52px;
+        height: 178px;
+        border-radius: 40px;
+        transform: rotate(-8deg);
+        background: linear-gradient(135deg, rgba(255,255,255,.38), rgba(255,255,255,.08));
+        border: 1px solid rgba(255,255,255,.28);
+      }
+      .hero-copy { position: relative; z-index: 1; max-width: 310px; text-shadow: 0 2px 18px rgba(0,0,0,.25); }
+      .category { display: inline-flex; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.18); font-size: 12px; font-weight: 800; backdrop-filter: blur(14px); }
+      .hero h3 { margin: 12px 0 8px; font-size: 25px; line-height: 1.18; letter-spacing: -0.04em; }
+      .hero p { margin: 0; color: rgba(255,255,255,.82); font-size: 13px; line-height: 1.45; }
+      .titlebar {
+        position: sticky;
+        top: 0;
+        z-index: 8;
+        height: 54px;
+        margin-top: -54px;
+        padding: 11px 14px 0;
+        display: grid;
+        grid-template-columns: 36px 1fr 36px;
+        gap: 8px;
+        align-items: center;
+        opacity: var(--bar-opacity, 0);
+        background: rgba(248,250,248,.86);
+        border-bottom: 1px solid rgba(20,24,25,.08);
+        backdrop-filter: blur(18px);
+      }
+      .titlebar strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: center; font-size: 14px; letter-spacing: -0.02em; }
+      .icon-btn { width: 34px; height: 34px; border: 1px solid rgba(20,24,25,.08); border-radius: 999px; background: rgba(255,255,255,.62); display: grid; place-items: center; color: #14201f; }
+      .content { padding: 18px 16px 28px; }
+      .summary-card, .info-card, .notice-card {
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: var(--card);
+        box-shadow: 0 10px 26px rgba(25,35,36,.06);
+        backdrop-filter: blur(14px);
+      }
+      .summary-card { padding: 17px; margin-bottom: 12px; }
+      .status-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 10px; }
+      .badge { padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; background: rgba(22,128,95,.1); color: var(--green); }
+      .android .badge { background: rgba(8,123,115,.11); color: var(--teal); }
+      .dday { color: var(--amber); font-size: 13px; font-weight: 800; }
+      .summary-card .summary-label { margin: 0 0 7px; color: var(--muted); font-size: 13px; font-weight: 800; letter-spacing: -0.01em; }
+      .summary-card p { margin: 0; color: #596362; line-height: 1.55; font-size: 14px; }
+      .cta-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+      .cta { border: 0; border-radius: 16px; padding: 12px 10px; font-weight: 800; color: #fff; background: var(--teal); }
+      .cta.secondary {
+        color: #0e4f49;
+        background: #eef8f6;
+        border: 1px solid rgba(8, 123, 115, 0.24);
+      }
+      .section-title { margin: 18px 2px 10px; color: #273230; font-size: 15px; letter-spacing: -0.02em; }
+      .info-card { padding: 6px 14px; }
+      .info-row { display: grid; grid-template-columns: 82px 1fr; gap: 12px; padding: 13px 0; border-bottom: 1px solid rgba(20,24,25,.08); }
+      .info-row:last-child { border-bottom: 0; }
+      .label { color: var(--muted); font-size: 13px; }
+      .value { font-size: 14px; line-height: 1.45; font-weight: 700; color: #222b2a; }
+      .notice-card { margin-top: 14px; padding: 14px; color: #5b6664; font-size: 13px; line-height: 1.55; }
+      .ios .hero { min-height: 286px; padding-top: 62px; background: linear-gradient(145deg, #365064 0%, #102c37 48%, #101417 100%); }
+      .ios .summary-card, .ios .info-card, .ios .notice-card { border-radius: 20px; background: rgba(255,255,255,.9); }
+      .ios .content { background: #f2f2f7; }
+      .ios .cta { border-radius: 14px; background: #0a7a70; }
+      .ios .cta.secondary {
+        color: #073f3a;
+        background: #ffffff;
+        border-color: rgba(7, 63, 58, 0.18);
+      }
+      @media (max-width: 840px) {
+        .topbar { display: block; }
+        .legend { justify-content: flex-start; margin-top: 14px; }
+        .phones { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="topbar">
+        <div>
+          <h1>굿즈/행사 상세 페이지 목업</h1>
+          <p class="lead">행사 선택 후 진입하는 상세 화면입니다. 썸네일은 화면 상단 약 1/3을 차지하고, 아래로 스크롤하면 타이틀바에 행사 제목이 표시됩니다.</p>
+        </div>
+        <div class="legend">
+          <span class="chip">장소/기간 보강</span>
+          <span class="chip">대형 썸네일</span>
+          <span class="chip">스크롤 타이틀바</span>
+        </div>
+      </header>
+
+      <section class="phones">
+        <article class="phone-wrap">
+          <h2>Android 상세</h2>
+          <div class="phone android">
+            <div class="status"><span>10:30</span><span>5G 87%</span></div>
+            <div class="detail" data-detail>
+              <section class="hero">
+                <div class="hero-copy">
+                  <span class="category">오프라인 행사</span>
+                  <h3>팝업 스토어 현장 입장 시작</h3>
+                  <p>더현대 서울 B2 행사장 · 6월 17일부터 6월 23일까지</p>
+                </div>
+              </section>
+              <nav class="titlebar"><button class="icon-btn">‹</button><strong>팝업 스토어 현장 입장 시작</strong><button class="icon-btn">↗</button></nav>
+              <div class="content">
+                <section class="summary-card">
+                  <div class="status-row"><span class="badge">진행 중</span><span class="dday">D-0</span></div>
+                  <div class="summary-label">핵심 안내</div>
+                  <p>현장 입장과 굿즈 판매가 함께 진행됩니다. 혼잡도에 따라 입장 대기와 구매 가능 수량이 달라질 수 있습니다.</p>
+                  <div class="cta-row"><button class="cta">앱에 저장</button><button class="cta secondary">출처 열기</button></div>
+                </section>
+                <h3 class="section-title">행사 정보</h3>
+                <section class="info-card">
+                  <div class="info-row"><span class="label">장소</span><span class="value">더현대 서울 B2 아이코닉 스퀘어</span></div>
+                  <div class="info-row"><span class="label">시작</span><span class="value">2026.06.17 (수) 19:00</span></div>
+                  <div class="info-row"><span class="label">기간</span><span class="value">2026.06.17 (수) - 2026.06.23 (화)</span></div>
+                  <div class="info-row"><span class="label">참여 방식</span><span class="value">오프라인 · 현장 입장</span></div>
+                  <div class="info-row"><span class="label">분류</span><span class="value">굿즈 · 행사</span></div>
+                  <div class="info-row"><span class="label">출처</span><span class="value">공식 공지 기반 HubEvent</span></div>
+                </section>
+                <section class="notice-card">일정, 장소, 판매/입장 조건은 공식 공지 변경에 따라 달라질 수 있습니다. 앱은 확인용 요약만 제공하므로 참여 전 반드시 출처 링크에서 최신 공지를 확인하세요.</section>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="phone-wrap">
+          <h2>iPhone 상세</h2>
+          <div class="phone ios">
+            <div class="notch"></div>
+            <div class="status"><span>10:30</span><span>LTE 87%</span></div>
+            <div class="detail" data-detail>
+              <section class="hero">
+                <div class="hero-copy">
+                  <span class="category">티켓 오픈</span>
+                  <h3>2026 콘서트 티켓 오픈</h3>
+                  <p>올림픽공원 KSPO DOME · 6월 14일 20:00 시작</p>
+                </div>
+              </section>
+              <nav class="titlebar"><button class="icon-btn">‹</button><strong>2026 콘서트 티켓 오픈</strong><button class="icon-btn">↗</button></nav>
+              <div class="content">
+                <section class="summary-card">
+                  <div class="status-row"><span class="badge">예정</span><span class="dday">D-3</span></div>
+                  <div class="summary-label">핵심 안내</div>
+                  <p>공연 티켓 예매 시작 일정입니다. 사용자 알림 설정에 따라 시작 전과 마감 임박 상태를 앱 내 일정으로 확인합니다.</p>
+                  <div class="cta-row"><button class="cta">캘린더 추가</button><button class="cta secondary">티켓 링크</button></div>
+                </section>
+                <h3 class="section-title">행사 정보</h3>
+                <section class="info-card">
+                  <div class="info-row"><span class="label">장소</span><span class="value">올림픽공원 KSPO DOME</span></div>
+                  <div class="info-row"><span class="label">시작</span><span class="value">2026.06.14 (일) 20:00</span></div>
+                  <div class="info-row"><span class="label">기간</span><span class="value">2026.06.14 (일) 20:00부터 예매 종료 공지까지</span></div>
+                  <div class="info-row"><span class="label">참여 방식</span><span class="value">온라인 예매 · 오프라인 공연</span></div>
+                  <div class="info-row"><span class="label">분류</span><span class="value">티켓 · 행사</span></div>
+                  <div class="info-row"><span class="label">출처</span><span class="value">공식 공지 기반 HubEvent</span></div>
+                </section>
+                <section class="notice-card">일정, 장소, 판매/입장 조건은 공식 공지 변경에 따라 달라질 수 있습니다. 앱은 확인용 요약만 제공하므로 참여 전 반드시 출처 링크에서 최신 공지를 확인하세요.</section>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+    <script>
+      document.querySelectorAll("[data-detail]").forEach((scroller) => {
+        const update = () => {
+          const opacity = Math.min(1, Math.max(0, (scroller.scrollTop - 88) / 92));
+          scroller.style.setProperty("--bar-opacity", opacity.toFixed(2));
+        };
+        scroller.addEventListener("scroll", update, { passive: true });
+        update();
+      });
+    </script>
+  </body>
+</html>

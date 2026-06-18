@@ -77,6 +77,13 @@ rtk pip list            rtk pnpm install        rtk npm run <script>
 - Use `fd` for file and directory discovery instead of `find`.
 - Use `rg` before `grep` when fast text search is the priority.
 - Use `ast-grep` when deeper analysis requires understanding syntax structure rather than plain text matching.
+
+## Serena Tool Usage
+
+- If Serena MCP tools are available, use them when they materially improve repository navigation, symbol-level code understanding, or targeted edits.
+- Before using Serena tools for a coding task, call Serena's `initial_instructions` tool and follow its active project guidance.
+- Prefer Serena's semantic tools for symbol discovery, reference lookup, and focused code edits; use `rg`, `fd`, `ast-grep`, and direct file reads when they are simpler or more precise.
+- Serena usage does not override this file, project rules, RTK command prefixing, privacy/secrets restrictions, or platform/API policy requirements.
 <!-- /headroom:rtk-instructions -->
 
 ## Commit Message Formatting

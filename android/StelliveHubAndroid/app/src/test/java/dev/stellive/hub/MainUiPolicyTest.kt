@@ -17,7 +17,7 @@ class MainUiPolicyTest {
         assertEquals("허용된 알림 기록과 정책 제외 항목", MainUiPolicy.topBarRole("history"))
         assertEquals("알림 대상과 전송 정책", MainUiPolicy.topBarRole("settings"))
         assertEquals("상세", MainUiPolicy.topBarTitle("goods_event_detail"))
-        assertEquals("공식 출처와 일정 정보", MainUiPolicy.topBarRole("goods_event_detail"))
+        assertEquals("상세", MainUiPolicy.topBarRole("goods_event_detail"))
     }
 
     @Test
