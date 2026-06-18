@@ -28,7 +28,7 @@
 		};
 		555555555555555555555555 = {
 			isa = PBXGroup;
-			children = (777777777777777777777777, 900000000000000000000003, 888888888888888888888888, 666666666666666666666666);
+			children = (777777777777777777777777, 111000000000000000000004, 900000000000000000000003, 888888888888888888888888, 666666666666666666666666);
 			sourceTree = "<group>";
 		};
 		666666666666666666666666 = {
@@ -37,9 +37,43 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		111000000000000000000001 = {
+			isa = PBXGroup;
+			children = (111000000000000000000002, 111000000000000000000003, 111000000000000000000005, B00000000000000000000000, 111000000000000000000006);
+			name = App;
+			sourceTree = "<group>";
+		};
+		111000000000000000000002 = {
+			isa = PBXGroup;
+			children = (B00000000000000000000001);
+			name = Models;
+			path = Models;
+			sourceTree = "<group>";
+		};
+		111000000000000000000003 = {
+			isa = PBXGroup;
+			children = (B00000000000000000000002, B00000000000000000000003, B00000000000000000000004, B0000000000000000000000D, B0000000000000000000000E, B0000000000000000000000F, B00000000000000000000010, B00000000000000000000011, B00000000000000000000012, B00000000000000000000013, B00000000000000000000014, B00000000000000000000015, B00000000000000000000016);
+			name = Services;
+			path = Services;
+			sourceTree = "<group>";
+		};
+		111000000000000000000004 = {
+			isa = PBXGroup;
+			children = (C00000000000000000000010);
+			name = Config;
+			path = Config;
+			sourceTree = "<group>";
+		};
+		111000000000000000000005 = {
+			isa = PBXGroup;
+			children = (B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, B00000000000000000000008, B00000000000000000000009, B0000000000000000000000A, B0000000000000000000000B, B0000000000000000000000C, B00000000000000000000017, B00000000000000000000018);
+			name = Views;
+			path = Views;
+			sourceTree = "<group>";
+		};
 		777777777777777777777777 = {
 			isa = PBXGroup;
-			children = (B00000000000000000000000, B00000000000000000000001, B00000000000000000000002, B00000000000000000000003, B00000000000000000000004, B0000000000000000000000D, B0000000000000000000000E, B0000000000000000000000F, B00000000000000000000010, B00000000000000000000011, B00000000000000000000012, B00000000000000000000013, B00000000000000000000014, B00000000000000000000015, B00000000000000000000016, C00000000000000000000010, B00000000000000000000005, B00000000000000000000006, B00000000000000000000007, B00000000000000000000008, B00000000000000000000009, B0000000000000000000000A, B0000000000000000000000B, B0000000000000000000000C, B00000000000000000000017, B00000000000000000000018);
+			children = (111000000000000000000001);
 			path = StelliveHubiOS;
 			sourceTree = "<group>";
 		};
@@ -50,31 +84,32 @@
 			sourceTree = "<group>";
 		};
 		B00000000000000000000000 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
-		B00000000000000000000001 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/HubModels.swift; sourceTree = "<group>"; };
-		B00000000000000000000002 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/MockHubStore.swift; sourceTree = "<group>"; };
-		B00000000000000000000003 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/RealtimeStreamClient.swift; sourceTree = "<group>"; };
-		B00000000000000000000004 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/NotificationPermissionService.swift; sourceTree = "<group>"; };
-		B0000000000000000000000D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/NotificationPayload.swift; sourceTree = "<group>"; };
-		B0000000000000000000000E = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/NotificationThreadPolicy.swift; sourceTree = "<group>"; };
-		B0000000000000000000000F = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/NotificationCollapsePolicy.swift; sourceTree = "<group>"; };
-		B00000000000000000000010 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/NotificationSummaryTextPolicy.swift; sourceTree = "<group>"; };
-		B00000000000000000000011 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/DeliveredNotificationCleanupService.swift; sourceTree = "<group>"; };
-B00000000000000000000012 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/HubCalendarWidgetStore.swift; sourceTree = "<group>"; };
-		B00000000000000000000013 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/HubAPIClient.swift; sourceTree = "<group>"; };
-		B00000000000000000000014 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/DeviceIDStore.swift; sourceTree = "<group>"; };
-		B00000000000000000000015 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/PushTokenSyncer.swift; sourceTree = "<group>"; };
-		B00000000000000000000016 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ServerHubStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000001 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubModels.swift; sourceTree = "<group>"; };
+		B00000000000000000000002 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockHubStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000003 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeStreamClient.swift; sourceTree = "<group>"; };
+		B00000000000000000000004 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPermissionService.swift; sourceTree = "<group>"; };
+		B0000000000000000000000D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPayload.swift; sourceTree = "<group>"; };
+		B0000000000000000000000E = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationThreadPolicy.swift; sourceTree = "<group>"; };
+		B0000000000000000000000F = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCollapsePolicy.swift; sourceTree = "<group>"; };
+		B00000000000000000000010 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSummaryTextPolicy.swift; sourceTree = "<group>"; };
+		B00000000000000000000011 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeliveredNotificationCleanupService.swift; sourceTree = "<group>"; };
+B00000000000000000000012 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubCalendarWidgetStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000013 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubAPIClient.swift; sourceTree = "<group>"; };
+		B00000000000000000000014 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceIDStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000015 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushTokenSyncer.swift; sourceTree = "<group>"; };
+		B00000000000000000000016 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerHubStore.swift; sourceTree = "<group>"; };
 		C00000000000000000000010 = { isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Default.xcconfig; sourceTree = SOURCE_ROOT; };
-		B00000000000000000000005 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ContentView.swift; sourceTree = "<group>"; };
-		B00000000000000000000006 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/HomeView.swift; sourceTree = "<group>"; };
-		B00000000000000000000007 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/LiveView.swift; sourceTree = "<group>"; };
-		B00000000000000000000008 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/HistoryView.swift; sourceTree = "<group>"; };
-		B00000000000000000000009 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/SettingsView.swift; sourceTree = "<group>"; };
-		B0000000000000000000000A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/MemberDetailView.swift; sourceTree = "<group>"; };
-		B0000000000000000000000B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/HubEventsView.swift; sourceTree = "<group>"; };
-		B0000000000000000000000C = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/HubEventDetailView.swift; sourceTree = "<group>"; };
-		B00000000000000000000017 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/HubEventsCalendarViewModel.swift; sourceTree = "<group>"; };
-		B00000000000000000000018 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/HubEventsCalendarView.swift; sourceTree = "<group>"; };
+		111000000000000000000006 = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B00000000000000000000005 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		B00000000000000000000006 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		B00000000000000000000007 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveView.swift; sourceTree = "<group>"; };
+		B00000000000000000000008 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		B00000000000000000000009 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B0000000000000000000000A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberDetailView.swift; sourceTree = "<group>"; };
+		B0000000000000000000000B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubEventsView.swift; sourceTree = "<group>"; };
+		B0000000000000000000000C = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubEventDetailView.swift; sourceTree = "<group>"; };
+		B00000000000000000000017 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubEventsCalendarViewModel.swift; sourceTree = "<group>"; };
+		B00000000000000000000018 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubEventsCalendarView.swift; sourceTree = "<group>"; };
 		C00000000000000000000000 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceStateTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000001 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationLoadReductionPolicyTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000002 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChzzkBackendBoundaryTests.swift; sourceTree = "<group>"; };
