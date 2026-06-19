@@ -1078,11 +1078,11 @@ export function renderAdminConsoleHtml(): string {
           input[key] = element.checked;
           return;
         }
-        if (["announcedAt", "startsAt", "endsAt"].includes(key)) {
-          const iso = toIsoFromLocal(element.value);
-          if (iso) input[key] = iso;
-          return;
-        }
+      if (["announcedAt", "startsAt", "endsAt"].includes(key)) {
+        const iso = toIsoFromLocal(element.value);
+        input[key] = iso || null;
+        return;
+      }
         const value = element.value.trim();
         if (value) input[key] = value;
       });

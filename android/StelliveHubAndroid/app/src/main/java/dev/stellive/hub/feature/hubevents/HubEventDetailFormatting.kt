@@ -35,7 +35,7 @@ object HubEventDetailFormatting {
         return when {
             startsAt != null && endsAt != null ->
                 "${formatDateTime(startsAt, zoneId)} - ${formatDateTime(endsAt, zoneId)}"
-            startsAt != null -> "${formatDateTime(startsAt, zoneId)}부터 종료 공지까지"
+            startsAt != null -> "${formatDateTime(startsAt, zoneId)} 시작 · 종료 미정"
             else -> "미정"
         }
     }

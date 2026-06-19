@@ -137,3 +137,34 @@ describe("hub event calendar projection", () => {
     expect(snapshot.entries[0]).toMatchObject({ eventId: "open", status: "open" });
   });
 });
+
+describe("HubEvent calendar start-only events", () => {
+  it("projects start-only events on the start date without deriving closing or ended status", () => {
+    const response = buildHubCalendarResponse(
+      [
+        hubEvent({
+          id: "start-only-event",
+          status: "upcoming",
+          startsAt: "2026-07-11T09:00:00.000Z",
+          endsAt: undefined
+        })
+      ],
+      {
+        from: new Date("2026-07-01T00:00:00.000Z"),
+        to: new Date("2026-07-31T23:59:59.999Z"),
+        timezone: "Asia/Seoul",
+        now: new Date("2026-07-11T10:00:00.000Z")
+      }
+    );
+
+    const entries = response.days.flatMap((day) => day.entries);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      eventId: "start-only-event",
+      status: "open",
+      displayDate: "2026-07-11",
+      displayTimeText: "18:00 시작"
+    });
+  });
+});

@@ -10,7 +10,13 @@ import { buildHubEventNotificationCandidates } from "../src/hub-events/hubEventN
 import type { AdminHubEventWriteInput, HubEventAuditLogInput } from "../src/hub-events/hubEventRepository.js";
 import type { PlatformEvent } from "../src/types.js";
 
-function adminEvent(overrides: Partial<AdminHubEvent> = {}): AdminHubEvent {
+type AdminHubEventOverrides = Partial<Omit<AdminHubEvent, "announcedAt" | "startsAt" | "endsAt">> & {
+  announcedAt?: string | Date | null;
+  startsAt?: string | Date | null;
+  endsAt?: string | Date | null;
+};
+
+function adminEvent(overrides: AdminHubEventOverrides = {}): AdminHubEvent {
   return {
     id: "event-1",
     category: "online_goods",
@@ -28,7 +34,7 @@ function adminEvent(overrides: Partial<AdminHubEvent> = {}): AdminHubEvent {
     createdAt: "2026-06-10T00:00:00.000Z",
     updatedAt: "2026-06-10T00:00:00.000Z",
     ...overrides
-  };
+  } as AdminHubEvent;
 }
 
 function createRepository(seed: AdminHubEvent) {

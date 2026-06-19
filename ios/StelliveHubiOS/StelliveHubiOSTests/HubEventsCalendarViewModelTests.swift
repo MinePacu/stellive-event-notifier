@@ -213,6 +213,24 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(rows.map(\.label), ["장소", "시작", "기간", "참여 방식", "분류", "출처"])
     }
 
+    func testHubEventDetailRowsShowUnknownEndForStartOnlyEvent() {
+        let rows = HubEventDetailFormatting.rows(for: startOnlyDetailEvent())
+        let period = rows.first { $0.label == "기간" }?.value
+
+        XCTAssertEqual(period, "2026.06.17 (수) 19:00 시작 · 종료 미정")
+    }
+
+    func testCalendarEntryDisplaysStartOnlyEventAsStartTime() {
+        let store = MockHubStore()
+        let entry = store.calendarDays(for: "all")
+            .flatMap(\.entries)
+            .first { $0.eventId == "upcoming-offline-popup" }
+
+        XCTAssertNil(entry?.endsAt)
+        XCTAssertEqual(entry?.displayTimeText.hasSuffix("시작"), true)
+        XCTAssertEqual(entry?.displayTimeText.contains("마감"), false)
+    }
+
     func testHubEventDetailNoticeCopyMatchesDesignSource() {
         XCTAssertEqual(
             HubEventDetailFormatting.noticeText,
@@ -246,6 +264,32 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
             purchaseUrl: nil,
             ticketUrl: nil,
             venueName: "더현대 서울 B2 아이코닉 스퀘어",
+            venueAddress: nil,
+            image: nil,
+            notificationEligible: true,
+            updatedAt: dateTime("2026-06-10T01:00:00Z")
+        )
+    }
+
+    private func startOnlyDetailEvent() -> HubEvent {
+        HubEvent(
+            id: "start-only-concert",
+            category: .offlineConcert,
+            participationMode: .offline,
+            status: .open,
+            title: "종료 시각 미정 콘서트",
+            summary: "공연 당일 종료 시각이 아직 확정되지 않았습니다.",
+            memberId: nil,
+            generationId: "official",
+            sourceUrl: "https://example.com/source",
+            sourceLabel: "공식 공지 기반 HubEvent",
+            sourceType: .official,
+            announcedAt: dateTime("2026-06-10T01:00:00Z"),
+            startsAt: dateTime("2026-06-17T10:00:00Z"),
+            endsAt: nil,
+            purchaseUrl: nil,
+            ticketUrl: nil,
+            venueName: "공연장",
             venueAddress: nil,
             image: nil,
             notificationEligible: true,

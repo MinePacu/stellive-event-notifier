@@ -1509,12 +1509,15 @@ components:
         announcedAt:
           type: string
           format: date-time
+          nullable: true
         startsAt:
           type: string
           format: date-time
+          nullable: true
         endsAt:
           type: string
           format: date-time
+          nullable: true
         purchaseUrl:
           type: string
           format: uri

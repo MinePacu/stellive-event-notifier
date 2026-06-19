@@ -25,6 +25,18 @@ class CalendarWidgetTextFormatterTest {
     }
 
     @Test
+    fun formatsStartOnlyHubEventSubtitleWithoutDeadlineCopy() {
+        val entry = calendarEntry(
+            status = HubEventStatus.OPEN,
+            title = "콘서트 당일",
+            displayDate = "2026-07-11",
+            displayTimeText = "18:00 시작"
+        )
+
+        assertEquals("진행중 · 2026-07-11 · 18:00 시작", CalendarWidgetTextFormatter.subtitle(entry))
+    }
+
+    @Test
     fun formatsSpecialDaySubtitleFromSpecialDayLabel() {
         val birthday = calendarEntry(
             id = "birthday:ayatsuno-yuni:2026-05-21",

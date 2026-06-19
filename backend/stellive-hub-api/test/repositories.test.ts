@@ -650,6 +650,34 @@ describe("HubEventRepository", () => {
     ]);
   });
 
+  it("passes explicit null dates through update writes", async () => {
+    const calls: unknown[] = [];
+    const repository = new HubEventRepository({
+      hubEvent: {
+        update: async (args: unknown) => {
+          calls.push(args);
+          return record;
+        }
+      }
+    });
+
+    await repository.update("event-1", {
+      endsAt: null,
+      actorId: "admin-2"
+    });
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        where: { id: "event-1" },
+        data: expect.objectContaining({
+          endsAt: null,
+          updatedBy: "admin-2",
+          revision: { increment: 1 }
+        })
+      })
+    ]);
+  });
+
   it("writes append-only audit log entries", async () => {
     const calls: unknown[] = [];
     const repository = new HubEventRepository({

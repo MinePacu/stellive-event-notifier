@@ -71,9 +71,14 @@ export interface AdminHubEventListResult {
   nextCursor?: string;
 }
 
-export interface AdminHubEventWriteInput extends Partial<HubEvent> {
+type NullableDateInput = string | Date | null | undefined;
+
+export type AdminHubEventWriteInput = Omit<Partial<HubEvent>, "announcedAt" | "startsAt" | "endsAt"> & {
+  announcedAt?: NullableDateInput;
+  startsAt?: NullableDateInput;
+  endsAt?: NullableDateInput;
   actorId?: string;
-}
+};
 
 export interface SetHubEventPublicationStateInput {
   id: string;
@@ -189,8 +194,9 @@ function toAdminHubEvent(record: HubEventRecord): AdminHubEvent {
   }) as unknown as AdminHubEvent;
 }
 
-function toDate(value: string | Date | undefined): Date | undefined {
-  if (!value) return undefined;
+function toDate(value: NullableDateInput): Date | null | undefined {
+  if (value === null) return null;
+  if (value === undefined) return undefined;
   return value instanceof Date ? value : new Date(value);
 }
 

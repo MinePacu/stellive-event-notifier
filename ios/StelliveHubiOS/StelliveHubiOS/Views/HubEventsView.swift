@@ -86,6 +86,9 @@ struct HubEventsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .refreshable {
+            await refreshServerHubEvents()
+        }
         .task {
             await refreshServerHubEvents()
         }

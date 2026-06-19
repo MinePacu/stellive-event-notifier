@@ -200,6 +200,35 @@ describe("admin hub event routes", () => {
     expect(service.list).toHaveBeenCalledWith(expect.objectContaining({ publicationState: "draft", limit: 5 }));
   });
 
+  it("passes explicit null date fields from update requests", async () => {
+    const { app, service } = await buildTestApp();
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/admin/hub-events/event-1",
+      headers: {
+        authorization: "Bearer admin-token",
+        "content-type": "application/json"
+      },
+      payload: JSON.stringify({
+        startsAt: "2026-07-11T09:00:00.000Z",
+        endsAt: null
+      })
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(service.update).toHaveBeenCalledWith(
+      "event-1",
+      {
+        startsAt: "2026-07-11T09:00:00.000Z",
+        endsAt: null
+      },
+      { actorId: "admin", reason: undefined }
+    );
+  });
+
   it("accepts a signed admin session cookie when explicitly sent", async () => {
     const cookie = createAdminSessionCookie({ adminToken: "admin-token", secure: false, now: new Date() });
     const { app } = await buildTestApp();
