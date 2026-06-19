@@ -238,7 +238,7 @@ enum HubEventDetailFormatting {
         case let (start?, end?):
             return "\(format(start)) - \(format(end))"
         case let (start?, nil):
-            return "\(format(start))부터 종료 공지까지"
+            return "\(format(start)) 시작 · 종료 미정"
         default:
             return "미정"
         }

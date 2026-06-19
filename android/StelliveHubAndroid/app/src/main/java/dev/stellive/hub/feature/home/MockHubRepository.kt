@@ -106,6 +106,23 @@ class MockHubRepository : HubRepository {
             venueName = "서울 팝업 스페이스",
             venueAddress = "서울특별시",
             updatedAt = Instant.parse("2026-06-03T02:00:00Z")
+        ),
+        HubEvent(
+            id = "start-only-concert",
+            category = HubEventCategory.OFFLINE_CONCERT,
+            participationMode = HubEventParticipationMode.OFFLINE,
+            status = HubEventStatus.UPCOMING,
+            title = "종료 시각 미정 콘서트",
+            summary = "공연 시작 시각만 확정된 일정입니다.",
+            generationId = "official",
+            sourceUrl = "https://stellive.example/events/start-only-concert",
+            sourceLabel = "공식 공지",
+            sourceType = HubEventSourceType.OFFICIAL,
+            announcedAt = Instant.parse("2026-06-01T03:00:00Z"),
+            startsAt = Instant.parse("2026-07-11T09:00:00Z"),
+            venueName = "고려대학교 화정체육관",
+            venueAddress = "서울특별시",
+            updatedAt = Instant.parse("2026-06-03T03:00:00Z")
         )
     )
 

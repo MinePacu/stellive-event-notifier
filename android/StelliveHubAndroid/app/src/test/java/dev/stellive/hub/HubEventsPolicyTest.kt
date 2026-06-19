@@ -64,7 +64,7 @@ class HubEventsPolicyTest {
         val repository = MockHubRepository()
 
         assertEquals(
-            listOf("closing-official-goods", "open-gen3-goods", "upcoming-offline-popup"),
+            listOf("closing-official-goods", "open-gen3-goods", "upcoming-offline-popup", "start-only-concert"),
             repository.hubEventsForFilter("all").map { it.id }
         )
     }

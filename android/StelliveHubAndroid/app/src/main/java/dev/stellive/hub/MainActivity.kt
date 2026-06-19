@@ -277,7 +277,7 @@ private var draggingLiveMemberId: String? = null
             HubScreen.SETTINGS_HUB_EVENTS -> renderSettingsHubEvents()
             HubScreen.SETTINGS_ADVANCED -> renderSettingsAdvanced()
         }
-        binding.contentRefresh.isEnabled = screen == HubScreen.LIVE
+        binding.contentRefresh.isEnabled = screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS
     }
 
     private fun updateSelectedBottomNavigation(screen: HubScreen) {

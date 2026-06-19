@@ -7,7 +7,13 @@ import {
 import type { AdminHubEvent } from "../src/hub-events/hubEventAdminTypes.js";
 import type { AdminHubEventWriteInput, HubEventAuditLogInput } from "../src/hub-events/hubEventRepository.js";
 
-function adminEvent(overrides: Partial<AdminHubEvent> = {}): AdminHubEvent {
+type AdminHubEventOverrides = Partial<Omit<AdminHubEvent, "announcedAt" | "startsAt" | "endsAt">> & {
+  announcedAt?: string | Date | null;
+  startsAt?: string | Date | null;
+  endsAt?: string | Date | null;
+};
+
+function adminEvent(overrides: AdminHubEventOverrides = {}): AdminHubEvent {
   return {
     id: "event-1",
     category: "online_goods",
@@ -25,7 +31,19 @@ function adminEvent(overrides: Partial<AdminHubEvent> = {}): AdminHubEvent {
     createdAt: "2026-06-12T00:00:00.000Z",
     updatedAt: "2026-06-12T00:00:00.000Z",
     ...overrides
+  } as AdminHubEvent;
+}
+
+function normalizeAdminEvent(event: AdminHubEvent): AdminHubEvent {
+  const normalized = { ...event } as AdminHubEvent & {
+    announcedAt?: string | null;
+    startsAt?: string | null;
+    endsAt?: string | null;
   };
+  if (normalized.announcedAt === null) delete normalized.announcedAt;
+  if (normalized.startsAt === null) delete normalized.startsAt;
+  if (normalized.endsAt === null) delete normalized.endsAt;
+  return normalized;
 }
 
 function createFakeRepository(seed: AdminHubEvent = adminEvent()) {
@@ -42,11 +60,13 @@ function createFakeRepository(seed: AdminHubEvent = adminEvent()) {
         current = adminEvent({ ...input, publicationState: "draft", revision: 1, createdBy: input.actorId, updatedBy: input.actorId });
         return current;
       },
-      async update(id: string, input: AdminHubEventWriteInput) {
-        calls.push(`update:${id}`);
-        current = adminEvent({ ...current, ...input, revision: current.revision + 1, updatedBy: input.actorId });
-        return current;
-      },
+    async update(id: string, input: AdminHubEventWriteInput) {
+      calls.push(`update:${id}`);
+      current = normalizeAdminEvent(
+        adminEvent({ ...current, ...input, revision: current.revision + 1, updatedBy: input.actorId })
+      );
+      return current;
+    },
       async setPublicationState(input: {
         id: string;
         publicationState: AdminHubEvent["publicationState"];
@@ -175,6 +195,66 @@ describe("HubEventAdminService", () => {
         reason: "ready"
       })
     );
+  });
+
+  it("clears endsAt when an update explicitly sends null", async () => {
+    const fake = createFakeRepository(
+      adminEvent({
+        status: "upcoming",
+        startsAt: "2026-07-11T09:00:00.000Z",
+        endsAt: "2026-07-11T14:00:00.000Z",
+        publicationState: "published",
+        publishedAt: "2026-06-12T12:00:00.000Z"
+      })
+    );
+    const service = createService(fake.repository);
+
+    const updated = await service.update("event-1", { endsAt: null }, { actorId: "admin" });
+
+    expect(updated.endsAt).toBeUndefined();
+  });
+
+  it("does not restore a cleared endsAt during publish", async () => {
+    const fake = createFakeRepository(
+      adminEvent({
+        status: "upcoming",
+        startsAt: "2026-07-11T09:00:00.000Z",
+        endsAt: "2026-07-11T14:00:00.000Z"
+      })
+    );
+    const service = createService(fake.repository);
+
+    await service.update("event-1", { endsAt: null }, { actorId: "admin" });
+    const published = await service.publish("event-1", { actorId: "admin", reason: "ready" });
+
+    expect(published.endsAt).toBeUndefined();
+  });
+
+  it("rejects clearing all date fields from a published event that needs a date window", async () => {
+    const fake = createFakeRepository(
+      adminEvent({
+        status: "upcoming",
+        startsAt: "2026-07-11T09:00:00.000Z",
+        endsAt: "2026-07-11T14:00:00.000Z",
+        publicationState: "published",
+        publishedAt: "2026-06-12T12:00:00.000Z"
+      })
+    );
+    const service = createService(fake.repository);
+
+    await expect(
+      service.update(
+        "event-1",
+        {
+          announcedAt: null,
+          startsAt: null,
+          endsAt: null
+        },
+        { actorId: "admin" }
+      )
+    ).rejects.toMatchObject({
+      errors: [{ field: "dateWindow", reason: "date_window_required" }]
+    });
   });
 
   it("rejects updates to deleted events", async () => {
