@@ -74,6 +74,7 @@ struct ContentView: View {
 
 private struct HubEventsTabView: View {
     @EnvironmentObject private var store: MockHubStore
+    @EnvironmentObject private var serverStore: ServerHubStore
     @Binding var deepLinkedEventId: String?
     @State private var path = NavigationPath()
 
@@ -82,7 +83,7 @@ private struct HubEventsTabView: View {
             HubEventsView()
                 .settingsToolbar(path: $path)
                 .navigationDestination(for: HubEvent.self) { event in
-                    HubEventDetailView(event: event)
+                    HubEventDetailContainerView(initialEvent: event)
                 }
                 .onAppear(perform: openPendingHubEvent)
                 .onChange(of: deepLinkedEventId) { _ in
@@ -94,8 +95,17 @@ private struct HubEventsTabView: View {
     private func openPendingHubEvent() {
         guard
             let eventId = deepLinkedEventId,
-            let event = store.hubEvents.first(where: { $0.id == eventId })
+            let event = serverStore.cachedHubEvent(id: eventId) ?? store.hubEvents.first(where: { $0.id == eventId })
         else {
+            if let eventId = deepLinkedEventId {
+                Task {
+                    if let event = await serverStore.loadHubEventDetail(id: eventId) {
+                        path.removeLast(path.count)
+                        path.append(event)
+                        deepLinkedEventId = nil
+                    }
+                }
+            }
             return
         }
 

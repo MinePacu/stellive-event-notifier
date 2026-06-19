@@ -2,20 +2,28 @@ import SwiftUI
 
 @main
 struct StelliveHubApp: App {
-    @StateObject private var store = MockHubStore()
+    @StateObject private var store: MockHubStore
+    @StateObject private var serverStore: ServerHubStore
+
+    init() {
+        let fallback = MockHubStore()
+        _store = StateObject(wrappedValue: fallback)
+        _serverStore = StateObject(
+            wrappedValue: ServerHubStore(
+                api: HubAPIClient(baseURL: Bundle.main.hubBaseURL ?? URL(string: "http://127.0.0.1:4000")!),
+                fallback: fallback
+            )
+        )
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
+                .environmentObject(serverStore)
                 .preferredColorScheme(store.settings.appearanceMode.preferredColorScheme)
                 .task {
-                    if let baseURL = Bundle.main.hubBaseURL {
-                        _ = await ServerHubStore(
-                            api: HubAPIClient(baseURL: baseURL),
-                            fallback: store
-                        ).bootstrap()
-                    }
+                    _ = await serverStore.bootstrap()
                     try? HubCalendarWidgetStore.saveToSharedContainer(store.calendarWidgetSnapshot())
                 }
         }

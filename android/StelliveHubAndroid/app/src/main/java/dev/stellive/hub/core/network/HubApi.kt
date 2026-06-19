@@ -2,6 +2,7 @@ package dev.stellive.hub.core.network
 
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Path
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Query
@@ -27,4 +28,26 @@ interface HubApi {
 
     @PUT("v1/preferences")
     suspend fun updatePreferences(@Body request: UpdatePreferencesRequestDto): UpdatePreferencesResponseDto
+
+    @GET("v1/hub-events")
+    suspend fun hubEvents(
+        @Query("category") category: String? = null,
+        @Query("participationMode") participationMode: String? = null,
+        @Query("status") status: String? = null,
+        @Query("generationId") generationId: String? = null,
+        @Query("memberId") memberId: String? = null,
+        @Query("from") from: String? = null,
+        @Query("to") to: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): HubEventsListResponseDto
+
+    @GET("v1/hub-events/{id}")
+    suspend fun hubEvent(@Path("id") id: String): HubEventDto
+
+    @GET("v1/hub-events/calendar")
+    suspend fun hubEventsCalendar(
+        @Query("from") from: String,
+        @Query("to") to: String,
+        @Query("timezone") timezone: String,
+    ): HubCalendarResponseDto
 }
