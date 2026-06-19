@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
+import { HubEventRepository } from "../src/hub-events/hubEventRepository.js";
 import type { HubCalendarSpecialDay, HubEvent } from "../src/types.js";
 import type { HubEventFilters, HubEventReadPort } from "../src/hub-events/hubEventService.js";
 
@@ -313,5 +314,99 @@ it("filters calendar responses by entryKind", async () => {
   const entries = response.json().days.flatMap((day: { entries: Array<{ entryKind: string }> }) => day.entries);
   expect(entries).toHaveLength(1);
   expect(entries[0].entryKind).toBe("member_birthday");
+});
+
+describe("HubEvent Prisma-backed public reads", () => {
+  it("exposes published non-deleted admin events through public list, detail, and calendar routes", async () => {
+    const published = {
+      id: "published-prisma-event",
+      category: "online_goods",
+      participationMode: "online",
+      status: "open",
+      title: "게시된 공식 굿즈",
+      summary: null,
+      memberId: "stellive-official",
+      generationId: "official",
+      sourceUrl: "https://example.com/published-prisma-event",
+      sourceLabel: "공식 공지",
+      sourceType: "official",
+      announcedAt: new Date("2026-06-10T00:00:00.000Z"),
+      startsAt: new Date("2026-06-18T00:00:00.000Z"),
+      endsAt: new Date("2026-06-30T23:59:59.999Z"),
+      purchaseUrl: null,
+      ticketUrl: null,
+      venueName: null,
+      venueAddress: null,
+      image: null,
+      notificationEligible: true,
+      publicationState: "published",
+      publishedAt: new Date("2026-06-10T00:00:00.000Z"),
+      cancelledAt: null,
+      deactivatedAt: null,
+      deletedAt: null,
+      revision: 1,
+      createdBy: "admin",
+      updatedBy: "admin",
+      createdAt: new Date("2026-06-10T00:00:00.000Z"),
+      updatedAt: new Date("2026-06-10T00:00:00.000Z"),
+    };
+    const findManyArgs: unknown[] = [];
+    const findFirstArgs: unknown[] = [];
+    const repository = new HubEventRepository({
+      hubEvent: {
+        async findMany(args: unknown) {
+          findManyArgs.push(args);
+          return [published];
+        },
+        async findFirst(args: unknown) {
+          findFirstArgs.push(args);
+          return published;
+        },
+      },
+    });
+    const app = await buildApp({
+      useProcessEnv: false,
+      env: {
+        NODE_ENV: "test",
+        HUB_EVENTS_STORAGE_MODE: "prisma",
+        DATABASE_URL: routeEnv.DATABASE_URL,
+      },
+      appRoutes: { dependencies: { hubEvents: repository } },
+    });
+
+    const listResponse = await app.inject({ method: "GET", url: "/v1/hub-events" });
+    const detailResponse = await app.inject({ method: "GET", url: "/v1/hub-events/published-prisma-event" });
+    const calendarResponse = await app.inject({
+      method: "GET",
+      url: "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul",
+    });
+
+    await app.close();
+
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json().items.map((event: HubEvent) => event.id)).toEqual(["published-prisma-event"]);
+    expect(detailResponse.statusCode).toBe(200);
+    expect(detailResponse.json().id).toBe("published-prisma-event");
+    expect(calendarResponse.statusCode).toBe(200);
+    expect(calendarResponse.json().days.flatMap((day: { entries: unknown[] }) => day.entries)).toContainEqual(
+      expect.objectContaining({ eventId: "published-prisma-event", entryKind: "hub_event" }),
+    );
+    expect(findManyArgs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          where: expect.objectContaining({ publicationState: "published", deletedAt: null }),
+        }),
+      ]),
+    );
+    expect(findFirstArgs).toEqual([
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: "published-prisma-event",
+          publicationState: "published",
+          deletedAt: null,
+        }),
+      }),
+    ]);
+  });
 });
 });

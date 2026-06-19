@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.CalendarContract
 import android.view.DragEvent
 import android.view.Gravity
 import android.view.View
@@ -42,6 +43,8 @@ import dev.stellive.hub.core.datastore.PreferenceKeys
 import dev.stellive.hub.core.model.AppearanceMode
 import dev.stellive.hub.core.model.CatalogRole
 import dev.stellive.hub.core.model.DeliveryMode
+import dev.stellive.hub.core.model.HubCalendarDay
+import dev.stellive.hub.core.model.HubEvent
 import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.NotificationEventType
 import dev.stellive.hub.core.model.NotificationHistoryItem
@@ -50,6 +53,7 @@ import dev.stellive.hub.databinding.ActivityMainBinding
 import dev.stellive.hub.feature.calendar.HubCalendarDeepLinkPolicy
 import dev.stellive.hub.feature.calendar.HubEventsCalendarView
 import dev.stellive.hub.feature.home.HubScreen
+import dev.stellive.hub.feature.home.HubRepository
 import dev.stellive.hub.feature.home.LiveMemberOrderingPolicy
 import dev.stellive.hub.core.network.HubApiClient
 import dev.stellive.hub.feature.home.MainUiPolicy
@@ -63,6 +67,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.net.URL
 import java.time.Instant
+import java.time.LocalDate
 import kotlin.concurrent.thread
 import dev.stellive.hub.feature.home.SettingsHubRow
 import dev.stellive.hub.feature.home.StatusSummaryItem
@@ -81,6 +86,7 @@ private data class LiveDragPayload(
 
 private lateinit var binding: ActivityMainBinding
     private val repository = MockHubRepository()
+    private lateinit var serverRepository: HubRepository
     private val liveClockHandler = Handler(Looper.getMainLooper())
     private val liveClockTextViews = mutableListOf<LiveClockTextView>()
     private val liveClockTicker = object : Runnable {
@@ -102,6 +108,8 @@ private var draggingLiveMemberId: String? = null
     private var selectedHistoryEventTypeFilterId = "all"
     private var selectedHistoryMemberFilterId = "all"
     private var selectedHubEventId: String? = null
+    private var serverHubEventDetailLoadedId: String? = null
+    private var serverHubEventDetail: HubEvent? = null
     private var selectedAppearanceMode = AppearanceMode.SYSTEM
     private val targetNotificationEnabledOverrides = mutableMapOf<String, Boolean>()
     private var notificationPermissionRequested = false
@@ -114,6 +122,7 @@ private var draggingLiveMemberId: String? = null
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        serverRepository = createServerRepository()
         configureTopBarGlass()
         setupTopBarScrollBehavior()
         setupBackNavigation()
@@ -146,18 +155,21 @@ private var draggingLiveMemberId: String? = null
 
     private fun loadServerBootstrap() {
         CoroutineScope(Dispatchers.Main).launch {
-            val state = ServerHubRepository(
-                remoteDataSource = ServerHubRepository.HubApiRemoteDataSource(HubApiClient.create(BuildConfig.HUB_BASE_URL)),
-                deviceIdStore = DeviceIdStore(this@MainActivity),
-                fallback = repository,
-            ).bootstrap()
+            val state = serverRepository.bootstrap()
             serverMembers = state.members
             liveStatusSourceLabel = state.liveStatusSourceLabel
             recordServerConnectionLog("bootstrap: $liveStatusSourceLabel")
- renderScreen(navigationHistory.currentScreen)
- binding.contentRefresh.isRefreshing = false
- }
- }
+            renderScreen(navigationHistory.currentScreen)
+            binding.contentRefresh.isRefreshing = false
+        }
+    }
+
+    private fun createServerRepository(): HubRepository =
+        ServerHubRepository(
+            remoteDataSource = ServerHubRepository.HubApiRemoteDataSource(HubApiClient.create(BuildConfig.HUB_BASE_URL)),
+            deviceIdStore = DeviceIdStore(this),
+            fallback = repository,
+        )
 
  private fun setupPullToRefresh() {
  binding.contentRefresh.isEnabled = false
@@ -478,6 +490,8 @@ private var draggingLiveMemberId: String? = null
             )
         )
         binding.contentList.addView(staticChips("전체", "굿즈", "티켓", "오프라인", "마감 임박"))
+        loadServerGoodsEvents()
+        return
         binding.contentList.addView(
             HubEventsCalendarView(
                 context = this,
@@ -501,6 +515,53 @@ private var draggingLiveMemberId: String? = null
         )
     }
 
+    private fun loadServerGoodsEvents() {
+        binding.contentList.addView(noticeCard("불러오는 중 · 서버에서 게시된 굿즈/행사 목록과 캘린더를 가져오고 있습니다."))
+        CoroutineScope(Dispatchers.Main).launch {
+            val today = LocalDate.now()
+            val days = serverRepository.hubCalendarDays(today.minusMonths(1), today.plusMonths(3), "Asia/Seoul")
+            val events = serverRepository.hubEvents("all")
+            if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS) {
+                renderServerGoodsEvents(days, events)
+            }
+        }
+    }
+
+    private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<HubEvent>) {
+        binding.contentList.removeAllViews()
+        binding.contentList.addView(
+            summaryGrid(
+                listOf(
+                    StatusSummaryItem(events.count { it.status == dev.stellive.hub.core.model.HubEventStatus.OPEN }.toString(), "진행 중"),
+                    StatusSummaryItem(events.count { it.status == dev.stellive.hub.core.model.HubEventStatus.UPCOMING }.toString(), "예정"),
+                    StatusSummaryItem(events.count { it.status == dev.stellive.hub.core.model.HubEventStatus.CLOSING_SOON }.toString(), "마감 임박")
+                )
+            )
+        )
+        binding.contentList.addView(staticChips("전체", "굿즈", "티켓", "오프라인", "마감 임박"))
+        binding.contentList.addView(
+            HubEventsCalendarView(
+                context = this,
+                days = days,
+            ) { eventId ->
+                selectedHubEventId = eventId
+                navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
+            }
+        )
+        val eventsById = events.associateBy { it.id }
+        days.forEach { day ->
+            binding.contentList.addView(calendarDayHeader(day.date))
+            day.entries.forEach { entry ->
+                eventsById[entry.eventId]?.let { event ->
+                    binding.contentList.addView(hubEventCard(event))
+                }
+            }
+        }
+        binding.contentList.addView(
+            noticeCard("방송/라이브/업로드와 포 최신 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
+        )
+    }
+
     private fun calendarDayHeader(date: String): TextView = TextView(this).apply {
         text = date
         setTextColor(color(R.color.hub_text))
@@ -510,7 +571,25 @@ private var draggingLiveMemberId: String? = null
     }
 
     private fun renderHubEventDetail() {
-        val event = repository.hubEvents.firstOrNull { it.id == selectedHubEventId }
+        val eventId = selectedHubEventId
+        if (eventId != null && serverHubEventDetailLoadedId != eventId) {
+            startScreen(
+                screenId = "goods_event_detail",
+                title = "상세",
+                role = "선택한 굿즈/행사를 불러오고 있습니다."
+            )
+            binding.contentList.addView(noticeCard("불러오는 중 · 서버에서 상세 정보를 가져오고 있습니다."))
+            CoroutineScope(Dispatchers.Main).launch {
+                serverHubEventDetail = serverRepository.hubEventDetail(eventId)
+                serverHubEventDetailLoadedId = eventId
+                if (navigationHistory.currentScreen == HubScreen.GOODS_EVENT_DETAIL && selectedHubEventId == eventId) {
+                    renderHubEventDetail()
+                }
+            }
+            return
+        }
+        val event = serverHubEventDetail?.takeIf { it.id == selectedHubEventId }
+            ?: repository.hubEvents.firstOrNull { it.id == selectedHubEventId }
         if (event == null) {
             startScreen(
                 screenId = "goods_event_detail",
@@ -531,6 +610,7 @@ private var draggingLiveMemberId: String? = null
         binding.contentList.removeAllViews()
         applyContentTopPadding(underTopBar = true)
         binding.contentList.addView(hubEventDetailHero(event))
+        binding.contentList.addView(hubEventDetailActions(event))
         binding.contentList.addView(
             compactEventCard(
                 title = event.title,
@@ -1780,6 +1860,65 @@ private fun moveLiveMember(member: HubMember, offset: Int) {
                 )
             )
         }
+
+    private fun hubEventDetailActions(event: HubEvent): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            leftMargin = dp(18)
+            rightMargin = dp(18)
+            bottomMargin = dp(12)
+        }
+
+        addView(
+            detailActionButton("캘린더 추가", primary = true) {
+                openCalendarInsert(event)
+            },
+            LinearLayout.LayoutParams(0, dp(50), 1f).apply {
+                marginEnd = dp(5)
+            }
+        )
+        addView(
+            detailActionButton("티켓 링크", primary = false) {
+                openExternalUrl(event.ticketUrl ?: event.purchaseUrl ?: event.sourceUrl)
+            },
+            LinearLayout.LayoutParams(0, dp(50), 1f).apply {
+                marginStart = dp(5)
+            }
+        )
+    }
+
+    private fun detailActionButton(label: String, primary: Boolean, onClick: () -> Unit): TextView =
+        TextView(this).apply {
+            text = label
+            gravity = Gravity.CENTER
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(if (primary) Color.WHITE else color(R.color.hub_text))
+            background = rounded(
+                fill = if (primary) color(R.color.hub_primary) else color(R.color.hub_surface),
+                radius = dp(14),
+                stroke = if (primary) null else color(R.color.hub_line)
+            )
+            setOnClickListener { onClick() }
+        }
+
+    private fun openCalendarInsert(event: HubEvent) {
+        val intent = Intent(Intent.ACTION_INSERT).setData(CalendarContract.Events.CONTENT_URI)
+            .putExtra(CalendarContract.Events.TITLE, event.title)
+            .putExtra(CalendarContract.Events.EVENT_LOCATION, event.venueName)
+            .putExtra(CalendarContract.Events.DESCRIPTION, event.summary ?: event.sourceLabel)
+        event.startsAt?.let { intent.putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, it.toEpochMilli()) }
+        event.endsAt?.let { intent.putExtra(CalendarContract.EXTRA_EVENT_END_TIME, it.toEpochMilli()) }
+        startActivity(intent)
+    }
+
+    private fun openExternalUrl(url: String?) {
+        val target = url?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: return
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+    }
 
     private fun compactEventCard(title: String, body: String, pills: List<String>, thumbnailUrl: String? = null): MaterialCardView =
         baseCard().apply {

@@ -190,7 +190,24 @@ class HubEventsCalendarViewModel(
     }
 
     fun replaceDays(days: List<HubCalendarDay>) {
+        val hadVisibleEntries = uiState.visibleEntries.isNotEmpty()
         uiState = recalculate(uiState.copy(days = days))
+        if (hadVisibleEntries || uiState.visibleEntries.isNotEmpty()) return
+
+        val firstSelectableDate = firstSelectableDate() ?: return
+        when (uiState.scopeMode) {
+            HubCalendarScopeMode.DAY -> selectDay(firstSelectableDate)
+            HubCalendarScopeMode.RANGE -> {
+                uiState = recalculate(
+                    uiState.copy(
+                        selectedMonth = YearMonth.from(firstSelectableDate),
+                        selectedDay = firstSelectableDate,
+                        rangeStart = firstSelectableDate,
+                        rangeEnd = firstSelectableDate,
+                    ),
+                )
+            }
+        }
     }
 
     fun hasEntries(date: LocalDate): Boolean =
@@ -229,6 +246,17 @@ class HubEventsCalendarViewModel(
             }
         }
         return state.copy(visibleEntries = visibleEntries)
+    }
+
+    private fun firstSelectableDate(): LocalDate? {
+        val selectableDates = filteredDays(uiState.days, uiState.filterId)
+            .filter { it.entries.isNotEmpty() }
+            .mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
+            .sorted()
+
+        return selectableDates.firstOrNull {
+            YearMonth.from(it) == uiState.selectedMonth
+        } ?: selectableDates.firstOrNull()
     }
 
     private fun filteredDays(days: List<HubCalendarDay>, filterId: String): List<HubCalendarDay> =

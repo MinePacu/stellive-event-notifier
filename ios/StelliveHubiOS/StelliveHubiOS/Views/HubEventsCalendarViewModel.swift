@@ -176,7 +176,24 @@ final class HubEventsCalendarViewModel: ObservableObject {
     }
 
     func replaceDays(_ days: [HubCalendarDay]) {
+        let hadVisibleEntries = !visibleEntries().isEmpty
         self.days = days
+        guard
+            !hadVisibleEntries,
+            visibleEntries().isEmpty,
+            let firstSelectableDate = firstSelectableDate()
+        else { return }
+
+        switch scopeMode {
+        case .day:
+            selectedMonth = firstSelectableDate
+            selectDate(firstSelectableDate)
+        case .range:
+            selectedMonth = firstSelectableDate
+            selectedDay = firstSelectableDate
+            rangeStart = firstSelectableDate
+            rangeEnd = firstSelectableDate
+        }
     }
 
     func refresh() async {
@@ -294,6 +311,18 @@ final class HubEventsCalendarViewModel: ObservableObject {
             filtered = entries
         }
         return filtered.sorted(by: HubCalendarPolicy.areInDisplayOrder)
+    }
+
+    private func firstSelectableDate() -> Date? {
+        let selectableDates = days
+            .filter { !filteredEntries(from: $0.entries).isEmpty }
+            .sorted { $0.date < $1.date }
+            .compactMap { Self.dayKeyFormatter.date(from: $0.date) }
+            .map { calendar.startOfDay(for: $0) }
+
+        return selectableDates.first {
+            calendar.isDate($0, equalTo: selectedMonth, toGranularity: .month)
+        } ?? selectableDates.first
     }
 
     private nonisolated static var defaultCalendar: Calendar {

@@ -46,6 +46,40 @@ class HubApiClient(
         api.updatePreferences(request)
     }
 
+    suspend fun hubEvents(
+        category: String? = null,
+        participationMode: String? = null,
+        status: String? = null,
+        generationId: String? = null,
+        memberId: String? = null,
+        from: String? = null,
+        to: String? = null,
+        limit: Int? = null,
+    ): HubNetworkResult<HubEventsListResponseDto> = runCatchingNetwork {
+        api.hubEvents(
+            category = category,
+            participationMode = participationMode,
+            status = status,
+            generationId = generationId,
+            memberId = memberId,
+            from = from,
+            to = to,
+            limit = limit,
+        )
+    }
+
+    suspend fun hubEvent(id: String): HubNetworkResult<HubEventDto> = runCatchingNetwork {
+        api.hubEvent(id)
+    }
+
+    suspend fun hubEventsCalendar(
+        from: String,
+        to: String,
+        timezone: String,
+    ): HubNetworkResult<HubCalendarResponseDto> = runCatchingNetwork {
+        api.hubEventsCalendar(from = from, to = to, timezone = timezone)
+    }
+
     private inline fun <T> runCatchingNetwork(block: () -> T): HubNetworkResult<T> =
         try {
             HubNetworkResult.Success(block())

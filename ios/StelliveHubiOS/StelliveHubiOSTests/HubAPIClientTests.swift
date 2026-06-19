@@ -77,7 +77,9 @@ final class HubAPIClientTests: XCTestCase {
                           "memberId": null,
                           "startsAt": null,
                           "endsAt": null,
-                          "displayDate": "2026-06-13",
+                  "startsAt": "2026-06-13T01:00:00.000Z",
+                  "endsAt": "2026-06-13T14:59:00.000Z",
+                  "displayDate": "2026-06-13",
                           "displayTimeText": "종일",
                           "sourceLabel": "Stellive Official",
                           "appDeepLink": "stellivehub://hub-events/event-1",
@@ -126,6 +128,61 @@ final class HubAPIClientTests: XCTestCase {
         }
     }
 
+    func testHubEventsListAndDetailSendExpectedPathsAndDecodeResponses() async throws {
+        var seenPaths: [String] = []
+        let client = makeClient { request in
+            seenPaths.append(request.url?.path ?? "")
+            if request.url?.path == "/v1/hub-events" {
+                let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+                let queryItems = Dictionary(uniqueKeysWithValues: (components?.queryItems ?? []).map { ($0.name, $0.value) })
+                XCTAssertEqual(queryItems["generationId"], "official")
+                XCTAssertEqual(queryItems["limit"], "10")
+                return jsonResponse(statusCode: 200, body: """
+                    {
+                      "items": [{
+                        "id": "event-1",
+                        "category": "online_goods",
+                        "participationMode": "online",
+                        "status": "open",
+                        "title": "서버 굿즈",
+                        "generationId": "official",
+                        "sourceUrl": "https://example.com/event-1",
+                        "sourceLabel": "공식 공지",
+                        "sourceType": "official",
+                        "notificationEligible": true,
+                        "updatedAt": "2026-06-18T00:00:00.000Z"
+                      }],
+                      "nextCursor": null
+                    }
+                    """)
+            }
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "id": "event-1",
+                  "category": "online_goods",
+                  "participationMode": "online",
+                  "status": "open",
+                  "title": "서버 굿즈",
+                  "generationId": "official",
+                  "startsAt": "2026-06-13T01:00:00.000Z",
+                  "endsAt": "2026-06-13T14:59:00.000Z",
+                  "sourceUrl": "https://example.com/event-1",
+                  "sourceLabel": "공식 공지",
+                  "sourceType": "official",
+                  "notificationEligible": true,
+                  "updatedAt": "2026-06-18T00:00:00.000Z"
+                }
+                """)
+        }
+
+        let list = try await client.hubEvents(generationId: "official", limit: 10)
+        let detail = try await client.hubEvent(id: "event-1")
+
+        XCTAssertEqual(seenPaths, ["/v1/hub-events", "/v1/hub-events/event-1"])
+        XCTAssertEqual(list.items.first?.id, "event-1")
+        XCTAssertEqual(detail.id, "event-1")
+    }
+
     private func makeClient(
         handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)
     ) -> HubAPIClient {
@@ -135,6 +192,108 @@ final class HubAPIClientTests: XCTestCase {
         return HubAPIClient(
             baseURL: URL(string: "https://example.invalid")!,
             session: URLSession(configuration: configuration)
+        )
+    }
+}
+
+@MainActor
+final class ServerHubStoreTests: XCTestCase {
+    override func tearDown() {
+        StubURLProtocol.requestHandler = nil
+        super.tearDown()
+    }
+
+    func testRefreshHubEventsCachesListAndDetailEntries() async {
+        let store = makeStore { request in
+            XCTAssertEqual(request.url?.path, "/v1/hub-events")
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "items": [{
+                    "id": "event-1",
+                    "category": "online_goods",
+                    "participationMode": "online",
+                    "status": "open",
+                    "title": "서버 굿즈",
+                    "generationId": "official",
+                    "sourceUrl": "https://example.com/event-1",
+                    "sourceLabel": "공식 공지",
+                    "sourceType": "official",
+                    "notificationEligible": true,
+                    "updatedAt": "2026-06-18T00:00:00.000Z"
+                  }],
+                  "nextCursor": null
+                }
+                """)
+        }
+
+        await store.refreshHubEvents(filter: "all")
+
+        XCTAssertEqual(store.serverHubEvents.map(\.id), ["event-1"])
+        XCTAssertEqual(store.cachedHubEvent(id: "event-1")?.title, "서버 굿즈")
+    }
+
+    func testDetail404ReturnsNilWithoutSynthesizingFallbackEvent() async {
+        let store = makeStore { request in
+            XCTAssertEqual(request.url?.path, "/v1/hub-events/missing")
+            return jsonResponse(statusCode: 404, body: #"{"error":"hub_event_not_found"}"#)
+        }
+
+        let event = await store.loadHubEventDetail(id: "missing")
+
+        XCTAssertNil(event)
+        XCTAssertNil(store.cachedHubEvent(id: "missing"))
+    }
+
+    func testRefreshCalendarUsesServerCalendarDays() async {
+        let store = makeStore { request in
+            XCTAssertEqual(request.url?.path, "/v1/hub-events/calendar")
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "timezone": "Asia/Seoul",
+                  "from": "2026-06-01",
+                  "to": "2026-06-30",
+                  "days": [{
+                    "date": "2026-06-18",
+                    "entries": [{
+                      "id": "event-1:2026-06-18",
+                      "eventId": "event-1",
+                      "entryKind": "hub_event",
+                      "title": "서버 굿즈",
+                      "category": "online_goods",
+                      "status": "open",
+                      "participationMode": "online",
+                      "generationId": "official",
+                      "displayDate": "2026-06-18",
+                      "displayTimeText": "종일",
+                      "sourceLabel": "공식 공지",
+                      "appDeepLink": "stellivehub://hub-events/event-1",
+                      "platformUrl": "https://example.com/event-1"
+                    }]
+                  }]
+                }
+                """)
+        }
+
+        await store.refreshCalendar(from: Date(timeIntervalSince1970: 1_781_740_800), to: Date(timeIntervalSince1970: 1_782_777_599), timezone: TimeZone(identifier: "Asia/Seoul")!)
+
+        XCTAssertEqual(store.serverCalendarDays.first?.entries.first?.eventId, "event-1")
+    }
+
+    private func makeStore(
+        handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)
+    ) -> ServerHubStore {
+        StubURLProtocol.requestHandler = handler
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        let client = HubAPIClient(
+            baseURL: URL(string: "https://example.invalid")!,
+            session: URLSession(configuration: configuration)
+        )
+        let defaults = UserDefaults(suiteName: "ServerHubStoreTests-\(UUID().uuidString)")!
+        return ServerHubStore(
+            api: client,
+            deviceIDStore: DeviceIDStore(defaults: defaults),
+            fallback: MockHubStore()
         )
     }
 }
