@@ -95,6 +95,31 @@ class HubEventsCalendarViewModelTest {
         assertEquals(LocalDate.of(2026, 7, 1), viewModel.uiState.selectedDay)
     }
 
+    @Test
+    fun replacingInitiallyEmptyDaysSelectsFirstVisibleServerDay() {
+        val viewModel = HubEventsCalendarViewModel(emptyList(), clock)
+
+        viewModel.replaceDays(
+            listOf(
+                HubCalendarDay(
+                    date = "2026-07-11",
+                    entries = listOf(
+                        entry(
+                            "admin-event",
+                            HubEventStatus.OPEN,
+                            HubEventCategory.OFFLINE_POPUP,
+                            HubEventParticipationMode.OFFLINE,
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(YearMonth.of(2026, 7), viewModel.uiState.selectedMonth)
+        assertEquals(LocalDate.of(2026, 7, 11), viewModel.uiState.selectedDay)
+        assertEquals(listOf("admin-event"), viewModel.uiState.visibleEntries.map { it.eventId })
+    }
+
     private fun sampleDays(): List<HubCalendarDay> = listOf(
         HubCalendarDay(
             date = "2026-06-15",

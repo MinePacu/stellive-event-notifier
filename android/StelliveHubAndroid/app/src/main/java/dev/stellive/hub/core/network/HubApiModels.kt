@@ -84,7 +84,71 @@ data class HubEventsSummaryDto(
 
 data class HubEventDto(
     val id: String,
+    val category: String? = null,
+    val participationMode: String? = null,
+    val status: String? = null,
     val title: String,
+    val summary: String? = null,
+    val memberId: String? = null,
+    val generationId: String? = null,
+    val sourceUrl: String? = null,
+    val sourceLabel: String? = null,
+    val sourceType: String? = null,
+    val announcedAt: String? = null,
+    val startsAt: String? = null,
+    val endsAt: String? = null,
+    val purchaseUrl: String? = null,
+    val ticketUrl: String? = null,
+    val venueName: String? = null,
+    val venueAddress: String? = null,
+    val image: HubEventImageDto? = null,
+    val notificationEligible: Boolean = true,
+    val updatedAt: String? = null,
+)
+
+data class HubEventImageDto(
+    val policyState: String,
+    val url: String? = null,
+    val sourceLabel: String? = null,
+    val sourceUrl: String? = null,
+    val altText: String? = null,
+)
+
+data class HubEventsListResponseDto(
+    val items: List<HubEventDto> = emptyList(),
+    val nextCursor: String? = null,
+)
+
+data class HubCalendarResponseDto(
+    val timezone: String,
+    val generatedAt: String? = null,
+    val days: List<HubCalendarDayDto> = emptyList(),
+)
+
+data class HubCalendarDayDto(
+    val date: String,
+    val entries: List<HubCalendarEntryDto> = emptyList(),
+)
+
+data class HubCalendarEntryDto(
+    val id: String,
+    val eventId: String? = null,
+    val entryKind: String? = null,
+    val specialDayKind: String? = null,
+    val specialDayLabel: String? = null,
+    val title: String,
+    val category: String? = null,
+    val status: String? = null,
+    val participationMode: String? = null,
+    val generationId: String? = null,
+    val memberId: String? = null,
+    val startsAt: String? = null,
+    val endsAt: String? = null,
+    val displayDate: String,
+    val displayTimeText: String,
+    val sourceLabel: String,
+    val appDeepLink: String? = null,
+    val platformUrl: String? = null,
 )
 
 data class HubCalendarWidgetSnapshotDto(

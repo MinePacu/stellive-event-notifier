@@ -19,6 +19,7 @@ import dev.stellive.hub.core.model.NotificationHistoryItem
 import dev.stellive.hub.feature.calendar.HubCalendarDeepLinkPolicy
 import dev.stellive.hub.feature.calendar.CalendarUiPolicy
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import dev.stellive.hub.core.model.NotificationSettingState
@@ -259,4 +260,15 @@ class MockHubRepository : HubRepository {
 
     override suspend fun updatePreferences(settings: dev.stellive.hub.core.model.NotificationSettingState): HubDataState =
         bootstrap()
+
+    override suspend fun hubEvents(filterId: String): List<HubEvent> =
+        if (filterId == "all") hubEvents else hubEvents.filter { it.generationId == filterId }
+
+    override suspend fun hubEventDetail(id: String): HubEvent? = hubEvents.firstOrNull { it.id == id }
+
+    override suspend fun hubCalendarDays(from: LocalDate, to: LocalDate, timezone: String): List<HubCalendarDay> =
+        calendarDaysForFilter("all").filter { day ->
+            val date = runCatching { LocalDate.parse(day.date) }.getOrNull()
+            date != null && !date.isBefore(from) && !date.isAfter(to)
+        }
 }

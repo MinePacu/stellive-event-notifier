@@ -183,6 +183,18 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.visibleEntries().map(\.id), ["goods-open"])
     }
 
+    func testReplacingInitiallyEmptyDaysSelectsFirstVisibleServerDay() {
+        let viewModel = makeViewModel(selectedDay: date("2026-06-19"), days: [])
+
+        viewModel.replaceDays([
+            day("2026-07-11", entries: [entry(id: "admin-event")])
+        ])
+
+        XCTAssertEqual(viewModel.selectedMonth, date("2026-07-11"))
+        XCTAssertEqual(viewModel.selectedDay, date("2026-07-11"))
+        XCTAssertEqual(viewModel.visibleEntries().map(\.id), ["admin-event"])
+    }
+
     func testApplyingSelectedRangeKeepsListModeAndNormalizesDates() {
         let viewModel = makeViewModel(days: [])
 

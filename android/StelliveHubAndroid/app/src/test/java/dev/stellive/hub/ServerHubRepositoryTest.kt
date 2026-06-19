@@ -2,6 +2,9 @@ package dev.stellive.hub
 
 import dev.stellive.hub.core.device.DeviceIdStore
 import dev.stellive.hub.core.network.BootstrapResponseDto
+import dev.stellive.hub.core.network.HubCalendarResponseDto
+import dev.stellive.hub.core.network.HubEventDto
+import dev.stellive.hub.core.network.HubEventsListResponseDto
 import dev.stellive.hub.core.network.HubNetworkResult
 import dev.stellive.hub.core.network.LiveStatusDto
 import dev.stellive.hub.core.network.MobileConfigDto
@@ -113,5 +116,26 @@ class ServerHubRepositoryTest {
                 ),
             )
         }
+
+        override suspend fun hubEvents(
+            generationId: String?,
+            limit: Int?,
+        ): HubNetworkResult<HubEventsListResponseDto> =
+            HubNetworkResult.Success(HubEventsListResponseDto())
+
+        override suspend fun hubEvent(id: String): HubNetworkResult<HubEventDto> =
+            HubNetworkResult.Failure("not_found", "not found")
+
+        override suspend fun hubEventsCalendar(
+            from: String,
+            to: String,
+            timezone: String,
+        ): HubNetworkResult<HubCalendarResponseDto> =
+            HubNetworkResult.Success(
+                HubCalendarResponseDto(
+                    timezone = timezone,
+                    generatedAt = "2026-06-11T03:00:00.000Z",
+                ),
+            )
     }
 }

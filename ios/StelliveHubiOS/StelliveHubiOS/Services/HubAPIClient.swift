@@ -124,6 +124,35 @@ struct HubCalendarResponse: Codable, Equatable {
     let days: [HubCalendarDay]
 }
 
+struct HubEventsListResponse: Codable, Equatable {
+    let items: [HubEventResponse]
+    let nextCursor: String?
+}
+
+struct HubEventResponse: Codable, Equatable {
+    let id: String
+    let category: HubEventCategory
+    let participationMode: HubEventParticipationMode
+    let status: HubEventStatus
+    let title: String
+    let summary: String?
+    let memberId: String?
+    let generationId: String
+    let sourceUrl: String
+    let sourceLabel: String
+    let sourceType: HubEventSourceType
+    let announcedAt: String?
+    let startsAt: String?
+    let endsAt: String?
+    let purchaseUrl: String?
+    let ticketUrl: String?
+    let venueName: String?
+    let venueAddress: String?
+    let image: HubEventImage?
+    let notificationEligible: Bool
+    let updatedAt: String
+}
+
 struct RegisterDeviceRequest: Codable, Equatable {
     let deviceId: String?
     let platform: String
@@ -185,12 +214,30 @@ final class HubAPIClient {
     private let session: URLSession
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private static let iso8601WithFractionalSeconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    private static let iso8601: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
 
     init(baseURL: URL, session: URLSession = .shared) {
         self.baseURL = baseURL
         self.session = session
         self.encoder = JSONEncoder()
         self.decoder = JSONDecoder()
+        self.decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+            if let date = Self.iso8601WithFractionalSeconds.date(from: value) ?? Self.iso8601.date(from: value) {
+                return date
+            }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid ISO8601 date: \(value)")
+        }
     }
 
     func bootstrap(deviceId: String?) async throws -> BootstrapResponse {
@@ -210,6 +257,34 @@ final class HubAPIClient {
             URLQueryItem(name: "timezone", value: timezone)
         ]
         return try await send(URLRequest(url: components.url!), responseType: HubCalendarResponse.self)
+    }
+
+    func hubEvents(
+        category: String? = nil,
+        participationMode: String? = nil,
+        status: String? = nil,
+        generationId: String? = nil,
+        memberId: String? = nil,
+        from: String? = nil,
+        to: String? = nil,
+        limit: Int? = nil
+    ) async throws -> HubEventsListResponse {
+        var components = URLComponents(url: baseURL.appendingPathComponent("v1/hub-events"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "category", value: category),
+            URLQueryItem(name: "participationMode", value: participationMode),
+            URLQueryItem(name: "status", value: status),
+            URLQueryItem(name: "generationId", value: generationId),
+            URLQueryItem(name: "memberId", value: memberId),
+            URLQueryItem(name: "from", value: from),
+            URLQueryItem(name: "to", value: to),
+            URLQueryItem(name: "limit", value: limit.map(String.init))
+        ].filter { $0.value != nil }
+        return try await send(URLRequest(url: components.url!), responseType: HubEventsListResponse.self)
+    }
+
+    func hubEvent(id: String) async throws -> HubEventResponse {
+        try await send(URLRequest(url: baseURL.appendingPathComponent("v1/hub-events/\(id)")), responseType: HubEventResponse.self)
     }
 
     func registerDevice(_ request: RegisterDeviceRequest) async throws -> RegisterDeviceResponse {

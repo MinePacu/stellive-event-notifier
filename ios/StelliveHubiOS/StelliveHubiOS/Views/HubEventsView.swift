@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HubEventsView: View {
     @EnvironmentObject private var store: MockHubStore
+    @EnvironmentObject private var serverStore: ServerHubStore
     @State private var selectedFilter = "all"
 
     private let filters: [(id: String, title: String)] = [
@@ -19,9 +20,9 @@ struct HubEventsView: View {
                 title: "굿즈/행사",
                 subtitle: "공식 출처의 기간성 정보",
                 metrics: [
-                    .init(value: "\(store.hubEventsSummary.openCount)", label: "진행 중"),
-                    .init(value: "\(store.hubEventsSummary.upcomingCount)", label: "예정"),
-                    .init(value: "\(store.hubEventsSummary.closingSoonCount)", label: "마감 임박")
+                            .init(value: "\(serverStore.hubEvents(for: "all").filter { $0.status == .open }.count)", label: "진행 중"),
+                            .init(value: "\(serverStore.hubEvents(for: "all").filter { $0.status == .upcoming }.count)", label: "예정"),
+                            .init(value: "\(serverStore.hubEvents(for: "all").filter { $0.status == .closingSoon }.count)", label: "마감 임박")
                 ]
             )
             .listRowInsets(IOSGroupedScreenPolicy.headerRowInsets)
@@ -59,16 +60,16 @@ struct HubEventsView: View {
             }
 
             Section("캘린더") {
-                HubEventsCalendarView(days: store.calendarDays(for: selectedFilter))
+                HubEventsCalendarView(days: serverStore.calendarDays(for: selectedFilter))
             }
 
-            ForEach(store.calendarDays(for: selectedFilter)) { day in
+            ForEach(serverStore.calendarDays(for: selectedFilter)) { day in
                 Section(day.date) {
                     ForEach(day.entries) { entry in
                         if HubCalendarDeepLinkPolicy.canNavigateToDetail(entry),
-                           let event = store.hubEvents.first(where: { $0.id == entry.eventId }) {
+                           let event = serverStore.hubEvents(for: selectedFilter).first(where: { $0.id == entry.eventId }) {
                             NavigationLink {
-                                HubEventDetailView(event: event)
+                                HubEventDetailContainerView(initialEvent: event)
                             } label: {
                                 HubCalendarRow(entry: entry)
                             }
@@ -85,6 +86,58 @@ struct HubEventsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .task {
+            await refreshServerHubEvents()
+        }
+        .onChange(of: selectedFilter) { _ in
+            Task { await refreshServerHubEvents() }
+        }
+    }
+
+    private func refreshServerHubEvents() async {
+        await serverStore.refreshHubEvents(filter: selectedFilter)
+        let calendar = Calendar(identifier: .gregorian)
+        let now = Date()
+        let from = calendar.date(byAdding: .month, value: -1, to: now) ?? now
+        let to = calendar.date(byAdding: .month, value: 3, to: now) ?? now
+        await serverStore.refreshCalendar(from: from, to: to, timezone: TimeZone(identifier: "Asia/Seoul") ?? .current)
+    }
+}
+
+struct HubEventDetailContainerView: View {
+    @EnvironmentObject private var serverStore: ServerHubStore
+    let initialEvent: HubEvent
+    @State private var event: HubEvent?
+    @State private var didLoad = false
+
+    var body: some View {
+        Group {
+            if let event {
+                HubEventDetailView(event: event)
+            } else if didLoad {
+                VStack(spacing: 12) {
+                    Image(systemName: "bag")
+                        .font(.title)
+                        .foregroundStyle(.secondary)
+                    Text("항목 없음")
+                        .font(.headline)
+                    Text("서버에서 굿즈/행사를 찾을 수 없습니다.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding()
+            } else {
+                HubEventDetailView(event: initialEvent)
+            }
+        }
+        .task(id: initialEvent.id) {
+            if !didLoad {
+                event = await serverStore.loadHubEventDetail(id: initialEvent.id)
+                didLoad = true
+            }
+        }
     }
 }
 

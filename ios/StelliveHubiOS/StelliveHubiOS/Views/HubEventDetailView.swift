@@ -16,19 +16,15 @@ struct HubEventDetailView: View {
         ZStack(alignment: .top) {
             HubEventDetailColors.background.ignoresSafeArea()
             ScrollView {
-                GeometryReader { proxy in
-                    Color.clear.preference(
-                        key: HubEventDetailScrollOffsetKey.self,
-                        value: proxy.frame(in: .named("hubEventDetailScroll")).minY
-                    )
-                }
-                .frame(height: 0)
-
                 VStack(spacing: 0) {
                     hero
                     VStack(spacing: 14) {
-                        summaryCard
-                        infoCard
+                        detailSection(HubEventDetailFormatting.summaryLabel) {
+                            summaryCard
+                        }
+                        detailSection("행사 정보") {
+                            infoCard
+                        }
                         noticeCard
                     }
                     .padding(.horizontal, 16)
@@ -36,14 +32,18 @@ struct HubEventDetailView: View {
                     .padding(.bottom, 28)
                 }
                 .padding(.top, -36)
+                .frame(width: UIScreen.main.bounds.width)
             }
-            .coordinateSpace(name: "hubEventDetailScroll")
-                .onPreferenceChange(HubEventDetailScrollOffsetKey.self) { value in
-                    withAnimation(.easeInOut(duration: 0.16)) {
-                        showCollapsedTitle = value < -1
+            .simultaneousGesture(DragGesture(minimumDistance: 12).onChanged { value in
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    if value.translation.height < -18 {
+                        showCollapsedTitle = true
+                    } else if value.translation.height > 18 {
+                        showCollapsedTitle = false
                     }
                 }
-                .ignoresSafeArea(edges: .top)
+            })
+            .ignoresSafeArea(edges: .top)
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
@@ -71,20 +71,23 @@ struct HubEventDetailView: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(.white.opacity(0.18), in: Capsule())
-                Text(event.title)
-                    .font(.system(size: 25, weight: .bold))
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.84)
+            Text(event.title)
+                .font(.system(size: 25, weight: .bold))
+                .lineLimit(3)
+                .minimumScaleFactor(0.84)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: UIScreen.main.bounds.width - 36, alignment: .leading)
                 Text(heroSubtitle)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.84))
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .foregroundStyle(.white)
             .shadow(color: .black.opacity(0.22), radius: 12, y: 4)
             .padding(.horizontal, 18)
             .padding(.bottom, 10)
         }
-        .frame(height: 338)
+        .frame(width: UIScreen.main.bounds.width, height: 390)
         .clipped()
         .ignoresSafeArea(edges: .top)
     }
@@ -92,15 +95,29 @@ struct HubEventDetailView: View {
     private var collapsedTitleBar: some View {
         VStack(spacing: 2) {
             Text(event.title)
-                .font(.footnote.weight(.bold))
+                .font(.subheadline.weight(.semibold))
                 .lineLimit(1)
+                .truncationMode(.tail)
                 .minimumScaleFactor(0.82)
             Text("상세")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.72))
         }
         .foregroundStyle(.white.opacity(0.88))
-        .frame(maxWidth: 210)
+        .frame(maxWidth: 240)
+    }
+
+    private func detailSection<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(HubEventDetailColors.muted)
+                .padding(.horizontal, 2)
+            content()
+        }
     }
 
     private var summaryCard: some View {
@@ -112,9 +129,6 @@ struct HubEventDetailView: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(Color.orange)
             }
-            Text(HubEventDetailFormatting.summaryLabel)
-                .font(.footnote.weight(.bold))
-                .foregroundStyle(HubEventDetailColors.muted)
             Text(event.summary?.isEmpty == false ? event.summary! : "공식 출처 기반 굿즈/행사 정보입니다.")
                 .font(.subheadline)
                 .foregroundStyle(HubEventDetailColors.muted)
@@ -126,7 +140,7 @@ struct HubEventDetailView: View {
     }
 
     private var ctaRow: some View {
-        HStack(spacing: 10) {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
             Button("캘린더 추가") {}
                 .buttonStyle(HubEventCTAButtonStyle(primary: true))
             if let ticketUrl = url(from: event.ticketUrl) {
@@ -145,10 +159,6 @@ struct HubEventDetailView: View {
 
     private var infoCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("행사 정보")
-                .font(.headline.weight(.bold))
-                .foregroundStyle(HubEventDetailColors.text)
-                .padding(.bottom, 10)
             ForEach(Array(HubEventDetailFormatting.rows(for: event).enumerated()), id: \.offset) { index, row in
                 if index > 0 {
                     Divider()
@@ -256,12 +266,16 @@ private struct HubEventHeroImage: View {
         Group {
             if let url {
                 AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        fallback
-                    }
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
+            default:
+                fallback
+            }
                 }
             } else {
                 fallback
@@ -306,10 +320,12 @@ private struct HubEventCTAButtonStyle: ButtonStyle {
     let primary: Bool
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.subheadline.weight(.bold))
-            .foregroundStyle(primary ? .white : HubEventDetailColors.text)
-            .frame(maxWidth: .infinity)
+            configuration.label
+                .font(.subheadline.weight(.bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .foregroundStyle(primary ? .white : HubEventDetailColors.text)
+                .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .background(primary ? Color(red: 0.04, green: 0.48, blue: 0.44) : HubEventDetailColors.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
@@ -317,13 +333,5 @@ private struct HubEventCTAButtonStyle: ButtonStyle {
                     .stroke(primary ? .clear : HubEventDetailColors.line, lineWidth: 1)
             }
             .opacity(configuration.isPressed ? 0.82 : 1)
-    }
-}
-
-private struct HubEventDetailScrollOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
