@@ -40,12 +40,37 @@ describe("hub calendar special days", () => {
         title: "아야츠노 유니 생일",
         generationId: "gen1",
         memberId: "member-yuni",
+        status: "open",
         displayDate: "2026-06-12",
         displayTimeText: "종일",
         sourceLabel: "카탈로그",
         appDeepLink: "stellivehub://calendar/special-days/birthday:member-yuni?date=2026-06-12"
       })
     ]);
+  });
+
+  it("sets special-day status from the daily local-date snapshot", () => {
+    const entries = buildSpecialDayEntries(
+      [
+        specialDay({ id: "birthday:past", month: 5, day: 21 }),
+        specialDay({ id: "birthday:today", month: 6, day: 20 }),
+        specialDay({ id: "birthday:future", month: 6, day: 21 })
+      ],
+      {
+        from: new Date("2026-05-01T00:00:00.000Z"),
+        to: new Date("2026-06-30T23:59:59.999Z"),
+        timezone: "Asia/Seoul",
+        now: new Date("2026-06-19T15:30:00.000Z")
+      }
+    );
+
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "birthday:past:2026-05-21", status: "ended" }),
+        expect.objectContaining({ id: "birthday:today:2026-06-20", status: "open" }),
+        expect.objectContaining({ id: "birthday:future:2026-06-21", status: "upcoming" })
+      ])
+    );
   });
 
   it("drops unverified, official, and malformed special days", () => {

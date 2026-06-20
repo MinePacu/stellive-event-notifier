@@ -1,5 +1,6 @@
 import type { CatalogService } from "../catalog/catalog.js";
 import { validateHubEvent } from "./hubEventPolicy.js";
+import { resolveEffectiveHubEventStatus, withEffectiveHubEventStatus } from "./hubEventStatus.js";
 import type {
   HubEvent,
   HubEventCategory,
@@ -32,7 +33,6 @@ export interface HubEventReadPort {
   summary(now?: Date): Promise<HubEventsSummary> | HubEventsSummary;
 }
 
-const closingSoonWindowMs = 24 * 60 * 60 * 1000;
 const statusRank: Record<HubEventStatus, number> = {
   closing_soon: 0,
   open: 1,
@@ -141,34 +141,19 @@ export class HubEventService {
   }
 
   getById(id: string): HubEvent | undefined {
-    return this.events.find((event) => event.id === id);
+    const event = this.events.find((event) => event.id === id);
+    return event ? withEffectiveHubEventStatus(event) : undefined;
   }
 
   effectiveStatus(event: HubEvent, now: Date = new Date()): HubEventStatus {
-    if (event.status === "cancelled") return "cancelled";
-    if (event.status === "ended") return "ended";
-
-    const nowTime = now.getTime();
-    const startsAt = asDate(event.startsAt);
-    const endsAt = asDate(event.endsAt);
-
-    if (event.status === "closing_soon") {
-      if (endsAt && nowTime >= endsAt.getTime()) return "ended";
-      return "closing_soon";
-    }
-
-    if (endsAt && nowTime >= endsAt.getTime()) return "ended";
-    if (startsAt && nowTime < startsAt.getTime()) return "upcoming";
-    if (endsAt && endsAt.getTime() - nowTime <= closingSoonWindowMs) return "closing_soon";
-    if (startsAt || endsAt) return "open";
-    return "announced";
+    return resolveEffectiveHubEventStatus(event, now);
   }
 
   list(filters: HubEventFilters = {}, now: Date = new Date()): HubEventListResult {
     const limit = Math.min(100, Math.max(1, filters.limit ?? 50));
     const filtered = this.filteredEvents(filters, now);
 
-    const items = filtered.slice(0, limit);
+    const items = filtered.slice(0, limit).map((event) => withEffectiveHubEventStatus(event, now));
     const nextCursor = filtered.length > limit ? items[items.length - 1]?.id : undefined;
 
     return nextCursor ? { items, nextCursor } : { items };
@@ -184,7 +169,8 @@ export class HubEventService {
         const status = this.effectiveStatus(event, now);
         return status === "closing_soon" || status === "open" || status === "upcoming";
       })
-      .slice(0, 3);
+      .slice(0, 3)
+      .map((event) => withEffectiveHubEventStatus(event, now));
 
     return { openCount, closingSoonCount, upcomingCount, preview };
   }

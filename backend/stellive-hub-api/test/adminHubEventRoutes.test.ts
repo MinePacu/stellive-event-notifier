@@ -44,14 +44,14 @@ function createFakeService() {
   };
 }
 
-async function buildTestApp(service = createFakeService()) {
+async function buildTestApp(service = createFakeService(), dependencies: Record<string, unknown> = {}) {
   return {
     service,
     app: await buildApp({
       env,
       useProcessEnv: false,
       adminHubEventRoutes: {
-        dependencies: { service }
+        dependencies: { service, ...dependencies }
       }
     })
   };
@@ -123,7 +123,8 @@ describe("admin hub event routes", () => {
       "hub-event-venue-address",
       "hub-event-notification-eligible",
       "hub-event-validation",
-      "hub-event-audit-log"
+      "hub-event-audit-log",
+      "recalculate-special-days"
     ]) {
       expect(html).toContain(`id="${id}"`);
     }
@@ -240,6 +241,24 @@ describe("admin hub event routes", () => {
     await app.close();
 
     expect(response.statusCode).toBe(200);
+  });
+
+  it("dispatches special-day status recalculation from an authenticated admin request", async () => {
+    const clearSpecialDayStatusCache = vi.fn(() => ({ cleared: true }));
+    const { app } = await buildTestApp(createFakeService(), { clearSpecialDayStatusCache });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/admin/hub-events/special-days/recalculate-status",
+      headers: {
+        authorization: "Bearer admin-token"
+      }
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true, cleared: true });
+    expect(clearSpecialDayStatusCache).toHaveBeenCalledTimes(1);
   });
 
   it("dispatches create, update, publish, cancel, deactivate, delete, validate, and audit handlers", async () => {

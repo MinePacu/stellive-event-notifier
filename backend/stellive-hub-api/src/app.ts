@@ -12,6 +12,7 @@ import swaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyRequest } from "fastify";
 import { loadEnv } from "./config/env.js";
 import { HubEventRepository } from "./hub-events/hubEventRepository.js";
+import { createHubCalendarSpecialDayOccurrenceRepositoryIfAvailable } from "./hub-events/hubCalendarSpecialDayOccurrenceRepository.js";
 import NotificationJobRepository from "./jobs/notificationJobRepository.js";
 import NotificationWorker from "./jobs/notificationWorker.js";
 import BootstrapService from "./mobile/bootstrapService.js";
@@ -182,6 +183,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   const appRouteDependencies: AppRouteDependencies = { ...options.appRoutes?.dependencies };
   if (!appRouteDependencies.hubEvents && env.HUB_EVENTS_STORAGE_MODE === "prisma") {
     appRouteDependencies.hubEvents = new HubEventRepository();
+  }
+  if (!appRouteDependencies.hubCalendarSpecialDayOccurrences && env.HUB_EVENTS_STORAGE_MODE === "prisma") {
+    appRouteDependencies.hubCalendarSpecialDayOccurrences = createHubCalendarSpecialDayOccurrenceRepositoryIfAvailable();
   }
   if (env.HUB_EVENTS_STORAGE_MODE === "prisma" && !appRouteDependencies.bootstrap) {
     const devices = hasBootstrapDevicePort(appRouteDependencies.devices)

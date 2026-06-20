@@ -29,6 +29,24 @@ function createFakeDependencies(overrides: Partial<InternalRouteDependencies> = 
     liveStatus: { listDiagnostics: async () => [] },
     deliveryAttempts: { listRecent: async () => [] },
     adapterHealth: { getState: async () => null, listAdapterHealth: async () => [] },
+    specialDayYearMaterializer: {
+      materializeYear: async (input) => ({
+        targetYear: input.targetYear ?? 2026,
+        timezone: "Asia/Seoul",
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        dryRun: input.dryRun === true
+      })
+    },
+    hubEventStatuses: {
+      reconcileDueStatuses: async (now) => ({
+        status: "ok",
+        checkedAt: (now ?? new Date("2026-06-20T00:00:00.000Z")).toISOString(),
+        opened: 0,
+        ended: 0
+      })
+    },
     ...overrides
   };
 }
@@ -366,6 +384,149 @@ describe("internal admin routes", () => {
     expect(pollLiveStatuses).toHaveBeenCalledTimes(1);
   });
 
+  it("requires internal auth for special-day yearly materialization", async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/hub-events/special-days/materialize-year"
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("requires internal auth for hub event status reconciliation", async () => {
+    const app = await buildTestApp();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/hub-events/statuses/reconcile"
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("dispatches hub event status reconciliation with the scheduler clock", async () => {
+    const reconcileDueStatuses = vi.fn(async (now: Date) => ({
+      status: "ok" as const,
+      checkedAt: now.toISOString(),
+      opened: 2,
+      ended: 1
+    }));
+    const now = new Date("2026-06-20T10:00:00.000Z");
+    const app = await buildTestApp({
+      now: () => now,
+      hubEventStatuses: { reconcileDueStatuses }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/hub-events/statuses/reconcile",
+      headers: authHeaders
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      status: "ok",
+      checkedAt: "2026-06-20T10:00:00.000Z",
+      opened: 2,
+      ended: 1
+    });
+    expect(reconcileDueStatuses).toHaveBeenCalledWith(now);
+  });
+
+  it("dispatches special-day yearly materialization with an explicit target year", async () => {
+    const materializeYear = vi.fn(async () => ({
+      targetYear: 2027,
+      timezone: "Asia/Seoul" as const,
+      created: 10,
+      updated: 0,
+      skipped: 0,
+      dryRun: false
+    }));
+    const app = await buildTestApp({
+      specialDayYearMaterializer: { materializeYear }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/hub-events/special-days/materialize-year",
+      headers: { ...authHeaders, "content-type": "application/json" },
+      payload: JSON.stringify({ targetYear: 2027 })
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      ok: true,
+      targetYear: 2027,
+      timezone: "Asia/Seoul",
+      created: 10,
+      updated: 0,
+      skipped: 0,
+      dryRun: false
+    });
+    expect(materializeYear).toHaveBeenCalledWith({ targetYear: 2027, dryRun: false, now: expect.any(Date) });
+  });
+
+  it("uses the current KST year for special-day materialization when targetYear is omitted", async () => {
+    const materializeYear = vi.fn(async () => ({
+      targetYear: 2027,
+      timezone: "Asia/Seoul" as const,
+      created: 0,
+      updated: 10,
+      skipped: 0,
+      dryRun: true
+    }));
+    const app = await buildTestApp({
+      now: () => new Date("2026-12-31T15:05:00.000Z"),
+      specialDayYearMaterializer: { materializeYear }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/hub-events/special-days/materialize-year",
+      headers: { ...authHeaders, "content-type": "application/json" },
+      payload: JSON.stringify({ dryRun: true })
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ ok: true, targetYear: 2027, dryRun: true });
+    expect(materializeYear).toHaveBeenCalledWith({
+      targetYear: 2027,
+      dryRun: true,
+      now: new Date("2026-12-31T15:05:00.000Z")
+    });
+  });
+
+  it("rejects invalid special-day materialization target years", async () => {
+    const materializeYear = vi.fn();
+    const app = await buildTestApp({
+      specialDayYearMaterializer: { materializeYear }
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/hub-events/special-days/materialize-year",
+      headers: { ...authHeaders, "content-type": "application/json" },
+      payload: JSON.stringify({ targetYear: 2110 })
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "special_day_materialization_body_invalid" });
+    expect(materializeYear).not.toHaveBeenCalled();
+  });
+
   it("does not enable CORS on privileged internal routes", async () => {
     const app = await buildTestApp();
     const response = await app.inject({
@@ -539,6 +700,18 @@ describe("admin console routes", () => {
     expect(response.body).toContain('id="auto-refresh-status"');
     expect(response.body).toContain('class="auto-refresh-status pill disabled"');
     expect(response.body).toContain('aria-live="polite"');
+    expect(response.body).toContain("events-card");
+    expect(response.body).toContain("card-body events-card-body");
+    expect(response.body).toContain("panel validation-panel");
+    expect(response.body).toContain("panel audit-log-panel");
+    expect(response.body).toContain('class="table-scroll"');
+    expect(response.body).toContain('@media (max-width: 640px)');
+    expect(response.body).toContain(
+      'data-tooltip="Refresh adapter, secret, feature flag, and job status."',
+    );
+    expect(response.body).toContain(
+      'data-tooltip="Validate the current Hub event form without saving."',
+    );
     expect(response.body).not.toContain("admin-token");
     expect(response.body).not.toContain("internal-test-token");
     expect(response.body).not.toContain('dateStyle: "medium"');

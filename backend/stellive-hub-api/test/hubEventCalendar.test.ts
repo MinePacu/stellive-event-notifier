@@ -4,6 +4,7 @@ import {
   buildHubCalendarWidgetSnapshot
 } from "../src/hub-events/hubEventCalendar.js";
 import type { HubEvent } from "../src/types.js";
+import type { SpecialDayOccurrence } from "../src/hub-events/hubCalendarSpecialDayMaterializer.js";
 
 function hubEvent(overrides: Partial<HubEvent> = {}): HubEvent {
   return {
@@ -135,6 +136,66 @@ describe("hub event calendar projection", () => {
 
     expect(snapshot.entries).toHaveLength(1);
     expect(snapshot.entries[0]).toMatchObject({ eventId: "open", status: "open" });
+  });
+
+  it("merges materialized special-day occurrences into calendar entries without fallback duplicates", () => {
+    const occurrence: SpecialDayOccurrence = {
+      id: "special-day-occurrence:birthday:ayatsuno-yuni:2026",
+      specialDayId: "birthday:ayatsuno-yuni",
+      kind: "member_birthday",
+      displayYear: 2026,
+      displayDate: "2026-05-21",
+      title: "아야츠노 유니 생일",
+      specialDayLabel: "생일",
+      generationId: "gen1",
+      memberId: "ayatsuno-yuni",
+      startsAt: new Date("2026-05-20T15:00:00.000Z"),
+      endsAt: new Date("2026-05-21T15:00:00.000Z"),
+      sourceLabel: "카탈로그",
+      policyState: "catalog_verified"
+    };
+
+    const response = buildHubCalendarResponse(
+      [],
+      {
+        from: new Date("2026-05-01T00:00:00.000Z"),
+        to: new Date("2026-05-31T23:59:59.999Z"),
+        timezone: "Asia/Seoul",
+        now: new Date("2026-05-21T00:00:00.000Z")
+      },
+      [
+        {
+          id: "birthday:ayatsuno-yuni",
+          kind: "member_birthday",
+          title: "아야츠노 유니 생일",
+          generationId: "gen1",
+          memberId: "ayatsuno-yuni",
+          month: 5,
+          day: 21,
+          activeStatus: "active",
+          catalogRole: "member",
+          sourceLabel: "카탈로그",
+          policyState: "catalog_verified"
+        }
+      ],
+      [occurrence]
+    );
+
+    const entries = response.days.flatMap((day) => day.entries);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual(
+      expect.objectContaining({
+        id: "birthday:ayatsuno-yuni:2026-05-21",
+        eventId: "birthday:ayatsuno-yuni",
+        entryKind: "member_birthday",
+        specialDayKind: "member_birthday",
+        displayDate: "2026-05-21",
+        displayTimeText: "종일",
+        startsAt: "2026-05-20T15:00:00.000Z",
+        endsAt: "2026-05-21T15:00:00.000Z",
+        status: "open"
+      })
+    );
   });
 });
 

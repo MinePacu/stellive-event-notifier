@@ -20,7 +20,11 @@ interface HubRepository {
     suspend fun bootstrap(): HubDataState
     suspend fun refresh(): HubDataState = bootstrap()
     suspend fun updatePreferences(settings: NotificationSettingState): HubDataState
-    suspend fun hubEvents(filterId: String = "all"): List<HubEvent>
+    suspend fun hubEvents(
+        filterId: String = "all",
+        from: LocalDate? = null,
+        to: LocalDate? = null,
+    ): List<HubEvent>
     suspend fun hubEventDetail(id: String): HubEvent?
     suspend fun hubCalendarDays(from: LocalDate, to: LocalDate, timezone: String): List<HubCalendarDay>
 }

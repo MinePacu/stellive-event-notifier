@@ -232,6 +232,37 @@ final class ServerHubStoreTests: XCTestCase {
         XCTAssertEqual(store.cachedHubEvent(id: "event-1")?.title, "서버 굿즈")
     }
 
+    func testRefreshHubEventsForwardsOptionalDateRange() async {
+        let requestedFrom = DateComponents(
+            calendar: Calendar(identifier: .gregorian),
+            timeZone: TimeZone(secondsFromGMT: 0),
+            year: 2026,
+            month: 6,
+            day: 14,
+            hour: 12
+        ).date!
+        let requestedTo = DateComponents(
+            calendar: Calendar(identifier: .gregorian),
+            timeZone: TimeZone(secondsFromGMT: 0),
+            year: 2026,
+            month: 7,
+            day: 15,
+            hour: 12
+        ).date!
+        let store = makeStore { request in
+            XCTAssertEqual(request.url?.path, "/v1/hub-events")
+            let components = URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)
+            let queryItems = components?.queryItems ?? []
+
+            XCTAssertEqual(queryItems.first(where: { $0.name == "from" })?.value, "2026-06-14")
+            XCTAssertEqual(queryItems.first(where: { $0.name == "to" })?.value, "2026-07-15")
+
+            return jsonResponse(statusCode: 200, body: #"{"items":[],"nextCursor":null}"#)
+        }
+
+        await store.refreshHubEvents(filter: "all", from: requestedFrom, to: requestedTo)
+    }
+
     func testDetail404ReturnsNilWithoutSynthesizingFallbackEvent() async {
         let store = makeStore { request in
             XCTAssertEqual(request.url?.path, "/v1/hub-events/missing")

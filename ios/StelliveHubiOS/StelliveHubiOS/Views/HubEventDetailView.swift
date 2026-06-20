@@ -58,8 +58,13 @@ struct HubEventDetailView: View {
     }
 
     private var hero: some View {
-        ZStack(alignment: .bottomLeading) {
+        GeometryReader { geometry in
+            let horizontalPadding: CGFloat = 18
+            let contentWidth = max(0, geometry.size.width - horizontalPadding * 2)
+
+            ZStack(alignment: .bottomLeading) {
             HubEventHeroImage(url: HubEventImagePolicy.displayURL(for: event.image))
+                    .frame(width: geometry.size.width, height: geometry.size.height)
             LinearGradient(
                 colors: [.clear, .black.opacity(0.46)],
                 startPoint: .center,
@@ -76,18 +81,20 @@ struct HubEventDetailView: View {
                 .lineLimit(3)
                 .minimumScaleFactor(0.84)
                 .multilineTextAlignment(.leading)
-                .frame(maxWidth: UIScreen.main.bounds.width - 36, alignment: .leading)
+                    .frame(maxWidth: contentWidth, alignment: .leading)
                 Text(heroSubtitle)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.84))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: contentWidth, alignment: .leading)
             .foregroundStyle(.white)
             .shadow(color: .black.opacity(0.22), radius: 12, y: 4)
-            .padding(.horizontal, 18)
+            .padding(.horizontal, horizontalPadding)
             .padding(.bottom, 10)
         }
-        .frame(width: UIScreen.main.bounds.width, height: 390)
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .frame(height: 390)
         .clipped()
         .ignoresSafeArea(edges: .top)
     }
@@ -270,8 +277,9 @@ private struct HubEventHeroImage: View {
             case .success(let image):
                 image
                     .resizable()
-                    .scaledToFit()
+                    .scaledToFill()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
                     .background(Color.black)
             default:
                 fallback

@@ -2,6 +2,7 @@ import { getPrismaClient } from "../storage/prisma.js";
 import type { HubEvent, HubEventImage, HubEventsSummary, HubEventStatus } from "../types.js";
 import type { AdminHubEvent, HubEventAdminAction, HubEventPublicationState } from "./hubEventAdminTypes.js";
 import type { HubEventFilters, HubEventListResult } from "./hubEventService.js";
+import { resolveEffectiveHubEventStatus, withEffectiveHubEventStatus } from "./hubEventStatus.js";
 
 interface HubEventRecord {
   id: string;
@@ -53,6 +54,7 @@ interface HubEventDelegate {
     findFirst?(args: unknown): Promise<HubEventRecord | null>;
     create?(args: { data: Record<string, unknown> }): Promise<HubEventRecord>;
     update?(args: { where: { id: string }; data: Record<string, unknown> }): Promise<HubEventRecord>;
+    updateMany?(args: { where: Record<string, unknown>; data: Record<string, unknown> }): Promise<{ count: number }>;
   };
   hubEventAuditLog?: {
     create?(args: { data: Record<string, unknown> }): Promise<unknown>;
@@ -102,6 +104,13 @@ export interface HubEventAuditLogInput {
   reason?: string;
   before: unknown;
   after: unknown;
+}
+
+export interface HubEventStatusReconcileResult {
+  status: "ok";
+  checkedAt: string;
+  opened: number;
+  ended: number;
 }
 
 export interface HubEventAuditLogEntry {
@@ -224,12 +233,12 @@ function toWriteData(input: AdminHubEventWriteInput): Record<string, unknown> {
   });
 }
 
-function addHubEventFilters(where: Record<string, unknown>, filters: HubEventFilters) {
+function addHubEventFilters(where: Record<string, unknown>, filters: HubEventFilters, options: { includeStatus?: boolean } = {}) {
   if (filters.category) where.category = filters.category;
   if (filters.participationMode) where.participationMode = filters.participationMode;
   if (filters.generationId) where.generationId = filters.generationId;
   if (filters.memberId) where.memberId = filters.memberId;
-  if (filters.status) where.status = filters.status;
+  if (options.includeStatus !== false && filters.status) where.status = filters.status;
 }
 
 function requireMethod<T>(method: T | undefined, name: string): T {
@@ -247,31 +256,14 @@ function asDate(value?: string | Date): Date | undefined {
 }
 
 function effectiveStatus(event: HubEvent, now: Date): HubEventStatus {
-  if (event.status === "cancelled") return "cancelled";
-  if (event.status === "ended") return "ended";
-
-  const nowTime = now.getTime();
-  const startsAt = asDate(event.startsAt);
-  const endsAt = asDate(event.endsAt);
-
-  if (event.status === "closing_soon") {
-    if (endsAt && nowTime >= endsAt.getTime()) return "ended";
-    return "closing_soon";
-  }
-
-  if (endsAt && nowTime >= endsAt.getTime()) return "ended";
-  if (startsAt && nowTime < startsAt.getTime()) return "upcoming";
-  if (endsAt && endsAt.getTime() - nowTime <= closingSoonWindowMs) return "closing_soon";
-  if (startsAt || endsAt) return "open";
-  return "announced";
+  return resolveEffectiveHubEventStatus(event, now);
 }
 
 export class HubEventRepository {
   constructor(private readonly prisma: HubEventDelegate = getPrismaClient() as unknown as HubEventDelegate) {}
 
   async list(filters: HubEventFilters = {}, now: Date = new Date()): Promise<HubEventListResult> {
-    void now;
-    return this.listPublished(filters);
+    return this.listPublished(filters, now);
   }
 
   async getById(id: string): Promise<HubEvent | undefined> {
@@ -279,7 +271,7 @@ export class HubEventRepository {
   }
 
   async summary(now: Date = new Date()): Promise<HubEventsSummary> {
-    const { items } = await this.listPublished({ limit: 100 });
+    const { items } = await this.listPublished({ limit: 100 }, now);
     const statuses = items.map((event) => effectiveStatus(event, now));
     const openCount = statuses.filter((status) => status === "open").length;
     const closingSoonCount = statuses.filter((status) => status === "closing_soon").length;
@@ -288,23 +280,61 @@ export class HubEventRepository {
     return { openCount, closingSoonCount, upcomingCount, preview: items.slice(0, 3) };
   }
 
-  async listPublished(filters: HubEventFilters = {}): Promise<HubEventListResult> {
+  async reconcileDueStatuses(now: Date = new Date()): Promise<HubEventStatusReconcileResult> {
+    const updateMany = requireMethod(this.prisma.hubEvent?.updateMany?.bind(this.prisma.hubEvent), "hub_event_update_many");
+    const baseWhere = {
+      publicationState: "published",
+      deletedAt: null,
+      cancelledAt: null
+    };
+
+    const opened = await updateMany({
+      where: {
+        ...baseWhere,
+        status: "upcoming",
+        startsAt: { lte: now }
+      },
+      data: { status: "open" }
+    });
+    const ended = await updateMany({
+      where: {
+        ...baseWhere,
+        status: { in: ["open", "closing_soon"] },
+        endsAt: { lte: now }
+      },
+      data: { status: "ended" }
+    });
+
+    return {
+      status: "ok",
+      checkedAt: now.toISOString(),
+      opened: opened.count,
+      ended: ended.count
+    };
+  }
+
+  async listPublished(filters: HubEventFilters = {}, now: Date = new Date()): Promise<HubEventListResult> {
     const findMany = requireMethod(this.prisma.hubEvent?.findMany?.bind(this.prisma.hubEvent), "hub_event_find_many");
     const limit = Math.min(100, Math.max(1, filters.limit ?? 50));
+    const queryLimit = filters.status ? 100 : limit;
     const where: Record<string, unknown> = {
       publicationState: "published",
       deletedAt: null
     };
-    addHubEventFilters(where, filters);
+    addHubEventFilters(where, filters, { includeStatus: false });
 
     const records = await findMany({
       where,
       orderBy: [{ endsAt: "asc" }, { startsAt: "asc" }, { updatedAt: "desc" }],
-      take: limit,
+      take: queryLimit,
       cursor: filters.cursor ? { id: filters.cursor } : undefined,
       skip: filters.cursor ? 1 : undefined
     });
-    const items = records.map(toPublicHubEvent);
+    const items = records
+      .map(toPublicHubEvent)
+      .map((event) => withEffectiveHubEventStatus(event, now))
+      .filter((event) => !filters.status || event.status === filters.status)
+      .slice(0, limit);
     return { items };
   }
 
@@ -317,7 +347,7 @@ export class HubEventRepository {
         deletedAt: null
       }
     });
-    return record ? toPublicHubEvent(record) : undefined;
+    return record ? withEffectiveHubEventStatus(toPublicHubEvent(record)) : undefined;
   }
 
   async listAdmin(filters: AdminHubEventFilters = {}): Promise<AdminHubEventListResult> {

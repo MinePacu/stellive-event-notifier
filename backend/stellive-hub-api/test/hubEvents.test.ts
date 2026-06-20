@@ -98,9 +98,39 @@ describe("HubEventService", () => {
   it("calculates effective status with the closing soon window", () => {
     const service = createService();
 
-    expect(service.effectiveStatus(service.getById("open-goods")!, new Date("2026-06-03T12:00:00Z"))).toBe("open");
-    expect(service.effectiveStatus(service.getById("closing-goods")!, new Date("2026-06-03T12:30:00Z"))).toBe("closing_soon");
-    expect(service.effectiveStatus(service.getById("offline-event")!, new Date("2026-06-03T12:00:00Z"))).toBe("upcoming");
+    expect(
+      service.effectiveStatus(
+        hubEvent({
+          id: "open-goods",
+          status: "open",
+          startsAt: "2026-06-01T00:00:00Z",
+          endsAt: "2026-06-05T00:00:00Z"
+        }),
+        new Date("2026-06-03T12:00:00Z")
+      )
+    ).toBe("open");
+    expect(
+      service.effectiveStatus(
+        hubEvent({
+          id: "closing-goods",
+          status: "open",
+          startsAt: "2026-06-02T00:00:00Z",
+          endsAt: "2026-06-04T00:00:00Z"
+        }),
+        new Date("2026-06-03T12:30:00Z")
+      )
+    ).toBe("closing_soon");
+    expect(
+      service.effectiveStatus(
+        hubEvent({
+          id: "offline-event",
+          status: "upcoming",
+          startsAt: "2026-06-05T00:00:00Z",
+          endsAt: "2026-06-06T00:00:00Z"
+        }),
+        new Date("2026-06-03T12:00:00Z")
+      )
+    ).toBe("upcoming");
   });
 
   it("treats a regular open event as ended exactly at endsAt", () => {
@@ -180,7 +210,7 @@ describe("HubEventService", () => {
         id: "closing-goods",
         category: "online_goods",
         participationMode: "online",
-        status: "open",
+        status: "closing_soon",
         title: "Closing Goods",
         memberId: "tenko-shibuki",
         generationId: "gen3",

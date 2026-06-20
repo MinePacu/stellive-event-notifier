@@ -223,6 +223,18 @@ final class HubEventsCalendarViewModel: ObservableObject {
         }
     }
 
+    func selectedMonthEntries() -> [HubCalendarEntry] {
+        days
+            .sorted { $0.date < $1.date }
+            .filter { day in
+                guard let date = Self.dayKeyFormatter.date(from: day.date) else {
+                    return false
+                }
+                return calendar.isDate(date, equalTo: selectedMonth, toGranularity: .month)
+            }
+            .flatMap { filteredEntries(from: $0.entries) }
+    }
+
     func marker(for date: Date) -> HubCalendarDateMarker {
         let day = calendar.startOfDay(for: date)
         switch scopeMode {
