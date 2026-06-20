@@ -44,6 +44,7 @@ import dev.stellive.hub.core.model.AppearanceMode
 import dev.stellive.hub.core.model.CatalogRole
 import dev.stellive.hub.core.model.DeliveryMode
 import dev.stellive.hub.core.model.HubCalendarDay
+import dev.stellive.hub.core.model.HubCalendarEntry
 import dev.stellive.hub.core.model.HubEvent
 import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.NotificationEventType
@@ -68,6 +69,7 @@ import kotlinx.coroutines.launch
 import java.net.URL
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import kotlin.concurrent.thread
 import dev.stellive.hub.feature.home.SettingsHubRow
 import dev.stellive.hub.feature.home.StatusSummaryItem
@@ -108,6 +110,9 @@ private var draggingLiveMemberId: String? = null
     private var selectedHistoryEventTypeFilterId = "all"
     private var selectedHistoryMemberFilterId = "all"
     private var selectedHubEventId: String? = null
+    private var goodsEventsDays: List<HubCalendarDay> = emptyList()
+    private var goodsEvents: List<HubEvent> = emptyList()
+    private var goodsEventsSelectedMonth: YearMonth = YearMonth.now()
     private var serverHubEventDetailLoadedId: String? = null
     private var serverHubEventDetail: HubEvent? = null
     private var selectedAppearanceMode = AppearanceMode.SYSTEM
@@ -496,6 +501,14 @@ private var draggingLiveMemberId: String? = null
             HubEventsCalendarView(
                 context = this,
                 days = repository.calendarDaysForFilter("all"),
+                initialMonth = goodsEventsSelectedMonth,
+                showModeControls = false,
+                onMonthChanged = { month ->
+                    goodsEventsSelectedMonth = month
+                    if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS) {
+                        renderServerGoodsEvents(goodsEventsDays, goodsEvents)
+                    }
+                },
             ) { eventId ->
                 selectedHubEventId = eventId
                 navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
@@ -512,6 +525,7 @@ private var draggingLiveMemberId: String? = null
         }
         binding.contentList.addView(
             noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
+                .withGoodsEventsNoticeTopMargin()
         )
     }
 
@@ -519,15 +533,23 @@ private var draggingLiveMemberId: String? = null
         binding.contentList.addView(noticeCard("불러오는 중 · 서버에서 게시된 굿즈/행사 목록과 캘린더를 가져오고 있습니다."))
         CoroutineScope(Dispatchers.Main).launch {
             val today = LocalDate.now()
-            val days = serverRepository.hubCalendarDays(today.minusMonths(1), today.plusMonths(3), "Asia/Seoul")
-            val events = serverRepository.hubEvents("all")
+            val from = today.minusMonths(1)
+            val to = today.plusMonths(3)
+            val days = serverRepository.hubCalendarDays(from, to, "Asia/Seoul")
+            val events = serverRepository.hubEvents("all", from, to)
+            goodsEventsSelectedMonth = YearMonth.from(today)
+            goodsEventsDays = days
+            goodsEvents = events
             if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS) {
                 renderServerGoodsEvents(days, events)
             }
         }
     }
 
-    private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<HubEvent>) {
+private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<HubEvent>) {
+        goodsEventsDays = days
+        goodsEvents = events
+        val monthDays = days.filter { it.date.take(7) == goodsEventsSelectedMonth.toString() }
         binding.contentList.removeAllViews()
         binding.contentList.addView(
             summaryGrid(
@@ -543,24 +565,43 @@ private var draggingLiveMemberId: String? = null
             HubEventsCalendarView(
                 context = this,
                 days = days,
+                initialMonth = goodsEventsSelectedMonth,
+                showModeControls = false,
+                onMonthChanged = { month ->
+                    goodsEventsSelectedMonth = month
+                    if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS) {
+                        renderServerGoodsEvents(goodsEventsDays, goodsEvents)
+                    }
+                },
             ) { eventId ->
                 selectedHubEventId = eventId
                 navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
             }
         )
         val eventsById = events.associateBy { it.id }
-        days.forEach { day ->
-            binding.contentList.addView(calendarDayHeader(day.date))
-            day.entries.forEach { entry ->
-                eventsById[entry.eventId]?.let { event ->
-                    binding.contentList.addView(hubEventCard(event))
-                }
+        monthDays.forEach { day ->
+            val entryViews = day.entries.map { entry ->
+                eventsById[entry.eventId]?.let(::hubEventCard) ?: localCalendarEntryRow(entry)
+            }
+            if (entryViews.isNotEmpty()) {
+                binding.contentList.addView(calendarDayHeader(day.date))
+                entryViews.forEach(binding.contentList::addView)
             }
         }
         binding.contentList.addView(
-            noticeCard("방송/라이브/업로드와 포 최신 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
+            noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
         )
     }
+
+    private fun localCalendarEntryRow(entry: HubCalendarEntry): MaterialCardView =
+        compactEventCard(
+            title = entry.title,
+            body = listOf(entry.displayDate, entry.displayTimeText)
+                .filter { it.isNotBlank() }
+                .joinToString(" · "),
+            pills = listOf(entry.category.displayName, entry.participationMode.displayName)
+                .filter { it.isNotBlank() },
+        )
 
     private fun calendarDayHeader(date: String): TextView = TextView(this).apply {
         text = date
@@ -1750,19 +1791,30 @@ private fun moveLiveMember(member: HubMember, offset: Int) {
             liveStartedAt?.let { registerLiveClockTextView(it, valueView) }
         }
 
-    private fun View.withDetailHorizontalMargins(): View {
-        val params = (layoutParams as? LinearLayout.LayoutParams)
-            ?: LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+private fun View.withDetailHorizontalMargins(): View {
+    val params = (layoutParams as? LinearLayout.LayoutParams)
+        ?: LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
             )
         params.leftMargin = dp(18)
         params.rightMargin = dp(18)
-        layoutParams = params
-        return this
-    }
+    layoutParams = params
+    return this
+}
 
-    private fun hubEventDetailHero(event: dev.stellive.hub.core.model.HubEvent): FrameLayout =
+private fun View.withGoodsEventsNoticeTopMargin(): View {
+    val params = (layoutParams as? LinearLayout.LayoutParams)
+        ?: LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+    params.topMargin = dp(8)
+    layoutParams = params
+    return this
+}
+
+private fun hubEventDetailHero(event: dev.stellive.hub.core.model.HubEvent): FrameLayout =
         FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,

@@ -39,6 +39,7 @@ data class HubEventsCalendarUiState(
 class HubEventsCalendarViewModel(
     initialDays: List<HubCalendarDay>,
     private val clock: Clock = Clock.systemDefaultZone(),
+    private val initialSelectedMonth: YearMonth? = null,
 ) {
     private val today: LocalDate
         get() = LocalDate.now(clock)
@@ -228,7 +229,7 @@ class HubEventsCalendarViewModel(
         val today = today
         return recalculate(
             HubEventsCalendarUiState(
-                selectedMonth = YearMonth.from(today),
+                selectedMonth = initialSelectedMonth ?: YearMonth.from(today),
                 selectedDay = today,
                 days = days,
             ),

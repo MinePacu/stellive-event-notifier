@@ -24,9 +24,12 @@ class HubEventsCalendarView(
     context: Context,
     days: List<HubCalendarDay>,
     clock: Clock = Clock.systemDefaultZone(),
+    initialMonth: YearMonth? = null,
+    private val showModeControls: Boolean = true,
+    private val onMonthChanged: (YearMonth) -> Unit = {},
     private val onEntryClick: (String) -> Unit = {},
 ) : MaterialCardView(context) {
-    private val viewModel = HubEventsCalendarViewModel(days, clock)
+    private val viewModel = HubEventsCalendarViewModel(days, clock, initialMonth)
     private val content = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(14), dp(14), dp(14), dp(14))
@@ -48,19 +51,19 @@ class HubEventsCalendarView(
     private fun render() {
         content.removeAllViews()
         content.addView(titleBlock())
-        content.addView(modeSwitch())
-        content.addView(scopeSwitch())
+        if (showModeControls) {
+            content.addView(modeSwitch())
+            content.addView(scopeSwitch())
+        }
 
-        if (viewModel.uiState.viewMode == HubEventsViewMode.LIST) {
+        if (showModeControls && viewModel.uiState.viewMode == HubEventsViewMode.LIST) {
             content.addView(listDateNavigationHeader())
-            content.addView(entryList(viewModel.uiState.visibleEntries))
             return
         }
 
         content.addView(monthControl())
         content.addView(weekdayHeader())
         content.addView(monthGrid())
-        content.addView(entryList(viewModel.uiState.visibleEntries))
     }
 
     private fun titleBlock(): View = LinearLayout(context).apply {
@@ -115,7 +118,7 @@ class HubEventsCalendarView(
 
             val isDayMode = viewModel.uiState.scopeMode == HubCalendarScopeMode.DAY
             addView(monthButton(if (isDayMode) "이전 날짜" else "이전 기간") {
-                if (isDayMode) viewModel.goToPreviousDay() else viewModel.goToPreviousRange()
+            updateState { if (isDayMode) viewModel.goToPreviousDay() else viewModel.goToPreviousRange() }
             })
 
             addView(TextView(context).apply {
@@ -128,7 +131,7 @@ class HubEventsCalendarView(
             })
 
             addView(monthButton(if (isDayMode) "다음 날짜" else "다음 기간") {
-                if (isDayMode) viewModel.goToNextDay() else viewModel.goToNextRange()
+            updateState { if (isDayMode) viewModel.goToNextDay() else viewModel.goToNextRange() }
             })
         })
 
@@ -138,10 +141,10 @@ class HubEventsCalendarView(
             setPadding(0, dp(8), 0, 0)
 
             if (viewModel.uiState.scopeMode == HubCalendarScopeMode.DAY) {
-                addView(monthButton("오늘") { viewModel.goToToday() })
+                addView(monthButton("오늘") { updateState { viewModel.goToToday() } })
                 addView(monthButton("날짜 선택") { showDayPicker() })
             } else {
-                addView(monthButton("이번 주") { viewModel.goToCurrentWeek() })
+                addView(monthButton("이번 주") { updateState { viewModel.goToCurrentWeek() } })
                 addView(monthButton("기간 선택") { showRangeStartPicker() })
             }
         })
@@ -158,8 +161,7 @@ class HubEventsCalendarView(
 
     private fun showDayPicker() {
         showDatePicker(viewModel.uiState.selectedDay, "날짜 선택") { selectedDate ->
-            viewModel.applySelectedDay(selectedDate)
-            render()
+            updateState { viewModel.applySelectedDay(selectedDate) }
         }
     }
 
@@ -168,8 +170,7 @@ class HubEventsCalendarView(
         showDatePicker(initialStart, "시작일 선택") { startDate ->
             val initialEnd = viewModel.uiState.rangeEnd ?: startDate.plusDays(6)
             showDatePicker(initialEnd, "종료일 선택") { endDate ->
-                viewModel.applySelectedRange(startDate, endDate)
-                render()
+                updateState { viewModel.applySelectedRange(startDate, endDate) }
             }
         }
     }
@@ -198,7 +199,7 @@ class HubEventsCalendarView(
         setPadding(0, dp(8), 0, dp(8))
 
         addView(monthButton("이전") {
-            viewModel.goToPreviousMonth()
+            updateState { viewModel.goToPreviousMonth() }
         })
         addView(TextView(context).apply {
             text = monthFormatter.format(viewModel.uiState.selectedMonth)
@@ -209,7 +210,7 @@ class HubEventsCalendarView(
             layoutParams = LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         })
         addView(monthButton("다음") {
-            viewModel.goToNextMonth()
+            updateState { viewModel.goToNextMonth() }
         })
     }
 
@@ -260,11 +261,10 @@ class HubEventsCalendarView(
             alpha = if (inSelectedMonth) 1f else 0.36f
             setOnClickListener {
                 if (viewModel.uiState.scopeMode == HubCalendarScopeMode.DAY) {
-                    viewModel.selectDay(date)
+                    updateState { viewModel.selectDay(date) }
                 } else {
-                    viewModel.selectRangeBoundary(date)
+                    updateState { viewModel.selectRangeBoundary(date) }
                 }
-                render()
             }
             layoutParams = GridLayout.LayoutParams().apply {
                 width = 0
@@ -376,6 +376,16 @@ class HubEventsCalendarView(
         }
     }
 
+    private fun updateState(action: () -> Unit) {
+        val previousMonth = viewModel.uiState.selectedMonth
+        action()
+        render()
+        val currentMonth = viewModel.uiState.selectedMonth
+        if (currentMonth != previousMonth) {
+            onMonthChanged(currentMonth)
+        }
+    }
+
     private fun monthButton(label: String, onClick: () -> Unit): View = TextView(context).apply {
         text = label
         gravity = Gravity.CENTER
@@ -388,7 +398,6 @@ class HubEventsCalendarView(
         isFocusable = true
         setOnClickListener {
             onClick()
-            render()
         }
     }
 

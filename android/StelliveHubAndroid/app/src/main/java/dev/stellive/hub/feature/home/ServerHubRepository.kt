@@ -50,8 +50,13 @@ class ServerHubRepository(
     override suspend fun updatePreferences(settings: NotificationSettingState): HubDataState =
         fallback.updatePreferences(settings)
 
-    override suspend fun hubEvents(filterId: String): List<HubEvent> {
-        val response = remoteDataSource.hubEvents(generationId = filterId.takeUnless { it == "all" }, limit = 100)
+    override suspend fun hubEvents(filterId: String, from: LocalDate?, to: LocalDate?): List<HubEvent> {
+        val response = remoteDataSource.hubEvents(
+            generationId = filterId.takeUnless { it == "all" },
+            from = from?.format(DateTimeFormatter.ISO_LOCAL_DATE),
+            to = to?.format(DateTimeFormatter.ISO_LOCAL_DATE),
+            limit = 100,
+        )
         if (response is HubNetworkResult.Success) {
             val events = response.value.items.mapNotNull { it.toHubEventOrNull() }
             if (events.isNotEmpty()) {
@@ -60,7 +65,7 @@ class ServerHubRepository(
                 return events
             }
         }
-        return eventCache.values.takeIf { it.isNotEmpty() }?.toList() ?: fallback.hubEvents(filterId)
+        return eventCache.values.takeIf { it.isNotEmpty() }?.toList() ?: fallback.hubEvents(filterId, from, to)
     }
 
     override suspend fun hubEventDetail(id: String): HubEvent? {
@@ -211,6 +216,8 @@ class ServerHubRepository(
         suspend fun registerDevice(request: RegisterDeviceRequestDto): HubNetworkResult<RegisterDeviceResponseDto>
         suspend fun hubEvents(
             generationId: String? = null,
+            from: String? = null,
+            to: String? = null,
             limit: Int? = null,
         ): HubNetworkResult<dev.stellive.hub.core.network.HubEventsListResponseDto>
         suspend fun hubEvent(id: String): HubNetworkResult<HubEventDto>
@@ -227,11 +234,13 @@ class ServerHubRepository(
             request: RegisterDeviceRequestDto,
         ): HubNetworkResult<RegisterDeviceResponseDto> = client.registerDevice(request)
 
-        override suspend fun hubEvents(
-            generationId: String?,
-            limit: Int?,
-        ): HubNetworkResult<dev.stellive.hub.core.network.HubEventsListResponseDto> =
-            client.hubEvents(generationId = generationId, limit = limit)
+    override suspend fun hubEvents(
+        generationId: String?,
+        from: String?,
+        to: String?,
+        limit: Int?,
+    ): HubNetworkResult<dev.stellive.hub.core.network.HubEventsListResponseDto> =
+        client.hubEvents(generationId = generationId, from = from, to = to, limit = limit)
 
         override suspend fun hubEvent(id: String): HubNetworkResult<HubEventDto> = client.hubEvent(id)
 
