@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { CatalogService } from "../catalog/catalog.js";
 import { productionHubCalendarSpecialDays } from "../hub-events/hubCalendarSpecialDayCatalog.js";
+import type { SpecialDayOccurrence } from "../hub-events/hubCalendarSpecialDayMaterializer.js";
 import { HubEventService, type HubEventReadPort } from "../hub-events/hubEventService.js";
 import { shouldDropEventBeforeStorage } from "../events/eventGuards.js";
 import { resolveNotificationDelivery } from "../notification/loadReductionPolicy.js";
@@ -23,6 +24,15 @@ const devDeviceId = "dev-device";
 export interface AppRouteDependencies {
   hubEvents?: HubEventReadPort;
   hubCalendarSpecialDays?: HubCalendarSpecialDay[];
+  hubCalendarSpecialDayOccurrences?: {
+    listRange(filters: {
+      from: Date;
+      to: Date;
+      generationId?: string;
+      memberId?: string;
+      kind?: string;
+    }): Promise<SpecialDayOccurrence[]>;
+  };
   bootstrap?: {
     getBootstrap(input: {
       deviceId?: string;
@@ -196,7 +206,8 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
 
   registerHubEventReadRoutes(app, {
     hubEvents,
-    hubCalendarSpecialDays: options.dependencies?.hubCalendarSpecialDays ?? productionHubCalendarSpecialDays
+    hubCalendarSpecialDays: options.dependencies?.hubCalendarSpecialDays ?? productionHubCalendarSpecialDays,
+    hubCalendarSpecialDayOccurrences: options.dependencies?.hubCalendarSpecialDayOccurrences
   });
 
   app.get("/v1/realtime/status", async () => realtime.status());

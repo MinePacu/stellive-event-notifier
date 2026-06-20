@@ -3,6 +3,7 @@ import { buildApp } from "../src/app.js";
 import { HubEventRepository } from "../src/hub-events/hubEventRepository.js";
 import type { HubCalendarSpecialDay, HubEvent } from "../src/types.js";
 import type { HubEventFilters, HubEventReadPort } from "../src/hub-events/hubEventService.js";
+import type { SpecialDayOccurrence } from "../src/hub-events/hubCalendarSpecialDayMaterializer.js";
 
 const routeEnv = {
   DATABASE_URL: "postgresql://stellive:stellive@localhost:5432/stellive_hub",
@@ -63,7 +64,13 @@ function createHubEvents(events: HubEvent[]): HubEventReadPort {
   };
 }
 
-async function buildRouteApp(events: HubEvent[], specialDays: HubCalendarSpecialDay[] = []) {
+async function buildRouteApp(
+  events: HubEvent[],
+  specialDays: HubCalendarSpecialDay[] = [],
+  specialDayOccurrences?: {
+    listRange(filters: { from: Date; to: Date; generationId?: string; memberId?: string; kind?: string }): Promise<SpecialDayOccurrence[]>;
+  }
+) {
   return buildApp({
     env: routeEnv,
     useProcessEnv: false,
@@ -71,6 +78,7 @@ async function buildRouteApp(events: HubEvent[], specialDays: HubCalendarSpecial
       dependencies: {
         hubEvents: createHubEvents(events),
         hubCalendarSpecialDays: specialDays,
+        hubCalendarSpecialDayOccurrences: specialDayOccurrences
       },
     },
   });
@@ -190,6 +198,84 @@ describe("HubEvent read routes", () => {
     );
   });
 
+  it("returns ended status for past special-day calendar entries", async () => {
+    const app = await buildRouteApp(
+      [hubEvent({ id: "calendar-event" })],
+      [
+        {
+          id: "birthday:member-yuni",
+          kind: "member_birthday",
+          title: "아야츠노 유니 생일",
+          generationId: "gen1",
+          memberId: "member-yuni",
+          month: 5,
+          day: 21,
+          activeStatus: "active",
+          catalogRole: "member",
+          sourceLabel: "카탈로그",
+          policyState: "catalog_verified"
+        }
+      ]
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/hub-events/calendar?from=2026-05-01T00:00:00.000Z&to=2026-05-31T23:59:59.999Z&timezone=Asia/Seoul"
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    const entries = response.json().days.flatMap((day: { entries: Array<{ entryKind: string }> }) => day.entries);
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "birthday:member-yuni:2026-05-21",
+          entryKind: "member_birthday",
+          status: "ended"
+        })
+      ])
+    );
+  });
+
+  it("returns materialized special-day occurrences from calendar routes", async () => {
+    const occurrence: SpecialDayOccurrence = {
+      id: "special-day-occurrence:birthday:ayatsuno-yuni:2026",
+      specialDayId: "birthday:ayatsuno-yuni",
+      kind: "member_birthday",
+      displayYear: 2026,
+      displayDate: "2026-05-21",
+      title: "아야츠노 유니 생일",
+      specialDayLabel: "생일",
+      generationId: "gen1",
+      memberId: "ayatsuno-yuni",
+      startsAt: new Date("2026-05-20T15:00:00.000Z"),
+      endsAt: new Date("2026-05-21T15:00:00.000Z"),
+      sourceLabel: "카탈로그",
+      policyState: "catalog_verified"
+    };
+    const listRange = async () => [occurrence];
+    const app = await buildRouteApp([], [], { listRange });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/hub-events/calendar?from=2026-05-01T00:00:00.000Z&to=2026-05-31T23:59:59.999Z&timezone=Asia/Seoul"
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    const entries = response.json().days.flatMap((day: { entries: unknown[] }) => day.entries);
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "birthday:ayatsuno-yuni:2026-05-21",
+          entryKind: "member_birthday",
+          startsAt: "2026-05-20T15:00:00.000Z",
+          endsAt: "2026-05-21T15:00:00.000Z"
+        })
+      ])
+    );
+  });
+
   it("returns widget snapshot entries with freshness metadata", async () => {
     const app = await buildRouteApp([
       hubEvent({ id: "widget-1" }),
@@ -206,6 +292,89 @@ describe("HubEvent read routes", () => {
       staleAfter: expect.any(String),
     });
     expect(response.json().entries).toHaveLength(1);
+  });
+
+  it("keeps calendar HubEvent entries when optional special-day occurrence storage is missing", async () => {
+    const app = await buildRouteApp(
+      [
+        hubEvent({
+          id: "calendar-event",
+          startsAt: "2026-07-11T09:00:00.000Z",
+          endsAt: "2026-07-11T12:00:00.000Z"
+        })
+      ],
+      [],
+      {
+        async listRange() {
+          throw Object.assign(new Error("missing table"), { code: "P2021" });
+        }
+      }
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/hub-events/calendar?from=2026-07-01T00:00:00.000Z&to=2026-07-31T23:59:59.999Z&timezone=Asia/Seoul"
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    const entries = response.json().days.flatMap((day: { entries: unknown[] }) => day.entries);
+    expect(entries).toEqual([expect.objectContaining({ eventId: "calendar-event", entryKind: "hub_event" })]);
+  });
+
+  it("keeps widget HubEvent entries when optional special-day occurrence storage is missing", async () => {
+    const app = await buildRouteApp(
+      [
+        hubEvent({
+          id: "widget-event",
+          startsAt: "2026-07-11T09:00:00.000Z",
+          endsAt: "2026-07-11T12:00:00.000Z"
+        })
+      ],
+      [],
+      {
+        async listRange() {
+          throw Object.assign(new Error("missing table"), { code: "P2021" });
+        }
+      }
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/hub-events/widget-snapshot?timezone=Asia/Seoul&limit=1"
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().entries).toEqual([
+      expect.objectContaining({ eventId: "widget-event", entryKind: "hub_event" })
+    ]);
+  });
+
+  it("propagates non-missing-table special-day occurrence errors", async () => {
+    const app = await buildRouteApp(
+      [
+        hubEvent({
+          id: "calendar-event",
+          startsAt: "2026-07-11T09:00:00.000Z",
+          endsAt: "2026-07-11T12:00:00.000Z"
+        })
+      ],
+      [],
+      {
+        async listRange() {
+          throw Object.assign(new Error("database unavailable"), { code: "P1001" });
+        }
+      }
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/hub-events/calendar?from=2026-07-01T00:00:00.000Z&to=2026-07-31T23:59:59.999Z&timezone=Asia/Seoul"
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(500);
   });
 
   it("does not synthesize livestream, upload, ordinary post, or fan-hosted events in HubEvent reads", async () => {

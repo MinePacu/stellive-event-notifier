@@ -287,7 +287,7 @@ class HubEventsCalendarView(
         cell.addView(TextView(context).apply {
             text = if (entryCount > 0) "•" else ""
             gravity = Gravity.CENTER
-            textSize = 13f
+            textSize = 17f
             setTextColor(dotColor(marker))
         })
         return cell

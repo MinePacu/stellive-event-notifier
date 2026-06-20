@@ -18,6 +18,13 @@ import type {
 import type { ChzzkLiveAdapterCounts } from "../adapters/chzzk/chzzkOpenApiAdapter.js";
 import type { NotificationWorkerDrainInput, NotificationWorkerDrainResult } from "../jobs/notificationWorker.js";
 import type { AppEnv } from "../config/env.js";
+import { productionHubCalendarSpecialDays } from "../hub-events/hubCalendarSpecialDayCatalog.js";
+import { buildSpecialDayOccurrences } from "../hub-events/hubCalendarSpecialDayMaterializer.js";
+import {
+  HubCalendarSpecialDayOccurrenceRepository,
+  type MaterializeSpecialDayYearResult
+} from "../hub-events/hubCalendarSpecialDayOccurrenceRepository.js";
+import { HubEventRepository, type HubEventStatusReconcileResult } from "../hub-events/hubEventRepository.js";
 import { NotificationJobRepository } from "../jobs/notificationJobRepository.js";
 import { DeliveryAttemptRepository } from "../repositories/deliveryAttemptRepository.js";
 import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
@@ -60,6 +67,13 @@ export interface InternalRouteDependencies {
   chzzkLiveAdapter?: {
     pollLiveStatuses(): MaybePromise<ChzzkLiveAdapterCounts>;
   };
+  specialDayYearMaterializer: {
+    materializeYear(input: { targetYear?: number; dryRun?: boolean; now?: Date }): MaybePromise<MaterializeSpecialDayYearResult>;
+  };
+  hubEventStatuses: {
+    reconcileDueStatuses(now: Date): MaybePromise<HubEventStatusReconcileResult>;
+  };
+  now?: () => Date;
 }
 
 export interface InternalRouteOptions {
@@ -88,6 +102,30 @@ function parseInternalLimit(value: unknown, defaultLimit: number): number {
   return Math.min(100, Math.max(1, Math.trunc(parsed)));
 }
 
+function kstYear(value: Date): number {
+  const year = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric"
+  }).format(value);
+  return Number(year);
+}
+
+function parseSpecialDayMaterializationBody(
+  body: unknown,
+  now: Date
+): { ok: true; value: { targetYear: number; dryRun: boolean; now: Date } } | { ok: false } {
+  if (body !== undefined && body !== null && (typeof body !== "object" || Array.isArray(body))) return { ok: false };
+  const input = (body ?? {}) as { targetYear?: unknown; dryRun?: unknown };
+  if (input.targetYear !== undefined) {
+    const targetYear = typeof input.targetYear === "number" ? input.targetYear : Number(input.targetYear);
+    if (!Number.isInteger(targetYear) || targetYear < 2020 || targetYear > 2100) return { ok: false };
+    if (input.dryRun !== undefined && typeof input.dryRun !== "boolean") return { ok: false };
+    return { ok: true, value: { targetYear, dryRun: input.dryRun === true, now } };
+  }
+  if (input.dryRun !== undefined && typeof input.dryRun !== "boolean") return { ok: false };
+  return { ok: true, value: { targetYear: kstYear(now), dryRun: input.dryRun === true, now } };
+}
+
 function hasOnlyNotificationDrainFields(body: unknown): boolean {
   if (body === undefined || body === null) return true;
   if (typeof body !== "object" || Array.isArray(body)) return false;
@@ -111,6 +149,8 @@ function createProtectedRoute(env: AppEnv, handler: ProtectedHandler): Protected
 
 function defaultDependencies(env: AppEnv): InternalRouteDependencies {
   const adapterHealth = new PlatformApiStateRepository();
+  const specialDayOccurrences = new HubCalendarSpecialDayOccurrenceRepository();
+  const hubEventRepository = new HubEventRepository();
 
   return {
     adminHealthService: new AdminHealthService(env),
@@ -118,7 +158,23 @@ function defaultDependencies(env: AppEnv): InternalRouteDependencies {
     webhookSubscriptions: new WebhookSubscriptionRepository(),
     liveStatus: new LiveStatusRepository(),
     deliveryAttempts: new DeliveryAttemptRepository(),
-    adapterHealth
+    adapterHealth,
+    specialDayYearMaterializer: {
+      async materializeYear(input) {
+        const targetYear = input.targetYear ?? kstYear(input.now ?? new Date());
+        const occurrences = buildSpecialDayOccurrences(productionHubCalendarSpecialDays, {
+          targetYear,
+          timezone: "Asia/Seoul"
+        });
+      return specialDayOccurrences.upsertYear(occurrences, {
+        dryRun: input.dryRun,
+        targetYear
+      });
+    }
+    },
+    hubEventStatuses: {
+      reconcileDueStatuses: (now) => hubEventRepository.reconcileDueStatuses(now)
+    }
   };
 }
 
@@ -202,6 +258,20 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
 
     const counts = await dependencies.chzzkLiveAdapter.pollLiveStatuses();
     return { status: "ok", counts };
+  });
+
+  app.post("/v1/internal/schedulers/hub-events/special-days/materialize-year", async (request, reply) => {
+    const now = dependencies.now?.() ?? new Date();
+    const parsed = parseSpecialDayMaterializationBody(request.body, now);
+    if (!parsed.ok) return reply.code(400).send({ error: "special_day_materialization_body_invalid" });
+
+    const result = await dependencies.specialDayYearMaterializer.materializeYear(parsed.value);
+    return { ok: true, ...result };
+  });
+
+  app.post("/v1/internal/schedulers/hub-events/statuses/reconcile", async () => {
+    const now = dependencies.now?.() ?? new Date();
+    return dependencies.hubEventStatuses.reconcileDueStatuses(now);
   });
 
   app.get<{ Querystring: LimitQuery }>("/v1/internal/live-status", async (request) => {

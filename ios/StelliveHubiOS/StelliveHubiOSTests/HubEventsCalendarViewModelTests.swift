@@ -21,6 +21,51 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.visibleEntries().isEmpty)
     }
 
+    func testSelectedMonthEntriesReturnsOnlyCurrentMonthEntries() {
+        let viewModel = makeViewModel(
+            selectedDay: date("2026-06-14"),
+            days: [
+                day("2026-06-13", entries: [entry(id: "june-goods")]),
+                day("2026-06-29", entries: [entry(id: "june-ticket", category: .ticketing)]),
+                day("2026-07-01", entries: [entry(id: "july-offline", participationMode: .offline)])
+            ]
+        )
+
+        XCTAssertEqual(viewModel.selectedMonthEntries().map(\.id), ["june-goods", "june-ticket"])
+    }
+
+    func testSelectedMonthEntriesRespectsActiveFilter() {
+        let viewModel = makeViewModel(
+            selectedDay: date("2026-06-14"),
+            days: [
+                day("2026-06-13", entries: [entry(id: "goods", category: .onlineGoods)]),
+                day("2026-06-14", entries: [entry(id: "ticket", category: .ticketing)])
+            ]
+        )
+
+        viewModel.setFilter("ticketing")
+
+        XCTAssertEqual(viewModel.selectedMonthEntries().map(\.id), ["ticket"])
+    }
+
+    func testSelectedMonthEntriesDoNotChangeWhenSelectedDayChangesWithinMonth() {
+        let viewModel = makeViewModel(
+            selectedDay: date("2026-06-14"),
+            days: [
+                day("2026-06-13", entries: [entry(id: "goods")]),
+                day("2026-06-15", entries: [entry(id: "ticket", category: .ticketing)]),
+                day("2026-06-28", entries: [entry(id: "closing", status: .closingSoon)]),
+                day("2026-07-01", entries: [entry(id: "next-month")])
+            ]
+        )
+
+        let initialMonthEntries = viewModel.selectedMonthEntries().map(\.id)
+
+        viewModel.selectDate(date("2026-06-28"))
+
+        XCTAssertEqual(viewModel.selectedMonthEntries().map(\.id), initialMonthEntries)
+    }
+
     func testSelectingDayReturnsEntriesForSelectedDate() {
         let viewModel = makeViewModel(days: [
             day("2026-06-13", entries: [entry(id: "today-open", status: .open)]),

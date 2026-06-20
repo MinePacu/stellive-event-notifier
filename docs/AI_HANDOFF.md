@@ -147,3 +147,12 @@ Backend `hubCalendarSpecialDays.ts` projects verified catalog special days into 
 
 Production special-day seed data now includes the 10 verified active member birthdays from the official Stellive talent profiles in `backend/stellive-hub-api/src/hub-events/hubCalendarSpecialDayCatalog.ts`. Gen1 anniversary and Gangzi birthday remain excluded until an allowed source is confirmed and explicitly approved. No Former members, official channel anniversaries, images, logos, or copied media were added.
 Latest verification on this branch: backend `rtk npm run build` and `rtk npm test` passed with 28 files and 260 tests; iOS `test_sim` passed on `iPhone 17` with 38 tests; Android `rtk ./gradlew testDebugUnitTest --tests dev.stellive.hub.CalendarWidgetTextFormatterTest --tests dev.stellive.hub.CalendarUiPolicyTest` and full `rtk ./gradlew testDebugUnitTest` passed from `android/StelliveHubAndroid`.
+## Hub Calendar Special Day Yearly Materialization
+
+Special day yearly materialization uses `POST /v1/internal/schedulers/hub-events/special-days/materialize-year` with `Authorization: Bearer <INTERNAL_API_TOKEN>`. The request may omit `targetYear` to use the current `Asia/Seoul` year, or pass `targetYear` for manual backfill; `dryRun` is supported for non-writing checks.
+
+Schedule the production job for January 1 00:05 `Asia/Seoul` or later. The endpoint is idempotent and upserts by `specialDayId + displayYear`, so repeated scheduler calls are acceptable.
+
+Apply the Prisma migration for `HubCalendarSpecialDayOccurrence` and run Prisma generate before enabling DB occurrence reads in a deployed Prisma-backed environment. After migration, call the endpoint once for the current KST year to backfill current-year birthdays/anniversaries.
+
+Verification commands from `backend/stellive-hub-api`: `rtk npm test -- hubCalendarSpecialDayMaterializer adminInternalRoutes hubEventCalendar hubEventReadRoutes`, `rtk npm run build`, and `rtk npm test`. Do not write real admin tokens, internal API tokens, credentials, raw provider payloads, member images, official logos, or copied media into docs, commits, or logs.

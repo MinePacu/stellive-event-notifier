@@ -16,6 +16,18 @@ interface LocalDateParts {
   day: number;
 }
 
+interface SpecialDayStatusSnapshot {
+  todayLocalDate: string;
+  timezone: string;
+}
+
+const statusSnapshotCache = new Map<string, SpecialDayStatusSnapshot>();
+
+export function clearSpecialDayStatusSnapshotCache(): { cleared: true } {
+  statusSnapshotCache.clear();
+  return { cleared: true };
+}
+
 export function anniversaryYearFor(displayYear: number, startYear: number): number | undefined {
   const anniversaryYear = displayYear - startYear;
   return anniversaryYear > 0 ? anniversaryYear : undefined;
@@ -42,6 +54,26 @@ function localDateString(parts: LocalDateParts): string {
     String(parts.month).padStart(2, "0"),
     String(parts.day).padStart(2, "0")
   ].join("-");
+}
+
+function specialDayStatus(
+  displayDate: string,
+  snapshot: SpecialDayStatusSnapshot
+): "ended" | "open" | "upcoming" {
+  if (displayDate < snapshot.todayLocalDate) return "ended";
+  if (displayDate === snapshot.todayLocalDate) return "open";
+  return "upcoming";
+}
+
+function specialDayStatusSnapshot(options: SpecialDayProjectionOptions): SpecialDayStatusSnapshot {
+  const todayLocalDate = localDateString(localDateParts(options.now, options.timezone));
+  const cacheKey = `special-day-status:${options.timezone}:${todayLocalDate}`;
+  const cached = statusSnapshotCache.get(cacheKey);
+  if (cached) return cached;
+
+  const snapshot = { todayLocalDate, timezone: options.timezone };
+  statusSnapshotCache.set(cacheKey, snapshot);
+  return snapshot;
 }
 
 function compareLocalDate(left: LocalDateParts, right: LocalDateParts): number {
@@ -79,7 +111,8 @@ function isAllowedSpecialDay(day: HubCalendarSpecialDay, options: SpecialDayProj
 function entryForSpecialDay(
   day: HubCalendarSpecialDay,
   displayDate: string,
-  displayYear: number
+  displayYear: number,
+  status: "ended" | "open" | "upcoming"
 ): HubCalendarEntry | undefined {
   if (day.kind === "generation_anniversary") {
     const anniversaryYear = anniversaryYearFor(displayYear, day.startYear ?? displayYear);
@@ -94,7 +127,7 @@ function entryForSpecialDay(
       specialDayLabel,
       title: `${day.title} ${specialDayLabel}`,
       category: "online_goods",
-      status: "upcoming",
+      status,
       participationMode: "online",
       generationId: day.generationId,
       memberId: day.memberId,
@@ -113,7 +146,7 @@ function entryForSpecialDay(
     specialDayLabel: "생일",
     title: day.title,
     category: "online_goods",
-    status: "upcoming",
+    status,
     participationMode: "online",
     generationId: day.generationId,
     memberId: day.memberId,
@@ -130,6 +163,7 @@ export function buildSpecialDayEntries(
 ): HubCalendarEntry[] {
   const fromLocal = localDateParts(options.from, options.timezone);
   const toLocal = localDateParts(options.to, options.timezone);
+  const statusSnapshot = specialDayStatusSnapshot(options);
 
   return specialDays.flatMap((day) => {
     if (!isAllowedSpecialDay(day, options)) return [];
@@ -139,7 +173,7 @@ export function buildSpecialDayEntries(
       if (compareLocalDate(candidate, fromLocal) < 0 || compareLocalDate(candidate, toLocal) > 0) return [];
 
       const displayDate = localDateString(candidate);
-      const entry = entryForSpecialDay(day, displayDate, year);
+      const entry = entryForSpecialDay(day, displayDate, year, specialDayStatus(displayDate, statusSnapshot));
       return entry ? [entry] : [];
     });
   });
