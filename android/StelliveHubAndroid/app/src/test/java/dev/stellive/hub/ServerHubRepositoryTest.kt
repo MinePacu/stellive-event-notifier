@@ -12,6 +12,7 @@ import dev.stellive.hub.core.network.RegisterDeviceRequestDto
 import dev.stellive.hub.core.network.RegisterDeviceResponseDto
 import dev.stellive.hub.feature.home.MockHubRepository
 import dev.stellive.hub.feature.home.ServerHubRepository
+import java.time.LocalDate
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -51,6 +52,25 @@ class ServerHubRepositoryTest {
     }
 
     @Test
+    fun hubEventsForwardsDateRange() = runTest {
+        val remote = RecordingRemoteDataSource()
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        repository.hubEvents(
+            filterId = "all",
+            from = LocalDate.of(2026, 6, 1),
+            to = LocalDate.of(2026, 9, 30),
+        )
+
+        assertEquals("2026-06-01", remote.lastHubEventsFrom)
+        assertEquals("2026-09-30", remote.lastHubEventsTo)
+    }
+
+    @Test
     fun bootstrapRegistersDeviceWhenServerSnapshotHasNoDevice() = runTest {
         val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage())
         val remote = RecordingRemoteDataSource()
@@ -69,6 +89,8 @@ class ServerHubRepositoryTest {
     private class RecordingRemoteDataSource : ServerHubRepository.RemoteDataSource {
         var bootstrapCalls = 0
         var registerCalls = 0
+        var lastHubEventsFrom: String? = null
+        var lastHubEventsTo: String? = null
 
         override suspend fun bootstrap(deviceId: String?): HubNetworkResult<BootstrapResponseDto> {
             bootstrapCalls += 1
@@ -119,9 +141,14 @@ class ServerHubRepositoryTest {
 
         override suspend fun hubEvents(
             generationId: String?,
+            from: String?,
+            to: String?,
             limit: Int?,
-        ): HubNetworkResult<HubEventsListResponseDto> =
-            HubNetworkResult.Success(HubEventsListResponseDto())
+        ): HubNetworkResult<HubEventsListResponseDto> {
+            lastHubEventsFrom = from
+            lastHubEventsTo = to
+            return HubNetworkResult.Success(HubEventsListResponseDto())
+        }
 
         override suspend fun hubEvent(id: String): HubNetworkResult<HubEventDto> =
             HubNetworkResult.Failure("not_found", "not found")

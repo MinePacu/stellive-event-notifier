@@ -278,8 +278,18 @@ class MockHubRepository : HubRepository {
     override suspend fun updatePreferences(settings: dev.stellive.hub.core.model.NotificationSettingState): HubDataState =
         bootstrap()
 
-    override suspend fun hubEvents(filterId: String): List<HubEvent> =
-        if (filterId == "all") hubEvents else hubEvents.filter { it.generationId == filterId }
+    override suspend fun hubEvents(filterId: String, from: LocalDate?, to: LocalDate?): List<HubEvent> =
+        hubEvents
+            .asSequence()
+            .filter { filterId == "all" || it.generationId == filterId }
+            .filter { event ->
+                if (from == null || to == null) {
+                    true
+                } else {
+                    event.overlaps(from, to)
+                }
+            }
+            .toList()
 
     override suspend fun hubEventDetail(id: String): HubEvent? = hubEvents.firstOrNull { it.id == id }
 
@@ -288,4 +298,12 @@ class MockHubRepository : HubRepository {
             val date = runCatching { LocalDate.parse(day.date) }.getOrNull()
             date != null && !date.isBefore(from) && !date.isAfter(to)
         }
+
+    private fun HubEvent.overlaps(from: LocalDate, to: LocalDate): Boolean {
+        val eventStart = startsAt?.atZone(calendarZone)?.toLocalDate()
+            ?: endsAt?.atZone(calendarZone)?.toLocalDate()
+            ?: return false
+        val eventEnd = endsAt?.atZone(calendarZone)?.toLocalDate() ?: eventStart
+        return !eventEnd.isBefore(from) && !eventStart.isAfter(to)
+    }
 }
