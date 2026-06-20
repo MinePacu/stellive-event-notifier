@@ -48,10 +48,16 @@ final class ServerHubStore: ObservableObject {
         deviceIDStore.saveDeviceID(response.deviceId)
     }
 
-    func refreshHubEvents(filter: String = "all") async {
+    func refreshHubEvents(filter: String = "all", from: Date? = nil, to: Date? = nil) async {
+        let formatter = Self.calendarDateFormatter
         do {
             let generationId = filter == "all" ? nil : filter
-            let response = try await api.hubEvents(generationId: generationId, limit: 100)
+            let response = try await api.hubEvents(
+                generationId: generationId,
+                from: from.map { formatter.string(from: $0) },
+                to: to.map { formatter.string(from: $0) },
+                limit: 100
+            )
             let events = response.items.map { $0.toHubEvent() }
             serverHubEvents = events
             for event in events {

@@ -6,6 +6,7 @@ import {
 } from "../admin/adminAuth.js";
 import { CatalogService } from "../catalog/catalog.js";
 import type { AppEnv } from "../config/env.js";
+import { clearSpecialDayStatusSnapshotCache } from "../hub-events/hubCalendarSpecialDays.js";
 import { HubEventAdminService, HubEventAdminValidationException } from "../hub-events/hubEventAdminService.js";
 import type { HubEventAdminValidationResult } from "../hub-events/hubEventAdminTypes.js";
 import type { AdminHubEventFilters } from "../hub-events/hubEventRepository.js";
@@ -25,6 +26,7 @@ interface HubEventAdminRouteService {
 
 export interface AdminHubEventRouteDependencies {
   service: HubEventAdminRouteService;
+  clearSpecialDayStatusCache: () => { cleared: true };
 }
 
 export interface AdminHubEventRouteOptions {
@@ -94,6 +96,8 @@ async function sendServiceError(error: unknown, reply: FastifyReply) {
 
 export async function registerAdminHubEventRoutes(app: FastifyInstance, options: AdminHubEventRouteOptions): Promise<void> {
   const service = options.dependencies?.service ?? new HubEventAdminService({ catalog: new CatalogService() });
+  const clearSpecialDayStatusCache =
+    options.dependencies?.clearSpecialDayStatusCache ?? clearSpecialDayStatusSnapshotCache;
 
   app.addHook("preHandler", async (request, reply) => {
     if (!request.url.startsWith("/v1/admin/hub-events")) return;
@@ -113,6 +117,11 @@ export async function registerAdminHubEventRoutes(app: FastifyInstance, options:
     const result = service.validate(request.body, "publish");
     if (!result.valid) return reply.code(400).send(result);
     return result;
+  });
+
+  app.post("/v1/admin/hub-events/special-days/recalculate-status", privilegedRouteOptions, async (_request, reply) => {
+    applyNoStore(reply);
+    return { ok: true, ...clearSpecialDayStatusCache() };
   });
 
   app.post("/v1/admin/hub-events", privilegedRouteOptions, async (request, reply) => {

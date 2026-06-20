@@ -11,6 +11,7 @@ import type {
   HubEventStatus
 } from "../types.js";
 import { buildSpecialDayEntries } from "./hubCalendarSpecialDays.js";
+import type { SpecialDayOccurrence } from "./hubCalendarSpecialDayMaterializer.js";
 
 export type { HubCalendarDay, HubCalendarEntry, HubCalendarResponse, HubCalendarWidgetSnapshot } from "../types.js";
 
@@ -130,6 +131,49 @@ function displayTimeText(event: HubEvent, date: string, timezone: string): strin
   return "종일";
 }
 
+function specialDayOccurrenceStatus(occurrence: SpecialDayOccurrence, now: Date): "ended" | "open" | "upcoming" {
+  const nowTime = now.getTime();
+  if (nowTime < occurrence.startsAt.getTime()) return "upcoming";
+  if (nowTime >= occurrence.endsAt.getTime()) return "ended";
+  return "open";
+}
+
+function toSpecialDayOccurrenceEntry(occurrence: SpecialDayOccurrence, now: Date): HubCalendarEntry {
+  return {
+    id: `${occurrence.specialDayId}:${occurrence.displayDate}`,
+    eventId: occurrence.specialDayId,
+    entryKind: occurrence.kind,
+    specialDayKind: occurrence.kind,
+    specialDayLabel: occurrence.specialDayLabel,
+    title: occurrence.title,
+    category: "online_goods",
+    status: specialDayOccurrenceStatus(occurrence, now),
+    participationMode: "online",
+    generationId: occurrence.generationId,
+    memberId: occurrence.memberId,
+    startsAt: occurrence.startsAt.toISOString(),
+    endsAt: occurrence.endsAt.toISOString(),
+    displayDate: occurrence.displayDate,
+    displayTimeText: "종일",
+    sourceLabel: occurrence.sourceLabel,
+    appDeepLink: `stellivehub://calendar/special-days/${occurrence.specialDayId}?date=${occurrence.displayDate}`
+  };
+}
+
+function specialDayEntryKey(entry: HubCalendarEntry): string {
+  return [entry.entryKind, entry.eventId, entry.displayDate].join(":");
+}
+
+function mergeSpecialDayEntries(materialized: HubCalendarEntry[], projected: HubCalendarEntry[]): HubCalendarEntry[] {
+  const entries = new Map<string, HubCalendarEntry>();
+  for (const entry of materialized) entries.set(specialDayEntryKey(entry), entry);
+  for (const entry of projected) {
+    const key = specialDayEntryKey(entry);
+    if (!entries.has(key)) entries.set(key, entry);
+  }
+  return [...entries.values()];
+}
+
 function calendarDatesFor(event: HubEvent, options: CalendarResponseOptions): string[] {
   const eventStart = localDateString(primaryStart(event), options.timezone);
   const eventEnd = localDateString(primaryEnd(event), options.timezone);
@@ -185,7 +229,8 @@ export function compareCalendarEntries(left: HubCalendarEntry, right: HubCalenda
 export function buildHubCalendarResponse(
   events: HubEvent[],
   options: CalendarResponseOptions,
-  specialDays: HubCalendarSpecialDay[] = []
+  specialDays: HubCalendarSpecialDay[] = [],
+  specialDayOccurrences: SpecialDayOccurrence[] = []
 ): HubCalendarResponse {
   const days = new Map<string, HubCalendarEntry[]>();
 
@@ -199,7 +244,10 @@ export function buildHubCalendarResponse(
     }
   }
 
-  const specialDayEntries = options.includeSpecialDays === false
+  const materializedSpecialDayEntries = options.includeSpecialDays === false
+    ? []
+    : specialDayOccurrences.map((occurrence) => toSpecialDayOccurrenceEntry(occurrence, options.now));
+  const projectedSpecialDayEntries = options.includeSpecialDays === false
     ? []
     : buildSpecialDayEntries(specialDays, {
       from: options.from,
@@ -209,6 +257,7 @@ export function buildHubCalendarResponse(
       generationId: options.generationId,
       memberId: options.memberId
     });
+  const specialDayEntries = mergeSpecialDayEntries(materializedSpecialDayEntries, projectedSpecialDayEntries);
 
   for (const entry of specialDayEntries) {
     const entries = days.get(entry.displayDate) ?? [];
@@ -237,13 +286,17 @@ export function buildHubCalendarResponse(
 export function buildHubCalendarWidgetSnapshot(
   events: HubEvent[],
   options: WidgetSnapshotOptions,
-  specialDays: HubCalendarSpecialDay[] = []
+  specialDays: HubCalendarSpecialDay[] = [],
+  specialDayOccurrences: SpecialDayOccurrence[] = []
 ): HubCalendarWidgetSnapshot {
   const hubEventEntries = events.map((event) => {
     const date = localDateString(primaryStart(event), options.timezone);
     return toEntry(event, date, effectiveStatus(event, options.now), options.timezone);
   });
-  const specialDayEntries = options.includeSpecialDays === false
+  const materializedSpecialDayEntries = options.includeSpecialDays === false
+    ? []
+    : specialDayOccurrences.map((occurrence) => toSpecialDayOccurrenceEntry(occurrence, options.now));
+  const projectedSpecialDayEntries = options.includeSpecialDays === false
     ? []
     : buildSpecialDayEntries(specialDays, {
       from: options.now,
@@ -253,6 +306,7 @@ export function buildHubCalendarWidgetSnapshot(
       generationId: options.generationId,
       memberId: options.memberId
     });
+  const specialDayEntries = mergeSpecialDayEntries(materializedSpecialDayEntries, projectedSpecialDayEntries);
   const entries = options.entryKinds?.length
     ? [...hubEventEntries, ...specialDayEntries].filter((entry) => options.entryKinds?.includes(entry.entryKind))
     : [...hubEventEntries, ...specialDayEntries];

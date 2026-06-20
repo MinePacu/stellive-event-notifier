@@ -2,11 +2,13 @@ import SwiftUI
 
 struct HubEventsCalendarView: View {
     private let days: [HubCalendarDay]
+    @Binding private var selectedMonth: Date
     @StateObject private var viewModel: HubEventsCalendarViewModel
     @State private var presentedPicker: CalendarPickerPresentation?
 
-    init(days: [HubCalendarDay]) {
+    init(days: [HubCalendarDay], selectedMonth: Binding<Date>) {
         self.days = days
+        _selectedMonth = selectedMonth
         _viewModel = StateObject(wrappedValue: HubEventsCalendarViewModel(viewMode: .calendar, days: days))
     }
 
@@ -20,37 +22,21 @@ struct HubEventsCalendarView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Picker("보기 방식", selection: Binding(
-                get: { viewModel.viewMode },
-                set: { viewModel.setViewMode($0) }
-            )) {
-                Text("목록").tag(HubEventsViewMode.list)
-                Text("캘린더").tag(HubEventsViewMode.calendar)
-            }
-            .pickerStyle(.segmented)
+            monthControl
+            weekdayHeader
+            monthGrid
 
-            Picker("선택 방식", selection: Binding(
-                get: { viewModel.scopeMode },
-                set: { viewModel.setScopeMode($0) }
-            )) {
-                Text("일별").tag(HubCalendarScopeMode.day)
-                Text("기간별").tag(HubCalendarScopeMode.range)
-            }
-            .pickerStyle(.segmented)
-
-            if viewModel.viewMode == .calendar {
-                monthControl
-                weekdayHeader
-                monthGrid
-            } else {
-                listDateNavigationHeader
-            }
-
-            eventList
         }
         .padding(.vertical, 6)
+        .onAppear {
+            selectedMonth = viewModel.selectedMonth
+        }
         .onChange(of: days) { newDays in
             viewModel.replaceDays(newDays)
+            selectedMonth = viewModel.selectedMonth
+        }
+        .onChange(of: viewModel.selectedMonth) { newMonth in
+            selectedMonth = newMonth
         }
         .sheet(item: $presentedPicker) { picker in
             switch picker {
@@ -339,29 +325,6 @@ struct HubEventsCalendarView: View {
         }
     }
 
-    private var eventList: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            let entries = viewModel.visibleEntries()
-            if entries.isEmpty {
-                Text("선택한 범위에 표시할 일정이 없습니다.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 16)
-            } else {
-                ForEach(entries) { entry in
-                    CalendarEntryRow(entry: entry)
-                        .padding(10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(Color(.secondarySystemGroupedBackground))
-                        )
-                }
-            }
-        }
-        .padding(.top, 4)
-    }
-
     private var monthDates: [Date] {
         let calendar = Calendar.current
         guard
@@ -543,7 +506,7 @@ private struct CalendarDateCell: View {
                 Text("\(Calendar.current.component(.day, from: date))")
                     .font(.caption.weight(strongMarker ? .bold : .regular))
                 Text(entryCount > 0 ? "•" : "")
-                    .font(.caption2.weight(.bold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(dotColor)
             }
             .frame(maxWidth: .infinity, minHeight: 46)

@@ -4,6 +4,7 @@ struct HubEventsView: View {
     @EnvironmentObject private var store: MockHubStore
     @EnvironmentObject private var serverStore: ServerHubStore
     @State private var selectedFilter = "all"
+    @State private var selectedCalendarMonth = Date()
 
     private let filters: [(id: String, title: String)] = [
         ("all", "전체"),
@@ -60,23 +61,32 @@ struct HubEventsView: View {
             }
 
             Section("캘린더") {
-                HubEventsCalendarView(days: serverStore.calendarDays(for: selectedFilter))
+                HubEventsCalendarView(
+                    days: serverStore.calendarDays(for: selectedFilter),
+                    selectedMonth: $selectedCalendarMonth
+                )
             }
 
-            ForEach(serverStore.calendarDays(for: selectedFilter)) { day in
+            ForEach(selectedMonthCalendarDays) { day in
                 Section(day.date) {
-                    ForEach(day.entries) { entry in
-                        if HubCalendarDeepLinkPolicy.canNavigateToDetail(entry),
-                           let event = serverStore.hubEvents(for: selectedFilter).first(where: { $0.id == entry.eventId }) {
-                            NavigationLink {
-                                HubEventDetailContainerView(initialEvent: event)
-                            } label: {
+                        ForEach(day.entries) { entry in
+                            if let event = serverStore.cachedHubEvent(id: entry.eventId) {
+                                if HubCalendarDeepLinkPolicy.canNavigateToDetail(entry) {
+                                    HubEventNavigationRow(event: event)
+                                } else {
+                                    HubEventRow(event: event)
+                                }
+                            } else {
                                 HubCalendarRow(entry: entry)
                             }
-                        } else {
-                            HubCalendarRow(entry: entry)
                         }
-                    }
+                }
+            }
+
+            if selectedMonthCalendarDays.isEmpty {
+                Section(selectedMonthFeedTitle) {
+                    Text("선택한 월에 표시할 일정이 없습니다.")
+                        .secondaryNoticeTextStyle()
                 }
             }
 
@@ -98,13 +108,53 @@ struct HubEventsView: View {
     }
 
     private func refreshServerHubEvents() async {
-        await serverStore.refreshHubEvents(filter: selectedFilter)
-        let calendar = Calendar(identifier: .gregorian)
+        let timezone = TimeZone(identifier: "Asia/Seoul") ?? .current
+        var calendar = Self.feedCalendar
+        calendar.timeZone = timezone
         let now = Date()
         let from = calendar.date(byAdding: .month, value: -1, to: now) ?? now
         let to = calendar.date(byAdding: .month, value: 3, to: now) ?? now
-        await serverStore.refreshCalendar(from: from, to: to, timezone: TimeZone(identifier: "Asia/Seoul") ?? .current)
+        await serverStore.refreshHubEvents(filter: selectedFilter, from: from, to: to)
+        await serverStore.refreshCalendar(from: from, to: to, timezone: timezone)
     }
+
+    private var selectedMonthCalendarDays: [HubCalendarDay] {
+        serverStore.calendarDays(for: selectedFilter).filter { day in
+            guard let date = Self.calendarDayFormatter.date(from: day.date) else {
+                return false
+            }
+            return Self.feedCalendar.isDate(date, equalTo: selectedCalendarMonth, toGranularity: .month)
+        }
+    }
+
+    private var selectedMonthFeedTitle: String {
+        Self.monthTitleFormatter.string(from: selectedCalendarMonth)
+    }
+
+    private static let feedCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: "ko_KR")
+        calendar.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+        return calendar
+    }()
+
+    private static let calendarDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = feedCalendar
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.timeZone = feedCalendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    private static let monthTitleFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = feedCalendar
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.timeZone = feedCalendar.timeZone
+        formatter.dateFormat = "yyyy년 M월 일정"
+        return formatter
+    }()
 }
 
 struct HubEventDetailContainerView: View {
@@ -144,45 +194,73 @@ struct HubEventDetailContainerView: View {
     }
 }
 
-private struct HubEventRow: View {
+struct HubEventRow: View {
     let event: HubEvent
+    var showsChevron = false
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 8) {
-                if let thumbnailURL = HubEventImagePolicy.displayURL(for: event.image) {
-                    HubEventRemoteImage(url: thumbnailURL)
-                }
+        VStack(alignment: .leading, spacing: 10) {
+            if let thumbnailURL = HubEventImagePolicy.displayURL(for: event.image) {
+                HubEventRemoteImage(url: thumbnailURL)
+            }
 
-                Text(event.title)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.88)
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(event.title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.88)
 
-                Text([event.category.displayName, event.participationMode.displayName, event.sourceLabel]
-                    .joined(separator: " · "))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.82)
-
-                if let summary = event.summary, !summary.isEmpty {
-                    Text(summary)
-                        .font(.caption)
+                    Text([event.category.displayName, event.participationMode.displayName, event.sourceLabel]
+                        .joined(separator: " · "))
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .minimumScaleFactor(0.82)
+
+                    if let summary = event.summary, !summary.isEmpty {
+                        Text(summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.82)
+                    }
+                }
+                .layoutPriority(1)
+
+                Spacer(minLength: 8)
+
+                HubEventStatusBadge(status: event.status)
+
+                if showsChevron {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 12)
                 }
             }
-            .layoutPriority(1)
-
-            Spacer(minLength: 8)
-
-            HubEventStatusBadge(status: event.status)
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct HubEventNavigationRow: View {
+    let event: HubEvent
+
+    var body: some View {
+        HubEventRow(event: event, showsChevron: true)
+            .contentShape(Rectangle())
+            .overlay {
+                NavigationLink {
+                    HubEventDetailContainerView(initialEvent: event)
+                } label: {
+                    Color.clear
+                }
+                .opacity(0)
+                .accessibilityHidden(true)
+            }
     }
 }
 

@@ -6,6 +6,7 @@ import {
   type WidgetSnapshotOptions
 } from "../hub-events/hubEventCalendar.js";
 import type { HubEventFilters, HubEventReadPort } from "../hub-events/hubEventService.js";
+import type { SpecialDayOccurrence } from "../hub-events/hubCalendarSpecialDayMaterializer.js";
 import type {
   HubCalendarEntryKind,
   HubCalendarSpecialDay,
@@ -29,6 +30,15 @@ const hubCalendarEntryKinds = new Set<HubCalendarEntryKind>(["hub_event", "membe
 export interface RegisterHubEventReadRouteOptions {
   hubEvents: HubEventReadPort;
   hubCalendarSpecialDays?: HubCalendarSpecialDay[];
+  hubCalendarSpecialDayOccurrences?: {
+    listRange(filters: {
+      from: Date;
+      to: Date;
+      generationId?: string;
+      memberId?: string;
+      kind?: string;
+    }): Promise<SpecialDayOccurrence[]>;
+  };
 }
 
 type ParseResult<T> = { ok: true; value: T } | { ok: false; response: FastifyReply };
@@ -205,8 +215,38 @@ function parseHubWidgetSnapshotQuery(query: unknown, reply: FastifyReply): Parse
   };
 }
 
+function isMissingOptionalSpecialDayOccurrenceStore(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2021"
+  );
+}
+
 export default function registerHubEventReadRoutes(app: FastifyInstance, options: RegisterHubEventReadRouteOptions): void {
-  const { hubEvents, hubCalendarSpecialDays = [] } = options;
+  const { hubEvents, hubCalendarSpecialDays = [], hubCalendarSpecialDayOccurrences } = options;
+
+  async function listOptionalSpecialDayOccurrences(
+    filters: { from: Date; to: Date; generationId?: string; memberId?: string; kind?: string },
+    includeSpecialDays?: boolean
+  ): Promise<SpecialDayOccurrence[]> {
+    if (includeSpecialDays === false || !hubCalendarSpecialDayOccurrences) return [];
+
+    try {
+      return await hubCalendarSpecialDayOccurrences.listRange(filters);
+    } catch (error) {
+      if (isMissingOptionalSpecialDayOccurrenceStore(error)) {
+        app.log.warn(
+          { err: error },
+          "Special-day occurrence table is unavailable; continuing without special-day entries"
+        );
+        return [];
+      }
+
+      throw error;
+    }
+  }
 
   app.get("/v1/hub-events/summary", async () => hubEvents.summary());
 
@@ -226,7 +266,16 @@ export default function registerHubEventReadRoutes(app: FastifyInstance, options
       generationId: parsed.value.generationId,
       memberId: parsed.value.memberId
     }, parsed.value.now);
-    return buildHubCalendarResponse(events.items, parsed.value, hubCalendarSpecialDays);
+    const specialDayOccurrences = await listOptionalSpecialDayOccurrences(
+      {
+        from: parsed.value.from,
+        to: parsed.value.to,
+        generationId: parsed.value.generationId,
+        memberId: parsed.value.memberId
+      },
+      parsed.value.includeSpecialDays
+    );
+    return buildHubCalendarResponse(events.items, parsed.value, hubCalendarSpecialDays, specialDayOccurrences);
   });
 
   app.get("/v1/hub-events/widget-snapshot", async (request, reply) => {
@@ -238,7 +287,16 @@ export default function registerHubEventReadRoutes(app: FastifyInstance, options
       generationId: parsed.value.generationId,
       memberId: parsed.value.memberId
     }, parsed.value.now);
-    return buildHubCalendarWidgetSnapshot(events.items, parsed.value, hubCalendarSpecialDays);
+    const specialDayOccurrences = await listOptionalSpecialDayOccurrences(
+      {
+        from: parsed.value.now,
+        to: new Date(parsed.value.now.getTime() + 90 * 24 * 60 * 60 * 1000),
+        generationId: parsed.value.generationId,
+        memberId: parsed.value.memberId
+      },
+      parsed.value.includeSpecialDays
+    );
+    return buildHubCalendarWidgetSnapshot(events.items, parsed.value, hubCalendarSpecialDays, specialDayOccurrences);
   });
 
   app.get("/v1/hub-events/:id", async (request, reply) => {

@@ -13,8 +13,51 @@ export function renderAdminConsoleHtml(): string {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Stellive Hub Admin</title>
   ${renderAdminThemeInitScript()}
-  <style>
-    ${renderAdminThemeStyle()}
+    <style>
+      ${renderAdminThemeStyle()}
+      .card-body {
+        padding: 20px;
+      }
+      .events-card-body,
+      .validation-panel,
+      .audit-log-panel {
+        padding: 20px;
+      }
+      .table-scroll {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .has-tooltip {
+        position: relative;
+      }
+      .has-tooltip::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        z-index: 20;
+        left: 50%;
+        bottom: calc(100% + 10px);
+        transform: translateX(-50%);
+        max-width: min(280px, calc(100vw - 32px));
+        width: max-content;
+        padding: 8px 10px;
+        border: 1px solid var(--admin-border);
+        border-radius: 8px;
+        background: var(--admin-surface);
+        color: var(--admin-text);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+        font-size: 12px;
+        line-height: 1.35;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 120ms ease, transform 120ms ease;
+      }
+      .has-tooltip:hover::after,
+      .has-tooltip:focus-visible::after,
+      .has-tooltip:focus-within::after {
+        opacity: 1;
+        transform: translateX(-50%) translateY(-2px);
+      }
     :root {
       font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: var(--admin-bg);
@@ -417,19 +460,53 @@ export function renderAdminConsoleHtml(): string {
       }
     }
     @media (max-width: 640px) {
+      body {
+        overflow-x: hidden;
+      }
       .header-inner {
         flex-direction: column;
         align-items: stretch;
       }
+      main,
+      .shell,
+      .panel,
+      .card,
+      .hub-events-workspace {
+        width: 100%;
+        max-width: 100%;
+      }
       main {
         padding: 12px;
       }
-      .toolbar {
+      .grid,
+      .toolbar,
+      .hub-events-workspace,
+      .hub-event-actions,
+      .hub-events-editor-grid,
+      .hub-events-footer,
+      .hub-events-filter-row,
+      .hub-events-two,
+      .hub-events-three {
         grid-template-columns: 1fr;
       }
-      table {
-        display: block;
+      .toolbar,
+      .hub-event-actions {
+        display: flex;
+        flex-wrap: wrap;
+      }
+      input,
+      select,
+      textarea,
+      button {
+        max-width: 100%;
+      }
+      .table-scroll {
+        width: 100%;
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .has-tooltip::after {
+        display: none;
       }
     }
   </style>
@@ -453,11 +530,11 @@ export function renderAdminConsoleHtml(): string {
     <section class="panel stack">
       <div class="toolbar">
         <div class="field">
-          <label for="internal-token">Internal API bearer token</label>
+            <label class="has-tooltip" data-tooltip="Store the internal API bearer token in this browser only." title="Store the internal API bearer token in this browser only." for="internal-token">Internal API bearer token</label>
           <input id="internal-token" type="password" autocomplete="off" spellcheck="false" placeholder="Required for /v1/internal/* requests">
         </div>
         <div class="refresh-controls">
-          <button id="refresh" type="button">Refresh</button>
+              <button class="has-tooltip" data-tooltip="Refresh adapter, secret, feature flag, and job status." title="Refresh adapter, secret, feature flag, and job status." id="refresh" type="button">Refresh</button>
           <label class="switch-control">
             <span>Auto refresh</span>
             <input id="auto-refresh" class="auto-refresh-input" type="checkbox">
@@ -469,6 +546,7 @@ export function renderAdminConsoleHtml(): string {
           <button id="drain" type="button">Drain jobs</button>
           <button id="renew-youtube" type="button">Renew YouTube</button>
           <button id="poll-chzzk" type="button">Poll CHZZK</button>
+              <button class="has-tooltip" data-tooltip="Recalculate special day calendar status." title="Recalculate special day calendar status." id="recalculate-special-days" type="button">Recalculate special days</button>
         </div>
       </div>
       <div id="message" class="message">Enter the internal API token, then refresh.</div>
@@ -478,6 +556,7 @@ export function renderAdminConsoleHtml(): string {
 
     <section class="panel">
       <h2>Adapters</h2>
+      <div class="table-scroll">
       <table>
         <thead>
           <tr>
@@ -489,10 +568,12 @@ export function renderAdminConsoleHtml(): string {
         </thead>
         <tbody id="adapters"></tbody>
       </table>
+      </div>
     </section>
 
     <section class="panel">
       <h2>Secrets readiness</h2>
+      <div class="table-scroll">
       <table>
         <thead>
           <tr>
@@ -502,10 +583,12 @@ export function renderAdminConsoleHtml(): string {
         </thead>
         <tbody id="secrets"></tbody>
       </table>
+      </div>
     </section>
 
     <section class="panel">
       <h2>Feature flags</h2>
+      <div class="table-scroll">
       <table>
         <thead>
           <tr>
@@ -515,6 +598,7 @@ export function renderAdminConsoleHtml(): string {
         </thead>
         <tbody id="feature-flags"></tbody>
       </table>
+      </div>
     </section>
       <section class="panel stack" data-admin-section="hub-events">
         <div class="section-heading">
@@ -523,8 +607,8 @@ export function renderAdminConsoleHtml(): string {
             <p class="subtle">Goods and event schedule publishing controls.</p>
           </div>
           <div class="hub-events-toolbar action-controls">
-            <button id="hub-event-refresh" type="button">Refresh events</button>
-            <button id="hub-event-validate" type="button">Validate</button>
+                <button class="has-tooltip" data-tooltip="Refresh Hub event list." title="Refresh Hub event list." id="hub-event-refresh" type="button">Refresh events</button>
+                <button class="has-tooltip" data-tooltip="Validate the current Hub event form without saving." title="Validate the current Hub event form without saving." id="hub-event-validate" type="button">Validate</button>
             <button data-hub-event-action="save-draft" id="hub-event-save-draft" type="button">Save draft</button>
             <button data-hub-event-action="publish" id="hub-event-publish" type="button">Publish</button>
             <button data-hub-event-action="cancel" id="hub-event-cancel" type="button">Cancel</button>
@@ -534,14 +618,15 @@ export function renderAdminConsoleHtml(): string {
         </div>
         <div class="hub-events-workspace">
           <div class="hub-events-sidebar">
-            <div>
+            <div class="events-card">
+            <div class="card-body events-card-body">
               <h3>Events</h3>
               <p class="subtle">Filter and select existing Hub events.</p>
             </div>
             <div class="hub-events-filters">
               <div class="hub-events-filter-row">
                 <div class="field">
-                  <label for="hub-event-state-filter">Publication state</label>
+                  <label class="has-tooltip" data-tooltip="Filter the events list by publication state." title="Filter the events list by publication state." for="hub-event-state-filter">Publication state</label>
                   <select id="hub-event-state-filter">
                     <option value="">All</option>
                     <option value="draft">Draft</option>
@@ -551,7 +636,7 @@ export function renderAdminConsoleHtml(): string {
                   </select>
                 </div>
                 <div class="field">
-                  <label for="hub-event-status-filter">Public status</label>
+                  <label class="has-tooltip" data-tooltip="Filter the events list by public-facing status." title="Filter the events list by public-facing status." for="hub-event-status-filter">Public status</label>
                   <select id="hub-event-status-filter">
                     <option value="">All</option>
                     <option value="announced">Announced</option>
@@ -568,14 +653,17 @@ export function renderAdminConsoleHtml(): string {
                 <input id="hub-event-search" type="search" autocomplete="off" spellcheck="false">
               </div>
             </div>
+            <div class="table-scroll">
             <div class="hub-events-list">
               <table>
                 <thead><tr><th aria-label="Select"></th><th>Title</th><th>State</th><th>Status</th><th>Updated</th></tr></thead>
                 <tbody id="hub-event-list"></tbody>
               </table>
             </div>
-          </div>
-          <div class="hub-events-editor">
+            </div>
+            </div>
+            </div>
+            <div class="hub-events-editor">
           <form id="hub-event-form" class="hub-events-editor-grid">
             <input id="hub-event-id" type="hidden">
             <div class="hub-events-section">
@@ -628,8 +716,8 @@ export function renderAdminConsoleHtml(): string {
           </div>
         </div>
         <div class="hub-events-footer">
-          <div class="hub-events-section"><h3>Validation</h3><ul id="hub-event-validation" class="message-list"></ul></div>
-          <div class="hub-events-section"><h3>Audit log</h3><ul id="hub-event-audit-log" class="message-list"></ul></div>
+          <div class="hub-events-section panel validation-panel"><h3>Validation</h3><ul id="hub-event-validation" class="message-list"></ul></div>
+          <div class="hub-events-section panel audit-log-panel"><h3>Audit log</h3><ul id="hub-event-audit-log" class="message-list"></ul></div>
         </div>
       </section>
     </main>
@@ -640,7 +728,8 @@ export function renderAdminConsoleHtml(): string {
       drainJobs: "/v1/internal/jobs/notifications/drain",
       renewYoutube: "/v1/internal/schedulers/youtube/renew-subscriptions",
         pollChzzk: "/v1/internal/schedulers/chzzk/live-status",
-        hubEvents: "/v1/admin/hub-events"
+        hubEvents: "/v1/admin/hub-events",
+        recalculateSpecialDays: "/v1/admin/hub-events/special-days/recalculate-status"
       };
 
     const overviewRoot = document.getElementById("overview");
@@ -1299,6 +1388,11 @@ export function renderAdminConsoleHtml(): string {
     });
     document.getElementById("poll-chzzk").addEventListener("click", function () {
       return runAction("Poll CHZZK", endpoints.pollChzzk, { method: "POST" });
+    });
+    document.getElementById("recalculate-special-days").addEventListener("click", function () {
+      return runHubEventUiAction("Recalculate special days", function () {
+        return adminApi(endpoints.recalculateSpecialDays, { method: "POST" });
+      });
     });
     autoRefreshInput.addEventListener("change", function () {
       if (autoRefreshInput.checked) {

@@ -191,6 +191,32 @@ model HubEvent {
   @@index([updatedAt])
 }
 
+model HubCalendarSpecialDayOccurrence {
+  id              String   @id
+  specialDayId    String
+  kind            String
+  displayYear     Int
+  displayDate     String
+  title           String
+  specialDayLabel String
+  generationId    String
+  memberId        String?
+  startsAt        DateTime
+  endsAt          DateTime
+  sourceLabel     String
+  policyState     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([specialDayId, displayYear])
+  @@index([displayDate])
+  @@index([startsAt])
+  @@index([endsAt])
+  @@index([generationId])
+  @@index([memberId])
+  @@index([kind])
+}
+
 model HubEventAuditLog {
   id         String   @id @default(cuid(2))
   hubEventId String
