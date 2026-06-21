@@ -1,5 +1,7 @@
 import Foundation
 
+private let builtInHubEventFilters: Set<String> = ["all", "goods", "ticketing", "offline", "closing"]
+
 @MainActor
 final class ServerHubStore: ObservableObject {
     private let api: HubAPIClient
@@ -51,7 +53,7 @@ final class ServerHubStore: ObservableObject {
     func refreshHubEvents(filter: String = "all", from: Date? = nil, to: Date? = nil) async {
         let formatter = Self.calendarDateFormatter
         do {
-            let generationId = filter == "all" ? nil : filter
+            let generationId = builtInHubEventFilters.contains(filter) ? nil : filter
             let response = try await api.hubEvents(
                 generationId: generationId,
                 from: from.map { formatter.string(from: $0) },
