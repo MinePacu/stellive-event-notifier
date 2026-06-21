@@ -579,15 +579,21 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
                 navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
             }
         )
-        val eventsById = events.associateBy { it.id }
-        monthDays.forEach { day ->
-            val entryViews = day.entries.map { entry ->
-                eventsById[entry.eventId]?.let(::hubEventCard) ?: localCalendarEntryRow(entry)
+        val feedRows = CalendarUiPolicy.feedRenderRowsForMonth(
+            days = monthDays,
+            month = goodsEventsSelectedMonth,
+            events = events,
+        )
+        var previousHeader: String? = null
+        feedRows.forEach { row ->
+            val header = calendarDayHeaderText(row.day)
+            if (header != previousHeader) {
+                binding.contentList.addView(calendarDayHeader(header))
+                previousHeader = header
             }
-            if (entryViews.isNotEmpty()) {
-                binding.contentList.addView(calendarDayHeader(calendarDayHeaderText(day)))
-                entryViews.forEach(binding.contentList::addView)
-            }
+            row.canonicalEvent?.let { event ->
+                binding.contentList.addView(hubEventCard(event))
+            } ?: binding.contentList.addView(localCalendarEntryRow(row.entry))
         }
         binding.contentList.addView(
             noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")

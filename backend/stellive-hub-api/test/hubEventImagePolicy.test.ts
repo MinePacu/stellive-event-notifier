@@ -131,6 +131,35 @@ describe("HubEvent image policy", () => {
     expect(result.errors).toEqual(expect.arrayContaining([expect.objectContaining({ reason })]));
   });
 
+  it.each([
+    { policyState: "none", url: "https://example.com/event.jpg" },
+    { policyState: "none", sourceLabel: "공식 공지" },
+    { policyState: "none", sourceUrl: "https://example.com/notice" },
+  ])("rejects none image policy with filled image metadata %#", (image) => {
+    const result = validateHubEventForAdmin(adminInput({ image }), catalog, "draft");
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ reason: "image_policy_state_not_allowed" })])
+    );
+  });
+
+  it.each(["verify_required", "blocked"] as HubEventImagePolicyState[])(
+    "accepts %s review metadata without making it displayable",
+    (policyState) => {
+      const image = {
+        policyState,
+        url: "https://example.com/event.jpg",
+        sourceLabel: "공식 공지",
+        sourceUrl: "https://example.com/notice"
+      };
+      const result = validateHubEventForAdmin(adminInput({ image }), catalog, "draft");
+
+      expect(result).toEqual({ valid: true, errors: [] });
+      expect(canDisplayHubEventImage(image)).toBe(false);
+    }
+  );
+
   it.each(["none", "verify_required", "blocked"] as HubEventImagePolicyState[])(
     "accepts %s without display URL metadata",
     (policyState) => {

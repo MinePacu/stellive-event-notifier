@@ -33,7 +33,7 @@ function createFakeService() {
   return {
     list: vi.fn(async () => ({ items: [event] })),
     getById: vi.fn(async (id: string) => (id === event.id ? event : undefined)),
-    createDraft: vi.fn(async () => event),
+    createDraft: vi.fn(async (_input?: unknown, _actor?: unknown) => event),
     update: vi.fn(async () => ({ ...event, title: "Updated" })),
     publish: vi.fn(async () => ({ ...event, publicationState: "published", publishedAt: "2026-06-12T12:00:00.000Z" })),
     cancel: vi.fn(async () => ({ ...event, status: "cancelled", cancelledAt: "2026-06-12T12:00:00.000Z" })),
@@ -228,6 +228,44 @@ describe("admin hub event routes", () => {
       },
       { actorId: "admin", reason: undefined }
     );
+  });
+
+  it("preserves review image metadata when saving a draft", async () => {
+    const image = {
+      policyState: "verify_required",
+      url: "https://example.com/event.jpg",
+      sourceLabel: "공식 공지",
+      sourceUrl: "https://example.com/notice"
+    };
+    const service = createFakeService();
+    service.createDraft.mockImplementation(async (input) => ({
+      ...event,
+      ...(input as Record<string, unknown>),
+      id: "event-image-draft"
+    }));
+    const { app } = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/admin/hub-events",
+      headers: {
+        authorization: "Bearer admin-token",
+        "content-type": "application/json"
+      },
+      payload: JSON.stringify({
+        ...event,
+        image
+      })
+    });
+
+    await app.close();
+
+    expect(response.statusCode).toBe(201);
+    expect(service.createDraft).toHaveBeenCalledWith(expect.objectContaining({ image }), {
+      actorId: "admin",
+      reason: undefined
+    });
+    expect(response.json()).toEqual(expect.objectContaining({ image }));
   });
 
   it("accepts a signed admin session cookie when explicitly sent", async () => {

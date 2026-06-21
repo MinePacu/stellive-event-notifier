@@ -97,6 +97,67 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         )
     }
 
+    func testVisibleEntriesDeduplicatesMultiDayCalendarEntriesByEventId() {
+        let first = entry(
+            id: "goods-range:2026-06-19",
+            eventId: "goods-range",
+            startsAt: date("2026-06-19"),
+            endsAt: date("2026-07-02")
+        )
+        let second = entry(
+            id: "goods-range:2026-06-20",
+            eventId: "goods-range",
+            startsAt: date("2026-06-19"),
+            endsAt: date("2026-07-02")
+        )
+        let viewModel = makeViewModel(
+            selectedDay: date("2026-06-19"),
+            days: [
+                day("2026-06-19", entries: [first]),
+                day("2026-06-20", entries: [second])
+            ]
+        )
+        viewModel.setScopeMode(.range)
+
+        viewModel.selectDate(date("2026-06-19"))
+        viewModel.selectDate(date("2026-06-20"))
+
+        XCTAssertEqual(viewModel.visibleEntries().map(\.eventId), ["goods-range"])
+        XCTAssertEqual(viewModel.visibleEntries().map(\.id), ["goods-range:2026-06-19"])
+    }
+
+    func testFeedRowsForMonthDeduplicatesByEventIdAndKeepsFirstVisibleDate() {
+        let first = entry(
+            id: "goods-range:2026-06-19",
+            eventId: "goods-range",
+            startsAt: date("2026-06-19"),
+            endsAt: date("2026-07-02")
+        )
+        let second = entry(
+            id: "goods-range:2026-06-20",
+            eventId: "goods-range",
+            startsAt: date("2026-06-19"),
+            endsAt: date("2026-07-02")
+        )
+        let other = entry(
+            id: "ticket:2026-06-20",
+            eventId: "ticket",
+            category: .ticketing
+        )
+
+        let rows = HubEventsFeedPolicy.rowsForMonth(
+            days: [
+                day("2026-06-19", entries: [first]),
+                day("2026-06-20", entries: [second, other])
+            ],
+            selectedMonth: date("2026-06-01"),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(rows.map(\.entry.eventId), ["goods-range", "ticket"])
+        XCTAssertEqual(rows.first?.day.date, "2026-06-19")
+    }
+
     func testRangeMiddleMarkerDistinguishesDatesWithAndWithoutEntries() {
         let viewModel = makeViewModel(days: [
             day("2026-06-13", entries: [entry(id: "start")]),
@@ -554,8 +615,13 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         HubCalendarDay(date: date, entries: entries)
     }
 
+    private func day(_ date: String, _ entries: [HubCalendarEntry]) -> HubCalendarDay {
+        day(date, entries: entries)
+    }
+
     private func entry(
         id: String,
+        eventId: String? = nil,
         category: HubEventCategory = .onlineGoods,
         participationMode: HubEventParticipationMode = .online,
         status: HubEventStatus = .open,
@@ -564,7 +630,7 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
     ) -> HubCalendarEntry {
         HubCalendarEntry(
             id: id,
-            eventId: id,
+            eventId: eventId ?? id,
             entryKind: .hubEvent,
             specialDayKind: nil,
             specialDayLabel: nil,

@@ -67,23 +67,25 @@ struct HubEventsView: View {
                 )
             }
 
-                ForEach(selectedMonthCalendarDays) { day in
-                    Section(calendarDayHeaderTitle(for: day)) {
-                        ForEach(day.entries) { entry in
-                            if let event = serverStore.cachedHubEvent(id: entry.eventId) {
-                                if HubCalendarDeepLinkPolicy.canNavigateToDetail(entry) {
+            ForEach(selectedMonthFeedSections) { section in
+                Section(section.title) {
+                    ForEach(section.rows) { row in
+                        if row.entry.entryKind == .hubEvent {
+                            if let event = serverStore.cachedHubEvent(id: row.entry.eventId) {
+                                if HubCalendarDeepLinkPolicy.canNavigateToDetail(row.entry) {
                                     HubEventNavigationRow(event: event)
                                 } else {
                                     HubEventRow(event: event)
                                 }
-                            } else {
-                                HubCalendarRow(entry: entry)
                             }
+                        } else {
+                            HubCalendarRow(entry: row.entry)
                         }
+                    }
                 }
             }
 
-            if selectedMonthCalendarDays.isEmpty {
+            if selectedMonthRenderableFeedRows.isEmpty {
                 Section(selectedMonthFeedTitle) {
                     Text("선택한 월에 표시할 일정이 없습니다.")
                         .secondaryNoticeTextStyle()
@@ -118,22 +120,40 @@ struct HubEventsView: View {
         await serverStore.refreshCalendar(from: from, to: to, timezone: timezone)
     }
 
-    private var selectedMonthCalendarDays: [HubCalendarDay] {
-        serverStore.calendarDays(for: selectedFilter).filter { day in
-            guard let date = Self.calendarDayFormatter.date(from: day.date) else {
-                return false
-            }
-            return Self.feedCalendar.isDate(date, equalTo: selectedCalendarMonth, toGranularity: .month)
+    private var selectedMonthFeedRows: [HubEventsFeedRow] {
+        HubEventsFeedPolicy.rowsForMonth(
+            days: serverStore.calendarDays(for: selectedFilter),
+            selectedMonth: selectedCalendarMonth,
+            calendar: Self.feedCalendar
+        )
+    }
+
+    private var selectedMonthRenderableFeedRows: [HubEventsFeedRow] {
+        selectedMonthFeedRows.filter { row in
+            row.entry.entryKind != .hubEvent || serverStore.cachedHubEvent(id: row.entry.eventId) != nil
         }
+    }
+
+    private var selectedMonthFeedSections: [HubEventsFeedSection] {
+        var sections: [HubEventsFeedSection] = []
+        for row in selectedMonthRenderableFeedRows {
+            let title = calendarDayHeaderTitle(for: row)
+            if sections.last?.title == title {
+                sections[sections.count - 1].rows.append(row)
+            } else {
+                sections.append(HubEventsFeedSection(title: title, rows: [row]))
+            }
+        }
+        return sections
     }
 
     private var selectedMonthFeedTitle: String {
         Self.monthTitleFormatter.string(from: selectedCalendarMonth)
     }
 
-    private func calendarDayHeaderTitle(for day: HubCalendarDay) -> String {
-        guard let periodTitle = day.entries.lazy.compactMap({ calendarEntryPeriodTitle(for: $0) }).first else {
-            return day.date
+    private func calendarDayHeaderTitle(for row: HubEventsFeedRow) -> String {
+        guard let periodTitle = calendarEntryPeriodTitle(for: row.entry) else {
+            return row.day.date
         }
         return periodTitle
     }
@@ -157,7 +177,7 @@ struct HubEventsView: View {
         return calendar
     }()
 
-    private static let calendarDayFormatter: DateFormatter = {
+    static let calendarDayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = feedCalendar
         formatter.locale = Locale(identifier: "ko_KR")
@@ -183,6 +203,44 @@ struct HubEventsView: View {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
+}
+
+struct HubEventsFeedRow: Identifiable {
+    let day: HubCalendarDay
+    let entry: HubCalendarEntry
+
+    var id: String { entry.eventId }
+}
+
+struct HubEventsFeedSection: Identifiable {
+    let title: String
+    var rows: [HubEventsFeedRow]
+
+    var id: String { "\(title)-\(rows.first?.id ?? "empty")" }
+}
+
+enum HubEventsFeedPolicy {
+    static func rowsForMonth(
+        days: [HubCalendarDay],
+        selectedMonth: Date,
+        calendar: Calendar
+    ) -> [HubEventsFeedRow] {
+        var seenEventIDs = Set<String>()
+        return days
+            .sorted { $0.date < $1.date }
+            .filter { day in
+                guard let date = HubEventsView.calendarDayFormatter.date(from: day.date) else {
+                    return false
+                }
+                return calendar.isDate(date, equalTo: selectedMonth, toGranularity: .month)
+            }
+            .flatMap { day in
+                day.entries.map { entry in HubEventsFeedRow(day: day, entry: entry) }
+            }
+            .filter { row in
+                seenEventIDs.insert(row.entry.eventId).inserted
+            }
+    }
 }
 
 struct HubEventDetailContainerView: View {

@@ -71,6 +71,22 @@ class ServerHubRepositoryTest {
     }
 
     @Test
+    fun hubEventsDoesNotSendBuiltInFiltersAsGenerationId() = runTest {
+        val remote = RecordingRemoteDataSource()
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        listOf("goods", "ticketing", "offline", "closing").forEach { filterId ->
+            repository.hubEvents(filterId = filterId, from = null, to = null)
+
+            assertNull(remote.lastHubEventsGenerationId)
+        }
+    }
+
+    @Test
     fun bootstrapRegistersDeviceWhenServerSnapshotHasNoDevice() = runTest {
         val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage())
         val remote = RecordingRemoteDataSource()
@@ -89,6 +105,7 @@ class ServerHubRepositoryTest {
     private class RecordingRemoteDataSource : ServerHubRepository.RemoteDataSource {
         var bootstrapCalls = 0
         var registerCalls = 0
+        var lastHubEventsGenerationId: String? = null
         var lastHubEventsFrom: String? = null
         var lastHubEventsTo: String? = null
 
@@ -145,6 +162,7 @@ class ServerHubRepositoryTest {
             to: String?,
             limit: Int?,
         ): HubNetworkResult<HubEventsListResponseDto> {
+            lastHubEventsGenerationId = generationId
             lastHubEventsFrom = from
             lastHubEventsTo = to
             return HubNetworkResult.Success(HubEventsListResponseDto())

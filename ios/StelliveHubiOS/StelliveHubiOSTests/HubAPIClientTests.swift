@@ -263,6 +263,20 @@ final class ServerHubStoreTests: XCTestCase {
         await store.refreshHubEvents(filter: "all", from: requestedFrom, to: requestedTo)
     }
 
+    func testRefreshHubEventsDoesNotSendBuiltInFilterAsGenerationId() async {
+        let store = makeStore { request in
+            XCTAssertEqual(request.url?.path, "/v1/hub-events")
+            let components = URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)
+            let queryItems = components?.queryItems ?? []
+
+            XCTAssertNil(queryItems.first { $0.name == "generationId" })
+
+            return jsonResponse(statusCode: 200, body: #"{"items":[]}"#)
+        }
+
+        await store.refreshHubEvents(filter: "goods")
+    }
+
     func testDetail404ReturnsNilWithoutSynthesizingFallbackEvent() async {
         let store = makeStore { request in
             XCTAssertEqual(request.url?.path, "/v1/hub-events/missing")
