@@ -1176,13 +1176,17 @@ export function renderAdminConsoleHtml(): string {
         if (value) input[key] = value;
       });
       const imagePolicyState = hubEventFields.imagePolicyState.value;
+      const imageUrl = hubEventFields.imageUrl.value.trim();
+      const imageSourceLabel = hubEventFields.imageSourceLabel.value.trim();
+      const imageSourceUrl = hubEventFields.imageSourceUrl.value.trim();
+      const hasImageMetadata = Boolean(imageUrl || imageSourceLabel || imageSourceUrl);
       if (imagePolicyState === "none") {
+        if (hasImageMetadata) {
+          throw new Error("image_policy_state_none_with_metadata");
+        }
         input.image = null;
       } else {
         const image = { policyState: imagePolicyState };
-        const imageUrl = hubEventFields.imageUrl.value.trim();
-        const imageSourceLabel = hubEventFields.imageSourceLabel.value.trim();
-        const imageSourceUrl = hubEventFields.imageSourceUrl.value.trim();
         if (imageUrl) image.url = imageUrl;
         if (imageSourceLabel) image.sourceLabel = imageSourceLabel;
         if (imageSourceUrl) image.sourceUrl = imageSourceUrl;

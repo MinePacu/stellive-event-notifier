@@ -104,6 +104,19 @@ function validateHubEventImageForAdmin(errors: HubEventValidationError[], input:
     return;
   }
 
+  const hasReviewMetadata = ["url", "sourceLabel", "sourceUrl", "altText"].some((field) =>
+    Boolean(stringField(image, field)?.trim())
+  );
+  if (policyState === "none" && hasReviewMetadata) {
+    addError(
+      errors,
+      "image.policyState",
+      "image_policy_state_not_allowed",
+      "image policyState none cannot be saved with image metadata."
+    );
+    return;
+  }
+
   for (const field of imageAssetFields) {
     if (field in image) {
       addError(errors, `image.${field}`, "image_asset_fields_not_allowed", "Image binary or local asset fields are not allowed.");
