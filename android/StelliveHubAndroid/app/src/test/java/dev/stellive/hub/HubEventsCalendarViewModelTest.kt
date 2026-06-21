@@ -58,6 +58,31 @@ class HubEventsCalendarViewModelTest {
     }
 
     @Test
+    fun rangeSelectionDeduplicatesMultiDayCalendarEntriesByEventId() {
+        val first = entry("goods-range", HubEventStatus.OPEN, HubEventCategory.ONLINE_GOODS).copy(
+            id = "goods-range:2026-06-19",
+            displayDate = "2026-06-19",
+        )
+        val second = first.copy(
+            id = "goods-range:2026-06-20",
+            displayDate = "2026-06-20",
+        )
+        val viewModel = HubEventsCalendarViewModel(
+            listOf(
+                HubCalendarDay("2026-06-19", listOf(first)),
+                HubCalendarDay("2026-06-20", listOf(second)),
+            ),
+            clock,
+        )
+
+        viewModel.selectRangeBoundary(LocalDate.of(2026, 6, 19))
+        viewModel.selectRangeBoundary(LocalDate.of(2026, 6, 20))
+
+        assertEquals(listOf("goods-range"), viewModel.uiState.visibleEntries.map { it.eventId })
+        assertEquals("goods-range:2026-06-19", viewModel.uiState.visibleEntries.single().id)
+    }
+
+    @Test
     fun rangeMiddleDatesUseDotMarkerOnlyWhenEntriesExist() {
         val viewModel = HubEventsCalendarViewModel(sampleDays(), clock)
 
