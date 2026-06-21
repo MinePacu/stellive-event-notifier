@@ -12,6 +12,7 @@ backend/stellive-hub-api/dist/
 .gradle/
 build/
 **/build/
+android/StelliveHubAndroid/.kotlin/
 local.properties
 google-services.json
 
@@ -30,3 +31,5 @@ qa-screenshots/
 # Secrets
 .env
 !.env.example
+.dual-graph/
+.dual-graph-context/

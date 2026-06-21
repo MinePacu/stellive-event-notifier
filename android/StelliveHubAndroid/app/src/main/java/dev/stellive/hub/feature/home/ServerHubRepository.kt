@@ -27,6 +27,8 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+private val builtInHubEventFilters = setOf("all", "goods", "ticketing", "offline", "closing")
+
 class ServerHubRepository(
     private val remoteDataSource: RemoteDataSource,
     private val deviceIdStore: DeviceIdStore,
@@ -52,7 +54,7 @@ class ServerHubRepository(
 
     override suspend fun hubEvents(filterId: String, from: LocalDate?, to: LocalDate?): List<HubEvent> {
         val response = remoteDataSource.hubEvents(
-            generationId = filterId.takeUnless { it == "all" },
+            generationId = filterId.takeUnless { it in builtInHubEventFilters },
             from = from?.format(DateTimeFormatter.ISO_LOCAL_DATE),
             to = to?.format(DateTimeFormatter.ISO_LOCAL_DATE),
             limit = 100,

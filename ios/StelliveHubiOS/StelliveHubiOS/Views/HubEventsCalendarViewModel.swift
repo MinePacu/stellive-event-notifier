@@ -263,15 +263,17 @@ final class HubEventsCalendarViewModel: ObservableObject {
     }
 
     func selectedMonthEntries() -> [HubCalendarEntry] {
-        days
-            .sorted { $0.date < $1.date }
-            .filter { day in
-                guard let date = Self.dayKeyFormatter.date(from: day.date) else {
-                    return false
+        deduplicatedByEventId(
+            days
+                .sorted { $0.date < $1.date }
+                .filter { day in
+                    guard let date = Self.dayKeyFormatter.date(from: day.date) else {
+                        return false
+                    }
+                    return calendar.isDate(date, equalTo: selectedMonth, toGranularity: .month)
                 }
-                return calendar.isDate(date, equalTo: selectedMonth, toGranularity: .month)
-            }
-            .flatMap { filteredEntries(from: $0.entries) }
+                .flatMap { filteredEntries(from: $0.entries) }
+        )
     }
 
     func marker(for date: Date) -> HubCalendarDateMarker {
@@ -582,7 +584,14 @@ final class HubEventsCalendarViewModel: ObservableObject {
             guard let next = calendar.date(byAdding: .day, value: 1, to: current) else { break }
             current = next
         }
-        return result.sorted(by: HubCalendarPolicy.areInDisplayOrder)
+        return deduplicatedByEventId(result.sorted(by: HubCalendarPolicy.areInDisplayOrder))
+    }
+
+    private func deduplicatedByEventId(_ entries: [HubCalendarEntry]) -> [HubCalendarEntry] {
+        var seen = Set<String>()
+        return entries.filter { entry in
+            seen.insert(entry.eventId).inserted
+        }
     }
 
     private func filteredEntries(from entries: [HubCalendarEntry]) -> [HubCalendarEntry] {

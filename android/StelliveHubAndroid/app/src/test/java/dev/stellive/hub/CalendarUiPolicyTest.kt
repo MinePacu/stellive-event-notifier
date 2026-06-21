@@ -5,8 +5,10 @@ import dev.stellive.hub.core.model.HubCalendarEntry
 import dev.stellive.hub.core.model.HubCalendarEntryKind
 import dev.stellive.hub.core.model.HubCalendarSpecialDayKind
 import dev.stellive.hub.core.model.HubCalendarWidgetSnapshot
+import dev.stellive.hub.core.model.HubEvent
 import dev.stellive.hub.core.model.HubEventCategory
 import dev.stellive.hub.core.model.HubEventParticipationMode
+import dev.stellive.hub.core.model.HubEventSourceType
 import dev.stellive.hub.core.model.HubEventStatus
 import dev.stellive.hub.feature.calendar.CalendarDateMarker
 import dev.stellive.hub.feature.calendar.CalendarEntrySpanKind
@@ -122,6 +124,84 @@ class CalendarUiPolicyTest {
         )
 
         assertEquals(listOf("closing", "open", "upcoming"), entries.map { it.eventId })
+    }
+
+    @Test
+    fun entriesForRangeDeduplicatesMultiDayCalendarEntriesByEventId() {
+        val first = calendarEntry("goods-range").copy(
+            id = "goods-range:2026-06-19",
+            displayDate = "2026-06-19",
+            startsAt = Instant.parse("2026-06-19T01:00:00Z"),
+            endsAt = Instant.parse("2026-07-02T14:59:00Z"),
+        )
+        val second = first.copy(
+            id = "goods-range:2026-06-20",
+            displayDate = "2026-06-20",
+        )
+        val days = listOf(
+            HubCalendarDay("2026-06-19", listOf(first)),
+            HubCalendarDay("2026-06-20", listOf(second)),
+        )
+
+        val entries = CalendarUiPolicy.entriesForRange(
+            days,
+            LocalDate.of(2026, 6, 19),
+            LocalDate.of(2026, 6, 20),
+        )
+
+        assertEquals(listOf("goods-range"), entries.map { it.eventId })
+        assertEquals("goods-range:2026-06-19", entries.single().id)
+    }
+
+    @Test
+    fun feedEntriesForMonthDeduplicatesByEventIdAndKeepsFirstVisibleDate() {
+        val first = calendarEntry("goods-range").copy(
+            id = "goods-range:2026-06-19",
+            displayDate = "2026-06-19",
+            startsAt = Instant.parse("2026-06-19T01:00:00Z"),
+            endsAt = Instant.parse("2026-07-02T14:59:00Z"),
+        )
+        val second = first.copy(id = "goods-range:2026-06-20", displayDate = "2026-06-20")
+        val other = calendarEntry("ticket").copy(id = "ticket:2026-06-20", displayDate = "2026-06-20")
+
+        val rows = CalendarUiPolicy.feedEntriesForMonth(
+            days = listOf(
+                HubCalendarDay("2026-06-19", listOf(first)),
+                HubCalendarDay("2026-06-20", listOf(second, other)),
+            ),
+            month = YearMonth.of(2026, 6),
+        )
+
+        assertEquals(listOf("goods-range", "ticket"), rows.map { it.entry.eventId })
+        assertEquals("2026-06-19", rows.first().day.date)
+    }
+
+    @Test
+    fun feedRenderRowsKeepsSpecialDaysWithoutCanonicalHubEvent() {
+        val birthday = birthdayEntry("birthday:sakihane-huya").copy(
+            id = "birthday:sakihane-huya:2026-07-07",
+            title = "사키하네 후야 생일",
+            displayDate = "2026-07-07",
+        )
+        val hubEvent = calendarEntry("goods-event").copy(
+            id = "goods-event:2026-07-07",
+            title = "공식 굿즈",
+            displayDate = "2026-07-07",
+        )
+        val canonicalEvent = hubEvent(
+            id = "goods-event",
+            title = "공식 굿즈",
+        )
+
+        val rows = CalendarUiPolicy.feedRenderRowsForMonth(
+            days = listOf(HubCalendarDay("2026-07-07", listOf(birthday, hubEvent))),
+            month = YearMonth.of(2026, 7),
+            events = listOf(canonicalEvent),
+        )
+
+        assertEquals(listOf("birthday:sakihane-huya", "goods-event"), rows.map { it.entry.eventId })
+        assertNull(rows.first { it.entry.eventId == "birthday:sakihane-huya" }.canonicalEvent)
+        assertEquals(canonicalEvent, rows.first { it.entry.eventId == "goods-event" }.canonicalEvent)
     }
 
     @Test
@@ -464,6 +544,23 @@ class CalendarUiPolicyTest {
         HubCalendarDay(date, entries.toList())
 
     private fun instant(value: String): Instant = Instant.parse(value)
+
+    private fun hubEvent(
+        id: String,
+        title: String = "공식 굿즈",
+    ): HubEvent =
+        HubEvent(
+            id = id,
+            category = HubEventCategory.ONLINE_GOODS,
+            participationMode = HubEventParticipationMode.ONLINE,
+            status = HubEventStatus.OPEN,
+            title = title,
+            generationId = "official",
+            sourceUrl = "https://example.com/$id",
+            sourceLabel = "공식",
+            sourceType = HubEventSourceType.OFFICIAL,
+            updatedAt = Instant.parse("2026-06-01T00:00:00Z"),
+        )
 
     private fun birthdayEntry(eventId: String): HubCalendarEntry =
         calendarEntry(

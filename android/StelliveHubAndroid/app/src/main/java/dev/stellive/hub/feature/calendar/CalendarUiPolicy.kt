@@ -2,7 +2,9 @@ package dev.stellive.hub.feature.calendar
 
 import dev.stellive.hub.core.model.HubCalendarDay
 import dev.stellive.hub.core.model.HubCalendarEntry
+import dev.stellive.hub.core.model.HubCalendarEntryKind
 import dev.stellive.hub.core.model.HubCalendarWidgetSnapshot
+import dev.stellive.hub.core.model.HubEvent
 import dev.stellive.hub.core.model.HubEventStatus
 import java.time.Instant
 import java.time.LocalDate
@@ -61,6 +63,17 @@ data class CalendarDurationBarSegment(
 data class CalendarDurationBarLayout(
     val segments: List<CalendarDurationBarSegment>,
     val laneCountsByWeek: Map<Int, Int>,
+)
+
+data class CalendarFeedEntry(
+    val day: HubCalendarDay,
+    val entry: HubCalendarEntry,
+)
+
+data class CalendarFeedRenderRow(
+    val day: HubCalendarDay,
+    val entry: HubCalendarEntry,
+    val canonicalEvent: HubEvent?,
 )
 
 object CalendarUiPolicy {
@@ -382,6 +395,43 @@ object CalendarUiPolicy {
             .flatMap { it.entries.asSequence() }
             .sortedWith(entryComparator)
             .toList()
+            .distinctByEventIdInDisplayOrder()
+    }
+
+    fun feedEntriesForMonth(days: List<HubCalendarDay>, month: YearMonth): List<CalendarFeedEntry> {
+        val seen = linkedSetOf<String>()
+        return days
+            .asSequence()
+            .filter { YearMonth.from(LocalDate.parse(it.date)) == month }
+            .flatMap { day -> day.entries.asSequence().map { entry -> CalendarFeedEntry(day, entry) } }
+            .filter { row -> seen.add(row.entry.eventId) }
+            .toList()
+    }
+
+    fun feedRenderRowsForMonth(
+        days: List<HubCalendarDay>,
+        month: YearMonth,
+        events: List<HubEvent>,
+    ): List<CalendarFeedRenderRow> {
+        val eventsById = events.associateBy { it.id }
+        return feedEntriesForMonth(days, month)
+            .mapNotNull { row ->
+                val canonicalEvent = eventsById[row.entry.eventId]
+                if (row.entry.entryKind == HubCalendarEntryKind.HUB_EVENT && canonicalEvent == null) {
+                    null
+                } else {
+                    CalendarFeedRenderRow(
+                        day = row.day,
+                        entry = row.entry,
+                        canonicalEvent = canonicalEvent,
+                    )
+                }
+            }
+    }
+
+    private fun List<HubCalendarEntry>.distinctByEventIdInDisplayOrder(): List<HubCalendarEntry> {
+        val seen = linkedSetOf<String>()
+        return filter { entry -> seen.add(entry.eventId) }
     }
 
     fun markerForDate(
