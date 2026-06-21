@@ -156,3 +156,74 @@ Schedule the production job for January 1 00:05 `Asia/Seoul` or later. The endpo
 Apply the Prisma migration for `HubCalendarSpecialDayOccurrence` and run Prisma generate before enabling DB occurrence reads in a deployed Prisma-backed environment. After migration, call the endpoint once for the current KST year to backfill current-year birthdays/anniversaries.
 
 Verification commands from `backend/stellive-hub-api`: `rtk npm test -- hubCalendarSpecialDayMaterializer adminInternalRoutes hubEventCalendar hubEventReadRoutes`, `rtk npm run build`, and `rtk npm test`. Do not write real admin tokens, internal API tokens, credentials, raw provider payloads, member images, official logos, or copied media into docs, commits, or logs.
+
+## Calendar Event Display Visibility Status
+
+Linked issues: GitHub `#46`, GitHub `#47`, GitLab work items `#24`, `#25`.
+
+Implementation branch: `calendar-event-display-46-47-24-25-plan`.
+
+Plan document: `docs/superpowers/plans/2026-06-21-calendar-event-display-visibility-code-design.md`.
+
+Implemented:
+- Android `CalendarUiPolicy` now derives multi-day span kind, event dot size/emphasis/count text, row status text, and multi-day accessibility hints from existing `HubCalendarEntry` fields.
+- Android `HubEventsCalendarView` renders a secondary multi-day bar and larger/stronger event dot or compact count marker without changing calendar DTOs.
+- iOS `HubEventsCalendarViewModel` now derives multi-day span kind, event dot style, row status/range text, and multi-day accessibility hints from existing `HubCalendarEntry` fields.
+- iOS `HubEventsCalendarView` passes derived dot/multi-day state into `CalendarDateCell` and renders a secondary multi-day bar plus larger/stronger dot/count marker.
+- No backend ingestion, push notification, external API, catalog, asset, or schedule creation behavior changed.
+
+Verification:
+- Android RED: `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest` failed before implementation because the new policy helpers did not exist.
+- Android focused GREEN: `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest --tests dev.stellive.hub.HubEventsCalendarViewModelTest` passed.
+- Android broad GREEN: `rtk ./gradlew :app:testDebugUnitTest` passed.
+- iOS RED: `rtk xcodebuild test -project ios/StelliveHubiOS/StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination "id=89B0B46A-8515-47E7-A122-681498F16C66" -only-testing:StelliveHubiOSTests/HubEventsCalendarViewModelTests` failed before implementation because `spanKind` and `dotStyle` did not exist.
+- iOS focused GREEN: same focused XCTest command passed on `iPhone 17 Pro` simulator ID `89B0B46A-8515-47E7-A122-681498F16C66`.
+- Contract check: `rtk rg -n "startsAt|endsAt|displayDate|displayTimeText|HubCalendarEntry" shared/schemas/domain.ts shared/openapi/openapi.yaml backend/stellive-hub-api/src/hub-events backend/stellive-hub-api/test` confirmed the calendar DTO path exposes fields used by local span display.
+- Policy grep: `rtk rg -n "Former|youtube_live_scheduled|youtube_live_started|youtube_live_ended|profileImageUrl|posterUrl|logoUrl|rawPayload|providerResponse|NID_AUT|NID_SES|login-cookie|cookie scraping" android ios docs/superpowers/plans/2026-06-21-calendar-event-display-visibility-code-design.md` matched existing policy/model/test references and explicit exclusions only.
+
+Known verification gap:
+- iOS broad test command `rtk xcodebuild test -project ios/StelliveHubiOS/StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination "id=89B0B46A-8515-47E7-A122-681498F16C66"` failed in existing `PreferenceStateTests.testIOSPrimaryNavigationMovesSettingsToToolbarAndAddsHubEventsTab`: actual primary navigation IDs were `["live", "hubEvents", "home"]`, expected `["home", "hubEvents"]`. This failure is outside the calendar display files changed here.
+- The plan referenced `iPhone 16`, but this machine did not have an `iPhone 16` simulator. Focused iOS verification used the available booted `iPhone 17 Pro` simulator instead.
+
+## Calendar Duration Bars And Start-Only Event Rollover Status
+
+Plan document: `docs/superpowers/plans/2026-06-21-calendar-duration-bars-stacking-code-design.md`.
+
+Implemented:
+- Android `CalendarUiPolicy` now builds visible-grid-clipped, week-split, lane-stacked duration bar segments from existing `HubCalendarEntry.startsAt` and `endsAt` fields.
+- Android `HubEventsCalendarView` renders duration bars per visible week row, including leading and trailing adjacent-month cells, and event card dates display a period when `endsAt` exists.
+- Android detail formatting no longer shows `종료 미정` for start-only hub events.
+- iOS `HubEventsCalendarViewModel` now builds matching duration bar layout data for the selected visible month grid.
+- iOS `HubEventsCalendarView` renders stacked duration bars per visible week row, including adjacent-month cells, and event card dates display a period when `endsAt` exists.
+- iOS detail formatting no longer shows `종료 미정` for start-only hub events.
+- Backend status reconciliation now treats `endsAt == null` hub events as ended after their Korea-date start/display day rolls over, and exposes `startOnlyEnded` in reconciliation results.
+- `HubEventStatusReconcileWorker` now schedules the next reconciliation at the next `Asia/Seoul` midnight boundary.
+
+Verification:
+- Backend focused GREEN: `rtk npm test -- hubEventStatus` passed, 3 files / 7 tests.
+- Backend focused GREEN: `rtk npm test -- adminInternalRoutes` passed, 1 file / 43 tests.
+- Backend build GREEN: `rtk npm run build` passed.
+- Backend broad GREEN: `rtk npm test` passed, 36 files / 313 tests.
+- Contract check: `rtk rg -n "HubCalendarEntry|startsAt|endsAt|displayDate|displayTimeText" shared/schemas/domain.ts shared/openapi/openapi.yaml backend/stellive-hub-api/src/hub-events backend/stellive-hub-api/test` confirmed existing DTO fields support local duration layout; no shared/mobile DTO shape change was needed.
+- Policy grep: `rtk rg -n "Former|youtube_live_scheduled|youtube_live_started|youtube_live_ended|profileImageUrl|posterUrl|logoUrl|rawPayload|providerResponse|NID_AUT|NID_SES|login-cookie|cookie scraping" android ios backend/stellive-hub-api/src backend/stellive-hub-api/test docs/superpowers/plans/2026-06-21-calendar-duration-bars-stacking-code-design.md` matched existing policy/model/test references and explicit exclusions only.
+
+Known verification gap:
+- Android focused test `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest` could not run in sandbox because Gradle wrapper needed `/Users/nohyunsoo/.gradle/.../gradle-9.0.0-bin.zip.lck` write access. Escalated retry was rejected by policy, so Android post-implementation tests remain unverified in this session.
+- iOS focused test `rtk xcodebuild test -project ios/StelliveHubiOS/StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination "platform=iOS Simulator,name=iPhone 17 Pro" -only-testing:StelliveHubiOSTests/HubEventsCalendarViewModelTests` could not run in sandbox because CoreSimulator access was unavailable and the simulator destination could not be resolved. Escalated retry was rejected by policy, so iOS post-implementation tests remain unverified in this session.
+
+Follow-up device verification:
+- iOS build/install/run GREEN: XcodeBuildMCP `build_run_sim` succeeded on booted `iPhone 17 Pro` simulator `89B0B46A-8515-47E7-A122-681498F16C66`; app path `/Users/nohyunsoo/Library/Developer/XcodeBuildMCP/workspaces/StelLiveNoti-05b02c56ff42/DerivedData/StelliveHubiOS-6035de198454/Build/Products/Debug-iphonesimulator/StelliveHubiOS.app`, bundle id `dev.stellive.hub`, process id `97204`.
+- iOS runtime UI snapshot and screenshot capture succeeded; screenshot path `/var/folders/sr/67htrnl50s993g5t4qcktcg80000gn/T/screenshot_optimized_44c23b09-17c9-44d7-837d-18329d45cd4b.jpg`.
+- Android build/install/run GREEN after explicit user approval: `rtk ./gradlew :app:assembleDebug` passed, `rtk adb devices` found `100.76.105.15:44105`, `rtk adb -s 100.76.105.15:44105 install -r android/StelliveHubAndroid/app/build/outputs/apk/debug/app-debug.apk` returned `Success`, and `rtk adb -s 100.76.105.15:44105 shell am start -n dev.stellive.hub/.MainActivity` launched the app.
+- Android runtime verification: package `dev.stellive.hub` is installed, resolved activity is `dev.stellive.hub/.MainActivity`, process id `13322` was observed after launch, foreground window showed `dev.stellive.hub/dev.stellive.hub.MainActivity`, and crash buffer was empty after clearing old unrelated crash entries.
+
+Follow-up date-range title fix:
+- Android and iOS now render multi-day hub event date titles as client-formatted date-only ranges such as `2026-06-26~2026-07-12`; server timestamps remain unchanged and times are omitted only in the client title formatter.
+- Android day-mode list navigation title uses the single visible multi-day event's period range when exactly one event is shown; multiple events keep the selected day title to avoid ambiguous representative ranges.
+- iOS day navigation title and list title use the same single-visible-event period range behavior.
+- Android feed day headers now prefer a visible duration entry's client-formatted date range over raw `day.date`, so image-card sections such as `SIX STAR STELLIVE` show `2026-06-26~2026-07-12` instead of `2026-06-26`.
+- iOS feed sections now apply the same duration-entry header rule instead of using raw `day.date`.
+- Android focused GREEN: `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest` passed after adding a range-title formatter test.
+- Android focused GREEN: `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest` passed again after feed header wiring changes. A parallel `assembleDebug` attempt hit Kotlin incremental cache contention; rerunning `assembleDebug` alone passed.
+- Android simplified build/install/run GREEN: `rtk ./gradlew :app:assembleDebug` passed, `rtk adb -s 100.76.105.15:44105 install -r android/StelliveHubAndroid/app/build/outputs/apk/debug/app-debug.apk` returned `Success`, `rtk adb -s 100.76.105.15:44105 shell am start -n dev.stellive.hub/.MainActivity` started the activity, and `pidof` returned `18760`.
+- iOS build/run GREEN: XcodeBuildMCP `build_run_sim` succeeded on `iPhone 17 Pro` simulator `89B0B46A-8515-47E7-A122-681498F16C66`, bundle id `dev.stellive.hub`, process id `4965`.

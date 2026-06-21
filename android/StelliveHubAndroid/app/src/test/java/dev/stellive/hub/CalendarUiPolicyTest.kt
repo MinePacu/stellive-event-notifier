@@ -9,10 +9,14 @@ import dev.stellive.hub.core.model.HubEventCategory
 import dev.stellive.hub.core.model.HubEventParticipationMode
 import dev.stellive.hub.core.model.HubEventStatus
 import dev.stellive.hub.feature.calendar.CalendarDateMarker
+import dev.stellive.hub.feature.calendar.CalendarEntrySpanKind
+import dev.stellive.hub.feature.calendar.CalendarEventDotEmphasis
 import dev.stellive.hub.feature.calendar.CalendarUiPolicy
 import dev.stellive.hub.feature.calendar.HubCalendarScopeMode
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -48,6 +52,20 @@ class CalendarUiPolicyTest {
         assertEquals("오늘", CalendarUiPolicy.dateHeaderText(today, now = today))
         assertEquals("내일", CalendarUiPolicy.dateHeaderText(today.plusDays(1), now = today))
         assertEquals("2026.06.13", CalendarUiPolicy.dateHeaderText(LocalDate.of(2026, 6, 13), now = today))
+    }
+
+    @Test
+    fun formatsEntryPeriodDateTextAsDateOnlyRange() {
+        val entry = calendarEntry(
+            "duration-title",
+            startsAt = Instant.parse("2026-06-26T10:00:00Z"),
+            endsAt = Instant.parse("2026-07-12T14:00:00Z"),
+        )
+
+        assertEquals(
+            "2026-06-26~2026-07-12",
+            CalendarUiPolicy.entryPeriodDateText(entry, zoneId = ZoneId.of("UTC")),
+        )
     }
 
     @Test
@@ -168,6 +186,284 @@ class CalendarUiPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun entrySpanKindDistinguishesSingleDayAndMultiDayPositions() {
+        val singleDay = calendarEntry(
+            eventId = "single",
+            startsAt = Instant.parse("2026-06-15T01:00:00Z"),
+            endsAt = Instant.parse("2026-06-15T14:59:00Z"),
+        )
+        val multiDay = calendarEntry(
+            eventId = "multi",
+            startsAt = Instant.parse("2026-06-15T01:00:00Z"),
+            endsAt = Instant.parse("2026-06-17T14:59:00Z"),
+        )
+
+        assertEquals(
+            CalendarEntrySpanKind.SINGLE_DAY,
+            CalendarUiPolicy.spanKindForEntry(singleDay, LocalDate.of(2026, 6, 15)),
+        )
+        assertEquals(
+            CalendarEntrySpanKind.MULTI_DAY_START,
+            CalendarUiPolicy.spanKindForEntry(multiDay, LocalDate.of(2026, 6, 15)),
+        )
+        assertEquals(
+            CalendarEntrySpanKind.MULTI_DAY_MIDDLE,
+            CalendarUiPolicy.spanKindForEntry(multiDay, LocalDate.of(2026, 6, 16)),
+        )
+        assertEquals(
+            CalendarEntrySpanKind.MULTI_DAY_END,
+            CalendarUiPolicy.spanKindForEntry(multiDay, LocalDate.of(2026, 6, 17)),
+        )
+    }
+
+    @Test
+    fun dotStyleScalesWithEntryCountAndStatusImportance() {
+        assertFalse(CalendarUiPolicy.dotStyleForEntries(emptyList()).visible)
+
+        val one = CalendarUiPolicy.dotStyleForEntries(listOf(calendarEntry("one")))
+        assertTrue(one.visible)
+        assertEquals(5, one.sizeDp)
+        assertEquals(CalendarEventDotEmphasis.NORMAL, one.emphasis)
+
+        val two = CalendarUiPolicy.dotStyleForEntries(
+            listOf(calendarEntry("one"), calendarEntry("two")),
+        )
+        assertEquals(6, two.sizeDp)
+
+        val many = CalendarUiPolicy.dotStyleForEntries(
+            listOf(calendarEntry("one"), calendarEntry("two"), calendarEntry("three")),
+        )
+        assertEquals(8, many.sizeDp)
+        assertEquals("3", many.countText)
+
+        val closing = CalendarUiPolicy.dotStyleForEntries(
+            listOf(calendarEntry("closing", HubEventStatus.CLOSING_SOON)),
+        )
+        assertEquals(CalendarEventDotEmphasis.HIGH, closing.emphasis)
+
+        val inactive = CalendarUiPolicy.dotStyleForEntries(
+            listOf(
+                calendarEntry("cancelled", HubEventStatus.CANCELLED),
+                calendarEntry("ended", HubEventStatus.ENDED),
+            ),
+        )
+        assertEquals(CalendarEventDotEmphasis.MUTED, inactive.emphasis)
+    }
+
+    @Test
+    fun accessibilityLabelCanIncludeMultiDayEventHint() {
+        assertEquals(
+            "6월 16일, 기간 포함, 일정 1개, 기간 행사 포함",
+            CalendarUiPolicy.accessibilityLabelForDate(
+                LocalDate.of(2026, 6, 16),
+                CalendarDateMarker.RANGE_MIDDLE_WITH_EVENT,
+                entryCount = 1,
+                hasMultiDayEntry = true,
+            ),
+        )
+    }
+
+    @Test
+    fun durationBarSegmentsClipAtVisibleGridBoundaries() {
+        val layout = CalendarUiPolicy.durationBarLayoutForMonth(
+            days = listOf(
+                day(
+                    "2026-05-31",
+                    calendarEntry(
+                        "grid",
+                        startsAt = instant("2026-05-28T01:00:00Z"),
+                        endsAt = instant("2026-07-10T14:59:00Z"),
+                    ),
+                ),
+            ),
+            month = YearMonth.of(2026, 6),
+        )
+
+        assertEquals(5, layout.segments.size)
+        assertEquals(0, layout.segments.first().weekIndex)
+        assertEquals(0, layout.segments.first().startColumn)
+        assertEquals(6, layout.segments.first().endColumn)
+        assertFalse(layout.segments.first().startsAtVisibleBoundary)
+        assertFalse(layout.segments.last().endsAtVisibleBoundary)
+    }
+
+    @Test
+    fun durationBarSegmentsIncludeTrailingNextMonthCellsWhenVisible() {
+        val layout = CalendarUiPolicy.durationBarLayoutForMonth(
+            days = listOf(
+                day(
+                    "2026-06-26",
+                    calendarEntry(
+                        "trailing",
+                        startsAt = instant("2026-06-26T01:00:00Z"),
+                        endsAt = instant("2026-07-02T14:59:00Z"),
+                    ),
+                ),
+            ),
+            month = YearMonth.of(2026, 6),
+        )
+
+        assertEquals(listOf(5 to 6, 0 to 4), layout.segments.map { it.startColumn to it.endColumn })
+        assertTrue(layout.segments.first().startsAtVisibleBoundary)
+        assertTrue(layout.segments.last().endsAtVisibleBoundary)
+    }
+
+    @Test
+    fun durationBarSegmentsIncludeLeadingPreviousMonthCellsWhenVisible() {
+        val layout = CalendarUiPolicy.durationBarLayoutForMonth(
+            days = listOf(
+                day(
+                    "2026-05-31",
+                    calendarEntry(
+                        "leading",
+                        startsAt = instant("2026-05-31T01:00:00Z"),
+                        endsAt = instant("2026-06-02T14:59:00Z"),
+                    ),
+                ),
+            ),
+            month = YearMonth.of(2026, 6),
+        )
+
+        assertEquals(listOf(0 to 2), layout.segments.map { it.startColumn to it.endColumn })
+        assertTrue(layout.segments.single().startsAtVisibleBoundary)
+        assertTrue(layout.segments.single().endsAtVisibleBoundary)
+    }
+
+    @Test
+    fun durationBarSegmentsSplitAtWeekBoundaries() {
+        val layout = CalendarUiPolicy.durationBarLayoutForMonth(
+            days = listOf(
+                day(
+                    "2026-06-26",
+                    calendarEntry(
+                        "split",
+                        startsAt = instant("2026-06-26T01:00:00Z"),
+                        endsAt = instant("2026-06-30T14:59:00Z"),
+                    ),
+                ),
+            ),
+            month = YearMonth.of(2026, 6),
+        )
+
+        assertEquals(listOf(3, 4), layout.segments.map { it.weekIndex })
+        assertEquals(listOf(5 to 6, 0 to 2), layout.segments.map { it.startColumn to it.endColumn })
+    }
+
+    @Test
+    fun durationBarSegmentsStackOverlappingRanges() {
+        val layout = CalendarUiPolicy.durationBarLayoutForMonth(
+            days = listOf(
+                day(
+                    "2026-06-10",
+                    calendarEntry(
+                        "first",
+                        startsAt = instant("2026-06-10T01:00:00Z"),
+                        endsAt = instant("2026-06-14T14:59:00Z"),
+                    ),
+                ),
+                day(
+                    "2026-06-12",
+                    calendarEntry(
+                        "second",
+                        startsAt = instant("2026-06-12T01:00:00Z"),
+                        endsAt = instant("2026-06-16T14:59:00Z"),
+                    ),
+                ),
+            ),
+            month = YearMonth.of(2026, 6),
+        )
+
+        val overlappingWeek = layout.segments.filter { it.weekIndex == 2 }
+        assertEquals(listOf(0, 1), overlappingWeek.map { it.lane }.sorted())
+        assertEquals(2, layout.laneCountsByWeek.getValue(2))
+    }
+
+    @Test
+    fun durationBarSegmentsReuseLaneForNonOverlappingRanges() {
+        val layout = CalendarUiPolicy.durationBarLayoutForMonth(
+            days = listOf(
+                day(
+                    "2026-06-10",
+                    calendarEntry(
+                        "first",
+                        startsAt = instant("2026-06-10T01:00:00Z"),
+                        endsAt = instant("2026-06-11T14:59:00Z"),
+                    ),
+                ),
+                day(
+                    "2026-06-12",
+                    calendarEntry(
+                        "second",
+                        startsAt = instant("2026-06-12T01:00:00Z"),
+                        endsAt = instant("2026-06-13T14:59:00Z"),
+                    ),
+                ),
+            ),
+            month = YearMonth.of(2026, 6),
+        )
+
+        assertEquals(listOf(0, 0), layout.segments.map { it.lane })
+        assertEquals(1, layout.laneCountsByWeek.getValue(1))
+    }
+
+    @Test
+    fun durationBarSegmentsDeduplicateProjectedMultiDayEntries() {
+        val entry = calendarEntry(
+            "same",
+            startsAt = instant("2026-06-10T01:00:00Z"),
+            endsAt = instant("2026-06-12T14:59:00Z"),
+        )
+        val layout = CalendarUiPolicy.durationBarLayoutForMonth(
+            days = listOf(day("2026-06-10", entry), day("2026-06-11", entry), day("2026-06-12", entry)),
+            month = YearMonth.of(2026, 6),
+        )
+
+        assertEquals(1, layout.segments.size)
+        assertEquals("same", layout.segments.single().eventId)
+    }
+
+    @Test
+    fun durationBarSegmentsIgnoreSingleDayMissingEndAndInvalidRanges() {
+        val layout = CalendarUiPolicy.durationBarLayoutForMonth(
+            days = listOf(
+                day(
+                    "2026-06-10",
+                    calendarEntry(
+                        "single",
+                        startsAt = instant("2026-06-10T01:00:00Z"),
+                        endsAt = instant("2026-06-10T14:59:00Z"),
+                    ),
+                ),
+                day(
+                    "2026-06-11",
+                    calendarEntry(
+                        "missing-end",
+                        startsAt = instant("2026-06-11T01:00:00Z"),
+                        endsAt = null,
+                    ),
+                ),
+                day(
+                    "2026-06-12",
+                    calendarEntry(
+                        "invalid",
+                        startsAt = instant("2026-06-12T01:00:00Z"),
+                        endsAt = instant("2026-06-11T14:59:00Z"),
+                    ),
+                ),
+            ),
+            month = YearMonth.of(2026, 6),
+        )
+
+        assertTrue(layout.segments.isEmpty())
+        assertTrue(layout.laneCountsByWeek.isEmpty())
+    }
+
+    private fun day(date: String, vararg entries: HubCalendarEntry): HubCalendarDay =
+        HubCalendarDay(date, entries.toList())
+
+    private fun instant(value: String): Instant = Instant.parse(value)
 
     private fun birthdayEntry(eventId: String): HubCalendarEntry =
         calendarEntry(

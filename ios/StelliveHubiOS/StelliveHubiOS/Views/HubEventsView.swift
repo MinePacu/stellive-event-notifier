@@ -67,8 +67,8 @@ struct HubEventsView: View {
                 )
             }
 
-            ForEach(selectedMonthCalendarDays) { day in
-                Section(day.date) {
+                ForEach(selectedMonthCalendarDays) { day in
+                    Section(calendarDayHeaderTitle(for: day)) {
                         ForEach(day.entries) { entry in
                             if let event = serverStore.cachedHubEvent(id: entry.eventId) {
                                 if HubCalendarDeepLinkPolicy.canNavigateToDetail(entry) {
@@ -131,6 +131,25 @@ struct HubEventsView: View {
         Self.monthTitleFormatter.string(from: selectedCalendarMonth)
     }
 
+    private func calendarDayHeaderTitle(for day: HubCalendarDay) -> String {
+        guard let periodTitle = day.entries.lazy.compactMap({ calendarEntryPeriodTitle(for: $0) }).first else {
+            return day.date
+        }
+        return periodTitle
+    }
+
+    private func calendarEntryPeriodTitle(for entry: HubCalendarEntry) -> String? {
+        guard let startsAt = entry.startsAt, let endsAt = entry.endsAt else {
+            return nil
+        }
+        let startDate = Self.feedCalendar.startOfDay(for: startsAt)
+        let endDate = Self.feedCalendar.startOfDay(for: endsAt)
+        guard endDate > startDate else {
+            return nil
+        }
+        return "\(Self.feedPeriodDateFormatter.string(from: startDate))~\(Self.feedPeriodDateFormatter.string(from: endDate))"
+    }
+
     private static let feedCalendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = Locale(identifier: "ko_KR")
@@ -153,6 +172,15 @@ struct HubEventsView: View {
         formatter.locale = Locale(identifier: "ko_KR")
         formatter.timeZone = feedCalendar.timeZone
         formatter.dateFormat = "yyyy년 M월 일정"
+        return formatter
+    }()
+
+    private static let feedPeriodDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = feedCalendar
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.timeZone = feedCalendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
 }

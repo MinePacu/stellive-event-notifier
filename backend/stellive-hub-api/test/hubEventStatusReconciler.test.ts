@@ -6,7 +6,8 @@ describe("HubEventRepository.reconcileDueStatuses", () => {
     const updateMany = vi
       .fn()
       .mockResolvedValueOnce({ count: 2 })
-      .mockResolvedValueOnce({ count: 3 });
+      .mockResolvedValueOnce({ count: 3 })
+      .mockResolvedValueOnce({ count: 4 });
     const repository = new HubEventRepository({
       hubEvent: { updateMany }
     } as never);
@@ -14,7 +15,7 @@ describe("HubEventRepository.reconcileDueStatuses", () => {
 
     const result = await repository.reconcileDueStatuses(now);
 
-    expect(updateMany).toHaveBeenCalledTimes(2);
+    expect(updateMany).toHaveBeenCalledTimes(3);
     expect(updateMany).toHaveBeenNthCalledWith(1, {
       where: {
         publicationState: "published",
@@ -35,11 +36,23 @@ describe("HubEventRepository.reconcileDueStatuses", () => {
       },
       data: { status: "ended" }
     });
+    expect(updateMany).toHaveBeenNthCalledWith(3, {
+      where: {
+        publicationState: "published",
+        deletedAt: null,
+        cancelledAt: null,
+        status: { in: ["open", "closing_soon"] },
+        startsAt: { lt: new Date("2026-06-19T15:00:00.000Z") },
+        endsAt: null
+      },
+      data: { status: "ended" }
+    });
     expect(result).toEqual({
       status: "ok",
       checkedAt: "2026-06-20T10:00:00.000Z",
       opened: 2,
-      ended: 3
+      ended: 3,
+      startOnlyEnded: 4
     });
   });
 });
