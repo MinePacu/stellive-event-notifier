@@ -52,6 +52,7 @@ import dev.stellive.hub.core.model.NotificationHistoryItem
 import dev.stellive.hub.core.model.NotificationPlatform
 import dev.stellive.hub.databinding.ActivityMainBinding
 import dev.stellive.hub.feature.calendar.HubCalendarDeepLinkPolicy
+import dev.stellive.hub.feature.calendar.CalendarUiPolicy
 import dev.stellive.hub.feature.calendar.HubEventsCalendarView
 import dev.stellive.hub.feature.home.HubScreen
 import dev.stellive.hub.feature.home.HubRepository
@@ -516,7 +517,7 @@ private var draggingLiveMemberId: String? = null
         )
 
         repository.calendarDaysForFilter("all").forEach { day ->
-            binding.contentList.addView(calendarDayHeader(day.date))
+            binding.contentList.addView(calendarDayHeader(calendarDayHeaderText(day)))
             day.entries.forEach { entry ->
                 repository.hubEvents.firstOrNull { it.id == entry.eventId }?.let { event ->
                     binding.contentList.addView(hubEventCard(event))
@@ -584,7 +585,7 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
                 eventsById[entry.eventId]?.let(::hubEventCard) ?: localCalendarEntryRow(entry)
             }
             if (entryViews.isNotEmpty()) {
-                binding.contentList.addView(calendarDayHeader(day.date))
+                binding.contentList.addView(calendarDayHeader(calendarDayHeaderText(day)))
                 entryViews.forEach(binding.contentList::addView)
             }
         }
@@ -596,12 +597,19 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
     private fun localCalendarEntryRow(entry: HubCalendarEntry): MaterialCardView =
         compactEventCard(
             title = entry.title,
-            body = listOf(entry.displayDate, entry.displayTimeText)
+            body = listOf(CalendarUiPolicy.entryPeriodDateText(entry), entry.displayTimeText)
                 .filter { it.isNotBlank() }
                 .joinToString(" · "),
             pills = listOf(entry.category.displayName, entry.participationMode.displayName)
                 .filter { it.isNotBlank() },
-        )
+    )
+
+    private fun calendarDayHeaderText(day: HubCalendarDay): String {
+        val periodEntry = day.entries.firstOrNull { entry ->
+            CalendarUiPolicy.entryPeriodDateText(entry) != entry.displayDate
+        } ?: return day.date
+        return CalendarUiPolicy.entryPeriodDateText(periodEntry)
+    }
 
     private fun calendarDayHeader(date: String): TextView = TextView(this).apply {
         text = date

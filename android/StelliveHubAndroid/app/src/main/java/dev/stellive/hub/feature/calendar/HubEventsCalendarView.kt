@@ -152,12 +152,21 @@ class HubEventsCalendarView(
 
     private fun listNavigationTitle(): String =
         if (viewModel.uiState.scopeMode == HubCalendarScopeMode.DAY) {
-            selectedDateFormatter.format(viewModel.uiState.selectedDay)
+            dayNavigationTitle()
         } else {
             val start = viewModel.uiState.rangeStart ?: viewModel.uiState.selectedDay
             val end = viewModel.uiState.rangeEnd ?: start.plusDays(6)
             "${rangeDateFormatter.format(start)} - ${rangeDateFormatter.format(end)}"
         }
+
+    private fun dayNavigationTitle(): String {
+        val singleEntry = viewModel.uiState.visibleEntries.singleOrNull()
+        if (singleEntry != null) {
+            val periodText = CalendarUiPolicy.entryPeriodDateText(singleEntry)
+            if (periodText != singleEntry.displayDate) return periodText
+        }
+        return selectedDateFormatter.format(viewModel.uiState.selectedDay)
+    }
 
     private fun showDayPicker() {
         showDatePicker(viewModel.uiState.selectedDay, "날짜 선택") { selectedDate ->
@@ -231,32 +240,86 @@ class HubEventsCalendarView(
         }
     }
 
-    private fun monthGrid(): View = GridLayout(context).apply {
-        columnCount = 7
+    private fun monthGrid(): View = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
         val month = viewModel.uiState.selectedMonth
         val firstDay = month.atDay(1)
         val leadingDays = firstDay.dayOfWeek.value % 7
         val totalCells = ((leadingDays + month.lengthOfMonth() + 6) / 7) * 7
+        val visibleStart = firstDay.minusDays(leadingDays.toLong())
+        val durationLayout = CalendarUiPolicy.durationBarLayoutForMonth(viewModel.uiState.days, month)
 
-        repeat(totalCells) { index ->
-            val date = firstDay.minusDays(leadingDays.toLong()).plusDays(index.toLong())
-            addView(dateCell(date, YearMonth.from(date) == month))
+        repeat(totalCells / 7) { weekIndex ->
+            val weekStart = visibleStart.plusDays((weekIndex * 7).toLong())
+            addView(GridLayout(context).apply {
+                columnCount = 7
+                repeat(7) { column ->
+                    val date = weekStart.plusDays(column.toLong())
+                    addView(dateCell(date, YearMonth.from(date) == month))
+                }
+            })
+            val laneCount = durationLayout.laneCountsByWeek[weekIndex] ?: 0
+            repeat(laneCount) { lane ->
+                addView(durationLaneRow(durationLayout.segments.filter { it.weekIndex == weekIndex && it.lane == lane }))
+            }
         }
+    }
+
+    private fun durationLaneRow(segments: List<CalendarDurationBarSegment>): View =
+        LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(1), 0, dp(1), 0)
+            layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(7)).apply {
+                topMargin = dp(1)
+            }
+            var cursor = 0
+            segments.sortedBy { it.startColumn }.forEach { segment ->
+                if (segment.startColumn > cursor) {
+                    addDurationSpacer(segment.startColumn - cursor)
+                }
+                addView(View(context).apply {
+                    background = rounded(durationBarColor(segment.emphasis), dp(3), Color.TRANSPARENT)
+                    alpha = 0.72f
+                    layoutParams = LinearLayout.LayoutParams(
+                        0,
+                        dp(5),
+                        (segment.endColumn - segment.startColumn + 1).toFloat(),
+                    )
+                })
+                cursor = segment.endColumn + 1
+            }
+            if (cursor < 7) {
+                addDurationSpacer(7 - cursor)
+            }
+        }
+
+    private fun LinearLayout.addDurationSpacer(columnSpan: Int) {
+        if (columnSpan <= 0) return
+        addView(View(context).apply {
+            layoutParams = LinearLayout.LayoutParams(0, dp(5), columnSpan.toFloat())
+        })
     }
 
     private fun dateCell(date: LocalDate, inSelectedMonth: Boolean): View {
         val marker = viewModel.markerForDate(date)
-        val entryCount = viewModel.uiState.days
+        val entries = viewModel.uiState.days
             .firstOrNull { it.date == date.toString() }
             ?.entries
-            ?.size ?: 0
+            .orEmpty()
+        val dotStyle = CalendarUiPolicy.dotStyleForEntries(entries)
+        val hasMultiDayEntry = CalendarUiPolicy.hasMultiDayEntry(entries, date)
         val cell = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             isClickable = true
             isFocusable = true
             minimumHeight = dp(54)
-            contentDescription = CalendarUiPolicy.accessibilityLabelForDate(date, marker, entryCount)
+            contentDescription = CalendarUiPolicy.accessibilityLabelForDate(
+                date,
+                marker,
+                entries.size,
+                hasMultiDayEntry = hasMultiDayEntry,
+            )
             background = cellBackground(marker)
             alpha = if (inSelectedMonth) 1f else 0.36f
             setOnClickListener {
@@ -284,12 +347,24 @@ class HubEventsCalendarView(
             ) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
             setTextColor(dateTextColor(marker))
         })
-        cell.addView(TextView(context).apply {
-            text = if (entryCount > 0) "•" else ""
-            gravity = Gravity.CENTER
-            textSize = 17f
-            setTextColor(dotColor(marker))
-        })
+        if (dotStyle.visible) {
+            val dotColor = when (dotStyle.emphasis) {
+                CalendarEventDotEmphasis.HIGH -> color(R.color.hub_warning)
+                CalendarEventDotEmphasis.MUTED -> color(R.color.hub_text_muted)
+                CalendarEventDotEmphasis.NORMAL -> color(R.color.hub_success)
+            }
+            cell.addView(TextView(context).apply {
+                text = dotStyle.countText.orEmpty()
+                gravity = Gravity.CENTER
+                textSize = 8f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Color.WHITE)
+                background = rounded(dotColor, dp(dotStyle.sizeDp), Color.TRANSPARENT)
+                layoutParams = LinearLayout.LayoutParams(dp(dotStyle.sizeDp), dp(dotStyle.sizeDp)).apply {
+                    topMargin = dp(3)
+                }
+            })
+        }
         return cell
     }
 
@@ -314,6 +389,8 @@ class HubEventsCalendarView(
 
     private fun entryRow(entry: HubCalendarEntry): View = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
+        val rowDate = runCatching { LocalDate.parse(entry.displayDate) }
+            .getOrDefault(viewModel.uiState.selectedDay)
         val canNavigate = HubCalendarDeepLinkPolicy.canNavigateToDetail(entry)
         isClickable = canNavigate
         isFocusable = canNavigate
@@ -341,7 +418,7 @@ class HubEventsCalendarView(
             setPadding(0, dp(3), 0, 0)
         })
         addView(TextView(context).apply {
-            text = "${CalendarUiPolicy.entryLabel(entry)} · ${entry.displayDate} · ${entry.displayTimeText}"
+            text = "${CalendarUiPolicy.entryRowStatusText(entry, rowDate)} · ${CalendarUiPolicy.entryPeriodDateText(entry)} · ${entry.displayTimeText}"
             setTextColor(color(R.color.hub_success))
             textSize = 12f
             setPadding(0, dp(4), 0, 0)
@@ -423,6 +500,12 @@ class HubEventsCalendarView(
         CalendarDateMarker.RANGE_START,
         CalendarDateMarker.RANGE_END -> Color.WHITE
         else -> color(R.color.hub_success)
+    }
+
+    private fun durationBarColor(emphasis: CalendarEventDotEmphasis): Int = when (emphasis) {
+        CalendarEventDotEmphasis.HIGH -> color(R.color.hub_warning)
+        CalendarEventDotEmphasis.MUTED -> color(R.color.hub_text_muted)
+        CalendarEventDotEmphasis.NORMAL -> color(R.color.hub_success)
     }
 
     private fun rounded(fill: Int, radius: Int, stroke: Int): GradientDrawable =

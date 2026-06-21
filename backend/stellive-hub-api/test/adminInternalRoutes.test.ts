@@ -44,7 +44,8 @@ function createFakeDependencies(overrides: Partial<InternalRouteDependencies> = 
         status: "ok",
         checkedAt: (now ?? new Date("2026-06-20T00:00:00.000Z")).toISOString(),
         opened: 0,
-        ended: 0
+        ended: 0,
+        startOnlyEnded: 0
       })
     },
     ...overrides
@@ -414,7 +415,8 @@ describe("internal admin routes", () => {
       status: "ok" as const,
       checkedAt: now.toISOString(),
       opened: 2,
-      ended: 1
+      ended: 1,
+      startOnlyEnded: 3
     }));
     const now = new Date("2026-06-20T10:00:00.000Z");
     const app = await buildTestApp({
@@ -435,7 +437,8 @@ describe("internal admin routes", () => {
       status: "ok",
       checkedAt: "2026-06-20T10:00:00.000Z",
       opened: 2,
-      ended: 1
+      ended: 1,
+      startOnlyEnded: 3
     });
     expect(reconcileDueStatuses).toHaveBeenCalledWith(now);
   });

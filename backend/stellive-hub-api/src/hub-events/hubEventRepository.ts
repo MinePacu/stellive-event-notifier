@@ -2,7 +2,7 @@ import { getPrismaClient } from "../storage/prisma.js";
 import type { HubEvent, HubEventImage, HubEventsSummary, HubEventStatus } from "../types.js";
 import type { AdminHubEvent, HubEventAdminAction, HubEventPublicationState } from "./hubEventAdminTypes.js";
 import type { HubEventFilters, HubEventListResult } from "./hubEventService.js";
-import { resolveEffectiveHubEventStatus, withEffectiveHubEventStatus } from "./hubEventStatus.js";
+import { koreaDateKey, resolveEffectiveHubEventStatus, withEffectiveHubEventStatus } from "./hubEventStatus.js";
 
 interface HubEventRecord {
   id: string;
@@ -111,6 +111,7 @@ export interface HubEventStatusReconcileResult {
   checkedAt: string;
   opened: number;
   ended: number;
+  startOnlyEnded: number;
 }
 
 export interface HubEventAuditLogEntry {
@@ -259,6 +260,10 @@ function effectiveStatus(event: HubEvent, now: Date): HubEventStatus {
   return resolveEffectiveHubEventStatus(event, now);
 }
 
+function startOnlyEndCutoff(now: Date): Date {
+  return new Date(`${koreaDateKey(now)}T00:00:00+09:00`);
+}
+
 export class HubEventRepository {
   constructor(private readonly prisma: HubEventDelegate = getPrismaClient() as unknown as HubEventDelegate) {}
 
@@ -304,12 +309,22 @@ export class HubEventRepository {
       },
       data: { status: "ended" }
     });
+    const startOnlyEnded = await updateMany({
+      where: {
+        ...baseWhere,
+        status: { in: ["open", "closing_soon"] },
+        startsAt: { lt: startOnlyEndCutoff(now) },
+        endsAt: null
+      },
+      data: { status: "ended" }
+    });
 
     return {
       status: "ok",
       checkedAt: now.toISOString(),
       opened: opened.count,
-      ended: ended.count
+      ended: ended.count,
+      startOnlyEnded: startOnlyEnded.count
     };
   }
 

@@ -189,7 +189,7 @@ struct HubEventsCalendarView: View {
                     .background(Circle().fill(Color(.systemBackground)))
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(selectedDateFormatter.string(from: viewModel.selectedDay))
+                    Text(dayNavigationTitle)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
@@ -254,12 +254,33 @@ struct HubEventsCalendarView: View {
 
     private var listNavigationTitle: String {
         if viewModel.scopeMode == .day {
-            return selectedDateFormatter.string(from: viewModel.selectedDay)
+            return dayNavigationTitle
         }
 
         let start = viewModel.rangeStart ?? viewModel.selectedDay
         let end = viewModel.rangeEnd ?? Calendar.current.date(byAdding: .day, value: 6, to: start) ?? start
         return "\(rangeDateFormatter.string(from: start)) - \(rangeDateFormatter.string(from: end))"
+    }
+
+    private var dayNavigationTitle: String {
+        let entries = viewModel.visibleEntries()
+        if entries.count == 1, let periodText = periodDateText(for: entries[0]) {
+            return periodText
+        }
+        return selectedDateFormatter.string(from: viewModel.selectedDay)
+    }
+
+    private func periodDateText(for entry: HubCalendarEntry) -> String? {
+        guard let startsAt = entry.startsAt, let endsAt = entry.endsAt else {
+            return nil
+        }
+        let calendar = Calendar.current
+        let startDate = calendar.startOfDay(for: startsAt)
+        let endDate = calendar.startOfDay(for: endsAt)
+        guard endDate > startDate else {
+            return nil
+        }
+        return "\(Self.periodDateFormatter.string(from: startDate))~\(Self.periodDateFormatter.string(from: endDate))"
     }
 
     private var dayNavigationSubtitle: String {
@@ -310,18 +331,60 @@ struct HubEventsCalendarView: View {
     }
 
     private var monthGrid: some View {
-        LazyVGrid(columns: gridColumns, spacing: 6) {
-            ForEach(monthDates, id: \.self) { date in
-                CalendarDateCell(
-                    date: date,
-                    isCurrentMonth: Calendar.current.isDate(date, equalTo: viewModel.selectedMonth, toGranularity: .month),
-                    marker: viewModel.marker(for: date),
-                    entryCount: viewModel.entryCount(on: date),
-                    accessibilityLabel: viewModel.accessibilityLabel(for: date)
-                ) {
-                    viewModel.selectDate(date)
+        let durationLayout = viewModel.durationBarLayoutForSelectedMonth()
+        return VStack(spacing: 6) {
+            ForEach(Array(monthWeeks.enumerated()), id: \.offset) { weekIndex, dates in
+                VStack(spacing: 2) {
+                    LazyVGrid(columns: gridColumns, spacing: 4) {
+                        ForEach(dates, id: \.self) { date in
+                            CalendarDateCell(
+                                date: date,
+                                isCurrentMonth: Calendar.current.isDate(date, equalTo: viewModel.selectedMonth, toGranularity: .month),
+                                marker: viewModel.marker(for: date),
+                                entryCount: viewModel.entryCount(on: date),
+                                dotStyle: viewModel.dotStyle(on: date),
+                                hasMultiDayEntry: viewModel.hasMultiDayEntry(on: date),
+                                accessibilityLabel: viewModel.accessibilityLabel(for: date)
+                            ) {
+                                viewModel.selectDate(date)
+                            }
+                        }
+                    }
+                    durationBars(for: durationLayout.segments.filter { $0.weekIndex == weekIndex })
                 }
+                .frame(minHeight: 52 + CGFloat(durationLayout.laneCountsByWeek[weekIndex] ?? 0) * 7)
             }
+        }
+    }
+
+    private func durationBars(for segments: [HubCalendarDurationBarSegment]) -> some View {
+        GeometryReader { proxy in
+            let columnWidth = proxy.size.width / 7
+            ForEach(segments) { segment in
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(durationBarColor(segment.emphasis).opacity(0.7))
+                    .frame(
+                        width: max(0, columnWidth * CGFloat(segment.endColumn - segment.startColumn + 1) - 4),
+                        height: 5
+                    )
+                    .offset(
+                        x: columnWidth * CGFloat(segment.startColumn) + 2,
+                        y: CGFloat(segment.lane) * 7
+                    )
+            }
+        }
+        .frame(height: CGFloat((segments.map(\.lane).max() ?? -1) + 1) * 7)
+        .allowsHitTesting(false)
+    }
+
+    private func durationBarColor(_ emphasis: HubCalendarEventDotEmphasis) -> Color {
+        switch emphasis {
+        case .high:
+            return .orange
+        case .muted:
+            return .secondary
+        case .normal:
+            return .teal
         }
     }
 
@@ -338,6 +401,12 @@ struct HubEventsCalendarView: View {
 
         return (0..<totalCells).compactMap { index in
             calendar.date(byAdding: .day, value: index - leadingDays, to: firstDay)
+        }
+    }
+
+    private var monthWeeks: [[Date]] {
+        stride(from: 0, to: monthDates.count, by: 7).map { start in
+            Array(monthDates[start..<min(start + 7, monthDates.count)])
         }
     }
 
@@ -365,6 +434,13 @@ struct HubEventsCalendarView: View {
         formatter.dateFormat = "M.d"
         return formatter
     }
+
+    private static let periodDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 }
 
 private enum CalendarPickerPresentation: String, Identifiable {
@@ -469,7 +545,7 @@ private struct CalendarEntryRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
 
-                Text("\(HubCalendarPolicy.entryLabel(entry)) · \(entry.displayDate) · \(entry.displayTimeText)")
+                Text("\(HubCalendarPolicy.entryLabel(entry)) · \(periodDateText) · \(entry.displayTimeText)")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.teal)
                     .lineLimit(1)
@@ -490,6 +566,26 @@ private struct CalendarEntryRow: View {
         }
         .accessibilityElement(children: .combine)
     }
+
+    private var periodDateText: String {
+        guard let startsAt = entry.startsAt, let endsAt = entry.endsAt else {
+            return entry.displayDate
+        }
+        let calendar = Calendar.current
+        let startDate = calendar.startOfDay(for: startsAt)
+        let endDate = calendar.startOfDay(for: endsAt)
+        guard endDate > startDate else {
+            return entry.displayDate
+        }
+        return "\(Self.periodDateFormatter.string(from: startDate))~\(Self.periodDateFormatter.string(from: endDate))"
+    }
+
+    private static let periodDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 }
 
 private struct CalendarDateCell: View {
@@ -497,17 +593,28 @@ private struct CalendarDateCell: View {
     let isCurrentMonth: Bool
     let marker: HubCalendarDateMarker
     let entryCount: Int
+    let dotStyle: HubCalendarEventDotStyle
+    let hasMultiDayEntry: Bool
     let accessibilityLabel: String
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 2) {
+            VStack(spacing: 3) {
                 Text("\(Calendar.current.component(.day, from: date))")
                     .font(.caption.weight(strongMarker ? .bold : .regular))
-                Text(entryCount > 0 ? "•" : "")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(dotColor)
+
+                if hasMultiDayEntry {
+                    Capsule(style: .continuous)
+                        .fill(Color.teal.opacity(0.28))
+                        .frame(width: 24, height: 4)
+                }
+
+                if dotStyle.visible {
+                    dotView
+                } else {
+                    Color.clear.frame(width: 5, height: 5)
+                }
             }
             .frame(maxWidth: .infinity, minHeight: 46)
             .foregroundStyle(textColor)
@@ -520,6 +627,21 @@ private struct CalendarDateCell: View {
 
     private var strongMarker: Bool {
         marker == .selectedDay || marker == .rangeStart || marker == .rangeEnd
+    }
+
+    @ViewBuilder
+    private var dotView: some View {
+        if let countText = dotStyle.countText {
+            Text(countText)
+                .font(.system(size: 7, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: dotStyle.size, height: dotStyle.size)
+                .background(Circle().fill(dotColor))
+        } else {
+            Circle()
+                .fill(dotColor)
+                .frame(width: dotStyle.size, height: dotStyle.size)
+        }
     }
 
     @ViewBuilder
@@ -544,6 +666,13 @@ private struct CalendarDateCell: View {
     }
 
     private var dotColor: Color {
-        strongMarker ? .white : .teal
+        switch dotStyle.emphasis {
+        case .high:
+            return .orange
+        case .muted:
+            return .secondary
+        case .normal:
+            return strongMarker ? .white : .teal
+        }
     }
 }
