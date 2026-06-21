@@ -49,10 +49,11 @@ class HubEventDetailFormattingTest {
     }
 
     @Test
-    fun periodUsesUnknownEndCopyWhenEndTimeIsMissing() {
+    fun periodTextForStartOnlyEventDoesNotShowUnknownEnd() {
         val period = HubEventDetailFormatting.periodText(sampleEvent().copy(endsAt = null), zone)
 
-        assertEquals("2026.06.17 (수) 19:00 시작 · 종료 미정", period)
+        assertEquals("2026.06.17 (수) 19:00 시작", period)
+        assertFalse(period.contains("종료 미정"))
     }
 
     private fun sampleEvent(): HubEvent =

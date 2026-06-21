@@ -89,6 +89,36 @@ describe("HubEvent status transitions", () => {
     expect(response.items[0]?.status).toBe("ended");
   });
 
+  it("keeps start-only event open during its KST start date", async () => {
+    const service = new HubEventService(new CatalogService(), [
+      hubEvent({
+        status: "open",
+        startsAt: "2026-06-20T10:00:00.000Z",
+        endsAt: undefined
+      })
+    ]);
+
+    const response = await service.list({ status: "open" }, new Date("2026-06-20T14:59:59.000Z"));
+
+    expect(response.items).toHaveLength(1);
+    expect(response.items[0]?.status).toBe("open");
+  });
+
+  it("returns ended for start-only event after KST date rolls over", async () => {
+    const service = new HubEventService(new CatalogService(), [
+      hubEvent({
+        status: "open",
+        startsAt: "2026-06-20T10:00:00.000Z",
+        endsAt: undefined
+      })
+    ]);
+
+    const response = await service.list({ status: "ended" }, new Date("2026-06-20T15:00:00.000Z"));
+
+    expect(response.items).toHaveLength(1);
+    expect(response.items[0]?.status).toBe("ended");
+  });
+
   it("applies time-based status transitions to Prisma-backed list and detail reads", async () => {
     const record = hubEventRecord();
     const repository = new HubEventRepository({

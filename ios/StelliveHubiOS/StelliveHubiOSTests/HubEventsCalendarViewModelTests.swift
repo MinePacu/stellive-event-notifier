@@ -157,6 +157,195 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.accessibilityLabel(for: date("2026-06-14")), "6월 14일, 기간 포함, 일정 1개")
     }
 
+    func testEntrySpanKindDistinguishesSingleDayAndMultiDayPositions() {
+        let viewModel = makeViewModel(days: [])
+        let singleDay = entry(
+            id: "single",
+            startsAt: dateTime("2026-06-15T01:00:00Z"),
+            endsAt: dateTime("2026-06-15T14:59:00Z")
+        )
+        let multiDay = entry(
+            id: "multi",
+            startsAt: dateTime("2026-06-15T01:00:00Z"),
+            endsAt: dateTime("2026-06-17T14:59:00Z")
+        )
+
+        XCTAssertEqual(viewModel.spanKind(for: singleDay, on: date("2026-06-15")), .singleDay)
+        XCTAssertEqual(viewModel.spanKind(for: multiDay, on: date("2026-06-15")), .multiDayStart)
+        XCTAssertEqual(viewModel.spanKind(for: multiDay, on: date("2026-06-16")), .multiDayMiddle)
+        XCTAssertEqual(viewModel.spanKind(for: multiDay, on: date("2026-06-17")), .multiDayEnd)
+    }
+
+    func testDotStyleScalesWithEntryCountAndStatusImportance() {
+        let viewModel = makeViewModel(days: [])
+
+        XCTAssertFalse(viewModel.dotStyle(for: []).visible)
+
+        let one = viewModel.dotStyle(for: [entry(id: "one")])
+        XCTAssertTrue(one.visible)
+        XCTAssertEqual(one.size, 5)
+        XCTAssertEqual(one.emphasis, .normal)
+
+        let two = viewModel.dotStyle(for: [entry(id: "one"), entry(id: "two")])
+        XCTAssertEqual(two.size, 6)
+
+        let many = viewModel.dotStyle(for: [entry(id: "one"), entry(id: "two"), entry(id: "three")])
+        XCTAssertEqual(many.size, 8)
+        XCTAssertEqual(many.countText, "3")
+
+        let closing = viewModel.dotStyle(for: [entry(id: "closing", status: .closingSoon)])
+        XCTAssertEqual(closing.emphasis, .high)
+
+        let inactive = viewModel.dotStyle(for: [
+            entry(id: "cancelled", status: .cancelled),
+            entry(id: "ended", status: .ended),
+        ])
+        XCTAssertEqual(inactive.emphasis, .muted)
+    }
+
+    func testDurationBarSegmentsClipAtVisibleGridBoundaries() {
+        let viewModel = makeViewModel(
+            selectedDay: date("2026-06-15"),
+            days: [
+                day("2026-05-31", [entry(id: "grid", startsAt: dateTime("2026-05-28T01:00:00Z"), endsAt: dateTime("2026-07-10T14:59:00Z"))])
+            ]
+        )
+
+        let layout = viewModel.durationBarLayoutForSelectedMonth()
+
+        XCTAssertEqual(layout.segments.count, 5)
+        XCTAssertEqual(layout.segments.first?.weekIndex, 0)
+        XCTAssertEqual(layout.segments.first?.startColumn, 0)
+        XCTAssertEqual(layout.segments.first?.endColumn, 6)
+        XCTAssertEqual(layout.segments.first?.startsAtVisibleBoundary, false)
+        XCTAssertEqual(layout.segments.last?.endsAtVisibleBoundary, false)
+    }
+
+    func testDurationBarSegmentsIncludeTrailingNextMonthCellsWhenVisible() {
+        let viewModel = makeViewModel(
+            selectedDay: date("2026-06-15"),
+            days: [
+                day("2026-06-26", [entry(id: "trailing", startsAt: dateTime("2026-06-26T01:00:00Z"), endsAt: dateTime("2026-07-02T14:59:00Z"))])
+            ]
+        )
+
+        let layout = viewModel.durationBarLayoutForSelectedMonth()
+
+        XCTAssertEqual(layout.segments.map { [$0.startColumn, $0.endColumn] }, [[5, 6], [0, 4]])
+        XCTAssertEqual(layout.segments.first?.startsAtVisibleBoundary, true)
+        XCTAssertEqual(layout.segments.last?.endsAtVisibleBoundary, true)
+    }
+
+    func testDurationBarSegmentsIncludeLeadingPreviousMonthCellsWhenVisible() {
+        let viewModel = makeViewModel(
+            selectedDay: date("2026-06-15"),
+            days: [
+                day("2026-05-31", [entry(id: "leading", startsAt: dateTime("2026-05-31T01:00:00Z"), endsAt: dateTime("2026-06-02T14:59:00Z"))])
+            ]
+        )
+
+        let layout = viewModel.durationBarLayoutForSelectedMonth()
+
+        XCTAssertEqual(layout.segments.map { [$0.startColumn, $0.endColumn] }, [[0, 2]])
+        XCTAssertEqual(layout.segments.first?.startsAtVisibleBoundary, true)
+        XCTAssertEqual(layout.segments.first?.endsAtVisibleBoundary, true)
+    }
+
+    func testDurationBarSegmentsSplitAtWeekBoundaries() {
+        let viewModel = makeViewModel(
+            selectedDay: date("2026-06-15"),
+            days: [
+                day("2026-06-26", [entry(id: "split", startsAt: dateTime("2026-06-26T01:00:00Z"), endsAt: dateTime("2026-06-30T14:59:00Z"))])
+            ]
+        )
+
+        let layout = viewModel.durationBarLayoutForSelectedMonth()
+
+        XCTAssertEqual(layout.segments.map(\.weekIndex), [3, 4])
+        XCTAssertEqual(layout.segments.map { [$0.startColumn, $0.endColumn] }, [[5, 6], [0, 2]])
+    }
+
+    func testDurationBarSegmentsStackOverlappingRanges() {
+        let viewModel = makeViewModel(
+            selectedDay: date("2026-06-15"),
+            days: [
+                day("2026-06-10", [entry(id: "first", startsAt: dateTime("2026-06-10T01:00:00Z"), endsAt: dateTime("2026-06-14T14:59:00Z"))]),
+                day("2026-06-12", [entry(id: "second", startsAt: dateTime("2026-06-12T01:00:00Z"), endsAt: dateTime("2026-06-16T14:59:00Z"))])
+            ]
+        )
+
+        let layout = viewModel.durationBarLayoutForSelectedMonth()
+        let overlappingWeek = layout.segments.filter { $0.weekIndex == 2 }
+
+        XCTAssertEqual(overlappingWeek.map(\.lane).sorted(), [0, 1])
+        XCTAssertEqual(layout.laneCountsByWeek[2], 2)
+    }
+
+    func testDurationBarSegmentsReuseLaneForNonOverlappingRanges() {
+        let viewModel = makeViewModel(
+            selectedDay: date("2026-06-15"),
+            days: [
+                day("2026-06-10", [entry(id: "first", startsAt: dateTime("2026-06-10T01:00:00Z"), endsAt: dateTime("2026-06-11T14:59:00Z"))]),
+                day("2026-06-12", [entry(id: "second", startsAt: dateTime("2026-06-12T01:00:00Z"), endsAt: dateTime("2026-06-13T14:59:00Z"))])
+            ]
+        )
+
+        let layout = viewModel.durationBarLayoutForSelectedMonth()
+
+        XCTAssertEqual(layout.segments.map(\.lane), [0, 0])
+        XCTAssertEqual(layout.laneCountsByWeek[1], 1)
+    }
+
+    func testDurationBarSegmentsDeduplicateProjectedMultiDayEntries() {
+        let projected = entry(id: "same", startsAt: dateTime("2026-06-10T01:00:00Z"), endsAt: dateTime("2026-06-12T14:59:00Z"))
+        let viewModel = makeViewModel(
+            selectedDay: date("2026-06-15"),
+            days: [
+                day("2026-06-10", [projected]),
+                day("2026-06-11", [projected]),
+                day("2026-06-12", [projected])
+            ]
+        )
+
+        let layout = viewModel.durationBarLayoutForSelectedMonth()
+
+        XCTAssertEqual(layout.segments.count, 1)
+        XCTAssertEqual(layout.segments.first?.eventId, "same")
+    }
+
+    func testDurationBarSegmentsIgnoreSingleDayMissingEndAndInvalidRanges() {
+        let viewModel = makeViewModel(
+            selectedDay: date("2026-06-15"),
+            days: [
+                day("2026-06-10", [entry(id: "single", startsAt: dateTime("2026-06-10T01:00:00Z"), endsAt: dateTime("2026-06-10T14:59:00Z"))]),
+                day("2026-06-11", [entry(id: "missing-end", startsAt: dateTime("2026-06-11T01:00:00Z"), endsAt: nil)]),
+                day("2026-06-12", [entry(id: "invalid", startsAt: dateTime("2026-06-12T01:00:00Z"), endsAt: dateTime("2026-06-11T14:59:00Z"))])
+            ]
+        )
+
+        let layout = viewModel.durationBarLayoutForSelectedMonth()
+
+        XCTAssertTrue(layout.segments.isEmpty)
+        XCTAssertTrue(layout.laneCountsByWeek.isEmpty)
+    }
+
+    func testAccessibilityLabelCanIncludeMultiDayEventHint() {
+        let viewModel = makeViewModel(days: [
+            day("2026-06-16", entries: [
+                entry(
+                    id: "multi",
+                    startsAt: dateTime("2026-06-15T01:00:00Z"),
+                    endsAt: dateTime("2026-06-17T14:59:00Z")
+                )
+            ])
+        ])
+        viewModel.setScopeMode(.range)
+        viewModel.selectDate(date("2026-06-15"))
+        viewModel.selectDate(date("2026-06-17"))
+
+        XCTAssertEqual(viewModel.accessibilityLabel(for: date("2026-06-16")), "6월 16일, 기간 포함, 일정 1개, 기간 행사 포함")
+    }
+
     func testListDayNavigationUpdatesSelectedDayAndVisibleEntries() {
         let viewModel = makeViewModel(selectedDay: date("2026-06-14"), days: [
             day("2026-06-14", entries: []),
@@ -258,11 +447,12 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(rows.map(\.label), ["장소", "시작", "기간", "참여 방식", "분류", "출처"])
     }
 
-    func testHubEventDetailRowsShowUnknownEndForStartOnlyEvent() {
+    func testHubEventDetailPeriodTextForStartOnlyEventDoesNotShowUnknownEnd() {
         let rows = HubEventDetailFormatting.rows(for: startOnlyDetailEvent())
         let period = rows.first { $0.label == "기간" }?.value
 
-        XCTAssertEqual(period, "2026.06.17 (수) 19:00 시작 · 종료 미정")
+        XCTAssertEqual(period, "2026.06.17 (수) 19:00 시작")
+        XCTAssertFalse(period?.contains("종료 미정") ?? false)
     }
 
     func testCalendarEntryDisplaysStartOnlyEventAsStartTime() {
@@ -368,7 +558,9 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         id: String,
         category: HubEventCategory = .onlineGoods,
         participationMode: HubEventParticipationMode = .online,
-        status: HubEventStatus = .open
+        status: HubEventStatus = .open,
+        startsAt: Date? = nil,
+        endsAt: Date? = nil
     ) -> HubCalendarEntry {
         HubCalendarEntry(
             id: id,
@@ -382,8 +574,8 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
             participationMode: participationMode,
             generationId: "official",
             memberId: nil,
-            startsAt: nil,
-            endsAt: nil,
+            startsAt: startsAt,
+            endsAt: endsAt,
             displayDate: "2026.06.13",
             displayTimeText: "종일",
             sourceLabel: "Stellive Official",

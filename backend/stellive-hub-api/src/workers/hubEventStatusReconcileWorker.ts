@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import loadEnv from "../config/env.js";
+import { koreaDateKey } from "../hub-events/hubEventStatus.js";
 
 function readPositiveInt(name: string, fallback: number): number {
   const value = Number(process.env[name]);
@@ -16,10 +17,9 @@ function schedulerBaseUrl(): string {
   );
 }
 
-export function msUntilNextHour(now: Date = new Date()): number {
-  const next = new Date(now);
-  next.setUTCMinutes(0, 0, 0);
-  next.setUTCHours(next.getUTCHours() + 1);
+export function msUntilNextKoreaMidnight(now: Date = new Date()): number {
+  const next = new Date(`${koreaDateKey(now)}T00:00:00+09:00`);
+  next.setUTCDate(next.getUTCDate() + 1);
   return Math.max(1, next.getTime() - now.getTime());
 }
 
@@ -39,11 +39,11 @@ export async function reconcileOnce(fetchImpl: typeof fetch = fetch): Promise<nu
     return backoffMs;
   }
 
-  return msUntilNextHour();
+  return msUntilNextKoreaMidnight();
 }
 
 async function main(): Promise<void> {
-  let delayMs = msUntilNextHour();
+  let delayMs = msUntilNextKoreaMidnight();
   for (;;) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     try {

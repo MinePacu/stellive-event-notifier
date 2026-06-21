@@ -1,4 +1,5 @@
 import Combine
+import CoreGraphics
 import Foundation
 
 enum HubEventsViewMode: String, CaseIterable, Identifiable {
@@ -23,6 +24,44 @@ enum HubCalendarDateMarker: Equatable {
     case rangeMiddleEmpty
     case rangeEnd
     case today
+}
+
+enum HubCalendarEntrySpanKind: Equatable {
+    case singleDay
+    case multiDayStart
+    case multiDayMiddle
+    case multiDayEnd
+    case multiDayAllDay
+}
+
+enum HubCalendarEventDotEmphasis: Equatable {
+    case muted
+    case normal
+    case high
+}
+
+struct HubCalendarEventDotStyle: Equatable {
+    let visible: Bool
+    let size: CGFloat
+    let emphasis: HubCalendarEventDotEmphasis
+    let countText: String?
+}
+
+struct HubCalendarDurationBarSegment: Equatable, Identifiable {
+    let id: String
+    let eventId: String
+    let weekIndex: Int
+    let lane: Int
+    let startColumn: Int
+    let endColumn: Int
+    let startsAtVisibleBoundary: Bool
+    let endsAtVisibleBoundary: Bool
+    let emphasis: HubCalendarEventDotEmphasis
+}
+
+struct HubCalendarDurationBarLayout: Equatable {
+    let segments: [HubCalendarDurationBarSegment]
+    let laneCountsByWeek: [Int: Int]
 }
 
 @MainActor
@@ -264,6 +303,243 @@ final class HubEventsCalendarViewModel: ObservableObject {
         return .outside
     }
 
+    func spanKind(for entry: HubCalendarEntry, on date: Date) -> HubCalendarEntrySpanKind {
+        guard let startsAt = entry.startsAt, let endsAt = entry.endsAt else {
+            return .singleDay
+        }
+
+        let startDate = calendar.startOfDay(for: startsAt)
+        let endDate = calendar.startOfDay(for: endsAt)
+        let cellDate = calendar.startOfDay(for: date)
+
+        guard startDate < endDate else {
+            return .singleDay
+        }
+
+        if calendar.isDate(cellDate, inSameDayAs: startDate) {
+            return .multiDayStart
+        }
+        if calendar.isDate(cellDate, inSameDayAs: endDate) {
+            return .multiDayEnd
+        }
+        if cellDate > startDate && cellDate < endDate {
+            return .multiDayMiddle
+        }
+        return .multiDayAllDay
+    }
+
+    func hasMultiDayEntry(on date: Date) -> Bool {
+        entries(on: date).contains { spanKind(for: $0, on: date) != .singleDay }
+    }
+
+    func durationBarLayoutForSelectedMonth() -> HubCalendarDurationBarLayout {
+        let visibleStart = visibleGridStart(for: selectedMonth)
+        let visibleEnd = visibleGridEnd(for: selectedMonth, visibleStart: visibleStart)
+        let visibleRange = visibleStart...visibleEnd
+        let candidates = days
+            .filter { day in
+                guard let date = Self.dayKeyFormatter.date(from: day.date) else { return false }
+                return visibleRange.contains(calendar.startOfDay(for: date))
+            }
+            .flatMap { filteredEntries(from: $0.entries) }
+            .reduce(into: [String: HubCalendarEntry]()) { result, entry in
+                result[entry.eventId] = result[entry.eventId] ?? entry
+            }
+            .compactMap { _, entry -> DurationCandidate? in
+                guard let startsAt = entry.startsAt, let endsAt = entry.endsAt else { return nil }
+                let startDate = calendar.startOfDay(for: startsAt)
+                let endDate = calendar.startOfDay(for: endsAt)
+                guard startDate < endDate else { return nil }
+                let clippedStart = max(startDate, visibleStart)
+                let clippedEnd = min(endDate, visibleEnd)
+                guard clippedStart <= clippedEnd else { return nil }
+                return DurationCandidate(
+                    entry: entry,
+                    startDate: startDate,
+                    endDate: endDate,
+                    visibleStart: clippedStart,
+                    visibleEnd: clippedEnd
+                )
+            }
+            .sorted {
+                if $0.visibleStart != $1.visibleStart { return $0.visibleStart < $1.visibleStart }
+                if $0.durationDays != $1.durationDays { return $0.durationDays > $1.durationDays }
+                if $0.entry.title != $1.entry.title { return $0.entry.title < $1.entry.title }
+                return $0.entry.eventId < $1.entry.eventId
+            }
+
+        let unassigned = candidates.flatMap { splitDurationCandidate($0, visibleGridStart: visibleStart) }
+        let assigned = Dictionary(grouping: unassigned, by: \.weekIndex)
+            .keys
+            .sorted()
+            .flatMap { weekIndex in
+                assignDurationLanes(Dictionary(grouping: unassigned, by: \.weekIndex)[weekIndex] ?? [])
+            }
+        let laneCounts = Dictionary(grouping: assigned, by: \.weekIndex)
+            .mapValues { segments in (segments.map(\.lane).max() ?? -1) + 1 }
+        return HubCalendarDurationBarLayout(segments: assigned, laneCountsByWeek: laneCounts)
+    }
+
+    private struct DurationCandidate {
+        let entry: HubCalendarEntry
+        let startDate: Date
+        let endDate: Date
+        let visibleStart: Date
+        let visibleEnd: Date
+
+        var durationDays: Int {
+            Calendar.current.dateComponents([.day], from: visibleStart, to: visibleEnd).day ?? 0
+        }
+    }
+
+    private struct UnassignedDurationSegment {
+        let candidate: DurationCandidate
+        let weekIndex: Int
+        let startColumn: Int
+        let endColumn: Int
+        let startsAtVisibleBoundary: Bool
+        let endsAtVisibleBoundary: Bool
+    }
+
+    private func visibleGridStart(for month: Date) -> Date {
+        guard let interval = calendar.dateInterval(of: .month, for: month) else {
+            return calendar.startOfDay(for: month)
+        }
+        let firstDay = calendar.startOfDay(for: interval.start)
+        let leadingDays = calendar.component(.weekday, from: firstDay) - 1
+        return calendar.date(byAdding: .day, value: -leadingDays, to: firstDay) ?? firstDay
+    }
+
+    private func visibleGridEnd(for month: Date, visibleStart: Date) -> Date {
+        guard
+            let interval = calendar.dateInterval(of: .month, for: month),
+            let daysRange = calendar.range(of: .day, in: .month, for: interval.start)
+        else {
+            return visibleStart
+        }
+        let leadingDays = calendar.component(.weekday, from: interval.start) - 1
+        let totalCells = ((leadingDays + daysRange.count + 6) / 7) * 7
+        return calendar.date(byAdding: .day, value: totalCells - 1, to: visibleStart) ?? visibleStart
+    }
+
+    private func splitDurationCandidate(
+        _ candidate: DurationCandidate,
+        visibleGridStart: Date
+    ) -> [UnassignedDurationSegment] {
+        var segments: [UnassignedDurationSegment] = []
+        var cursor = candidate.visibleStart
+        while cursor <= candidate.visibleEnd {
+            let daysFromGridStart = calendar.dateComponents([.day], from: visibleGridStart, to: cursor).day ?? 0
+            let weekIndex = daysFromGridStart / 7
+            let startColumn = daysFromGridStart % 7
+            let weekStart = calendar.date(byAdding: .day, value: weekIndex * 7, to: visibleGridStart) ?? visibleGridStart
+            let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
+            let segmentEnd = min(candidate.visibleEnd, weekEnd)
+            let endColumn = calendar.dateComponents([.day], from: weekStart, to: segmentEnd).day ?? startColumn
+            segments.append(
+                UnassignedDurationSegment(
+                    candidate: candidate,
+                    weekIndex: weekIndex,
+                    startColumn: startColumn,
+                    endColumn: endColumn,
+                    startsAtVisibleBoundary: calendar.isDate(cursor, inSameDayAs: candidate.startDate),
+                    endsAtVisibleBoundary: calendar.isDate(segmentEnd, inSameDayAs: candidate.endDate)
+                )
+            )
+            guard let next = calendar.date(byAdding: .day, value: 1, to: segmentEnd) else { break }
+            cursor = next
+        }
+        return segments
+    }
+
+    private func assignDurationLanes(_ segments: [UnassignedDurationSegment]) -> [HubCalendarDurationBarSegment] {
+        var laneEnds: [Int] = []
+        return segments
+            .sorted {
+                if $0.startColumn != $1.startColumn { return $0.startColumn < $1.startColumn }
+                if $0.endColumn != $1.endColumn { return $0.endColumn > $1.endColumn }
+                return $0.candidate.entry.eventId < $1.candidate.entry.eventId
+            }
+            .map { segment in
+                let lane = laneEnds.firstIndex { $0 < segment.startColumn } ?? laneEnds.count
+                if lane == laneEnds.count {
+                    laneEnds.append(-1)
+                }
+                laneEnds[lane] = segment.endColumn
+                return HubCalendarDurationBarSegment(
+                    id: "\(segment.candidate.entry.eventId)-\(segment.weekIndex)-\(lane)",
+                    eventId: segment.candidate.entry.eventId,
+                    weekIndex: segment.weekIndex,
+                    lane: lane,
+                    startColumn: segment.startColumn,
+                    endColumn: segment.endColumn,
+                    startsAtVisibleBoundary: segment.startsAtVisibleBoundary,
+                    endsAtVisibleBoundary: segment.endsAtVisibleBoundary,
+                    emphasis: dotStyle(for: [segment.candidate.entry]).emphasis
+                )
+            }
+    }
+
+    func dotStyle(for entries: [HubCalendarEntry]) -> HubCalendarEventDotStyle {
+        guard entries.isEmpty == false else {
+            return HubCalendarEventDotStyle(visible: false, size: 0, emphasis: .muted, countText: nil)
+        }
+
+        let emphasis: HubCalendarEventDotEmphasis
+        if entries.contains(where: { $0.status == .closingSoon }) {
+            emphasis = .high
+        } else if entries.allSatisfy({ $0.status == .cancelled || $0.status == .ended }) {
+            emphasis = .muted
+        } else {
+            emphasis = .normal
+        }
+
+        let size: CGFloat
+        switch entries.count {
+        case 1:
+            size = 5
+        case 2:
+            size = 6
+        default:
+            size = 8
+        }
+
+        return HubCalendarEventDotStyle(
+            visible: true,
+            size: size,
+            emphasis: emphasis,
+            countText: entries.count >= 3 ? "\(min(entries.count, 9))" : nil
+        )
+    }
+
+    func dotStyle(on date: Date) -> HubCalendarEventDotStyle {
+        dotStyle(for: entries(on: date))
+    }
+
+    func rangeLabel(for entry: HubCalendarEntry, on date: Date) -> String? {
+        switch spanKind(for: entry, on: date) {
+        case .singleDay:
+            return nil
+        case .multiDayStart:
+            return "기간 시작"
+        case .multiDayMiddle, .multiDayAllDay:
+            return "진행 기간"
+        case .multiDayEnd:
+            return "기간 종료"
+        }
+    }
+
+    func rowStatusText(for entry: HubCalendarEntry, on date: Date) -> String {
+        [HubCalendarPolicy.entryLabel(entry), rangeLabel(for: entry, on: date)]
+            .compactMap { $0 }
+            .reduce(into: [String]()) { labels, label in
+                if labels.contains(label) == false {
+                    labels.append(label)
+                }
+            }
+            .joined(separator: " · ")
+    }
+
     func entryCount(on date: Date) -> Int {
         entries(on: date).count
     }
@@ -272,7 +548,8 @@ final class HubEventsCalendarViewModel: ObservableObject {
         let marker = marker(for: date)
         let count = entryCount(on: date)
         let countText = count > 0 ? "일정 \(count)개" : "일정 없음"
-        return "\(accessibilityDateFormatter.string(from: date)), \(marker.accessibilityText), \(countText)"
+        let multiDayText = hasMultiDayEntry(on: date) ? ", 기간 행사 포함" : ""
+        return "\(accessibilityDateFormatter.string(from: date)), \(marker.accessibilityText), \(countText)\(multiDayText)"
     }
 
     private func selectRangeBoundary(_ date: Date) {
