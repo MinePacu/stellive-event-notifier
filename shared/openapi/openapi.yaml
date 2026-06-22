@@ -362,6 +362,125 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SongQueryError"
+  /v1/music:
+    get:
+      summary: Playlist-first music catalog list.
+      description: Cached backend music list. Route handlers read DB/cache only and do not call YouTube directly.
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [all, cover, original, other]
+            default: all
+        - name: memberId
+          in: query
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            oneOf:
+              - type: string
+              - type: integer
+            default: 30
+            maximum: 50
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [publishedAt_desc]
+            default: publishedAt_desc
+      responses:
+        "200":
+          description: Cached normalized music list.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: private, max-age=300, stale-while-revalidate=600
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicListResponse"
+        "400":
+          description: Invalid music list query.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicQueryError"
+  /v1/music/{id}:
+    get:
+      summary: Playlist-first music item detail.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cached normalized music item detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicDetailResponse"
+        "404":
+          description: Music item not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicQueryError"
+  /v1/members/{id}/music:
+    get:
+      summary: Playlist-first music list for a member.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [all, cover, original, other]
+            default: all
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            oneOf:
+              - type: string
+              - type: integer
+            default: 30
+            maximum: 50
+      responses:
+        "200":
+          description: Cached normalized member music list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicMemberMusicResponse"
+        "400":
+          description: Invalid member music query.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicQueryError"
+        "404":
+          description: Music member not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MusicQueryError"
   /v1/preferences:
     get:
       responses:
@@ -1163,6 +1282,145 @@ components:
             - unsupported_song_type_filter
             - invalid_limit
             - unknown_member
+    MusicMemberSummary:
+      type: object
+      required:
+        - id
+        - nameKo
+        - nameEn
+        - role
+      properties:
+        id:
+          type: string
+        nameKo:
+          type: string
+        nameEn:
+          type: string
+        role:
+          type: string
+          enum: [main, collaboration, group, unknown]
+    MusicCatalogItem:
+      type: object
+      required:
+        - id
+        - youtubeVideoId
+        - title
+        - type
+        - publishedAt
+        - thumbnailUrl
+        - duration
+        - members
+        - youtubeUrl
+        - sourcePlaylistId
+      properties:
+        id:
+          type: string
+        youtubeVideoId:
+          type: string
+        title:
+          type: string
+        type:
+          type: string
+          enum: [cover, original, other, unknown]
+        publishedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        thumbnailUrl:
+          type:
+            - string
+            - "null"
+          format: uri
+        duration:
+          type:
+            - string
+            - "null"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/MusicMemberSummary"
+        youtubeUrl:
+          type: string
+          format: uri
+        sourcePlaylistId:
+          type:
+            - string
+            - "null"
+    MusicListResponse:
+      type: object
+      required:
+        - items
+        - serverTime
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MusicCatalogItem"
+        nextCursor:
+          type:
+            - string
+            - "null"
+        serverTime:
+          type: string
+          format: date-time
+    MusicDetailResponse:
+      type: object
+      required:
+        - item
+        - serverTime
+      properties:
+        item:
+          $ref: "#/components/schemas/MusicCatalogItem"
+        serverTime:
+          type: string
+          format: date-time
+    MusicMemberBase:
+      type: object
+      required:
+        - id
+        - nameKo
+        - nameEn
+      properties:
+        id:
+          type: string
+        nameKo:
+          type: string
+        nameEn:
+          type: string
+    MusicMemberMusicResponse:
+      type: object
+      required:
+        - member
+        - items
+        - serverTime
+      properties:
+        member:
+          $ref: "#/components/schemas/MusicMemberBase"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MusicCatalogItem"
+        nextCursor:
+          type:
+            - string
+            - "null"
+        serverTime:
+          type: string
+          format: date-time
+    MusicQueryError:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          enum:
+            - unsupported_music_type_filter
+            - invalid_limit
+            - invalid_sort
+            - music_item_not_found
+            - music_member_not_found
     BootstrapResponse:
       type: object
       required:

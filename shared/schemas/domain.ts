@@ -124,6 +124,35 @@ export interface SongFacetSummary {
   cover: number;
 }
 
+export const musicItemTypeValues = ["cover", "original", "other", "unknown"] as const;
+export type MusicItemType = (typeof musicItemTypeValues)[number];
+
+export const musicPublicTypeFilterValues = ["all", "cover", "original", "other"] as const;
+export type MusicPublicTypeFilter = (typeof musicPublicTypeFilterValues)[number];
+
+export const musicMemberRoleValues = ["main", "collaboration", "group", "unknown"] as const;
+export type MusicMemberRole = (typeof musicMemberRoleValues)[number];
+
+export interface MusicMemberSummary {
+  id: string;
+  nameKo: string;
+  nameEn: string;
+  role: MusicMemberRole;
+}
+
+export interface MusicCatalogItem {
+  id: string;
+  youtubeVideoId: string;
+  title: string;
+  type: MusicItemType;
+  publishedAt: string | null;
+  thumbnailUrl: string | null;
+  duration: string | null;
+  members: MusicMemberSummary[];
+  youtubeUrl: string;
+  sourcePlaylistId: string | null;
+}
+
 export interface PlatformEvent {
   id: string;
   source: PlatformSource;

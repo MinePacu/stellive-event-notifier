@@ -206,6 +206,109 @@ model SongClassificationOverride {
   updatedAt      DateTime @updatedAt
 }
 
+model MusicMember {
+  id               String   @id
+  nameKo           String
+  nameEn           String
+  aliases          Json
+  youtubeChannelId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  itemLinks        MusicItemMember[]
+
+  @@index([youtubeChannelId])
+}
+
+model SourcePlaylist {
+  id                   String   @id @default(cuid(2))
+  youtubePlaylistId    String   @unique
+  title                String
+  type                 String
+  rawCategoryHint      String
+  memberId             String?
+  isActive             Boolean  @default(true)
+  lastSyncedAt         DateTime?
+  lastSuccessfulSyncAt DateTime?
+  lastSyncError        String?
+  etag                 String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  items                MusicItem[]
+
+  @@index([type, isActive])
+  @@index([memberId])
+}
+
+model MusicItem {
+  id               String   @id @default(cuid(2))
+  youtubeVideoId   String   @unique
+  title            String
+  description      String?
+  type             String
+  sourcePlaylistId String?
+  publishedAt      DateTime?
+  thumbnailUrl     String?
+  thumbnailWidth   Int?
+  thumbnailHeight  Int?
+  duration         String?
+  channelId        String?
+  channelTitle     String?
+  isPublic         Boolean  @default(true)
+  lastSeenAt       DateTime
+  missingCount     Int      @default(0)
+  playlistPosition Int?
+  rawCategoryHint  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  sourcePlaylist   SourcePlaylist? @relation(fields: [sourcePlaylistId], references: [id])
+  members          MusicItemMember[]
+
+  @@index([type])
+  @@index([publishedAt])
+  @@index([sourcePlaylistId])
+  @@index([isPublic])
+}
+
+model MusicItemMember {
+  musicItemId String
+  memberId    String
+  role        String   @default("unknown")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  musicItem   MusicItem   @relation(fields: [musicItemId], references: [id], onDelete: Cascade)
+  member      MusicMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@id([musicItemId, memberId])
+  @@index([memberId])
+  @@index([role])
+}
+
+model MusicSyncRun {
+  id               String   @id @default(cuid(2))
+  syncType         String
+  source           String
+  sourcePlaylistId String?
+  startedAt        DateTime
+  finishedAt       DateTime?
+  status           String   @default("running")
+  quotaUnits       Int      @default(0)
+  fetchedCount     Int      @default(0)
+  insertedCount    Int      @default(0)
+  updatedCount     Int      @default(0)
+  missingCount     Int      @default(0)
+  errorMessage     String?
+  metadata         Json?
+  createdAt        DateTime @default(now())
+
+  @@index([syncType, startedAt])
+  @@index([sourcePlaylistId, startedAt])
+  @@index([status])
+}
+
 model HubEvent {
   id                    String   @id @default(cuid(2))
   category              String

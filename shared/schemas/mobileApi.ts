@@ -3,6 +3,7 @@ import type {
   HubCalendarWidgetSnapshot,
   HubEventsSummary,
   LiveStatus,
+  MusicCatalogItem,
   Member,
   SongCatalogItem,
   SongFacetSummary,
@@ -64,6 +65,28 @@ export interface SongFacetsResponse {
 
 export interface SongListResponse {
   items: SongCatalogItem[];
+  nextCursor?: string | null;
+  serverTime: string;
+}
+
+export interface MusicListResponse {
+  items: MusicCatalogItem[];
+  nextCursor?: string | null;
+  serverTime: string;
+}
+
+export interface MusicDetailResponse {
+  item: MusicCatalogItem;
+  serverTime: string;
+}
+
+export interface MusicMemberMusicResponse {
+  member: {
+    id: string;
+    nameKo: string;
+    nameEn: string;
+  };
+  items: MusicCatalogItem[];
   nextCursor?: string | null;
   serverTime: string;
 }
