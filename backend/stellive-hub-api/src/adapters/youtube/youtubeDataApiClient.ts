@@ -25,7 +25,21 @@ export type YoutubeListUploadsResult =
     candidates: [];
     pagesFetched: 0;
     quotaUnits: number;
-  };
+    };
+
+export type YoutubeFetchPlaylistItemsResult =
+  | {
+      status: "ok";
+      items: YoutubeMusicPlaylistItem[];
+      pagesFetched: number;
+      quotaUnits: number;
+    }
+  | {
+      status: "quota_exceeded" | "error";
+      items: [];
+      pagesFetched: number;
+      quotaUnits: number;
+    };
 
 export interface YoutubeListUploadsInput {
   channelId: string;
@@ -34,10 +48,20 @@ export interface YoutubeListUploadsInput {
   etag?: string;
 }
 
+export interface YoutubeMusicPlaylistItem {
+  videoId: string;
+  title: string;
+  publishedAt: string;
+  position?: number;
+}
+
 export interface YoutubeVideoDetail {
   videoId: string;
   channelId?: string;
+  channelTitle?: string;
   title?: string;
+  description?: string;
+  publishedAt?: string;
   tags: string[];
   duration?: string;
   privacyStatus?: string;
@@ -68,6 +92,7 @@ interface YoutubePlaylistItem {
     title?: string;
     channelId?: string;
     publishedAt?: string;
+    position?: number;
     resourceId?: {
       videoId?: string;
     };
@@ -86,7 +111,10 @@ interface YoutubeVideoItem {
   id?: string;
   snippet?: {
     title?: string;
+    description?: string;
+    publishedAt?: string;
     channelId?: string;
+    channelTitle?: string;
     tags?: string[];
     liveBroadcastContent?: string;
     thumbnails?: Record<string, YoutubeThumbnail | undefined>;
@@ -178,6 +206,44 @@ export class YoutubeDataApiClient {
     return { status: "ok", candidates, pagesFetched, quotaUnits, etag, nextPageToken: pageToken };
   }
 
+  async fetchPlaylistItems(playlistId: string): Promise<YoutubeFetchPlaylistItemsResult> {
+    const items: YoutubeMusicPlaylistItem[] = [];
+    let pageToken: string | undefined;
+    let pagesFetched = 0;
+    let quotaUnits = 0;
+
+    do {
+      const url = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
+      url.searchParams.set("part", "snippet,contentDetails");
+      url.searchParams.set("playlistId", playlistId);
+      url.searchParams.set("maxResults", "50");
+      url.searchParams.set("key", this.options.apiKey);
+      if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+      quotaUnits += 1;
+      const response = await this.fetchImpl(url.toString());
+      const body = await response.json() as YoutubeListWrapper<YoutubePlaylistItem>;
+      if (!response.ok) {
+        return {
+          status: response.status === 403 ? "quota_exceeded" : "error",
+          items: [],
+          pagesFetched,
+          quotaUnits,
+        };
+      }
+
+      pagesFetched += 1;
+      items.push(...(body.items ?? []).flatMap((item) => this.toMusicPlaylistItem(item)));
+      pageToken = body.nextPageToken;
+    } while (pageToken);
+
+    return { status: "ok", items, pagesFetched, quotaUnits };
+  }
+
+  async fetchVideos(videoIds: string[]): Promise<YoutubeVideoDetail[]> {
+    return this.getVideoDetails(videoIds);
+  }
+
   async getVideoDetails(videoIds: string[]): Promise<YoutubeVideoDetail[]> {
     const details: YoutubeVideoDetail[] = [];
     for (const ids of chunk(videoIds, 50)) {
@@ -214,13 +280,27 @@ export class YoutubeDataApiClient {
     }];
   }
 
+  private toMusicPlaylistItem(item: YoutubePlaylistItem): YoutubeMusicPlaylistItem[] {
+    const videoId = item.contentDetails?.videoId ?? item.snippet?.resourceId?.videoId;
+    if (!videoId) return [];
+    return [{
+      videoId,
+      title: item.snippet?.title ?? "",
+      publishedAt: normalizeDate(item.contentDetails?.videoPublishedAt ?? item.snippet?.publishedAt),
+      position: item.snippet?.position,
+    }];
+  }
+
   private toVideoDetail(item: YoutubeVideoItem): YoutubeVideoDetail[] {
     if (!item.id) return [];
     const thumbnail = pickThumbnail(item.snippet?.thumbnails);
     return [{
       videoId: item.id,
       channelId: item.snippet?.channelId,
+      channelTitle: item.snippet?.channelTitle,
       title: item.snippet?.title,
+      description: item.snippet?.description,
+      publishedAt: item.snippet?.publishedAt ? normalizeDate(item.snippet.publishedAt) : undefined,
       tags: item.snippet?.tags ?? [],
       duration: item.contentDetails?.duration,
       privacyStatus: item.status?.privacyStatus,
