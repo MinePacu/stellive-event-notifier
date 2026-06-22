@@ -206,13 +206,17 @@ export class YoutubeDataApiClient {
     return { status: "ok", candidates, pagesFetched, quotaUnits, etag, nextPageToken: pageToken };
   }
 
-  async fetchPlaylistItems(playlistId: string): Promise<YoutubeFetchPlaylistItemsResult> {
+  async fetchPlaylistItems(
+    playlistId: string,
+    options: { maxPages?: number } = {},
+  ): Promise<YoutubeFetchPlaylistItemsResult> {
     const items: YoutubeMusicPlaylistItem[] = [];
     let pageToken: string | undefined;
     let pagesFetched = 0;
     let quotaUnits = 0;
+    const maxPages = options.maxPages ? Math.max(1, Math.trunc(options.maxPages)) : Number.POSITIVE_INFINITY;
 
-    do {
+    while (pagesFetched < maxPages) {
       const url = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
       url.searchParams.set("part", "snippet,contentDetails");
       url.searchParams.set("playlistId", playlistId);
@@ -235,7 +239,8 @@ export class YoutubeDataApiClient {
       pagesFetched += 1;
       items.push(...(body.items ?? []).flatMap((item) => this.toMusicPlaylistItem(item)));
       pageToken = body.nextPageToken;
-    } while (pageToken);
+      if (!pageToken) break;
+    }
 
     return { status: "ok", items, pagesFetched, quotaUnits };
   }

@@ -71,6 +71,23 @@ describe("YoutubeDataApiClient music playlist methods", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("caps playlist pagination when maxPages is provided", async () => {
+    const fetchImpl = vi.fn(async (_input: string | URL | Request, _init?: RequestInit): Promise<Response> =>
+      jsonResponse({
+        kind: "youtube#playlistItemListResponse",
+        nextPageToken: "page-2",
+        items: [{ contentDetails: { videoId: "video-1" }, snippet: { title: "cover one" } }],
+      }));
+    const client = new YoutubeDataApiClient({ apiKey: "test-key", fetch: fetchImpl });
+
+    await expect(client.fetchPlaylistItems("PLmusic", { maxPages: 1 })).resolves.toMatchObject({
+      status: "ok",
+      pagesFetched: 1,
+      quotaUnits: 1,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("fetches video details in 50-id chunks", async () => {
     const fetchImpl = vi
       .fn(async (_input: string | URL | Request, _init?: RequestInit): Promise<Response> => jsonResponse({}))
