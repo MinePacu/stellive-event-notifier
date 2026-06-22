@@ -96,6 +96,14 @@ export interface InternalRouteDependencies {
       failed: number;
     }>;
   };
+  musicSync?: {
+    syncAllMusic(mode: "light" | "full" | "daily" | "manual"): MaybePromise<{
+      status: string;
+      sourceCount?: number;
+      failedCount?: number;
+      quotaUnits?: number;
+    }>;
+  };
   chzzkLiveAdapter?: {
     pollLiveStatuses(): MaybePromise<ChzzkLiveAdapterCounts>;
   };
@@ -162,6 +170,18 @@ function hasOnlyNotificationDrainFields(body: unknown): boolean {
   if (body === undefined || body === null) return true;
   if (typeof body !== "object" || Array.isArray(body)) return false;
   return Object.keys(body).every((key) => key === "limit");
+}
+
+function parseMusicSyncBody(body: unknown): { ok: true; mode: "light" | "full" | "manual" } | { ok: false } {
+  if (body === undefined || body === null) return { ok: true, mode: "manual" };
+  if (typeof body !== "object" || Array.isArray(body)) return { ok: false };
+  const input = body as { mode?: unknown };
+  if (!Object.keys(input).every((key) => key === "mode")) return { ok: false };
+  if (input.mode === undefined) return { ok: true, mode: "manual" };
+  if (input.mode === "light" || input.mode === "full" || input.mode === "manual") {
+    return { ok: true, mode: input.mode };
+  }
+  return { ok: false };
 }
 
 function readAuthorizationHeader(value: string | string[] | undefined): string | undefined {
@@ -300,6 +320,16 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
     }
 
     return dependencies.youtubeSongBackfillScheduler.reconcile();
+  });
+
+  app.post("/v1/internal/schedulers/music/sync", async (request, reply) => {
+    const parsed = parseMusicSyncBody(request.body);
+    if (!parsed.ok) return reply.code(400).send({ error: "music_sync_body_invalid" });
+    if (!dependencies.musicSync) {
+      return { status: "disabled", reason: "music_sync_not_configured" };
+    }
+    const result = await dependencies.musicSync.syncAllMusic(parsed.mode);
+    return { ok: true, ...result };
   });
 
   app.post("/v1/internal/schedulers/chzzk/live-status", async () => {
