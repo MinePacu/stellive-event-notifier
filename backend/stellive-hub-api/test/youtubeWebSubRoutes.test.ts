@@ -99,12 +99,42 @@ describe("registerWebhookRoutes", () => {
 
     expect(response.statusCode).toBe(202);
     expect(response.json()).toEqual({ received: 1, ingested: 1, skipped: 0 });
-    expect(ingestYoutubeUpload).toHaveBeenCalledWith(
-      expect.objectContaining({
-        videoId: "abc123",
-        channelId: "UC123",
-        title: "Song upload",
-      }),
-    );
+  expect(ingestYoutubeUpload).toHaveBeenCalledWith(
+    expect.objectContaining({
+      videoId: "abc123",
+      channelId: "UC123",
+      title: "Song upload",
+    }),
+  );
+});
+
+it("passes WebSub video notifications to optional music hook without classifying uploads inline", async () => {
+  const app = Fastify();
+  const musicNotification = { handleYoutubeUpload: vi.fn(async () => undefined) };
+  const ingestYoutubeUpload = vi.fn(async () => ({ ingested: true as const, songId: "song-1" }));
+  await registerWebhookRoutes(app, {
+    env: routeEnv,
+    subscriptions: { upsertSubscription: async () => undefined },
+    songIngestion: { ingestYoutubeUpload },
+    musicNotification,
   });
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/webhooks/youtube",
+    headers: { "content-type": "application/atom+xml" },
+    payload: sampleAtom,
+  });
+  await app.close();
+
+  expect(response.statusCode).toBe(202);
+  expect(musicNotification.handleYoutubeUpload).toHaveBeenCalledWith({
+    videoId: "abc123",
+    channelId: "UC123",
+    title: "Song upload",
+    sourceUrl: "https://www.youtube.com/watch?v=abc123",
+    publishedAt: "2026-06-22T10:00:00.000Z",
+    updatedAt: "2026-06-22T10:01:00.000Z",
+  });
+  expect(ingestYoutubeUpload).toHaveBeenCalledTimes(1);
+});
 });

@@ -27,10 +27,22 @@ interface YoutubeWebhookSongIngestionPort {
   }): Promise<SongIngestionResult>;
 }
 
+interface YoutubeWebhookMusicNotificationPort {
+  handleYoutubeUpload(candidate: {
+    videoId: string;
+    channelId: string;
+    title: string;
+    sourceUrl: string;
+    publishedAt: string;
+    updatedAt: string;
+  }): Promise<void>;
+}
+
 export interface WebhookRouteOptions {
   env: AppEnv;
   subscriptions: YoutubeWebhookSubscriptionPort;
   songIngestion: YoutubeWebhookSongIngestionPort;
+  musicNotification?: YoutubeWebhookMusicNotificationPort;
   now?: () => Date;
 }
 
@@ -112,11 +124,12 @@ export async function registerWebhookRoutes(app: FastifyInstance, options: Webho
 
     let ingested = 0;
     let skipped = 0;
-    for (const entry of parsed.entries) {
-      const result = await options.songIngestion.ingestYoutubeUpload(entry);
-      if (result.ingested) ingested += 1;
-      else skipped += 1;
-    }
+  for (const entry of parsed.entries) {
+    const result = await options.songIngestion.ingestYoutubeUpload(entry);
+    await options.musicNotification?.handleYoutubeUpload(entry);
+    if (result.ingested) ingested += 1;
+    else skipped += 1;
+  }
 
     return reply.code(202).send({
       received: parsed.entries.length,
