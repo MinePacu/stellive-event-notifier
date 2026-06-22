@@ -10,6 +10,7 @@ import { RealtimeDeliveryService } from "../realtime/realtimeDeliveryService.js"
 import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
 import { registerAppRoutes } from "./appRoutes.js";
 import registerHubEventReadRoutes from "./hubEventReadRoutes.js";
+import registerMusicRoutes from "./musicRoutes.js";
 import registerSongRoutes from "./songRoutes.js";
 import type { DeliveryAttempt, HubCalendarSpecialDay, PlatformEvent, UserNotificationPreference } from "../types.js";
 import type { BootstrapResponse, MobilePlatform } from "../../../../shared/schemas/mobileApi.js";
@@ -215,6 +216,9 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
 
   await registerSongRoutes(app, {
     dependencies: { songs: options.dependencies?.songs },
+  });
+  await registerMusicRoutes(app, {
+    registerMembersListRoute: false,
   });
 
   app.get("/v1/realtime/status", async () => realtime.status());
