@@ -23,9 +23,12 @@ import { createFcmClient } from "./push/fcmClient.js";
 import { FcmPushSender } from "./push/pushSender.js";
 import { DeliveryAttemptRepository } from "./repositories/deliveryAttemptRepository.js";
 import DeviceRepository from "./repositories/deviceRepository.js";
+import { PrismaMusicRepository, PrismaMusicSyncRunRepository } from "./repositories/musicRepository.js";
 import PlatformEventRepository from "./repositories/platformEventRepository.js";
 import PreferenceRepository from "./repositories/preferenceRepository.js";
 import { PrismaSongRepository } from "./repositories/songRepository.js";
+import { InMemoryMusicSyncLock } from "./music/musicLocks.js";
+import { MusicSyncService } from "./music/musicSyncService.js";
 import { WebhookSubscriptionRepository } from "./repositories/webhookSubscriptionRepository.js";
 import SongIngestionService from "./songs/songIngestionService.js";
 import SongBackfillService from "./songs/songBackfillService.js";
@@ -199,6 +202,39 @@ function createDefaultYoutubeSongBackfillScheduler(
   };
 }
 
+function createDefaultMusicSyncService(
+  env: AppEnv,
+  dependencies: Partial<InternalRouteDependencies> | undefined,
+  fetchImpl?: typeof fetch,
+): Pick<InternalRouteDependencies, "musicSync"> {
+  if (dependencies?.musicSync) return {};
+  if (!env.MUSIC_SYNC_ENABLED || !env.YOUTUBE_API_KEY) return {};
+  const catalog = new CatalogService();
+  const members = catalog.getMembers().map((member) => ({
+    id: member.id,
+    aliases: [
+      member.koreanName,
+      member.englishName,
+      member.platforms?.youtubeHandle,
+      member.platforms?.youtubeChannelId,
+    ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+  }));
+  const service = new MusicSyncService({
+    repository: new PrismaMusicRepository() as never,
+    syncRuns: new PrismaMusicSyncRunRepository(),
+    youtube: new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl }),
+    locks: new InMemoryMusicSyncLock(),
+    members,
+    lightMaxPages: env.MUSIC_LIGHT_SYNC_MAX_PAGES,
+    lockTtlMs: env.MUSIC_SYNC_LOCK_SECONDS * 1_000,
+  });
+  return {
+    musicSync: {
+      syncAllMusic: (mode) => service.syncAllMusic(mode === "light" ? "light" : "full"),
+    },
+  };
+}
+
 function hasChzzkStateRepository(value: unknown): value is Pick<PlatformApiStateRepository, "getState" | "upsertState" | "upsertAdapterHealth"> {
   return (
     typeof value === "object" &&
@@ -322,6 +358,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ...createDefaultChzzkLiveAdapter(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
       ...createDefaultYoutubeSubscriptionScheduler(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
       ...createDefaultYoutubeSongBackfillScheduler(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
+      ...createDefaultMusicSyncService(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
       ...options.internalRoutes.dependencies
     }
     : {
@@ -329,6 +366,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch),
       ...createDefaultYoutubeSubscriptionScheduler(env, undefined, options.chzzkLiveApiFetch),
       ...createDefaultYoutubeSongBackfillScheduler(env, undefined, options.chzzkLiveApiFetch),
+      ...createDefaultMusicSyncService(env, undefined, options.chzzkLiveApiFetch),
     };
   await registerInternalRoutes(app, { env, dependencies: internalRouteDependencies });
   await registerAdminRoutes(app, { env });

@@ -55,12 +55,22 @@ export interface MarkMissingFromSourceInput {
   missingCheckedAt: Date;
 }
 
+export interface MusicSourcePlaylistRecord {
+  id: string;
+  youtubePlaylistId: string;
+  title: string;
+  type: "cover" | "original" | "other";
+  rawCategoryHint: "COVER" | "SINGLE" | "EP" | "OTHERS";
+  memberId?: string | null;
+}
+
 export interface MusicRepositoryDelegate {
   musicMember?: {
     upsert(args: unknown): Promise<unknown>;
   };
   sourcePlaylist?: {
     upsert(args: unknown): Promise<unknown>;
+    findMany?(args: unknown): Promise<MusicSourcePlaylistRecord[]>;
   };
   musicItem?: {
     upsert?(args: unknown): Promise<unknown>;
@@ -143,6 +153,13 @@ export class PrismaMusicRepository {
       where: { youtubePlaylistId: input.youtubePlaylistId },
       create: input,
       update: input,
+    });
+  }
+
+  async listActiveSourcePlaylists(): Promise<MusicSourcePlaylistRecord[]> {
+    return this.prisma.sourcePlaylist!.findMany!({
+      where: { isActive: true },
+      orderBy: [{ type: "asc" }, { title: "asc" }],
     });
   }
 

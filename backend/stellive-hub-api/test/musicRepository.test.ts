@@ -176,6 +176,36 @@ describe("PrismaMusicRepository", () => {
       },
     });
   });
+
+  it("lists active source playlists for sync wiring", async () => {
+    const prisma = {
+      sourcePlaylist: {
+        upsert: vi.fn(),
+        findMany: vi.fn(async () => [{
+          id: "source-1",
+          youtubePlaylistId: "PL_COVER",
+          title: "COVER",
+          type: "cover" as const,
+          rawCategoryHint: "COVER" as const,
+          memberId: "ayatsuno-yuni",
+        }]),
+      },
+    };
+    const repository = new PrismaMusicRepository(prisma);
+
+    await expect(repository.listActiveSourcePlaylists()).resolves.toEqual([{
+      id: "source-1",
+      youtubePlaylistId: "PL_COVER",
+      title: "COVER",
+      type: "cover",
+      rawCategoryHint: "COVER",
+      memberId: "ayatsuno-yuni",
+    }]);
+    expect(prisma.sourcePlaylist.findMany).toHaveBeenCalledWith({
+      where: { isActive: true },
+      orderBy: [{ type: "asc" }, { title: "asc" }],
+    });
+  });
 });
 
 describe("PrismaMusicSyncRunRepository", () => {
