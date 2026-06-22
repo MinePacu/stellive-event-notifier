@@ -100,6 +100,48 @@ Naver Cafe automatic collection is deferred for the MVP. Do not collect private 
 
 If Naver Cafe support returns, use only Naver Search API `cafearticle` public search results or another clearly allowed official path. Treat it as standard best-effort delivery, not realtime.
 
+## YouTube Music Sync
+
+Stellive music sync uses YouTube Data API v3 from the backend only. Mobile clients must call `/v1/music` and related backend routes; they must not receive or use `YOUTUBE_API_KEY`.
+
+Default sync calls:
+
+- `playlistItems.list` with `part=snippet,contentDetails`, `maxResults=50`, `nextPageToken` pagination.
+- `videos.list` with `part=snippet,contentDetails,status` in 50-id chunks when details are needed.
+- `search.list` is not part of the default sync path because its quota cost is high.
+
+Environment variables:
+
+```env
+YOUTUBE_API_KEY=
+YOUTUBE_API_BASE_URL=https://www.googleapis.com/youtube/v3
+MUSIC_SYNC_ENABLED=false
+MUSIC_CACHE_TTL_SECONDS=600
+MUSIC_CACHE_STALE_SECONDS=600
+MUSIC_SYNC_LOCK_SECONDS=30
+LIGHT_SYNC_INTERVAL_MINUTES=10
+FULL_SYNC_INTERVAL_MINUTES=60
+DAILY_RECONCILE_CRON=0 4 * * *
+MUSIC_LIGHT_SYNC_MAX_PAGES=2
+```
+
+Manual trigger:
+
+```bash
+curl -H "Authorization: Bearer <INTERNAL_API_TOKEN>" \
+  -H "content-type: application/json" \
+  -d '{"mode":"light"}' \
+  http://localhost:4000/v1/internal/schedulers/music/sync
+```
+
+Quota estimate:
+
+```text
+daily quota ≈ source_playlist count × fetched page count × daily sync runs
+```
+
+Keep source playlist IDs in DB/admin seed configuration. Do not guess playlist IDs in code, and do not persist raw YouTube payloads.
+
 ## Firebase
 
 Use FCM for Android and iOS push delivery. iOS APNs is connected through Firebase initially. Keep service account credentials in environment variables or secret stores only.

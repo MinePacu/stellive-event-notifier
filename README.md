@@ -103,6 +103,40 @@ npm run prisma:migrate
 
 Admin 및 internal API는 token/session 보호 경로입니다. Production credential은 반드시 환경 변수나 secret manager로만 주입합니다.
 
+## 스텔라이브 음악 API / YouTube 동기화
+
+`GET /v1/music`, `GET /v1/music/:id`, `GET /v1/members/:id/music`는 서버 캐시/DB 기반으로 커버곡과 오리지널곡 목록을 제공합니다. 클라이언트는 YouTube API를 직접 호출하지 않으며 `YOUTUBE_API_KEY`는 서버 환경 변수로만 사용합니다.
+
+동기화 MVP는 공식/관리자 정의 `source_playlists`를 기준으로 `playlistItems.list`와 필요 시 `videos.list`만 사용합니다. 기본 로직에서 `search.list`는 사용하지 않습니다. 수동 동기화는 `POST /v1/internal/schedulers/music/sync`를 `INTERNAL_API_TOKEN`으로 보호해 호출합니다.
+
+주요 환경 변수:
+
+```env
+YOUTUBE_API_KEY=
+YOUTUBE_API_BASE_URL=https://www.googleapis.com/youtube/v3
+MUSIC_SYNC_ENABLED=false
+MUSIC_CACHE_TTL_SECONDS=600
+MUSIC_CACHE_STALE_SECONDS=600
+MUSIC_SYNC_LOCK_SECONDS=30
+LIGHT_SYNC_INTERVAL_MINUTES=10
+FULL_SYNC_INTERVAL_MINUTES=60
+DAILY_RECONCILE_CRON=0 4 * * *
+MUSIC_LIGHT_SYNC_MAX_PAGES=2
+```
+
+캐시 정책은 API 응답 fresh TTL 5~10분, stale-while-revalidate, per-key refresh coalescing을 기본으로 합니다. quota 추정은 `source_playlist 수 × 페이지 수 × 동기화 횟수`를 기준으로 보고, 현재 MVP 규모에서는 YouTube 기본 quota 10,000 units/day 안에 여유가 있도록 설계했습니다.
+
+예시:
+
+```bash
+curl -H "Authorization: Bearer <INTERNAL_API_TOKEN>" \
+  -H "content-type: application/json" \
+  -d '{"mode":"full"}' \
+  http://localhost:4000/v1/internal/schedulers/music/sync
+```
+
+Admin/internal 토큰과 YouTube API key는 문서, 커밋, 로그에 기록하지 않습니다.
+
 ## Android
 
 ```bash

@@ -1,5 +1,49 @@
 # AI Handoff
 
+## Stellive Music YouTube Sync MVP Status
+
+Implemented backend MVP for Stellive music catalog sync and public read APIs.
+
+Implemented:
+- Shared music DTO/type contracts and OpenAPI music route schemas.
+- Prisma models for `MusicMember`, `SourcePlaylist`, `MusicItem`, `MusicItemMember`, and `MusicSyncRun`.
+- Repository ports for music members, source playlists, music items, member links, missing marking, and sync run lifecycle.
+- 10 active target member allowlist; `gangzi`, `stellive-official`, `gen4-placeholder`, and Former members excluded.
+- Backend-only YouTube Data API client methods for `playlistItems.list` pagination and `videos.list` 50-id chunking.
+- Source-playlist-first classification and alias-based N:M member matching.
+- Light/full music sync service with per-source locks, quota failure handling, conservative missing marking, and source-level failure isolation.
+- Memory response cache with stale-while-revalidate and per-key stampede prevention.
+- Public cached routes: `GET /v1/music`, `GET /v1/music/:id`, `GET /v1/members/:id/music`.
+- Protected manual sync route: `POST /v1/internal/schedulers/music/sync`.
+- Music env defaults in `env.ts` and `.env.example`; sync dependency created only when `MUSIC_SYNC_ENABLED=true` and `YOUTUBE_API_KEY` exists.
+- Reconciliation service for future official MUSIC source comparison and optional WebSub music notification hook.
+
+Policy notes:
+- Clients must never call YouTube directly or receive `YOUTUBE_API_KEY`.
+- Default sync does not use `search.list`.
+- Source playlist IDs are not guessed in code; configure through DB/admin seed.
+- Raw YouTube payloads, image binaries, official logos, fan art, production tokens, and credentials were not added.
+- Public API reads DB/cache only; user requests do not call YouTube.
+
+Focused verification run:
+- `rtk npm test -- musicContract musicRepository`
+- `rtk npm test -- musicSourcePlaylists`
+- `rtk npm test -- musicYoutubeDataApiClient youtubeDataApiClient`
+- `rtk npm test -- musicClassifier musicMemberMatcher`
+- `rtk npm test -- musicSyncService musicRepository`
+- `rtk npm test -- responseCache`
+- `rtk npm test -- musicRoutes`
+- `rtk npm test -- musicInternalRoutes adminInternalRoutes`
+- `rtk npm test -- musicAppWiring musicRepository musicInternalRoutes musicRoutes chzzkAuthRoutes`
+- `rtk npm test -- musicReconciliationService youtubeWebSubRoutes`
+- `rtk npm run build`
+
+Follow-ups:
+- Apply Prisma migration/db push before enabling `MUSIC_SYNC_ENABLED` against a real database.
+- Insert real `source_playlists.youtubePlaylistId` values through admin/DB configuration after verification; do not hardcode guessed IDs.
+- Add scheduler/cron process wrappers for 10-minute light sync, hourly full sync, and daily reconciliation when deployment scheduler choice is finalized.
+- Wire optional WebSub music notification hook to enqueue targeted light sync once a durable queue exists.
+
 ## Song Page YouTube WebSub Status
 
 - Song-page backend now exposes `GET /v1/webhooks/youtube` for WebSub verification and `POST /v1/webhooks/youtube` for Atom upload receipt through `backend/stellive-hub-api/src/routes/webhookRoutes.ts`.

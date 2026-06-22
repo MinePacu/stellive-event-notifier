@@ -115,6 +115,30 @@ This file maps the repository files that are not excluded by `.gitignore`. Ignor
 
 ## Backend: `backend/stellive-hub-api`
 
+### Backend Music Sync Additions
+- `backend/stellive-hub-api/src/cache/responseCache.ts` - Response cache with memory fallback, stale-while-revalidate, and per-key load coalescing.
+- `backend/stellive-hub-api/src/music/musicClassifier.ts` - Source-playlist-first music type classification helpers.
+- `backend/stellive-hub-api/src/music/musicDto.ts` - Public music DTO mapper that avoids raw payload/secret/local file leakage.
+- `backend/stellive-hub-api/src/music/musicLocks.ts` - Per-source music sync lock abstraction and in-memory implementation.
+- `backend/stellive-hub-api/src/music/musicMemberMatcher.ts` - Alias-based N:M music item/member matcher.
+- `backend/stellive-hub-api/src/music/musicReconciliationService.ts` - Daily reconciliation diagnostics for official-source comparison.
+- `backend/stellive-hub-api/src/music/musicSourcePlaylists.ts` - 10-member allowlist and official MUSIC source playlist seed policy.
+- `backend/stellive-hub-api/src/music/musicSyncService.ts` - Light/full playlist sync service using backend-only YouTube Data API ports.
+- `backend/stellive-hub-api/src/repositories/musicRepository.ts` - Music member/source playlist/item repositories and sync run repository.
+- `backend/stellive-hub-api/src/repositories/musicSyncRunRepository.ts` - Music sync run repository re-export boundary.
+- `backend/stellive-hub-api/src/routes/musicRoutes.ts` - Public cached `/v1/music` and member music routes.
+- `backend/stellive-hub-api/test/musicAppWiring.test.ts` - Focused env/app wiring tests for music sync.
+- `backend/stellive-hub-api/test/musicClassifier.test.ts` - Music classification tests.
+- `backend/stellive-hub-api/test/musicContract.test.ts` - Shared music DTO/contract leakage tests.
+- `backend/stellive-hub-api/test/musicInternalRoutes.test.ts` - Protected manual music sync route tests.
+- `backend/stellive-hub-api/test/musicMemberMatcher.test.ts` - Music member alias matching tests.
+- `backend/stellive-hub-api/test/musicReconciliationService.test.ts` - Music reconciliation diagnostics tests.
+- `backend/stellive-hub-api/test/musicRepository.test.ts` - Music repository tests.
+- `backend/stellive-hub-api/test/musicRoutes.test.ts` - Public music route/cache tests.
+- `backend/stellive-hub-api/test/musicSourcePlaylists.test.ts` - Music source seed policy tests.
+- `backend/stellive-hub-api/test/musicSyncService.test.ts` - Light/full sync service and lock tests.
+- `backend/stellive-hub-api/test/musicYoutubeDataApiClient.test.ts` - YouTube playlist/video client music sync tests.
+
 ### Backend Project Files
 
 - `backend/stellive-hub-api/.env.example` - Non-secret environment variable template for backend configuration.
