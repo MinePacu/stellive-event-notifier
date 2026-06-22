@@ -10,8 +10,10 @@ import { RealtimeDeliveryService } from "../realtime/realtimeDeliveryService.js"
 import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
 import { registerAppRoutes } from "./appRoutes.js";
 import registerHubEventReadRoutes from "./hubEventReadRoutes.js";
+import registerSongRoutes from "./songRoutes.js";
 import type { DeliveryAttempt, HubCalendarSpecialDay, PlatformEvent, UserNotificationPreference } from "../types.js";
 import type { BootstrapResponse, MobilePlatform } from "../../../../shared/schemas/mobileApi.js";
+import type { SongRepository } from "../repositories/songRepository.js";
 
 const catalog = new CatalogService();
 const defaultHubEvents = new HubEventService(catalog);
@@ -23,6 +25,7 @@ const devDeviceId = "dev-device";
 
 export interface AppRouteDependencies {
   hubEvents?: HubEventReadPort;
+  songs?: SongRepository;
   hubCalendarSpecialDays?: HubCalendarSpecialDay[];
   hubCalendarSpecialDayOccurrences?: {
     listRange(filters: {
@@ -208,6 +211,10 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
     hubEvents,
     hubCalendarSpecialDays: options.dependencies?.hubCalendarSpecialDays ?? productionHubCalendarSpecialDays,
     hubCalendarSpecialDayOccurrences: options.dependencies?.hubCalendarSpecialDayOccurrences
+  });
+
+  await registerSongRoutes(app, {
+    dependencies: { songs: options.dependencies?.songs },
   });
 
   app.get("/v1/realtime/status", async () => realtime.status());

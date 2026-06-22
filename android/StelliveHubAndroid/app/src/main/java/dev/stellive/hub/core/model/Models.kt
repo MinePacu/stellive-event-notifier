@@ -8,6 +8,16 @@ enum class DeliveryMode { STANDARD, REALTIME_BEST_EFFORT }
 enum class TapAction { OPEN_APP, OPEN_PLATFORM }
 enum class AppearanceMode { SYSTEM, LIGHT, DARK }
 
+enum class SongType(val apiValue: String, val displayName: String) {
+    ORIGINAL("original", "오리지널"),
+    COVER("cover", "커버");
+
+    companion object {
+        fun fromApiValue(value: String): SongType? =
+            entries.firstOrNull { it.apiValue == value }
+    }
+}
+
 enum class NotificationPlatform(val displayName: String) {
     CHZZK("CHZZK"),
     YOUTUBE("YouTube"),
@@ -221,6 +231,51 @@ data class HubCalendarWidgetSnapshot(
     val timezone: String,
     val entries: List<HubCalendarEntry>,
     val staleAfter: Instant
+)
+
+data class SongThumbnail(
+    val url: String,
+    val width: Int,
+    val height: Int,
+)
+
+data class SongCatalogItem(
+    val id: String,
+    val youtubeVideoId: String,
+    val title: String,
+    val memberId: String,
+    val memberName: String,
+    val generationId: String,
+    val generationName: String,
+    val type: SongType,
+    val sourceUrl: String,
+    val thumbnail: SongThumbnail? = null,
+    val publishedAt: Instant,
+)
+
+data class SongFilterCount(
+    val id: String,
+    val label: String,
+    val generationId: String? = null,
+    val count: Int,
+)
+
+data class SongFacetSummary(
+    val total: Int,
+    val original: Int,
+    val cover: Int,
+)
+
+data class SongFacets(
+    val summary: SongFacetSummary,
+    val generationFilters: List<SongFilterCount>,
+    val memberFilters: List<SongFilterCount>,
+    val typeFilters: List<SongFilterCount>,
+)
+
+data class SongListResult(
+    val items: List<SongCatalogItem>,
+    val nextCursor: String? = null,
 )
 
 data class GenerationFilter(

@@ -83,6 +83,47 @@ export interface Generation {
   notificationDefaultEnabled: boolean;
 }
 
+export const songTypeValues = ["original", "cover", "unknown"] as const;
+export type SongType = (typeof songTypeValues)[number];
+
+export const songGenerationFilterValues = ["all", "gen1", "gen2", "gen3"] as const;
+export type SongGenerationFilterId = (typeof songGenerationFilterValues)[number];
+export type SongCatalogGenerationId = Exclude<SongGenerationFilterId, "all">;
+export type MobileSongType = Exclude<SongType, "unknown">;
+
+export interface SongThumbnail {
+  url: string;
+  width: number;
+  height: number;
+}
+
+export interface SongCatalogItem {
+  id: string;
+  youtubeVideoId: string;
+  title: string;
+  memberId: string;
+  memberName: string;
+  generationId: SongCatalogGenerationId;
+  generationName: string;
+  type: MobileSongType;
+  sourceUrl: string;
+  thumbnail?: SongThumbnail;
+  publishedAt: string;
+}
+
+export interface SongFilterCount {
+  id: string;
+  label: string;
+  generationId?: SongGenerationFilterId;
+  count: number;
+}
+
+export interface SongFacetSummary {
+  total: number;
+  original: number;
+  cover: number;
+}
+
 export interface PlatformEvent {
   id: string;
   source: PlatformSource;

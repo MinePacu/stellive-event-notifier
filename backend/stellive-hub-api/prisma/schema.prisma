@@ -148,6 +148,64 @@ model WebhookSubscription {
   @@index([source, status])
 }
 
+model YoutubeChannelState {
+  id                      String   @id @default(cuid(2))
+  memberId                String
+  channelId               String   @unique
+  topicUrl                String?
+  status                  String
+  subscribedAt            DateTime?
+  expiresAt               DateTime?
+  lastRenewAttemptAt      DateTime?
+  lastSuccessfulReceiptAt DateTime?
+  etag                    String?
+  newestVideoId           String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([memberId])
+  @@index([status, expiresAt])
+}
+
+model Song {
+  id                       String   @id @default(cuid(2))
+  youtubeVideoId           String
+  youtubeChannelId         String
+  dedupeKey                 String   @unique
+  title                    String
+  memberId                 String
+  memberName               String
+  generationId             String
+  generationName           String
+  songType                 String
+  classificationConfidence Float?
+  sourceUrl                String
+  thumbnailUrl             String?
+  thumbnailWidth           Int?
+  thumbnailHeight          Int?
+  duration                 String?
+  privacyStatus            String?
+  publishedAt              DateTime
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([youtubeVideoId])
+  @@index([youtubeChannelId])
+  @@index([generationId])
+  @@index([memberId])
+  @@index([songType])
+  @@index([publishedAt])
+}
+
+model SongClassificationOverride {
+  id             String   @id @default(cuid(2))
+  youtubeVideoId String   @unique
+  songType       String
+  reason         String
+  updatedBy      String?
+  updatedAt      DateTime @updatedAt
+}
+
 model HubEvent {
   id                    String   @id @default(cuid(2))
   category              String

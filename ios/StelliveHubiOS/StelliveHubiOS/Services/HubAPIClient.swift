@@ -287,6 +287,42 @@ final class HubAPIClient {
         try await send(URLRequest(url: baseURL.appendingPathComponent("v1/hub-events/\(id)")), responseType: HubEventResponse.self)
     }
 
+    func songs(
+        generationId: String? = nil,
+        memberId: String? = nil,
+        type: String? = nil,
+        q: String? = nil,
+        cursor: String? = nil,
+        limit: Int? = nil
+    ) async throws -> SongListResponse {
+        var components = URLComponents(url: baseURL.appendingPathComponent("v1/songs"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "generationId", value: generationId),
+            URLQueryItem(name: "memberId", value: memberId),
+            URLQueryItem(name: "type", value: type),
+            URLQueryItem(name: "q", value: q),
+            URLQueryItem(name: "cursor", value: cursor),
+            URLQueryItem(name: "limit", value: limit.map(String.init))
+        ].filter { $0.value != nil }
+        return try await send(URLRequest(url: components.url!), responseType: SongListResponse.self)
+    }
+
+    func songFacets(
+        generationId: String? = nil,
+        memberId: String? = nil,
+        type: String? = nil,
+        q: String? = nil
+    ) async throws -> SongFacetsResponse {
+        var components = URLComponents(url: baseURL.appendingPathComponent("v1/songs/facets"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "generationId", value: generationId),
+            URLQueryItem(name: "memberId", value: memberId),
+            URLQueryItem(name: "type", value: type),
+            URLQueryItem(name: "q", value: q)
+        ].filter { $0.value != nil }
+        return try await send(URLRequest(url: components.url!), responseType: SongFacetsResponse.self)
+    }
+
     func registerDevice(_ request: RegisterDeviceRequest) async throws -> RegisterDeviceResponse {
         try await sendJSON(path: "v1/devices/register", method: "POST", body: request, responseType: RegisterDeviceResponse.self)
     }

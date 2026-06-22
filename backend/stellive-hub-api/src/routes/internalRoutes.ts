@@ -64,6 +64,38 @@ export interface InternalRouteDependencies {
   notificationWorker?: {
     drain(input: NotificationWorkerDrainInput): MaybePromise<NotificationWorkerDrainResult>;
   };
+  youtubeSubscriptionScheduler?: {
+    renewSubscriptions(): MaybePromise<{
+      status: "ok" | "partial_failure";
+      renewed: number;
+      failed: number;
+      skipped: number;
+    }>;
+  };
+  youtubeSongBackfillScheduler?: {
+    backfill(): MaybePromise<{
+      status: "ok";
+      checkedChannels: number;
+      skippedChannels: number;
+      pagesFetched: number;
+      quotaUnits: number;
+      ingested: number;
+      skipped: number;
+      notModified: number;
+      failed: number;
+    }>;
+    reconcile(): MaybePromise<{
+      status: "ok";
+      checkedChannels: number;
+      skippedChannels: number;
+      pagesFetched: number;
+      quotaUnits: number;
+      ingested: number;
+      skipped: number;
+      notModified: number;
+      failed: number;
+    }>;
+  };
   chzzkLiveAdapter?: {
     pollLiveStatuses(): MaybePromise<ChzzkLiveAdapterCounts>;
   };
@@ -239,7 +271,35 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
       return { status: "disabled", reason: "youtube_websub_disabled" };
     }
 
-    return { status: "not_available", reason: "youtube_subscription_renewal_not_implemented" };
+    if (!dependencies.youtubeSubscriptionScheduler) {
+      return { status: "not_available", reason: "youtube_subscription_renewal_not_configured" };
+    }
+
+    return dependencies.youtubeSubscriptionScheduler.renewSubscriptions();
+  });
+
+  app.post("/v1/internal/schedulers/youtube/song-backfill", async () => {
+    if (!options.env.YOUTUBE_DATA_API_FALLBACK_ENABLED) {
+      return { status: "disabled", reason: "youtube_data_api_fallback_disabled" };
+    }
+
+    if (!dependencies.youtubeSongBackfillScheduler) {
+      return { status: "not_available", reason: "youtube_song_backfill_not_configured" };
+    }
+
+    return dependencies.youtubeSongBackfillScheduler.backfill();
+  });
+
+  app.post("/v1/internal/schedulers/youtube/song-reconcile", async () => {
+    if (!options.env.YOUTUBE_DATA_API_FALLBACK_ENABLED) {
+      return { status: "disabled", reason: "youtube_data_api_fallback_disabled" };
+    }
+
+    if (!dependencies.youtubeSongBackfillScheduler) {
+      return { status: "not_available", reason: "youtube_song_backfill_not_configured" };
+    }
+
+    return dependencies.youtubeSongBackfillScheduler.reconcile();
   });
 
   app.post("/v1/internal/schedulers/chzzk/live-status", async () => {

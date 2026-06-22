@@ -50,4 +50,22 @@ interface HubApi {
         @Query("to") to: String,
         @Query("timezone") timezone: String,
     ): HubCalendarResponseDto
+
+    @GET("v1/songs")
+    suspend fun songs(
+        @Query("generationId") generationId: String? = null,
+        @Query("memberId") memberId: String? = null,
+        @Query("type") type: String? = null,
+        @Query("q") q: String? = null,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): SongListResponseDto
+
+    @GET("v1/songs/facets")
+    suspend fun songFacets(
+        @Query("generationId") generationId: String? = null,
+        @Query("memberId") memberId: String? = null,
+        @Query("type") type: String? = null,
+        @Query("q") q: String? = null,
+    ): SongFacetsResponseDto
 }

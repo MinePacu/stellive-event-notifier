@@ -292,6 +292,75 @@ final class MockHubStore: ObservableObject {
         )
     }
 
+    let songs: [SongCatalogItem] = [
+        SongCatalogItem(
+            id: "mock-song-1",
+            youtubeVideoId: "mock-video-1",
+            title: "별빛 항로",
+            memberId: "akane-lize",
+            memberName: "아카네 리제",
+            generationId: "gen2",
+            generationName: "2기생",
+            type: .original,
+            sourceUrl: "https://www.youtube.com/watch?v=mock-video-1",
+            thumbnail: nil,
+            publishedAt: ISO8601DateFormatter().date(from: "2026-06-21T12:00:00Z") ?? Date(timeIntervalSince1970: 0)
+        ),
+        SongCatalogItem(
+            id: "mock-song-2",
+            youtubeVideoId: "mock-video-2",
+            title: "커버 모음",
+            memberId: "ayatsuno-yuni",
+            memberName: "아야츠노 유니",
+            generationId: "gen1",
+            generationName: "1기생",
+            type: .cover,
+            sourceUrl: "https://www.youtube.com/watch?v=mock-video-2",
+            thumbnail: nil,
+            publishedAt: ISO8601DateFormatter().date(from: "2026-06-20T12:00:00Z") ?? Date(timeIntervalSince1970: 0)
+        )
+    ]
+
+    func songs(generationId: String? = nil, memberId: String? = nil, type: String? = nil, query: String? = nil) -> SongListResponse {
+        let filtered = songs.filter { song in
+            let generationMatches = generationId == nil || generationId == "all" || song.generationId == generationId
+            let memberMatches = memberId == nil || memberId == "all" || song.memberId == memberId
+            let typeMatches = type == nil || type == "all" || song.type.rawValue == type
+            let queryText = query ?? ""
+            let queryMatches = queryText.isEmpty || song.title.localizedCaseInsensitiveContains(queryText) || song.memberName.localizedCaseInsensitiveContains(queryText)
+            return generationMatches && memberMatches && typeMatches && queryMatches
+        }
+        return SongListResponse(items: filtered, nextCursor: nil)
+    }
+
+    func songFacets(generationId: String? = nil, memberId: String? = nil, type: String? = nil, query: String? = nil) -> SongFacetsResponse {
+        let filtered = songs(generationId: generationId, memberId: memberId, type: type, query: query).items
+        return SongFacetsResponse(
+            summary: SongFacetSummary(
+                total: filtered.count,
+                original: filtered.filter { $0.type == .original }.count,
+                cover: filtered.filter { $0.type == .cover }.count
+            ),
+            generationFilters: IOSSongPagePolicy.generationFilters.map { filter in
+                SongFilterCount(
+                    id: filter.id,
+                    label: filter.label,
+                    generationId: filter.id == "all" ? nil : filter.id,
+                    count: filter.id == "all" ? songs.count : songs.filter { $0.generationId == filter.id }.count
+                )
+            },
+            memberFilters: [SongFilterCount(id: "all", label: "전체", generationId: nil, count: songs.count)],
+            typeFilters: IOSSongPagePolicy.typeFilters.map { filter in
+                SongFilterCount(
+                    id: filter.id,
+                    label: filter.label,
+                    generationId: nil,
+                    count: filter.id == "all" ? songs.count : songs.filter { $0.type.rawValue == filter.id }.count
+                )
+            }
+        )
+    }
+
     func orderedHubEvents(_ events: [HubEvent]) -> [HubEvent] {
         events.sorted { lhs, rhs in
             let lhsRank = Self.hubEventStatusRank(lhs.status)

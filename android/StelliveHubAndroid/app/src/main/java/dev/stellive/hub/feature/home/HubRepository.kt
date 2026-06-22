@@ -6,6 +6,8 @@ import dev.stellive.hub.core.model.HubEvent
 import dev.stellive.hub.core.model.HubEventsSummary
 import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.NotificationSettingState
+import dev.stellive.hub.core.model.SongFacets
+import dev.stellive.hub.core.model.SongListResult
 import java.time.LocalDate
 
 data class HubDataState(
@@ -27,4 +29,17 @@ interface HubRepository {
     ): List<HubEvent>
     suspend fun hubEventDetail(id: String): HubEvent?
     suspend fun hubCalendarDays(from: LocalDate, to: LocalDate, timezone: String): List<HubCalendarDay>
+    suspend fun songs(
+        generationId: String? = null,
+        memberId: String? = null,
+        type: String? = null,
+        query: String? = null,
+        cursor: String? = null,
+    ): SongListResult
+    suspend fun songFacets(
+        generationId: String? = null,
+        memberId: String? = null,
+        type: String? = null,
+        query: String? = null,
+    ): SongFacets
 }

@@ -4,6 +4,8 @@ import ChzzkApiClient from "./adapters/chzzk/chzzkApiClient.js";
 import ChzzkOpenApiAdapter from "./adapters/chzzk/chzzkOpenApiAdapter.js";
 import { CatalogService } from "./catalog/catalog.js";
 import ChzzkEventIngestor from "./events/chzzkEventIngestor.js";
+import YoutubeWebSubSubscriptionService from "./adapters/youtube/youtubeWebSubSubscriptionService.js";
+import YoutubeDataApiClient from "./adapters/youtube/youtubeDataApiClient.js";
 import { LiveStatusRepository } from "./repositories/liveStatusRepository.js";
 import { PlatformApiStateRepository } from "./repositories/platformApiStateRepository.js";
 import sensible from "@fastify/sensible";
@@ -23,11 +25,16 @@ import { DeliveryAttemptRepository } from "./repositories/deliveryAttemptReposit
 import DeviceRepository from "./repositories/deviceRepository.js";
 import PlatformEventRepository from "./repositories/platformEventRepository.js";
 import PreferenceRepository from "./repositories/preferenceRepository.js";
+import { PrismaSongRepository } from "./repositories/songRepository.js";
+import { WebhookSubscriptionRepository } from "./repositories/webhookSubscriptionRepository.js";
+import SongIngestionService from "./songs/songIngestionService.js";
+import SongBackfillService from "./songs/songBackfillService.js";
 import { type AdminHubEventRouteDependencies, registerAdminHubEventRoutes } from "./routes/adminHubEventRoutes.js";
 import { registerAdminRoutes } from "./routes/adminRoutes.js";
 import registerChzzkAuthRoutes, { type ChzzkAuthRouteOptions } from "./routes/chzzkAuthRoutes.js";
 import { type InternalRouteDependencies, registerInternalRoutes } from "./routes/internalRoutes.js";
 import { type AppRouteDependencies, registerRoutes } from "./routes/routes.js";
+import { registerWebhookRoutes } from "./routes/webhookRoutes.js";
 
 type EnvOverrides = Record<string, string | boolean | number | undefined>;
 
@@ -106,6 +113,89 @@ function createDefaultChzzkLiveAdapter(
       liveStatusRepository,
       ingestEvent: (event) => ingestor.ingest(event)
     })
+  };
+}
+
+function createDefaultSongIngestionService(): SongIngestionService {
+  const catalog = new CatalogService();
+  const songs = new PrismaSongRepository();
+
+  return new SongIngestionService({
+    catalog: {
+      findByYoutubeChannelId(channelId) {
+        const member = catalog.getMembers().find((candidate) => candidate.platforms?.youtubeChannelId === channelId);
+        if (!member) return undefined;
+        return {
+          memberId: member.id,
+          memberName: member.koreanName,
+          generationId: member.generationId,
+          generationName: member.generationName,
+        };
+      },
+    },
+    songs,
+  });
+}
+
+function createDefaultYoutubeSubscriptionScheduler(
+  env: AppEnv,
+  dependencies: Partial<InternalRouteDependencies> | undefined,
+  fetchImpl?: typeof fetch,
+): Pick<InternalRouteDependencies, "youtubeSubscriptionScheduler"> {
+  if (dependencies?.youtubeSubscriptionScheduler) return {};
+  if (!env.YOUTUBE_WEBSUB_CALLBACK_URL || !env.YOUTUBE_WEBSUB_VERIFY_TOKEN) return {};
+
+  const catalog = new CatalogService();
+  const targets = catalog
+    .getMembers()
+    .filter((member) => member.generationId === "gen1" || member.generationId === "gen2" || member.generationId === "gen3")
+    .flatMap((member) => {
+      const channelId = member.platforms?.youtubeChannelId;
+      if (!channelId) return [];
+      return [{
+        targetId: member.id,
+        channelId,
+        topicUrl: `https://www.youtube.com/xml/feeds/videos.xml?channel_id=${channelId}`,
+      }];
+    });
+
+  return {
+    youtubeSubscriptionScheduler: new YoutubeWebSubSubscriptionService({
+      callbackUrl: env.YOUTUBE_WEBSUB_CALLBACK_URL,
+      verifyToken: env.YOUTUBE_WEBSUB_VERIFY_TOKEN,
+      targets,
+      subscriptions: new WebhookSubscriptionRepository(),
+      fetch: fetchImpl,
+    }),
+  };
+}
+
+function createDefaultYoutubeSongBackfillScheduler(
+  env: AppEnv,
+  dependencies: Partial<InternalRouteDependencies> | undefined,
+  fetchImpl?: typeof fetch,
+): Pick<InternalRouteDependencies, "youtubeSongBackfillScheduler"> {
+  if (dependencies?.youtubeSongBackfillScheduler) return {};
+  if (!env.YOUTUBE_API_KEY) return {};
+
+  const catalog = new CatalogService();
+  const targets = catalog
+    .getMembers()
+    .filter((member) => member.generationId === "gen1" || member.generationId === "gen2" || member.generationId === "gen3")
+    .flatMap((member) => {
+      const channelId = member.platforms?.youtubeChannelId;
+      if (!channelId) return [];
+      return [{ memberId: member.id, channelId }];
+    });
+
+  return {
+    youtubeSongBackfillScheduler: new SongBackfillService({
+      youtube: new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl }),
+      ingestion: createDefaultSongIngestionService(),
+      targets,
+      maxPages: env.YOUTUBE_SONG_BACKFILL_MAX_PAGES,
+      maxChannels: env.YOUTUBE_SONG_RECONCILE_MAX_CHANNELS,
+    }),
   };
 }
 
@@ -218,19 +308,28 @@ export async function buildApp(options: BuildAppOptions = {}) {
   }
 
   await registerRoutes(app, { dependencies: appRouteDependencies });
+  await registerWebhookRoutes(app, {
+    env,
+    subscriptions: new WebhookSubscriptionRepository(),
+    songIngestion: createDefaultSongIngestionService(),
+  });
   await registerChzzkAuthRoutes(app, {
     env,
     ...options.chzzkAuthRoutes?.dependencies
   });
   const internalRouteDependencies: Partial<InternalRouteDependencies> = options.internalRoutes?.dependencies
     ? {
-        ...createDefaultChzzkLiveAdapter(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
-        ...options.internalRoutes.dependencies
-      }
+      ...createDefaultChzzkLiveAdapter(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
+      ...createDefaultYoutubeSubscriptionScheduler(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
+      ...createDefaultYoutubeSongBackfillScheduler(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
+      ...options.internalRoutes.dependencies
+    }
     : {
-        notificationWorker: createDefaultNotificationWorker(env),
-        ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch)
-      };
+      notificationWorker: createDefaultNotificationWorker(env),
+      ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch),
+      ...createDefaultYoutubeSubscriptionScheduler(env, undefined, options.chzzkLiveApiFetch),
+      ...createDefaultYoutubeSongBackfillScheduler(env, undefined, options.chzzkLiveApiFetch),
+    };
   await registerInternalRoutes(app, { env, dependencies: internalRouteDependencies });
   await registerAdminRoutes(app, { env });
   await registerAdminHubEventRoutes(app, { env, dependencies: options.adminHubEventRoutes?.dependencies });

@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stellive Hub Song Page Mobile Mockup</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #e9eef1;
+      --phone-shell: #101417;
+      --bg: #f5f7f8;
+      --card: #ffffff;
+      --surface: #f7f8f6;
+      --line: #d9e2e4;
+      --line-soft: rgba(23, 35, 38, 0.08);
+      --text: #172326;
+      --muted: #667579;
+      --subtle: #8c999c;
+      --primary: #315c64;
+      --primary-soft: #e8f5f3;
+      --secondary: #7a5e2d;
+      --warning-soft: #f7f3e8;
+      --success: #18815f;
+      --success-soft: #e8f6ef;
+      --shadow: 0 28px 86px rgba(20, 32, 36, 0.24);
+      --radius-lg: 26px;
+      --radius-md: 16px;
+      --font: "SUIT", "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: var(--font);
+      background:
+        radial-gradient(circle at 18% 0%, rgba(49, 92, 100, 0.16), transparent 30%),
+        radial-gradient(circle at 86% 8%, rgba(122, 94, 45, 0.14), transparent 28%),
+        linear-gradient(180deg, #f8fafb 0%, var(--page) 100%);
+    }
+    .page { width: min(1280px, 100%); margin: 0 auto; padding: 36px 22px 48px; }
+    .intro { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin-bottom: 24px; }
+    .intro h1 { margin: 0; font-size: clamp(28px, 4vw, 46px); line-height: 1.05; letter-spacing: -0.04em; }
+    .intro p { max-width: 640px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.65; }
+    .screens { display: grid; grid-template-columns: repeat(2, minmax(320px, 1fr)); gap: 26px; align-items: start; }
+    .device-column { display: grid; justify-items: center; gap: 12px; }
+    .device-label { width: min(420px, 100%); display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; }
+    .device-label strong { color: var(--text); font-size: 14px; }
+    .phone { width: min(420px, 100%); min-height: 852px; padding: 12px; border-radius: 38px; background: linear-gradient(180deg, #273137, var(--phone-shell)); box-shadow: var(--shadow); }
+    .screen { min-height: 828px; overflow: hidden; border-radius: 30px; background: var(--bg); border: 1px solid rgba(255, 255, 255, 0.42); }
+    .statusbar { height: 34px; padding: 11px 18px 0; display: flex; justify-content: space-between; font-size: 12px; font-weight: 800; }
+    .topbar { height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px 0 18px; background: rgba(247, 248, 250, 0.86); backdrop-filter: blur(14px); }
+    .title-group { display: grid; gap: 2px; }
+    .topbar strong { font-size: 15px; line-height: 1.1; }
+    .topbar span { color: var(--muted); font-size: 11px; font-weight: 700; }
+    .icon-button { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.74); font-weight: 900; }
+    .content { padding: 0 18px 16px; }
+    .hero { margin-top: 4px; padding: 17px; border-radius: var(--radius-lg); background: linear-gradient(135deg, rgba(49, 92, 100, 0.16), transparent 52%), linear-gradient(180deg, #fff, #f7fbfb); border: 1px solid var(--line); }
+    .hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+    .hero h2 { margin: 0; font-size: 30px; line-height: .98; letter-spacing: -0.045em; }
+    .hero p { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .refresh-pill { flex: 0 0 auto; padding: 7px 9px; border-radius: 999px; color: var(--primary); background: var(--primary-soft); border: 1px solid rgba(49, 92, 100, 0.16); font-size: 11px; font-weight: 900; }
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+    .metric { min-height: 58px; padding: 10px; border-radius: 15px; background: rgba(255,255,255,.72); border: 1px solid var(--line-soft); }
+    .metric strong { display: block; font-size: 20px; letter-spacing: -0.03em; }
+    .metric span { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; font-weight: 800; }
+    .search { height: 42px; margin: 14px 0 10px; display: flex; align-items: center; gap: 9px; padding: 0 13px; border-radius: 15px; color: var(--subtle); background: var(--card); border: 1px solid var(--line); font-size: 13px; font-weight: 800; }
+    .search.active { color: var(--text); border-color: rgba(49,92,100,.28); background: #ffffff; }
+    .search-clear { margin-left: auto; color: var(--primary); font-size: 11px; font-weight: 900; }
+    .chips { display: flex; gap: 7px; overflow: hidden; padding-bottom: 10px; }
+    .chip { flex: 0 0 auto; min-height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0 12px; border-radius: 999px; color: var(--muted); background: var(--card); border: 1px solid var(--line); font-size: 12px; font-weight: 900; white-space: nowrap; }
+    .chip.active { color: var(--primary); background: var(--primary-soft); border-color: rgba(49,92,100,.24); }
+    .segmented { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 5px; margin-bottom: 12px; border-radius: 16px; background: #edf2f3; border: 1px solid var(--line); }
+    .segment { height: 32px; border-radius: 11px; display: grid; place-items: center; color: var(--muted); font-size: 12px; font-weight: 900; }
+    .segment.active { color: var(--text); background: var(--card); box-shadow: 0 2px 10px rgba(23,35,38,.07); }
+    .section-title { display: flex; align-items: center; justify-content: space-between; margin: 2px 0 8px; color: var(--muted); font-size: 13px; font-weight: 900; }
+    .section-title span { color: var(--subtle); font-size: 11px; font-weight: 800; }
+    .member-picker { display: grid; gap: 8px; padding: 10px; margin-bottom: 12px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); }
+    .member-picker-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .member-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+    .member-pill { min-height: 50px; display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 8px; padding: 8px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+    .member-pill.active { border-color: rgba(49,92,100,.32); background: var(--primary-soft); }
+    .member-action { min-height: 34px; display: grid; place-items: center; border-radius: 12px; color: var(--primary); background: var(--primary-soft); border: 1px solid rgba(49,92,100,.18); font-size: 12px; font-weight: 900; }
+    .avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 13px; color: #fff; background: linear-gradient(145deg, #6e8085, #315c64); font-size: 11px; font-weight: 900; }
+    .ios .avatar { border-radius: 999px; }
+    .member-text strong, .song-title strong { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .member-text strong { font-size: 12px; }
+    .member-text span { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; font-weight: 800; }
+    .song-list { display: grid; gap: 9px; }
+    .song-card { padding: 12px; border-radius: var(--radius-md); background: var(--card); border: 1px solid var(--line); }
+    .song-main { display: grid; grid-template-columns: 96px 1fr auto; gap: 11px; align-items: center; }
+    .song-art { width: 96px; aspect-ratio: 16 / 9; display: grid; place-items: center; border-radius: 12px; color: var(--primary); background: linear-gradient(135deg, rgba(49,92,100,.18), transparent 62%), var(--surface); border: 1px solid var(--line); font-size: 12px; font-weight: 900; }
+    .song-title { min-width: 0; }
+    .song-title strong { font-size: 14px; line-height: 1.2; }
+    .song-title span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; font-weight: 750; }
+    .song-date { color: var(--subtle); font-size: 10px; font-weight: 900; white-space: nowrap; }
+    .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .tag { min-height: 25px; display: inline-flex; align-items: center; padding: 0 8px; border-radius: 999px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); font-size: 10px; font-weight: 900; }
+    .tag.original { color: var(--success); background: var(--success-soft); border-color: rgba(24,129,95,.18); }
+    .tag.cover { color: var(--secondary); background: var(--warning-soft); border-color: rgba(122,94,45,.16); }
+    .result-summary { display: grid; gap: 7px; padding: 12px; margin: 0 0 12px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+    .result-summary strong { font-size: 15px; }
+    .result-summary span { color: var(--muted); font-size: 11px; font-weight: 800; line-height: 1.35; }
+    .query-mark { color: var(--primary); }
+    .active-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+    .bottom-nav { margin-top: 14px; height: 64px; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); background: var(--card); }
+    .nav-item { display: grid; justify-items: center; align-content: center; gap: 4px; color: var(--subtle); font-size: 11px; font-weight: 900; }
+    .nav-icon { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 8px; font-size: 13px; }
+    .nav-item.active { color: var(--primary); }
+    .nav-item.active .nav-icon { background: var(--primary-soft); }
+    .home-indicator { width: 116px; height: 5px; border-radius: 999px; margin: 10px auto 0; background: rgba(0,0,0,.24); }
+    .ios .screen { background: #f2f4f5; }
+    .ios .topbar { background: rgba(242,244,245,.88); }
+    .ios .hero, .ios .song-card, .ios .member-pill { border-radius: 22px; }
+    .ios .song-main { grid-template-columns: 92px 1fr auto; }
+    .ios .song-art { width: 92px; border-radius: 13px; }
+    .settings-hint { margin-top: 11px; padding: 11px 12px; border-radius: 14px; color: var(--muted); background: var(--card); border: 1px dashed var(--line); font-size: 11px; line-height: 1.42; font-weight: 800; }
+    @media (max-width: 860px) { .intro { display: grid; } .screens { grid-template-columns: 1fr; } }
+    @media (max-width: 430px) { .page { padding: 18px 10px 30px; } .phone { padding: 8px; border-radius: 30px; } .screen { border-radius: 24px; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="intro">
+      <div><h1>노래 페이지 UI 목업</h1></div>
+      <p>GitLab #23 / GitHub #45 요구사항 기준입니다. 하단 “기록” 탭은 “노래”로 대체하고, 알림 기록은 설정 진입 후 확인하는 구조를 전제로 합니다. 노래 화면은 YouTube 업로드 곡을 전체, 기수, 멤버, 오리지널/커버 기준으로 한 화면에서 탐색하도록 구성했습니다. 카드와 배경 색상은 현재 UI 코드에서 이미 정해진 색상 토큰을 따르고, 타이틀 바도 Android와 iPhone 앱 모두 기존 코드에 있는 타이틀 바를 그대로 사용합니다. 기수 카테고리는 1기생/2기생/3기생만 노출하고 감자/기타는 제외합니다.</p>
+    </section>
+    <section class="screens" aria-label="Android and iPhone song page mockups">
+      <article class="device-column">
+        <div class="device-label"><strong>Android</strong><span>current card/chip density</span></div>
+        <div class="phone android"><div class="screen">
+          <div class="statusbar"><span>9:41</span><span>5G 88%</span></div>
+          <div class="topbar"><div class="title-group"><strong>노래</strong><span>YouTube 업로드 곡 탐색</span></div><div class="icon-button" aria-label="설정">⚙</div></div>
+          <div class="content">
+            <section class="hero">
+              <div class="hero-top"><div><h2>노래</h2><p>멤버별 오리지널곡과 커버곡을 빠르게 모아봅니다. 요약 카드는 설정에서 표시 여부를 바꿀 수 있습니다.</p></div><div class="refresh-pill">요약 ON</div></div>
+              <div class="metrics"><div class="metric"><strong>128</strong><span>전체 곡</span></div><div class="metric"><strong>31</strong><span>오리지널</span></div><div class="metric"><strong>97</strong><span>커버</span></div></div>
+            </section>
+            <div class="search">⌕ 제목, 멤버, 키워드 검색</div>
+            <div class="chips" aria-label="generation filters"><div class="chip active">전체</div><div class="chip">1기생</div><div class="chip">2기생</div><div class="chip">3기생</div></div>
+            <div class="segmented" aria-label="song type filters"><div class="segment active">전체</div><div class="segment">오리지널</div><div class="segment">커버</div></div>
+            <div class="section-title">멤버별 탐색 <span>기수 멤버 10명</span></div>
+            <div class="member-picker">
+              <div class="member-picker-top"><div class="member-text"><strong>전체 멤버</strong><span>현재 전체 128곡 표시</span></div><div class="chip active">전체 선택</div></div>
+              <div class="member-grid">
+                <div class="member-pill active"><div class="avatar">전체</div><div class="member-text"><strong>전체</strong><span>128곡</span></div></div>
+                <div class="member-pill"><div class="avatar">유니</div><div class="member-text"><strong>아야츠노 유니</strong><span>18곡</span></div></div>
+                <div class="member-pill"><div class="avatar">히나</div><div class="member-text"><strong>시라유키 히나</strong><span>16곡</span></div></div>
+                <div class="member-pill"><div class="avatar">리제</div><div class="member-text"><strong>아카네 리제</strong><span>14곡</span></div></div>
+              </div>
+              <div class="member-action">멤버 10명 전체 목록 열기</div>
+            </div>
+            <div class="section-title">최근 업로드 <span>전체 · 최신순</span></div>
+            <div class="song-list">
+              <article class="song-card"><div class="song-main"><div class="song-art">16:9</div><div class="song-title"><strong>별빛 항로</strong><span>아카네 리제 · 2기생</span></div><div class="song-date">06.21</div></div><div class="tag-row"><span class="tag original">오리지널</span><span class="tag">YouTube 업로드</span><span class="tag">썸네일 비율</span></div></article>
+              <article class="song-card"><div class="song-main"><div class="song-art">16:9</div><div class="song-title"><strong>밤 산책 커버</strong><span>아야츠노 유니 · 1기생</span></div><div class="song-date">06.18</div></div><div class="tag-row"><span class="tag cover">커버</span><span class="tag">YouTube 업로드</span><span class="tag">보컬</span></div></article>
+              <article class="song-card"><div class="song-main"><div class="song-art">16:9</div><div class="song-title"><strong>푸른 궤도 커버</strong><span>텐코 시부키 · 3기생</span></div><div class="song-date">06.14</div></div><div class="tag-row"><span class="tag cover">커버</span><span class="tag">YouTube 업로드</span><span class="tag">3기생</span></div></article>
+            </div>
+          </div>
+          <nav class="bottom-nav" aria-label="bottom navigation"><div class="nav-item"><div class="nav-icon">⌂</div><span>홈</span></div><div class="nav-item"><div class="nav-icon">●</div><span>라이브</span></div><div class="nav-item active"><div class="nav-icon">♪</div><span>노래</span></div><div class="nav-item"><div class="nav-icon">□</div><span>굿즈/행사</span></div></nav>
+        </div></div>
+      </article>
+      <article class="device-column">
+        <div class="device-label"><strong>iPhone</strong><span>SwiftUI grouped rhythm</span></div>
+        <div class="phone ios"><div class="screen">
+          <div class="statusbar"><span>9:41</span><span>LTE 88%</span></div>
+          <div class="topbar"><div class="title-group"><strong>노래</strong><span>전체 · 오리지널 · 커버</span></div><div class="icon-button" aria-label="설정">⚙</div></div>
+          <div class="content">
+            <section class="hero">
+              <div class="hero-top"><div><h2>음악 모아보기</h2><p>필터를 바꿔도 화면 이동 없이 곡 목록과 멤버 범위를 바로 좁힙니다. 요약 카드는 설정에서 끌 수 있습니다.</p></div><div class="refresh-pill">API-first</div></div>
+              <div class="metrics"><div class="metric"><strong>10</strong><span>멤버</span></div><div class="metric"><strong>3</strong><span>기수</span></div><div class="metric"><strong>2</strong><span>곡 타입</span></div></div>
+            </section>
+            <div class="search">⌕ 곡명 또는 멤버 검색</div>
+            <div class="chips" aria-label="generation filters"><div class="chip active">전체</div><div class="chip">1기생</div><div class="chip">2기생</div><div class="chip">3기생</div></div>
+            <div class="segmented" aria-label="song type filters"><div class="segment active">전체</div><div class="segment">Original</div><div class="segment">Cover</div></div>
+            <div class="section-title">선택 대상 <span>2기생 · 커버 포함</span></div>
+            <div class="member-picker">
+              <div class="member-picker-top"><div class="member-text"><strong>2기생 전체</strong><span>현재 45곡 표시</span></div><div class="chip active">2기생</div></div>
+              <div class="member-grid">
+                <div class="member-pill active"><div class="avatar">2기</div><div class="member-text"><strong>2기생 전체</strong><span>45곡</span></div></div>
+                <div class="member-pill"><div class="avatar">마시</div><div class="member-text"><strong>네네코 마시로</strong><span>11곡</span></div></div>
+                <div class="member-pill"><div class="avatar">타비</div><div class="member-text"><strong>아라하시 타비</strong><span>9곡</span></div></div>
+                <div class="member-pill"><div class="avatar">리제</div><div class="member-text"><strong>아카네 리제</strong><span>14곡</span></div></div>
+              </div>
+              <div class="member-action">멤버 선택 화면 열기</div>
+            </div>
+            <div class="section-title">곡 목록 <span>탭하면 YouTube로 열기</span></div>
+            <div class="song-list">
+              <article class="song-card"><div class="song-main"><div class="song-art">16:9</div><div class="song-title"><strong>맑은 날의 커버</strong><span>시라유키 히나 · 2기생</span></div><div class="song-date">06.20</div></div><div class="tag-row"><span class="tag cover">커버</span><span class="tag">YouTube 업로드</span><span class="tag">2기생</span></div></article>
+              <article class="song-card"><div class="song-main"><div class="song-art">16:9</div><div class="song-title"><strong>우주 정거장</strong><span>네네코 마시로 · 2기생</span></div><div class="song-date">06.11</div></div><div class="tag-row"><span class="tag original">오리지널</span><span class="tag">멤버 채널</span><span class="tag">2기생</span></div></article>
+              <article class="song-card"><div class="song-main"><div class="song-art">16:9</div><div class="song-title"><strong>새벽 라디오 커버</strong><span>아라하시 타비 · 2기생</span></div><div class="song-date">06.02</div></div><div class="tag-row"><span class="tag cover">커버</span><span class="tag">YouTube 업로드</span><span class="tag">최근순</span></div></article>
+            </div>
+            <div class="settings-hint">설정에는 “화면 구성” 전용 페이지를 두고 노래/라이브/굿즈·행사 요약 카드 표시 여부를 페이지별로 제어합니다. 알림 기록은 설정 화면의 “알림 기록” 행으로 이동합니다.</div>
+          </div>
+          <nav class="bottom-nav" aria-label="bottom navigation"><div class="nav-item"><div class="nav-icon">⌂</div><span>홈</span></div><div class="nav-item"><div class="nav-icon">●</div><span>라이브</span></div><div class="nav-item active"><div class="nav-icon">♪</div><span>노래</span></div><div class="nav-item"><div class="nav-icon">□</div><span>굿즈/행사</span></div></nav>
+          <div class="home-indicator"></div>
+        </div></div>
+      </article>
+    </section>
+
+    <section class="intro" style="margin-top: 34px;">
+      <div><h1>검색 결과 상태</h1></div>
+      <p>검색어가 입력되면 요약 카드는 접고, 검색어와 현재 필터 조합을 먼저 보여준 뒤 결과 목록을 렌더링합니다. 결과 화면도 Android/iPhone에서 같은 정보 구조를 유지합니다.</p>
+    </section>
+
+    <section class="screens" aria-label="Android and iPhone song search result mockups">
+      <article class="device-column">
+        <div class="device-label"><strong>Android · 검색 결과</strong><span>query + filtered list</span></div>
+        <div class="phone android"><div class="screen">
+          <div class="statusbar"><span>9:41</span><span>5G 88%</span></div>
+          <div class="topbar"><div class="title-group"><strong>노래 검색</strong><span>검색 결과 4곡</span></div><div class="icon-button" aria-label="설정">⚙</div></div>
+          <div class="content">
+            <div class="search active">⌕ <strong>커버</strong><span class="search-clear">지우기</span></div>
+            <div class="result-summary">
+              <strong><span class="query-mark">“커버”</span> 검색 결과</strong>
+              <span>전체 멤버 · 전체 기수 · 최신순 기준으로 4곡을 찾았습니다.</span>
+              <div class="active-filters"><span class="tag">검색어 커버</span><span class="tag">전체 기수</span><span class="tag">전체 타입</span></div>
+            </div>
+            <div class="segmented" aria-label="song type filters"><div class="segment active">전체</div><div class="segment">오리지널</div><div class="segment">커버</div></div>
+            <div class="section-title">결과 목록 <span>검색 정확도순 · 최신순 보조</span></div>
+            <div class="song-list">
+              <article class="song-card"><div class="song-main"><div class="song-art">16:9</div><div class="song-title"><strong>밤 산책 커버</strong><span>아야츠노 유니 · 제목 일치</span></div><div class="song-date">06.18</div></div><div class="tag-row"><span class="tag cover">커버</span><span class="tag">YouTube 업로드</span><span class="tag">검색어 일치</span></div></article>
+              <article class="song-card"><div class="song-main"><div class="song-art">16:9</div><div class="song-title"><strong>푸른 궤도 커버</strong><span>텐코 시부키 · 제목 일치</span></div><div class="song-date">06.14</div></div><div class="tag-row"><span class="tag cover">커버</span><span class="tag">3기생</span><span class="tag">검색어 일치</span></div></article>
+              <article class="song-card"><div class="song-main"><div class="song-art">16:9</div><div class="song-title"><strong>새벽 라디오 커버</strong><span>아라하시 타비 · 제목 일치</span></div><div class="song-date">06.02</div></div><div class="tag-row"><span class="tag cover">커버</span><span class="tag">2기생</span><span class="tag">최근순</span></div></article>
+            </div>
+          </div>
+          <nav class="bottom-nav" aria-label="bottom navigation"><div class="nav-item"><div class="nav-icon">⌂</div><span>홈</span></div><div class="nav-item"><div class="nav-icon">●</div><span>라이브</span></div><div class="nav-item active"><div class="nav-icon">♪</div><span>노래</span></div><div class="nav-item"><div class="nav-icon">□</div><span>굿즈/행사</span></div></nav>
+        </div></div>
+      </article>
+
+      <article class="device-column">
+        <div class="device-label"><strong>iPhone · 검색 결과</strong><span>same structure</span></div>
+        <div class="phone ios"><div class="screen">
+          <div class="statusbar"><span>9:41</span><span>LTE 88%</span></div>
+          <div class="topbar"><div class="title-group"><strong>노래 검색</strong><span>2기생 · 2곡</span></div><div class="icon-button" aria-label="설정">⚙</div></div>
+          <div class="content">
+            <div class="search active">⌕ <strong>마시로</strong><span class="search-clear">취소</span></div>
+            <div class="result-summary">
+              <strong><span class="query-mark">“마시로”</span> 검색 결과</strong>
+              <span>2기생 필터와 검색어를 함께 적용했습니다. 멤버/곡명/태그가 같은 결과 화면 안에서 갱신됩니다.</span>
+              <div class="active-filters"><span class="tag">검색어 마시로</span><span class="tag">2기생</span><span class="tag">전체 타입</span></div>
+            </div>
+            <div class="segmented" aria-label="song type filters"><div class="segment active">전체</div><div class="segment">Original</div><div class="segment">Cover</div></div>
+            <div class="section-title">결과 목록 <span>2곡</span></div>
+            <div class="song-list">
+              <article class="song-card"><div class="song-main"><div class="song-art">16:9</div><div class="song-title"><strong>우주 정거장</strong><span>네네코 마시로 · 멤버 일치</span></div><div class="song-date">06.11</div></div><div class="tag-row"><span class="tag original">오리지널</span><span class="tag">2기생</span><span class="tag">멤버 검색</span></div></article>
+              <article class="song-card"><div class="song-main"><div class="song-art">16:9</div><div class="song-title"><strong>별 조각 커버</strong><span>네네코 마시로 · 멤버 일치</span></div><div class="song-date">05.28</div></div><div class="tag-row"><span class="tag cover">커버</span><span class="tag">YouTube 업로드</span><span class="tag">멤버 검색</span></div></article>
+            </div>
+          </div>
+          <nav class="bottom-nav" aria-label="bottom navigation"><div class="nav-item"><div class="nav-icon">⌂</div><span>홈</span></div><div class="nav-item"><div class="nav-icon">●</div><span>라이브</span></div><div class="nav-item active"><div class="nav-icon">♪</div><span>노래</span></div><div class="nav-item"><div class="nav-icon">□</div><span>굿즈/행사</span></div></nav>
+          <div class="home-indicator"></div>
+        </div></div>
+      </article>
+    </section>
+
+  </main>
+</body>
+</html>

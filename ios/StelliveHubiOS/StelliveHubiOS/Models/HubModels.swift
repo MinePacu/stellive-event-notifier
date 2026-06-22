@@ -381,6 +381,87 @@ struct HubCalendarWidgetSnapshot: Codable, Equatable {
     let staleAfter: Date
 }
 
+enum SongType: String, Codable, CaseIterable, Hashable, Identifiable {
+    case original
+    case cover
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .original:
+            return "오리지널"
+        case .cover:
+            return "커버"
+        }
+    }
+}
+
+struct SongThumbnail: Codable, Equatable, Hashable {
+    let url: String
+    let width: Int
+    let height: Int
+}
+
+struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
+    let id: String
+    let youtubeVideoId: String
+    let title: String
+    let memberId: String
+    let memberName: String
+    let generationId: String
+    let generationName: String
+    let type: SongType
+    let sourceUrl: String
+    let thumbnail: SongThumbnail?
+    let publishedAt: Date
+}
+
+struct SongListResponse: Codable, Equatable {
+    let items: [SongCatalogItem]
+    let nextCursor: String?
+}
+
+struct SongFilterCount: Identifiable, Codable, Equatable, Hashable {
+    let id: String
+    let label: String
+    let generationId: String?
+    let count: Int
+}
+
+struct SongFacetSummary: Codable, Equatable, Hashable {
+    let total: Int
+    let original: Int
+    let cover: Int
+}
+
+struct SongFacetsResponse: Codable, Equatable {
+    let summary: SongFacetSummary
+    let generationFilters: [SongFilterCount]
+    let memberFilters: [SongFilterCount]
+    let typeFilters: [SongFilterCount]
+}
+
+struct SongFilterOption: Identifiable, Equatable {
+    let id: String
+    let label: String
+}
+
+enum IOSSongPagePolicy {
+    static let generationFilters: [SongFilterOption] = [
+        .init(id: "all", label: "전체"),
+        .init(id: "gen1", label: "1기생"),
+        .init(id: "gen2", label: "2기생"),
+        .init(id: "gen3", label: "3기생")
+    ]
+
+    static let typeFilters: [SongFilterOption] = [
+        .init(id: "all", label: "전체"),
+        .init(id: "original", label: "오리지널"),
+        .init(id: "cover", label: "커버")
+    ]
+}
+
 enum HubCalendarPolicy {
     static let staleWidgetText = "최근 동기화 필요"
     static let emptyWidgetText = "예정된 일정 없음"

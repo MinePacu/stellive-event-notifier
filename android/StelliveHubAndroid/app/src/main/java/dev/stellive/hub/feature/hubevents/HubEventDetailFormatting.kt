@@ -1,6 +1,7 @@
 package dev.stellive.hub.feature.hubevents
 
 import dev.stellive.hub.core.model.HubEvent
+import dev.stellive.hub.core.model.HubEventCategory
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -39,6 +40,15 @@ object HubEventDetailFormatting {
             else -> "미정"
         }
     }
+
+    fun linkActionLabel(category: HubEventCategory): String =
+        when (category) {
+            HubEventCategory.ONLINE_GOODS,
+            HubEventCategory.ONLINE_COLLAB -> "구매 링크"
+            HubEventCategory.OFFLINE_CONCERT,
+            HubEventCategory.TICKETING -> "티켓 링크"
+            else -> "예약 링크"
+        }
 
     fun formatDateTime(instant: java.time.Instant, zoneId: ZoneId = ZoneId.systemDefault()): String =
         dateTimeFormatter.format(instant.atZone(zoneId))

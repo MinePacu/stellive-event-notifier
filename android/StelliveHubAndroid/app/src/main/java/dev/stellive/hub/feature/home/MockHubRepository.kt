@@ -16,6 +16,12 @@ import dev.stellive.hub.core.model.HubEventStatus
 import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.NotificationEventType
 import dev.stellive.hub.core.model.NotificationHistoryItem
+import dev.stellive.hub.core.model.SongCatalogItem
+import dev.stellive.hub.core.model.SongFacetSummary
+import dev.stellive.hub.core.model.SongFacets
+import dev.stellive.hub.core.model.SongFilterCount
+import dev.stellive.hub.core.model.SongListResult
+import dev.stellive.hub.core.model.SongType
 import dev.stellive.hub.feature.calendar.HubCalendarDeepLinkPolicy
 import dev.stellive.hub.feature.calendar.CalendarUiPolicy
 import java.time.Instant
@@ -140,6 +146,33 @@ class MockHubRepository : HubRepository {
     )
 
     val settings = NotificationSettingState()
+
+    val songs = listOf(
+        SongCatalogItem(
+            id = "mock-song-1",
+            youtubeVideoId = "mock-video-1",
+            title = "별빛 항로",
+            memberId = "akane-lize",
+            memberName = "아카네 리제",
+            generationId = "gen2",
+            generationName = "2기생",
+            type = SongType.ORIGINAL,
+            sourceUrl = "https://www.youtube.com/watch?v=mock-video-1",
+            publishedAt = Instant.parse("2026-06-21T12:00:00Z")
+        ),
+        SongCatalogItem(
+            id = "mock-song-2",
+            youtubeVideoId = "mock-video-2",
+            title = "커버 모음",
+            memberId = "ayatsuno-yuni",
+            memberName = "아야츠노 유니",
+            generationId = "gen1",
+            generationName = "1기생",
+            type = SongType.COVER,
+            sourceUrl = "https://www.youtube.com/watch?v=mock-video-2",
+            publishedAt = Instant.parse("2026-06-20T12:00:00Z")
+        )
+    )
 
     val history = listOf(
         NotificationHistoryItem("h3", "마감 임박", "스텔라이브 공식 굿즈 예약 마감 임박", "hub-event:closing-official-goods", "굿즈/행사", "event_deadline_soon", DeliveryMode.STANDARD, null),
@@ -298,6 +331,55 @@ class MockHubRepository : HubRepository {
             val date = runCatching { LocalDate.parse(day.date) }.getOrNull()
             date != null && !date.isBefore(from) && !date.isAfter(to)
         }
+
+    override suspend fun songs(
+        generationId: String?,
+        memberId: String?,
+        type: String?,
+        query: String?,
+        cursor: String?,
+    ): SongListResult {
+        val filtered = songs
+            .asSequence()
+            .filter { generationId == null || generationId == "all" || it.generationId == generationId }
+            .filter { memberId == null || memberId == "all" || it.memberId == memberId }
+            .filter { type == null || type == "all" || it.type.apiValue == type }
+            .filter { query.isNullOrBlank() || it.title.contains(query, ignoreCase = true) || it.memberName.contains(query, ignoreCase = true) }
+            .toList()
+        return SongListResult(items = filtered, nextCursor = null)
+    }
+
+    override suspend fun songFacets(
+        generationId: String?,
+        memberId: String?,
+        type: String?,
+        query: String?,
+    ): SongFacets {
+        val filtered = songs(generationId, memberId, type, query, cursor = null).items
+        return SongFacets(
+            summary = SongFacetSummary(
+                total = filtered.size,
+                original = filtered.count { it.type == SongType.ORIGINAL },
+                cover = filtered.count { it.type == SongType.COVER },
+            ),
+            generationFilters = MainUiPolicy.songGenerationFilters().map { filter ->
+                SongFilterCount(
+                    id = filter.id,
+                    label = filter.label,
+                    generationId = filter.id.takeUnless { it == "all" },
+                    count = if (filter.id == "all") songs.size else songs.count { it.generationId == filter.id },
+                )
+            },
+            memberFilters = listOf(SongFilterCount("all", "전체", "all", songs.size)),
+            typeFilters = MainUiPolicy.songTypeFilters().map { filter ->
+                SongFilterCount(
+                    id = filter.id,
+                    label = filter.label,
+                    count = if (filter.id == "all") songs.size else songs.count { it.type.apiValue == filter.id },
+                )
+            },
+        )
+    }
 
     private fun HubEvent.overlaps(from: LocalDate, to: LocalDate): Boolean {
         val eventStart = startsAt?.atZone(calendarZone)?.toLocalDate()

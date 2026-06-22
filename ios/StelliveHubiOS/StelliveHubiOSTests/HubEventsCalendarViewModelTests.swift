@@ -541,6 +541,15 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertFalse(HubEventDetailFormatting.summaryLabel.contains(event.title))
     }
 
+    func testHubEventDetailLinkActionLabelFollowsCategory() {
+        XCTAssertEqual(HubEventDetailFormatting.linkActionLabel(for: .onlineGoods), "구매 링크")
+        XCTAssertEqual(HubEventDetailFormatting.linkActionLabel(for: .onlineCollab), "구매 링크")
+        XCTAssertEqual(HubEventDetailFormatting.linkActionLabel(for: .offlineConcert), "티켓 링크")
+        XCTAssertEqual(HubEventDetailFormatting.linkActionLabel(for: .ticketing), "티켓 링크")
+        XCTAssertEqual(HubEventDetailFormatting.linkActionLabel(for: .offlineCollab), "예약 링크")
+        XCTAssertEqual(HubEventDetailFormatting.linkActionLabel(for: .offlinePopup), "예약 링크")
+    }
+
     private func detailEvent() -> HubEvent {
         HubEvent(
             id: "popup-store",

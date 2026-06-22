@@ -183,6 +183,55 @@ final class HubAPIClientTests: XCTestCase {
         XCTAssertEqual(detail.id, "event-1")
     }
 
+    func testSongsListAndFacetsSendExpectedPathsAndDecodeResponses() async throws {
+        var seenPaths: [String] = []
+        let client = makeClient { request in
+            seenPaths.append(request.url?.path ?? "")
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+            let queryItems = Dictionary(uniqueKeysWithValues: (components?.queryItems ?? []).map { ($0.name, $0.value) })
+            if request.url?.path == "/v1/songs" {
+                XCTAssertEqual(queryItems["generationId"], "gen2")
+                XCTAssertEqual(queryItems["memberId"], "akane-lize")
+                XCTAssertEqual(queryItems["type"], "original")
+                XCTAssertEqual(queryItems["q"], "별빛")
+                return jsonResponse(statusCode: 200, body: """
+                    {
+                      "items": [{
+                        "id": "song-1",
+                        "youtubeVideoId": "abc123",
+                        "title": "별빛 항로",
+                        "memberId": "akane-lize",
+                        "memberName": "아카네 리제",
+                        "generationId": "gen2",
+                        "generationName": "2기생",
+                        "type": "original",
+                        "sourceUrl": "https://www.youtube.com/watch?v=abc123",
+                        "thumbnail": {"url": "https://i.ytimg.com/vi/abc123/mqdefault.jpg", "width": 320, "height": 180},
+                        "publishedAt": "2026-06-21T12:00:00.000Z"
+                      }],
+                      "nextCursor": null
+                    }
+                    """)
+            }
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "summary": {"total": 1, "original": 1, "cover": 0},
+                  "generationFilters": [{"id": "gen2", "label": "2기생", "generationId": "gen2", "count": 1}],
+                  "memberFilters": [],
+                  "typeFilters": []
+                }
+                """)
+        }
+
+        let songs = try await client.songs(generationId: "gen2", memberId: "akane-lize", type: "original", q: "별빛")
+        let facets = try await client.songFacets(generationId: "gen2")
+
+        XCTAssertEqual(seenPaths, ["/v1/songs", "/v1/songs/facets"])
+        XCTAssertEqual(songs.items.first?.id, "song-1")
+        XCTAssertEqual(songs.items.first?.thumbnail?.width, 320)
+        XCTAssertEqual(facets.summary.original, 1)
+    }
+
     private func makeClient(
         handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)
     ) -> HubAPIClient {
@@ -322,6 +371,34 @@ final class ServerHubStoreTests: XCTestCase {
         await store.refreshCalendar(from: Date(timeIntervalSince1970: 1_781_740_800), to: Date(timeIntervalSince1970: 1_782_777_599), timezone: TimeZone(identifier: "Asia/Seoul")!)
 
         XCTAssertEqual(store.serverCalendarDays.first?.entries.first?.eventId, "event-1")
+    }
+
+    func testRefreshSongsUsesServerResponses() async {
+        let store = makeStore { request in
+            XCTAssertEqual(request.url?.path, "/v1/songs")
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "items": [{
+                    "id": "song-1",
+                    "youtubeVideoId": "abc123",
+                    "title": "별빛 항로",
+                    "memberId": "akane-lize",
+                    "memberName": "아카네 리제",
+                    "generationId": "gen2",
+                    "generationName": "2기생",
+                    "type": "original",
+                    "sourceUrl": "https://www.youtube.com/watch?v=abc123",
+                    "publishedAt": "2026-06-21T12:00:00.000Z"
+                  }],
+                  "nextCursor": null
+                }
+                """)
+        }
+
+        await store.refreshSongs(generationId: "gen2", type: "original")
+
+        XCTAssertEqual(store.serverSongs.map(\.id), ["song-1"])
+        XCTAssertEqual(store.songs(generationId: "gen2", type: "original").items.first?.title, "별빛 항로")
     }
 
     private func makeStore(

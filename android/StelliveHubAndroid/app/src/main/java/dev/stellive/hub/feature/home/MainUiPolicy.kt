@@ -25,6 +25,11 @@ data class MainNavigationItem(
     val label: String
 )
 
+data class SongFilterOption(
+    val id: String,
+    val label: String
+)
+
 data class SettingsHubRow(
     val screenId: String,
     val title: String,
@@ -45,7 +50,7 @@ object MainUiPolicy {
     fun primaryNavigationItems(): List<MainNavigationItem> = listOf(
         MainNavigationItem("home", "홈"),
         MainNavigationItem("live", "라이브"),
-        MainNavigationItem("history", "기록"),
+        MainNavigationItem("songs", "노래"),
         MainNavigationItem("goods_events", "굿즈/행사")
     )
 
@@ -56,7 +61,7 @@ object MainUiPolicy {
         !canGoBack && screenId in primaryNavigationItems().map { it.screenId }
 
     fun showsTopBarText(screenId: String): Boolean =
-        screenId == "goods_event_detail" || screenId == "settings" || screenId.startsWith("settings_")
+        screenId == "goods_event_detail" || screenId == "history" || screenId == "settings" || screenId.startsWith("settings_")
 
     fun goodsEventDetailTopBarTitle(eventTitle: String): String = eventTitle
 
@@ -64,6 +69,7 @@ object MainUiPolicy {
 
     fun topBarTitle(screenId: String): String = when (screenId) {
         "live" -> "라이브"
+        "songs" -> "노래"
         "history" -> "기록"
         "settings" -> "설정"
         "settings_delivery" -> "전달 방식"
@@ -79,6 +85,7 @@ object MainUiPolicy {
 
     fun topBarRole(screenId: String): String = when (screenId) {
         "live" -> "방송 상태와 CHZZK 대상 현황"
+        "songs" -> "YouTube 업로드 곡 탐색"
         "history" -> "허용된 알림 기록과 정책 제외 항목"
         "settings" -> "알림 대상과 전송 정책"
         "settings_delivery" -> "알림 전달과 제한"
@@ -113,6 +120,19 @@ object MainUiPolicy {
     )
 
     fun homeSummaryCardsVisible(): Boolean = false
+
+    fun songGenerationFilters(): List<SongFilterOption> = listOf(
+        SongFilterOption("all", "전체"),
+        SongFilterOption("gen1", "1기생"),
+        SongFilterOption("gen2", "2기생"),
+        SongFilterOption("gen3", "3기생")
+    )
+
+    fun songTypeFilters(): List<SongFilterOption> = listOf(
+        SongFilterOption("all", "전체"),
+        SongFilterOption("original", "오리지널"),
+        SongFilterOption("cover", "커버")
+    )
 
     fun homeHubEventsListAction(closingSoonCount: Int): HomeHubEventsAction =
         if (closingSoonCount > 0) {
@@ -173,6 +193,12 @@ object MainUiPolicy {
                 deadlineSoonEnabled -> "켜짐 · 마감 임박 ON"
                 else -> "켜짐"
             }
+        ),
+        SettingsHubRow(
+            screenId = "history",
+            title = "알림 기록",
+            body = "허용된 알림과 정책 제외 항목을 확인합니다.",
+            value = "보기"
         ),
         SettingsHubRow(
             screenId = "advanced",

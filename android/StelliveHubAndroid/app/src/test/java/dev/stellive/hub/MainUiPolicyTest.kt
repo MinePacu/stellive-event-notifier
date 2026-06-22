@@ -14,6 +14,7 @@ class MainUiPolicyTest {
     fun topBarRolesMatchBottomNavigationScreens() {
         assertEquals("라이브 현황과 최근 알림", MainUiPolicy.topBarRole("home"))
         assertEquals("방송 상태와 CHZZK 대상 현황", MainUiPolicy.topBarRole("live"))
+        assertEquals("YouTube 업로드 곡 탐색", MainUiPolicy.topBarRole("songs"))
         assertEquals("허용된 알림 기록과 정책 제외 항목", MainUiPolicy.topBarRole("history"))
         assertEquals("알림 대상과 전송 정책", MainUiPolicy.topBarRole("settings"))
         assertEquals("상세", MainUiPolicy.topBarTitle("goods_event_detail"))
@@ -24,10 +25,12 @@ class MainUiPolicyTest {
     fun primaryNavigationMovesSettingsToTopBarAndAddsHubEventsTab() {
         val navigationItems = MainUiPolicy.primaryNavigationItems()
 
-        assertEquals(listOf("home", "live", "history", "goods_events"), navigationItems.map { it.screenId })
-        assertEquals(listOf("홈", "라이브", "기록", "굿즈/행사"), navigationItems.map { it.label })
+        assertEquals(listOf("home", "live", "songs", "goods_events"), navigationItems.map { it.screenId })
+        assertEquals(listOf("홈", "라이브", "노래", "굿즈/행사"), navigationItems.map { it.label })
         assertFalse(navigationItems.any { it.screenId == "settings" })
+        assertFalse(navigationItems.any { it.screenId == "history" })
         assertTrue(MainUiPolicy.showsSettingsTopBarAction("home", canGoBack = false))
+        assertTrue(MainUiPolicy.showsSettingsTopBarAction("songs", canGoBack = false))
         assertTrue(MainUiPolicy.showsSettingsTopBarAction("goods_events", canGoBack = false))
         assertFalse(MainUiPolicy.showsSettingsTopBarAction("settings", canGoBack = false))
         assertFalse(MainUiPolicy.showsSettingsTopBarAction("goods_event_detail", canGoBack = true))
@@ -107,7 +110,7 @@ class MainUiPolicyTest {
             deadlineSoonEnabled = true
         )
 
-        assertEquals(listOf("delivery", "targets", "platforms", "event_types", "hub_events", "advanced"), rows.map { it.screenId })
+        assertEquals(listOf("delivery", "targets", "platforms", "event_types", "hub_events", "history", "advanced"), rows.map { it.screenId })
         assertEquals("표준", rows.first { it.screenId == "delivery" }.value)
         assertEquals("4/5", rows.first { it.screenId == "platforms" }.value)
         assertEquals("켜짐 · 마감 임박 ON", rows.first { it.screenId == "hub_events" }.value)

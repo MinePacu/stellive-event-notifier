@@ -116,10 +116,11 @@ final class PreferenceStateTests: XCTestCase {
     }
 
     func testIOSPrimaryNavigationMovesSettingsToToolbarAndAddsHubEventsTab() {
-        XCTAssertEqual(IOSPrimaryNavigationPolicy.bottomTabs.map(\.id), ["home", "live", "history", "hubEvents"])
-        XCTAssertEqual(IOSPrimaryNavigationPolicy.bottomTabs.map(\.title), ["홈", "라이브", "기록", "굿즈/행사"])
+        XCTAssertEqual(IOSPrimaryNavigationPolicy.bottomTabs.map(\.id), ["home", "live", "songs", "hubEvents"])
+        XCTAssertEqual(IOSPrimaryNavigationPolicy.bottomTabs.map(\.title), ["홈", "라이브", "노래", "굿즈/행사"])
+        XCTAssertFalse(IOSPrimaryNavigationPolicy.bottomTabs.contains { $0.id == "history" })
         XCTAssertFalse(IOSPrimaryNavigationPolicy.bottomTabs.contains { $0.id == "settings" })
-        XCTAssertEqual(IOSPrimaryNavigationPolicy.titlelessPrimaryScreens, ["home", "hubEvents"])
+        XCTAssertEqual(IOSPrimaryNavigationPolicy.titlelessPrimaryScreens, ["home", "live", "songs", "hubEvents"])
         XCTAssertEqual(IOSPrimaryNavigationPolicy.settingsAccess.placement, .topBarTrailing)
         XCTAssertEqual(IOSPrimaryNavigationPolicy.settingsAccess.systemImage, "slider.horizontal.3")
         XCTAssertTrue(IOSPrimaryNavigationPolicy.settingsAccess.appliesToAllPrimaryTabs)

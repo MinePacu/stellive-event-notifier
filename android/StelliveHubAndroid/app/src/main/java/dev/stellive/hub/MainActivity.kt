@@ -50,6 +50,7 @@ import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.NotificationEventType
 import dev.stellive.hub.core.model.NotificationHistoryItem
 import dev.stellive.hub.core.model.NotificationPlatform
+import dev.stellive.hub.core.model.SongCatalogItem
 import dev.stellive.hub.databinding.ActivityMainBinding
 import dev.stellive.hub.feature.calendar.HubCalendarDeepLinkPolicy
 import dev.stellive.hub.feature.calendar.CalendarUiPolicy
@@ -110,6 +111,8 @@ private var liveMemberPriorityIds: List<String> = emptyList()
 private var draggingLiveMemberId: String? = null
     private var selectedHistoryEventTypeFilterId = "all"
     private var selectedHistoryMemberFilterId = "all"
+    private var selectedSongGenerationId = "all"
+    private var selectedSongType = "all"
     private var selectedHubEventId: String? = null
     private var goodsEventsDays: List<HubCalendarDay> = emptyList()
     private var goodsEvents: List<HubEvent> = emptyList()
@@ -271,6 +274,7 @@ private var draggingLiveMemberId: String? = null
     private fun renderScreen(screen: HubScreen) {
         when (screen) {
             HubScreen.HOME -> renderHome()
+            HubScreen.SONGS -> renderSongs()
             HubScreen.GOODS_EVENTS -> renderGoodsEvents()
             HubScreen.GOODS_EVENT_DETAIL -> renderHubEventDetail()
             HubScreen.LIVE -> renderLive()
@@ -283,7 +287,7 @@ private var draggingLiveMemberId: String? = null
             HubScreen.SETTINGS_HUB_EVENTS -> renderSettingsHubEvents()
             HubScreen.SETTINGS_ADVANCED -> renderSettingsAdvanced()
         }
-        binding.contentRefresh.isEnabled = screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS
+        binding.contentRefresh.isEnabled = screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS || screen == HubScreen.SONGS
     }
 
     private fun updateSelectedBottomNavigation(screen: HubScreen) {
@@ -296,7 +300,7 @@ private var draggingLiveMemberId: String? = null
     private fun bottomNavigationItems(): List<View> = listOf(
         binding.tabHome,
         binding.tabLive,
-        binding.tabHistory,
+        binding.tabSongs,
         binding.tabGoodsEvents
     )
 
@@ -331,17 +335,18 @@ private var draggingLiveMemberId: String? = null
 
     private fun screenForItem(itemId: Int): HubScreen = when (itemId) {
         R.id.tab_live -> HubScreen.LIVE
-        R.id.tab_history -> HubScreen.HISTORY
+        R.id.tab_songs -> HubScreen.SONGS
         R.id.tab_goods_events -> HubScreen.GOODS_EVENTS
         else -> HubScreen.HOME
     }
 
     private fun itemForScreen(screen: HubScreen): Int? = when (screen) {
         HubScreen.HOME -> R.id.tab_home
+        HubScreen.SONGS -> R.id.tab_songs
         HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
         HubScreen.GOODS_EVENT_DETAIL -> R.id.tab_goods_events
         HubScreen.LIVE -> R.id.tab_live
-        HubScreen.HISTORY -> R.id.tab_history
+        HubScreen.HISTORY -> null
         HubScreen.SETTINGS -> null
         HubScreen.SETTINGS_DELIVERY -> null
         HubScreen.SETTINGS_TARGETS -> null
@@ -810,6 +815,115 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
         binding.contentList.addView(noticeCard(MainUiPolicy.historyPolicyNotice()))
     }
 
+    private fun renderSongs() {
+        startScreen(
+            screenId = "songs",
+            title = getString(R.string.songs_title),
+            role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
+        )
+        binding.contentList.addView(
+            compactEventCard(
+                title = "노래",
+                body = "모바일 앱은 YouTube를 직접 호출하지 않고 서버 API의 캐시된 곡 목록만 표시합니다.",
+                pills = listOf("YouTube", "서버 캐시")
+            )
+        )
+        binding.contentList.addView(songFilterChips())
+        binding.contentList.addView(noticeCard("불러오는 중 · 서버에서 노래 목록을 가져오고 있습니다."))
+
+        CoroutineScope(Dispatchers.Main).launch {
+            val songs = serverRepository.songs(
+                generationId = selectedSongGenerationId,
+                type = selectedSongType,
+            )
+            if (navigationHistory.currentScreen != HubScreen.SONGS) return@launch
+            startScreen(
+                screenId = "songs",
+                title = getString(R.string.songs_title),
+                role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
+            )
+            binding.contentList.addView(
+                compactEventCard(
+                    title = "노래",
+                    body = "모바일 앱은 YouTube를 직접 호출하지 않고 서버 API의 캐시된 곡 목록만 표시합니다.",
+                    pills = listOf("YouTube", "서버 캐시")
+                )
+            )
+            binding.contentList.addView(songFilterChips())
+            if (songs.items.isEmpty()) {
+                binding.contentList.addView(noticeCard("표시할 노래가 없습니다. 필터를 바꾸거나 나중에 다시 확인해 주세요."))
+            } else {
+                songs.items.forEach { song ->
+                    binding.contentList.addView(songCard(song))
+                }
+            }
+        }
+    }
+
+    private fun songFilterChips(): HorizontalScrollView =
+        HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(12)
+            }
+            addView(ChipGroup(context).apply {
+                isSingleLine = true
+                MainUiPolicy.songGenerationFilters().forEach { filter ->
+                    addView(Chip(context).apply {
+                        text = filter.label
+                        isCheckable = true
+                        isChecked = filter.id == selectedSongGenerationId
+                        setOnClickListener {
+                            selectedSongGenerationId = filter.id
+                            renderSongs()
+                        }
+                    })
+                }
+                MainUiPolicy.songTypeFilters().forEach { filter ->
+                    addView(Chip(context).apply {
+                        text = filter.label
+                        isCheckable = true
+                        isChecked = filter.id == selectedSongType
+                        setOnClickListener {
+                            selectedSongType = filter.id
+                            renderSongs()
+                        }
+                    })
+                }
+            })
+        }
+
+    private fun songCard(song: SongCatalogItem): MaterialCardView =
+        baseCard().apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(10)
+            }
+            val content = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(15), dp(14), dp(15), dp(14))
+            }
+            content.addView(TextView(context).apply {
+                text = song.title
+                setTextColor(color(R.color.hub_text))
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            content.addView(TextView(context).apply {
+                text = "${song.memberName} · ${song.generationName} · ${song.type.displayName}"
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 12f
+                setPadding(0, dp(5), 0, 0)
+            })
+            content.addView(TextView(context).apply {
+                text = song.sourceUrl
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 12f
+                setPadding(0, dp(8), 0, 0)
+                maxLines = 1
+            })
+            addView(content)
+        }
+
     private fun renderSettings() {
         val settings = repository.settings
         startScreen(
@@ -1067,6 +1181,7 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
         "platforms" -> HubScreen.SETTINGS_PLATFORMS
         "event_types" -> HubScreen.SETTINGS_EVENT_TYPES
         "hub_events" -> HubScreen.SETTINGS_HUB_EVENTS
+        "history" -> HubScreen.HISTORY
         "advanced" -> HubScreen.SETTINGS_ADVANCED
         else -> HubScreen.SETTINGS
     }
@@ -1947,7 +2062,7 @@ private fun hubEventDetailHero(event: dev.stellive.hub.core.model.HubEvent): Fra
             }
         )
         addView(
-            detailActionButton("티켓 링크", primary = false) {
+            detailActionButton(HubEventDetailFormatting.linkActionLabel(event.category), primary = false) {
                 openExternalUrl(event.ticketUrl ?: event.purchaseUrl ?: event.sourceUrl)
             },
             LinearLayout.LayoutParams(0, dp(50), 1f).apply {

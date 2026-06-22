@@ -151,6 +151,51 @@ data class HubCalendarEntryDto(
     val platformUrl: String? = null,
 )
 
+data class SongThumbnailDto(
+    val url: String,
+    val width: Int,
+    val height: Int,
+)
+
+data class SongCatalogItemDto(
+    val id: String,
+    val youtubeVideoId: String,
+    val title: String,
+    val memberId: String,
+    val memberName: String,
+    val generationId: String,
+    val generationName: String,
+    val type: String,
+    val sourceUrl: String,
+    val thumbnail: SongThumbnailDto? = null,
+    val publishedAt: String,
+)
+
+data class SongListResponseDto(
+    val items: List<SongCatalogItemDto> = emptyList(),
+    val nextCursor: String? = null,
+)
+
+data class SongFilterCountDto(
+    val id: String,
+    val label: String,
+    val generationId: String? = null,
+    val count: Int,
+)
+
+data class SongFacetSummaryDto(
+    val total: Int,
+    val original: Int,
+    val cover: Int,
+)
+
+data class SongFacetsResponseDto(
+    val summary: SongFacetSummaryDto,
+    val generationFilters: List<SongFilterCountDto> = emptyList(),
+    val memberFilters: List<SongFilterCountDto> = emptyList(),
+    val typeFilters: List<SongFilterCountDto> = emptyList(),
+)
+
 data class HubCalendarWidgetSnapshotDto(
     val timezone: String,
     val generatedAt: String,

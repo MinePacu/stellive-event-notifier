@@ -13,6 +13,13 @@ import dev.stellive.hub.core.model.HubEventParticipationMode
 import dev.stellive.hub.core.model.HubEventSourceType
 import dev.stellive.hub.core.model.HubEventStatus
 import dev.stellive.hub.core.model.NotificationSettingState
+import dev.stellive.hub.core.model.SongCatalogItem
+import dev.stellive.hub.core.model.SongFacetSummary
+import dev.stellive.hub.core.model.SongFacets
+import dev.stellive.hub.core.model.SongFilterCount
+import dev.stellive.hub.core.model.SongListResult
+import dev.stellive.hub.core.model.SongThumbnail
+import dev.stellive.hub.core.model.SongType
 import dev.stellive.hub.core.network.BootstrapResponseDto
 import dev.stellive.hub.core.network.HubCalendarEntryDto
 import dev.stellive.hub.core.network.HubCalendarResponseDto
@@ -22,6 +29,10 @@ import dev.stellive.hub.core.network.HubNetworkResult
 import dev.stellive.hub.core.network.LiveStatusDto
 import dev.stellive.hub.core.network.RegisterDeviceRequestDto
 import dev.stellive.hub.core.network.RegisterDeviceResponseDto
+import dev.stellive.hub.core.network.SongCatalogItemDto
+import dev.stellive.hub.core.network.SongFacetsResponseDto
+import dev.stellive.hub.core.network.SongFilterCountDto
+import dev.stellive.hub.core.network.SongListResponseDto
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -36,6 +47,8 @@ class ServerHubRepository(
 ) : HubRepository {
     private val eventCache = linkedMapOf<String, HubEvent>()
     private var calendarCache: List<HubCalendarDay> = emptyList()
+    private var songCache: SongListResult? = null
+    private var songFacetCache: SongFacets? = null
 
     override suspend fun bootstrap(): HubDataState {
         val deviceId = deviceIdStore.getDeviceId()
@@ -92,6 +105,44 @@ class ServerHubRepository(
             return days
         }
         return calendarCache.takeIf { it.isNotEmpty() } ?: fallback.hubCalendarDays(from, to, timezone)
+    }
+
+    override suspend fun songs(
+        generationId: String?,
+        memberId: String?,
+        type: String?,
+        query: String?,
+        cursor: String?,
+    ): SongListResult {
+        val response = remoteDataSource.songs(
+            generationId = generationId,
+            memberId = memberId,
+            type = type,
+            q = query,
+            cursor = cursor,
+            limit = 30,
+        )
+        if (response is HubNetworkResult.Success) {
+            val result = response.value.toSongListResult()
+            songCache = result
+            return result
+        }
+        return songCache ?: fallback.songs(generationId, memberId, type, query, cursor)
+    }
+
+    override suspend fun songFacets(
+        generationId: String?,
+        memberId: String?,
+        type: String?,
+        query: String?,
+    ): SongFacets {
+        val response = remoteDataSource.songFacets(generationId = generationId, memberId = memberId, type = type, q = query)
+        if (response is HubNetworkResult.Success) {
+            val facets = response.value.toSongFacets()
+            songFacetCache = facets
+            return facets
+        }
+        return songFacetCache ?: fallback.songFacets(generationId, memberId, type, query)
     }
 
     private suspend fun registerDevice() {
@@ -182,6 +233,47 @@ class ServerHubRepository(
     private fun HubCalendarResponseDto.toCalendarDays(): List<HubCalendarDay> =
         days.map { day -> HubCalendarDay(date = day.date, entries = day.entries.mapNotNull { it.toCalendarEntryOrNull() }) }
 
+    private fun SongListResponseDto.toSongListResult(): SongListResult =
+        SongListResult(
+            items = items.mapNotNull { it.toSongCatalogItemOrNull() },
+            nextCursor = nextCursor,
+        )
+
+    private fun SongCatalogItemDto.toSongCatalogItemOrNull(): SongCatalogItem? {
+        val type = SongType.fromApiValue(type) ?: return null
+        val publishedAt = parseInstantOrNull(publishedAt) ?: return null
+        return SongCatalogItem(
+            id = id,
+            youtubeVideoId = youtubeVideoId,
+            title = title,
+            memberId = memberId,
+            memberName = memberName,
+            generationId = generationId,
+            generationName = generationName,
+            type = type,
+            sourceUrl = sourceUrl,
+            thumbnail = thumbnail?.let {
+                SongThumbnail(url = it.url, width = it.width, height = it.height)
+            },
+            publishedAt = publishedAt,
+        )
+    }
+
+    private fun SongFacetsResponseDto.toSongFacets(): SongFacets =
+        SongFacets(
+            summary = SongFacetSummary(
+                total = summary.total,
+                original = summary.original,
+                cover = summary.cover,
+            ),
+            generationFilters = generationFilters.map { it.toSongFilterCount() },
+            memberFilters = memberFilters.map { it.toSongFilterCount() },
+            typeFilters = typeFilters.map { it.toSongFilterCount() },
+        )
+
+    private fun SongFilterCountDto.toSongFilterCount(): SongFilterCount =
+        SongFilterCount(id = id, label = label, generationId = generationId, count = count)
+
     private fun HubCalendarEntryDto.toCalendarEntryOrNull(): HubCalendarEntry? {
         val kind = entryKind?.toEnum<HubCalendarEntryKind>() ?: HubCalendarEntryKind.HUB_EVENT
         val calendarEventId = eventId ?: if (kind == HubCalendarEntryKind.HUB_EVENT) return null else id
@@ -224,6 +316,20 @@ class ServerHubRepository(
         ): HubNetworkResult<dev.stellive.hub.core.network.HubEventsListResponseDto>
         suspend fun hubEvent(id: String): HubNetworkResult<HubEventDto>
         suspend fun hubEventsCalendar(from: String, to: String, timezone: String): HubNetworkResult<HubCalendarResponseDto>
+        suspend fun songs(
+            generationId: String? = null,
+            memberId: String? = null,
+            type: String? = null,
+            q: String? = null,
+            cursor: String? = null,
+            limit: Int? = null,
+        ): HubNetworkResult<SongListResponseDto>
+        suspend fun songFacets(
+            generationId: String? = null,
+            memberId: String? = null,
+            type: String? = null,
+            q: String? = null,
+        ): HubNetworkResult<SongFacetsResponseDto>
     }
 
     class HubApiRemoteDataSource(
@@ -251,5 +357,23 @@ class ServerHubRepository(
             to: String,
             timezone: String,
         ): HubNetworkResult<HubCalendarResponseDto> = client.hubEventsCalendar(from = from, to = to, timezone = timezone)
+
+        override suspend fun songs(
+            generationId: String?,
+            memberId: String?,
+            type: String?,
+            q: String?,
+            cursor: String?,
+            limit: Int?,
+        ): HubNetworkResult<SongListResponseDto> =
+            client.songs(generationId = generationId, memberId = memberId, type = type, q = q, cursor = cursor, limit = limit)
+
+        override suspend fun songFacets(
+            generationId: String?,
+            memberId: String?,
+            type: String?,
+            q: String?,
+        ): HubNetworkResult<SongFacetsResponseDto> =
+            client.songFacets(generationId = generationId, memberId = memberId, type = type, q = q)
     }
 }

@@ -13,6 +13,12 @@ import dev.stellive.hub.core.network.MobileConfigDto
 import dev.stellive.hub.core.network.PreferencesResponseDto
 import dev.stellive.hub.core.network.RegisterDeviceRequestDto
 import dev.stellive.hub.core.network.RegisterDeviceResponseDto
+import dev.stellive.hub.core.network.SongCatalogItemDto
+import dev.stellive.hub.core.network.SongFacetSummaryDto
+import dev.stellive.hub.core.network.SongFacetsResponseDto
+import dev.stellive.hub.core.network.SongFilterCountDto
+import dev.stellive.hub.core.network.SongListResponseDto
+import dev.stellive.hub.core.network.SongThumbnailDto
 import dev.stellive.hub.core.network.UpdateDeviceTokenRequestDto
 import dev.stellive.hub.core.network.UpdateDeviceTokenResponseDto
 import dev.stellive.hub.core.network.UpdatePreferencesRequestDto
@@ -230,6 +236,41 @@ class HubApiClientTest {
         assertEquals("server-event", decoded?.days?.single()?.entries?.single()?.eventId)
     }
 
+    @Test
+    fun songClientReturnsListAndFacetResponses() = runTest {
+        val client = HubApiClient(
+            api = FakeHubApi(
+                songsResponse = SongListResponseDto(
+                    items = listOf(
+                        SongCatalogItemDto(
+                            id = "song-1",
+                            youtubeVideoId = "abc123",
+                            title = "별빛 항로",
+                            memberId = "akane-lize",
+                            memberName = "아카네 리제",
+                            generationId = "gen2",
+                            generationName = "2기생",
+                            type = "original",
+                            sourceUrl = "https://www.youtube.com/watch?v=abc123",
+                            thumbnail = SongThumbnailDto("https://i.ytimg.com/vi/abc123/mqdefault.jpg", 320, 180),
+                            publishedAt = "2026-06-21T12:00:00.000Z",
+                        ),
+                    ),
+                ),
+                songFacetsResponse = SongFacetsResponseDto(
+                    summary = SongFacetSummaryDto(total = 1, original = 1, cover = 0),
+                    generationFilters = listOf(SongFilterCountDto("gen2", "2기생", "gen2", 1)),
+                ),
+            ),
+        )
+
+        val list = client.songs(generationId = "gen2", type = "original")
+        val facets = client.songFacets(generationId = "gen2")
+
+        assertEquals("song-1", (list as HubNetworkResult.Success).value.items.single().id)
+        assertEquals(1, (facets as HubNetworkResult.Success).value.summary.original)
+    }
+
     private class FakeHubApi(
         private val bootstrapResponse: BootstrapResponseDto? = null,
         private val hubEventsResponse: HubEventsListResponseDto = HubEventsListResponseDto(),
@@ -237,6 +278,10 @@ class HubApiClientTest {
         private val calendarResponse: HubCalendarResponseDto = HubCalendarResponseDto(
             timezone = "Asia/Seoul",
             generatedAt = "2026-06-18T00:00:00.000Z",
+        ),
+        private val songsResponse: SongListResponseDto = SongListResponseDto(),
+        private val songFacetsResponse: SongFacetsResponseDto = SongFacetsResponseDto(
+            summary = SongFacetSummaryDto(total = 0, original = 0, cover = 0),
         ),
         private val failure: Throwable? = null,
     ) : HubApi {
@@ -311,6 +356,28 @@ class HubApiClientTest {
         ): HubCalendarResponseDto {
             failure?.let { throw it }
             return calendarResponse
+        }
+
+        override suspend fun songs(
+            generationId: String?,
+            memberId: String?,
+            type: String?,
+            q: String?,
+            cursor: String?,
+            limit: Int?,
+        ): SongListResponseDto {
+            failure?.let { throw it }
+            return songsResponse
+        }
+
+        override suspend fun songFacets(
+            generationId: String?,
+            memberId: String?,
+            type: String?,
+            q: String?,
+        ): SongFacetsResponseDto {
+            failure?.let { throw it }
+            return songFacetsResponse
         }
     }
 }

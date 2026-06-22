@@ -53,6 +53,8 @@ const envSchema = z
     YOUTUBE_WEBSUB_VERIFY_TOKEN: optionalString(),
     YOUTUBE_WEBSUB_ENABLED: booleanFlag(true),
     YOUTUBE_DATA_API_FALLBACK_ENABLED: booleanFlag(false),
+    YOUTUBE_SONG_BACKFILL_MAX_PAGES: z.coerce.number().int().positive().default(1),
+    YOUTUBE_SONG_RECONCILE_MAX_CHANNELS: z.coerce.number().int().positive().default(10),
 
     X_BEARER_TOKEN: optionalString(),
     X_API_COST_POLICY: z.literal("no_paid_api").default("no_paid_api"),

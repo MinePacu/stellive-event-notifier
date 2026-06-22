@@ -10,6 +10,12 @@ import dev.stellive.hub.core.network.LiveStatusDto
 import dev.stellive.hub.core.network.MobileConfigDto
 import dev.stellive.hub.core.network.RegisterDeviceRequestDto
 import dev.stellive.hub.core.network.RegisterDeviceResponseDto
+import dev.stellive.hub.core.network.SongCatalogItemDto
+import dev.stellive.hub.core.network.SongFacetSummaryDto
+import dev.stellive.hub.core.network.SongFacetsResponseDto
+import dev.stellive.hub.core.network.SongFilterCountDto
+import dev.stellive.hub.core.network.SongListResponseDto
+import dev.stellive.hub.core.network.SongThumbnailDto
 import dev.stellive.hub.feature.home.MockHubRepository
 import dev.stellive.hub.feature.home.ServerHubRepository
 import java.time.LocalDate
@@ -102,12 +108,62 @@ class ServerHubRepositoryTest {
         assertEquals("device-created", deviceIdStore.getDeviceId())
     }
 
+    @Test
+    fun songsForwardsFiltersAndMapsServerDtos() = runTest {
+        val remote = RecordingRemoteDataSource()
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val songs = repository.songs(
+            generationId = "gen2",
+            memberId = "akane-lize",
+            type = "original",
+            query = "별빛",
+            cursor = "cursor-1",
+        )
+
+        assertEquals("gen2", remote.lastSongGenerationId)
+        assertEquals("akane-lize", remote.lastSongMemberId)
+        assertEquals("original", remote.lastSongType)
+        assertEquals("별빛", remote.lastSongQuery)
+        assertEquals("cursor-1", remote.lastSongCursor)
+        assertEquals(1, songs.items.size)
+        assertEquals("song-1", songs.items.first().id)
+        assertEquals("original", songs.items.first().type.apiValue)
+        assertEquals(320, songs.items.first().thumbnail?.width)
+    }
+
+    @Test
+    fun songFacetsMapServerFiltersWithoutGamjaOrOfficial() = runTest {
+        val remote = RecordingRemoteDataSource()
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val facets = repository.songFacets()
+
+        assertEquals(listOf("all", "gen1", "gen2", "gen3"), facets.generationFilters.map { it.id })
+        assertFalse(facets.generationFilters.any { it.id == "gamja" || it.id == "official" })
+        assertEquals(1, facets.summary.original)
+        assertEquals(2, facets.summary.cover)
+    }
+
     private class RecordingRemoteDataSource : ServerHubRepository.RemoteDataSource {
         var bootstrapCalls = 0
         var registerCalls = 0
         var lastHubEventsGenerationId: String? = null
         var lastHubEventsFrom: String? = null
         var lastHubEventsTo: String? = null
+        var lastSongGenerationId: String? = null
+        var lastSongMemberId: String? = null
+        var lastSongType: String? = null
+        var lastSongQuery: String? = null
+        var lastSongCursor: String? = null
 
         override suspend fun bootstrap(deviceId: String?): HubNetworkResult<BootstrapResponseDto> {
             bootstrapCalls += 1
@@ -174,12 +230,71 @@ class ServerHubRepositoryTest {
         override suspend fun hubEventsCalendar(
             from: String,
             to: String,
-            timezone: String,
+        timezone: String,
         ): HubNetworkResult<HubCalendarResponseDto> =
             HubNetworkResult.Success(
                 HubCalendarResponseDto(
                     timezone = timezone,
                     generatedAt = "2026-06-11T03:00:00.000Z",
+                ),
+            )
+
+        override suspend fun songs(
+            generationId: String?,
+            memberId: String?,
+            type: String?,
+            q: String?,
+            cursor: String?,
+            limit: Int?,
+        ): HubNetworkResult<SongListResponseDto> {
+            lastSongGenerationId = generationId
+            lastSongMemberId = memberId
+            lastSongType = type
+            lastSongQuery = q
+            lastSongCursor = cursor
+            return HubNetworkResult.Success(
+                SongListResponseDto(
+                    items = listOf(
+                        SongCatalogItemDto(
+                            id = "song-1",
+                            youtubeVideoId = "abc123",
+                            title = "별빛 항로",
+                            memberId = "akane-lize",
+                            memberName = "아카네 리제",
+                            generationId = "gen2",
+                            generationName = "2기생",
+                            type = "original",
+                            sourceUrl = "https://www.youtube.com/watch?v=abc123",
+                            thumbnail = SongThumbnailDto(
+                                url = "https://i.ytimg.com/vi/abc123/mqdefault.jpg",
+                                width = 320,
+                                height = 180,
+                            ),
+                            publishedAt = "2026-06-21T12:00:00.000Z",
+                        ),
+                    ),
+                    nextCursor = "next-cursor",
+                ),
+            )
+        }
+
+        override suspend fun songFacets(
+            generationId: String?,
+            memberId: String?,
+            type: String?,
+            q: String?,
+        ): HubNetworkResult<SongFacetsResponseDto> =
+            HubNetworkResult.Success(
+                SongFacetsResponseDto(
+                    summary = SongFacetSummaryDto(total = 3, original = 1, cover = 2),
+                    generationFilters = listOf(
+                        SongFilterCountDto("all", "전체", null, 3),
+                        SongFilterCountDto("gen1", "1기생", "gen1", 1),
+                        SongFilterCountDto("gen2", "2기생", "gen2", 1),
+                        SongFilterCountDto("gen3", "3기생", "gen3", 1),
+                    ),
+                    memberFilters = emptyList(),
+                    typeFilters = emptyList(),
                 ),
             )
     }

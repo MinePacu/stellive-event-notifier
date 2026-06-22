@@ -270,6 +270,98 @@ paths:
       responses:
         "200":
           description: Compact home preview metrics and up to three hub events.
+  /v1/songs/facets:
+    get:
+      summary: Mobile song page facet counts.
+      parameters:
+        - name: generationId
+          in: query
+          schema:
+            type: string
+            enum: [all, gen1, gen2, gen3]
+        - name: memberId
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [all, original, cover]
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Summary, generation, member, and type counts for the mobile song page.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: private, max-age=60
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SongFacetsResponse"
+        "400":
+          description: Invalid song facet query.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SongQueryError"
+  /v1/songs:
+    get:
+      summary: Mobile song page cached song list.
+      parameters:
+        - name: generationId
+          in: query
+          schema:
+            type: string
+            enum: [all, gen1, gen2, gen3]
+        - name: memberId
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [all, original, cover]
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            oneOf:
+              - type: string
+              - type: integer
+            default: 30
+            maximum: 50
+      responses:
+        "200":
+          description: Cached backend song list for mobile clients. Route handlers do not call YouTube directly.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              description: private, max-age=30
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SongListResponse"
+        "400":
+          description: Invalid song list query.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SongQueryError"
   /v1/preferences:
     get:
       responses:
@@ -903,6 +995,174 @@ components:
           type: array
           items:
             type: object
+    SongThumbnail:
+      type: object
+      required:
+        - url
+        - width
+        - height
+      properties:
+        url:
+          type: string
+          format: uri
+        width:
+          type: integer
+          minimum: 1
+        height:
+          type: integer
+          minimum: 1
+    SongCatalogItem:
+      type: object
+      required:
+        - id
+        - youtubeVideoId
+        - title
+        - memberId
+        - memberName
+        - generationId
+        - generationName
+        - type
+        - sourceUrl
+        - publishedAt
+      properties:
+        id:
+          type: string
+        youtubeVideoId:
+          type: string
+        title:
+          type: string
+        memberId:
+          type: string
+        memberName:
+          type: string
+        generationId:
+          type: string
+          enum: [gen1, gen2, gen3]
+        generationName:
+          type: string
+        type:
+          type: string
+          enum: [original, cover]
+        sourceUrl:
+          type: string
+          format: uri
+        thumbnail:
+          $ref: "#/components/schemas/SongThumbnail"
+        publishedAt:
+          type: string
+          format: date-time
+    SongFacetSummary:
+      type: object
+      required:
+        - total
+        - original
+        - cover
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        original:
+          type: integer
+          minimum: 0
+        cover:
+          type: integer
+          minimum: 0
+    SongFilterCount:
+      type: object
+      required:
+        - id
+        - label
+        - count
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        generationId:
+          type: string
+          enum: [all, gen1, gen2, gen3]
+        count:
+          type: integer
+          minimum: 0
+    SongDisplaySettings:
+      type: object
+      required:
+        - summaryCards
+      properties:
+        summaryCards:
+          type: object
+          required:
+            - songs
+            - live
+            - hubEvents
+            - home
+          properties:
+            songs:
+              type: boolean
+            live:
+              type: boolean
+            hubEvents:
+              type: boolean
+            home:
+              type: boolean
+    SongFacetsResponse:
+      type: object
+      required:
+        - summary
+        - generationFilters
+        - memberFilters
+        - typeFilters
+        - displaySettings
+        - serverTime
+      properties:
+        summary:
+          $ref: "#/components/schemas/SongFacetSummary"
+        generationFilters:
+          type: array
+          items:
+            $ref: "#/components/schemas/SongFilterCount"
+        memberFilters:
+          type: array
+          items:
+            $ref: "#/components/schemas/SongFilterCount"
+        typeFilters:
+          type: array
+          items:
+            $ref: "#/components/schemas/SongFilterCount"
+        displaySettings:
+          $ref: "#/components/schemas/SongDisplaySettings"
+        serverTime:
+          type: string
+          format: date-time
+    SongListResponse:
+      type: object
+      required:
+        - items
+        - serverTime
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SongCatalogItem"
+        nextCursor:
+          type:
+            - string
+            - "null"
+        serverTime:
+          type: string
+          format: date-time
+    SongQueryError:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          enum:
+            - unsupported_song_generation_filter
+            - unsupported_song_type_filter
+            - invalid_limit
+            - unknown_member
     BootstrapResponse:
       type: object
       required:
