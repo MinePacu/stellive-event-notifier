@@ -4,7 +4,7 @@ import { ResponseCache, type ResponseCachePolicy } from "../cache/responseCache.
 import { toMusicCatalogDto } from "../music/musicDto.js";
 import { PrismaMusicRepository } from "../repositories/musicRepository.js";
 
-type MusicSort = "publishedAt_desc";
+type MusicSort = "publishedAt_desc" | "publishedAtDesc" | "playlistOrder";
 
 export interface MusicRoutesRepository {
   listMusicItems(filters: {
@@ -13,6 +13,9 @@ export interface MusicRoutesRepository {
     cursor?: string;
     limit?: number;
     sort?: MusicSort;
+    includeGraduated?: boolean;
+    includeInstrumental?: boolean;
+    includeExcluded?: boolean;
   }): Promise<{ items: MusicCatalogItem[]; nextCursor?: string | null }>;
   getMusicItem?(id: string): Promise<MusicCatalogItem | null>;
   listMusicMembers?(): Promise<Array<{ id: string; nameKo: string; nameEn: string }>>;
@@ -79,27 +82,41 @@ export default async function registerMusicRoutes(app: FastifyInstance, options:
 }
 
 function parseMusicListQuery(query: Record<string, unknown>, memberId?: string):
-  | { ok: true; filters: { type?: MusicPublicTypeFilter; memberId?: string; cursor?: string; limit?: number; sort?: MusicSort } }
-  | { ok: false } {
+| { ok: true; filters: { type?: MusicPublicTypeFilter; memberId?: string; cursor?: string; limit?: number; sort?: MusicSort; includeGraduated?: boolean; includeInstrumental?: boolean; includeExcluded?: boolean } }
+| { ok: false } {
   const type = typeof query.type === "string" ? query.type : "all";
   const sort = typeof query.sort === "string" ? query.sort : "publishedAt_desc";
   const limit = typeof query.limit === "string" ? Number(query.limit) : undefined;
   const cursor = typeof query.cursor === "string" ? query.cursor : undefined;
 
   if (!validTypes.has(type)) return { ok: false };
-  if (sort !== "publishedAt_desc") return { ok: false };
+  if (sort !== "publishedAt_desc" && sort !== "publishedAtDesc" && sort !== "playlistOrder") return { ok: false };
   if (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 100)) return { ok: false };
+  const includeGraduated = parseBooleanQuery(query.includeGraduated);
+  const includeInstrumental = parseBooleanQuery(query.includeInstrumental);
+  const includeExcluded = parseBooleanQuery(query.includeExcluded);
+  if (includeGraduated === "invalid" || includeInstrumental === "invalid" || includeExcluded === "invalid") return { ok: false };
 
   return {
     ok: true,
     filters: removeUndefined({
       type: type as MusicPublicTypeFilter,
       memberId,
-      cursor,
-      limit,
-      sort,
-    }),
-  };
+    cursor,
+    limit,
+    sort,
+    includeGraduated,
+    includeInstrumental,
+    includeExcluded,
+  }),
+};
+}
+
+function parseBooleanQuery(value: unknown): boolean | undefined | "invalid" {
+  if (value === undefined) return undefined;
+  if (value === "true" || value === true) return true;
+  if (value === "false" || value === false) return false;
+  return "invalid";
 }
 
 function normalizedCacheKey(path: string, filters: Record<string, unknown>): string {

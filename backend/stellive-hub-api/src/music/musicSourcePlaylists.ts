@@ -1,6 +1,6 @@
 import type { MusicItemType } from "../../../../shared/schemas/domain.js";
 
-export type MusicSourceRawCategoryHint = "COVER" | "SINGLE" | "EP" | "OTHERS";
+export type MusicSourceRawCategoryHint = "COVER" | "SINGLE" | "EP" | "ORIGINAL" | "OTHERS";
 
 export interface MusicSourcePlaylistSeed {
   youtubePlaylistId: string;
@@ -59,12 +59,35 @@ export const musicSourcePlaylistSeeds: MusicSourcePlaylistSeed[] = [
   },
 ];
 
+export const OFFICIAL_STELLIVE_MUSIC_COVER_PLAYLIST_ID = "PLLjd981H8qSN9PQ8-X6wINqBF1GjGxusy";
+export const OFFICIAL_STELLIVE_MUSIC_ORIGINAL_PLAYLIST_ID = "PLLjd981H8qSMGC4Nir0hD2Gj9n9PDUoHX";
+
+export const officialStelliveMusicSourcePlaylistSeeds: MusicSourcePlaylistSeed[] = [
+  {
+    youtubePlaylistId: OFFICIAL_STELLIVE_MUSIC_COVER_PLAYLIST_ID,
+    title: "Stellive Official Music COVER",
+    type: "cover",
+    rawCategoryHint: "COVER",
+    memberId: null,
+    isActive: true,
+  },
+  {
+    youtubePlaylistId: OFFICIAL_STELLIVE_MUSIC_ORIGINAL_PLAYLIST_ID,
+    title: "Stellive Official Music ORIGINAL",
+    type: "original",
+    rawCategoryHint: "ORIGINAL",
+    memberId: null,
+    isActive: true,
+  },
+];
+
 export function musicSourceTypeForRawCategory(rawCategory: string): MusicItemType {
   switch (rawCategory.trim().toUpperCase()) {
     case "COVER":
       return "cover";
     case "SINGLE":
     case "EP":
+    case "ORIGINAL":
       return "original";
     case "OTHERS":
       return "other";

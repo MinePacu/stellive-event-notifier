@@ -49,10 +49,14 @@ export interface YoutubeListUploadsInput {
 }
 
 export interface YoutubeMusicPlaylistItem {
+  playlistItemId?: string;
   videoId: string;
   title: string;
   publishedAt: string;
   position?: number;
+  channelId?: string;
+  channelTitle?: string;
+  privacyStatus?: string;
 }
 
 export interface YoutubeVideoDetail {
@@ -64,7 +68,12 @@ export interface YoutubeVideoDetail {
   publishedAt?: string;
   tags: string[];
   duration?: string;
+  dimension?: string;
+  definition?: string;
+  caption?: string;
   privacyStatus?: string;
+  embeddable?: boolean;
+  madeForKids?: boolean;
   liveBroadcastContent?: string;
   thumbnailUrl?: string;
   thumbnailWidth?: number;
@@ -88,9 +97,11 @@ interface YoutubeChannelItem {
 }
 
 interface YoutubePlaylistItem {
+  id?: string;
   snippet?: {
     title?: string;
     channelId?: string;
+    channelTitle?: string;
     publishedAt?: string;
     position?: number;
     resourceId?: {
@@ -121,9 +132,14 @@ interface YoutubeVideoItem {
   };
   contentDetails?: {
     duration?: string;
+    dimension?: string;
+    definition?: string;
+    caption?: string;
   };
   status?: {
     privacyStatus?: string;
+    embeddable?: boolean;
+    madeForKids?: boolean;
   };
 }
 
@@ -218,7 +234,7 @@ export class YoutubeDataApiClient {
 
     while (pagesFetched < maxPages) {
       const url = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
-      url.searchParams.set("part", "snippet,contentDetails");
+      url.searchParams.set("part", "snippet,contentDetails,status");
       url.searchParams.set("playlistId", playlistId);
       url.searchParams.set("maxResults", "50");
       url.searchParams.set("key", this.options.apiKey);
@@ -289,10 +305,14 @@ export class YoutubeDataApiClient {
     const videoId = item.contentDetails?.videoId ?? item.snippet?.resourceId?.videoId;
     if (!videoId) return [];
     return [{
+      playlistItemId: item.id,
       videoId,
       title: item.snippet?.title ?? "",
       publishedAt: normalizeDate(item.contentDetails?.videoPublishedAt ?? item.snippet?.publishedAt),
       position: item.snippet?.position,
+      channelId: item.snippet?.channelId,
+      channelTitle: item.snippet?.channelTitle,
+      privacyStatus: item.status?.privacyStatus,
     }];
   }
 
@@ -308,7 +328,12 @@ export class YoutubeDataApiClient {
       publishedAt: item.snippet?.publishedAt ? normalizeDate(item.snippet.publishedAt) : undefined,
       tags: item.snippet?.tags ?? [],
       duration: item.contentDetails?.duration,
+      dimension: item.contentDetails?.dimension,
+      definition: item.contentDetails?.definition,
+      caption: item.contentDetails?.caption,
       privacyStatus: item.status?.privacyStatus,
+      embeddable: item.status?.embeddable,
+      madeForKids: item.status?.madeForKids,
       liveBroadcastContent: item.snippet?.liveBroadcastContent,
       thumbnailUrl: thumbnail?.url,
       thumbnailWidth: thumbnail?.width,

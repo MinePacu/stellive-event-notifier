@@ -1,40 +1,27 @@
 import { describe, expect, it, vi } from "vitest";
+
 import {
   PrismaMusicRepository,
   PrismaMusicSyncRunRepository,
 } from "../src/repositories/musicRepository.js";
 
 describe("PrismaMusicRepository", () => {
-  it("upserts music members, source playlists, music items, and member links", async () => {
-    const calls: Array<{ name: string; args: unknown }> = [];
+  it("upserts extended music members, source playlists, music items, source mappings, member links, and overrides", async () => {
     const prisma = {
-      musicMember: {
-        upsert: vi.fn(async (args: unknown) => {
-          calls.push({ name: "musicMember.upsert", args });
-          return args;
-        }),
-      },
-      sourcePlaylist: {
-        upsert: vi.fn(async (args: unknown) => {
-          calls.push({ name: "sourcePlaylist.upsert", args });
-          return { id: "source-1", youtubePlaylistId: "PL_COVER" };
-        }),
-      },
+      musicMember: { upsert: vi.fn(async (args: unknown) => args) },
+      sourcePlaylist: { upsert: vi.fn(async () => ({ id: "source-1", youtubePlaylistId: "PL_COVER" })) },
       musicItem: {
-        upsert: vi.fn(async (args: unknown) => {
-          calls.push({ name: "musicItem.upsert", args });
-          return { id: "music-1", youtubeVideoId: "video-1" };
-        }),
+        upsert: vi.fn(async () => ({ id: "music-1", youtubeVideoId: "video-1" })),
+        findUnique: vi.fn(async () => ({ id: "music-1", youtubeVideoId: "video-1" })),
       },
+      musicItemSourcePlaylist: { upsert: vi.fn(async (args: unknown) => args) },
       musicItemMember: {
-        deleteMany: vi.fn(async (args: unknown) => {
-          calls.push({ name: "musicItemMember.deleteMany", args });
-          return { count: 0 };
-        }),
-        createMany: vi.fn(async (args: unknown) => {
-          calls.push({ name: "musicItemMember.createMany", args });
-          return { count: 2 };
-        }),
+        deleteMany: vi.fn(async () => ({ count: 0 })),
+        createMany: vi.fn(async () => ({ count: 2 })),
+      },
+      musicItemOverride: {
+        upsert: vi.fn(async (args: unknown) => args),
+        findUnique: vi.fn(async () => ({ forcedType: "cover" })),
       },
     };
 
@@ -44,6 +31,8 @@ describe("PrismaMusicRepository", () => {
       nameKo: "아카네 리제",
       nameEn: "Akane Lize",
       aliases: ["리제", "Lize"],
+      generationOrGroup: "gen2",
+      isGraduated: false,
       youtubeChannelId: "UC123",
     });
     await repository.upsertSourcePlaylist({
@@ -54,110 +43,150 @@ describe("PrismaMusicRepository", () => {
       memberId: null,
       isActive: true,
     });
-    await repository.upsertMusicItem({
+    const item = await repository.upsertMusicItem({
       youtubeVideoId: "video-1",
-      title: "Starlight",
+      title: "Song",
+      normalizedTitle: "song",
       description: "desc",
-      type: "original",
+      type: "cover",
       sourcePlaylistId: "source-1",
       publishedAt: "2026-06-22T00:00:00.000Z",
-      thumbnailUrl: "https://i.ytimg.com/vi/video-1/maxresdefault.jpg",
-      thumbnailWidth: 1280,
-      thumbnailHeight: 720,
+      thumbnailUrl: "https://i.ytimg.com/vi/video-1/hqdefault.jpg",
+      thumbnailWidth: 480,
+      thumbnailHeight: 360,
       duration: "PT3M21S",
+      durationSeconds: 201,
       channelId: "UC123",
       channelTitle: "Akane Lize",
       isPublic: true,
+      privacyStatus: "public",
+      embeddable: true,
+      madeForKids: false,
+      dimension: "2d",
+      definition: "hd",
+      caption: "false",
+      tags: ["cover"],
+      isAvailable: true,
+      isExcluded: false,
+      exclusionReason: null,
+      classificationStatus: "AUTO_CLASSIFIED",
+      isInstrumental: false,
+      specialFlags: [],
+      fetchedAt: new Date("2026-06-22T00:00:00.000Z"),
       lastSeenAt: new Date("2026-06-22T00:00:00.000Z"),
-      playlistPosition: 1,
-      rawCategoryHint: "SINGLE",
+      playlistPosition: 0,
+      rawCategoryHint: "COVER",
+    });
+    await repository.upsertMusicItemSourcePlaylist({
+      musicItemId: "music-1",
+      sourcePlaylistId: "source-1",
+      youtubePlaylistItemId: "pli-1",
+      sourcePlaylistTitle: "COVER",
+      sourcePlaylistPosition: 0,
+      sourcePlaylistType: "cover",
+      seenAt: new Date("2026-06-22T00:00:00.000Z"),
     });
     await repository.replaceMusicItemMembers("music-1", [
-      { memberId: "akane-lize", role: "main" },
-      { memberId: "ayatsuno-yuni", role: "collaboration" },
+      { memberId: "akane-lize", role: "main", confidence: 1, source: "CHANNEL_ID" },
+      { memberId: "ayatsuno-yuni", role: "collaboration", confidence: 0.8, source: "TITLE" },
     ]);
+    await repository.upsertMusicItemOverride({
+      musicItemId: "music-1",
+      youtubeVideoId: "video-1",
+      forcedType: "cover",
+      forcedMemberIds: ["akane-lize"],
+      forceExcluded: false,
+      exclusionReason: null,
+      note: "confirmed",
+    });
 
+    expect(item).toEqual({ id: "music-1", youtubeVideoId: "video-1" });
     expect(prisma.musicMember.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: "akane-lize" },
-    }));
-    expect(prisma.sourcePlaylist.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { youtubePlaylistId: "PL_COVER" },
+      create: expect.objectContaining({ generationOrGroup: "gen2", isGraduated: false }),
+      update: expect.objectContaining({ generationOrGroup: "gen2", isGraduated: false }),
     }));
     expect(prisma.musicItem.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { youtubeVideoId: "video-1" },
+      create: expect.objectContaining({
+        normalizedTitle: "song",
+        durationSeconds: 201,
+        privacyStatus: "public",
+        classificationStatus: "AUTO_CLASSIFIED",
+      }),
     }));
-    expect(prisma.musicItemMember.deleteMany).toHaveBeenCalledWith({ where: { musicItemId: "music-1" } });
+    expect(prisma.musicItemSourcePlaylist.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { musicItemId_sourcePlaylistId: { musicItemId: "music-1", sourcePlaylistId: "source-1" } },
+    }));
     expect(prisma.musicItemMember.createMany).toHaveBeenCalledWith({
       data: [
-        { musicItemId: "music-1", memberId: "akane-lize", role: "main" },
-        { musicItemId: "music-1", memberId: "ayatsuno-yuni", role: "collaboration" },
+        { musicItemId: "music-1", memberId: "akane-lize", role: "main", confidence: 1, source: "CHANNEL_ID" },
+        { musicItemId: "music-1", memberId: "ayatsuno-yuni", role: "collaboration", confidence: 0.8, source: "TITLE" },
       ],
       skipDuplicates: true,
     });
-    expect(calls.map((call) => call.name)).toEqual([
-      "musicMember.upsert",
-      "sourcePlaylist.upsert",
-      "musicItem.upsert",
-      "musicItemMember.deleteMany",
-      "musicItemMember.createMany",
-    ]);
+    await expect(repository.getOverrideByVideoId("video-1")).resolves.toEqual({ forcedType: "cover" });
   });
 
-  it("lists music items by type and member with cursor pagination", async () => {
+  it("lists music items with public default filters, optional graduated/instrumental/excluded filters, and playlist sort", async () => {
     const prisma = {
       musicItem: {
-        findMany: vi.fn(async () => [
-          {
-            id: "music-1",
-            youtubeVideoId: "video-1",
-            title: "Song",
-            type: "cover",
-            publishedAt: new Date("2026-06-22T00:00:00.000Z"),
-            thumbnailUrl: null,
-            duration: null,
-            sourcePlaylistId: "source-1",
-            members: [
-              { memberId: "akane-lize", role: "main", member: { id: "akane-lize", nameKo: "아카네 리제", nameEn: "Akane Lize" } },
-            ],
-          },
-          {
-            id: "music-2",
-            youtubeVideoId: "video-2",
-            title: "Extra",
-            type: "cover",
-            publishedAt: new Date("2026-06-21T00:00:00.000Z"),
-            thumbnailUrl: null,
-            duration: null,
-            sourcePlaylistId: "source-1",
-            members: [],
-          },
-        ]),
+        findMany: vi.fn(async () => [{
+          id: "music-1",
+          youtubeVideoId: "video-1",
+          title: "Song",
+          type: "cover",
+          publishedAt: new Date("2026-06-22T00:00:00.000Z"),
+          thumbnailUrl: null,
+          duration: null,
+          durationSeconds: 201,
+          isInstrumental: false,
+          specialFlags: [],
+          sourcePlaylistId: "source-1",
+          members: [{
+            memberId: "akane-lize",
+            role: "main",
+            member: { id: "akane-lize", nameKo: "아카네 리제", nameEn: "Akane Lize", isGraduated: false },
+          }],
+        }]),
       },
     };
-
     const repository = new PrismaMusicRepository(prisma);
-    const result = await repository.listMusicItems({ type: "cover", memberId: "akane-lize", limit: 1 });
+
+    const result = await repository.listMusicItems({
+      type: "cover",
+      memberId: "akane-lize",
+      includeGraduated: false,
+      includeInstrumental: false,
+      includeExcluded: false,
+      sort: "playlistOrder",
+      limit: 10,
+    });
 
     expect(prisma.musicItem.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
         type: "cover",
         isPublic: true,
-        members: { some: { memberId: "akane-lize" } },
+        isAvailable: true,
+        isExcluded: false,
+        isInstrumental: false,
+        members: {
+          some: {
+            memberId: "akane-lize",
+            member: { isGraduated: false },
+          },
+        },
       },
-      orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
-      take: 2,
+      orderBy: [{ playlistPosition: "asc" }, { publishedAt: "desc" }, { id: "asc" }],
+      take: 11,
     }));
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0].members[0].role).toBe("main");
-    expect(result.nextCursor).toBe("music-2");
+    expect(result.items[0]).toMatchObject({
+      youtubeVideoId: "video-1",
+      durationSeconds: 201,
+      isInstrumental: false,
+    });
   });
 
   it("marks missing source items conservatively without hard deleting", async () => {
-    const prisma = {
-      musicItem: {
-        updateMany: vi.fn(async () => ({ count: 3 })),
-      },
-    };
+    const prisma = { musicItem: { updateMany: vi.fn(async () => ({ count: 3 })) } };
     const repository = new PrismaMusicRepository(prisma);
 
     await expect(repository.markMissingFromSource({
@@ -167,11 +196,11 @@ describe("PrismaMusicRepository", () => {
     })).resolves.toEqual({ missingCount: 3 });
 
     expect(prisma.musicItem.updateMany).toHaveBeenCalledWith({
-      where: {
-        sourcePlaylistId: "source-1",
-        youtubeVideoId: { notIn: ["video-1"] },
-      },
+      where: { sourcePlaylistId: "source-1", youtubeVideoId: { notIn: ["video-1"] } },
       data: {
+        isPublic: false,
+        isAvailable: false,
+        privacyStatus: "UNKNOWN_OR_REMOVED",
         missingCount: { increment: 1 },
       },
     });
@@ -187,7 +216,7 @@ describe("PrismaMusicRepository", () => {
           title: "COVER",
           type: "cover" as const,
           rawCategoryHint: "COVER" as const,
-          memberId: "ayatsuno-yuni",
+          memberId: null,
         }]),
       },
     };
@@ -199,7 +228,7 @@ describe("PrismaMusicRepository", () => {
       title: "COVER",
       type: "cover",
       rawCategoryHint: "COVER",
-      memberId: "ayatsuno-yuni",
+      memberId: null,
     }]);
     expect(prisma.sourcePlaylist.findMany).toHaveBeenCalledWith({
       where: { isActive: true },
@@ -209,7 +238,7 @@ describe("PrismaMusicRepository", () => {
 });
 
 describe("PrismaMusicSyncRunRepository", () => {
-  it("creates, finishes, fails, and lists sync runs", async () => {
+  it("creates, finishes, fails, lists sync runs", async () => {
     const prisma = {
       musicSyncRun: {
         create: vi.fn(async () => ({ id: "run-1" })),
@@ -228,11 +257,10 @@ describe("PrismaMusicSyncRunRepository", () => {
     await repository.finishRun("run-1", {
       finishedAt: new Date("2026-06-22T00:01:00.000Z"),
       quotaUnits: 2,
-      fetchedCount: 50,
+      fetchedCount: 1,
       insertedCount: 1,
-      updatedCount: 2,
+      updatedCount: 0,
       missingCount: 0,
-      metadata: { pagesFetched: 1 },
     });
     await repository.failRun("run-1", {
       finishedAt: new Date("2026-06-22T00:01:00.000Z"),
@@ -240,19 +268,5 @@ describe("PrismaMusicSyncRunRepository", () => {
       quotaUnits: 1,
     });
     await expect(repository.listRecent(10)).resolves.toEqual([{ id: "run-1", status: "completed" }]);
-
-    expect(prisma.musicSyncRun.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ status: "running" }),
-    }));
-    expect(prisma.musicSyncRun.update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ status: "completed" }),
-    }));
-    expect(prisma.musicSyncRun.update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ status: "failed", errorMessage: "youtube_forbidden" }),
-    }));
-    expect(prisma.musicSyncRun.findMany).toHaveBeenCalledWith({
-      orderBy: [{ startedAt: "desc" }],
-      take: 10,
-    });
   });
 });

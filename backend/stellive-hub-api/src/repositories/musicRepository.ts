@@ -1,11 +1,16 @@
 import type { MusicCatalogItem, MusicItemType, MusicMemberRole } from "../../../../shared/schemas/domain.js";
 import { getPrismaClient } from "../storage/prisma.js";
 
+export type SourcePlaylistRawCategoryHint = "COVER" | "SINGLE" | "EP" | "ORIGINAL" | "OTHERS";
+export type MusicSort = "publishedAt_desc" | "publishedAtDesc" | "playlistOrder";
+
 export interface MusicMemberUpsertInput {
   id: string;
   nameKo: string;
   nameEn: string;
   aliases: string[];
+  generationOrGroup?: string | null;
+  isGraduated?: boolean;
   youtubeChannelId?: string | null;
 }
 
@@ -13,7 +18,7 @@ export interface SourcePlaylistUpsertInput {
   youtubePlaylistId: string;
   title: string;
   type: "cover" | "original" | "other";
-  rawCategoryHint: "COVER" | "SINGLE" | "EP" | "OTHERS";
+  rawCategoryHint: SourcePlaylistRawCategoryHint;
   memberId?: string | null;
   isActive: boolean;
 }
@@ -21,6 +26,7 @@ export interface SourcePlaylistUpsertInput {
 export interface MusicItemUpsertInput {
   youtubeVideoId: string;
   title: string;
+  normalizedTitle?: string | null;
   description?: string | null;
   type: MusicItemType;
   sourcePlaylistId?: string | null;
@@ -29,17 +35,54 @@ export interface MusicItemUpsertInput {
   thumbnailWidth?: number | null;
   thumbnailHeight?: number | null;
   duration?: string | null;
+  durationSeconds?: number | null;
   channelId?: string | null;
   channelTitle?: string | null;
   isPublic: boolean;
+  privacyStatus?: string | null;
+  embeddable?: boolean | null;
+  madeForKids?: boolean | null;
+  dimension?: string | null;
+  definition?: string | null;
+  caption?: string | null;
+  tags?: unknown;
+  isAvailable?: boolean;
+  isExcluded?: boolean;
+  exclusionReason?: string | null;
+  classificationStatus?: string;
+  isInstrumental?: boolean;
+  specialFlags?: unknown;
+  fetchedAt?: Date | null;
   lastSeenAt: Date;
   playlistPosition?: number | null;
   rawCategoryHint?: string | null;
 }
 
+export interface MusicItemSourcePlaylistInput {
+  musicItemId: string;
+  sourcePlaylistId: string;
+  youtubePlaylistItemId?: string | null;
+  sourcePlaylistTitle?: string | null;
+  sourcePlaylistPosition?: number | null;
+  sourcePlaylistType: string;
+  seenAt: Date;
+}
+
 export interface MusicItemMemberInput {
   memberId: string;
   role: MusicMemberRole;
+  confidence?: number;
+  source?: string;
+}
+
+export interface MusicItemOverrideInput {
+  musicItemId: string;
+  youtubeVideoId: string;
+  forcedType?: string | null;
+  forcedMemberIds?: string[] | null;
+  forceExcluded?: boolean;
+  exclusionReason?: string | null;
+  note?: string | null;
 }
 
 export interface MusicListFilters {
@@ -47,6 +90,10 @@ export interface MusicListFilters {
   memberId?: string;
   cursor?: string;
   limit?: number;
+  sort?: MusicSort;
+  includeGraduated?: boolean;
+  includeInstrumental?: boolean;
+  includeExcluded?: boolean;
 }
 
 export interface MarkMissingFromSourceInput {
@@ -60,26 +107,30 @@ export interface MusicSourcePlaylistRecord {
   youtubePlaylistId: string;
   title: string;
   type: "cover" | "original" | "other";
-  rawCategoryHint: "COVER" | "SINGLE" | "EP" | "OTHERS";
+  rawCategoryHint: SourcePlaylistRawCategoryHint;
   memberId?: string | null;
 }
 
 export interface MusicRepositoryDelegate {
-  musicMember?: {
-    upsert(args: unknown): Promise<unknown>;
-  };
+  musicMember?: { upsert(args: unknown): Promise<unknown>; findMany?(args: unknown): Promise<unknown[]> };
   sourcePlaylist?: {
     upsert(args: unknown): Promise<unknown>;
     findMany?(args: unknown): Promise<MusicSourcePlaylistRecord[]>;
   };
   musicItem?: {
     upsert?(args: unknown): Promise<unknown>;
+    findUnique?(args: unknown): Promise<unknown | null>;
     findMany?(args: unknown): Promise<MusicItemRecord[]>;
     updateMany?(args: unknown): Promise<{ count: number }>;
   };
+  musicItemSourcePlaylist?: { upsert(args: unknown): Promise<unknown> };
   musicItemMember?: {
     deleteMany(args: unknown): Promise<unknown>;
     createMany(args: unknown): Promise<unknown>;
+  };
+  musicItemOverride?: {
+    upsert(args: unknown): Promise<unknown>;
+    findUnique(args: unknown): Promise<unknown | null>;
   };
 }
 
@@ -91,6 +142,10 @@ interface MusicItemRecord {
   publishedAt?: Date | null;
   thumbnailUrl?: string | null;
   duration?: string | null;
+  durationSeconds?: number | null;
+  isInstrumental?: boolean | null;
+  specialFlags?: unknown;
+  classificationStatus?: string | null;
   sourcePlaylistId?: string | null;
   members?: Array<{
     role: string;
@@ -98,6 +153,7 @@ interface MusicItemRecord {
       id: string;
       nameKo: string;
       nameEn: string;
+      isGraduated?: boolean;
     };
   }>;
 }
@@ -115,6 +171,10 @@ function toMusicCatalogItem(record: MusicItemRecord): MusicCatalogItem {
     publishedAt: record.publishedAt?.toISOString() ?? null,
     thumbnailUrl: record.thumbnailUrl ?? null,
     duration: record.duration ?? null,
+    durationSeconds: record.durationSeconds ?? null,
+    isInstrumental: record.isInstrumental ?? false,
+    specialFlags: Array.isArray(record.specialFlags) ? record.specialFlags : [],
+    classificationStatus: record.classificationStatus ?? undefined,
     members: (record.members ?? []).map((link) => ({
       id: link.member.id,
       nameKo: link.member.nameKo,
@@ -130,21 +190,19 @@ export class PrismaMusicRepository {
   constructor(private readonly prisma: MusicRepositoryDelegate = getPrismaClient() as unknown as MusicRepositoryDelegate) {}
 
   async upsertMember(input: MusicMemberUpsertInput): Promise<unknown> {
+    const data = {
+      id: input.id,
+      nameKo: input.nameKo,
+      nameEn: input.nameEn,
+      aliases: input.aliases,
+      generationOrGroup: input.generationOrGroup,
+      isGraduated: input.isGraduated ?? false,
+      youtubeChannelId: input.youtubeChannelId,
+    };
     return this.prisma.musicMember!.upsert({
       where: { id: input.id },
-      create: {
-        id: input.id,
-        nameKo: input.nameKo,
-        nameEn: input.nameEn,
-        aliases: input.aliases,
-        youtubeChannelId: input.youtubeChannelId,
-      },
-      update: {
-        nameKo: input.nameKo,
-        nameEn: input.nameEn,
-        aliases: input.aliases,
-        youtubeChannelId: input.youtubeChannelId,
-      },
+      create: data,
+      update: data,
     });
   }
 
@@ -154,6 +212,10 @@ export class PrismaMusicRepository {
       create: input,
       update: input,
     });
+  }
+
+  async upsertOfficialSourcePlaylists(seeds: SourcePlaylistUpsertInput[]): Promise<unknown[]> {
+    return Promise.all(seeds.map((seed) => this.upsertSourcePlaylist(seed)));
   }
 
   async listActiveSourcePlaylists(): Promise<MusicSourcePlaylistRecord[]> {
@@ -167,6 +229,7 @@ export class PrismaMusicRepository {
     const data = {
       youtubeVideoId: input.youtubeVideoId,
       title: input.title,
+      normalizedTitle: input.normalizedTitle,
       description: input.description,
       type: input.type,
       sourcePlaylistId: input.sourcePlaylistId,
@@ -175,9 +238,24 @@ export class PrismaMusicRepository {
       thumbnailWidth: input.thumbnailWidth,
       thumbnailHeight: input.thumbnailHeight,
       duration: input.duration,
+      durationSeconds: input.durationSeconds,
       channelId: input.channelId,
       channelTitle: input.channelTitle,
       isPublic: input.isPublic,
+      privacyStatus: input.privacyStatus,
+      embeddable: input.embeddable,
+      madeForKids: input.madeForKids,
+      dimension: input.dimension,
+      definition: input.definition,
+      caption: input.caption,
+      tags: input.tags,
+      isAvailable: input.isAvailable ?? input.isPublic,
+      isExcluded: input.isExcluded ?? false,
+      exclusionReason: input.exclusionReason,
+      classificationStatus: input.classificationStatus ?? "AUTO_CLASSIFIED",
+      isInstrumental: input.isInstrumental ?? false,
+      specialFlags: input.specialFlags ?? [],
+      fetchedAt: input.fetchedAt,
       lastSeenAt: input.lastSeenAt,
       playlistPosition: input.playlistPosition,
       rawCategoryHint: input.rawCategoryHint,
@@ -191,33 +269,129 @@ export class PrismaMusicRepository {
     });
   }
 
+  async upsertMusicItemSourcePlaylist(input: MusicItemSourcePlaylistInput): Promise<unknown> {
+    return this.prisma.musicItemSourcePlaylist!.upsert({
+      where: {
+        musicItemId_sourcePlaylistId: {
+          musicItemId: input.musicItemId,
+          sourcePlaylistId: input.sourcePlaylistId,
+        },
+      },
+      create: input,
+      update: input,
+    });
+  }
+
+  async getMusicItemByVideoId(videoId: string): Promise<unknown | null> {
+    return this.prisma.musicItem!.findUnique?.({ where: { youtubeVideoId: videoId } }) ?? null;
+  }
+
+  async getOverrideByVideoId(videoId: string): Promise<unknown | null> {
+    return this.prisma.musicItemOverride!.findUnique({ where: { youtubeVideoId: videoId } });
+  }
+
+  async upsertMusicItemOverride(input: MusicItemOverrideInput): Promise<unknown> {
+    const data = {
+      musicItemId: input.musicItemId,
+      youtubeVideoId: input.youtubeVideoId,
+      forcedType: input.forcedType,
+      forcedMemberIds: input.forcedMemberIds ?? undefined,
+      forceExcluded: input.forceExcluded ?? false,
+      exclusionReason: input.exclusionReason,
+      note: input.note,
+    };
+    return this.prisma.musicItemOverride!.upsert({
+      where: { youtubeVideoId: input.youtubeVideoId },
+      create: data,
+      update: data,
+    });
+  }
+
   async replaceMusicItemMembers(musicItemId: string, links: MusicItemMemberInput[]): Promise<void> {
     await this.prisma.musicItemMember!.deleteMany({ where: { musicItemId } });
     if (links.length === 0) return;
     await this.prisma.musicItemMember!.createMany({
-      data: links.map((link) => ({ musicItemId, memberId: link.memberId, role: link.role })),
+      data: links.map((link) => ({
+        musicItemId,
+        memberId: link.memberId,
+        role: link.role,
+        confidence: link.confidence ?? 0,
+        source: link.source ?? "UNKNOWN",
+      })),
       skipDuplicates: true,
     });
   }
 
-  async listMusicItems(filters: MusicListFilters): Promise<{ items: MusicCatalogItem[]; nextCursor: string | null }> {
-    const limit = filters.limit ?? 30;
-    const where: Record<string, unknown> = { isPublic: true };
+  async listMusicItems(filters: MusicListFilters): Promise<{ items: MusicCatalogItem[]; nextCursor?: string | null }> {
+    const limit = Math.min(Math.max(filters.limit ?? 50, 1), 100);
+    const where: Record<string, unknown> = {
+      isPublic: true,
+      isAvailable: true,
+    };
     if (filters.type && filters.type !== "all") where.type = filters.type;
-    if (filters.memberId) where.members = { some: { memberId: filters.memberId } };
+    if (filters.includeExcluded !== true) where.isExcluded = false;
+    if (filters.includeInstrumental !== true) where.isInstrumental = false;
+    if (filters.memberId) {
+      where.members = {
+        some: {
+          memberId: filters.memberId,
+          ...(filters.includeGraduated === true ? {} : { member: { isGraduated: false } }),
+        },
+      };
+    } else if (filters.includeGraduated !== true) {
+      where.members = { some: { member: { isGraduated: false } } };
+    }
     if (filters.cursor) where.id = { gt: filters.cursor };
 
-    const records = await this.prisma.musicItem!.findMany!({
-      where,
-      orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
-      take: limit + 1,
-      include: { members: { include: { member: true } } },
-    });
+    const orderBy = filters.sort === "playlistOrder"
+      ? [{ playlistPosition: "asc" }, { publishedAt: "desc" }, { id: "asc" }]
+      : [{ publishedAt: "desc" }, { id: "asc" }];
 
+    const rows = await this.prisma.musicItem!.findMany!({
+      where,
+      include: { members: { include: { member: true } } },
+      orderBy,
+      take: limit + 1,
+    });
+    const page = rows.slice(0, limit);
     return {
-      items: records.slice(0, limit).map(toMusicCatalogItem),
-      nextCursor: records.length > limit ? records[limit].id : null,
+      items: page.map(toMusicCatalogItem),
+      nextCursor: rows.length > limit ? rows[limit].id : null,
     };
+  }
+
+  async listReviewCandidates(filters: { limit?: number } = {}): Promise<MusicCatalogItem[]> {
+    const limit = Math.min(Math.max(filters.limit ?? 25, 1), 100);
+    const rows = await this.prisma.musicItem!.findMany!({
+      where: {
+        isPublic: true,
+        OR: [
+          { classificationStatus: "NEEDS_REVIEW" },
+          { isExcluded: true },
+          { isAvailable: false },
+        ],
+      },
+      include: { members: { include: { member: true } } },
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+      take: limit,
+    });
+    return rows.map(toMusicCatalogItem);
+  }
+
+  async getMusicItem(id: string): Promise<MusicCatalogItem | null> {
+    const record = await this.prisma.musicItem!.findUnique?.({
+      where: { id },
+      include: { members: { include: { member: true } } },
+    }) as MusicItemRecord | null | undefined;
+    return record ? toMusicCatalogItem(record) : null;
+  }
+
+  async listMusicMembers(): Promise<Array<{ id: string; nameKo: string; nameEn: string }>> {
+    return this.prisma.musicMember!.findMany?.({
+      where: { isGraduated: false },
+      orderBy: [{ id: "asc" }],
+      select: { id: true, nameKo: true, nameEn: true },
+    }) as Promise<Array<{ id: string; nameKo: string; nameEn: string }>>;
   }
 
   async markMissingFromSource(input: MarkMissingFromSourceInput): Promise<{ missingCount: number }> {
@@ -227,6 +401,9 @@ export class PrismaMusicRepository {
         youtubeVideoId: { notIn: input.seenYoutubeVideoIds },
       },
       data: {
+        isPublic: false,
+        isAvailable: false,
+        privacyStatus: "UNKNOWN_OR_REMOVED",
         missingCount: { increment: 1 },
       },
     });

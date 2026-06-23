@@ -9,6 +9,10 @@ export function toMusicCatalogDto(item: MusicCatalogItem): MusicCatalogItem {
     publishedAt: item.publishedAt,
     thumbnailUrl: item.thumbnailUrl,
     duration: item.duration,
+    durationSeconds: item.durationSeconds,
+    isInstrumental: item.isInstrumental,
+    specialFlags: item.specialFlags,
+    classificationStatus: item.classificationStatus,
     members: item.members.map((member) => ({
       id: member.id,
       nameKo: member.nameKo,

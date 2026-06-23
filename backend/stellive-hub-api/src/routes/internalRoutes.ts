@@ -103,6 +103,11 @@ export interface InternalRouteDependencies {
       failedCount?: number;
       quotaUnits?: number;
     }>;
+    syncOfficialStelliveMusicPlaylists?(mode: "light" | "full" | "manual"): MaybePromise<unknown>;
+    listReviewCandidates?(filters?: { limit?: number }): MaybePromise<unknown[]>;
+    upsertOverride?(videoId: string, input: Record<string, unknown>): MaybePromise<unknown>;
+    listSyncRuns?(limit?: number): MaybePromise<unknown[]>;
+    estimateQuota?(): MaybePromise<unknown>;
   };
   chzzkLiveAdapter?: {
     pollLiveStatuses(): MaybePromise<ChzzkLiveAdapterCounts>;
@@ -322,17 +327,55 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
     return dependencies.youtubeSongBackfillScheduler.reconcile();
   });
 
-  app.post("/v1/internal/schedulers/music/sync", async (request, reply) => {
-    const parsed = parseMusicSyncBody(request.body);
-    if (!parsed.ok) return reply.code(400).send({ error: "music_sync_body_invalid" });
-    if (!dependencies.musicSync) {
-      return { status: "disabled", reason: "music_sync_not_configured" };
+app.post("/v1/internal/schedulers/music/sync", async (request, reply) => {
+  const parsed = parseMusicSyncBody(request.body);
+  if (!parsed.ok) return reply.code(400).send({ error: "music_sync_body_invalid" });
+  if (!dependencies.musicSync) {
+    return { status: "disabled", reason: "music_sync_not_configured" };
     }
-    const result = await dependencies.musicSync.syncAllMusic(parsed.mode);
-    return { ok: true, ...result };
-  });
+  const result = await dependencies.musicSync.syncAllMusic(parsed.mode);
+  return { ok: true, ...result };
+});
 
-  app.post("/v1/internal/schedulers/chzzk/live-status", async () => {
+app.post("/v1/internal/schedulers/music/sync-official-playlists", async (request, reply) => {
+  const parsed = parseMusicSyncBody(request.body);
+  if (!parsed.ok) return reply.code(400).send({ error: "music_sync_body_invalid" });
+  if (!dependencies.musicSync?.syncOfficialStelliveMusicPlaylists) {
+    return { status: "disabled", reason: "official_music_sync_not_configured" };
+  }
+  const result = await dependencies.musicSync.syncOfficialStelliveMusicPlaylists(parsed.mode);
+  return { ok: true, ...(typeof result === "object" && result !== null ? result : { status: result }) };
+});
+
+app.get<{ Querystring: LimitQuery }>("/v1/internal/music/review", async (request) => {
+  if (!dependencies.musicSync?.listReviewCandidates) return { items: [] };
+  const limit = parseInternalLimit(request.query.limit, 25);
+  return { items: await dependencies.musicSync.listReviewCandidates({ limit }) };
+});
+
+app.patch<{ Params: { videoId: string } }>("/v1/internal/music/videos/:videoId/override", async (request, reply) => {
+  if (!dependencies.musicSync?.upsertOverride) {
+    return reply.code(404).send({ error: "music_override_not_configured" });
+  }
+  if (request.body !== undefined && request.body !== null && (typeof request.body !== "object" || Array.isArray(request.body))) {
+    return reply.code(400).send({ error: "music_override_body_invalid" });
+  }
+  const item = await dependencies.musicSync.upsertOverride(request.params.videoId, (request.body ?? {}) as Record<string, unknown>);
+  return { ok: true, item };
+});
+
+app.get<{ Querystring: LimitQuery }>("/v1/internal/music/sync-log", async (request) => {
+  if (!dependencies.musicSync?.listSyncRuns) return { items: [] };
+  const limit = parseInternalLimit(request.query.limit, 25);
+  return { items: await dependencies.musicSync.listSyncRuns(limit) };
+});
+
+app.get("/v1/internal/music/quota-estimate", async () => {
+  if (!dependencies.musicSync?.estimateQuota) return { dailyEstimate: 0 };
+  return dependencies.musicSync.estimateQuota();
+});
+
+app.post("/v1/internal/schedulers/chzzk/live-status", async () => {
     if (!options.env.CHZZK_LIVE_POLLING_ENABLED) {
       return { status: "disabled", reason: "chzzk_live_polling_disabled" };
     }

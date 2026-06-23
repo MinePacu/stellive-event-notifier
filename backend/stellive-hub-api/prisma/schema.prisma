@@ -211,6 +211,8 @@ model MusicMember {
   nameKo           String
   nameEn           String
   aliases          Json
+  generationOrGroup String?
+  isGraduated      Boolean  @default(false)
   youtubeChannelId String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -236,6 +238,7 @@ model SourcePlaylist {
   updatedAt            DateTime @updatedAt
 
   items                MusicItem[]
+  itemSources          MusicItemSourcePlaylist[]
 
   @@index([type, isActive])
   @@index([memberId])
@@ -245,6 +248,7 @@ model MusicItem {
   id               String   @id @default(cuid(2))
   youtubeVideoId   String   @unique
   title            String
+  normalizedTitle  String?
   description      String?
   type             String
   sourcePlaylistId String?
@@ -253,9 +257,24 @@ model MusicItem {
   thumbnailWidth   Int?
   thumbnailHeight  Int?
   duration         String?
+  durationSeconds  Int?
   channelId        String?
   channelTitle     String?
   isPublic         Boolean  @default(true)
+  privacyStatus    String?
+  embeddable       Boolean?
+  madeForKids      Boolean?
+  dimension        String?
+  definition       String?
+  caption          String?
+  tags             Json?
+  isAvailable      Boolean  @default(true)
+  isExcluded       Boolean  @default(false)
+  exclusionReason  String?
+  classificationStatus String @default("AUTO_CLASSIFIED")
+  isInstrumental   Boolean  @default(false)
+  specialFlags     Json?
+  fetchedAt        DateTime?
   lastSeenAt       DateTime
   missingCount     Int      @default(0)
   playlistPosition Int?
@@ -265,17 +284,23 @@ model MusicItem {
 
   sourcePlaylist   SourcePlaylist? @relation(fields: [sourcePlaylistId], references: [id])
   members          MusicItemMember[]
+  sourcePlaylists  MusicItemSourcePlaylist[]
+  override         MusicItemOverride?
 
   @@index([type])
   @@index([publishedAt])
   @@index([sourcePlaylistId])
   @@index([isPublic])
+  @@index([isAvailable, isExcluded])
+  @@index([classificationStatus])
 }
 
 model MusicItemMember {
   musicItemId String
   memberId    String
   role        String   @default("unknown")
+  confidence  Float    @default(0)
+  source      String   @default("UNKNOWN")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -285,6 +310,42 @@ model MusicItemMember {
   @@id([musicItemId, memberId])
   @@index([memberId])
   @@index([role])
+  @@index([source])
+}
+
+model MusicItemSourcePlaylist {
+  id                     String         @id @default(cuid(2))
+  musicItemId            String
+  sourcePlaylistId       String
+  youtubePlaylistItemId  String?
+  sourcePlaylistTitle    String?
+  sourcePlaylistPosition Int?
+  sourcePlaylistType     String
+  seenAt                 DateTime
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  musicItem              MusicItem      @relation(fields: [musicItemId], references: [id], onDelete: Cascade)
+  sourcePlaylist         SourcePlaylist @relation(fields: [sourcePlaylistId], references: [id], onDelete: Cascade)
+
+  @@unique([musicItemId, sourcePlaylistId])
+  @@index([sourcePlaylistId])
+  @@index([sourcePlaylistType])
+}
+
+model MusicItemOverride {
+  id              String    @id @default(cuid(2))
+  musicItemId     String    @unique
+  youtubeVideoId  String    @unique
+  forcedType      String?
+  forcedMemberIds Json?
+  forceExcluded   Boolean   @default(false)
+  exclusionReason String?
+  note            String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  musicItem       MusicItem @relation(fields: [musicItemId], references: [id], onDelete: Cascade)
 }
 
 model MusicSyncRun {

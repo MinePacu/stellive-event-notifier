@@ -82,8 +82,8 @@ describe("MusicSyncService", () => {
       playlistPosition: 0,
     }));
     expect(repository.replaceMusicItemMembers).toHaveBeenCalledWith("music-1", [
-      { memberId: "ayatsuno-yuni", role: "main" },
-      { memberId: "shirayuki-hina", role: "collaboration" },
+      { memberId: "ayatsuno-yuni", role: "main", confidence: 0.9, source: "TITLE" },
+      { memberId: "shirayuki-hina", role: "collaboration", confidence: 0.8, source: "TITLE" },
     ]);
     expect(syncRuns.finishRun).toHaveBeenCalledWith("run-1", expect.objectContaining({ fetchedCount: 1 }));
   });

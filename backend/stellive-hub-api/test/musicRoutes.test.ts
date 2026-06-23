@@ -13,6 +13,9 @@ const item: MusicCatalogItem = {
   publishedAt: "2026-06-21T12:00:00.000Z",
   thumbnailUrl: "https://i.ytimg.com/vi/video-1/hqdefault.jpg",
   duration: "PT3M21S",
+  durationSeconds: 201,
+  isInstrumental: false,
+  specialFlags: [],
   members: [{ id: "ayatsuno-yuni", nameKo: "아야츠노 유니", nameEn: "Ayatsuno Yuni", role: "main" }],
   youtubeUrl: "https://www.youtube.com/watch?v=video-1",
   sourcePlaylistId: "source-1",
@@ -31,12 +34,13 @@ async function buildRouteApp() {
     repository,
     cache: new ResponseCache(),
     cachePolicy: { ttlMs: 300_000, staleMs: 600_000 },
+    registerMembersListRoute: true,
   });
   return { app, repository };
 }
 
 describe("music routes", () => {
-  it("GET /v1/music validates query and returns cached music list", async () => {
+  it("GET /v1/music validates query returns cached music list", async () => {
     const { app, repository } = await buildRouteApp();
 
     const response = await app.inject({ method: "GET", url: "/v1/music?type=cover&limit=20&sort=publishedAt_desc" });
@@ -52,6 +56,25 @@ describe("music routes", () => {
       type: "cover",
       limit: 20,
       sort: "publishedAt_desc",
+    });
+  });
+
+  it("GET /v1/music accepts official playlist sort and include filters", async () => {
+    const { app, repository } = await buildRouteApp();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/music?type=original&sort=playlistOrder&includeGraduated=true&includeInstrumental=true&includeExcluded=true",
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(repository.listMusicItems).toHaveBeenCalledWith({
+      type: "original",
+      sort: "playlistOrder",
+      includeGraduated: true,
+      includeInstrumental: true,
+      includeExcluded: true,
     });
   });
 

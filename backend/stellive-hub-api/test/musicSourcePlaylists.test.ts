@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  OFFICIAL_STELLIVE_MUSIC_COVER_PLAYLIST_ID,
+  OFFICIAL_STELLIVE_MUSIC_ORIGINAL_PLAYLIST_ID,
   TARGET_MUSIC_MEMBER_IDS,
   musicSourcePlaylistSeeds,
   musicSourceTypeForRawCategory,
+  officialStelliveMusicSourcePlaylistSeeds,
 } from "../src/music/musicSourcePlaylists.js";
 
 describe("music source playlist seeds", () => {
-  it("defines only the 10 target active Stellive member ids", () => {
+  it("defines only 10 target active Stellive member ids", () => {
     expect(TARGET_MUSIC_MEMBER_IDS).toEqual([
       "ayatsuno-yuni",
       "sakihane-huya",
@@ -26,47 +29,39 @@ describe("music source playlist seeds", () => {
     expect(TARGET_MUSIC_MEMBER_IDS).not.toContain("gen4-placeholder");
   });
 
-  it("defines source playlist seed metadata without guessed playlist ids", () => {
-    expect(musicSourcePlaylistSeeds).toEqual([
+  it("keeps legacy placeholder source playlist metadata inactive", () => {
+    expect(musicSourcePlaylistSeeds.every((seed) => seed.youtubePlaylistId === "")).toBe(true);
+    expect(musicSourcePlaylistSeeds.every((seed) => seed.isActive === false)).toBe(true);
+  });
+
+  it("defines official Stellive music playlist seeds as active catalog sync sources", () => {
+    expect(OFFICIAL_STELLIVE_MUSIC_COVER_PLAYLIST_ID).toBe("PLLjd981H8qSN9PQ8-X6wINqBF1GjGxusy");
+    expect(OFFICIAL_STELLIVE_MUSIC_ORIGINAL_PLAYLIST_ID).toBe("PLLjd981H8qSMGC4Nir0hD2Gj9n9PDUoHX");
+    expect(officialStelliveMusicSourcePlaylistSeeds).toEqual([
       {
-        youtubePlaylistId: "",
-        title: "Stellive MUSIC COVER",
+        youtubePlaylistId: "PLLjd981H8qSN9PQ8-X6wINqBF1GjGxusy",
+        title: "Stellive Official Music COVER",
         type: "cover",
         rawCategoryHint: "COVER",
         memberId: null,
-        isActive: false,
+        isActive: true,
       },
       {
-        youtubePlaylistId: "",
-        title: "Stellive MUSIC SINGLE",
+        youtubePlaylistId: "PLLjd981H8qSMGC4Nir0hD2Gj9n9PDUoHX",
+        title: "Stellive Official Music ORIGINAL",
         type: "original",
-        rawCategoryHint: "SINGLE",
+        rawCategoryHint: "ORIGINAL",
         memberId: null,
-        isActive: false,
-      },
-      {
-        youtubePlaylistId: "",
-        title: "Stellive MUSIC EP",
-        type: "original",
-        rawCategoryHint: "EP",
-        memberId: null,
-        isActive: false,
-      },
-      {
-        youtubePlaylistId: "",
-        title: "Stellive MUSIC OTHERS",
-        type: "other",
-        rawCategoryHint: "OTHERS",
-        memberId: null,
-        isActive: false,
+        isActive: true,
       },
     ]);
   });
 
-  it("maps official MUSIC raw categories to source playlist types", () => {
+  it("maps official MUSIC raw categories source playlist types", () => {
     expect(musicSourceTypeForRawCategory("COVER")).toBe("cover");
     expect(musicSourceTypeForRawCategory("SINGLE")).toBe("original");
     expect(musicSourceTypeForRawCategory("EP")).toBe("original");
+    expect(musicSourceTypeForRawCategory("ORIGINAL")).toBe("original");
     expect(musicSourceTypeForRawCategory("OTHERS")).toBe("other");
     expect(musicSourceTypeForRawCategory("unknown")).toBe("unknown");
   });

@@ -29,6 +29,8 @@ import PreferenceRepository from "./repositories/preferenceRepository.js";
 import { PrismaSongRepository } from "./repositories/songRepository.js";
 import { InMemoryMusicSyncLock } from "./music/musicLocks.js";
 import { MusicSyncService } from "./music/musicSyncService.js";
+import { OfficialStelliveMusicSyncService } from "./music/officialStelliveMusicSyncService.js";
+import { officialStelliveMusicSourcePlaylistSeeds } from "./music/musicSourcePlaylists.js";
 import { WebhookSubscriptionRepository } from "./repositories/webhookSubscriptionRepository.js";
 import SongIngestionService from "./songs/songIngestionService.js";
 import SongBackfillService from "./songs/songBackfillService.js";
@@ -219,18 +221,53 @@ function createDefaultMusicSyncService(
       member.platforms?.youtubeChannelId,
     ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
   }));
+  const repository = new PrismaMusicRepository();
+  const syncRuns = new PrismaMusicSyncRunRepository();
+  const youtube = new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl });
+  const locks = new InMemoryMusicSyncLock();
   const service = new MusicSyncService({
-    repository: new PrismaMusicRepository() as never,
-    syncRuns: new PrismaMusicSyncRunRepository(),
-    youtube: new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl }),
-    locks: new InMemoryMusicSyncLock(),
+    repository: repository as never,
+    syncRuns,
+    youtube,
+    locks,
     members,
+    lightMaxPages: env.MUSIC_LIGHT_SYNC_MAX_PAGES,
+    lockTtlMs: env.MUSIC_SYNC_LOCK_SECONDS * 1_000,
+  });
+  const officialService = new OfficialStelliveMusicSyncService({
+    repository: repository as never,
+    syncRuns,
+    youtube,
+    locks,
+    members,
+    sourceSeeds: officialStelliveMusicSourcePlaylistSeeds.map((seed) => {
+      if (seed.type === "cover") return { ...seed, youtubePlaylistId: env.STELLIVE_MUSIC_COVER_PLAYLIST_ID };
+      if (seed.type === "original") return { ...seed, youtubePlaylistId: env.STELLIVE_MUSIC_ORIGINAL_PLAYLIST_ID };
+      return seed;
+    }),
     lightMaxPages: env.MUSIC_LIGHT_SYNC_MAX_PAGES,
     lockTtlMs: env.MUSIC_SYNC_LOCK_SECONDS * 1_000,
   });
   return {
     musicSync: {
       syncAllMusic: (mode) => service.syncAllMusic(mode === "light" ? "light" : "full"),
+      syncOfficialStelliveMusicPlaylists: (mode) => officialService.syncOfficialStelliveMusicPlaylists(mode),
+      listReviewCandidates: ({ limit } = {}) => repository.listReviewCandidates?.({ limit }) ?? Promise.resolve([]),
+      upsertOverride: async (videoId, input) => {
+        const item = await repository.getMusicItemByVideoId(videoId) as { id?: string; youtubeVideoId?: string } | null;
+        if (!item?.id) return { error: "music_item_not_found", videoId };
+        return repository.upsertMusicItemOverride({
+          musicItemId: item.id,
+          youtubeVideoId: item.youtubeVideoId ?? videoId,
+          forcedType: typeof input.forcedType === "string" ? input.forcedType : null,
+          forcedMemberIds: Array.isArray(input.forcedMemberIds) ? input.forcedMemberIds.filter((value): value is string => typeof value === "string") : null,
+          forceExcluded: input.forceExcluded === true,
+          exclusionReason: typeof input.exclusionReason === "string" ? input.exclusionReason : null,
+          note: typeof input.note === "string" ? input.note : null,
+        });
+      },
+      listSyncRuns: (limit) => syncRuns.listRecent(limit ?? 25),
+      estimateQuota: () => ({ dailyEstimate: 300, officialPlaylists: 2 }),
     },
   };
 }
