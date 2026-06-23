@@ -239,18 +239,34 @@ data class SongThumbnail(
     val height: Int,
 )
 
+data class SongMemberSummary(
+    val id: String,
+    val nameKo: String,
+    val nameEn: String? = null,
+    val role: String? = null,
+)
+
 data class SongCatalogItem(
     val id: String,
     val youtubeVideoId: String,
     val title: String,
-    val memberId: String,
-    val memberName: String,
-    val generationId: String,
-    val generationName: String,
     val type: SongType,
-    val sourceUrl: String,
+    val memberId: String? = null,
+    val memberName: String? = null,
+    val generationId: String? = null,
+    val generationName: String? = null,
+    val sourceUrl: String? = null,
     val thumbnail: SongThumbnail? = null,
-    val publishedAt: Instant,
+    val publishedAt: Instant = Instant.EPOCH,
+    val thumbnailUrl: String? = thumbnail?.url,
+    val duration: String? = null,
+    val durationSeconds: Int? = null,
+    val isInstrumental: Boolean = false,
+    val specialFlags: List<String> = emptyList(),
+    val classificationStatus: String? = null,
+    val members: List<SongMemberSummary> = emptyList(),
+    val youtubeUrl: String = sourceUrl ?: "https://www.youtube.com/watch?v=$youtubeVideoId",
+    val sourcePlaylistId: String? = null,
 )
 
 data class SongFilterCount(

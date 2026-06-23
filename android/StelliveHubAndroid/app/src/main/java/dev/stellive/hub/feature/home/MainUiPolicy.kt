@@ -4,6 +4,7 @@ import dev.stellive.hub.core.model.NotificationEventType
 import dev.stellive.hub.core.model.NotificationPlatform
 import dev.stellive.hub.core.model.NotificationSettingState
 import dev.stellive.hub.core.model.HubEventStatus
+import dev.stellive.hub.core.model.SongCatalogItem
 import java.text.NumberFormat
 import java.time.Duration
 import java.time.Instant
@@ -133,6 +134,31 @@ object MainUiPolicy {
         SongFilterOption("original", "오리지널"),
         SongFilterOption("cover", "커버")
     )
+
+    fun songMemberDisplayText(song: SongCatalogItem): String =
+        song.members
+            .map { it.nameKo.ifBlank { it.nameEn.orEmpty() } }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(" · ")
+            ?: song.memberName?.takeIf { it.isNotBlank() }
+            ?: "스텔라이브"
+
+    fun songMatchesGeneration(
+        song: SongCatalogItem,
+        selectedGenerationId: String,
+        memberGenerationById: Map<String, String>,
+    ): Boolean {
+        if (selectedGenerationId == "all") return true
+        return song.members.any { memberGenerationById[it.id] == selectedGenerationId }
+    }
+
+    fun songMatchesQuery(song: SongCatalogItem, query: String): Boolean {
+        if (query.isBlank()) return true
+        return song.title.contains(query, ignoreCase = true) ||
+            songMemberDisplayText(song).contains(query, ignoreCase = true)
+    }
 
     fun homeHubEventsListAction(closingSoonCount: Int): HomeHubEventsAction =
         if (closingSoonCount > 0) {

@@ -403,24 +403,138 @@ struct SongThumbnail: Codable, Equatable, Hashable {
     let height: Int
 }
 
+struct MusicMemberSummary: Codable, Equatable, Hashable, Identifiable {
+    let id: String
+    let nameKo: String
+    let nameEn: String?
+    let role: String?
+}
+
 struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let youtubeVideoId: String
     let title: String
-    let memberId: String
-    let memberName: String
-    let generationId: String
-    let generationName: String
+    let memberId: String?
+    let memberName: String?
+    let generationId: String?
+    let generationName: String?
     let type: SongType
-    let sourceUrl: String
+    let sourceUrl: String?
     let thumbnail: SongThumbnail?
-    let publishedAt: Date
+    let publishedAt: Date?
+    let thumbnailUrl: String?
+    let duration: String?
+    let durationSeconds: Int?
+    let isInstrumental: Bool
+    let specialFlags: [String]
+    let classificationStatus: String?
+    let members: [MusicMemberSummary]
+    let youtubeUrl: String
+    let sourcePlaylistId: String?
+
+    init(
+        id: String,
+        youtubeVideoId: String,
+        title: String,
+        type: SongType,
+        publishedAt: Date? = nil,
+        thumbnailUrl: String? = nil,
+        duration: String? = nil,
+        durationSeconds: Int? = nil,
+        isInstrumental: Bool = false,
+        specialFlags: [String] = [],
+        classificationStatus: String? = nil,
+        members: [MusicMemberSummary] = [],
+        youtubeUrl: String,
+        sourcePlaylistId: String? = nil,
+        memberId: String? = nil,
+        memberName: String? = nil,
+        generationId: String? = nil,
+        generationName: String? = nil,
+        sourceUrl: String? = nil,
+        thumbnail: SongThumbnail? = nil
+    ) {
+        self.id = id
+        self.youtubeVideoId = youtubeVideoId
+        self.title = title
+        self.memberId = memberId
+        self.memberName = memberName
+        self.generationId = generationId
+        self.generationName = generationName
+        self.type = type
+        self.sourceUrl = sourceUrl
+        self.thumbnail = thumbnail
+        self.publishedAt = publishedAt
+        self.thumbnailUrl = thumbnailUrl ?? thumbnail?.url
+        self.duration = duration
+        self.durationSeconds = durationSeconds
+        self.isInstrumental = isInstrumental
+        self.specialFlags = specialFlags
+        self.classificationStatus = classificationStatus
+        self.members = members
+        self.youtubeUrl = youtubeUrl
+        self.sourcePlaylistId = sourcePlaylistId
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case youtubeVideoId
+        case title
+        case memberId
+        case memberName
+        case generationId
+        case generationName
+        case type
+        case sourceUrl
+        case thumbnail
+        case publishedAt
+        case thumbnailUrl
+        case duration
+        case durationSeconds
+        case isInstrumental
+        case specialFlags
+        case classificationStatus
+        case members
+        case youtubeUrl
+        case sourcePlaylistId
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try container.decode(String.self, forKey: .id)
+        let youtubeVideoId = try container.decode(String.self, forKey: .youtubeVideoId)
+        let sourceUrl = try container.decodeIfPresent(String.self, forKey: .sourceUrl)
+        self.init(
+            id: id,
+            youtubeVideoId: youtubeVideoId,
+            title: try container.decode(String.self, forKey: .title),
+            type: try container.decode(SongType.self, forKey: .type),
+            publishedAt: try container.decodeIfPresent(Date.self, forKey: .publishedAt),
+            thumbnailUrl: try container.decodeIfPresent(String.self, forKey: .thumbnailUrl),
+            duration: try container.decodeIfPresent(String.self, forKey: .duration),
+            durationSeconds: try container.decodeIfPresent(Int.self, forKey: .durationSeconds),
+            isInstrumental: try container.decodeIfPresent(Bool.self, forKey: .isInstrumental) ?? false,
+            specialFlags: try container.decodeIfPresent([String].self, forKey: .specialFlags) ?? [],
+            classificationStatus: try container.decodeIfPresent(String.self, forKey: .classificationStatus),
+            members: try container.decodeIfPresent([MusicMemberSummary].self, forKey: .members) ?? [],
+            youtubeUrl: try container.decodeIfPresent(String.self, forKey: .youtubeUrl) ?? sourceUrl ?? "https://www.youtube.com/watch?v=\(youtubeVideoId)",
+            sourcePlaylistId: try container.decodeIfPresent(String.self, forKey: .sourcePlaylistId),
+            memberId: try container.decodeIfPresent(String.self, forKey: .memberId),
+            memberName: try container.decodeIfPresent(String.self, forKey: .memberName),
+            generationId: try container.decodeIfPresent(String.self, forKey: .generationId),
+            generationName: try container.decodeIfPresent(String.self, forKey: .generationName),
+            sourceUrl: sourceUrl,
+            thumbnail: try container.decodeIfPresent(SongThumbnail.self, forKey: .thumbnail)
+        )
+    }
 }
 
 struct SongListResponse: Codable, Equatable {
     let items: [SongCatalogItem]
     let nextCursor: String?
 }
+
+typealias MusicListResponse = SongListResponse
 
 struct SongFilterCount: Identifiable, Codable, Equatable, Hashable {
     let id: String
@@ -460,6 +574,43 @@ enum IOSSongPagePolicy {
         .init(id: "original", label: "오리지널"),
         .init(id: "cover", label: "커버")
     ]
+
+    static func memberDisplayText(_ song: SongCatalogItem) -> String {
+        let names = song.members
+            .map { $0.nameKo.isEmpty ? ($0.nameEn ?? "") : $0.nameKo }
+            .filter { !$0.isEmpty }
+        let uniqueNames = names.reduce(into: [String]()) { result, name in
+            if !result.contains(name) {
+                result.append(name)
+            }
+        }
+        if !uniqueNames.isEmpty {
+            return uniqueNames.joined(separator: " · ")
+        }
+        if let memberName = song.memberName, !memberName.isEmpty {
+            return memberName
+        }
+        return "스텔라이브"
+    }
+
+    static func matchesGeneration(
+        _ song: SongCatalogItem,
+        selectedGenerationId: String,
+        memberGenerationById: [String: String]
+    ) -> Bool {
+        if selectedGenerationId == "all" {
+            return true
+        }
+        return song.members.contains { memberGenerationById[$0.id] == selectedGenerationId }
+    }
+
+    static func matchesQuery(_ song: SongCatalogItem, query: String) -> Bool {
+        if query.isEmpty {
+            return true
+        }
+        return song.title.localizedCaseInsensitiveContains(query) ||
+            memberDisplayText(song).localizedCaseInsensitiveContains(query)
+    }
 }
 
 enum HubCalendarPolicy {

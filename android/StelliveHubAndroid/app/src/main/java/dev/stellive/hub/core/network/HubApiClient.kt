@@ -107,6 +107,23 @@ class HubApiClient(
         api.songFacets(generationId = generationId, memberId = memberId, type = type, q = q)
     }
 
+    suspend fun music(
+        type: String? = null,
+        cursor: String? = null,
+        limit: Int? = null,
+        sort: String? = "publishedAt_desc",
+    ): HubNetworkResult<MusicListResponseDto> =
+        runCatchingNetwork { api.music(type = type, cursor = cursor, limit = limit, sort = sort) }
+
+    suspend fun memberMusic(
+        memberId: String,
+        type: String? = null,
+        cursor: String? = null,
+        limit: Int? = null,
+        sort: String? = "publishedAt_desc",
+    ): HubNetworkResult<MusicListResponseDto> =
+        runCatchingNetwork { api.memberMusic(memberId = memberId, type = type, cursor = cursor, limit = limit, sort = sort) }
+
     private inline fun <T> runCatchingNetwork(block: () -> T): HubNetworkResult<T> =
         try {
             HubNetworkResult.Success(block())

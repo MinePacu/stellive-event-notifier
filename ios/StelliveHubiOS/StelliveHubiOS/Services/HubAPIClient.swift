@@ -323,6 +323,39 @@ final class HubAPIClient {
         return try await send(URLRequest(url: components.url!), responseType: SongFacetsResponse.self)
     }
 
+    func music(
+        type: String? = nil,
+        cursor: String? = nil,
+        limit: Int? = nil,
+        sort: String? = "publishedAt_desc"
+    ) async throws -> MusicListResponse {
+        var components = URLComponents(url: baseURL.appendingPathComponent("v1/music"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "type", value: type),
+            URLQueryItem(name: "cursor", value: cursor),
+            URLQueryItem(name: "limit", value: limit.map(String.init)),
+            URLQueryItem(name: "sort", value: sort)
+        ].filter { $0.value != nil }
+        return try await send(URLRequest(url: components.url!), responseType: MusicListResponse.self)
+    }
+
+    func memberMusic(
+        memberId: String,
+        type: String? = nil,
+        cursor: String? = nil,
+        limit: Int? = nil,
+        sort: String? = "publishedAt_desc"
+    ) async throws -> MusicListResponse {
+        var components = URLComponents(url: baseURL.appendingPathComponent("v1/members/\(memberId)/music"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "type", value: type),
+            URLQueryItem(name: "cursor", value: cursor),
+            URLQueryItem(name: "limit", value: limit.map(String.init)),
+            URLQueryItem(name: "sort", value: sort)
+        ].filter { $0.value != nil }
+        return try await send(URLRequest(url: components.url!), responseType: MusicListResponse.self)
+    }
+
     func registerDevice(_ request: RegisterDeviceRequest) async throws -> RegisterDeviceResponse {
         try await sendJSON(path: "v1/devices/register", method: "POST", body: request, responseType: RegisterDeviceResponse.self)
     }

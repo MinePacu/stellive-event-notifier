@@ -7,6 +7,9 @@ import dev.stellive.hub.core.network.HubEventDto
 import dev.stellive.hub.core.network.HubEventsListResponseDto
 import dev.stellive.hub.core.network.HubNetworkResult
 import dev.stellive.hub.core.network.LiveStatusDto
+import dev.stellive.hub.core.network.MusicCatalogItemDto
+import dev.stellive.hub.core.network.MusicListResponseDto
+import dev.stellive.hub.core.network.MusicMemberSummaryDto
 import dev.stellive.hub.core.network.MobileConfigDto
 import dev.stellive.hub.core.network.RegisterDeviceRequestDto
 import dev.stellive.hub.core.network.RegisterDeviceResponseDto
@@ -118,22 +121,37 @@ class ServerHubRepositoryTest {
         )
 
         val songs = repository.songs(
-            generationId = "gen2",
-            memberId = "akane-lize",
-            type = "original",
-            query = "별빛",
+            type = "cover",
             cursor = "cursor-1",
         )
 
-        assertEquals("gen2", remote.lastSongGenerationId)
-        assertEquals("akane-lize", remote.lastSongMemberId)
-        assertEquals("original", remote.lastSongType)
-        assertEquals("별빛", remote.lastSongQuery)
-        assertEquals("cursor-1", remote.lastSongCursor)
+        assertEquals("cover", remote.lastMusicType)
+        assertEquals("cursor-1", remote.lastMusicCursor)
         assertEquals(1, songs.items.size)
-        assertEquals("song-1", songs.items.first().id)
-        assertEquals("original", songs.items.first().type.apiValue)
-        assertEquals(320, songs.items.first().thumbnail?.width)
+        assertEquals("video-1", songs.items.first().id)
+        assertEquals("cover", songs.items.first().type.apiValue)
+        assertEquals("https://img.youtube.com/vi/video-1/hqdefault.jpg", songs.items.first().thumbnailUrl)
+    }
+
+    @Test
+    fun songsMapOfficialMusicCollaborationMembers() = runTest {
+        val remote = RecordingRemoteDataSource()
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val songs = repository.songs(
+            memberId = "yuzuha-riko",
+            type = "cover",
+        )
+
+        assertEquals("yuzuha-riko", remote.lastMemberMusicMemberId)
+        assertEquals("cover", remote.lastMemberMusicType)
+        assertEquals(1, songs.items.size)
+        assertEquals(listOf("유즈하 리코", "네네코 마시로"), songs.items.single().members.map { it.nameKo })
+        assertEquals("https://www.youtube.com/watch?v=video-1", songs.items.single().youtubeUrl)
     }
 
     @Test
@@ -164,6 +182,10 @@ class ServerHubRepositoryTest {
         var lastSongType: String? = null
         var lastSongQuery: String? = null
         var lastSongCursor: String? = null
+        var lastMusicType: String? = null
+        var lastMusicCursor: String? = null
+        var lastMemberMusicMemberId: String? = null
+        var lastMemberMusicType: String? = null
 
         override suspend fun bootstrap(deviceId: String?): HubNetworkResult<BootstrapResponseDto> {
             bootstrapCalls += 1
@@ -296,6 +318,62 @@ class ServerHubRepositoryTest {
                     memberFilters = emptyList(),
                     typeFilters = emptyList(),
                 ),
+            )
+
+        override suspend fun music(
+            type: String?,
+            cursor: String?,
+            limit: Int?,
+            sort: String?,
+        ): HubNetworkResult<MusicListResponseDto> {
+            lastMusicType = type
+            lastMusicCursor = cursor
+            return HubNetworkResult.Success(officialMusicResponse())
+        }
+
+        override suspend fun memberMusic(
+            memberId: String,
+            type: String?,
+            cursor: String?,
+            limit: Int?,
+            sort: String?,
+        ): HubNetworkResult<MusicListResponseDto> {
+            lastMemberMusicMemberId = memberId
+            lastMemberMusicType = type
+            return HubNetworkResult.Success(officialMusicResponse())
+        }
+
+        private fun officialMusicResponse(): MusicListResponseDto =
+            MusicListResponseDto(
+                items = listOf(
+                    MusicCatalogItemDto(
+                        id = "video-1",
+                        youtubeVideoId = "video-1",
+                        title = "Collab Cover",
+                        type = "cover",
+                        publishedAt = "2026-06-23T00:00:00.000Z",
+                        thumbnailUrl = "https://img.youtube.com/vi/video-1/hqdefault.jpg",
+                        duration = "PT3M",
+                        durationSeconds = 180,
+                        members = listOf(
+                            MusicMemberSummaryDto(
+                                id = "yuzuha-riko",
+                                nameKo = "유즈하 리코",
+                                nameEn = "Yuzuha Riko",
+                                role = "MAIN",
+                            ),
+                            MusicMemberSummaryDto(
+                                id = "neneko-mashiro",
+                                nameKo = "네네코 마시로",
+                                nameEn = "Neneko Mashiro",
+                                role = "COLLAB",
+                            ),
+                        ),
+                        youtubeUrl = "https://www.youtube.com/watch?v=video-1",
+                        sourcePlaylistId = "playlist-cover",
+                    ),
+                ),
+                nextCursor = "next-cursor",
             )
     }
 }

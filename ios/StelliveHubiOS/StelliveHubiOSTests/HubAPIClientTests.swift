@@ -232,6 +232,46 @@ final class HubAPIClientTests: XCTestCase {
         XCTAssertEqual(facets.summary.original, 1)
     }
 
+    func testMusicListUsesOfficialMusicEndpointAndDecodesMembers() async throws {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/v1/music")
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+            let queryItems = Dictionary(uniqueKeysWithValues: (components?.queryItems ?? []).map { ($0.name, $0.value) })
+            XCTAssertEqual(queryItems["type"], "cover")
+            XCTAssertEqual(queryItems["limit"], "30")
+            XCTAssertEqual(queryItems["sort"], "publishedAt_desc")
+            return jsonResponse(statusCode: 200, body: """
+            {
+              "items": [{
+                "id": "video-1",
+                "youtubeVideoId": "video-1",
+                "title": "Collab Cover",
+                "type": "cover",
+                "publishedAt": "2026-06-23T00:00:00.000Z",
+                "thumbnailUrl": "https://img.youtube.com/vi/video-1/hqdefault.jpg",
+                "duration": "PT3M",
+                "durationSeconds": 180,
+                "isInstrumental": false,
+                "specialFlags": [],
+                "classificationStatus": "AUTO_CLASSIFIED",
+                "members": [
+                  { "id": "yuzuha-riko", "nameKo": "유즈하 리코", "nameEn": "Yuzuha Riko", "role": "MAIN" },
+                  { "id": "neneko-mashiro", "nameKo": "네네코 마시로", "nameEn": "Neneko Mashiro", "role": "COLLAB" }
+                ],
+                "youtubeUrl": "https://www.youtube.com/watch?v=video-1",
+                "sourcePlaylistId": "playlist-cover"
+              }],
+              "nextCursor": null
+            }
+            """)
+        }
+
+        let response = try await client.music(type: "cover", limit: 30, sort: "publishedAt_desc")
+
+        XCTAssertEqual(response.items.first?.members.map(\.nameKo), ["유즈하 리코", "네네코 마시로"])
+        XCTAssertEqual(response.items.first?.youtubeUrl, "https://www.youtube.com/watch?v=video-1")
+    }
+
     private func makeClient(
         handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)
     ) -> HubAPIClient {

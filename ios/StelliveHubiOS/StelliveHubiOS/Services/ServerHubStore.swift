@@ -98,14 +98,13 @@ final class ServerHubStore: ObservableObject {
         cursor: String? = nil
     ) async {
         do {
-            let response = try await api.songs(
-                generationId: generationId,
-                memberId: memberId,
-                type: type,
-                q: query,
-                cursor: cursor,
-                limit: 30
-            )
+            let normalizedType = type == "all" ? nil : type
+            let response: MusicListResponse
+            if let memberId, !memberId.isEmpty, memberId != "all" {
+                response = try await api.memberMusic(memberId: memberId, type: normalizedType, cursor: cursor, limit: 30)
+            } else {
+                response = try await api.music(type: normalizedType, cursor: cursor, limit: 30)
+            }
             serverSongs = response.items
         } catch {
             if serverSongs.isEmpty {
@@ -169,7 +168,7 @@ final class ServerHubStore: ObservableObject {
             let memberMatches = memberId == nil || memberId == "all" || song.memberId == memberId
             let typeMatches = type == nil || type == "all" || song.type.rawValue == type
             let queryText = query ?? ""
-            let queryMatches = queryText.isEmpty || song.title.localizedCaseInsensitiveContains(queryText) || song.memberName.localizedCaseInsensitiveContains(queryText)
+            let queryMatches = queryText.isEmpty || song.title.localizedCaseInsensitiveContains(queryText) || IOSSongPagePolicy.memberDisplayText(song).localizedCaseInsensitiveContains(queryText)
             return generationMatches && memberMatches && typeMatches && queryMatches
         }
         return SongListResponse(items: filtered, nextCursor: nil)

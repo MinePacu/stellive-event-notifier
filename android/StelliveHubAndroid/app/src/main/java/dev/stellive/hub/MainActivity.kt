@@ -14,10 +14,13 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.CalendarContract
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.DragEvent
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
@@ -113,6 +116,7 @@ private var draggingLiveMemberId: String? = null
     private var selectedHistoryMemberFilterId = "all"
     private var selectedSongGenerationId = "all"
     private var selectedSongType = "all"
+    private var selectedSongQuery = ""
     private var selectedHubEventId: String? = null
     private var goodsEventsDays: List<HubCalendarDay> = emptyList()
     private var goodsEvents: List<HubEvent> = emptyList()
@@ -828,14 +832,20 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
                 pills = listOf("YouTube", "서버 캐시")
             )
         )
+        binding.contentList.addView(songSearchCard())
         binding.contentList.addView(songFilterChips())
         binding.contentList.addView(noticeCard("불러오는 중 · 서버에서 노래 목록을 가져오고 있습니다."))
 
         CoroutineScope(Dispatchers.Main).launch {
             val songs = serverRepository.songs(
-                generationId = selectedSongGenerationId,
+                generationId = "all",
                 type = selectedSongType,
             )
+            val memberGenerationById = (serverMembers ?: repository.members).associate { it.id to it.generationId }
+            val visibleSongs = songs.items.filter { song ->
+                MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
+                    MainUiPolicy.songMatchesQuery(song, selectedSongQuery)
+            }
             if (navigationHistory.currentScreen != HubScreen.SONGS) return@launch
             startScreen(
                 screenId = "songs",
@@ -849,43 +859,80 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
                     pills = listOf("YouTube", "서버 캐시")
                 )
             )
+            binding.contentList.addView(songSearchCard())
             binding.contentList.addView(songFilterChips())
-            if (songs.items.isEmpty()) {
+            if (visibleSongs.isEmpty()) {
                 binding.contentList.addView(noticeCard("표시할 노래가 없습니다. 필터를 바꾸거나 나중에 다시 확인해 주세요."))
             } else {
-                songs.items.forEach { song ->
+                visibleSongs.forEach { song ->
                     binding.contentList.addView(songCard(song))
                 }
             }
         }
     }
 
-    private fun songFilterChips(): HorizontalScrollView =
-        HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
+    private fun songSearchCard(): MaterialCardView =
+        baseCard().apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(10)
+            }
+            val input = EditText(context).apply {
+                hint = "노래 제목 또는 멤버 검색"
+                setSingleLine(true)
+                setText(selectedSongQuery)
+                setTextColor(color(R.color.hub_text))
+                setHintTextColor(color(R.color.hub_text_muted))
+                textSize = 14f
+                setPadding(dp(13), dp(8), dp(13), dp(8))
+                setOnEditorActionListener { view, _, _ ->
+                    selectedSongQuery = view.text?.toString().orEmpty()
+                    renderSongs()
+                    true
+                }
+                setOnFocusChangeListener { view, hasFocus ->
+                    if (!hasFocus) {
+                        selectedSongQuery = (view as EditText).text?.toString().orEmpty()
+                        renderSongs()
+                    }
+                }
+                addTextChangedListener(object : TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+
+                    override fun afterTextChanged(s: Editable?) {
+                        selectedSongQuery = s?.toString().orEmpty()
+                    }
+                })
+            }
+            addView(input)
+        }
+
+    private fun songFilterChips(): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(12)
             }
+            addView(songFilterRow(MainUiPolicy.songGenerationFilters(), selectedSongGenerationId) { selectedSongGenerationId = it })
+            addView(songFilterRow(MainUiPolicy.songTypeFilters(), selectedSongType) { selectedSongType = it })
+        }
+
+    private fun songFilterRow(
+        filters: List<dev.stellive.hub.feature.home.SongFilterOption>,
+        selectedId: String,
+        onSelected: (String) -> Unit,
+    ): HorizontalScrollView =
+        HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
             addView(ChipGroup(context).apply {
                 isSingleLine = true
-                MainUiPolicy.songGenerationFilters().forEach { filter ->
+                filters.forEach { filter ->
                     addView(Chip(context).apply {
                         text = filter.label
                         isCheckable = true
-                        isChecked = filter.id == selectedSongGenerationId
+                        isChecked = filter.id == selectedId
                         setOnClickListener {
-                            selectedSongGenerationId = filter.id
-                            renderSongs()
-                        }
-                    })
-                }
-                MainUiPolicy.songTypeFilters().forEach { filter ->
-                    addView(Chip(context).apply {
-                        text = filter.label
-                        isCheckable = true
-                        isChecked = filter.id == selectedSongType
-                        setOnClickListener {
-                            selectedSongType = filter.id
+                            onSelected(filter.id)
                             renderSongs()
                         }
                     })
@@ -907,22 +954,15 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
                 setTextColor(color(R.color.hub_text))
                 textSize = 15f
                 typeface = Typeface.DEFAULT_BOLD
-            })
-            content.addView(TextView(context).apply {
-                text = "${song.memberName} · ${song.generationName} · ${song.type.displayName}"
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 12f
-                setPadding(0, dp(5), 0, 0)
-            })
-            content.addView(TextView(context).apply {
-                text = song.sourceUrl
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 12f
-                setPadding(0, dp(8), 0, 0)
-                maxLines = 1
-            })
-            addView(content)
-        }
+        })
+        content.addView(TextView(context).apply {
+            text = "${MainUiPolicy.songMemberDisplayText(song)} · ${song.type.displayName}"
+            setTextColor(color(R.color.hub_text_muted))
+            textSize = 12f
+            setPadding(0, dp(5), 0, 0)
+        })
+        addView(content)
+    }
 
     private fun renderSettings() {
         val settings = repository.settings

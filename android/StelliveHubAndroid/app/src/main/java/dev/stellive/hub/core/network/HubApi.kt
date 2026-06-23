@@ -68,4 +68,21 @@ interface HubApi {
         @Query("type") type: String? = null,
         @Query("q") q: String? = null,
     ): SongFacetsResponseDto
+
+    @GET("v1/music")
+    suspend fun music(
+        @Query("type") type: String? = null,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("sort") sort: String? = null,
+    ): MusicListResponseDto
+
+    @GET("v1/members/{id}/music")
+    suspend fun memberMusic(
+        @Path("id") memberId: String,
+        @Query("type") type: String? = null,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("sort") sort: String? = null,
+    ): MusicListResponseDto
 }

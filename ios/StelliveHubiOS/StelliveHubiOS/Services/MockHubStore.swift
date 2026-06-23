@@ -297,27 +297,36 @@ final class MockHubStore: ObservableObject {
             id: "mock-song-1",
             youtubeVideoId: "mock-video-1",
             title: "별빛 항로",
+            type: .original,
+            publishedAt: ISO8601DateFormatter().date(from: "2026-06-21T12:00:00Z") ?? Date(timeIntervalSince1970: 0),
+            members: [
+                MusicMemberSummary(id: "akane-lize", nameKo: "아카네 리제", nameEn: "Akane Lize", role: "MAIN")
+            ],
+            youtubeUrl: "https://www.youtube.com/watch?v=mock-video-1",
             memberId: "akane-lize",
             memberName: "아카네 리제",
             generationId: "gen2",
             generationName: "2기생",
-            type: .original,
             sourceUrl: "https://www.youtube.com/watch?v=mock-video-1",
-            thumbnail: nil,
-            publishedAt: ISO8601DateFormatter().date(from: "2026-06-21T12:00:00Z") ?? Date(timeIntervalSince1970: 0)
+            thumbnail: nil
         ),
         SongCatalogItem(
             id: "mock-song-2",
             youtubeVideoId: "mock-video-2",
             title: "커버 모음",
-            memberId: "ayatsuno-yuni",
-            memberName: "아야츠노 유니",
-            generationId: "gen1",
-            generationName: "1기생",
             type: .cover,
+            publishedAt: ISO8601DateFormatter().date(from: "2026-06-20T12:00:00Z") ?? Date(timeIntervalSince1970: 0),
+            members: [
+                MusicMemberSummary(id: "yuzuha-riko", nameKo: "유즈하 리코", nameEn: "Yuzuha Riko", role: "MAIN"),
+                MusicMemberSummary(id: "neneko-mashiro", nameKo: "네네코 마시로", nameEn: "Neneko Mashiro", role: "COLLAB")
+            ],
+            youtubeUrl: "https://www.youtube.com/watch?v=mock-video-2",
+            memberId: "yuzuha-riko",
+            memberName: "유즈하 리코",
+            generationId: "gen3",
+            generationName: "3기생",
             sourceUrl: "https://www.youtube.com/watch?v=mock-video-2",
-            thumbnail: nil,
-            publishedAt: ISO8601DateFormatter().date(from: "2026-06-20T12:00:00Z") ?? Date(timeIntervalSince1970: 0)
+            thumbnail: nil
         )
     ]
 
@@ -327,7 +336,7 @@ final class MockHubStore: ObservableObject {
             let memberMatches = memberId == nil || memberId == "all" || song.memberId == memberId
             let typeMatches = type == nil || type == "all" || song.type.rawValue == type
             let queryText = query ?? ""
-            let queryMatches = queryText.isEmpty || song.title.localizedCaseInsensitiveContains(queryText) || song.memberName.localizedCaseInsensitiveContains(queryText)
+            let queryMatches = queryText.isEmpty || song.title.localizedCaseInsensitiveContains(queryText) || IOSSongPagePolicy.memberDisplayText(song).localizedCaseInsensitiveContains(queryText)
             return generationMatches && memberMatches && typeMatches && queryMatches
         }
         return SongListResponse(items: filtered, nextCursor: nil)

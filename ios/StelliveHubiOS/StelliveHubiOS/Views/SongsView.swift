@@ -8,19 +8,35 @@ struct SongsView: View {
     @State private var selectedType = "all"
     @State private var query = ""
 
+    private var memberGenerationById: [String: String] {
+        Dictionary(uniqueKeysWithValues: store.members.map { ($0.id, $0.generationId) })
+    }
+
     private var songs: [SongCatalogItem] {
         serverStore.songs(
-            generationId: selectedGenerationId,
+            generationId: "all",
             type: selectedType,
-            query: query
-        ).items
+            query: ""
+        ).items.filter {
+            IOSSongPagePolicy.matchesGeneration($0, selectedGenerationId: selectedGenerationId, memberGenerationById: memberGenerationById) &&
+                IOSSongPagePolicy.matchesQuery($0, query: query)
+        }
     }
 
     private var facets: SongFacetsResponse {
-        serverStore.songFacets(
-            generationId: selectedGenerationId,
-            type: selectedType,
-            query: query
+        SongFacetsResponse(
+            summary: SongFacetSummary(
+                total: songs.count,
+                original: songs.filter { $0.type == .original }.count,
+                cover: songs.filter { $0.type == .cover }.count
+            ),
+            generationFilters: IOSSongPagePolicy.generationFilters.map {
+                SongFilterCount(id: $0.id, label: $0.label, generationId: $0.id == "all" ? nil : $0.id, count: songs.count)
+            },
+            memberFilters: [],
+            typeFilters: IOSSongPagePolicy.typeFilters.map {
+                SongFilterCount(id: $0.id, label: $0.label, generationId: nil, count: songs.count)
+            }
         )
     }
 
@@ -29,14 +45,14 @@ struct SongsView: View {
             List {
                 HubHeaderCard(
                     iconText: "♪",
-                    title: "노래",
-                    subtitle: "YouTube 기반 오리지널/커버 곡 목록",
-                    metrics: [
-                        .init(value: "(facets.summary.total)", label: "전체"),
-                        .init(value: "(facets.summary.original)", label: "오리지널"),
-                        .init(value: "(facets.summary.cover)", label: "커버")
-                    ]
-                )
+                title: "노래",
+                subtitle: "YouTube 기반 오리지널/커버 곡 목록",
+                metrics: [
+                    .init(value: "\(facets.summary.total)", label: "전체"),
+                    .init(value: "\(facets.summary.original)", label: "오리지널"),
+                    .init(value: "\(facets.summary.cover)", label: "커버")
+                ]
+            )
                 .listRowInsets(IOSGroupedScreenPolicy.headerRowInsets)
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
@@ -91,15 +107,10 @@ struct SongsView: View {
     }
 
     private func refreshSongs() async {
-        await serverStore.refreshSongFacets(
-            generationId: selectedGenerationId,
-            type: selectedType,
-            query: query
-        )
         await serverStore.refreshSongs(
-            generationId: selectedGenerationId,
+            generationId: "all",
             type: selectedType,
-            query: query
+            query: ""
         )
     }
 }
@@ -108,7 +119,7 @@ private struct SongRow: View {
     let song: SongCatalogItem
 
     var body: some View {
-        Link(destination: URL(string: song.sourceUrl) ?? URL(string: "https://www.youtube.com")!) {
+        Link(destination: URL(string: song.youtubeUrl) ?? URL(string: "https://www.youtube.com")!) {
             HStack(alignment: .top, spacing: 12) {
                 SongThumbnailView()
 
@@ -119,14 +130,16 @@ private struct SongRow: View {
                         .lineLimit(2)
                         .minimumScaleFactor(0.86)
 
-                    Text([song.memberName, song.generationName, song.type.displayName].joined(separator: " · "))
+                    Text([IOSSongPagePolicy.memberDisplayText(song), song.type.displayName].joined(separator: " · "))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
 
-                    Text(song.publishedAt, style: .date)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if let publishedAt = song.publishedAt {
+                        Text(publishedAt, style: .date)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer(minLength: 8)

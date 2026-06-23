@@ -176,6 +176,35 @@ data class SongListResponseDto(
     val nextCursor: String? = null,
 )
 
+data class MusicMemberSummaryDto(
+    val id: String,
+    val nameKo: String,
+    val nameEn: String? = null,
+    val role: String? = null,
+)
+
+data class MusicCatalogItemDto(
+    val id: String,
+    val youtubeVideoId: String,
+    val title: String,
+    val type: String,
+    val publishedAt: String? = null,
+    val thumbnailUrl: String? = null,
+    val duration: String? = null,
+    val durationSeconds: Int? = null,
+    val isInstrumental: Boolean = false,
+    val specialFlags: List<String> = emptyList(),
+    val classificationStatus: String? = null,
+    val members: List<MusicMemberSummaryDto> = emptyList(),
+    val youtubeUrl: String,
+    val sourcePlaylistId: String? = null,
+)
+
+data class MusicListResponseDto(
+    val items: List<MusicCatalogItemDto> = emptyList(),
+    val nextCursor: String? = null,
+)
+
 data class SongFilterCountDto(
     val id: String,
     val label: String,

@@ -1,5 +1,8 @@
 package dev.stellive.hub
 
+import dev.stellive.hub.core.model.SongCatalogItem
+import dev.stellive.hub.core.model.SongMemberSummary
+import dev.stellive.hub.core.model.SongType
 import dev.stellive.hub.feature.home.MainUiPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -21,7 +24,68 @@ class SongUiPolicyTest {
         assertEquals(listOf("all", "gen1", "gen2", "gen3"), MainUiPolicy.songGenerationFilters().map { it.id })
         assertEquals(listOf("전체", "1기생", "2기생", "3기생"), MainUiPolicy.songGenerationFilters().map { it.label })
         assertEquals(listOf("all", "original", "cover"), MainUiPolicy.songTypeFilters().map { it.id })
+        assertEquals(1, MainUiPolicy.songGenerationFilters().count { it.id == "all" })
+        assertEquals(1, MainUiPolicy.songTypeFilters().count { it.id == "all" })
         assertFalse(MainUiPolicy.songGenerationFilters().any { it.id == "gamja" || it.id == "official" })
+    }
+
+    @Test
+    fun songMatchesSelectedGenerationByMemberIds() {
+        val song = SongCatalogItem(
+            id = "video-1",
+            youtubeVideoId = "video-1",
+            title = "Collab",
+            type = SongType.COVER,
+            members = listOf(
+                SongMemberSummary(id = "yuzuha-riko", nameKo = "유즈하 리코"),
+                SongMemberSummary(id = "neneko-mashiro", nameKo = "네네코 마시로"),
+            ),
+            youtubeUrl = "https://www.youtube.com/watch?v=video-1",
+        )
+        val memberGenerations = mapOf(
+            "yuzuha-riko" to "gen3",
+            "neneko-mashiro" to "gen2",
+        )
+
+        assertTrue(MainUiPolicy.songMatchesGeneration(song, "all", memberGenerations))
+        assertTrue(MainUiPolicy.songMatchesGeneration(song, "gen2", memberGenerations))
+        assertTrue(MainUiPolicy.songMatchesGeneration(song, "gen3", memberGenerations))
+        assertFalse(MainUiPolicy.songMatchesGeneration(song, "gen1", memberGenerations))
+    }
+
+    @Test
+    fun songMatchesQueryByTitleOrMemberDisplayText() {
+        val song = SongCatalogItem(
+            id = "video-1",
+            youtubeVideoId = "video-1",
+            title = "Starlight Cover",
+            type = SongType.COVER,
+            members = listOf(SongMemberSummary(id = "yuzuha-riko", nameKo = "유즈하 리코")),
+            youtubeUrl = "https://www.youtube.com/watch?v=video-1",
+        )
+
+        assertTrue(MainUiPolicy.songMatchesQuery(song, "starlight"))
+        assertTrue(MainUiPolicy.songMatchesQuery(song, "리코"))
+        assertTrue(MainUiPolicy.songMatchesQuery(song, ""))
+        assertFalse(MainUiPolicy.songMatchesQuery(song, "마시로"))
+    }
+
+    @Test
+    fun songMemberDisplayJoinsCollaborationMembers() {
+        val song = SongCatalogItem(
+            id = "video-1",
+            youtubeVideoId = "video-1",
+            title = "Collab",
+            type = SongType.COVER,
+            members = listOf(
+                SongMemberSummary(id = "yuzuha-riko", nameKo = "유즈하 리코"),
+                SongMemberSummary(id = "neneko-mashiro", nameKo = "네네코 마시로"),
+            ),
+            youtubeUrl = "https://www.youtube.com/watch?v=video-1",
+        )
+
+        assertEquals("유즈하 리코 · 네네코 마시로", MainUiPolicy.songMemberDisplayText(song))
+        assertEquals("스텔라이브", MainUiPolicy.songMemberDisplayText(song.copy(members = emptyList())))
     }
 
     @Test

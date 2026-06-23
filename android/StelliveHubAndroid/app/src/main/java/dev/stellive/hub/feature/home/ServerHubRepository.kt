@@ -18,6 +18,7 @@ import dev.stellive.hub.core.model.SongFacetSummary
 import dev.stellive.hub.core.model.SongFacets
 import dev.stellive.hub.core.model.SongFilterCount
 import dev.stellive.hub.core.model.SongListResult
+import dev.stellive.hub.core.model.SongMemberSummary
 import dev.stellive.hub.core.model.SongThumbnail
 import dev.stellive.hub.core.model.SongType
 import dev.stellive.hub.core.network.BootstrapResponseDto
@@ -27,6 +28,8 @@ import dev.stellive.hub.core.network.HubEventDto
 import dev.stellive.hub.core.network.HubApiClient
 import dev.stellive.hub.core.network.HubNetworkResult
 import dev.stellive.hub.core.network.LiveStatusDto
+import dev.stellive.hub.core.network.MusicCatalogItemDto
+import dev.stellive.hub.core.network.MusicListResponseDto
 import dev.stellive.hub.core.network.RegisterDeviceRequestDto
 import dev.stellive.hub.core.network.RegisterDeviceResponseDto
 import dev.stellive.hub.core.network.SongCatalogItemDto
@@ -114,14 +117,23 @@ class ServerHubRepository(
         query: String?,
         cursor: String?,
     ): SongListResult {
-        val response = remoteDataSource.songs(
-            generationId = generationId,
-            memberId = memberId,
-            type = type,
-            q = query,
-            cursor = cursor,
-            limit = 30,
-        )
+        val normalizedType = type?.takeUnless { it == "all" }
+        val response = if (!memberId.isNullOrBlank() && memberId != "all") {
+            remoteDataSource.memberMusic(
+                memberId = memberId,
+                type = normalizedType,
+                cursor = cursor,
+                limit = 30,
+                sort = "publishedAt_desc",
+            )
+        } else {
+            remoteDataSource.music(
+                type = normalizedType,
+                cursor = cursor,
+                limit = 30,
+                sort = "publishedAt_desc",
+            )
+        }
         if (response is HubNetworkResult.Success) {
             val result = response.value.toSongListResult()
             songCache = result
@@ -233,13 +245,47 @@ class ServerHubRepository(
     private fun HubCalendarResponseDto.toCalendarDays(): List<HubCalendarDay> =
         days.map { day -> HubCalendarDay(date = day.date, entries = day.entries.mapNotNull { it.toCalendarEntryOrNull() }) }
 
-    private fun SongListResponseDto.toSongListResult(): SongListResult =
-        SongListResult(
-            items = items.mapNotNull { it.toSongCatalogItemOrNull() },
-            nextCursor = nextCursor,
-        )
+private fun SongListResponseDto.toSongListResult(): SongListResult =
+    SongListResult(
+        items = items.mapNotNull { it.toSongCatalogItemOrNull() },
+        nextCursor = nextCursor,
+    )
 
-    private fun SongCatalogItemDto.toSongCatalogItemOrNull(): SongCatalogItem? {
+private fun MusicListResponseDto.toSongListResult(): SongListResult =
+    SongListResult(
+        items = items.mapNotNull { it.toSongCatalogItemOrNull() },
+        nextCursor = nextCursor,
+    )
+
+private fun MusicCatalogItemDto.toSongCatalogItemOrNull(): SongCatalogItem? {
+    val type = SongType.fromApiValue(type) ?: return null
+    val publishedAt = publishedAt?.let(::parseInstantOrNull) ?: Instant.EPOCH
+    return SongCatalogItem(
+        id = id,
+        youtubeVideoId = youtubeVideoId,
+        title = title,
+        type = type,
+        publishedAt = publishedAt,
+        thumbnailUrl = thumbnailUrl,
+        duration = duration,
+        durationSeconds = durationSeconds,
+        isInstrumental = isInstrumental,
+        specialFlags = specialFlags,
+        classificationStatus = classificationStatus,
+        members = members.map {
+            SongMemberSummary(
+                id = it.id,
+                nameKo = it.nameKo,
+                nameEn = it.nameEn,
+                role = it.role,
+            )
+        },
+        youtubeUrl = youtubeUrl,
+        sourcePlaylistId = sourcePlaylistId,
+    )
+}
+
+private fun SongCatalogItemDto.toSongCatalogItemOrNull(): SongCatalogItem? {
         val type = SongType.fromApiValue(type) ?: return null
         val publishedAt = parseInstantOrNull(publishedAt) ?: return null
         return SongCatalogItem(
@@ -321,12 +367,28 @@ class ServerHubRepository(
             memberId: String? = null,
             type: String? = null,
             q: String? = null,
-            cursor: String? = null,
-            limit: Int? = null,
-        ): HubNetworkResult<SongListResponseDto>
-        suspend fun songFacets(
-            generationId: String? = null,
-            memberId: String? = null,
+        cursor: String? = null,
+        limit: Int? = null,
+    ): HubNetworkResult<SongListResponseDto>
+
+    suspend fun music(
+        type: String? = null,
+        cursor: String? = null,
+        limit: Int? = null,
+        sort: String? = null,
+    ): HubNetworkResult<MusicListResponseDto>
+
+    suspend fun memberMusic(
+        memberId: String,
+        type: String? = null,
+        cursor: String? = null,
+        limit: Int? = null,
+        sort: String? = null,
+    ): HubNetworkResult<MusicListResponseDto>
+
+    suspend fun songFacets(
+        generationId: String? = null,
+        memberId: String? = null,
             type: String? = null,
             q: String? = null,
         ): HubNetworkResult<SongFacetsResponseDto>
@@ -358,18 +420,35 @@ class ServerHubRepository(
             timezone: String,
         ): HubNetworkResult<HubCalendarResponseDto> = client.hubEventsCalendar(from = from, to = to, timezone = timezone)
 
-        override suspend fun songs(
-            generationId: String?,
-            memberId: String?,
-            type: String?,
-            q: String?,
-            cursor: String?,
-            limit: Int?,
-        ): HubNetworkResult<SongListResponseDto> =
-            client.songs(generationId = generationId, memberId = memberId, type = type, q = q, cursor = cursor, limit = limit)
+    override suspend fun songs(
+        generationId: String?,
+        memberId: String?,
+        type: String?,
+        q: String?,
+        cursor: String?,
+        limit: Int?,
+    ): HubNetworkResult<SongListResponseDto> =
+        client.songs(generationId = generationId, memberId = memberId, type = type, q = q, cursor = cursor, limit = limit)
 
-        override suspend fun songFacets(
-            generationId: String?,
+    override suspend fun music(
+        type: String?,
+        cursor: String?,
+        limit: Int?,
+        sort: String?,
+    ): HubNetworkResult<MusicListResponseDto> =
+        client.music(type = type, cursor = cursor, limit = limit, sort = sort)
+
+    override suspend fun memberMusic(
+        memberId: String,
+        type: String?,
+        cursor: String?,
+        limit: Int?,
+        sort: String?,
+    ): HubNetworkResult<MusicListResponseDto> =
+        client.memberMusic(memberId = memberId, type = type, cursor = cursor, limit = limit, sort = sort)
+
+    override suspend fun songFacets(
+        generationId: String?,
             memberId: String?,
             type: String?,
             q: String?,

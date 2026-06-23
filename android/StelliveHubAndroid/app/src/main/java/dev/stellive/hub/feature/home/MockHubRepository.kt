@@ -344,7 +344,7 @@ class MockHubRepository : HubRepository {
             .filter { generationId == null || generationId == "all" || it.generationId == generationId }
             .filter { memberId == null || memberId == "all" || it.memberId == memberId }
             .filter { type == null || type == "all" || it.type.apiValue == type }
-            .filter { query.isNullOrBlank() || it.title.contains(query, ignoreCase = true) || it.memberName.contains(query, ignoreCase = true) }
+            .filter { query.isNullOrBlank() || it.title.contains(query, ignoreCase = true) || it.memberName?.contains(query, ignoreCase = true) == true }
             .toList()
         return SongListResult(items = filtered, nextCursor = null)
     }
