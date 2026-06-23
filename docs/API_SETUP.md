@@ -106,9 +106,10 @@ Stellive music sync uses YouTube Data API v3 from the backend only. Mobile clien
 
 Default sync calls:
 
-- `playlistItems.list` with `part=snippet,contentDetails`, `maxResults=50`, `nextPageToken` pagination.
+- `playlistItems.list` with `part=snippet,contentDetails,status`, `maxResults=50`, `nextPageToken` pagination.
 - `videos.list` with `part=snippet,contentDetails,status` in 50-id chunks when details are needed.
 - `search.list` is not part of the default sync path because its quota cost is high.
+- Official music catalog sync uses only COVER `PLLjd981H8qSN9PQ8-X6wINqBF1GjGxusy` and ORIGINAL `PLLjd981H8qSMGC4Nir0hD2Gj9n9PDUoHX`.
 
 Environment variables:
 
@@ -121,6 +122,9 @@ MUSIC_CACHE_STALE_SECONDS=600
 MUSIC_SYNC_LOCK_SECONDS=30
 LIGHT_SYNC_INTERVAL_MINUTES=10
 FULL_SYNC_INTERVAL_MINUTES=60
+STELLIVE_MUSIC_SYNC_INTERVAL_MINUTES=60
+STELLIVE_MUSIC_COVER_PLAYLIST_ID=PLLjd981H8qSN9PQ8-X6wINqBF1GjGxusy
+STELLIVE_MUSIC_ORIGINAL_PLAYLIST_ID=PLLjd981H8qSMGC4Nir0hD2Gj9n9PDUoHX
 DAILY_RECONCILE_CRON=0 4 * * *
 MUSIC_LIGHT_SYNC_MAX_PAGES=2
 ```
@@ -131,7 +135,7 @@ Manual trigger:
 curl -H "Authorization: Bearer <INTERNAL_API_TOKEN>" \
   -H "content-type: application/json" \
   -d '{"mode":"light"}' \
-  http://localhost:4000/v1/internal/schedulers/music/sync
+  http://localhost:4000/v1/internal/schedulers/music/sync-official-playlists
 ```
 
 Quota estimate:

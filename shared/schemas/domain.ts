@@ -148,6 +148,10 @@ export interface MusicCatalogItem {
   publishedAt: string | null;
   thumbnailUrl: string | null;
   duration: string | null;
+  durationSeconds?: number | null;
+  isInstrumental?: boolean;
+  specialFlags?: unknown[];
+  classificationStatus?: string;
   members: MusicMemberSummary[];
   youtubeUrl: string;
   sourcePlaylistId: string | null;

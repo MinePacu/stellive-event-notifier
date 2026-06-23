@@ -1,5 +1,10 @@
 # CODEMAP
 
+## Recent Official Music Playlist Sync Additions
+
+- `backend/stellive-hub-api/src/music/officialStelliveMusicSyncService.ts` - Official Stellive COVER/ORIGINAL playlist sync, videoId dedupe, source mapping, manual override handling.
+- `backend/stellive-hub-api/test/musicOfficialPlaylistSyncService.test.ts` - Official playlist sync behavior tests.
+
 This file maps the repository files that are not excluded by `.gitignore`. Ignored generated outputs, local secrets, dependency folders, IDE files, build artifacts, screenshots, and platform-specific private config such as `google-services.json`, `GoogleService-Info.plist`, `.env`, `node_modules/`, `dist/`, and `build/` are intentionally omitted.
 
 ## Root And Project Metadata

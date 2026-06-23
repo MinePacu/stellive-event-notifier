@@ -107,7 +107,7 @@ Admin 및 internal API는 token/session 보호 경로입니다. Production crede
 
 `GET /v1/music`, `GET /v1/music/:id`, `GET /v1/members/:id/music`는 서버 캐시/DB 기반으로 커버곡과 오리지널곡 목록을 제공합니다. 클라이언트는 YouTube API를 직접 호출하지 않으며 `YOUTUBE_API_KEY`는 서버 환경 변수로만 사용합니다.
 
-동기화 MVP는 공식/관리자 정의 `source_playlists`를 기준으로 `playlistItems.list`와 필요 시 `videos.list`만 사용합니다. 기본 로직에서 `search.list`는 사용하지 않습니다. 수동 동기화는 `POST /v1/internal/schedulers/music/sync`를 `INTERNAL_API_TOKEN`으로 보호해 호출합니다.
+동기화 MVP는 스텔라이브 공식 COVER/ORIGINAL YouTube playlist 2개를 기준으로 `playlistItems.list`와 필요 시 `videos.list`만 사용합니다. 기본 로직에서 `search.list`는 사용하지 않습니다. 공식 playlist 동기화는 `POST /v1/internal/schedulers/music/sync-official-playlists`를 `INTERNAL_API_TOKEN`으로 보호해 호출합니다.
 
 주요 환경 변수:
 
@@ -120,6 +120,9 @@ MUSIC_CACHE_STALE_SECONDS=600
 MUSIC_SYNC_LOCK_SECONDS=30
 LIGHT_SYNC_INTERVAL_MINUTES=10
 FULL_SYNC_INTERVAL_MINUTES=60
+STELLIVE_MUSIC_SYNC_INTERVAL_MINUTES=60
+STELLIVE_MUSIC_COVER_PLAYLIST_ID=PLLjd981H8qSN9PQ8-X6wINqBF1GjGxusy
+STELLIVE_MUSIC_ORIGINAL_PLAYLIST_ID=PLLjd981H8qSMGC4Nir0hD2Gj9n9PDUoHX
 DAILY_RECONCILE_CRON=0 4 * * *
 MUSIC_LIGHT_SYNC_MAX_PAGES=2
 ```
@@ -132,7 +135,7 @@ MUSIC_LIGHT_SYNC_MAX_PAGES=2
 curl -H "Authorization: Bearer <INTERNAL_API_TOKEN>" \
   -H "content-type: application/json" \
   -d '{"mode":"full"}' \
-  http://localhost:4000/v1/internal/schedulers/music/sync
+http://localhost:4000/v1/internal/schedulers/music/sync-official-playlists
 ```
 
 Admin/internal 토큰과 YouTube API key는 문서, 커밋, 로그에 기록하지 않습니다.

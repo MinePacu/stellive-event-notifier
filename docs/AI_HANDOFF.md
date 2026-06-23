@@ -1,5 +1,13 @@
 # AI Handoff
 
+## Official Stellive Music Playlist Sync Update
+
+- Official music catalog sync now uses only COVER `PLLjd981H8qSN9PQ8-X6wINqBF1GjGxusy` and ORIGINAL `PLLjd981H8qSMGC4Nir0hD2Gj9n9PDUoHX`.
+- Added `MusicItemSourcePlaylist` and `MusicItemOverride` schema support for duplicate source preservation and manual override priority.
+- Added `POST /v1/internal/schedulers/music/sync-official-playlists` plus internal review, override, sync-log, and quota-estimate routes.
+- Public music defaults hide unavailable, excluded, graduated, and instrumental items unless include flags are supplied.
+- Focused verification for this slice: `musicRepository musicSourcePlaylists musicYoutubeDataApiClient youtubeDataApiClient musicClassifier musicMemberMatcher musicOfficialPlaylistSyncService musicSyncService musicRoutes musicInternalRoutes musicAppWiring`, `prisma:generate`, and backend build.
+
 ## Stellive Music YouTube Sync MVP Status
 
 Implemented backend MVP for Stellive music catalog sync and public read APIs.
