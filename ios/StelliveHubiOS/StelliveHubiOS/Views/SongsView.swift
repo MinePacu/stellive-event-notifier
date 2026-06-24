@@ -159,7 +159,7 @@ private struct SongRow: View {
     var body: some View {
         Link(destination: URL(string: song.youtubeUrl) ?? URL(string: "https://www.youtube.com")!) {
             HStack(alignment: .top, spacing: 12) {
-                    SongThumbnailView(thumbnailUrl: song.thumbnailUrl)
+                    SongThumbnailView(urls: IOSSongPagePolicy.thumbnailUrlCandidates(for: song))
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(song.title)
@@ -194,17 +194,20 @@ private struct SongRow: View {
 }
 
 private struct SongThumbnailView: View {
-    let thumbnailUrl: String?
+    let urls: [URL]
+    @State private var index = 0
 
     var body: some View {
         Group {
-            if let thumbnailUrl, let url = URL(string: thumbnailUrl) {
-                AsyncImage(url: url) { phase in
+            if urls.indices.contains(index) {
+                AsyncImage(url: urls[index]) { phase in
                     switch phase {
                     case .success(let image):
                         image
                             .resizable()
                             .scaledToFill()
+                    case .failure:
+                        fallbackTrigger
                     default:
                         placeholder
                     }
@@ -216,6 +219,14 @@ private struct SongThumbnailView: View {
         .frame(width: 96, height: 54)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityHidden(true)
+    }
+
+    private var fallbackTrigger: some View {
+        placeholder.task {
+            if index + 1 < urls.count {
+                index += 1
+            }
+        }
     }
 
     private var placeholder: some View {

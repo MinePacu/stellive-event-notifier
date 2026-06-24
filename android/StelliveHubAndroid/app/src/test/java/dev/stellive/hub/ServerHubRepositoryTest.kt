@@ -126,11 +126,33 @@ class ServerHubRepositoryTest {
         )
 
         assertEquals("cover", remote.lastMusicType)
-        assertEquals("cursor-1", remote.lastMusicCursor)
+        assertNull(remote.musicCursors.first())
         assertEquals(1, songs.items.size)
         assertEquals("video-1", songs.items.first().id)
         assertEquals("cover", songs.items.first().type.apiValue)
         assertEquals("https://img.youtube.com/vi/video-1/hqdefault.jpg", songs.items.first().thumbnailUrl)
+    }
+
+    @Test
+    fun songsFetchAllOfficialMusicPagesBeforeClientPagination() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            musicResponses = ArrayDeque(listOf(
+                officialMusicResponseForTest("video-1", nextCursor = "cursor-2"),
+                officialMusicResponseForTest("video-1", "video-2", nextCursor = null),
+            ))
+        }
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val songs = repository.songs(type = "cover")
+
+        assertEquals(listOf("video-1", "video-2"), songs.items.map { it.youtubeVideoId })
+        assertNull(songs.nextCursor)
+        assertEquals(listOf(null, "cursor-2"), remote.musicCursors)
+        assertEquals(listOf(100, 100), remote.musicLimits)
     }
 
     @Test
@@ -184,6 +206,9 @@ class ServerHubRepositoryTest {
         var lastSongCursor: String? = null
         var lastMusicType: String? = null
         var lastMusicCursor: String? = null
+        val musicCursors = mutableListOf<String?>()
+        val musicLimits = mutableListOf<Int?>()
+        var musicResponses = ArrayDeque<MusicListResponseDto>()
         var lastMemberMusicMemberId: String? = null
         var lastMemberMusicType: String? = null
 
@@ -328,7 +353,9 @@ class ServerHubRepositoryTest {
         ): HubNetworkResult<MusicListResponseDto> {
             lastMusicType = type
             lastMusicCursor = cursor
-            return HubNetworkResult.Success(officialMusicResponse())
+            musicCursors += cursor
+            musicLimits += limit
+            return HubNetworkResult.Success(musicResponses.removeFirstOrNull() ?: officialMusicResponse())
         }
 
         override suspend fun memberMusic(
@@ -375,5 +402,32 @@ class ServerHubRepositoryTest {
                 ),
                 nextCursor = "next-cursor",
             )
+
+        fun officialMusicResponseForTest(
+            vararg videoIds: String,
+            nextCursor: String?,
+        ): MusicListResponseDto = MusicListResponseDto(
+            items = videoIds.map { videoId ->
+                MusicCatalogItemDto(
+                    id = videoId,
+                    youtubeVideoId = videoId,
+                    title = "Cover $videoId",
+                    type = "cover",
+                    publishedAt = "2026-06-23T00:00:00.000Z",
+                    thumbnailUrl = "https://img.youtube.com/vi/$videoId/hqdefault.jpg",
+                    members = listOf(
+                        MusicMemberSummaryDto(
+                            id = "yuzuha-riko",
+                            nameKo = "유즈하 리코",
+                            nameEn = "Yuzuha Riko",
+                            role = "MAIN",
+                        ),
+                    ),
+                    youtubeUrl = "https://www.youtube.com/watch?v=$videoId",
+                    sourcePlaylistId = "playlist-cover",
+                )
+            },
+            nextCursor = nextCursor,
+        )
     }
 }

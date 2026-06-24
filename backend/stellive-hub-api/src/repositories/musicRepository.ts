@@ -140,6 +140,7 @@ interface MusicItemRecord {
   title: string;
   type: string;
   publishedAt?: Date | null;
+  playlistPosition?: number | null;
   thumbnailUrl?: string | null;
   duration?: string | null;
   durationSeconds?: number | null;
@@ -184,6 +185,72 @@ function toMusicCatalogItem(record: MusicItemRecord): MusicCatalogItem {
     youtubeUrl: `https://www.youtube.com/watch?v=${record.youtubeVideoId}`,
     sourcePlaylistId: record.sourcePlaylistId ?? null,
   };
+}
+
+interface MusicCursorPayload {
+  v: 1;
+  sort: MusicSort;
+  id: string;
+  publishedAt?: string | null;
+  playlistPosition?: number | null;
+}
+
+function normalizedMusicSort(sort: MusicSort | undefined): MusicSort {
+  return sort === "playlistOrder" ? "playlistOrder" : "publishedAt_desc";
+}
+
+function encodeMusicCursor(record: MusicItemRecord, sort: MusicSort): string {
+  const payload: MusicCursorPayload = {
+    v: 1,
+    sort,
+    id: record.id,
+    publishedAt: record.publishedAt?.toISOString() ?? null,
+    playlistPosition: record.playlistPosition ?? null,
+  };
+  return Buffer.from(JSON.stringify(payload)).toString("base64url");
+}
+
+function decodeMusicCursor(cursor: string | undefined): MusicCursorPayload | { legacyId: string } | null {
+  if (!cursor) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<MusicCursorPayload>;
+    if (parsed.v === 1 && typeof parsed.id === "string") return parsed as MusicCursorPayload;
+  } catch {
+    return { legacyId: cursor };
+  }
+  return { legacyId: cursor };
+}
+
+function appendCursorWhere(where: Record<string, unknown>, cursor: MusicCursorPayload | { legacyId: string } | null): void {
+  if (!cursor) return;
+  if ("legacyId" in cursor) {
+    where.id = { gt: cursor.legacyId };
+    return;
+  }
+  const publishedAt = cursor.publishedAt ? new Date(cursor.publishedAt) : null;
+  if (cursor.sort === "playlistOrder") {
+    const playlistPosition = cursor.playlistPosition ?? null;
+    where.OR = [
+      { playlistPosition: { gt: playlistPosition ?? -1 } },
+      {
+        playlistPosition,
+        publishedAt: { lt: publishedAt ?? new Date(0) },
+      },
+      {
+        playlistPosition,
+        publishedAt,
+        id: { gt: cursor.id },
+      },
+    ];
+    return;
+  }
+  where.OR = [
+    { publishedAt: { lt: publishedAt ?? new Date(0) } },
+    {
+      publishedAt,
+      id: { gt: cursor.id },
+    },
+  ];
 }
 
 export class PrismaMusicRepository {
@@ -341,9 +408,10 @@ export class PrismaMusicRepository {
     } else if (filters.includeGraduated !== true) {
       where.members = { some: { member: { isGraduated: false } } };
     }
-    if (filters.cursor) where.id = { gt: filters.cursor };
+    const sort = normalizedMusicSort(filters.sort);
+    appendCursorWhere(where, decodeMusicCursor(filters.cursor));
 
-    const orderBy = filters.sort === "playlistOrder"
+    const orderBy = sort === "playlistOrder"
       ? [{ playlistPosition: "asc" }, { publishedAt: "desc" }, { id: "asc" }]
       : [{ publishedAt: "desc" }, { id: "asc" }];
 
@@ -354,9 +422,10 @@ export class PrismaMusicRepository {
       take: limit + 1,
     });
     const page = rows.slice(0, limit);
+    const last = page.at(-1);
     return {
       items: page.map(toMusicCatalogItem),
-      nextCursor: rows.length > limit ? rows[limit].id : null,
+      nextCursor: rows.length > limit && last ? encodeMusicCursor(last, sort) : null,
     };
   }
 

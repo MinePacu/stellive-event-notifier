@@ -178,12 +178,90 @@ describe("PrismaMusicRepository", () => {
       orderBy: [{ playlistPosition: "asc" }, { publishedAt: "desc" }, { id: "asc" }],
       take: 11,
     }));
-    expect(result.items[0]).toMatchObject({
-      youtubeVideoId: "video-1",
-      durationSeconds: 201,
-      isInstrumental: false,
-    });
+  expect(result.items[0]).toMatchObject({
+    youtubeVideoId: "video-1",
+    durationSeconds: 201,
+    isInstrumental: false,
   });
+});
+
+it("uses published date and id cursor conditions for publishedAt descending music pages", async () => {
+  const prisma = {
+    musicItem: {
+      findMany: vi.fn(async () => []),
+    },
+  };
+  const repository = new PrismaMusicRepository(prisma);
+  const cursor = Buffer.from(JSON.stringify({
+    v: 1,
+    sort: "publishedAt_desc",
+    publishedAt: "2026-06-01T00:00:00.000Z",
+    id: "music-100",
+  })).toString("base64url");
+
+  await repository.listMusicItems({
+    type: "cover",
+    cursor,
+    limit: 100,
+    sort: "publishedAt_desc",
+  });
+
+  expect(prisma.musicItem.findMany).toHaveBeenCalledWith(expect.objectContaining({
+    where: expect.objectContaining({
+      OR: [
+        { publishedAt: { lt: new Date("2026-06-01T00:00:00.000Z") } },
+        {
+          publishedAt: new Date("2026-06-01T00:00:00.000Z"),
+          id: { gt: "music-100" },
+        },
+      ],
+    }),
+    orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
+    take: 101,
+  }));
+});
+
+it("uses playlist position, published date, and id cursor conditions for playlist order music pages", async () => {
+  const prisma = {
+    musicItem: {
+      findMany: vi.fn(async () => []),
+    },
+  };
+  const repository = new PrismaMusicRepository(prisma);
+  const cursor = Buffer.from(JSON.stringify({
+    v: 1,
+    sort: "playlistOrder",
+    playlistPosition: 100,
+    publishedAt: "2026-06-01T00:00:00.000Z",
+    id: "music-100",
+  })).toString("base64url");
+
+  await repository.listMusicItems({
+    type: "cover",
+    cursor,
+    limit: 100,
+    sort: "playlistOrder",
+  });
+
+  expect(prisma.musicItem.findMany).toHaveBeenCalledWith(expect.objectContaining({
+    where: expect.objectContaining({
+      OR: [
+        { playlistPosition: { gt: 100 } },
+        {
+          playlistPosition: 100,
+          publishedAt: { lt: new Date("2026-06-01T00:00:00.000Z") },
+        },
+        {
+          playlistPosition: 100,
+          publishedAt: new Date("2026-06-01T00:00:00.000Z"),
+          id: { gt: "music-100" },
+        },
+      ],
+    }),
+    orderBy: [{ playlistPosition: "asc" }, { publishedAt: "desc" }, { id: "asc" }],
+    take: 101,
+  }));
+});
 
   it("marks missing source items conservatively without hard deleting", async () => {
     const prisma = { musicItem: { updateMany: vi.fn(async () => ({ count: 3 })) } };

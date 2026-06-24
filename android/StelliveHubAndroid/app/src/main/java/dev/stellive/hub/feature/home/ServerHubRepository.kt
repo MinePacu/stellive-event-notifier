@@ -48,6 +48,12 @@ class ServerHubRepository(
     private val deviceIdStore: DeviceIdStore,
     private val fallback: MockHubRepository,
 ) : HubRepository {
+    private companion object {
+        const val MUSIC_PAGE_LIMIT = 100
+        const val MUSIC_MAX_PAGES = 10
+        const val MUSIC_MAX_ITEMS = 1000
+    }
+
     private val eventCache = linkedMapOf<String, HubEvent>()
     private var calendarCache: List<HubCalendarDay> = emptyList()
     private var songCache: SongListResult? = null
@@ -118,28 +124,52 @@ class ServerHubRepository(
         cursor: String?,
     ): SongListResult {
         val normalizedType = type?.takeUnless { it == "all" }
-        val response = if (!memberId.isNullOrBlank() && memberId != "all") {
-            remoteDataSource.memberMusic(
-                memberId = memberId,
-                type = normalizedType,
-                cursor = cursor,
-                limit = 30,
-                sort = "publishedAt_desc",
-            )
-        } else {
-            remoteDataSource.music(
-                type = normalizedType,
-                cursor = cursor,
-                limit = 30,
-                sort = "publishedAt_desc",
-            )
-        }
-        if (response is HubNetworkResult.Success) {
-            val result = response.value.toSongListResult()
+        val result = fetchAllMusicPages(memberId = memberId, type = normalizedType)
+        if (result != null) {
             songCache = result
             return result
         }
         return songCache ?: fallback.songs(generationId, memberId, type, query, cursor)
+    }
+
+    private suspend fun fetchAllMusicPages(
+        memberId: String?,
+        type: String?,
+    ): SongListResult? {
+        val items = mutableListOf<SongCatalogItem>()
+        val seen = linkedSetOf<String>()
+        var nextCursor: String? = null
+        repeat(MUSIC_MAX_PAGES) {
+            val response = if (!memberId.isNullOrBlank() && memberId != "all") {
+                remoteDataSource.memberMusic(
+                    memberId = memberId,
+                    type = type,
+                    cursor = nextCursor,
+                    limit = MUSIC_PAGE_LIMIT,
+                    sort = "publishedAt_desc",
+                )
+            } else {
+                remoteDataSource.music(
+                    type = type,
+                    cursor = nextCursor,
+                    limit = MUSIC_PAGE_LIMIT,
+                    sort = "publishedAt_desc",
+                )
+            }
+            if (response !is HubNetworkResult.Success) {
+                return if (items.isNotEmpty()) SongListResult(items = items.take(MUSIC_MAX_ITEMS)) else null
+            }
+            val page = response.value.toSongListResult()
+            page.items.forEach { song ->
+                val key = song.youtubeVideoId.ifBlank { song.id }
+                if (seen.add(key)) items += song
+            }
+            if (page.nextCursor.isNullOrBlank() || items.size >= MUSIC_MAX_ITEMS) {
+                return SongListResult(items = items.take(MUSIC_MAX_ITEMS))
+            }
+            nextCursor = page.nextCursor
+        }
+        return SongListResult(items = items.take(MUSIC_MAX_ITEMS))
     }
 
     override suspend fun songFacets(

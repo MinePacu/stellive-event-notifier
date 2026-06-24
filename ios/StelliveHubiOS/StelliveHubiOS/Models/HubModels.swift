@@ -629,6 +629,28 @@ enum IOSSongPagePolicy {
         let end = min(start + pageSize, songs.count)
         return Array(songs[start..<end])
     }
+
+    static func thumbnailUrlCandidates(for song: SongCatalogItem) -> [URL] {
+        var urls: [URL] = []
+        if let raw = song.thumbnailUrl,
+           let url = URL(string: raw),
+           url.scheme == "https" {
+            urls.append(url)
+        }
+        let videoId = song.youtubeVideoId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !videoId.isEmpty {
+            for name in ["hqdefault", "mqdefault", "default"] {
+                if let url = URL(string: "https://i.ytimg.com/vi/\(videoId)/\(name).jpg") {
+                    urls.append(url)
+                }
+            }
+        }
+        return urls.reduce(into: [URL]()) { result, url in
+            if !result.contains(url) {
+                result.append(url)
+            }
+        }
+    }
 }
 
 enum HubCalendarPolicy {

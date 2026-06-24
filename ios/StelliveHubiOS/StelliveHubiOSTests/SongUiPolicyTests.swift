@@ -142,4 +142,25 @@ final class SongUiPolicyTests: XCTestCase {
 
         XCTAssertTrue(rows.contains { $0.route == .history && $0.title == "알림 기록" })
     }
+
+    func testThumbnailUrlCandidatesUseBackendUrlThenYoutubeFallbacks() {
+        let song = SongCatalogItem(
+            id: "id-1",
+            youtubeVideoId: "abc123",
+            title: "Song",
+            type: .cover,
+            thumbnailUrl: "https://example.test/thumb.jpg",
+            youtubeUrl: "https://www.youtube.com/watch?v=abc123"
+        )
+
+        XCTAssertEqual(
+            IOSSongPagePolicy.thumbnailUrlCandidates(for: song),
+            [
+                URL(string: "https://example.test/thumb.jpg")!,
+                URL(string: "https://i.ytimg.com/vi/abc123/hqdefault.jpg")!,
+                URL(string: "https://i.ytimg.com/vi/abc123/mqdefault.jpg")!,
+                URL(string: "https://i.ytimg.com/vi/abc123/default.jpg")!,
+            ]
+        )
+    }
 }

@@ -441,6 +441,46 @@ final class ServerHubStoreTests: XCTestCase {
         XCTAssertEqual(store.songs(generationId: "gen2", type: "original").items.first?.title, "별빛 항로")
     }
 
+    func testMusicPageCollectorFetchesAllPagesAndDedupes() async throws {
+        var cursors: [String?] = []
+        let items = try await MusicPageCollector.collect { cursor, limit in
+            cursors.append(cursor)
+            XCTAssertEqual(limit, 100)
+            if cursor == nil {
+                return MusicListResponse(
+                    items: [song("video-1")],
+                    nextCursor: "cursor-2"
+                )
+            }
+            return MusicListResponse(
+                items: [song("video-1"), song("video-2")],
+                nextCursor: nil
+            )
+        }
+
+        XCTAssertEqual(cursors, [nil, "cursor-2"])
+        XCTAssertEqual(items.map(\.youtubeVideoId), ["video-1", "video-2"])
+    }
+
+    private func song(_ videoId: String) -> SongCatalogItem {
+        SongCatalogItem(
+            id: videoId,
+            youtubeVideoId: videoId,
+            title: "Cover \(videoId)",
+            type: .cover,
+            thumbnailUrl: "https://img.youtube.com/vi/\(videoId)/hqdefault.jpg",
+            members: [
+                MusicMemberSummary(
+                    id: "yuzuha-riko",
+                    nameKo: "유즈하 리코",
+                    nameEn: "Yuzuha Riko",
+                    role: "MAIN"
+                ),
+            ],
+            youtubeUrl: "https://www.youtube.com/watch?v=\(videoId)"
+        )
+    }
+
     private func makeStore(
         handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)
     ) -> ServerHubStore {

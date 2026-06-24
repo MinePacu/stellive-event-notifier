@@ -2,6 +2,32 @@ import Foundation
 
 private let builtInHubEventFilters: Set<String> = ["all", "goods", "ticketing", "offline", "closing"]
 
+struct MusicPageCollector {
+    static let pageLimit = 100
+    static let maxPages = 10
+    static let maxItems = 1000
+
+    static func collect(fetch: (String?, Int) async throws -> MusicListResponse) async throws -> [SongCatalogItem] {
+        var cursor: String?
+        var output: [SongCatalogItem] = []
+        var seen = Set<String>()
+        for _ in 0..<maxPages {
+            let page = try await fetch(cursor, pageLimit)
+            for item in page.items {
+                let key = item.youtubeVideoId.isEmpty ? item.id : item.youtubeVideoId
+                if seen.insert(key).inserted {
+                    output.append(item)
+                }
+            }
+            guard let next = page.nextCursor, !next.isEmpty, output.count < maxItems else {
+                return Array(output.prefix(maxItems))
+            }
+            cursor = next
+        }
+        return Array(output.prefix(maxItems))
+    }
+}
+
 @MainActor
 final class ServerHubStore: ObservableObject {
     private let api: HubAPIClient
@@ -99,13 +125,13 @@ final class ServerHubStore: ObservableObject {
     ) async {
         do {
             let normalizedType = type == "all" ? nil : type
-            let response: MusicListResponse
-            if let memberId, !memberId.isEmpty, memberId != "all" {
-                response = try await api.memberMusic(memberId: memberId, type: normalizedType, cursor: cursor, limit: 30)
-            } else {
-                response = try await api.music(type: normalizedType, cursor: cursor, limit: 30)
+            let items = try await MusicPageCollector.collect { pageCursor, pageLimit in
+                if let memberId, !memberId.isEmpty, memberId != "all" {
+                    return try await api.memberMusic(memberId: memberId, type: normalizedType, cursor: pageCursor, limit: pageLimit)
+                }
+                return try await api.music(type: normalizedType, cursor: pageCursor, limit: pageLimit)
             }
-            serverSongs = response.items
+            serverSongs = items
         } catch {
             if serverSongs.isEmpty {
                 serverSongs = fallback.songs(generationId: generationId, memberId: memberId, type: type, query: query).items
