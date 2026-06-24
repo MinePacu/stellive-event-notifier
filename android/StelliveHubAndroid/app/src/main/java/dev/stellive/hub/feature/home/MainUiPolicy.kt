@@ -45,6 +45,8 @@ data class SettingsPolicyRow(
 )
 
 object MainUiPolicy {
+    const val SONG_PAGE_SIZE = 20
+
     private const val TOP_BAR_ACTION_ICON_INSET_DP = 10
     private const val LIVE_CLOCK_REFRESH_DELAY_MILLIS = 1_000L
 
@@ -158,6 +160,25 @@ object MainUiPolicy {
         if (query.isBlank()) return true
         return song.title.contains(query, ignoreCase = true) ||
             songMemberDisplayText(song).contains(query, ignoreCase = true)
+    }
+
+    fun songPageCount(totalItems: Int, pageSize: Int = SONG_PAGE_SIZE): Int {
+        if (totalItems <= 0) return 1
+        return ((totalItems - 1) / pageSize) + 1
+    }
+
+    fun coerceSongPage(page: Int, totalItems: Int, pageSize: Int = SONG_PAGE_SIZE): Int =
+        page.coerceIn(1, songPageCount(totalItems, pageSize))
+
+    fun songPageItems(
+        songs: List<SongCatalogItem>,
+        page: Int,
+        pageSize: Int = SONG_PAGE_SIZE,
+    ): List<SongCatalogItem> {
+        val safePage = coerceSongPage(page, songs.size, pageSize)
+        val fromIndex = (safePage - 1) * pageSize
+        val toIndex = minOf(fromIndex + pageSize, songs.size)
+        return songs.subList(fromIndex, toIndex)
     }
 
     fun homeHubEventsListAction(closingSoonCount: Int): HomeHubEventsAction =

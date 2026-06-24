@@ -76,6 +76,25 @@ final class SongUiPolicyTests: XCTestCase {
         XCTAssertFalse(IOSSongPagePolicy.matchesQuery(song, query: "마시로"))
     }
 
+    func testSongPaginationCalculatesPagesAndSlicesItems() {
+        let songs = (1...45).map { index in
+            SongCatalogItem(
+                id: "video-\(index)",
+                youtubeVideoId: "video-\(index)",
+                title: "Song \(index)",
+                type: .cover,
+                youtubeUrl: "https://www.youtube.com/watch?v=video-\(index)"
+            )
+        }
+
+        XCTAssertEqual(IOSSongPagePolicy.pageCount(totalItems: songs.count, pageSize: 20), 3)
+        XCTAssertEqual(IOSSongPagePolicy.pageItems(songs, page: 1, pageSize: 20).map(\.id), (1...20).map { "video-\($0)" })
+        XCTAssertEqual(IOSSongPagePolicy.pageItems(songs, page: 2, pageSize: 20).map(\.id), (21...40).map { "video-\($0)" })
+        XCTAssertEqual(IOSSongPagePolicy.pageItems(songs, page: 3, pageSize: 20).map(\.id), (41...45).map { "video-\($0)" })
+        XCTAssertEqual(IOSSongPagePolicy.clampedPage(99, totalItems: songs.count, pageSize: 20), 3)
+        XCTAssertEqual(IOSSongPagePolicy.clampedPage(0, totalItems: songs.count, pageSize: 20), 1)
+    }
+
     func testSongMemberDisplayJoinsCollaborationMembers() {
         let song = SongCatalogItem(
             id: "video-1",

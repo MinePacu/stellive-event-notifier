@@ -117,6 +117,7 @@ private var draggingLiveMemberId: String? = null
     private var selectedSongGenerationId = "all"
     private var selectedSongType = "all"
     private var selectedSongQuery = ""
+    private var selectedSongPage = 1
     private var selectedHubEventId: String? = null
     private var goodsEventsDays: List<HubCalendarDay> = emptyList()
     private var goodsEvents: List<HubEvent> = emptyList()
@@ -846,6 +847,9 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
                 MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
                     MainUiPolicy.songMatchesQuery(song, selectedSongQuery)
             }
+            val safePage = MainUiPolicy.coerceSongPage(selectedSongPage, visibleSongs.size)
+            selectedSongPage = safePage
+            val pagedSongs = MainUiPolicy.songPageItems(visibleSongs, safePage)
             if (navigationHistory.currentScreen != HubScreen.SONGS) return@launch
             startScreen(
                 screenId = "songs",
@@ -864,8 +868,11 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
             if (visibleSongs.isEmpty()) {
                 binding.contentList.addView(noticeCard("표시할 노래가 없습니다. 필터를 바꾸거나 나중에 다시 확인해 주세요."))
             } else {
-                visibleSongs.forEach { song ->
+                pagedSongs.forEach { song ->
                     binding.contentList.addView(songCard(song))
+                }
+                if (MainUiPolicy.songPageCount(visibleSongs.size) > 1) {
+                    binding.contentList.addView(songPageControl(visibleSongs.size))
                 }
             }
         }
@@ -886,12 +893,14 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
                 setPadding(dp(13), dp(8), dp(13), dp(8))
                 setOnEditorActionListener { view, _, _ ->
                     selectedSongQuery = view.text?.toString().orEmpty()
+                    selectedSongPage = 1
                     renderSongs()
                     true
                 }
                 setOnFocusChangeListener { view, hasFocus ->
                     if (!hasFocus) {
                         selectedSongQuery = (view as EditText).text?.toString().orEmpty()
+                        selectedSongPage = 1
                         renderSongs()
                     }
                 }
@@ -901,6 +910,7 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
 
                     override fun afterTextChanged(s: Editable?) {
                         selectedSongQuery = s?.toString().orEmpty()
+                        selectedSongPage = 1
                     }
                 })
             }
@@ -933,6 +943,7 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
                         isChecked = filter.id == selectedId
                         setOnClickListener {
                             onSelected(filter.id)
+                            selectedSongPage = 1
                             renderSongs()
                         }
                     })
@@ -945,9 +956,14 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
             }
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(dp(15), dp(14), dp(15), dp(14))
+            }
+            row.addView(songThumbnail(song))
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(15), dp(14), dp(15), dp(14))
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
             content.addView(TextView(context).apply {
                 text = song.title
@@ -958,11 +974,78 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
         content.addView(TextView(context).apply {
             text = "${MainUiPolicy.songMemberDisplayText(song)} · ${song.type.displayName}"
             setTextColor(color(R.color.hub_text_muted))
-            textSize = 12f
-            setPadding(0, dp(5), 0, 0)
-        })
-        addView(content)
-    }
+                textSize = 12f
+                setPadding(0, dp(5), 0, 0)
+            })
+            row.addView(content)
+            addView(row)
+        }
+
+    private fun songThumbnail(song: SongCatalogItem): View =
+        FrameLayout(this).apply {
+            val size = dp(72)
+            layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                rightMargin = dp(12)
+            }
+            background = rounded(fill = color(R.color.hub_surface), radius = dp(12))
+            addView(TextView(context).apply {
+                text = "♪"
+                gravity = Gravity.CENTER
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 20f
+            }, FrameLayout.LayoutParams(size, size))
+            val url = song.thumbnailUrl?.takeIf { it.startsWith("https://") }
+            if (url != null) {
+                addView(ImageView(context).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    clipToOutline = true
+                    thread {
+                        runCatching {
+                            URL(url).openStream().use { BitmapFactory.decodeStream(it) }
+                        }.getOrNull()?.let { bitmap ->
+                            runOnUiThread { setImageBitmap(bitmap) }
+                        }
+                    }
+                }, FrameLayout.LayoutParams(size, size))
+            }
+        }
+
+    private fun songPageControl(totalItems: Int): MaterialCardView =
+        baseCard().apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(10)
+            }
+            val pageCount = MainUiPolicy.songPageCount(totalItems)
+            val currentPage = MainUiPolicy.coerceSongPage(selectedSongPage, totalItems)
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(15), dp(10), dp(15), dp(10))
+                addView(Chip(context).apply {
+                    text = "이전"
+                    isEnabled = currentPage > 1
+                    setOnClickListener {
+                        selectedSongPage = currentPage - 1
+                        renderSongs()
+                    }
+                })
+                addView(TextView(context).apply {
+                    text = "$currentPage / $pageCount"
+                    gravity = Gravity.CENTER
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 12f
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                })
+                addView(Chip(context).apply {
+                    text = "다음"
+                    isEnabled = currentPage < pageCount
+                    setOnClickListener {
+                        selectedSongPage = currentPage + 1
+                        renderSongs()
+                    }
+                })
+            })
+        }
 
     private fun renderSettings() {
         val settings = repository.settings

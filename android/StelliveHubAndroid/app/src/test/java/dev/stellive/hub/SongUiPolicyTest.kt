@@ -71,6 +71,26 @@ class SongUiPolicyTest {
     }
 
     @Test
+    fun songPaginationCalculatesPagesAndSlicesItems() {
+        val songs = (1..45).map { index ->
+            SongCatalogItem(
+                id = "video-$index",
+                youtubeVideoId = "video-$index",
+                title = "Song $index",
+                type = SongType.COVER,
+                youtubeUrl = "https://www.youtube.com/watch?v=video-$index",
+            )
+        }
+
+        assertEquals(3, MainUiPolicy.songPageCount(totalItems = songs.size, pageSize = 20))
+        assertEquals((1..20).map { "video-$it" }, MainUiPolicy.songPageItems(songs, page = 1, pageSize = 20).map { it.id })
+        assertEquals((21..40).map { "video-$it" }, MainUiPolicy.songPageItems(songs, page = 2, pageSize = 20).map { it.id })
+        assertEquals((41..45).map { "video-$it" }, MainUiPolicy.songPageItems(songs, page = 3, pageSize = 20).map { it.id })
+        assertEquals(3, MainUiPolicy.coerceSongPage(page = 99, totalItems = songs.size, pageSize = 20))
+        assertEquals(1, MainUiPolicy.coerceSongPage(page = 0, totalItems = songs.size, pageSize = 20))
+    }
+
+    @Test
     fun songMemberDisplayJoinsCollaborationMembers() {
         val song = SongCatalogItem(
             id = "video-1",

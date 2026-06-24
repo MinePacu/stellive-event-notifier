@@ -562,6 +562,8 @@ struct SongFilterOption: Identifiable, Equatable {
 }
 
 enum IOSSongPagePolicy {
+    static let pageSize = 20
+
     static let generationFilters: [SongFilterOption] = [
         .init(id: "all", label: "전체"),
         .init(id: "gen1", label: "1기생"),
@@ -610,6 +612,22 @@ enum IOSSongPagePolicy {
         }
         return song.title.localizedCaseInsensitiveContains(query) ||
             memberDisplayText(song).localizedCaseInsensitiveContains(query)
+    }
+
+    static func pageCount(totalItems: Int, pageSize: Int = Self.pageSize) -> Int {
+        guard totalItems > 0 else { return 1 }
+        return ((totalItems - 1) / pageSize) + 1
+    }
+
+    static func clampedPage(_ page: Int, totalItems: Int, pageSize: Int = Self.pageSize) -> Int {
+        min(max(page, 1), pageCount(totalItems: totalItems, pageSize: pageSize))
+    }
+
+    static func pageItems(_ songs: [SongCatalogItem], page: Int, pageSize: Int = Self.pageSize) -> [SongCatalogItem] {
+        let safePage = clampedPage(page, totalItems: songs.count, pageSize: pageSize)
+        let start = (safePage - 1) * pageSize
+        let end = min(start + pageSize, songs.count)
+        return Array(songs[start..<end])
     }
 }
 

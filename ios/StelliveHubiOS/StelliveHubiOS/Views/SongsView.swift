@@ -7,6 +7,7 @@ struct SongsView: View {
     @State private var selectedGenerationId = "all"
     @State private var selectedType = "all"
     @State private var query = ""
+    @State private var selectedPage = 1
 
     private var memberGenerationById: [String: String] {
         Dictionary(uniqueKeysWithValues: store.members.map { ($0.id, $0.generationId) })
@@ -21,6 +22,14 @@ struct SongsView: View {
             IOSSongPagePolicy.matchesGeneration($0, selectedGenerationId: selectedGenerationId, memberGenerationById: memberGenerationById) &&
                 IOSSongPagePolicy.matchesQuery($0, query: query)
         }
+    }
+
+    private var currentPage: Int {
+        IOSSongPagePolicy.clampedPage(selectedPage, totalItems: songs.count)
+    }
+
+    private var pagedSongs: [SongCatalogItem] {
+        IOSSongPagePolicy.pageItems(songs, page: currentPage)
     }
 
     private var facets: SongFacetsResponse {
@@ -85,11 +94,15 @@ struct SongsView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(songs) { song in
-                            SongRow(song: song)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                                .listRowSeparator(.hidden)
-                        }
+                    ForEach(pagedSongs) { song in
+                        SongRow(song: song)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                            .listRowSeparator(.hidden)
+                    }
+
+                    if IOSSongPagePolicy.pageCount(totalItems: songs.count) > 1 {
+                        songPageControl
+                    }
                     }
                 }
             }
@@ -97,6 +110,9 @@ struct SongsView: View {
             .scrollContentBackground(.hidden)
             .background(Color(uiColor: .systemGroupedBackground))
             .settingsToolbar(path: $path)
+            .onChange(of: selectedGenerationId) { _ in selectedPage = 1 }
+            .onChange(of: selectedType) { _ in selectedPage = 1 }
+            .onChange(of: query) { _ in selectedPage = 1 }
             .refreshable {
                 await refreshSongs()
             }
@@ -113,6 +129,28 @@ struct SongsView: View {
             query: ""
         )
     }
+
+    private var songPageControl: some View {
+        HStack {
+            Button("이전") {
+                selectedPage = max(1, currentPage - 1)
+            }
+            .disabled(currentPage == 1)
+
+            Spacer()
+
+            Text("\(currentPage) / \(IOSSongPagePolicy.pageCount(totalItems: songs.count))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Button("다음") {
+                selectedPage = min(IOSSongPagePolicy.pageCount(totalItems: songs.count), currentPage + 1)
+            }
+            .disabled(currentPage == IOSSongPagePolicy.pageCount(totalItems: songs.count))
+        }
+    }
 }
 
 private struct SongRow: View {
@@ -121,7 +159,7 @@ private struct SongRow: View {
     var body: some View {
         Link(destination: URL(string: song.youtubeUrl) ?? URL(string: "https://www.youtube.com")!) {
             HStack(alignment: .top, spacing: 12) {
-                SongThumbnailView()
+                    SongThumbnailView(thumbnailUrl: song.thumbnailUrl)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(song.title)
@@ -156,7 +194,31 @@ private struct SongRow: View {
 }
 
 private struct SongThumbnailView: View {
+    let thumbnailUrl: String?
+
     var body: some View {
+        Group {
+            if let thumbnailUrl, let url = URL(string: thumbnailUrl) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    default:
+                        placeholder
+                    }
+                }
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: 96, height: 54)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityHidden(true)
+    }
+
+    private var placeholder: some View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
             .fill(Color(.tertiarySystemGroupedBackground))
             .overlay {
@@ -164,8 +226,5 @@ private struct SongThumbnailView: View {
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
-            .aspectRatio(16.0 / 9.0, contentMode: .fit)
-            .frame(width: 96)
-            .accessibilityHidden(true)
     }
 }
