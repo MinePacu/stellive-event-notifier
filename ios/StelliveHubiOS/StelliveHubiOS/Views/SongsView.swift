@@ -6,6 +6,7 @@ struct SongsView: View {
     @State private var path = NavigationPath()
     @State private var selectedGenerationId = "all"
     @State private var selectedType = "all"
+    @State private var selectedMemberId = "all"
     @State private var query = ""
     @State private var selectedPage = 1
 
@@ -20,6 +21,7 @@ struct SongsView: View {
             query: ""
         ).items.filter {
             IOSSongPagePolicy.matchesGeneration($0, selectedGenerationId: selectedGenerationId, memberGenerationById: memberGenerationById) &&
+                IOSSongPagePolicy.matchesMember($0, selectedMemberId: selectedMemberId) &&
                 IOSSongPagePolicy.matchesQuery($0, query: query)
         }
     }
@@ -80,13 +82,35 @@ struct SongsView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    Picker("분류", selection: $selectedType) {
-                        ForEach(IOSSongPagePolicy.typeFilters) { filter in
-                            Text(filter.label).tag(filter.id)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+            Picker("분류", selection: $selectedType) {
+                ForEach(IOSSongPagePolicy.typeFilters) { filter in
+                    Text(filter.label).tag(filter.id)
                 }
+            }
+            .pickerStyle(.segmented)
+
+            NavigationLink {
+                SongMemberFilterView(
+                    filters: IOSSongPagePolicy.memberFilters(from: store.members),
+                    selectedMemberId: $selectedMemberId,
+                    selectedPage: $selectedPage
+                )
+            } label: {
+                HStack {
+                    Text("멤버")
+                    Spacer()
+                    Text(IOSSongPagePolicy.memberFilterLabel(from: store.members, selectedMemberId: selectedMemberId))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if IOSSongPagePolicy.canClearMemberFilter(selectedMemberId) {
+                Button("전체로 보기") {
+                    selectedMemberId = "all"
+                    selectedPage = 1
+                }
+            }
+        }
 
                 Section("노래 목록") {
                     if songs.isEmpty {
@@ -109,10 +133,11 @@ struct SongsView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(Color(uiColor: .systemGroupedBackground))
-            .settingsToolbar(path: $path)
-            .onChange(of: selectedGenerationId) { _ in selectedPage = 1 }
-            .onChange(of: selectedType) { _ in selectedPage = 1 }
-            .onChange(of: query) { _ in selectedPage = 1 }
+        .settingsToolbar(path: $path)
+        .onChange(of: selectedGenerationId) { _ in selectedPage = 1 }
+        .onChange(of: selectedType) { _ in selectedPage = 1 }
+        .onChange(of: selectedMemberId) { _ in selectedPage = 1 }
+        .onChange(of: query) { _ in selectedPage = 1 }
             .refreshable {
                 await refreshSongs()
             }
@@ -193,6 +218,32 @@ private struct SongRow: View {
     }
 }
 
+private struct SongMemberFilterView: View {
+    let filters: [SongFilterOption]
+    @Binding var selectedMemberId: String
+    @Binding var selectedPage: Int
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List(filters) { filter in
+            Button {
+                selectedMemberId = filter.id
+                selectedPage = 1
+                dismiss()
+            } label: {
+                HStack {
+                    Text(filter.label)
+                    Spacer()
+                    if selectedMemberId == filter.id {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+        .navigationTitle("노래 멤버 선택")
+    }
+}
+
 private struct SongThumbnailView: View {
     let urls: [URL]
     @State private var index = 0
@@ -216,7 +267,7 @@ private struct SongThumbnailView: View {
                 placeholder
             }
         }
-        .frame(width: 96, height: 54)
+        .frame(width: IOSSongPagePolicy.thumbnailSize.width, height: IOSSongPagePolicy.thumbnailSize.height)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityHidden(true)
     }

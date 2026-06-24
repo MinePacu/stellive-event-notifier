@@ -576,6 +576,28 @@ enum IOSSongPagePolicy {
         .init(id: "original", label: "오리지널"),
         .init(id: "cover", label: "커버")
     ]
+    static let thumbnailAspectRatio: CGFloat = 16.0 / 9.0
+    static let thumbnailSize = CGSize(width: 96, height: 54)
+
+    static func memberFilters(from members: [HubMember]) -> [SongFilterOption] {
+        [SongFilterOption(id: "all", label: "전체")] + members
+            .filter { $0.catalogRole == .member && ["gen1", "gen2", "gen3"].contains($0.generationId) }
+            .map { SongFilterOption(id: $0.id, label: $0.koreanName.isEmpty ? $0.englishName : $0.koreanName) }
+    }
+
+    static func matchesMember(_ song: SongCatalogItem, selectedMemberId: String) -> Bool {
+        selectedMemberId == "all" || song.members.contains { $0.id == selectedMemberId }
+    }
+
+    static func memberFilterLabel(from members: [HubMember], selectedMemberId: String) -> String {
+        guard selectedMemberId != "all" else { return "전체" }
+        let name = members.first { $0.id == selectedMemberId }?.koreanName ?? ""
+        return name.isEmpty ? selectedMemberId : name
+    }
+
+    static func canClearMemberFilter(_ selectedMemberId: String) -> Bool {
+        selectedMemberId != "all"
+    }
 
     static func memberDisplayText(_ song: SongCatalogItem) -> String {
         let names = song.members

@@ -3,8 +3,11 @@ package dev.stellive.hub.feature.home
 import dev.stellive.hub.core.model.NotificationEventType
 import dev.stellive.hub.core.model.NotificationPlatform
 import dev.stellive.hub.core.model.NotificationSettingState
+import dev.stellive.hub.core.model.CatalogRole
+import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.HubEventStatus
 import dev.stellive.hub.core.model.SongCatalogItem
+import kotlin.math.roundToInt
 import java.text.NumberFormat
 import java.time.Duration
 import java.time.Instant
@@ -46,6 +49,7 @@ data class SettingsPolicyRow(
 
 object MainUiPolicy {
     const val SONG_PAGE_SIZE = 20
+    const val SONG_THUMBNAIL_ASPECT_RATIO = 16f / 9f
 
     private const val TOP_BAR_ACTION_ICON_INSET_DP = 10
     private const val LIVE_CLOCK_REFRESH_DELAY_MILLIS = 1_000L
@@ -136,6 +140,34 @@ object MainUiPolicy {
         SongFilterOption("original", "오리지널"),
         SongFilterOption("cover", "커버")
     )
+
+    fun songExternalUrl(rawUrl: String?): String? {
+        val trimmed = rawUrl?.trim().orEmpty()
+        return trimmed.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+    }
+
+    fun songMemberFilters(members: List<HubMember>): List<SongFilterOption> =
+        listOf(SongFilterOption("all", "전체")) + members
+            .filter { it.catalogRole == CatalogRole.MEMBER }
+            .filter { it.generationId in setOf("gen1", "gen2", "gen3") }
+            .map { SongFilterOption(it.id, it.koreanName.ifBlank { it.englishName }) }
+
+    fun songMatchesMember(song: SongCatalogItem, selectedMemberId: String): Boolean {
+        if (selectedMemberId == "all") return true
+        return song.members.any { it.id == selectedMemberId }
+    }
+
+    fun songMemberFilterLabel(members: List<HubMember>, selectedMemberId: String): String =
+        if (selectedMemberId == "all") {
+            "전체"
+        } else {
+            members.firstOrNull { it.id == selectedMemberId }?.koreanName?.takeIf { it.isNotBlank() }
+                ?: selectedMemberId
+        }
+
+    fun canClearSongMemberFilter(selectedMemberId: String): Boolean = selectedMemberId != "all"
+
+    fun songThumbnailHeightDp(widthDp: Int): Int = (widthDp / SONG_THUMBNAIL_ASPECT_RATIO).roundToInt()
 
     fun songMemberDisplayText(song: SongCatalogItem): String =
         song.members

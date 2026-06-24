@@ -1,11 +1,15 @@
 package dev.stellive.hub
 
+import dev.stellive.hub.core.model.ActiveStatus
+import dev.stellive.hub.core.model.CatalogRole
+import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.SongCatalogItem
 import dev.stellive.hub.core.model.SongMemberSummary
 import dev.stellive.hub.core.model.SongType
 import dev.stellive.hub.feature.home.MainUiPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -109,6 +113,59 @@ class SongUiPolicyTest {
     }
 
     @Test
+    fun songExternalUrlAcceptsHttpAndHttpsOnly() {
+        assertEquals(
+            "https://www.youtube.com/watch?v=abc",
+            MainUiPolicy.songExternalUrl("https://www.youtube.com/watch?v=abc"),
+        )
+        assertEquals(
+            "http://www.youtube.com/watch?v=abc",
+            MainUiPolicy.songExternalUrl("http://www.youtube.com/watch?v=abc"),
+        )
+        assertNull(MainUiPolicy.songExternalUrl(""))
+        assertNull(MainUiPolicy.songExternalUrl("javascript:alert(1)"))
+    }
+
+    @Test
+    fun songMemberFiltersUseActiveGenerationMembersAndSupportQuickClear() {
+        val members = listOf(
+            songMember(id = "yuzuha-riko", name = "유즈하 리코", generationId = "gen3"),
+            songMember(id = "neneko-mashiro", name = "네네코 마시로", generationId = "gen2"),
+            songMember(id = "gangzi", name = "강지", generationId = "gamja", role = CatalogRole.REPRESENTATIVE),
+            songMember(id = "stellive-official", name = "스텔라이브 공식", generationId = "official", role = CatalogRole.OFFICIAL_CHANNEL),
+        )
+        val collabSong = SongCatalogItem(
+            id = "video-1",
+            youtubeVideoId = "video-1",
+            title = "Collab",
+            type = SongType.COVER,
+            members = listOf(
+                SongMemberSummary(id = "yuzuha-riko", nameKo = "유즈하 리코"),
+                SongMemberSummary(id = "neneko-mashiro", nameKo = "네네코 마시로"),
+            ),
+            youtubeUrl = "https://www.youtube.com/watch?v=video-1",
+        )
+
+        val options = MainUiPolicy.songMemberFilters(members)
+
+        assertEquals("all", options.first().id)
+        assertFalse(options.any { it.id == "gangzi" || it.id == "stellive-official" })
+        assertTrue(MainUiPolicy.songMatchesMember(collabSong, "yuzuha-riko"))
+        assertTrue(MainUiPolicy.songMatchesMember(collabSong, "all"))
+        assertFalse(MainUiPolicy.songMatchesMember(collabSong, "akane-lize"))
+        assertEquals("전체", MainUiPolicy.songMemberFilterLabel(members, "all"))
+        assertEquals("네네코 마시로", MainUiPolicy.songMemberFilterLabel(members, "neneko-mashiro"))
+        assertFalse(MainUiPolicy.canClearSongMemberFilter("all"))
+        assertTrue(MainUiPolicy.canClearSongMemberFilter("neneko-mashiro"))
+    }
+
+    @Test
+    fun songThumbnailUsesSixteenByNineAspectRatio() {
+        assertEquals(16f / 9f, MainUiPolicy.SONG_THUMBNAIL_ASPECT_RATIO)
+        assertEquals(63, MainUiPolicy.songThumbnailHeightDp(widthDp = 112))
+    }
+
+    @Test
     fun songsUseExistingTopBarAndHistoryMovesToSettings() {
         assertEquals("노래", MainUiPolicy.topBarTitle("songs"))
         assertEquals("YouTube 업로드 곡 탐색", MainUiPolicy.topBarRole("songs"))
@@ -125,4 +182,21 @@ class SongUiPolicyTest {
             deadlineSoonEnabled = true,
         ).any { it.screenId == "history" && it.title == "알림 기록" })
     }
+
+    private fun songMember(
+        id: String,
+        name: String,
+        generationId: String,
+        role: CatalogRole = CatalogRole.MEMBER,
+    ): HubMember = HubMember(
+        id = id,
+        koreanName = name,
+        englishName = id,
+        generationId = generationId,
+        generationName = generationId,
+        unitName = generationId,
+        catalogRole = role,
+        activeStatus = ActiveStatus.ACTIVE,
+        isPerson = role == CatalogRole.MEMBER,
+    )
 }

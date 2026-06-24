@@ -163,4 +163,79 @@ final class SongUiPolicyTests: XCTestCase {
             ]
         )
     }
+
+    func testSongMemberFiltersUseActiveGenerationMembersAndSupportQuickClear() {
+        let members = [
+            songMember(id: "yuzuha-riko", name: "유즈하 리코", generationId: "gen3"),
+            songMember(id: "neneko-mashiro", name: "네네코 마시로", generationId: "gen2"),
+            songMember(id: "gangzi", name: "강지", generationId: "gamja", role: .representative),
+            songMember(id: "stellive-official", name: "스텔라이브 공식", generationId: "official", role: .officialChannel),
+        ]
+        let collabSong = SongCatalogItem(
+            id: "video-1",
+            youtubeVideoId: "video-1",
+            title: "Collab",
+            type: .cover,
+            publishedAt: nil,
+            thumbnailUrl: nil,
+            duration: nil,
+            durationSeconds: nil,
+            isInstrumental: false,
+            specialFlags: [],
+            classificationStatus: nil,
+            members: [
+                MusicMemberSummary(id: "yuzuha-riko", nameKo: "유즈하 리코", nameEn: "Yuzuha Riko", role: "MAIN"),
+                MusicMemberSummary(id: "neneko-mashiro", nameKo: "네네코 마시로", nameEn: "Neneko Mashiro", role: "COLLAB"),
+            ],
+            youtubeUrl: "https://www.youtube.com/watch?v=video-1",
+            sourcePlaylistId: nil
+        )
+
+        let filters = IOSSongPagePolicy.memberFilters(from: members)
+
+        XCTAssertEqual(filters.first?.id, "all")
+        XCTAssertFalse(filters.contains { $0.id == "gangzi" || $0.id == "stellive-official" })
+        XCTAssertTrue(IOSSongPagePolicy.matchesMember(collabSong, selectedMemberId: "yuzuha-riko"))
+        XCTAssertTrue(IOSSongPagePolicy.matchesMember(collabSong, selectedMemberId: "all"))
+        XCTAssertFalse(IOSSongPagePolicy.matchesMember(collabSong, selectedMemberId: "akane-lize"))
+        XCTAssertEqual(IOSSongPagePolicy.memberFilterLabel(from: members, selectedMemberId: "all"), "전체")
+        XCTAssertEqual(IOSSongPagePolicy.memberFilterLabel(from: members, selectedMemberId: "neneko-mashiro"), "네네코 마시로")
+        XCTAssertFalse(IOSSongPagePolicy.canClearMemberFilter("all"))
+        XCTAssertTrue(IOSSongPagePolicy.canClearMemberFilter("neneko-mashiro"))
+    }
+
+    func testSongThumbnailUsesSixteenByNineAspectRatio() {
+        XCTAssertEqual(IOSSongPagePolicy.thumbnailAspectRatio, 16.0 / 9.0, accuracy: 0.001)
+        XCTAssertEqual(
+            IOSSongPagePolicy.thumbnailSize.width / IOSSongPagePolicy.thumbnailSize.height,
+            16.0 / 9.0,
+            accuracy: 0.001
+        )
+    }
+
+    private func songMember(
+        id: String,
+        name: String,
+        generationId: String,
+        role: CatalogRole = .member
+    ) -> HubMember {
+        HubMember(
+            id: id,
+            koreanName: name,
+            englishName: id,
+            generationId: generationId,
+            generationName: generationId,
+            unitName: generationId,
+            catalogRole: role,
+            roleLabel: nil,
+            activeStatus: .active,
+            isPerson: role == .member,
+            chzzkChannelId: nil,
+            youtubeHandle: nil,
+            xHandle: nil,
+            isLive: false,
+            notificationEnabled: true,
+            realtimeEnabled: false
+        )
+    }
 }
