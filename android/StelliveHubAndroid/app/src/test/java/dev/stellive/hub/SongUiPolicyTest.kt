@@ -12,6 +12,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
 
 class SongUiPolicyTest {
     @Test
@@ -163,6 +164,30 @@ class SongUiPolicyTest {
     fun songThumbnailUsesSixteenByNineAspectRatio() {
         assertEquals(16f / 9f, MainUiPolicy.SONG_THUMBNAIL_ASPECT_RATIO)
         assertEquals(63, MainUiPolicy.songThumbnailHeightDp(widthDp = 112))
+    }
+
+    @Test
+    fun songSearchAndMemberSummaryUseStableNormalizedValues() {
+        val members = listOf(songMember("neneko-mashiro", "네네코 마시로", "gen2"))
+
+        assertEquals("", MainUiPolicy.normalizedSongQuery("   "))
+        assertEquals("stella", MainUiPolicy.normalizedSongQuery("  stella  "))
+        assertEquals(
+            "네네코 마시로 · 12곡",
+            MainUiPolicy.songMemberFilterSummary(members, "neneko-mashiro", 12),
+        )
+    }
+
+    @Test
+    fun recentCoverSongsAreNewestFirstAndLimited() {
+        val songs = listOf(
+            SongCatalogItem("old", "old", "Old", SongType.COVER, publishedAt = Instant.parse("2026-01-01T00:00:00Z")),
+            SongCatalogItem("original", "original", "Original", SongType.ORIGINAL, publishedAt = Instant.parse("2026-06-01T00:00:00Z")),
+            SongCatalogItem("new", "new", "New", SongType.COVER, publishedAt = Instant.parse("2026-06-02T00:00:00Z")),
+            SongCatalogItem("middle", "middle", "Middle", SongType.COVER, publishedAt = Instant.parse("2026-05-01T00:00:00Z")),
+        )
+
+        assertEquals(listOf("new", "middle"), MainUiPolicy.recentCoverSongs(songs, limit = 2).map { it.id })
     }
 
     @Test

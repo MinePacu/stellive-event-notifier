@@ -213,6 +213,40 @@ final class SongUiPolicyTests: XCTestCase {
         )
     }
 
+    func testRecentCoverSongsAreNewestFirstAndLimited() {
+        let songs = [
+            SongCatalogItem(
+                id: "old-cover",
+                youtubeVideoId: "old-cover",
+                title: "Old",
+                type: .cover,
+                publishedAt: Date(timeIntervalSince1970: 100),
+                youtubeUrl: "https://www.youtube.com/watch?v=old-cover"
+            ),
+            SongCatalogItem(
+                id: "original",
+                youtubeVideoId: "original",
+                title: "Original",
+                type: .original,
+                publishedAt: Date(timeIntervalSince1970: 300),
+                youtubeUrl: "https://www.youtube.com/watch?v=original"
+            ),
+            SongCatalogItem(
+                id: "new-cover",
+                youtubeVideoId: "new-cover",
+                title: "New",
+                type: .cover,
+                publishedAt: Date(timeIntervalSince1970: 200),
+                youtubeUrl: "https://www.youtube.com/watch?v=new-cover"
+            ),
+        ]
+
+        XCTAssertEqual(
+            IOSSongPagePolicy.recentCoverSongs(songs, limit: 1).map(\.id),
+            ["new-cover"]
+        )
+    }
+
     private func songMember(
         id: String,
         name: String,

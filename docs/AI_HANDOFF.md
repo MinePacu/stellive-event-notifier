@@ -1,5 +1,13 @@
 # AI Handoff
 
+## Mobile Status, Recent Covers, And Channel Discovery
+
+- Android song search now debounces focus/editor-triggered rerenders, avoiding removal of the active input during focus loss.
+- Android Home/Live/Songs/Goods-Events use a compact server status strip; the duplicated Songs title card was removed and the member selector summary was reduced.
+- Android and iOS Home show up to five recent cover songs from backend `/v1/music?type=cover&limit=5`; mobile code never calls YouTube directly.
+- `MusicChannelDiscoverySyncService` checks the official and active member uploads playlists, classifies cover/original candidates, deduplicates by `videoId`, preserves official playlist sources/manual overrides, and leaves uncertain member matches in review.
+- Docker includes an hourly discovery worker controlled by `MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED`, `MUSIC_CHANNEL_DISCOVERY_INTERVAL_MINUTES`, and `MUSIC_CHANNEL_DISCOVERY_RECENT_PAGES`.
+
 ## Official Stellive Music Playlist Sync Update
 
 - Official music catalog sync now uses only COVER `PLLjd981H8qSN9PQ8-X6wINqBF1GjGxusy` and ORIGINAL `PLLjd981H8qSMGC4Nir0hD2Gj9n9PDUoHX`.

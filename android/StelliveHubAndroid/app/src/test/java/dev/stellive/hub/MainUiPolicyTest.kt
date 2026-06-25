@@ -179,6 +179,13 @@ class MainUiPolicyTest {
     }
 
     @Test
+    fun serverConnectionLabelDistinguishesConnectedCachedAndOffline() {
+        assertEquals("서버 연결됨", MainUiPolicy.serverConnectionLabel("서버 liveStatus"))
+        assertEquals("캐시 표시 중", MainUiPolicy.serverConnectionLabel("서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음"))
+        assertEquals("오프라인", MainUiPolicy.serverConnectionLabel("서버 연결 실패 · 앱 내 목업"))
+    }
+
+    @Test
     fun policyNoticesMatchScreenResponsibilities() {
         assertTrue(MainUiPolicy.hubEventPolicyNotice().contains("팬 주최 이벤트"))
         assertTrue(MainUiPolicy.historyPolicyNotice().contains("공식 YouTube 라이브 예정, 시작, 종료"))

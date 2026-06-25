@@ -652,6 +652,15 @@ enum IOSSongPagePolicy {
         return Array(songs[start..<end])
     }
 
+    static func recentCoverSongs(_ songs: [SongCatalogItem], limit: Int = 5) -> [SongCatalogItem] {
+        Array(
+            songs
+                .filter { $0.type == .cover }
+                .sorted { ($0.publishedAt ?? .distantPast) > ($1.publishedAt ?? .distantPast) }
+                .prefix(max(0, limit))
+        )
+    }
+
     static func thumbnailUrlCandidates(for song: SongCatalogItem) -> [URL] {
         var urls: [URL] = []
         if let raw = song.thumbnailUrl,

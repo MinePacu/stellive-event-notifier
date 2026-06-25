@@ -7,6 +7,7 @@ import dev.stellive.hub.core.model.CatalogRole
 import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.HubEventStatus
 import dev.stellive.hub.core.model.SongCatalogItem
+import dev.stellive.hub.core.model.SongType
 import kotlin.math.roundToInt
 import java.text.NumberFormat
 import java.time.Duration
@@ -166,6 +167,27 @@ object MainUiPolicy {
         }
 
     fun canClearSongMemberFilter(selectedMemberId: String): Boolean = selectedMemberId != "all"
+
+    fun songMemberFilterSummary(
+        members: List<HubMember>,
+        selectedMemberId: String,
+        visibleCount: Int,
+    ): String = "${songMemberFilterLabel(members, selectedMemberId)} · ${visibleCount}곡"
+
+    fun normalizedSongQuery(query: String): String = query.trim()
+
+    fun recentCoverSongs(songs: List<SongCatalogItem>, limit: Int = 5): List<SongCatalogItem> =
+        songs.asSequence()
+            .filter { it.type == SongType.COVER }
+            .sortedByDescending { it.publishedAt }
+            .take(limit.coerceAtLeast(0))
+            .toList()
+
+    fun serverConnectionLabel(sourceLabel: String): String = when {
+        sourceLabel.contains("실패") || sourceLabel.contains("목업") -> "오프라인"
+        sourceLabel.contains("데이터 없음") || sourceLabel.contains("캐시") -> "캐시 표시 중"
+        else -> "서버 연결됨"
+    }
 
     fun songThumbnailHeightDp(widthDp: Int): Int = (widthDp / SONG_THUMBNAIL_ASPECT_RATIO).roundToInt()
 

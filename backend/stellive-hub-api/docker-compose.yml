@@ -61,5 +61,20 @@ services:
     depends_on:
       - api
 
+  music-channel-discovery-worker:
+    build:
+      context: ../..
+      dockerfile: backend/stellive-hub-api/Dockerfile
+    env_file:
+      - .env.example
+      - .env
+    environment:
+      DATABASE_URL: postgresql://stellive:stellive@postgres:5432/stellive_hub
+      REDIS_URL: redis://redis:6379
+      MUSIC_CHANNEL_DISCOVERY_SCHEDULER_BASE_URL: http://api:4000
+    command: ["npm", "run", "start:music-channel-discovery-worker"]
+    depends_on:
+      - api
+
 volumes:
   postgres-data:

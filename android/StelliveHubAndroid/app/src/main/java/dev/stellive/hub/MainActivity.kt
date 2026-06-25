@@ -117,8 +117,13 @@ private var draggingLiveMemberId: String? = null
 private var selectedSongGenerationId = "all"
 private var selectedSongType = "all"
 private var selectedSongQuery = ""
+private var appliedSongQuery = ""
 private var selectedSongPage = 1
 private var selectedSongMemberId = "all"
+private val songSearchHandler = Handler(Looper.getMainLooper())
+private var pendingSongSearchRender: Runnable? = null
+private var homeRecentCoverSongs: List<SongCatalogItem>? = null
+private var isLoadingHomeRecentCoverSongs = false
 private var selectedHubEventId: String? = null
     private var goodsEventsDays: List<HubCalendarDay> = emptyList()
     private var goodsEvents: List<HubEvent> = emptyList()
@@ -164,6 +169,7 @@ private var selectedHubEventId: String? = null
 
     override fun onDestroy() {
         liveClockHandler.removeCallbacks(liveClockTicker)
+        pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
         liveClockTextViews.clear()
         super.onDestroy()
     }
@@ -202,6 +208,22 @@ private var selectedHubEventId: String? = null
 
     private fun visibleServerConnectionDebugLogs(): List<String> =
         MainUiPolicy.debugServerConnectionLogs(debugModeEnabled, serverConnectionDebugLogs)
+
+    private fun serverStatusStrip(): MaterialCardView =
+        baseCard().apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                bottomMargin = dp(10)
+            }
+            addView(TextView(context).apply {
+                text = "● ${MainUiPolicy.serverConnectionLabel(liveStatusSourceLabel)}"
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 12f
+                setPadding(dp(12), dp(7), dp(12), dp(7))
+            })
+        }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -408,7 +430,7 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
             role = "지금 라이브, 최근 알림, 마감 임박 굿즈/행사를 확인합니다."
         )
         binding.contentList.addView(sectionLabel("지금 라이브"))
-        binding.contentList.addView(compactEventCard("라이브 데이터", liveStatusSourceLabel, listOf("상태")))
+        binding.contentList.addView(serverStatusStrip())
         if (liveMembersForUi().isEmpty()) {
             binding.contentList.addView(
                 compactEventCard("현재 라이브 없음", "서버 갱신 기준으로 표시합니다.", listOf("대기"))
@@ -420,6 +442,24 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
                 binding.contentList.addView(moreLiveMembersButton())
             }
         }
+        binding.contentList.addView(sectionLabel("최근 커버곡"))
+        when (val recentCovers = homeRecentCoverSongs) {
+            null -> binding.contentList.addView(
+                compactEventCard("불러오는 중", "서버에서 최근 커버곡을 확인하고 있습니다.", listOf("노래"))
+            )
+            emptyList<SongCatalogItem>() -> binding.contentList.addView(
+                compactEventCard("최근 커버곡 없음", "등록된 커버곡이 없습니다.", listOf("노래"))
+            )
+            else -> recentCovers.forEach { binding.contentList.addView(songCard(it)) }
+        }
+        binding.contentList.addView(
+            compactEventCard("노래 전체 보기", "커버곡과 오리지널 곡 전체 목록으로 이동합니다.", listOf("전체")).apply {
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { navigateToRoot(HubScreen.SONGS) }
+            }
+        )
+        loadHomeRecentCoverSongsIfNeeded()
         binding.contentList.addView(sectionLabel("최근 알림"))
         if (repository.recentHistoryPreview.isEmpty()) {
             binding.contentList.addView(
@@ -468,6 +508,18 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
                     }
                 }
             )
+        }
+    }
+
+    private fun loadHomeRecentCoverSongsIfNeeded() {
+        if (homeRecentCoverSongs != null || isLoadingHomeRecentCoverSongs) return
+        isLoadingHomeRecentCoverSongs = true
+        CoroutineScope(Dispatchers.Main).launch {
+            homeRecentCoverSongs = serverRepository.recentCoverSongs(limit = 5)
+            isLoadingHomeRecentCoverSongs = false
+            if (navigationHistory.currentScreen == HubScreen.HOME) {
+                renderHome()
+            }
         }
     }
 
@@ -565,6 +617,7 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
         goodsEvents = events
         val monthDays = days.filter { it.date.take(7) == goodsEventsSelectedMonth.toString() }
         binding.contentList.removeAllViews()
+        binding.contentList.addView(serverStatusStrip())
         binding.contentList.addView(
             summaryGrid(
                 listOf(
@@ -745,7 +798,7 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
             role = "Foreground 상태 갱신은 화면 표시용입니다. 백그라운드 알림은 서버 중심 푸시로 처리합니다."
         )
         binding.contentList.addView(liveStatusChips())
-        binding.contentList.addView(compactEventCard("라이브 데이터", liveStatusSourceLabel, listOf("상태")))
+        binding.contentList.addView(serverStatusStrip())
         val members = liveStatusFilteredMembersForUi()
         if (members.isEmpty()) {
             binding.contentList.addView(compactEventCard("조건에 맞는 멤버 없음", "다른 라이브 상태 필터를 선택해 확인할 수 있습니다.", listOf("필터")))
@@ -824,18 +877,14 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
     }
 
 private fun renderSongs() {
+        pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
+        pendingSongSearchRender = null
         startScreen(
             screenId = "songs",
             title = getString(R.string.songs_title),
             role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
         )
-        binding.contentList.addView(
-            compactEventCard(
-                title = "노래",
-                body = "모바일 앱은 YouTube를 직접 호출하지 않고 서버 API의 캐시된 곡 목록만 표시합니다.",
-                pills = listOf("YouTube", "서버 캐시")
-            )
-        )
+        binding.contentList.addView(serverStatusStrip())
         binding.contentList.addView(songSearchCard())
         binding.contentList.addView(songFilterChips())
         binding.contentList.addView(noticeCard("불러오는 중 · 서버에서 노래 목록을 가져오고 있습니다."))
@@ -860,13 +909,7 @@ MainUiPolicy.songMatchesQuery(song, selectedSongQuery)
                 title = getString(R.string.songs_title),
                 role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
             )
-            binding.contentList.addView(
-                compactEventCard(
-                    title = "노래",
-                    body = "모바일 앱은 YouTube를 직접 호출하지 않고 서버 API의 캐시된 곡 목록만 표시합니다.",
-                    pills = listOf("YouTube", "서버 캐시")
-                )
-            )
+binding.contentList.addView(serverStatusStrip())
 binding.contentList.addView(songSearchCard())
 binding.contentList.addView(songFilterChips())
 binding.contentList.addView(songMemberFilterCard(serverMembers ?: repository.members, visibleSongs.size))
@@ -903,16 +946,12 @@ private fun songSearchCard(): MaterialCardView =
                 textSize = 14f
                 setPadding(dp(13), dp(8), dp(13), dp(8))
                 setOnEditorActionListener { view, _, _ ->
-                    selectedSongQuery = view.text?.toString().orEmpty()
-                    selectedSongPage = 1
-                    renderSongs()
+                    scheduleSongSearchRender(view.text?.toString().orEmpty())
                     true
                 }
                 setOnFocusChangeListener { view, hasFocus ->
                     if (!hasFocus) {
-                        selectedSongQuery = (view as EditText).text?.toString().orEmpty()
-                        selectedSongPage = 1
-                        renderSongs()
+                        scheduleSongSearchRender((view as EditText).text?.toString().orEmpty())
                     }
                 }
                 addTextChangedListener(object : TextWatcher {
@@ -927,6 +966,20 @@ private fun songSearchCard(): MaterialCardView =
             }
             addView(input)
         }
+
+private fun scheduleSongSearchRender(rawQuery: String) {
+    val normalized = MainUiPolicy.normalizedSongQuery(rawQuery)
+    selectedSongQuery = normalized
+    selectedSongPage = 1
+    pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
+    if (normalized == appliedSongQuery) return
+    pendingSongSearchRender = Runnable {
+        pendingSongSearchRender = null
+        if (navigationHistory.currentScreen != HubScreen.SONGS) return@Runnable
+        appliedSongQuery = normalized
+        renderSongs()
+    }.also { songSearchHandler.postDelayed(it, 150L) }
+}
 
     private fun songFilterChips(): LinearLayout =
         LinearLayout(this).apply {
@@ -950,7 +1003,7 @@ private fun songMemberFilterCard(members: List<HubMember>, visibleCount: Int): L
         addView(
             compactEventCard(
                 title = "멤버",
-                body = "${MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberId)} · ${visibleCount}곡",
+                body = MainUiPolicy.songMemberFilterSummary(members, selectedSongMemberId, visibleCount),
                 pills = listOf("선택")
             ).apply {
                 isClickable = true

@@ -5,6 +5,19 @@
 - `backend/stellive-hub-api/src/music/officialStelliveMusicSyncService.ts` - Official Stellive COVER/ORIGINAL playlist sync, videoId dedupe, source mapping, manual override handling.
 - `backend/stellive-hub-api/test/musicOfficialPlaylistSyncService.test.ts` - Official playlist sync behavior tests.
 
+## Recent Mobile Song Page And Discovery Planning
+
+- `docs/superpowers/plans/2026-06-25-mobile-song-page-status-recent-cover-discovery-design-plan.md` - Feature design for Android song page UI fixes, compact server status, home recent covers, and hourly music channel discovery.
+- `docs/superpowers/plans/2026-06-25-mobile-song-page-status-recent-cover-discovery-code-design-application-plan.md` - Code design/application plan with token-minimized investigation and focused test scope for the same work.
+- `backend/stellive-hub-api/src/music/musicChannelDiscoverySyncService.ts` - Official/member uploads discovery into the normalized music catalog with dedupe, review, and override preservation.
+- `backend/stellive-hub-api/src/workers/musicChannelDiscoveryWorker.ts` - Configurable hourly internal discovery trigger worker.
+- `backend/stellive-hub-api/test/musicChannelDiscoverySyncService.test.ts` - Focused discovery dedupe, source preservation, member-link, and review tests.
+
+## Android Shared UI Chrome Planning
+
+- `docs/superpowers/plans/2026-06-25-android-shared-ui-chrome-card-filter-design-plan.md` - Android root-screen header removal, shared card surfaces, fixed filter strip, song search navigation, and scroll-title behavior design.
+- `docs/superpowers/plans/2026-06-25-android-shared-ui-chrome-card-filter-code-design-application-plan.md` - Serena-first implementation plan with focused changed-code tests and token-minimized investigation rules.
+
 This file maps the repository files that are not excluded by `.gitignore`. Ignored generated outputs, local secrets, dependency folders, IDE files, build artifacts, screenshots, and platform-specific private config such as `google-services.json`, `GoogleService-Info.plist`, `.env`, `node_modules/`, `dist/`, and `build/` are intentionally omitted.
 
 ## Root And Project Metadata

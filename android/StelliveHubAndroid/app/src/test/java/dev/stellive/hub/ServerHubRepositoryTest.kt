@@ -177,6 +177,23 @@ class ServerHubRepositoryTest {
     }
 
     @Test
+    fun recentCoverSongsRequestsOnlyTheLatestRequestedItems() = runTest {
+        val remote = RecordingRemoteDataSource()
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val songs = repository.recentCoverSongs(limit = 5)
+
+        assertEquals("cover", remote.lastMusicType)
+        assertEquals(5, remote.musicLimits.single())
+        assertEquals("publishedAt_desc", remote.lastMusicSort)
+        assertEquals(1, songs.size)
+    }
+
+    @Test
     fun songFacetsMapServerFiltersWithoutGamjaOrOfficial() = runTest {
         val remote = RecordingRemoteDataSource()
         val repository = ServerHubRepository(
@@ -206,6 +223,7 @@ class ServerHubRepositoryTest {
         var lastSongCursor: String? = null
         var lastMusicType: String? = null
         var lastMusicCursor: String? = null
+        var lastMusicSort: String? = null
         val musicCursors = mutableListOf<String?>()
         val musicLimits = mutableListOf<Int?>()
         var musicResponses = ArrayDeque<MusicListResponseDto>()
@@ -353,6 +371,7 @@ class ServerHubRepositoryTest {
         ): HubNetworkResult<MusicListResponseDto> {
             lastMusicType = type
             lastMusicCursor = cursor
+            lastMusicSort = sort
             musicCursors += cursor
             musicLimits += limit
             return HubNetworkResult.Success(musicResponses.removeFirstOrNull() ?: officialMusicResponse())
