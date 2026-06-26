@@ -30,7 +30,7 @@ import { PrismaSongRepository } from "./repositories/songRepository.js";
 import { InMemoryMusicSyncLock } from "./music/musicLocks.js";
 import { MusicSyncService } from "./music/musicSyncService.js";
 import { OfficialStelliveMusicSyncService } from "./music/officialStelliveMusicSyncService.js";
-import { officialStelliveMusicSourcePlaylistSeeds } from "./music/musicSourcePlaylists.js";
+import { officialStelliveMusicSourcePlaylistSeeds, TARGET_MUSIC_MEMBER_IDS } from "./music/musicSourcePlaylists.js";
 import { WebhookSubscriptionRepository } from "./repositories/webhookSubscriptionRepository.js";
 import SongIngestionService from "./songs/songIngestionService.js";
 import SongBackfillService from "./songs/songBackfillService.js";
@@ -70,6 +70,26 @@ type BootstrapDevicePort = Pick<DeviceRepository, "getDevice">;
 type BootstrapPreferencePort = Pick<PreferenceRepository, "listForDevice">;
 type BootstrapLiveStatusPort = Pick<LiveStatusRepository, "listDiagnostics">;
 type BootstrapHubEventsPort = Pick<HubEventRepository, "summary">;
+
+export function createMusicMemberUpsertInputs(catalog = new CatalogService()) {
+  const targetIds = new Set<string>(TARGET_MUSIC_MEMBER_IDS);
+  return catalog.getMembers()
+    .filter((member) => targetIds.has(member.id))
+    .map((member) => ({
+      id: member.id,
+      nameKo: member.koreanName,
+      nameEn: member.englishName,
+      aliases: [
+        member.koreanName,
+        member.englishName,
+        member.platforms?.youtubeHandle,
+        member.platforms?.youtubeChannelId,
+      ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+      generationOrGroup: member.generationId,
+      isGraduated: false,
+      youtubeChannelId: member.platforms?.youtubeChannelId ?? null,
+    }));
+}
 
 function createDefaultNotificationWorker(env: AppEnv): NotificationWorker {
   const fcmClient = createFcmClient({
@@ -225,6 +245,11 @@ function createDefaultMusicSyncService(
   const syncRuns = new PrismaMusicSyncRunRepository();
   const youtube = new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl });
   const locks = new InMemoryMusicSyncLock();
+  const syncCatalogMusicMembers = async () => {
+    for (const input of createMusicMemberUpsertInputs(catalog)) {
+      await repository.upsertMember(input);
+    }
+  };
   const service = new MusicSyncService({
     repository: repository as never,
     syncRuns,
@@ -250,8 +275,14 @@ function createDefaultMusicSyncService(
   });
   return {
     musicSync: {
-      syncAllMusic: (mode) => service.syncAllMusic(mode === "light" ? "light" : "full"),
-      syncOfficialStelliveMusicPlaylists: (mode) => officialService.syncOfficialStelliveMusicPlaylists(mode),
+      syncAllMusic: async (mode) => {
+        await syncCatalogMusicMembers();
+        return service.syncAllMusic(mode === "light" ? "light" : "full");
+      },
+      syncOfficialStelliveMusicPlaylists: async (mode) => {
+        await syncCatalogMusicMembers();
+        return officialService.syncOfficialStelliveMusicPlaylists(mode);
+      },
       listReviewCandidates: ({ limit } = {}) => repository.listReviewCandidates?.({ limit }) ?? Promise.resolve([]),
       upsertOverride: async (videoId, input) => {
         const item = await repository.getMusicItemByVideoId(videoId) as { id?: string; youtubeVideoId?: string } | null;

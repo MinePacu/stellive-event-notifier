@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildApp } from "../src/app.js";
+import { buildApp, createMusicMemberUpsertInputs } from "../src/app.js";
 import { loadEnv } from "../src/config/env.js";
 
 const baseEnv = {
@@ -10,6 +10,26 @@ const baseEnv = {
 };
 
 describe("music app wiring", () => {
+  it("builds DB upsert inputs for every target music member channel", () => {
+    const inputs = createMusicMemberUpsertInputs();
+    const ids = inputs.map((input) => input.id).sort();
+
+    expect(ids).toEqual([
+      "akane-lize",
+      "aokumo-rin",
+      "arahashi-tabi",
+      "ayatsuno-yuni",
+      "hanako-nana",
+      "neneko-mashiro",
+      "sakihane-huya",
+      "shirayuki-hina",
+      "tenko-shibuki",
+      "yuzuha-riko",
+    ]);
+    expect(inputs.every((input) => typeof input.youtubeChannelId === "string" && input.youtubeChannelId.startsWith("UC"))).toBe(true);
+    expect(inputs.find((input) => input.id === "stellive-official")).toBeUndefined();
+  });
+
   it("loadEnv parses music sync cache and official playlist defaults", () => {
     const env = loadEnv(baseEnv);
 
