@@ -1,5 +1,13 @@
 # AI Handoff
 
+## Android Shared UI Chrome, Cards, And Filters
+
+- Android root screens no longer render duplicate large body titles/descriptions; the existing top bar owns page identity.
+- Live, Songs, and Goods/Events filters use a fixed shared top filter strip. Up to three options use equal width; larger groups scroll horizontally.
+- Songs exposes a top-bar search action and a separate search screen that retains the input view while debounced result updates replace only the results container.
+- Shared semantic card surfaces and external section/date headers are implemented without copying Samsung Health graphs, exercise UI, assets, colors, or proprietary layout.
+- Goods/Events summary rectangles were removed; existing calendar/feed data and client-side filter rules remain in use.
+
 ## Mobile Status, Recent Covers, And Channel Discovery
 
 - Android song search now debounces focus/editor-triggered rerenders, avoiding removal of the active input during focus loss.

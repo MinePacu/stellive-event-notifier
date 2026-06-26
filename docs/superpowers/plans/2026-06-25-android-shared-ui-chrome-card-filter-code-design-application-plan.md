@@ -37,6 +37,7 @@
 - 셸 명령은 항상 `rtk`를 사용한다.
 - 테스트 출력은 실패 요약 위주로 제한한다.
 - 기존 작업 트리의 다른 변경을 수정하거나 되돌리지 않는다.
+- 제공 이미지의 그래프·운동 기록·Samsung 고유 UI는 구현 근거로 사용하지 않는다. 파란 표시 영역과 설명 문구만 요구사항으로 취급한다.
 
 ## Minimal Test Policy
 
@@ -646,4 +647,3 @@ Document:
 - [ ] Existing repository/API calls and client pagination are unchanged.
 - [ ] No iOS/backend tests are run because those files are not changed.
 - [ ] No prohibited assets, secrets, Former members, or unsupported official YouTube live behavior are introduced.
-

@@ -22,6 +22,7 @@ class SongUiPolicyTest {
         assertEquals(listOf("home", "live", "songs", "goods_events"), navigationItems.map { it.screenId })
         assertEquals(listOf("홈", "라이브", "노래", "굿즈/행사"), navigationItems.map { it.label })
         assertFalse(navigationItems.any { it.screenId == "history" })
+        assertEquals("노래 검색", MainUiPolicy.topBarTitle("song_search"))
     }
 
     @Test
@@ -32,6 +33,18 @@ class SongUiPolicyTest {
         assertEquals(1, MainUiPolicy.songGenerationFilters().count { it.id == "all" })
         assertEquals(1, MainUiPolicy.songTypeFilters().count { it.id == "all" })
         assertFalse(MainUiPolicy.songGenerationFilters().any { it.id == "gamja" || it.id == "official" })
+    }
+
+    @Test
+    fun songTopFiltersExposeGenerationAndTypeGroups() {
+        val groups = MainUiPolicy.songTopFilterGroups(
+            selectedGenerationId = "gen2",
+            selectedType = "cover",
+        )
+
+        assertEquals(listOf("generation", "type"), groups.map { it.id })
+        assertEquals("gen2", groups[0].selectedId)
+        assertEquals("cover", groups[1].selectedId)
     }
 
     @Test

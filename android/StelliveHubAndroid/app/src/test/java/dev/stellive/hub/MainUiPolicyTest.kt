@@ -60,6 +60,17 @@ class MainUiPolicyTest {
     }
 
     @Test
+    fun liveAndGoodsEventTopFiltersKeepExistingIds() {
+        val live = MainUiPolicy.liveTopFilterGroups("all").single()
+        val goods = MainUiPolicy.goodsEventsTopFilterGroups("all").single()
+
+        assertEquals(listOf("live", "all", "offline"), live.options.map { it.id })
+        assertEquals(listOf("all", "goods", "ticketing", "offline", "closing"), goods.options.map { it.id })
+        assertEquals("all", live.selectedId)
+        assertEquals("all", goods.selectedId)
+    }
+
+    @Test
     fun homeHubEventsListActionKeepsFullListReachableWhenClosingSoonExists() {
         val action = MainUiPolicy.homeHubEventsListAction(closingSoonCount = 1)
 

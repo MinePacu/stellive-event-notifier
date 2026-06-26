@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stellive Hub Admin Console Mockup</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d0e0c;
+      --nav: #11130f;
+      --surface: #151812;
+      --surface-2: #10120f;
+      --field: #0a0b0a;
+      --line: #2a3027;
+      --line-strong: #3a4436;
+      --text: #edf1e8;
+      --muted: #a4ad9d;
+      --quiet: #747d6e;
+      --good: #8bc79a;
+      --warn: #d9aa55;
+      --bad: #dd7770;
+      --focus: #7fb58a;
+      --button: #1b2018;
+      --button-hover: #232a20;
+      --radius: 8px;
+      font-family: "Aptos", "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 248px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .nav {
+      border-right: 1px solid var(--line);
+      background: var(--nav);
+      padding: 18px 14px;
+    }
+
+    .nav-title {
+      margin: 0 0 18px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .nav-group {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 18px;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 34px;
+      padding: 0 9px;
+      border-radius: 6px;
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    .nav-link[aria-current="page"] {
+      background: #1b2118;
+      color: var(--text);
+    }
+
+    .nav-link:hover {
+      background: var(--button-hover);
+      color: var(--text);
+    }
+
+    .nav-note {
+      margin-top: 20px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      color: var(--quiet);
+      font-size: 12px;
+    }
+
+    .content {
+      min-width: 0;
+      padding: 18px 22px 28px;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    h2 {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    h3 {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .top-actions,
+    .button-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .token-field {
+      display: grid;
+      grid-template-columns: 200px minmax(220px, 360px);
+      align-items: center;
+      gap: 10px;
+    }
+
+    label {
+      color: #d9dfd2;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      min-height: 36px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: var(--field);
+      color: var(--text);
+      padding: 8px 10px;
+      outline: none;
+    }
+
+    textarea {
+      min-height: 86px;
+      resize: vertical;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: var(--focus);
+      outline: 2px solid rgba(127, 181, 138, 0.45);
+      outline-offset: 1px;
+    }
+
+    button {
+      min-height: 36px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: var(--button);
+      color: var(--text);
+      padding: 0 12px;
+      cursor: default;
+    }
+
+    button:hover {
+      background: var(--button-hover);
+    }
+
+    button.primary {
+      border-color: #6c9f75;
+      background: #243323;
+    }
+
+    button.danger {
+      border-color: #7c413d;
+      color: #ffd9d5;
+    }
+
+    .section {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 46px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-2);
+    }
+
+    .section-body {
+      padding: 14px;
+    }
+
+    .overview-table,
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      border-top: 1px solid var(--line);
+      padding: 9px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    thead th {
+      border-top: 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .overview-table th {
+      width: 180px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .overview-table tr:first-child th,
+    .overview-table tr:first-child td,
+    .data-table tbody tr:first-child td {
+      border-top: 0;
+    }
+
+    .status {
+      display: inline-block;
+      min-width: 76px;
+      border: 1px solid var(--line-strong);
+      border-radius: 4px;
+      padding: 2px 6px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .status.good {
+      border-color: rgba(139, 199, 154, 0.45);
+      color: var(--good);
+    }
+
+    .status.warn {
+      border-color: rgba(217, 170, 85, 0.5);
+      color: var(--warn);
+    }
+
+    .status.bad {
+      border-color: rgba(221, 119, 112, 0.5);
+      color: var(--bad);
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .actions-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .action-line {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      min-height: 50px;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+    }
+
+    .action-line:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .action-title {
+      font-weight: 700;
+    }
+
+    .action-meta,
+    .cell-note,
+    .help {
+      color: var(--quiet);
+      font-size: 12px;
+    }
+
+    .event-layout {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .filter-grid,
+    .form-grid.two,
+    .form-grid.three {
+      display: grid;
+      gap: 10px;
+    }
+
+    .filter-grid,
+    .form-grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .form-grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .event-list {
+      border-top: 1px solid var(--line);
+      margin-top: 12px;
+      padding-top: 8px;
+    }
+
+    .event-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: start;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      padding: 9px;
+    }
+
+    .event-row + .event-row {
+      margin-top: 5px;
+    }
+
+    .event-row.active {
+      border-color: var(--line-strong);
+      background: #11170f;
+    }
+
+    .event-title {
+      font-weight: 700;
+    }
+
+    .event-meta {
+      color: var(--quiet);
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
+    .editor {
+      display: grid;
+      gap: 12px;
+    }
+
+    .form-section {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #11140f;
+    }
+
+    .form-section h3 {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #0f110e;
+    }
+
+    .form-section-body {
+      display: grid;
+      gap: 11px;
+      padding: 12px;
+    }
+
+    .image-policy {
+      display: grid;
+      grid-template-columns: 130px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      background: var(--field);
+    }
+
+    .image-placeholder {
+      display: grid;
+      place-items: center;
+      min-height: 74px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      color: var(--quiet);
+      font-size: 12px;
+    }
+
+    .footer-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .log-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      color: var(--muted);
+    }
+
+    .log-list li + li {
+      margin-top: 7px;
+    }
+
+    @media (max-width: 1160px) {
+      .app,
+      .split,
+      .event-layout,
+      .footer-panels {
+        grid-template-columns: 1fr;
+      }
+
+      .nav {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .nav-group {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 760px) {
+      .content {
+        padding: 14px 12px 22px;
+      }
+
+      .topbar,
+      .token-field,
+      .filter-grid,
+      .form-grid.two,
+      .form-grid.three,
+      .image-policy {
+        grid-template-columns: 1fr;
+      }
+
+      .top-actions,
+      .button-row {
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <nav class="nav" aria-label="Admin sections">
+      <h1 class="nav-title">Stellive Hub Admin</h1>
+      <div class="nav-group">
+        <a class="nav-link" href="#overview" aria-current="page">Overview <span>4</span></a>
+        <a class="nav-link" href="#operations">Operations <span>5</span></a>
+        <a class="nav-link" href="#adapters">Adapters <span>4</span></a>
+        <a class="nav-link" href="#hub-events">Hub events <span>3</span></a>
+      </div>
+      <div class="nav-note">
+        Browser-only internal token storage. No production secrets are shown in this mockup.
+      </div>
+    </nav>
+
+    <main class="content">
+      <header class="topbar">
+        <div class="token-field">
+          <label for="internal-token">Internal API bearer token</label>
+          <input id="internal-token" type="password" value="••••••••••••" autocomplete="off">
+        </div>
+        <div class="top-actions">
+          <button type="button">Refresh</button>
+          <button type="button">Auto refresh off</button>
+          <button type="button">Theme: dark</button>
+          <button type="button">Log out</button>
+        </div>
+      </header>
+
+      <section id="overview" class="section">
+        <div class="section-head">
+          <h2>Overview</h2>
+          <span class="status good">current</span>
+        </div>
+        <div class="section-body">
+          <table class="overview-table">
+            <tbody>
+              <tr>
+                <th>Service</th>
+                <td>stellive-hub-api / production-like local test</td>
+              </tr>
+              <tr>
+                <th>Database</th>
+                <td><span class="status good">ok</span> PostgreSQL reachable</td>
+              </tr>
+              <tr>
+                <th>Queue</th>
+                <td>12 queued, 1 locked, 238 completed, 2 failed</td>
+              </tr>
+              <tr>
+                <th>Recent delivery</th>
+                <td>94 sent, 31 skipped, 2 failed</td>
+              </tr>
+              <tr>
+                <th>Oldest queued job</th>
+                <td>2026-06-26 13:41 KST</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="split" id="operations">
+        <section class="section">
+          <div class="section-head">
+            <h2>Operations</h2>
+          </div>
+          <div class="section-body actions-list">
+            <div class="action-line">
+              <div>
+                <div class="action-title">Drain notification jobs</div>
+                <div class="action-meta">Calls /v1/internal/jobs/notifications/drain</div>
+              </div>
+              <button type="button" class="primary">Run</button>
+            </div>
+            <div class="action-line">
+              <div>
+                <div class="action-title">Renew YouTube subscriptions</div>
+                <div class="action-meta">WebSub lease renewal only</div>
+              </div>
+              <button type="button">Run</button>
+            </div>
+            <div class="action-line">
+              <div>
+                <div class="action-title">Poll CHZZK live status</div>
+                <div class="action-meta">Backend-only Open API live-list check</div>
+              </div>
+              <button type="button">Run</button>
+            </div>
+            <div class="action-line">
+              <div>
+                <div class="action-title">Recalculate special days</div>
+                <div class="action-meta">Refresh generated calendar entries</div>
+              </div>
+              <button type="button">Run</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="adapters" class="section">
+          <div class="section-head">
+            <h2>Adapters</h2>
+          </div>
+          <div class="section-body">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Status</th>
+                  <th>Reason</th>
+                  <th>Checked</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>YouTube</td>
+                  <td><span class="status good">enabled</span></td>
+                  <td>WebSub configured</td>
+                  <td>14:07 KST</td>
+                </tr>
+                <tr>
+                  <td>CHZZK</td>
+                  <td><span class="status good">enabled</span></td>
+                  <td>Client-auth live-list verified</td>
+                  <td>14:06 KST</td>
+                </tr>
+                <tr>
+                  <td>X</td>
+                  <td><span class="status">disabled</span></td>
+                  <td>x_no_free_official_api</td>
+                  <td>Not checked yet</td>
+                </tr>
+                <tr>
+                  <td>Naver Cafe</td>
+                  <td><span class="status">disabled</span></td>
+                  <td>deferred_for_mvp</td>
+                  <td>Not checked yet</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>Secrets and feature flags</h2>
+        </div>
+        <div class="section-body">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>State</th>
+                <th>Name</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>ADMIN_CONSOLE_TOKEN</td>
+                <td><span class="status good">configured</span></td>
+                <td>YOUTUBE_WEBSUB_ENABLED</td>
+                <td>true</td>
+              </tr>
+              <tr>
+                <td>INTERNAL_API_TOKEN</td>
+                <td><span class="status good">configured</span></td>
+                <td>X_FREE_API_ENABLED</td>
+                <td>false</td>
+              </tr>
+              <tr>
+                <td>FCM_PRIVATE_KEY</td>
+                <td><span class="status warn">missing</span></td>
+                <td>CHZZK_LIVE_POLLING_ENABLED</td>
+                <td>true</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="hub-events" class="section">
+        <div class="section-head">
+          <h2>Hub events</h2>
+          <div class="button-row">
+            <button type="button">Refresh events</button>
+            <button type="button">Validate</button>
+            <button type="button" class="primary">Save draft</button>
+            <button type="button">Publish</button>
+            <button type="button">Cancel</button>
+            <button type="button">Deactivate</button>
+            <button type="button" class="danger">Delete</button>
+          </div>
+        </div>
+        <div class="section-body">
+          <div class="event-layout">
+            <aside class="section">
+              <div class="section-head">
+                <h2>Events</h2>
+                <span class="status">3 items</span>
+              </div>
+              <div class="section-body">
+                <div class="filter-grid">
+                  <div class="field">
+                    <label for="state-filter">Publication state</label>
+                    <select id="state-filter">
+                      <option>All</option>
+                      <option>Draft</option>
+                      <option>Published</option>
+                      <option>Inactive</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="status-filter">Public status</label>
+                    <select id="status-filter">
+                      <option>All</option>
+                      <option>Upcoming</option>
+                      <option>Open</option>
+                      <option>Closing soon</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="field" style="margin-top: 10px;">
+                  <label for="event-search">Search</label>
+                  <input id="event-search" value="goods">
+                </div>
+                <div class="event-list">
+                  <article class="event-row active">
+                    <div>
+                      <div class="event-title">Official goods reservation window</div>
+                      <div class="event-meta">online_goods / official / updated 13:58</div>
+                    </div>
+                    <span class="status warn">draft</span>
+                  </article>
+                  <article class="event-row">
+                    <div>
+                      <div class="event-title">Gen2 offline collaboration schedule</div>
+                      <div class="event-meta">offline_popup / gen2 / updated yesterday</div>
+                    </div>
+                    <span class="status good">published</span>
+                  </article>
+                  <article class="event-row">
+                    <div>
+                      <div class="event-title">Ticketing deadline reminder</div>
+                      <div class="event-meta">ticketing / gen3 / updated Jun 25</div>
+                    </div>
+                    <span class="status">inactive</span>
+                  </article>
+                </div>
+              </div>
+            </aside>
+
+            <div class="editor">
+              <div class="form-section">
+                <h3>Basic information</h3>
+                <div class="form-section-body">
+                  <div class="field">
+                    <label for="title">Title</label>
+                    <input id="title" value="Official goods reservation window">
+                  </div>
+                  <div class="field">
+                    <label for="summary">Summary</label>
+                    <textarea id="summary">Reservation opens after the official announcement window. Calendar and widgets stay text-first.</textarea>
+                  </div>
+                  <div class="form-grid three">
+                    <div class="field">
+                      <label for="category">Category</label>
+                      <select id="category">
+                        <option>online_goods</option>
+                        <option>ticketing</option>
+                        <option>offline_popup</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="mode">Participation mode</label>
+                      <select id="mode">
+                        <option>online</option>
+                        <option>offline</option>
+                        <option>hybrid</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="event-status">Status</label>
+                      <select id="event-status">
+                        <option>announced</option>
+                        <option>upcoming</option>
+                        <option>open</option>
+                        <option>closing_soon</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-grid two">
+                    <div class="field">
+                      <label for="generation">Generation</label>
+                      <input id="generation" value="official">
+                      <div class="help">Allowed examples: official, gen1, gen2, gen3.</div>
+                    </div>
+                    <div class="field">
+                      <label for="member">Member</label>
+                      <input id="member" placeholder="Leave blank for official or generation-wide events">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <h3>Source and image metadata</h3>
+                <div class="form-section-body">
+                  <div class="form-grid two">
+                    <div class="field">
+                      <label for="source-type">Source type</label>
+                      <select id="source-type">
+                        <option>official</option>
+                        <option>member</option>
+                        <option>official_collab</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="image-policy">Image policy state</label>
+                      <select id="image-policy">
+                        <option>none</option>
+                        <option>official_runtime_url</option>
+                        <option>third_party_allowed</option>
+                        <option>verify_required</option>
+                        <option>blocked</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="source-url">Source URL</label>
+                    <input id="source-url" value="https://example.invalid/official-notice">
+                  </div>
+                  <div class="image-policy">
+                    <div class="image-placeholder">No bundled image</div>
+                    <div>
+                      <div class="event-title">Metadata only</div>
+                      <div class="cell-note">The backend stores HTTPS image metadata when allowed. This mockup does not include images, logos, screenshots, fan art, or copied assets.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <h3>Schedule and links</h3>
+                <div class="form-section-body">
+                  <div class="form-grid three">
+                    <div class="field">
+                      <label for="announced">Announced at</label>
+                      <input id="announced" value="2026-06-26 14:00">
+                    </div>
+                    <div class="field">
+                      <label for="starts">Starts at</label>
+                      <input id="starts" value="2026-07-01 18:00">
+                    </div>
+                    <div class="field">
+                      <label for="ends">Ends at</label>
+                      <input id="ends" value="2026-07-12 23:59">
+                    </div>
+                  </div>
+                  <div class="form-grid two">
+                    <div class="field">
+                      <label for="purchase">Purchase URL</label>
+                      <input id="purchase" value="https://example.invalid/store">
+                    </div>
+                    <div class="field">
+                      <label for="ticket">Ticket URL</label>
+                      <input id="ticket" placeholder="Optional">
+                    </div>
+                  </div>
+                  <div class="form-grid two">
+                    <div class="field">
+                      <label for="venue-name">Venue name</label>
+                      <input id="venue-name" placeholder="Optional">
+                    </div>
+                    <div class="field">
+                      <label for="venue-address">Venue address</label>
+                      <input id="venue-address" placeholder="Optional">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="footer-panels">
+                <div class="form-section">
+                  <h3>Validation</h3>
+                  <div class="form-section-body">
+                    <ul class="log-list">
+                      <li><span class="status good">ok</span> Official category is 기타 and member is blank.</li>
+                      <li><span class="status good">ok</span> No image upload or copied asset field.</li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="form-section">
+                  <h3>Audit log</h3>
+                  <div class="form-section-body">
+                    <ul class="log-list">
+                      <li>2026-06-26 13:58 KST / draft saved / admin</li>
+                      <li>2026-06-26 13:43 KST / validation passed / admin</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
