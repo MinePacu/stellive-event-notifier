@@ -2,6 +2,32 @@ import Foundation
 
 private let builtInHubEventFilters: Set<String> = ["all", "goods", "ticketing", "offline", "closing"]
 
+struct MusicPageCollector {
+    static let pageLimit = 100
+    static let maxPages = 10
+    static let maxItems = 1000
+
+    static func collect(fetch: (String?, Int) async throws -> MusicListResponse) async throws -> [SongCatalogItem] {
+        var cursor: String?
+        var output: [SongCatalogItem] = []
+        var seen = Set<String>()
+        for _ in 0..<maxPages {
+            let page = try await fetch(cursor, pageLimit)
+            for item in page.items {
+                let key = item.youtubeVideoId.isEmpty ? item.id : item.youtubeVideoId
+                if seen.insert(key).inserted {
+                    output.append(item)
+                }
+            }
+            guard let next = page.nextCursor, !next.isEmpty, output.count < maxItems else {
+                return Array(output.prefix(maxItems))
+            }
+            cursor = next
+        }
+        return Array(output.prefix(maxItems))
+    }
+}
+
 @MainActor
 final class ServerHubStore: ObservableObject {
     private let api: HubAPIClient
@@ -9,6 +35,8 @@ final class ServerHubStore: ObservableObject {
     private let fallback: MockHubStore
     @Published private(set) var serverHubEvents: [HubEvent] = []
     @Published private(set) var serverCalendarDays: [HubCalendarDay] = []
+    @Published private(set) var serverSongs: [SongCatalogItem] = []
+    @Published private(set) var serverSongFacets: SongFacetsResponse?
     @Published private(set) var hubEventDetailCache: [String: HubEvent] = [:]
 
     init(
@@ -88,6 +116,44 @@ final class ServerHubStore: ObservableObject {
         }
     }
 
+    func refreshSongs(
+        generationId: String? = nil,
+        memberId: String? = nil,
+        type: String? = nil,
+        query: String? = nil,
+        cursor: String? = nil
+    ) async {
+        do {
+            let normalizedType = type == "all" ? nil : type
+            let items = try await MusicPageCollector.collect { pageCursor, pageLimit in
+                if let memberId, !memberId.isEmpty, memberId != "all" {
+                    return try await api.memberMusic(memberId: memberId, type: normalizedType, cursor: pageCursor, limit: pageLimit)
+                }
+                return try await api.music(type: normalizedType, cursor: pageCursor, limit: pageLimit)
+            }
+            serverSongs = items
+        } catch {
+            if serverSongs.isEmpty {
+                serverSongs = fallback.songs(generationId: generationId, memberId: memberId, type: type, query: query).items
+            }
+        }
+    }
+
+    func refreshSongFacets(
+        generationId: String? = nil,
+        memberId: String? = nil,
+        type: String? = nil,
+        query: String? = nil
+    ) async {
+        do {
+            serverSongFacets = try await api.songFacets(generationId: generationId, memberId: memberId, type: type, q: query)
+        } catch {
+            if serverSongFacets == nil {
+                serverSongFacets = fallback.songFacets(generationId: generationId, memberId: memberId, type: type, query: query)
+            }
+        }
+    }
+
     func loadHubEventDetail(id: String) async -> HubEvent? {
         do {
             let event = try await api.hubEvent(id: id).toHubEvent()
@@ -119,6 +185,23 @@ final class ServerHubStore: ObservableObject {
 
     func cachedHubEvent(id: String) -> HubEvent? {
         hubEventDetailCache[id] ?? serverHubEvents.first(where: { $0.id == id })
+    }
+
+    func songs(generationId: String? = nil, memberId: String? = nil, type: String? = nil, query: String? = nil) -> SongListResponse {
+        let source = serverSongs.isEmpty ? fallback.songs(generationId: generationId, memberId: memberId, type: type, query: query).items : serverSongs
+        let filtered = source.filter { song in
+            let generationMatches = generationId == nil || generationId == "all" || song.generationId == generationId
+            let memberMatches = memberId == nil || memberId == "all" || song.memberId == memberId
+            let typeMatches = type == nil || type == "all" || song.type.rawValue == type
+            let queryText = query ?? ""
+            let queryMatches = queryText.isEmpty || song.title.localizedCaseInsensitiveContains(queryText) || IOSSongPagePolicy.memberDisplayText(song).localizedCaseInsensitiveContains(queryText)
+            return generationMatches && memberMatches && typeMatches && queryMatches
+        }
+        return SongListResponse(items: filtered, nextCursor: nil)
+    }
+
+    func songFacets(generationId: String? = nil, memberId: String? = nil, type: String? = nil, query: String? = nil) -> SongFacetsResponse {
+        serverSongFacets ?? fallback.songFacets(generationId: generationId, memberId: memberId, type: type, query: query)
     }
 
     private func filteredServerHubEvents(for filter: String) -> [HubEvent] {

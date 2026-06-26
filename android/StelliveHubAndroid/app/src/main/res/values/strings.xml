@@ -3,10 +3,11 @@
     <string name="home_title">홈</string>
     <string name="live_title">라이브</string>
     <string name="history_title">알림 기록</string>
+    <string name="songs_title">노래</string>
     <string name="settings_title">설정</string>
     <string name="tab_home">홈</string>
     <string name="tab_live">라이브</string>
-    <string name="tab_history">기록</string>
+    <string name="tab_songs">노래</string>
     <string name="tab_goods_events">굿즈/행사</string>
     <string name="tab_settings">설정</string>
     <string name="action_back">이전 화면</string>

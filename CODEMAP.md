@@ -1,5 +1,10 @@
 # CODEMAP
 
+## Recent Official Music Playlist Sync Additions
+
+- `backend/stellive-hub-api/src/music/officialStelliveMusicSyncService.ts` - Official Stellive COVER/ORIGINAL playlist sync, videoId dedupe, source mapping, manual override handling.
+- `backend/stellive-hub-api/test/musicOfficialPlaylistSyncService.test.ts` - Official playlist sync behavior tests.
+
 This file maps the repository files that are not excluded by `.gitignore`. Ignored generated outputs, local secrets, dependency folders, IDE files, build artifacts, screenshots, and platform-specific private config such as `google-services.json`, `GoogleService-Info.plist`, `.env`, `node_modules/`, `dist/`, and `build/` are intentionally omitted.
 
 ## Root And Project Metadata
@@ -46,6 +51,7 @@ This file maps the repository files that are not excluded by `.gitignore`. Ignor
 - `docs/REALTIME_DELIVERY.md` - Best-effort realtime delivery policy and user disclosure language.
 - `docs/UI_GUIDELINES.md` - Original UI direction and platform design constraints.
 - `docs/mockups/live-page-mobile-preview.html` - Static local preview mockup for the live page.
+- `docs/mockups/song-page-mobile-preview.html` - Static local preview mockup for the song page proposed by GitLab #23 and GitHub #45.
 - `docs/superpowers/plans/2026-06-02-chzzk-live-elapsed-time.md` - Implementation plan for CHZZK live elapsed-time display.
 - `docs/superpowers/plans/2026-06-03-hub-events-ui-rework.md` - Implementation plan for hub events UI rework.
 - `docs/superpowers/plans/2026-06-03-hub-events.md` - Implementation plan for hub events feature work.
@@ -90,6 +96,9 @@ This file maps the repository files that are not excluded by `.gitignore`. Ignor
 - `docs/superpowers/plans/2026-06-17-admin-hub-events-field-layout-code-plan.md` - Untracked local implementation plan for admin hub event field layout work.
 - `docs/superpowers/plans/2026-06-17-hub-event-thumbnail-code-design.md` - Code design for hub event thumbnail support.
 - `docs/superpowers/plans/2026-06-17-hub-event-thumbnail-feature-design.md` - Feature design for hub event thumbnail support.
+- `docs/superpowers/plans/2026-06-22-song-page-code-design-application-plan.md` - Code design and implementation plan for server-backed song page API communication, including token-minimized execution guidance.
+- `docs/superpowers/plans/2026-06-22-song-page-ui-api-communication-plan.md` - Product/API communication plan connecting the song page mockup to backend song APIs and mobile client behavior.
+- `docs/superpowers/plans/2026-06-22-youtube-song-page-ingestion-plan.md` - Implementation plan for low-load YouTube song ingestion, song mobile APIs, and unified Android/iOS song page UI.
 - `docs/superpowers/specs/2026-06-03-hub-events-design.md` - Feature specification for hub events.
 - `docs/superpowers/specs/2026-06-03-hub-events-ui-rework-design.md` - Feature specification for hub events UI rework.
 - `docs/superpowers/specs/2026-06-04-settings-navigation-design.md` - Feature specification for settings navigation.
@@ -110,6 +119,30 @@ This file maps the repository files that are not excluded by `.gitignore`. Ignor
 - `mockups/issue-30-16-goods-events-calendar-menu-mockup.html` - Standalone goods/events calendar menu mockup for issue planning.
 
 ## Backend: `backend/stellive-hub-api`
+
+### Backend Music Sync Additions
+- `backend/stellive-hub-api/src/cache/responseCache.ts` - Response cache with memory fallback, stale-while-revalidate, and per-key load coalescing.
+- `backend/stellive-hub-api/src/music/musicClassifier.ts` - Source-playlist-first music type classification helpers.
+- `backend/stellive-hub-api/src/music/musicDto.ts` - Public music DTO mapper that avoids raw payload/secret/local file leakage.
+- `backend/stellive-hub-api/src/music/musicLocks.ts` - Per-source music sync lock abstraction and in-memory implementation.
+- `backend/stellive-hub-api/src/music/musicMemberMatcher.ts` - Alias-based N:M music item/member matcher.
+- `backend/stellive-hub-api/src/music/musicReconciliationService.ts` - Daily reconciliation diagnostics for official-source comparison.
+- `backend/stellive-hub-api/src/music/musicSourcePlaylists.ts` - 10-member allowlist and official MUSIC source playlist seed policy.
+- `backend/stellive-hub-api/src/music/musicSyncService.ts` - Light/full playlist sync service using backend-only YouTube Data API ports.
+- `backend/stellive-hub-api/src/repositories/musicRepository.ts` - Music member/source playlist/item repositories and sync run repository.
+- `backend/stellive-hub-api/src/repositories/musicSyncRunRepository.ts` - Music sync run repository re-export boundary.
+- `backend/stellive-hub-api/src/routes/musicRoutes.ts` - Public cached `/v1/music` and member music routes.
+- `backend/stellive-hub-api/test/musicAppWiring.test.ts` - Focused env/app wiring tests for music sync.
+- `backend/stellive-hub-api/test/musicClassifier.test.ts` - Music classification tests.
+- `backend/stellive-hub-api/test/musicContract.test.ts` - Shared music DTO/contract leakage tests.
+- `backend/stellive-hub-api/test/musicInternalRoutes.test.ts` - Protected manual music sync route tests.
+- `backend/stellive-hub-api/test/musicMemberMatcher.test.ts` - Music member alias matching tests.
+- `backend/stellive-hub-api/test/musicReconciliationService.test.ts` - Music reconciliation diagnostics tests.
+- `backend/stellive-hub-api/test/musicRepository.test.ts` - Music repository tests.
+- `backend/stellive-hub-api/test/musicRoutes.test.ts` - Public music route/cache tests.
+- `backend/stellive-hub-api/test/musicSourcePlaylists.test.ts` - Music source seed policy tests.
+- `backend/stellive-hub-api/test/musicSyncService.test.ts` - Light/full sync service and lock tests.
+- `backend/stellive-hub-api/test/musicYoutubeDataApiClient.test.ts` - YouTube playlist/video client music sync tests.
 
 ### Backend Project Files
 
@@ -137,6 +170,9 @@ This file maps the repository files that are not excluded by `.gitignore`. Ignor
 - `backend/stellive-hub-api/src/adapters/chzzk/chzzkAuthClient.ts` - CHZZK OAuth authorization URL and token exchange client.
 - `backend/stellive-hub-api/src/adapters/chzzk/chzzkOAuthState.ts` - Signed OAuth state generation and verification for CHZZK auth flows.
 - `backend/stellive-hub-api/src/adapters/chzzk/chzzkOpenApiAdapter.ts` - CHZZK live-status adapter that compares API responses with catalog targets and emits allowed events.
+- `backend/stellive-hub-api/src/adapters/youtube/youtubeAtomParser.ts` - Minimal YouTube WebSub Atom parser for upload candidate fields.
+- `backend/stellive-hub-api/src/adapters/youtube/youtubeDataApiClient.ts` - Bounded official YouTube Data API client for upload playlist backfill, ETag-aware reconciliation, and explicit video metadata reads.
+- `backend/stellive-hub-api/src/adapters/youtube/youtubeWebSubSubscriptionService.ts` - YouTube WebSub subscribe renewal service for supported song-channel topics.
 - `backend/stellive-hub-api/src/catalog/catalog.ts` - Catalog service for loading and validating shared generation/member seed data.
 
 ### Backend Event, Hub Event, And Calendar Logic
@@ -162,6 +198,9 @@ This file maps the repository files that are not excluded by `.gitignore`. Ignor
 - `backend/stellive-hub-api/src/notification/spikeDowngrade.ts` - Spike detection and downgrade helpers for bursty notification periods.
 - `backend/stellive-hub-api/src/preferences/preferenceResolution.ts` - Resolves global, platform, event type, generation, member, quiet-hours, and realtime preferences.
 - `backend/stellive-hub-api/src/realtime/realtimeDeliveryService.ts` - Foreground realtime delivery service for authenticated app sessions.
+- `backend/stellive-hub-api/src/songs/songClassifier.ts` - Low-load YouTube upload classifier for original, cover, and unknown song type detection.
+- `backend/stellive-hub-api/src/songs/songBackfillService.ts` - Caps YouTube song backfill/reconciliation by channel and page count before delegating normalized uploads to song ingestion.
+- `backend/stellive-hub-api/src/songs/songIngestionService.ts` - Normalizes classified YouTube upload candidates into song repository upserts with catalog policy checks.
 
 ### Backend Jobs, Push, And Repositories
 
@@ -176,6 +215,7 @@ This file maps the repository files that are not excluded by `.gitignore`. Ignor
 - `backend/stellive-hub-api/src/repositories/platformApiStateRepository.ts` - Stores adapter health, cursors, OAuth token metadata, and platform API state.
 - `backend/stellive-hub-api/src/repositories/platformEventRepository.ts` - Persists normalized platform events and dedupe records.
 - `backend/stellive-hub-api/src/repositories/preferenceRepository.ts` - Stores and reads server-side notification preference snapshots.
+- `backend/stellive-hub-api/src/repositories/songRepository.ts` - Song read repository port and empty fallback for the mobile song API skeleton.
 - `backend/stellive-hub-api/src/repositories/webhookSubscriptionRepository.ts` - Stores webhook subscription state and renewal metadata.
 
 ### Backend Routes And Workers
@@ -192,6 +232,8 @@ This file maps the repository files that are not excluded by `.gitignore`. Ignor
 - `backend/stellive-hub-api/src/routes/hubEventReadRoutes.ts` - Public hub event list, detail, calendar, widget, and summary routes.
 - `backend/stellive-hub-api/src/routes/internalRoutes.ts` - Protected internal scheduler, worker, and diagnostic routes.
 - `backend/stellive-hub-api/src/routes/routes.ts` - Route registration aggregator for the Fastify app.
+- `backend/stellive-hub-api/src/routes/songRoutes.ts` - Mobile song list and facet routes with supported filter validation and cache headers.
+- `backend/stellive-hub-api/src/routes/webhookRoutes.ts` - Public YouTube WebSub verification and Atom receipt routes for song ingestion.
 - `backend/stellive-hub-api/src/workers/chzzkLivePollWorker.ts` - Standalone worker entry point for CHZZK live polling.
 
 ### Backend Tests
@@ -222,12 +264,24 @@ This file maps the repository files that are not excluded by `.gitignore`. Ignor
 - `backend/stellive-hub-api/test/mobileBootstrapFallbackLiveStatus.test.ts` - Tests bootstrap fallback live-status behavior.
 - `backend/stellive-hub-api/test/mobileDeviceRoutes.test.ts` - Tests mobile device registration and token routes.
 - `backend/stellive-hub-api/test/mobilePreferences.test.ts` - Tests mobile preference read/write behavior.
+- `backend/stellive-hub-api/test/mobileSongsContract.test.ts` - Tests shared mobile song API contract values and DTO safety.
 - `backend/stellive-hub-api/test/notificationLoadReduction.test.ts` - Tests notification load-reduction and push-cap policy.
 - `backend/stellive-hub-api/test/notificationWorker.test.ts` - Tests notification worker delivery, skip, retry, and attempt recording behavior.
 - `backend/stellive-hub-api/test/platformApiStateRepository.test.ts` - Tests platform API state repository behavior.
 - `backend/stellive-hub-api/test/preferenceResolution.test.ts` - Tests notification preference resolution.
 - `backend/stellive-hub-api/test/pushPayloadFactory.test.ts` - Tests Android/iOS push payload construction.
 - `backend/stellive-hub-api/test/repositories.test.ts` - Tests repository integration behavior.
+- `backend/stellive-hub-api/test/songClassifier.test.ts` - Tests marker-based YouTube upload song classification.
+- `backend/stellive-hub-api/test/songBackfillService.test.ts` - Tests capped YouTube song backfill/reconciliation delegation and not-modified skips.
+- `backend/stellive-hub-api/test/songIngestionService.test.ts` - Tests YouTube upload normalization, catalog skips, and unknown song type skips.
+- `backend/stellive-hub-api/test/songRepository.test.ts` - Tests song Prisma schema expectations and repository mapping/query behavior.
+- `backend/stellive-hub-api/test/songRoutes.test.ts` - Tests mobile song route filters, cache headers, and empty cached-list responses.
+- `backend/stellive-hub-api/test/youtubeAtomParser.test.ts` - Tests minimal YouTube Atom upload parsing and typed parse errors.
+- `backend/stellive-hub-api/test/youtubeDataApiClient.test.ts` - Tests YouTube Data API response normalization, ETag handling, page caps, and video detail batching.
+- `backend/stellive-hub-api/test/youtubeSongBackfillInternalRoutes.test.ts` - Tests internal YouTube song backfill scheduler delegation and feature-flag disable behavior.
+- `backend/stellive-hub-api/test/youtubeWebSubInternalRoutes.test.ts` - Tests internal YouTube subscription renewal scheduler delegation.
+- `backend/stellive-hub-api/test/youtubeWebSubRoutes.test.ts` - Tests public YouTube WebSub verification and Atom ingestion route behavior.
+- `backend/stellive-hub-api/test/youtubeWebSubSubscriptionService.test.ts` - Tests YouTube WebSub subscription renewal request and error handling.
 
 ## Android: `android/StelliveHubAndroid`
 
@@ -281,6 +335,7 @@ This file maps the repository files that are not excluded by `.gitignore`. Ignor
 - `android/StelliveHubAndroid/app/src/main/res/drawable/ic_tab_history.xml` - Bottom tab icon for history.
 - `android/StelliveHubAndroid/app/src/main/res/drawable/ic_tab_home.xml` - Bottom tab icon for home.
 - `android/StelliveHubAndroid/app/src/main/res/drawable/ic_tab_live.xml` - Bottom tab icon for live.
+- `android/StelliveHubAndroid/app/src/main/res/drawable/ic_tab_songs.xml` - Bottom tab icon for the song catalog screen.
 - `android/StelliveHubAndroid/app/src/main/res/drawable/ic_tab_settings.xml` - Bottom tab icon for settings.
 - `android/StelliveHubAndroid/app/src/main/res/layout/activity_main.xml` - Main Android activity layout shell.
 - `android/StelliveHubAndroid/app/src/main/res/layout/item_member.xml` - Member row/item layout.
@@ -316,6 +371,7 @@ This file maps the repository files that are not excluded by `.gitignore`. Ignor
 - `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/NotificationLoadReductionAndroidTest.kt` - Unit test for Android notification load-reduction behavior.
 - `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/PreferenceResolutionStateTest.kt` - Unit test for Android preference resolution state.
 - `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt` - Unit test for server-backed Android repository mapping.
+- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt` - Unit test for Android song tab navigation, song filters, and history relocation policy.
 
 ## iOS: `ios/StelliveHubiOS`
 
@@ -352,6 +408,7 @@ This file maps the repository files that are not excluded by `.gitignore`. Ignor
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/LiveView.swift` - Live status screen.
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/MemberDetailView.swift` - Member detail screen.
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/SettingsView.swift` - Notification settings and preference controls.
+- `ios/StelliveHubiOS/StelliveHubiOS/Views/SongsView.swift` - Server-backed iOS song catalog screen that reuses existing grouped styling, toolbar behavior, and song filters.
 - `ios/StelliveHubiOS/StelliveHubiOSTests/ChzzkBackendBoundaryTests.swift` - Tests iOS CHZZK backend-boundary assumptions.
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubAPIClientTests.swift` - Tests iOS backend API client mapping.
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubCalendarPolicyTests.swift` - Tests calendar display policy.
@@ -361,3 +418,4 @@ This file maps the repository files that are not excluded by `.gitignore`. Ignor
 - `ios/StelliveHubiOS/StelliveHubiOSTests/NotificationLoadReductionPolicyTests.swift` - Tests notification load-reduction policy on iOS.
 - `ios/StelliveHubiOS/StelliveHubiOSTests/PreferenceStateTests.swift` - Tests preference state modeling.
 - `ios/StelliveHubiOS/StelliveHubiOSTests/ServerLiveStatusMappingTests.swift` - Tests backend live-status DTO mapping.
+- `ios/StelliveHubiOS/StelliveHubiOSTests/SongUiPolicyTests.swift` - Tests iOS song tab navigation, song filters, and history relocation policy.

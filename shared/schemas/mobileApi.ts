@@ -3,7 +3,11 @@ import type {
   HubCalendarWidgetSnapshot,
   HubEventsSummary,
   LiveStatus,
+  MusicCatalogItem,
   Member,
+  SongCatalogItem,
+  SongFacetSummary,
+  SongFilterCount,
   UserNotificationPreference,
 } from "./domain.js";
 
@@ -38,6 +42,52 @@ export interface BootstrapResponse {
   liveStatus: LiveStatus[];
   hubEventsSummary: HubEventsSummary;
   hubCalendarWidgetSnapshot?: HubCalendarWidgetSnapshot;
+  serverTime: string;
+}
+
+export interface SongDisplaySettings {
+  summaryCards: {
+    songs: boolean;
+    live: boolean;
+    hubEvents: boolean;
+    home: boolean;
+  };
+}
+
+export interface SongFacetsResponse {
+  summary: SongFacetSummary;
+  generationFilters: SongFilterCount[];
+  memberFilters: SongFilterCount[];
+  typeFilters: SongFilterCount[];
+  displaySettings: SongDisplaySettings;
+  serverTime: string;
+}
+
+export interface SongListResponse {
+  items: SongCatalogItem[];
+  nextCursor?: string | null;
+  serverTime: string;
+}
+
+export interface MusicListResponse {
+  items: MusicCatalogItem[];
+  nextCursor?: string | null;
+  serverTime: string;
+}
+
+export interface MusicDetailResponse {
+  item: MusicCatalogItem;
+  serverTime: string;
+}
+
+export interface MusicMemberMusicResponse {
+  member: {
+    id: string;
+    nameKo: string;
+    nameEn: string;
+  };
+  items: MusicCatalogItem[];
+  nextCursor?: string | null;
   serverTime: string;
 }
 

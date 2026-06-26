@@ -4,6 +4,8 @@ import ChzzkApiClient from "./adapters/chzzk/chzzkApiClient.js";
 import ChzzkOpenApiAdapter from "./adapters/chzzk/chzzkOpenApiAdapter.js";
 import { CatalogService } from "./catalog/catalog.js";
 import ChzzkEventIngestor from "./events/chzzkEventIngestor.js";
+import YoutubeWebSubSubscriptionService from "./adapters/youtube/youtubeWebSubSubscriptionService.js";
+import YoutubeDataApiClient from "./adapters/youtube/youtubeDataApiClient.js";
 import { LiveStatusRepository } from "./repositories/liveStatusRepository.js";
 import { PlatformApiStateRepository } from "./repositories/platformApiStateRepository.js";
 import sensible from "@fastify/sensible";
@@ -21,13 +23,23 @@ import { createFcmClient } from "./push/fcmClient.js";
 import { FcmPushSender } from "./push/pushSender.js";
 import { DeliveryAttemptRepository } from "./repositories/deliveryAttemptRepository.js";
 import DeviceRepository from "./repositories/deviceRepository.js";
+import { PrismaMusicRepository, PrismaMusicSyncRunRepository } from "./repositories/musicRepository.js";
 import PlatformEventRepository from "./repositories/platformEventRepository.js";
 import PreferenceRepository from "./repositories/preferenceRepository.js";
+import { PrismaSongRepository } from "./repositories/songRepository.js";
+import { InMemoryMusicSyncLock } from "./music/musicLocks.js";
+import { MusicSyncService } from "./music/musicSyncService.js";
+import { OfficialStelliveMusicSyncService } from "./music/officialStelliveMusicSyncService.js";
+import { officialStelliveMusicSourcePlaylistSeeds, TARGET_MUSIC_MEMBER_IDS } from "./music/musicSourcePlaylists.js";
+import { WebhookSubscriptionRepository } from "./repositories/webhookSubscriptionRepository.js";
+import SongIngestionService from "./songs/songIngestionService.js";
+import SongBackfillService from "./songs/songBackfillService.js";
 import { type AdminHubEventRouteDependencies, registerAdminHubEventRoutes } from "./routes/adminHubEventRoutes.js";
 import { registerAdminRoutes } from "./routes/adminRoutes.js";
 import registerChzzkAuthRoutes, { type ChzzkAuthRouteOptions } from "./routes/chzzkAuthRoutes.js";
 import { type InternalRouteDependencies, registerInternalRoutes } from "./routes/internalRoutes.js";
 import { type AppRouteDependencies, registerRoutes } from "./routes/routes.js";
+import { registerWebhookRoutes } from "./routes/webhookRoutes.js";
 
 type EnvOverrides = Record<string, string | boolean | number | undefined>;
 
@@ -58,6 +70,26 @@ type BootstrapDevicePort = Pick<DeviceRepository, "getDevice">;
 type BootstrapPreferencePort = Pick<PreferenceRepository, "listForDevice">;
 type BootstrapLiveStatusPort = Pick<LiveStatusRepository, "listDiagnostics">;
 type BootstrapHubEventsPort = Pick<HubEventRepository, "summary">;
+
+export function createMusicMemberUpsertInputs(catalog = new CatalogService()) {
+  const targetIds = new Set<string>(TARGET_MUSIC_MEMBER_IDS);
+  return catalog.getMembers()
+    .filter((member) => targetIds.has(member.id))
+    .map((member) => ({
+      id: member.id,
+      nameKo: member.koreanName,
+      nameEn: member.englishName,
+      aliases: [
+        member.koreanName,
+        member.englishName,
+        member.platforms?.youtubeHandle,
+        member.platforms?.youtubeChannelId,
+      ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+      generationOrGroup: member.generationId,
+      isGraduated: false,
+      youtubeChannelId: member.platforms?.youtubeChannelId ?? null,
+    }));
+}
 
 function createDefaultNotificationWorker(env: AppEnv): NotificationWorker {
   const fcmClient = createFcmClient({
@@ -106,6 +138,168 @@ function createDefaultChzzkLiveAdapter(
       liveStatusRepository,
       ingestEvent: (event) => ingestor.ingest(event)
     })
+  };
+}
+
+function createDefaultSongIngestionService(): SongIngestionService {
+  const catalog = new CatalogService();
+  const songs = new PrismaSongRepository();
+
+  return new SongIngestionService({
+    catalog: {
+      findByYoutubeChannelId(channelId) {
+        const member = catalog.getMembers().find((candidate) => candidate.platforms?.youtubeChannelId === channelId);
+        if (!member) return undefined;
+        return {
+          memberId: member.id,
+          memberName: member.koreanName,
+          generationId: member.generationId,
+          generationName: member.generationName,
+        };
+      },
+    },
+    songs,
+  });
+}
+
+function createDefaultYoutubeSubscriptionScheduler(
+  env: AppEnv,
+  dependencies: Partial<InternalRouteDependencies> | undefined,
+  fetchImpl?: typeof fetch,
+): Pick<InternalRouteDependencies, "youtubeSubscriptionScheduler"> {
+  if (dependencies?.youtubeSubscriptionScheduler) return {};
+  if (!env.YOUTUBE_WEBSUB_CALLBACK_URL || !env.YOUTUBE_WEBSUB_VERIFY_TOKEN) return {};
+
+  const catalog = new CatalogService();
+  const targets = catalog
+    .getMembers()
+    .filter((member) => member.generationId === "gen1" || member.generationId === "gen2" || member.generationId === "gen3")
+    .flatMap((member) => {
+      const channelId = member.platforms?.youtubeChannelId;
+      if (!channelId) return [];
+      return [{
+        targetId: member.id,
+        channelId,
+        topicUrl: `https://www.youtube.com/xml/feeds/videos.xml?channel_id=${channelId}`,
+      }];
+    });
+
+  return {
+    youtubeSubscriptionScheduler: new YoutubeWebSubSubscriptionService({
+      callbackUrl: env.YOUTUBE_WEBSUB_CALLBACK_URL,
+      verifyToken: env.YOUTUBE_WEBSUB_VERIFY_TOKEN,
+      targets,
+      subscriptions: new WebhookSubscriptionRepository(),
+      fetch: fetchImpl,
+    }),
+  };
+}
+
+function createDefaultYoutubeSongBackfillScheduler(
+  env: AppEnv,
+  dependencies: Partial<InternalRouteDependencies> | undefined,
+  fetchImpl?: typeof fetch,
+): Pick<InternalRouteDependencies, "youtubeSongBackfillScheduler"> {
+  if (dependencies?.youtubeSongBackfillScheduler) return {};
+  if (!env.YOUTUBE_API_KEY) return {};
+
+  const catalog = new CatalogService();
+  const targets = catalog
+    .getMembers()
+    .filter((member) => member.generationId === "gen1" || member.generationId === "gen2" || member.generationId === "gen3")
+    .flatMap((member) => {
+      const channelId = member.platforms?.youtubeChannelId;
+      if (!channelId) return [];
+      return [{ memberId: member.id, channelId }];
+    });
+
+  return {
+    youtubeSongBackfillScheduler: new SongBackfillService({
+      youtube: new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl }),
+      ingestion: createDefaultSongIngestionService(),
+      targets,
+      maxPages: env.YOUTUBE_SONG_BACKFILL_MAX_PAGES,
+      maxChannels: env.YOUTUBE_SONG_RECONCILE_MAX_CHANNELS,
+    }),
+  };
+}
+
+function createDefaultMusicSyncService(
+  env: AppEnv,
+  dependencies: Partial<InternalRouteDependencies> | undefined,
+  fetchImpl?: typeof fetch,
+): Pick<InternalRouteDependencies, "musicSync"> {
+  if (dependencies?.musicSync) return {};
+  if (!env.MUSIC_SYNC_ENABLED || !env.YOUTUBE_API_KEY) return {};
+  const catalog = new CatalogService();
+  const members = catalog.getMembers().map((member) => ({
+    id: member.id,
+    aliases: [
+      member.koreanName,
+      member.englishName,
+      member.platforms?.youtubeHandle,
+      member.platforms?.youtubeChannelId,
+    ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+  }));
+  const repository = new PrismaMusicRepository();
+  const syncRuns = new PrismaMusicSyncRunRepository();
+  const youtube = new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl });
+  const locks = new InMemoryMusicSyncLock();
+  const syncCatalogMusicMembers = async () => {
+    for (const input of createMusicMemberUpsertInputs(catalog)) {
+      await repository.upsertMember(input);
+    }
+  };
+  const service = new MusicSyncService({
+    repository: repository as never,
+    syncRuns,
+    youtube,
+    locks,
+    members,
+    lightMaxPages: env.MUSIC_LIGHT_SYNC_MAX_PAGES,
+    lockTtlMs: env.MUSIC_SYNC_LOCK_SECONDS * 1_000,
+  });
+  const officialService = new OfficialStelliveMusicSyncService({
+    repository: repository as never,
+    syncRuns,
+    youtube,
+    locks,
+    members,
+    sourceSeeds: officialStelliveMusicSourcePlaylistSeeds.map((seed) => {
+      if (seed.type === "cover") return { ...seed, youtubePlaylistId: env.STELLIVE_MUSIC_COVER_PLAYLIST_ID };
+      if (seed.type === "original") return { ...seed, youtubePlaylistId: env.STELLIVE_MUSIC_ORIGINAL_PLAYLIST_ID };
+      return seed;
+    }),
+    lightMaxPages: env.MUSIC_LIGHT_SYNC_MAX_PAGES,
+    lockTtlMs: env.MUSIC_SYNC_LOCK_SECONDS * 1_000,
+  });
+  return {
+    musicSync: {
+      syncAllMusic: async (mode) => {
+        await syncCatalogMusicMembers();
+        return service.syncAllMusic(mode === "light" ? "light" : "full");
+      },
+      syncOfficialStelliveMusicPlaylists: async (mode) => {
+        await syncCatalogMusicMembers();
+        return officialService.syncOfficialStelliveMusicPlaylists(mode);
+      },
+      listReviewCandidates: ({ limit } = {}) => repository.listReviewCandidates?.({ limit }) ?? Promise.resolve([]),
+      upsertOverride: async (videoId, input) => {
+        const item = await repository.getMusicItemByVideoId(videoId) as { id?: string; youtubeVideoId?: string } | null;
+        if (!item?.id) return { error: "music_item_not_found", videoId };
+        return repository.upsertMusicItemOverride({
+          musicItemId: item.id,
+          youtubeVideoId: item.youtubeVideoId ?? videoId,
+          forcedType: typeof input.forcedType === "string" ? input.forcedType : null,
+          forcedMemberIds: Array.isArray(input.forcedMemberIds) ? input.forcedMemberIds.filter((value): value is string => typeof value === "string") : null,
+          forceExcluded: input.forceExcluded === true,
+          exclusionReason: typeof input.exclusionReason === "string" ? input.exclusionReason : null,
+          note: typeof input.note === "string" ? input.note : null,
+        });
+      },
+      listSyncRuns: (limit) => syncRuns.listRecent(limit ?? 25),
+      estimateQuota: () => ({ dailyEstimate: 300, officialPlaylists: 2 }),
+    },
   };
 }
 
@@ -218,19 +412,30 @@ export async function buildApp(options: BuildAppOptions = {}) {
   }
 
   await registerRoutes(app, { dependencies: appRouteDependencies });
+  await registerWebhookRoutes(app, {
+    env,
+    subscriptions: new WebhookSubscriptionRepository(),
+    songIngestion: createDefaultSongIngestionService(),
+  });
   await registerChzzkAuthRoutes(app, {
     env,
     ...options.chzzkAuthRoutes?.dependencies
   });
   const internalRouteDependencies: Partial<InternalRouteDependencies> = options.internalRoutes?.dependencies
     ? {
-        ...createDefaultChzzkLiveAdapter(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
-        ...options.internalRoutes.dependencies
-      }
+      ...createDefaultChzzkLiveAdapter(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
+      ...createDefaultYoutubeSubscriptionScheduler(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
+      ...createDefaultYoutubeSongBackfillScheduler(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
+      ...createDefaultMusicSyncService(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
+      ...options.internalRoutes.dependencies
+    }
     : {
-        notificationWorker: createDefaultNotificationWorker(env),
-        ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch)
-      };
+      notificationWorker: createDefaultNotificationWorker(env),
+      ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch),
+      ...createDefaultYoutubeSubscriptionScheduler(env, undefined, options.chzzkLiveApiFetch),
+      ...createDefaultYoutubeSongBackfillScheduler(env, undefined, options.chzzkLiveApiFetch),
+      ...createDefaultMusicSyncService(env, undefined, options.chzzkLiveApiFetch),
+    };
   await registerInternalRoutes(app, { env, dependencies: internalRouteDependencies });
   await registerAdminRoutes(app, { env });
   await registerAdminHubEventRoutes(app, { env, dependencies: options.adminHubEventRoutes?.dependencies });

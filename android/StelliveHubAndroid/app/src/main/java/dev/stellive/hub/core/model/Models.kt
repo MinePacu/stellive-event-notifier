@@ -8,6 +8,16 @@ enum class DeliveryMode { STANDARD, REALTIME_BEST_EFFORT }
 enum class TapAction { OPEN_APP, OPEN_PLATFORM }
 enum class AppearanceMode { SYSTEM, LIGHT, DARK }
 
+enum class SongType(val apiValue: String, val displayName: String) {
+    ORIGINAL("original", "오리지널"),
+    COVER("cover", "커버");
+
+    companion object {
+        fun fromApiValue(value: String): SongType? =
+            entries.firstOrNull { it.apiValue == value }
+    }
+}
+
 enum class NotificationPlatform(val displayName: String) {
     CHZZK("CHZZK"),
     YOUTUBE("YouTube"),
@@ -221,6 +231,67 @@ data class HubCalendarWidgetSnapshot(
     val timezone: String,
     val entries: List<HubCalendarEntry>,
     val staleAfter: Instant
+)
+
+data class SongThumbnail(
+    val url: String,
+    val width: Int,
+    val height: Int,
+)
+
+data class SongMemberSummary(
+    val id: String,
+    val nameKo: String,
+    val nameEn: String? = null,
+    val role: String? = null,
+)
+
+data class SongCatalogItem(
+    val id: String,
+    val youtubeVideoId: String,
+    val title: String,
+    val type: SongType,
+    val memberId: String? = null,
+    val memberName: String? = null,
+    val generationId: String? = null,
+    val generationName: String? = null,
+    val sourceUrl: String? = null,
+    val thumbnail: SongThumbnail? = null,
+    val publishedAt: Instant = Instant.EPOCH,
+    val thumbnailUrl: String? = thumbnail?.url,
+    val duration: String? = null,
+    val durationSeconds: Int? = null,
+    val isInstrumental: Boolean = false,
+    val specialFlags: List<String> = emptyList(),
+    val classificationStatus: String? = null,
+    val members: List<SongMemberSummary> = emptyList(),
+    val youtubeUrl: String = sourceUrl ?: "https://www.youtube.com/watch?v=$youtubeVideoId",
+    val sourcePlaylistId: String? = null,
+)
+
+data class SongFilterCount(
+    val id: String,
+    val label: String,
+    val generationId: String? = null,
+    val count: Int,
+)
+
+data class SongFacetSummary(
+    val total: Int,
+    val original: Int,
+    val cover: Int,
+)
+
+data class SongFacets(
+    val summary: SongFacetSummary,
+    val generationFilters: List<SongFilterCount>,
+    val memberFilters: List<SongFilterCount>,
+    val typeFilters: List<SongFilterCount>,
+)
+
+data class SongListResult(
+    val items: List<SongCatalogItem>,
+    val nextCursor: String? = null,
 )
 
 data class GenerationFilter(

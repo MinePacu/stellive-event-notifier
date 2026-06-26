@@ -42,6 +42,16 @@ class HubEventDetailFormattingTest {
     }
 
     @Test
+    fun linkActionLabelFollowsCategory() {
+        assertEquals("구매 링크", HubEventDetailFormatting.linkActionLabel(HubEventCategory.ONLINE_GOODS))
+        assertEquals("구매 링크", HubEventDetailFormatting.linkActionLabel(HubEventCategory.ONLINE_COLLAB))
+        assertEquals("티켓 링크", HubEventDetailFormatting.linkActionLabel(HubEventCategory.OFFLINE_CONCERT))
+        assertEquals("티켓 링크", HubEventDetailFormatting.linkActionLabel(HubEventCategory.TICKETING))
+        assertEquals("예약 링크", HubEventDetailFormatting.linkActionLabel(HubEventCategory.OFFLINE_COLLAB))
+        assertEquals("예약 링크", HubEventDetailFormatting.linkActionLabel(HubEventCategory.OFFLINE_POPUP))
+    }
+
+    @Test
     fun periodUsesStartAndEndWhenBothExist() {
         val period = HubEventDetailFormatting.periodText(sampleEvent(), zone)
 

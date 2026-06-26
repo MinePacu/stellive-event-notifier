@@ -1,5 +1,70 @@
 # AI Handoff
 
+## Official Stellive Music Playlist Sync Update
+
+- Official music catalog sync now uses only COVER `PLLjd981H8qSN9PQ8-X6wINqBF1GjGxusy` and ORIGINAL `PLLjd981H8qSMGC4Nir0hD2Gj9n9PDUoHX`.
+- Added `MusicItemSourcePlaylist` and `MusicItemOverride` schema support for duplicate source preservation and manual override priority.
+- Added `POST /v1/internal/schedulers/music/sync-official-playlists` plus internal review, override, sync-log, and quota-estimate routes.
+- Public music defaults hide unavailable, excluded, graduated, and instrumental items unless include flags are supplied.
+- Focused verification for this slice: `musicRepository musicSourcePlaylists musicYoutubeDataApiClient youtubeDataApiClient musicClassifier musicMemberMatcher musicOfficialPlaylistSyncService musicSyncService musicRoutes musicInternalRoutes musicAppWiring`, `prisma:generate`, and backend build.
+
+## Stellive Music YouTube Sync MVP Status
+
+Implemented backend MVP for Stellive music catalog sync and public read APIs.
+
+Implemented:
+- Shared music DTO/type contracts and OpenAPI music route schemas.
+- Prisma models for `MusicMember`, `SourcePlaylist`, `MusicItem`, `MusicItemMember`, and `MusicSyncRun`.
+- Repository ports for music members, source playlists, music items, member links, missing marking, and sync run lifecycle.
+- 10 active target member allowlist; `gangzi`, `stellive-official`, `gen4-placeholder`, and Former members excluded.
+- Backend-only YouTube Data API client methods for `playlistItems.list` pagination and `videos.list` 50-id chunking.
+- Source-playlist-first classification and alias-based N:M member matching.
+- Light/full music sync service with per-source locks, quota failure handling, conservative missing marking, and source-level failure isolation.
+- Memory response cache with stale-while-revalidate and per-key stampede prevention.
+- Public cached routes: `GET /v1/music`, `GET /v1/music/:id`, `GET /v1/members/:id/music`.
+- Protected manual sync route: `POST /v1/internal/schedulers/music/sync`.
+- Music env defaults in `env.ts` and `.env.example`; sync dependency created only when `MUSIC_SYNC_ENABLED=true` and `YOUTUBE_API_KEY` exists.
+- Reconciliation service for future official MUSIC source comparison and optional WebSub music notification hook.
+
+Policy notes:
+- Clients must never call YouTube directly or receive `YOUTUBE_API_KEY`.
+- Default sync does not use `search.list`.
+- Source playlist IDs are not guessed in code; configure through DB/admin seed.
+- Raw YouTube payloads, image binaries, official logos, fan art, production tokens, and credentials were not added.
+- Public API reads DB/cache only; user requests do not call YouTube.
+
+Focused verification run:
+- `rtk npm test -- musicContract musicRepository`
+- `rtk npm test -- musicSourcePlaylists`
+- `rtk npm test -- musicYoutubeDataApiClient youtubeDataApiClient`
+- `rtk npm test -- musicClassifier musicMemberMatcher`
+- `rtk npm test -- musicSyncService musicRepository`
+- `rtk npm test -- responseCache`
+- `rtk npm test -- musicRoutes`
+- `rtk npm test -- musicInternalRoutes adminInternalRoutes`
+- `rtk npm test -- musicAppWiring musicRepository musicInternalRoutes musicRoutes chzzkAuthRoutes`
+- `rtk npm test -- musicReconciliationService youtubeWebSubRoutes`
+- `rtk npm run build`
+
+Follow-ups:
+- Apply Prisma migration/db push before enabling `MUSIC_SYNC_ENABLED` against a real database.
+- Insert real `source_playlists.youtubePlaylistId` values through admin/DB configuration after verification; do not hardcode guessed IDs.
+- Add scheduler/cron process wrappers for 10-minute light sync, hourly full sync, and daily reconciliation when deployment scheduler choice is finalized.
+- Wire optional WebSub music notification hook to enqueue targeted light sync once a durable queue exists.
+
+## Song Page YouTube WebSub Status
+
+- Song-page backend now exposes `GET /v1/webhooks/youtube` for WebSub verification and `POST /v1/webhooks/youtube` for Atom upload receipt through `backend/stellive-hub-api/src/routes/webhookRoutes.ts`.
+- Verification enforces `YOUTUBE_WEBSUB_VERIFY_TOKEN`, returns `hub.challenge` as plain text, derives `channel_id` from `hub.topic`, and records normalized subscription state through `WebhookSubscriptionRepository`.
+- Atom receipt parses only required upload fields via `youtubeAtomParser.ts` and forwards normalized candidates into `SongIngestionService`; no raw Atom payload persistence was added.
+- Internal scheduler `POST /v1/internal/schedulers/youtube/renew-subscriptions` now delegates to `YoutubeWebSubSubscriptionService` when `YOUTUBE_WEBSUB_CALLBACK_URL` and `YOUTUBE_WEBSUB_VERIFY_TOKEN` are configured.
+- Default scheduler targets are limited to `gen1`, `gen2`, and `gen3` members with `youtubeChannelId`; `gamja`, `official`, and `gen4-upcoming` are not subscribed for the song page.
+- App composition now wires default song ingestion with `PrismaSongRepository` for WebSub receipt handling and stores renewal/verification state in `WebhookSubscription`.
+
+Verification completed:
+- `rtk npm test -- youtubeWebSubRoutes youtubeWebSubSubscriptionService youtubeWebSubInternalRoutes`
+- `rtk npm run build`
+
 ## CHZZK Live API Current Status
 
 - Backend CHZZK live polling uses the official Client-authenticated live-list flow: `GET /open/v1/lives` with `Client-Id` and `Client-Secret` headers.
@@ -243,3 +308,74 @@ Plan: `docs/superpowers/plans/2026-06-21-calendar-feed-canonical-event-dedupe-co
 ## Android Special-Day Feed Cards
 
 Plan: `docs/superpowers/plans/2026-06-21-android-special-day-feed-cards-code-plan.md`. Root cause: Android Goods/Events feed resolved every calendar row through canonical `/v1/hub-events` IDs, so `member_birthday` and `generation_anniversary` rows such as `birthday:sakihane-huya` were dropped. Fix: `CalendarUiPolicy.feedRenderRowsForMonth()` keeps special-day rows without canonical `HubEvent` and `MainActivity.renderServerGoodsEvents()` renders them with `localCalendarEntryRow()`. Verification: RED `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest` failed before implementation because `feedRenderRowsForMonth` did not exist; GREEN focused `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest` passed after implementation; `rtk git diff --check` passed. `assembleDebug`, adb install, backend tests, and iOS tests were not run because this plan marked them as conditional or out of scope.
+
+## YouTube Song Page Data API Backfill Slice
+
+Plan documents: `docs/superpowers/plans/2026-06-22-youtube-song-page-ingestion-plan.md` and `docs/superpowers/plans/2026-06-22-song-page-code-design-application-plan.md`.
+
+Implemented:
+- `backend/stellive-hub-api/src/adapters/youtube/youtubeDataApiClient.ts` normalizes official YouTube Data API `channels.list`, `playlistItems.list`, and `videos.list` responses into minimal typed data. It sends `If-None-Match` when an ETag is available, treats `304` as not modified, caps playlist pages, and batches explicit video detail IDs by 50.
+- `backend/stellive-hub-api/src/songs/songBackfillService.ts` runs admin/internal-triggered backfill and capped reconciliation over configured generation member YouTube targets, then delegates each normalized upload to `SongIngestionService`.
+- `backend/stellive-hub-api/src/routes/internalRoutes.ts` now exposes `POST /v1/internal/schedulers/youtube/song-backfill` and `POST /v1/internal/schedulers/youtube/song-reconcile`, gated by `YOUTUBE_DATA_API_FALLBACK_ENABLED`.
+- `backend/stellive-hub-api/src/app.ts` wires the default Data API client/backfill scheduler when `YOUTUBE_API_KEY` is configured. Target members remain limited to `gen1`, `gen2`, and `gen3` entries with catalog YouTube channel IDs.
+- `.env.example` and `env.ts` include `YOUTUBE_SONG_BACKFILL_MAX_PAGES=1` and `YOUTUBE_SONG_RECONCILE_MAX_CHANNELS=10`.
+
+Verification:
+- RED: `rtk npm test -- youtubeDataApiClient songBackfillService youtubeSongBackfillInternalRoutes` failed because the client/service files were missing and the internal route returned 404.
+- GREEN: `rtk npm test -- youtubeDataApiClient songBackfillService youtubeSongBackfillInternalRoutes` passed.
+- Focused final GREEN: `rtk npm test -- youtubeDataApiClient songBackfillService youtubeSongBackfillInternalRoutes youtubeWebSubInternalRoutes` passed.
+- Backend build GREEN: `rtk npm run build` passed from `backend/stellive-hub-api`.
+- Diff hygiene GREEN: `rtk git diff --check` passed.
+- Policy grep matched existing policy references, Android drawable path entries, and this slice's explicit no-raw/no-secret notes only.
+
+Policy notes:
+- Mobile reads still use backend `/v1/songs`; mobile apps do not call YouTube directly.
+- No raw YouTube API responses are persisted by this slice.
+- No secrets, production tokens, profile images, official logos, fan art, copied media assets, Former members, Gangzi generation membership, or official YouTube live events were added.
+
+## Android Song Page API/UI Slice
+
+Plan documents: `docs/superpowers/plans/2026-06-22-song-page-code-design-application-plan.md`, `docs/superpowers/plans/2026-06-22-song-page-ui-api-communication-plan.md`, and `docs/mockups/song-page-mobile-preview.html`.
+
+Implemented:
+- Android song models and DTOs were added in `Models.kt` and `HubApiModels.kt` for song list items, thumbnails, filter counts, facet summaries, and list/facet responses.
+- `HubApi.kt` and `HubApiClient.kt` now expose backend-only `GET /v1/songs` and `GET /v1/songs/facets`; Android still does not call YouTube directly.
+- `ServerHubRepository.kt` maps song list/facet DTOs into app models and keeps fallback/cache behavior.
+- `MockHubRepository.kt` includes tiny app-owned song fixtures for offline/fallback rendering.
+- Android bottom navigation replaces `기록` with `노래`; `알림 기록` remains reachable from settings.
+- `MainActivity.kt` adds a minimal song screen using the existing Android title bar, existing bottom navigation shell, existing card helper, and existing color resources. No new palette or proprietary UI chrome was added.
+
+Verification:
+- RED: `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest --tests dev.stellive.hub.ServerHubRepositoryTest` failed after escalation because song DTOs/repository APIs/policy helpers did not exist.
+- GREEN: `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest --tests dev.stellive.hub.ServerHubRepositoryTest --tests dev.stellive.hub.MainUiPolicyTest --tests dev.stellive.hub.HubApiClientTest` passed after implementation.
+
+Policy notes:
+- Song generation filters are only `all`, `gen1`, `gen2`, and `gen3`; `gamja` and `official` are not song page generation filters.
+- Existing Android title bar and color/card resources are reused.
+- No Former members, official YouTube live events, secrets, production tokens, profile image binaries, official logos, fan art, screenshots, copied media assets, login-cookie scraping, or direct YouTube mobile calls were added.
+
+## iOS Song Page API/UI Slice And Final Focused Verification
+
+Plan documents: `docs/superpowers/plans/2026-06-22-song-page-code-design-application-plan.md`, `docs/superpowers/plans/2026-06-22-song-page-ui-api-communication-plan.md`, and `docs/mockups/song-page-mobile-preview.html`.
+
+Implemented:
+- iOS song models and API client methods were added for backend-only `GET /v1/songs` and `GET /v1/songs/facets`.
+- `ServerHubStore` and `MockHubStore` expose song list/facet data with fallback behavior.
+- iOS bottom navigation now replaces `기록` with `노래`; `알림 기록` remains reachable from settings.
+- `SongsView.swift` renders a minimal song catalog screen using the existing iPhone navigation/toolbar behavior, existing grouped background/card colors, and backend-backed generation/type filters.
+- The Xcode project now includes `SongsView.swift` and `SongUiPolicyTests.swift`.
+
+Verification:
+- iOS focused GREEN: `rtk xcodebuild test -project ios/StelliveHubiOS/StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination "id=89B0B46A-8515-47E7-A122-681498F16C66" -only-testing:StelliveHubiOSTests/SongUiPolicyTests` passed after using the specific simulator ID because two `iPhone 17 Pro` simulators were present.
+- iOS focused GREEN: `rtk xcodebuild test -project ios/StelliveHubiOS/StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination "id=89B0B46A-8515-47E7-A122-681498F16C66" -only-testing:StelliveHubiOSTests/HubAPIClientTests -only-testing:StelliveHubiOSTests/PreferenceStateTests -only-testing:StelliveHubiOSTests/SongUiPolicyTests` passed.
+- Backend focused GREEN: `rtk npm test -- mobileSongsContract songRoutes songRepository songClassifier songIngestionService youtubeAtomParser youtubeDataApiClient songBackfillService youtubeSongBackfillInternalRoutes youtubeWebSubRoutes youtubeWebSubInternalRoutes youtubeWebSubSubscriptionService` passed, 12 files / 33 tests.
+- Backend build GREEN: `rtk npm run build` passed from `backend/stellive-hub-api`.
+- Android focused GREEN: `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest --tests dev.stellive.hub.ServerHubRepositoryTest --tests dev.stellive.hub.MainUiPolicyTest --tests dev.stellive.hub.HubApiClientTest` passed after escalated Gradle cache access.
+- Diff hygiene GREEN: `rtk git diff --check` passed.
+- Targeted policy grep across changed/shared/backend/mobile/docs paths matched existing policy references, explicit exclusions, admin-cookie/auth tests, and image-field guard tests only.
+
+Policy notes:
+- Mobile apps continue to call only the backend song API; neither Android nor iOS calls YouTube directly.
+- Song generation filters are only `all`, `gen1`, `gen2`, and `gen3`; `gamja`, `official`, and `gen4-upcoming` are excluded from song page filters.
+- Existing Android/iPhone title bars, card colors, and background colors are reused.
+- No Former members, official YouTube live events, secrets, production tokens, profile image binaries, official logos, fan art, screenshots, copied media assets, login-cookie scraping, or direct YouTube mobile calls were added.
