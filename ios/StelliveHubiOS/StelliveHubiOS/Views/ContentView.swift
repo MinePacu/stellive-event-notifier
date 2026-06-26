@@ -28,7 +28,7 @@ struct IOSPrimaryNavigationPolicy {
     static let bottomTabs: [BottomTab] = [
         .init(id: "home", title: "홈", systemImage: "house"),
         .init(id: "live", title: "라이브", systemImage: "dot.radiowaves.left.and.right"),
-        .init(id: "history", title: "기록", systemImage: "clock"),
+        .init(id: "songs", title: "노래", systemImage: "music.note.list"),
         .init(id: "hubEvents", title: "굿즈/행사", systemImage: "bag")
     ]
 
@@ -42,7 +42,7 @@ struct IOSPrimaryNavigationPolicy {
         suppressesPrimaryButtonWithinSettingsFlow: true
     )
 
-    static let titlelessPrimaryScreens: Set<String> = ["home", "live", "hubEvents"]
+    static let titlelessPrimaryScreens: Set<String> = ["home", "live", "songs", "hubEvents"]
 }
 
 struct ContentView: View {
@@ -57,9 +57,9 @@ struct ContentView: View {
             LiveView()
                 .tabItem { Label(IOSPrimaryNavigationPolicy.bottomTabs[1].title, systemImage: IOSPrimaryNavigationPolicy.bottomTabs[1].systemImage) }
                 .tag("live")
-            HistoryView()
+            SongsView()
                 .tabItem { Label(IOSPrimaryNavigationPolicy.bottomTabs[2].title, systemImage: IOSPrimaryNavigationPolicy.bottomTabs[2].systemImage) }
-                .tag("history")
+                .tag("songs")
             HubEventsTabView(deepLinkedEventId: $pendingHubEventId)
                 .tabItem { Label(IOSPrimaryNavigationPolicy.bottomTabs[3].title, systemImage: IOSPrimaryNavigationPolicy.bottomTabs[3].systemImage) }
                 .tag("hubEvents")

@@ -10,7 +10,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown", "rightsNotes": "Use app-owned placeholder unless an official API returns a displayable URL." },
-    "platforms": { "chzzkChannelId": "45e71a76e949e16a34764deb962f9d9f", "youtubeHandle": "@ayatsunoyuni", "xHandle": "AyatsunoYuni", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "45e71a76e949e16a34764deb962f9d9f", "youtubeChannelId": "UClbYIn9LDbbFZ9w2shX3K0g", "youtubeHandle": "@ayatsunoyuni", "xHandle": "AyatsunoYuni", "externalUrls": {} }
   },
   {
     "id": "sakihane-huya",
@@ -36,7 +36,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "b044e3a3b9259246bc92e863e7d3f3b8", "xHandle": "verify_required", "youtubeHandle": "verify_required", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "b044e3a3b9259246bc92e863e7d3f3b8", "youtubeChannelId": "UC1afpiIuBDcjYlmruAa0HiA", "xHandle": "verify_required", "youtubeHandle": "@ShirayukiHina", "externalUrls": {} }
   },
   {
     "id": "neneko-mashiro",
@@ -49,7 +49,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "4515b179f86b67b4981e16190817c580", "xHandle": "verify_required", "youtubeHandle": "verify_required", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "4515b179f86b67b4981e16190817c580", "youtubeChannelId": "UCnQt1xFonbwyexeHfYe6VaA", "xHandle": "verify_required", "youtubeHandle": "@NenekoMashiro", "externalUrls": {} }
   },
   {
     "id": "akane-lize",
@@ -62,7 +62,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "4325b1d5bbc321fad3042306646e2e50", "xHandle": "verify_required", "youtubeHandle": "verify_required", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "4325b1d5bbc321fad3042306646e2e50", "youtubeChannelId": "UC7-m6jQLinZQWIbwm9W-1iw", "xHandle": "verify_required", "youtubeHandle": "@AkaneLize", "externalUrls": {} }
   },
   {
     "id": "arahashi-tabi",
@@ -75,7 +75,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "a6c4ddb09cdb160478996007bff35296", "xHandle": "verify_required", "youtubeHandle": "verify_required", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "a6c4ddb09cdb160478996007bff35296", "youtubeChannelId": "UCAHVQ44O81aehLWfy9O6Elw", "xHandle": "verify_required", "youtubeHandle": "@ArahashiTabi", "externalUrls": {} }
   },
   {
     "id": "tenko-shibuki",
@@ -174,4 +174,3 @@
     "supportedEventTypes": []
   }
 ]
-

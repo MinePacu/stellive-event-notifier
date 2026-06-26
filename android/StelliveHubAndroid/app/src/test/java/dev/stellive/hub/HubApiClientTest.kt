@@ -9,10 +9,19 @@ import dev.stellive.hub.core.network.HubCalendarResponseDto
 import dev.stellive.hub.core.network.HubEventDto
 import dev.stellive.hub.core.network.HubEventsListResponseDto
 import dev.stellive.hub.core.network.HubNetworkResult
+import dev.stellive.hub.core.network.MusicCatalogItemDto
+import dev.stellive.hub.core.network.MusicListResponseDto
+import dev.stellive.hub.core.network.MusicMemberSummaryDto
 import dev.stellive.hub.core.network.MobileConfigDto
 import dev.stellive.hub.core.network.PreferencesResponseDto
 import dev.stellive.hub.core.network.RegisterDeviceRequestDto
 import dev.stellive.hub.core.network.RegisterDeviceResponseDto
+import dev.stellive.hub.core.network.SongCatalogItemDto
+import dev.stellive.hub.core.network.SongFacetSummaryDto
+import dev.stellive.hub.core.network.SongFacetsResponseDto
+import dev.stellive.hub.core.network.SongFilterCountDto
+import dev.stellive.hub.core.network.SongListResponseDto
+import dev.stellive.hub.core.network.SongThumbnailDto
 import dev.stellive.hub.core.network.UpdateDeviceTokenRequestDto
 import dev.stellive.hub.core.network.UpdateDeviceTokenResponseDto
 import dev.stellive.hub.core.network.UpdatePreferencesRequestDto
@@ -230,6 +239,87 @@ class HubApiClientTest {
         assertEquals("server-event", decoded?.days?.single()?.entries?.single()?.eventId)
     }
 
+    @Test
+    fun songClientReturnsListAndFacetResponses() = runTest {
+        val client = HubApiClient(
+            api = FakeHubApi(
+                songsResponse = SongListResponseDto(
+                    items = listOf(
+                        SongCatalogItemDto(
+                            id = "song-1",
+                            youtubeVideoId = "abc123",
+                            title = "별빛 항로",
+                            memberId = "akane-lize",
+                            memberName = "아카네 리제",
+                            generationId = "gen2",
+                            generationName = "2기생",
+                            type = "original",
+                            sourceUrl = "https://www.youtube.com/watch?v=abc123",
+                            thumbnail = SongThumbnailDto("https://i.ytimg.com/vi/abc123/mqdefault.jpg", 320, 180),
+                            publishedAt = "2026-06-21T12:00:00.000Z",
+                        ),
+                    ),
+                ),
+                songFacetsResponse = SongFacetsResponseDto(
+                    summary = SongFacetSummaryDto(total = 1, original = 1, cover = 0),
+                    generationFilters = listOf(SongFilterCountDto("gen2", "2기생", "gen2", 1)),
+                ),
+            ),
+        )
+
+        val list = client.songs(generationId = "gen2", type = "original")
+        val facets = client.songFacets(generationId = "gen2")
+
+        assertEquals("song-1", (list as HubNetworkResult.Success).value.items.single().id)
+        assertEquals(1, (facets as HubNetworkResult.Success).value.summary.original)
+    }
+
+    @Test
+    fun musicClientReturnsOfficialMusicResponse() = runTest {
+        val fakeApi = FakeHubApi(
+            musicResponse = MusicListResponseDto(
+                items = listOf(
+                    MusicCatalogItemDto(
+                        id = "video-1",
+                        youtubeVideoId = "video-1",
+                        title = "Collab Cover",
+                        type = "cover",
+                        publishedAt = "2026-06-23T00:00:00.000Z",
+                        thumbnailUrl = "https://img.youtube.com/vi/video-1/hqdefault.jpg",
+                        duration = "PT3M",
+                        durationSeconds = 180,
+                        members = listOf(
+                            MusicMemberSummaryDto(
+                                id = "yuzuha-riko",
+                                nameKo = "유즈하 리코",
+                                nameEn = "Yuzuha Riko",
+                                role = "MAIN",
+                            ),
+                            MusicMemberSummaryDto(
+                                id = "neneko-mashiro",
+                                nameKo = "네네코 마시로",
+                                nameEn = "Neneko Mashiro",
+                                role = "COLLAB",
+                            ),
+                        ),
+                        youtubeUrl = "https://www.youtube.com/watch?v=video-1",
+                        sourcePlaylistId = "playlist-cover",
+                    ),
+                ),
+            ),
+        )
+        val client = HubApiClient(api = fakeApi)
+
+        val result = client.music(type = "cover", limit = 30, sort = "publishedAt_desc")
+
+        assertTrue(result is HubNetworkResult.Success)
+        val response = (result as HubNetworkResult.Success).value
+        assertEquals("cover", fakeApi.lastMusicType)
+        assertEquals(30, fakeApi.lastMusicLimit)
+        assertEquals("publishedAt_desc", fakeApi.lastMusicSort)
+        assertEquals(listOf("유즈하 리코", "네네코 마시로"), response.items.single().members.map { it.nameKo })
+    }
+
     private class FakeHubApi(
         private val bootstrapResponse: BootstrapResponseDto? = null,
         private val hubEventsResponse: HubEventsListResponseDto = HubEventsListResponseDto(),
@@ -238,8 +328,17 @@ class HubApiClientTest {
             timezone = "Asia/Seoul",
             generatedAt = "2026-06-18T00:00:00.000Z",
         ),
+        private val songsResponse: SongListResponseDto = SongListResponseDto(),
+        private val songFacetsResponse: SongFacetsResponseDto = SongFacetsResponseDto(
+            summary = SongFacetSummaryDto(total = 0, original = 0, cover = 0),
+        ),
+        private val musicResponse: MusicListResponseDto = MusicListResponseDto(),
         private val failure: Throwable? = null,
     ) : HubApi {
+        var lastMusicType: String? = null
+        var lastMusicLimit: Int? = null
+        var lastMusicSort: String? = null
+
         override suspend fun bootstrap(
             deviceId: String?,
             platform: String,
@@ -311,6 +410,55 @@ class HubApiClientTest {
         ): HubCalendarResponseDto {
             failure?.let { throw it }
             return calendarResponse
+        }
+
+        override suspend fun songs(
+            generationId: String?,
+            memberId: String?,
+            type: String?,
+            q: String?,
+            cursor: String?,
+            limit: Int?,
+        ): SongListResponseDto {
+            failure?.let { throw it }
+            return songsResponse
+        }
+
+        override suspend fun songFacets(
+            generationId: String?,
+            memberId: String?,
+            type: String?,
+            q: String?,
+        ): SongFacetsResponseDto {
+            failure?.let { throw it }
+            return songFacetsResponse
+        }
+
+        override suspend fun music(
+            type: String?,
+            cursor: String?,
+            limit: Int?,
+            sort: String?,
+        ): MusicListResponseDto {
+            failure?.let { throw it }
+            lastMusicType = type
+            lastMusicLimit = limit
+            lastMusicSort = sort
+            return musicResponse
+        }
+
+        override suspend fun memberMusic(
+            memberId: String,
+            type: String?,
+            cursor: String?,
+            limit: Int?,
+            sort: String?,
+        ): MusicListResponseDto {
+            failure?.let { throw it }
+            lastMusicType = type
+            lastMusicLimit = limit
+            lastMusicSort = sort
+            return musicResponse
         }
     }
 }

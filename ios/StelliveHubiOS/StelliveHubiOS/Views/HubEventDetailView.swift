@@ -150,14 +150,8 @@ struct HubEventDetailView: View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
             Button("캘린더 추가") {}
                 .buttonStyle(HubEventCTAButtonStyle(primary: true))
-            if let ticketUrl = url(from: event.ticketUrl) {
-                Link("티켓 링크", destination: ticketUrl)
-                    .buttonStyle(HubEventCTAButtonStyle(primary: false))
-            } else if let purchaseUrl = url(from: event.purchaseUrl) {
-                Link("구매 링크", destination: purchaseUrl)
-                    .buttonStyle(HubEventCTAButtonStyle(primary: false))
-            } else if let sourceUrl = url(from: event.sourceUrl) {
-                Link("출처 열기", destination: sourceUrl)
+            if let actionUrl = url(from: event.ticketUrl) ?? url(from: event.purchaseUrl) ?? url(from: event.sourceUrl) {
+                Link(HubEventDetailFormatting.linkActionLabel(for: event.category), destination: actionUrl)
                     .buttonStyle(HubEventCTAButtonStyle(primary: false))
             }
         }
@@ -259,6 +253,17 @@ enum HubEventDetailFormatting {
             return "마감 임박"
         }
         return event.status.displayName
+    }
+
+    static func linkActionLabel(for category: HubEventCategory) -> String {
+        switch category {
+        case .onlineGoods, .onlineCollab:
+            return "구매 링크"
+        case .offlineConcert, .ticketing:
+            return "티켓 링크"
+        default:
+            return "예약 링크"
+        }
     }
 
     static func format(_ date: Date) -> String {

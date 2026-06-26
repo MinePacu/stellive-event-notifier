@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum SettingsRoute: String, CaseIterable, Hashable {
+    case history
     case delivery
     case targets
     case platforms
@@ -49,6 +50,12 @@ enum SettingsNavigationPolicy {
 
     static func hubRows(settings: NotificationSettingsState, members: [HubMember]) -> [SettingsHubRow] {
         [
+            SettingsHubRow(
+                route: .history,
+                title: "알림 기록",
+                note: "최근 수신 내역과 필터",
+                summary: "(members.count)개 대상"
+            ),
             SettingsHubRow(
                 route: .delivery,
                 title: "전달 방식",
@@ -280,6 +287,8 @@ struct SettingsContentView: View {
     @ViewBuilder
     private func settingsDestination(_ route: SettingsRoute) -> some View {
         switch route {
+        case .history:
+            HistoryView()
         case .delivery:
             deliverySettings
         case .targets:

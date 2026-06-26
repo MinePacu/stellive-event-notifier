@@ -3,7 +3,11 @@ package dev.stellive.hub.feature.home
 import dev.stellive.hub.core.model.NotificationEventType
 import dev.stellive.hub.core.model.NotificationPlatform
 import dev.stellive.hub.core.model.NotificationSettingState
+import dev.stellive.hub.core.model.CatalogRole
+import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.HubEventStatus
+import dev.stellive.hub.core.model.SongCatalogItem
+import kotlin.math.roundToInt
 import java.text.NumberFormat
 import java.time.Duration
 import java.time.Instant
@@ -25,6 +29,11 @@ data class MainNavigationItem(
     val label: String
 )
 
+data class SongFilterOption(
+    val id: String,
+    val label: String
+)
+
 data class SettingsHubRow(
     val screenId: String,
     val title: String,
@@ -39,13 +48,16 @@ data class SettingsPolicyRow(
 )
 
 object MainUiPolicy {
+    const val SONG_PAGE_SIZE = 20
+    const val SONG_THUMBNAIL_ASPECT_RATIO = 16f / 9f
+
     private const val TOP_BAR_ACTION_ICON_INSET_DP = 10
     private const val LIVE_CLOCK_REFRESH_DELAY_MILLIS = 1_000L
 
     fun primaryNavigationItems(): List<MainNavigationItem> = listOf(
         MainNavigationItem("home", "홈"),
         MainNavigationItem("live", "라이브"),
-        MainNavigationItem("history", "기록"),
+        MainNavigationItem("songs", "노래"),
         MainNavigationItem("goods_events", "굿즈/행사")
     )
 
@@ -56,7 +68,7 @@ object MainUiPolicy {
         !canGoBack && screenId in primaryNavigationItems().map { it.screenId }
 
     fun showsTopBarText(screenId: String): Boolean =
-        screenId == "goods_event_detail" || screenId == "settings" || screenId.startsWith("settings_")
+        screenId == "goods_event_detail" || screenId == "history" || screenId == "settings" || screenId.startsWith("settings_")
 
     fun goodsEventDetailTopBarTitle(eventTitle: String): String = eventTitle
 
@@ -64,6 +76,7 @@ object MainUiPolicy {
 
     fun topBarTitle(screenId: String): String = when (screenId) {
         "live" -> "라이브"
+        "songs" -> "노래"
         "history" -> "기록"
         "settings" -> "설정"
         "settings_delivery" -> "전달 방식"
@@ -79,6 +92,7 @@ object MainUiPolicy {
 
     fun topBarRole(screenId: String): String = when (screenId) {
         "live" -> "방송 상태와 CHZZK 대상 현황"
+        "songs" -> "YouTube 업로드 곡 탐색"
         "history" -> "허용된 알림 기록과 정책 제외 항목"
         "settings" -> "알림 대상과 전송 정책"
         "settings_delivery" -> "알림 전달과 제한"
@@ -113,6 +127,91 @@ object MainUiPolicy {
     )
 
     fun homeSummaryCardsVisible(): Boolean = false
+
+    fun songGenerationFilters(): List<SongFilterOption> = listOf(
+        SongFilterOption("all", "전체"),
+        SongFilterOption("gen1", "1기생"),
+        SongFilterOption("gen2", "2기생"),
+        SongFilterOption("gen3", "3기생")
+    )
+
+    fun songTypeFilters(): List<SongFilterOption> = listOf(
+        SongFilterOption("all", "전체"),
+        SongFilterOption("original", "오리지널"),
+        SongFilterOption("cover", "커버")
+    )
+
+    fun songExternalUrl(rawUrl: String?): String? {
+        val trimmed = rawUrl?.trim().orEmpty()
+        return trimmed.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+    }
+
+    fun songMemberFilters(members: List<HubMember>): List<SongFilterOption> =
+        listOf(SongFilterOption("all", "전체")) + members
+            .filter { it.catalogRole == CatalogRole.MEMBER }
+            .filter { it.generationId in setOf("gen1", "gen2", "gen3") }
+            .map { SongFilterOption(it.id, it.koreanName.ifBlank { it.englishName }) }
+
+    fun songMatchesMember(song: SongCatalogItem, selectedMemberId: String): Boolean {
+        if (selectedMemberId == "all") return true
+        return song.members.any { it.id == selectedMemberId }
+    }
+
+    fun songMemberFilterLabel(members: List<HubMember>, selectedMemberId: String): String =
+        if (selectedMemberId == "all") {
+            "전체"
+        } else {
+            members.firstOrNull { it.id == selectedMemberId }?.koreanName?.takeIf { it.isNotBlank() }
+                ?: selectedMemberId
+        }
+
+    fun canClearSongMemberFilter(selectedMemberId: String): Boolean = selectedMemberId != "all"
+
+    fun songThumbnailHeightDp(widthDp: Int): Int = (widthDp / SONG_THUMBNAIL_ASPECT_RATIO).roundToInt()
+
+    fun songMemberDisplayText(song: SongCatalogItem): String =
+        song.members
+            .map { it.nameKo.ifBlank { it.nameEn.orEmpty() } }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(" · ")
+            ?: song.memberName?.takeIf { it.isNotBlank() }
+            ?: "스텔라이브"
+
+    fun songMatchesGeneration(
+        song: SongCatalogItem,
+        selectedGenerationId: String,
+        memberGenerationById: Map<String, String>,
+    ): Boolean {
+        if (selectedGenerationId == "all") return true
+        return song.members.any { memberGenerationById[it.id] == selectedGenerationId }
+    }
+
+    fun songMatchesQuery(song: SongCatalogItem, query: String): Boolean {
+        if (query.isBlank()) return true
+        return song.title.contains(query, ignoreCase = true) ||
+            songMemberDisplayText(song).contains(query, ignoreCase = true)
+    }
+
+    fun songPageCount(totalItems: Int, pageSize: Int = SONG_PAGE_SIZE): Int {
+        if (totalItems <= 0) return 1
+        return ((totalItems - 1) / pageSize) + 1
+    }
+
+    fun coerceSongPage(page: Int, totalItems: Int, pageSize: Int = SONG_PAGE_SIZE): Int =
+        page.coerceIn(1, songPageCount(totalItems, pageSize))
+
+    fun songPageItems(
+        songs: List<SongCatalogItem>,
+        page: Int,
+        pageSize: Int = SONG_PAGE_SIZE,
+    ): List<SongCatalogItem> {
+        val safePage = coerceSongPage(page, songs.size, pageSize)
+        val fromIndex = (safePage - 1) * pageSize
+        val toIndex = minOf(fromIndex + pageSize, songs.size)
+        return songs.subList(fromIndex, toIndex)
+    }
 
     fun homeHubEventsListAction(closingSoonCount: Int): HomeHubEventsAction =
         if (closingSoonCount > 0) {
@@ -173,6 +272,12 @@ object MainUiPolicy {
                 deadlineSoonEnabled -> "켜짐 · 마감 임박 ON"
                 else -> "켜짐"
             }
+        ),
+        SettingsHubRow(
+            screenId = "history",
+            title = "알림 기록",
+            body = "허용된 알림과 정책 제외 항목을 확인합니다.",
+            value = "보기"
         ),
         SettingsHubRow(
             screenId = "advanced",

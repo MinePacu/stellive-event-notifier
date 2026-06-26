@@ -183,6 +183,95 @@ final class HubAPIClientTests: XCTestCase {
         XCTAssertEqual(detail.id, "event-1")
     }
 
+    func testSongsListAndFacetsSendExpectedPathsAndDecodeResponses() async throws {
+        var seenPaths: [String] = []
+        let client = makeClient { request in
+            seenPaths.append(request.url?.path ?? "")
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+            let queryItems = Dictionary(uniqueKeysWithValues: (components?.queryItems ?? []).map { ($0.name, $0.value) })
+            if request.url?.path == "/v1/songs" {
+                XCTAssertEqual(queryItems["generationId"], "gen2")
+                XCTAssertEqual(queryItems["memberId"], "akane-lize")
+                XCTAssertEqual(queryItems["type"], "original")
+                XCTAssertEqual(queryItems["q"], "별빛")
+                return jsonResponse(statusCode: 200, body: """
+                    {
+                      "items": [{
+                        "id": "song-1",
+                        "youtubeVideoId": "abc123",
+                        "title": "별빛 항로",
+                        "memberId": "akane-lize",
+                        "memberName": "아카네 리제",
+                        "generationId": "gen2",
+                        "generationName": "2기생",
+                        "type": "original",
+                        "sourceUrl": "https://www.youtube.com/watch?v=abc123",
+                        "thumbnail": {"url": "https://i.ytimg.com/vi/abc123/mqdefault.jpg", "width": 320, "height": 180},
+                        "publishedAt": "2026-06-21T12:00:00.000Z"
+                      }],
+                      "nextCursor": null
+                    }
+                    """)
+            }
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "summary": {"total": 1, "original": 1, "cover": 0},
+                  "generationFilters": [{"id": "gen2", "label": "2기생", "generationId": "gen2", "count": 1}],
+                  "memberFilters": [],
+                  "typeFilters": []
+                }
+                """)
+        }
+
+        let songs = try await client.songs(generationId: "gen2", memberId: "akane-lize", type: "original", q: "별빛")
+        let facets = try await client.songFacets(generationId: "gen2")
+
+        XCTAssertEqual(seenPaths, ["/v1/songs", "/v1/songs/facets"])
+        XCTAssertEqual(songs.items.first?.id, "song-1")
+        XCTAssertEqual(songs.items.first?.thumbnail?.width, 320)
+        XCTAssertEqual(facets.summary.original, 1)
+    }
+
+    func testMusicListUsesOfficialMusicEndpointAndDecodesMembers() async throws {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/v1/music")
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+            let queryItems = Dictionary(uniqueKeysWithValues: (components?.queryItems ?? []).map { ($0.name, $0.value) })
+            XCTAssertEqual(queryItems["type"], "cover")
+            XCTAssertEqual(queryItems["limit"], "30")
+            XCTAssertEqual(queryItems["sort"], "publishedAt_desc")
+            return jsonResponse(statusCode: 200, body: """
+            {
+              "items": [{
+                "id": "video-1",
+                "youtubeVideoId": "video-1",
+                "title": "Collab Cover",
+                "type": "cover",
+                "publishedAt": "2026-06-23T00:00:00.000Z",
+                "thumbnailUrl": "https://img.youtube.com/vi/video-1/hqdefault.jpg",
+                "duration": "PT3M",
+                "durationSeconds": 180,
+                "isInstrumental": false,
+                "specialFlags": [],
+                "classificationStatus": "AUTO_CLASSIFIED",
+                "members": [
+                  { "id": "yuzuha-riko", "nameKo": "유즈하 리코", "nameEn": "Yuzuha Riko", "role": "MAIN" },
+                  { "id": "neneko-mashiro", "nameKo": "네네코 마시로", "nameEn": "Neneko Mashiro", "role": "COLLAB" }
+                ],
+                "youtubeUrl": "https://www.youtube.com/watch?v=video-1",
+                "sourcePlaylistId": "playlist-cover"
+              }],
+              "nextCursor": null
+            }
+            """)
+        }
+
+        let response = try await client.music(type: "cover", limit: 30, sort: "publishedAt_desc")
+
+        XCTAssertEqual(response.items.first?.members.map(\.nameKo), ["유즈하 리코", "네네코 마시로"])
+        XCTAssertEqual(response.items.first?.youtubeUrl, "https://www.youtube.com/watch?v=video-1")
+    }
+
     private func makeClient(
         handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)
     ) -> HubAPIClient {
@@ -322,6 +411,74 @@ final class ServerHubStoreTests: XCTestCase {
         await store.refreshCalendar(from: Date(timeIntervalSince1970: 1_781_740_800), to: Date(timeIntervalSince1970: 1_782_777_599), timezone: TimeZone(identifier: "Asia/Seoul")!)
 
         XCTAssertEqual(store.serverCalendarDays.first?.entries.first?.eventId, "event-1")
+    }
+
+    func testRefreshSongsUsesServerResponses() async {
+        let store = makeStore { request in
+            XCTAssertEqual(request.url?.path, "/v1/songs")
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "items": [{
+                    "id": "song-1",
+                    "youtubeVideoId": "abc123",
+                    "title": "별빛 항로",
+                    "memberId": "akane-lize",
+                    "memberName": "아카네 리제",
+                    "generationId": "gen2",
+                    "generationName": "2기생",
+                    "type": "original",
+                    "sourceUrl": "https://www.youtube.com/watch?v=abc123",
+                    "publishedAt": "2026-06-21T12:00:00.000Z"
+                  }],
+                  "nextCursor": null
+                }
+                """)
+        }
+
+        await store.refreshSongs(generationId: "gen2", type: "original")
+
+        XCTAssertEqual(store.serverSongs.map(\.id), ["song-1"])
+        XCTAssertEqual(store.songs(generationId: "gen2", type: "original").items.first?.title, "별빛 항로")
+    }
+
+    func testMusicPageCollectorFetchesAllPagesAndDedupes() async throws {
+        var cursors: [String?] = []
+        let items = try await MusicPageCollector.collect { cursor, limit in
+            cursors.append(cursor)
+            XCTAssertEqual(limit, 100)
+            if cursor == nil {
+                return MusicListResponse(
+                    items: [song("video-1")],
+                    nextCursor: "cursor-2"
+                )
+            }
+            return MusicListResponse(
+                items: [song("video-1"), song("video-2")],
+                nextCursor: nil
+            )
+        }
+
+        XCTAssertEqual(cursors, [nil, "cursor-2"])
+        XCTAssertEqual(items.map(\.youtubeVideoId), ["video-1", "video-2"])
+    }
+
+    private func song(_ videoId: String) -> SongCatalogItem {
+        SongCatalogItem(
+            id: videoId,
+            youtubeVideoId: videoId,
+            title: "Cover \(videoId)",
+            type: .cover,
+            thumbnailUrl: "https://img.youtube.com/vi/\(videoId)/hqdefault.jpg",
+            members: [
+                MusicMemberSummary(
+                    id: "yuzuha-riko",
+                    nameKo: "유즈하 리코",
+                    nameEn: "Yuzuha Riko",
+                    role: "MAIN"
+                ),
+            ],
+            youtubeUrl: "https://www.youtube.com/watch?v=\(videoId)"
+        )
     }
 
     private func makeStore(

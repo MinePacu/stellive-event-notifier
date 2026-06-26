@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 import { CatalogService } from "../src/catalog/catalog.js";
 
 const catalog = new CatalogService();
+const musicMemberIds = [
+  "ayatsuno-yuni",
+  "sakihane-huya",
+  "shirayuki-hina",
+  "neneko-mashiro",
+  "akane-lize",
+  "arahashi-tabi",
+  "tenko-shibuki",
+  "aokumo-rin",
+  "yuzuha-riko",
+  "hanako-nana",
+];
 
 describe("catalog seed policy", () => {
   it("contains no Former entries", () => {
@@ -27,5 +39,15 @@ describe("catalog seed policy", () => {
     expect(catalog.isSupportedEventForMember("stellive-official", "official_youtube_upload")).toBe(true);
     expect(catalog.isSupportedEventForMember("stellive-official", "youtube_live_started")).toBe(false);
   });
-});
 
+  it("defines YouTube channel IDs for all target music members", () => {
+    const missing = musicMemberIds.filter((memberId) => !catalog.getMember(memberId)?.platforms.youtubeChannelId);
+
+    expect(missing).toEqual([]);
+    expect(catalog.getMember("ayatsuno-yuni")?.platforms.youtubeChannelId).toBe("UClbYIn9LDbbFZ9w2shX3K0g");
+    expect(catalog.getMember("shirayuki-hina")?.platforms.youtubeChannelId).toBe("UC1afpiIuBDcjYlmruAa0HiA");
+    expect(catalog.getMember("neneko-mashiro")?.platforms.youtubeChannelId).toBe("UCnQt1xFonbwyexeHfYe6VaA");
+    expect(catalog.getMember("akane-lize")?.platforms.youtubeChannelId).toBe("UC7-m6jQLinZQWIbwm9W-1iw");
+    expect(catalog.getMember("arahashi-tabi")?.platforms.youtubeChannelId).toBe("UCAHVQ44O81aehLWfy9O6Elw");
+  });
+});

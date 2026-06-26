@@ -75,10 +75,54 @@ class HubApiClient(
     suspend fun hubEventsCalendar(
         from: String,
         to: String,
-        timezone: String,
+    timezone: String,
     ): HubNetworkResult<HubCalendarResponseDto> = runCatchingNetwork {
         api.hubEventsCalendar(from = from, to = to, timezone = timezone)
     }
+
+    suspend fun songs(
+        generationId: String? = null,
+        memberId: String? = null,
+        type: String? = null,
+        q: String? = null,
+        cursor: String? = null,
+        limit: Int? = null,
+    ): HubNetworkResult<SongListResponseDto> = runCatchingNetwork {
+        api.songs(
+            generationId = generationId,
+            memberId = memberId,
+            type = type,
+            q = q,
+            cursor = cursor,
+            limit = limit,
+        )
+    }
+
+    suspend fun songFacets(
+        generationId: String? = null,
+        memberId: String? = null,
+        type: String? = null,
+        q: String? = null,
+    ): HubNetworkResult<SongFacetsResponseDto> = runCatchingNetwork {
+        api.songFacets(generationId = generationId, memberId = memberId, type = type, q = q)
+    }
+
+    suspend fun music(
+        type: String? = null,
+        cursor: String? = null,
+        limit: Int? = null,
+        sort: String? = "publishedAt_desc",
+    ): HubNetworkResult<MusicListResponseDto> =
+        runCatchingNetwork { api.music(type = type, cursor = cursor, limit = limit, sort = sort) }
+
+    suspend fun memberMusic(
+        memberId: String,
+        type: String? = null,
+        cursor: String? = null,
+        limit: Int? = null,
+        sort: String? = "publishedAt_desc",
+    ): HubNetworkResult<MusicListResponseDto> =
+        runCatchingNetwork { api.memberMusic(memberId = memberId, type = type, cursor = cursor, limit = limit, sort = sort) }
 
     private inline fun <T> runCatchingNetwork(block: () -> T): HubNetworkResult<T> =
         try {

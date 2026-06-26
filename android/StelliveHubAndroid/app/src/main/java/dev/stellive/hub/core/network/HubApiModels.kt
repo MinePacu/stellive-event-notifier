@@ -151,6 +151,80 @@ data class HubCalendarEntryDto(
     val platformUrl: String? = null,
 )
 
+data class SongThumbnailDto(
+    val url: String,
+    val width: Int,
+    val height: Int,
+)
+
+data class SongCatalogItemDto(
+    val id: String,
+    val youtubeVideoId: String,
+    val title: String,
+    val memberId: String,
+    val memberName: String,
+    val generationId: String,
+    val generationName: String,
+    val type: String,
+    val sourceUrl: String,
+    val thumbnail: SongThumbnailDto? = null,
+    val publishedAt: String,
+)
+
+data class SongListResponseDto(
+    val items: List<SongCatalogItemDto> = emptyList(),
+    val nextCursor: String? = null,
+)
+
+data class MusicMemberSummaryDto(
+    val id: String,
+    val nameKo: String,
+    val nameEn: String? = null,
+    val role: String? = null,
+)
+
+data class MusicCatalogItemDto(
+    val id: String,
+    val youtubeVideoId: String,
+    val title: String,
+    val type: String,
+    val publishedAt: String? = null,
+    val thumbnailUrl: String? = null,
+    val duration: String? = null,
+    val durationSeconds: Int? = null,
+    val isInstrumental: Boolean = false,
+    val specialFlags: List<String> = emptyList(),
+    val classificationStatus: String? = null,
+    val members: List<MusicMemberSummaryDto> = emptyList(),
+    val youtubeUrl: String,
+    val sourcePlaylistId: String? = null,
+)
+
+data class MusicListResponseDto(
+    val items: List<MusicCatalogItemDto> = emptyList(),
+    val nextCursor: String? = null,
+)
+
+data class SongFilterCountDto(
+    val id: String,
+    val label: String,
+    val generationId: String? = null,
+    val count: Int,
+)
+
+data class SongFacetSummaryDto(
+    val total: Int,
+    val original: Int,
+    val cover: Int,
+)
+
+data class SongFacetsResponseDto(
+    val summary: SongFacetSummaryDto,
+    val generationFilters: List<SongFilterCountDto> = emptyList(),
+    val memberFilters: List<SongFilterCountDto> = emptyList(),
+    val typeFilters: List<SongFilterCountDto> = emptyList(),
+)
+
 data class HubCalendarWidgetSnapshotDto(
     val timezone: String,
     val generatedAt: String,

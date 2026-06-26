@@ -23,6 +23,17 @@ interface WebhookSubscriptionDiagnosticSelect {
   lastError: true;
 }
 
+interface WebhookSubscriptionWriteInput {
+  source: string;
+  targetId: string;
+  callbackUrl: string;
+  topicUrl: string;
+  status: string;
+  leaseExpiresAt?: Date | null;
+  lastVerifiedAt?: Date | null;
+  lastError?: string | null;
+}
+
 interface WebhookSubscriptionDelegate {
   webhookSubscription: {
     findMany(args: {
@@ -30,6 +41,11 @@ interface WebhookSubscriptionDelegate {
       take: number;
       select: WebhookSubscriptionDiagnosticSelect;
     }): Promise<WebhookSubscriptionRecord[]>;
+    upsert(args: {
+      where: { source_targetId_topicUrl: { source: string; targetId: string; topicUrl: string } };
+      create: WebhookSubscriptionWriteInput;
+      update: Omit<WebhookSubscriptionWriteInput, "source" | "targetId" | "topicUrl">;
+    }): Promise<unknown>;
   };
 }
 
@@ -41,7 +57,7 @@ const webhookSubscriptionDiagnosticSelect: WebhookSubscriptionDiagnosticSelect =
   status: true,
   leaseExpiresAt: true,
   lastVerifiedAt: true,
-  lastError: true
+  lastError: true,
 };
 
 function clampDiagnosticLimit(limit: number, defaultLimit: number): number {
@@ -58,22 +74,50 @@ function toDiagnostic(record: WebhookSubscriptionRecord): WebhookSubscriptionDia
     status: record.status,
     leaseExpiresAt: record.leaseExpiresAt?.toISOString(),
     lastVerifiedAt: record.lastVerifiedAt?.toISOString(),
-    lastError: record.lastError ?? undefined
+    lastError: record.lastError ?? undefined,
   };
 }
 
 export class WebhookSubscriptionRepository {
   constructor(
-    private readonly prisma: WebhookSubscriptionDelegate = getPrismaClient() as unknown as WebhookSubscriptionDelegate
+    private readonly prisma: WebhookSubscriptionDelegate = getPrismaClient() as unknown as WebhookSubscriptionDelegate,
   ) {}
 
   async listDiagnostics(limit = 50): Promise<WebhookSubscriptionDiagnostic[]> {
     const records = await this.prisma.webhookSubscription.findMany({
       orderBy: { updatedAt: "desc" },
       take: clampDiagnosticLimit(limit, 50),
-      select: webhookSubscriptionDiagnosticSelect
+      select: webhookSubscriptionDiagnosticSelect,
     });
-
     return records.map(toDiagnostic);
+  }
+
+  async upsertSubscription(input: WebhookSubscriptionWriteInput): Promise<void> {
+    await this.prisma.webhookSubscription.upsert({
+      where: {
+        source_targetId_topicUrl: {
+          source: input.source,
+          targetId: input.targetId,
+          topicUrl: input.topicUrl,
+        },
+      },
+      create: {
+        source: input.source,
+        targetId: input.targetId,
+        callbackUrl: input.callbackUrl,
+        topicUrl: input.topicUrl,
+        status: input.status,
+        leaseExpiresAt: input.leaseExpiresAt ?? null,
+        lastVerifiedAt: input.lastVerifiedAt ?? null,
+        lastError: input.lastError ?? null,
+      },
+      update: {
+        callbackUrl: input.callbackUrl,
+        status: input.status,
+        leaseExpiresAt: input.leaseExpiresAt ?? null,
+        lastVerifiedAt: input.lastVerifiedAt ?? null,
+        lastError: input.lastError ?? null,
+      },
+    });
   }
 }

@@ -113,13 +113,13 @@
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/tab_history"
+            android:id="@+id/tab_songs"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:clickable="true"
-            android:contentDescription="@string/tab_history"
+            android:contentDescription="@string/tab_songs"
             android:focusable="true"
             android:gravity="center"
             android:orientation="vertical"
@@ -131,7 +131,7 @@
                 android:layout_height="23dp"
                 android:contentDescription="@null"
                 android:duplicateParentState="true"
-                android:src="@drawable/ic_tab_history"
+                android:src="@drawable/ic_tab_songs"
                 app:tint="@color/hub_bottom_nav_selector" />
 
             <TextView
@@ -139,7 +139,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="1dp"
                 android:duplicateParentState="true"
-                android:text="@string/tab_history"
+                android:text="@string/tab_songs"
                 android:textColor="@color/hub_bottom_nav_selector"
                 android:textSize="11sp"
                 android:textStyle="bold" />

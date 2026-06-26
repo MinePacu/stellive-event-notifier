@@ -64,6 +64,51 @@ export interface InternalRouteDependencies {
   notificationWorker?: {
     drain(input: NotificationWorkerDrainInput): MaybePromise<NotificationWorkerDrainResult>;
   };
+  youtubeSubscriptionScheduler?: {
+    renewSubscriptions(): MaybePromise<{
+      status: "ok" | "partial_failure";
+      renewed: number;
+      failed: number;
+      skipped: number;
+    }>;
+  };
+  youtubeSongBackfillScheduler?: {
+    backfill(): MaybePromise<{
+      status: "ok";
+      checkedChannels: number;
+      skippedChannels: number;
+      pagesFetched: number;
+      quotaUnits: number;
+      ingested: number;
+      skipped: number;
+      notModified: number;
+      failed: number;
+    }>;
+    reconcile(): MaybePromise<{
+      status: "ok";
+      checkedChannels: number;
+      skippedChannels: number;
+      pagesFetched: number;
+      quotaUnits: number;
+      ingested: number;
+      skipped: number;
+      notModified: number;
+      failed: number;
+    }>;
+  };
+  musicSync?: {
+    syncAllMusic(mode: "light" | "full" | "daily" | "manual"): MaybePromise<{
+      status: string;
+      sourceCount?: number;
+      failedCount?: number;
+      quotaUnits?: number;
+    }>;
+    syncOfficialStelliveMusicPlaylists?(mode: "light" | "full" | "manual"): MaybePromise<unknown>;
+    listReviewCandidates?(filters?: { limit?: number }): MaybePromise<unknown[]>;
+    upsertOverride?(videoId: string, input: Record<string, unknown>): MaybePromise<unknown>;
+    listSyncRuns?(limit?: number): MaybePromise<unknown[]>;
+    estimateQuota?(): MaybePromise<unknown>;
+  };
   chzzkLiveAdapter?: {
     pollLiveStatuses(): MaybePromise<ChzzkLiveAdapterCounts>;
   };
@@ -130,6 +175,18 @@ function hasOnlyNotificationDrainFields(body: unknown): boolean {
   if (body === undefined || body === null) return true;
   if (typeof body !== "object" || Array.isArray(body)) return false;
   return Object.keys(body).every((key) => key === "limit");
+}
+
+function parseMusicSyncBody(body: unknown): { ok: true; mode: "light" | "full" | "manual" } | { ok: false } {
+  if (body === undefined || body === null) return { ok: true, mode: "manual" };
+  if (typeof body !== "object" || Array.isArray(body)) return { ok: false };
+  const input = body as { mode?: unknown };
+  if (!Object.keys(input).every((key) => key === "mode")) return { ok: false };
+  if (input.mode === undefined) return { ok: true, mode: "manual" };
+  if (input.mode === "light" || input.mode === "full" || input.mode === "manual") {
+    return { ok: true, mode: input.mode };
+  }
+  return { ok: false };
 }
 
 function readAuthorizationHeader(value: string | string[] | undefined): string | undefined {
@@ -239,10 +296,86 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
       return { status: "disabled", reason: "youtube_websub_disabled" };
     }
 
-    return { status: "not_available", reason: "youtube_subscription_renewal_not_implemented" };
+    if (!dependencies.youtubeSubscriptionScheduler) {
+      return { status: "not_available", reason: "youtube_subscription_renewal_not_configured" };
+    }
+
+    return dependencies.youtubeSubscriptionScheduler.renewSubscriptions();
   });
 
-  app.post("/v1/internal/schedulers/chzzk/live-status", async () => {
+  app.post("/v1/internal/schedulers/youtube/song-backfill", async () => {
+    if (!options.env.YOUTUBE_DATA_API_FALLBACK_ENABLED) {
+      return { status: "disabled", reason: "youtube_data_api_fallback_disabled" };
+    }
+
+    if (!dependencies.youtubeSongBackfillScheduler) {
+      return { status: "not_available", reason: "youtube_song_backfill_not_configured" };
+    }
+
+    return dependencies.youtubeSongBackfillScheduler.backfill();
+  });
+
+  app.post("/v1/internal/schedulers/youtube/song-reconcile", async () => {
+    if (!options.env.YOUTUBE_DATA_API_FALLBACK_ENABLED) {
+      return { status: "disabled", reason: "youtube_data_api_fallback_disabled" };
+    }
+
+    if (!dependencies.youtubeSongBackfillScheduler) {
+      return { status: "not_available", reason: "youtube_song_backfill_not_configured" };
+    }
+
+    return dependencies.youtubeSongBackfillScheduler.reconcile();
+  });
+
+app.post("/v1/internal/schedulers/music/sync", async (request, reply) => {
+  const parsed = parseMusicSyncBody(request.body);
+  if (!parsed.ok) return reply.code(400).send({ error: "music_sync_body_invalid" });
+  if (!dependencies.musicSync) {
+    return { status: "disabled", reason: "music_sync_not_configured" };
+    }
+  const result = await dependencies.musicSync.syncAllMusic(parsed.mode);
+  return { ok: true, ...result };
+});
+
+app.post("/v1/internal/schedulers/music/sync-official-playlists", async (request, reply) => {
+  const parsed = parseMusicSyncBody(request.body);
+  if (!parsed.ok) return reply.code(400).send({ error: "music_sync_body_invalid" });
+  if (!dependencies.musicSync?.syncOfficialStelliveMusicPlaylists) {
+    return { status: "disabled", reason: "official_music_sync_not_configured" };
+  }
+  const result = await dependencies.musicSync.syncOfficialStelliveMusicPlaylists(parsed.mode);
+  return { ok: true, ...(typeof result === "object" && result !== null ? result : { status: result }) };
+});
+
+app.get<{ Querystring: LimitQuery }>("/v1/internal/music/review", async (request) => {
+  if (!dependencies.musicSync?.listReviewCandidates) return { items: [] };
+  const limit = parseInternalLimit(request.query.limit, 25);
+  return { items: await dependencies.musicSync.listReviewCandidates({ limit }) };
+});
+
+app.patch<{ Params: { videoId: string } }>("/v1/internal/music/videos/:videoId/override", async (request, reply) => {
+  if (!dependencies.musicSync?.upsertOverride) {
+    return reply.code(404).send({ error: "music_override_not_configured" });
+  }
+  if (request.body !== undefined && request.body !== null && (typeof request.body !== "object" || Array.isArray(request.body))) {
+    return reply.code(400).send({ error: "music_override_body_invalid" });
+  }
+  const item = await dependencies.musicSync.upsertOverride(request.params.videoId, (request.body ?? {}) as Record<string, unknown>);
+  return { ok: true, item };
+});
+
+app.get<{ Querystring: LimitQuery }>("/v1/internal/music/sync-log", async (request) => {
+  if (!dependencies.musicSync?.listSyncRuns) return { items: [] };
+  const limit = parseInternalLimit(request.query.limit, 25);
+  return { items: await dependencies.musicSync.listSyncRuns(limit) };
+});
+
+app.get("/v1/internal/music/quota-estimate", async () => {
+  if (!dependencies.musicSync?.estimateQuota) return { dailyEstimate: 0 };
+  return dependencies.musicSync.estimateQuota();
+});
+
+app.post("/v1/internal/schedulers/chzzk/live-status", async () => {
     if (!options.env.CHZZK_LIVE_POLLING_ENABLED) {
       return { status: "disabled", reason: "chzzk_live_polling_disabled" };
     }
