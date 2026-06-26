@@ -578,6 +578,10 @@ enum IOSSongPagePolicy {
     ]
     static let thumbnailAspectRatio: CGFloat = 16.0 / 9.0
     static let thumbnailSize = CGSize(width: 96, height: 54)
+    static let rowInsetTop: CGFloat = 6
+    static let rowInsetLeading: CGFloat = 0
+    static let rowInsetBottom: CGFloat = 6
+    static let rowInsetTrailing: CGFloat = 0
 
     static func memberFilters(from members: [HubMember]) -> [SongFilterOption] {
         [SongFilterOption(id: "all", label: "전체")] + members

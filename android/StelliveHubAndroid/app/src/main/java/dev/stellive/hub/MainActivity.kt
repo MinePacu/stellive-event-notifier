@@ -68,6 +68,7 @@ import dev.stellive.hub.feature.home.MainNavigationHistory
 import dev.stellive.hub.feature.home.MockHubRepository
 import dev.stellive.hub.feature.home.ServerHubRepository
 import dev.stellive.hub.feature.hubevents.HubEventDetailFormatting
+import dev.stellive.hub.feature.hubevents.HubEventHeroTagTone
 import dev.stellive.hub.feature.hubevents.HubEventImagePolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -754,72 +755,32 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
 
         startScreen(
             screenId = "goods_event_detail",
-            title = event.title,
-            role = "공식 출처와 일정 정보를 확인합니다."
+            title = "",
+            role = ""
         )
-        binding.collapsedTitle.text = MainUiPolicy.goodsEventDetailTopBarTitle(event.title)
-        binding.collapsedRole.text = MainUiPolicy.goodsEventDetailTopBarRole()
+        binding.collapsedTitle.text = ""
+        binding.collapsedRole.text = ""
         binding.contentList.removeAllViews()
         applyContentTopPadding(underTopBar = true)
         binding.contentList.addView(hubEventDetailHero(event))
         binding.contentList.addView(hubEventDetailActions(event))
+        binding.contentList.addView(sectionLabel(HubEventDetailFormatting.SummaryLabel).withDetailHorizontalMargins())
         binding.contentList.addView(
             compactEventCard(
-                title = event.title,
-                body = listOfNotNull(
-                    event.venueName,
-                    event.startsAt?.let { HubEventDetailFormatting.formatDateTime(it) },
-                ).joinToString(" · ").ifBlank { event.sourceLabel },
-                pills = listOf(event.status.displayName, event.category.displayName, event.participationMode.displayName)
-            ).withDetailHorizontalMargins()
-        )
-        binding.contentList.addView(
-            compactEventCard(
-                title = HubEventDetailFormatting.SummaryLabel,
+                title = "",
                 body = event.summary ?: "공식 출처 기반 굿즈/행사 정보입니다.",
-                pills = listOf(event.status.displayName)
+                pills = emptyList()
             ).withDetailHorizontalMargins()
         )
+        binding.contentList.addView(sectionLabel("행사 정보").withDetailHorizontalMargins())
         binding.contentList.addView(
             settingsPanel(
-                title = "행사 정보",
                 rows = HubEventDetailFormatting.rows(event).map { row ->
                     SettingRow(row.label, row.value, null, null)
                 }
             ).withDetailHorizontalMargins()
         )
         binding.contentList.addView(noticeCard(HubEventDetailFormatting.NoticeText).withDetailHorizontalMargins())
-        return
-        binding.contentList.addView(
-            compactEventCard(
-                title = event.title,
-                body = event.summary ?: "공식 출처 기반 굿즈/행사 정보입니다.",
-                pills = listOf(event.status.displayName, event.category.displayName, event.participationMode.displayName)
-            )
-        )
-        binding.contentList.addView(
-            settingsPanel(
-                title = "정보",
-                rows = listOfNotNull(
-                    SettingRow("분류", event.category.displayName, null, event.category.displayName),
-                    SettingRow("참여 방식", event.participationMode.displayName, null, event.participationMode.displayName),
-                    SettingRow("출처", event.sourceLabel, null, "공식"),
-                    event.venueName?.let { SettingRow("장소", it, null, "오프라인") },
-                    event.endsAt?.let { SettingRow("종료", it.toString(), null, "일정") }
-                )
-            )
-        )
-        val linkRows = listOfNotNull(
-            httpsLinkRow("출처", event.sourceUrl),
-            httpsLinkRow("구매", event.purchaseUrl),
-            httpsLinkRow("티켓", event.ticketUrl)
-        )
-        if (linkRows.isNotEmpty()) {
-            binding.contentList.addView(settingsPanel(title = "링크", rows = linkRows))
-        }
-        binding.contentList.addView(
-            noticeCard("공식 이미지, 로고, 포스터는 앱에 저장하거나 재사용하지 않습니다.")
-        )
     }
 
     private fun renderLive() {
@@ -2376,17 +2337,11 @@ private fun hubEventDetailHero(event: dev.stellive.hub.core.model.HubEvent): Fra
                 LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
                     setPadding(dp(18), 0, dp(18), dp(10))
-                    addView(TextView(context).apply {
-                        text = event.category.displayName
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT
-                        )
-                        setTextColor(Color.WHITE)
-                        textSize = 12f
-                        typeface = Typeface.DEFAULT_BOLD
-                        background = rounded(Color.argb(46, 255, 255, 255), dp(12))
-                        setPadding(dp(8), dp(4), dp(8), dp(4))
+                    addView(LinearLayout(context).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        HubEventDetailFormatting.heroTags(event).forEach { tag ->
+                            addView(heroTagChip(tag.label, tag.tone))
+                        }
                     })
                     addView(TextView(context).apply {
                         text = event.title
@@ -2396,15 +2351,15 @@ private fun hubEventDetailHero(event: dev.stellive.hub.core.model.HubEvent): Fra
                         setPadding(0, dp(10), 0, 0)
                         setLineSpacing(0f, 1.06f)
                     })
-                    addView(TextView(context).apply {
-                        text = listOfNotNull(event.venueName, HubEventDetailFormatting.rows(event).firstOrNull { it.label == "기간" }?.value)
-                            .joinToString(" · ")
-                            .ifBlank { event.sourceLabel }
-                        setTextColor(Color.argb(214, 255, 255, 255))
-                        textSize = 13f
-                        typeface = Typeface.DEFAULT_BOLD
-                        setPadding(0, dp(7), 0, 0)
-                    })
+                    HubEventDetailFormatting.heroSubtitleLines(event).forEachIndexed { index, line ->
+                        addView(TextView(context).apply {
+                            text = line
+                            setTextColor(Color.argb(214, 255, 255, 255))
+                            textSize = 13f
+                            typeface = if (index == 0) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                            setPadding(0, if (index == 0) dp(7) else dp(3), 0, 0)
+                        })
+                    }
                 },
                 FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
@@ -2483,21 +2438,25 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
                 setPadding(dp(13), dp(13), dp(13), dp(13))
             }
             thumbnailUrl?.let { content.addView(hubEventThumbnail(it)) }
-            content.addView(TextView(context).apply {
-                text = title
-                setTextColor(color(R.color.hub_text))
-                textSize = 15f
-                typeface = Typeface.DEFAULT_BOLD
-            })
+            if (title.isNotBlank()) {
+                content.addView(TextView(context).apply {
+                    text = title
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                })
+            }
             content.addView(TextView(context).apply {
                 text = body
                 setTextColor(color(R.color.hub_text_muted))
                 textSize = 12f
-                setPadding(0, dp(6), 0, 0)
+                setPadding(0, if (title.isBlank()) 0 else dp(6), 0, 0)
             })
-        content.addView(pillRow(pills))
-        addView(content)
-    }
+            if (pills.isNotEmpty()) {
+                content.addView(pillRow(pills))
+            }
+            addView(content)
+        }
 
     private fun targetToggleCard(
         title: String,
@@ -2763,6 +2722,19 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
             addView(rowChip(label))
         }
     }
+
+    private fun heroTagChip(text: String, tone: HubEventHeroTagTone): Chip =
+        rowChip(text).apply {
+            val (textColorRes, backgroundColorRes) = when (tone) {
+                HubEventHeroTagTone.STATUS -> Pair(R.color.hub_success, R.color.hub_success_soft)
+                HubEventHeroTagTone.CATEGORY -> Pair(R.color.hub_warning, R.color.hub_warning_soft)
+                HubEventHeroTagTone.PARTICIPATION -> Pair(R.color.hub_primary, R.color.hub_accent_soft)
+            }
+            setTextColor(color(textColorRes))
+            chipBackgroundColor = ContextCompat.getColorStateList(context, backgroundColorRes)
+            chipStrokeColor = ContextCompat.getColorStateList(context, backgroundColorRes)
+            (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dp(6)
+        }
 
     private fun rowChip(text: String): Chip = Chip(this).apply {
         this.text = text

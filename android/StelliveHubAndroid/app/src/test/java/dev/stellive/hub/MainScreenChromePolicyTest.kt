@@ -39,18 +39,32 @@ class MainScreenChromePolicyTest {
     }
 
     @Test
-    fun goodsEventDetailKeepsExistingExpandedHeaderAndStickyTitle() {
+    fun goodsEventDetailKeepsExpandedHeaderWithoutStickyTitle() {
         val spec = MainScreenChromePolicy.spec("goods_event_detail", canGoBack = true)
 
         assertTrue(spec.showExpandedBodyHeader)
-        assertTrue(spec.keepTopBarTitleWhenScrolled)
+        assertFalse(spec.keepTopBarTitleWhenScrolled)
     }
 
     @Test
-    fun songsRootShowsSettingsAndSearchActions() {
+    fun settingsActionIsVisibleOnEveryScreen() {
+        listOf(
+            "home",
+            "live",
+            "songs",
+            "goods_events",
+            "goods_event_detail",
+            "song_search",
+            "settings_delivery",
+        ).forEach { screenId ->
+            assertTrue(MainScreenChromePolicy.spec(screenId, canGoBack = screenId != "home").showSettingsAction)
+        }
+    }
+
+    @Test
+    fun songsRootShowsSearchAction() {
         val spec = MainScreenChromePolicy.spec("songs")
 
-        assertTrue(spec.showSettingsAction)
         assertTrue(spec.showSongSearchAction)
         assertFalse(MainScreenChromePolicy.spec("song_search", canGoBack = true).showSongSearchAction)
     }

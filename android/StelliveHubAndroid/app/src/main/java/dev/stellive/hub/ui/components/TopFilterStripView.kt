@@ -17,7 +17,7 @@ class TopFilterStripView(context: Context) : LinearLayout(context) {
 
     init {
         orientation = VERTICAL
-        setPadding(0, dp(5), 0, dp(7))
+        setPadding(0, dp(TopFilterStripPolicy.ContainerTopPaddingDp), 0, dp(TopFilterStripPolicy.ContainerBottomPaddingDp))
     }
 
     fun bind(
@@ -74,11 +74,11 @@ class TopFilterStripView(context: Context) : LinearLayout(context) {
             contentDescription = "${group.id} ${option.label}${if (selected) ", 선택됨" else ""}"
             layoutParams = LayoutParams(
                 if (mode == FilterStripLayoutMode.EQUAL_WIDTH) 0 else dp(112),
-                dp(40),
+                dp(TopFilterStripPolicy.OptionHeightDp),
                 if (mode == FilterStripLayoutMode.EQUAL_WIDTH) 1f else 0f,
             ).apply {
-                marginEnd = dp(6)
-                bottomMargin = dp(5)
+                marginEnd = dp(TopFilterStripPolicy.OptionEndMarginDp)
+                bottomMargin = dp(TopFilterStripPolicy.OptionBottomMarginDp)
             }
             addView(TextView(context).apply {
                 text = option.label

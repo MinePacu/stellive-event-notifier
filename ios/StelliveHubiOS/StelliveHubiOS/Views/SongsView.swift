@@ -1,5 +1,16 @@
 import SwiftUI
 
+extension IOSSongPagePolicy {
+    static var songRowInsets: EdgeInsets {
+        EdgeInsets(
+            top: rowInsetTop,
+            leading: rowInsetLeading,
+            bottom: rowInsetBottom,
+            trailing: rowInsetTrailing
+        )
+    }
+}
+
 struct SongsView: View {
     @EnvironmentObject private var store: MockHubStore
     @EnvironmentObject private var serverStore: ServerHubStore
@@ -120,7 +131,7 @@ struct SongsView: View {
                     } else {
                     ForEach(pagedSongs) { song in
                         SongRow(song: song)
-                            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                            .listRowInsets(IOSSongPagePolicy.songRowInsets)
                             .listRowSeparator(.hidden)
                     }
 

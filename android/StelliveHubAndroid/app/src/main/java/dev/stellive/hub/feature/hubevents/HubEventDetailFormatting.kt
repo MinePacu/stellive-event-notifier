@@ -11,6 +11,17 @@ data class HubEventDetailRow(
     val value: String,
 )
 
+data class HubEventHeroTag(
+    val label: String,
+    val tone: HubEventHeroTagTone,
+)
+
+enum class HubEventHeroTagTone {
+    STATUS,
+    CATEGORY,
+    PARTICIPATION,
+}
+
 object HubEventDetailFormatting {
     const val SummaryLabel = "핵심 안내"
     const val NoticeText = "일정, 장소, 판매/입장 조건은 공식 공지 변경에 따라 달라질 수 있습니다. 앱은 확인용 요약만 제공하므로 참여 전 반드시 출처 링크에서 최신 공지를 확인하세요."
@@ -29,6 +40,19 @@ object HubEventDetailFormatting {
             add(HubEventDetailRow("분류", event.category.displayName))
             add(HubEventDetailRow("출처", event.sourceLabel))
         }
+
+    fun heroSubtitleLines(event: HubEvent, zoneId: ZoneId = ZoneId.systemDefault()): List<String> {
+        val venue = event.venueName?.takeIf { it.isNotBlank() } ?: event.sourceLabel
+        val period = periodText(event, zoneId)
+        return listOf(venue, period).distinct().filter { it.isNotBlank() }
+    }
+
+    fun heroTags(event: HubEvent): List<HubEventHeroTag> =
+        listOf(
+            HubEventHeroTag(event.status.displayName, HubEventHeroTagTone.STATUS),
+            HubEventHeroTag(event.category.displayName, HubEventHeroTagTone.CATEGORY),
+            HubEventHeroTag(event.participationMode.displayName, HubEventHeroTagTone.PARTICIPATION),
+        ).distinctBy { it.label }
 
     fun periodText(event: HubEvent, zoneId: ZoneId = ZoneId.systemDefault()): String {
         val startsAt = event.startsAt

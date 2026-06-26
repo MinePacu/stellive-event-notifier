@@ -10,7 +10,6 @@ private enum HubEventDetailColors {
 
 struct HubEventDetailView: View {
     let event: HubEvent
-    @State private var showCollapsedTitle = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -34,27 +33,11 @@ struct HubEventDetailView: View {
                 .padding(.top, -36)
                 .frame(width: UIScreen.main.bounds.width)
             }
-            .simultaneousGesture(DragGesture(minimumDistance: 12).onChanged { value in
-                withAnimation(.easeInOut(duration: 0.16)) {
-                    if value.translation.height < -18 {
-                        showCollapsedTitle = true
-                    } else if value.translation.height > 18 {
-                        showCollapsedTitle = false
-                    }
-                }
-            })
             .ignoresSafeArea(edges: .top)
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                collapsedTitleBar
-                    .opacity(showCollapsedTitle ? 1 : 0)
-                    .accessibilityHidden(!showCollapsedTitle)
-            }
-        }
     }
 
     private var hero: some View {
@@ -71,20 +54,24 @@ struct HubEventDetailView: View {
                 endPoint: .bottom
             )
             VStack(alignment: .leading, spacing: 10) {
-                Text(event.category.displayName)
-                    .font(.caption.weight(.bold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.white.opacity(0.18), in: Capsule())
+                HStack(spacing: 7) {
+                    ForEach(HubEventDetailFormatting.heroTags(for: event)) { tag in
+                        HubEventHeroTagView(tag: tag)
+                    }
+                }
             Text(event.title)
                 .font(.system(size: 25, weight: .bold))
                 .lineLimit(3)
                 .minimumScaleFactor(0.84)
                 .multilineTextAlignment(.leading)
                     .frame(maxWidth: contentWidth, alignment: .leading)
-                Text(heroSubtitle)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.84))
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(HubEventDetailFormatting.heroSubtitleLines(for: event), id: \.self) { line in
+                        Text(line)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.84))
+                    }
+                }
             }
                     .frame(maxWidth: contentWidth, alignment: .leading)
             .foregroundStyle(.white)
@@ -97,21 +84,6 @@ struct HubEventDetailView: View {
         .frame(height: 390)
         .clipped()
         .ignoresSafeArea(edges: .top)
-    }
-
-    private var collapsedTitleBar: some View {
-        VStack(spacing: 2) {
-            Text(event.title)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .minimumScaleFactor(0.82)
-            Text("상세")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.72))
-        }
-        .foregroundStyle(.white.opacity(0.88))
-        .frame(maxWidth: 240)
     }
 
     private func detailSection<Content: View>(
@@ -129,13 +101,6 @@ struct HubEventDetailView: View {
 
     private var summaryCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                HubEventStatusBadge(status: event.status)
-                Spacer()
-                Text(HubEventDetailFormatting.statusTimingText(for: event))
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(Color.orange)
-            }
             Text(event.summary?.isEmpty == false ? event.summary! : "공식 출처 기반 굿즈/행사 정보입니다.")
                 .font(.subheadline)
                 .foregroundStyle(HubEventDetailColors.muted)
@@ -191,13 +156,6 @@ struct HubEventDetailView: View {
             .background(HubEventDetailColors.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
-    private var heroSubtitle: String {
-        let rows = HubEventDetailFormatting.rows(for: event)
-        let venue = rows.first { $0.label == "장소" }?.value
-        let period = rows.first { $0.label == "기간" }?.value
-        return [venue, period].compactMap { $0 }.joined(separator: " · ")
-    }
-
     private func url(from rawValue: String?) -> URL? {
         guard let rawValue, !rawValue.isEmpty else { return nil }
         return URL(string: rawValue)
@@ -207,6 +165,21 @@ struct HubEventDetailView: View {
 struct HubEventDetailRow: Equatable {
     let label: String
     let value: String
+}
+
+struct HubEventHeroTag: Equatable, Identifiable {
+    let label: String
+    let tone: HubEventHeroTagTone
+
+    var id: String {
+        "\(tone)-\(label)"
+    }
+}
+
+enum HubEventHeroTagTone: Equatable {
+    case status
+    case category
+    case participation
 }
 
 enum HubEventDetailFormatting {
@@ -232,6 +205,29 @@ enum HubEventDetailFormatting {
         rows.append(HubEventDetailRow(label: "분류", value: event.category.displayName))
         rows.append(HubEventDetailRow(label: "출처", value: event.sourceLabel))
         return rows
+    }
+
+    static func heroSubtitleLines(for event: HubEvent) -> [String] {
+        let venue = event.venueName?.isEmpty == false ? event.venueName! : event.sourceLabel
+        return [venue, periodText(for: event)]
+            .filter { !$0.isEmpty }
+            .reduce(into: [String]()) { result, line in
+                if !result.contains(line) {
+                    result.append(line)
+                }
+            }
+    }
+
+    static func heroTags(for event: HubEvent) -> [HubEventHeroTag] {
+        [
+            HubEventHeroTag(label: event.status.displayName, tone: .status),
+            HubEventHeroTag(label: event.category.displayName, tone: .category),
+            HubEventHeroTag(label: event.participationMode.displayName, tone: .participation)
+        ].reduce(into: [HubEventHeroTag]()) { result, tag in
+            if !result.contains(where: { $0.label == tag.label }) {
+                result.append(tag)
+            }
+        }
     }
 
     static func periodText(for event: HubEvent) -> String {
@@ -313,6 +309,34 @@ private struct HubEventHeroImage: View {
                 .rotationEffect(.degrees(-8))
                 .offset(x: 86, y: 86)
         }
+    }
+}
+
+private struct HubEventHeroTagView: View {
+    let tag: HubEventHeroTag
+
+    var body: some View {
+        Text(tag.label)
+            .font(.caption.weight(.bold))
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(background, in: Capsule())
+    }
+
+    private var foreground: Color {
+        switch tag.tone {
+        case .status:
+            return Color(red: 0.22, green: 0.78, blue: 0.61)
+        case .category:
+            return Color(red: 1.0, green: 0.74, blue: 0.32)
+        case .participation:
+            return Color(red: 0.64, green: 0.83, blue: 1.0)
+        }
+    }
+
+    private var background: Color {
+        foreground.opacity(0.18)
     }
 }
 

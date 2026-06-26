@@ -6,6 +6,7 @@ import dev.stellive.hub.core.model.HubEventParticipationMode
 import dev.stellive.hub.core.model.HubEventSourceType
 import dev.stellive.hub.core.model.HubEventStatus
 import dev.stellive.hub.feature.hubevents.HubEventDetailFormatting
+import dev.stellive.hub.feature.hubevents.HubEventHeroTagTone
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
@@ -64,6 +65,35 @@ class HubEventDetailFormattingTest {
 
         assertEquals("2026.06.17 (수) 19:00 시작", period)
         assertFalse(period.contains("종료 미정"))
+    }
+
+    @Test
+    fun heroSubtitleSplitsVenueAndPeriodAcrossLines() {
+        val lines = HubEventDetailFormatting.heroSubtitleLines(sampleEvent(), zone)
+
+        assertEquals(
+            listOf(
+                "더현대 서울 B2 아이코닉 스퀘어",
+                "2026.06.17 (수) 19:00 - 2026.06.23 (화) 21:00",
+            ),
+            lines,
+        )
+    }
+
+    @Test
+    fun heroTagsAreDeduplicatedAndUseDistinctTones() {
+        val tags = HubEventDetailFormatting.heroTags(sampleEvent())
+
+        assertEquals(listOf("진행 중", "굿즈", "오프라인"), tags.map { it.label })
+        assertEquals(
+            listOf(
+                HubEventHeroTagTone.STATUS,
+                HubEventHeroTagTone.CATEGORY,
+                HubEventHeroTagTone.PARTICIPATION,
+            ),
+            tags.map { it.tone },
+        )
+        assertEquals(tags.size, tags.map { it.label }.toSet().size)
     }
 
     private fun sampleEvent(): HubEvent =

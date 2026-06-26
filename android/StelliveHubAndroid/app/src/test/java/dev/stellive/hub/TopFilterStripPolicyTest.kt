@@ -28,4 +28,13 @@ class TopFilterStripPolicyTest {
         assertFalse(TopFilterStripPolicy.showsTrailingOverflowHint())
         assertFalse(TopFilterStripPolicy.showsSelectedCheckIcon())
     }
+
+    @Test
+    fun filterStripKeepsExtraTopPaddingAndTouchHeight() {
+        assertEquals(8, TopFilterStripPolicy.ContainerTopPaddingDp)
+        assertEquals(8, TopFilterStripPolicy.ContainerBottomPaddingDp)
+        assertEquals(42, TopFilterStripPolicy.OptionHeightDp)
+        assertEquals(6, TopFilterStripPolicy.OptionEndMarginDp)
+        assertEquals(6, TopFilterStripPolicy.OptionBottomMarginDp)
+    }
 }
