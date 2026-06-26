@@ -62,18 +62,16 @@ class TopFilterStripView(context: Context) : LinearLayout(context) {
         onSelected: (groupId: String, optionId: String) -> Unit,
     ): MaterialCardView =
         MaterialCardView(context).apply {
+            val selected = option.id == group.selectedId
             radius = dp(18).toFloat()
             cardElevation = 0f
-            isCheckable = true
-            isChecked = option.id == group.selectedId
-            checkedIcon = null
             setCardBackgroundColor(
                 ContextCompat.getColor(
                     context,
-                    if (isChecked) R.color.hub_accent_soft else R.color.hub_card_surface_compact,
+                    if (selected) R.color.hub_accent_soft else R.color.hub_card_surface_compact,
                 ),
             )
-            contentDescription = "${group.id} ${option.label}${if (isChecked) ", 선택됨" else ""}"
+            contentDescription = "${group.id} ${option.label}${if (selected) ", 선택됨" else ""}"
             layoutParams = LayoutParams(
                 if (mode == FilterStripLayoutMode.EQUAL_WIDTH) 0 else dp(112),
                 dp(40),
@@ -87,7 +85,7 @@ class TopFilterStripView(context: Context) : LinearLayout(context) {
                 gravity = Gravity.CENTER
                 setTextColor(ContextCompat.getColor(context, R.color.hub_text))
                 textSize = 13f
-                typeface = if (isChecked) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
             }, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT,
