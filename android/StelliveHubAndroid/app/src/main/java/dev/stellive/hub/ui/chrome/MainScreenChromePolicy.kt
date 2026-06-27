@@ -11,7 +11,7 @@ data class MainScreenChromeSpec(
 object MainScreenChromePolicy {
     private val rootScreens = setOf("home", "live", "songs", "goods_events")
     private val expandedBodyHeaderScreens = setOf("history", "goods_event_detail")
-    private val titleStickyWhileScrollingScreens = setOf("goods_event_detail")
+    private val titleStickyWhileScrollingScreens = emptySet<String>()
 
     fun spec(screenId: String, canGoBack: Boolean = false): MainScreenChromeSpec {
         val isRoot = screenId in rootScreens
@@ -19,7 +19,7 @@ object MainScreenChromePolicy {
             showExpandedBodyHeader = screenId in expandedBodyHeaderScreens,
             showTopBarTitleAtRest = true,
             keepTopBarTitleWhenScrolled = screenId in titleStickyWhileScrollingScreens,
-            showSettingsAction = isRoot && !canGoBack,
+            showSettingsAction = true,
             showSongSearchAction = screenId == "songs" && !canGoBack,
         )
     }

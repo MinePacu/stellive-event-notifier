@@ -17,7 +17,9 @@ class TopFilterStripView(context: Context) : LinearLayout(context) {
 
     init {
         orientation = VERTICAL
-        setPadding(0, dp(5), 0, dp(7))
+        clipChildren = false
+        clipToPadding = false
+        setPadding(0, dp(TopFilterStripPolicy.ContainerTopPaddingDp), 0, dp(TopFilterStripPolicy.ContainerBottomPaddingDp))
     }
 
     fun bind(
@@ -25,19 +27,24 @@ class TopFilterStripView(context: Context) : LinearLayout(context) {
         onSelected: (groupId: String, optionId: String) -> Unit,
     ) {
         removeAllViews()
+        val maxOptionCountInStrip = groups.maxOfOrNull { it.options.size } ?: 0
         groups.forEach { group ->
-            addView(filterGroup(group, onSelected))
+            addView(filterGroup(group, maxOptionCountInStrip, onSelected))
         }
     }
 
     private fun filterGroup(
         group: TopFilterGroup,
+        maxOptionCountInStrip: Int,
         onSelected: (groupId: String, optionId: String) -> Unit,
     ): View {
-        val mode = TopFilterStripPolicy.layoutMode(group.options.size)
+        val mode = TopFilterStripPolicy.layoutMode(group.options.size, maxOptionCountInStrip)
         val optionRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            clipChildren = false
+            clipToPadding = false
+            setPadding(0, dp(TopFilterStripPolicy.GroupTopPaddingDp), 0, 0)
         }
         group.options.forEach { option ->
             optionRow.addView(filterOption(group, option, mode, onSelected))
@@ -46,6 +53,8 @@ class TopFilterStripView(context: Context) : LinearLayout(context) {
 
         val scroll = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
+            clipChildren = false
+            clipToPadding = false
             addView(optionRow)
             setOnScrollChangeListener { _, scrollX, _, _, _ ->
                 scrollPositions[group.id] = scrollX
@@ -62,32 +71,31 @@ class TopFilterStripView(context: Context) : LinearLayout(context) {
         onSelected: (groupId: String, optionId: String) -> Unit,
     ): MaterialCardView =
         MaterialCardView(context).apply {
+            val selected = option.id == group.selectedId
             radius = dp(18).toFloat()
             cardElevation = 0f
-            isCheckable = true
-            isChecked = option.id == group.selectedId
-            checkedIcon = null
+            clipToOutline = true
             setCardBackgroundColor(
                 ContextCompat.getColor(
                     context,
-                    if (isChecked) R.color.hub_accent_soft else R.color.hub_card_surface_compact,
+                    if (selected) R.color.hub_accent_soft else R.color.hub_card_surface_compact,
                 ),
             )
-            contentDescription = "${group.id} ${option.label}${if (isChecked) ", 선택됨" else ""}"
+            contentDescription = "${group.id} ${option.label}${if (selected) ", 선택됨" else ""}"
             layoutParams = LayoutParams(
                 if (mode == FilterStripLayoutMode.EQUAL_WIDTH) 0 else dp(112),
-                dp(40),
+                dp(TopFilterStripPolicy.OptionHeightDp),
                 if (mode == FilterStripLayoutMode.EQUAL_WIDTH) 1f else 0f,
             ).apply {
-                marginEnd = dp(6)
-                bottomMargin = dp(5)
+                marginEnd = dp(TopFilterStripPolicy.OptionEndMarginDp)
+                bottomMargin = dp(TopFilterStripPolicy.OptionBottomMarginDp)
             }
             addView(TextView(context).apply {
                 text = option.label
                 gravity = Gravity.CENTER
                 setTextColor(ContextCompat.getColor(context, R.color.hub_text))
                 textSize = 13f
-                typeface = if (isChecked) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
             }, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT,

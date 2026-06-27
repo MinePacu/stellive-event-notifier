@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildApp, createMusicMemberUpsertInputs } from "../src/app.js";
+import { buildApp, createMusicMemberAliasInputs, createMusicMemberUpsertInputs } from "../src/app.js";
 import { loadEnv } from "../src/config/env.js";
 
 const baseEnv = {
@@ -28,6 +28,13 @@ describe("music app wiring", () => {
     ]);
     expect(inputs.every((input) => typeof input.youtubeChannelId === "string" && input.youtubeChannelId.startsWith("UC"))).toBe(true);
     expect(inputs.find((input) => input.id === "stellive-official")).toBeUndefined();
+  });
+
+  it("uses the same target music members for automatic member matching", () => {
+    const ids = createMusicMemberAliasInputs().map((input) => input.id).sort();
+
+    expect(ids).toEqual(createMusicMemberUpsertInputs().map((input) => input.id).sort());
+    expect(ids).not.toContain("stellive-official");
   });
 
   it("loadEnv parses music sync cache and official playlist defaults", () => {

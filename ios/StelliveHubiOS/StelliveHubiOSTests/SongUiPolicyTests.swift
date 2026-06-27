@@ -213,6 +213,13 @@ final class SongUiPolicyTests: XCTestCase {
         )
     }
 
+    func testHomeRecentCoverRowsUseSongPageInsets() {
+        XCTAssertEqual(IOSSongPagePolicy.rowInsetTop, 6)
+        XCTAssertEqual(IOSSongPagePolicy.rowInsetLeading, 0)
+        XCTAssertEqual(IOSSongPagePolicy.rowInsetBottom, 6)
+        XCTAssertEqual(IOSSongPagePolicy.rowInsetTrailing, 0)
+    }
+
     func testRecentCoverSongsAreNewestFirstAndLimited() {
         let songs = [
             SongCatalogItem(

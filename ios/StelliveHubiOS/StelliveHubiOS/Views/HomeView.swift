@@ -37,6 +37,7 @@ struct HomeView: View {
                     } else {
                         ForEach(serverStore.recentCoverSongs) { song in
                             SongRow(song: song)
+                                .listRowInsets(IOSSongPagePolicy.songRowInsets)
                         }
                     }
 

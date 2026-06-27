@@ -126,10 +126,10 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertTrue(IOSPrimaryNavigationPolicy.settingsAccess.appliesToAllPrimaryTabs)
     }
 
-    func testSettingsToolbarPushesWithinPresenterNavigationStackOnlyFromPrimaryRoots() {
+    func testSettingsToolbarPushesWithinPresenterNavigationStackOnEveryPage() {
         XCTAssertEqual(IOSPrimaryNavigationPolicy.settingsAccess.presentation, .navigationStackPush)
         XCTAssertTrue(IOSPrimaryNavigationPolicy.settingsAccess.reusesPresenterNavigationStack)
-        XCTAssertTrue(IOSPrimaryNavigationPolicy.settingsAccess.showsOnlyOnPrimaryRoots)
+        XCTAssertFalse(IOSPrimaryNavigationPolicy.settingsAccess.showsOnlyOnPrimaryRoots)
         XCTAssertTrue(IOSPrimaryNavigationPolicy.settingsAccess.suppressesPrimaryButtonWithinSettingsFlow)
     }
 

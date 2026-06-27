@@ -38,7 +38,7 @@ struct IOSPrimaryNavigationPolicy {
         appliesToAllPrimaryTabs: true,
         presentation: .navigationStackPush,
         reusesPresenterNavigationStack: true,
-        showsOnlyOnPrimaryRoots: true,
+        showsOnlyOnPrimaryRoots: false,
         suppressesPrimaryButtonWithinSettingsFlow: true
     )
 

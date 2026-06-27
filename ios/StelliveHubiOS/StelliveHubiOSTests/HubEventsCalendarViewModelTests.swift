@@ -516,6 +516,24 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertFalse(period?.contains("종료 미정") ?? false)
     }
 
+    func testHubEventDetailHeroSubtitleSplitsVenueAndPeriodAcrossLines() {
+        XCTAssertEqual(
+            HubEventDetailFormatting.heroSubtitleLines(for: detailEvent()),
+            [
+                "더현대 서울 B2 아이코닉 스퀘어",
+                "2026.06.17 (수) 19:00 - 2026.06.23 (화) 21:00"
+            ]
+        )
+    }
+
+    func testHubEventDetailHeroTagsAreDeduplicatedAndUseDistinctTones() {
+        let tags = HubEventDetailFormatting.heroTags(for: detailEvent())
+
+        XCTAssertEqual(tags.map(\.label), ["진행 중", "굿즈", "오프라인"])
+        XCTAssertEqual(tags.map(\.tone), [.status, .category, .participation])
+        XCTAssertEqual(Set(tags.map(\.label)).count, tags.count)
+    }
+
     func testCalendarEntryDisplaysStartOnlyEventAsStartTime() {
         let store = MockHubStore()
         let entry = store.calendarDays(for: "all")
