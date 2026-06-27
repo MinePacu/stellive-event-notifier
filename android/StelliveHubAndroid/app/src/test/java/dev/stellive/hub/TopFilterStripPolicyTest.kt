@@ -31,9 +31,10 @@ class TopFilterStripPolicyTest {
 
     @Test
     fun filterStripKeepsExtraTopPaddingAndTouchHeight() {
-        assertEquals(8, TopFilterStripPolicy.ContainerTopPaddingDp)
-        assertEquals(8, TopFilterStripPolicy.ContainerBottomPaddingDp)
-        assertEquals(42, TopFilterStripPolicy.OptionHeightDp)
+        assertEquals(12, TopFilterStripPolicy.ContainerTopPaddingDp)
+        assertEquals(10, TopFilterStripPolicy.ContainerBottomPaddingDp)
+        assertEquals(2, TopFilterStripPolicy.GroupTopPaddingDp)
+        assertEquals(44, TopFilterStripPolicy.OptionHeightDp)
         assertEquals(6, TopFilterStripPolicy.OptionEndMarginDp)
         assertEquals(6, TopFilterStripPolicy.OptionBottomMarginDp)
     }

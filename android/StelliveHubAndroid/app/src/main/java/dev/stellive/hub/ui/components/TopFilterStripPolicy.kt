@@ -17,9 +17,10 @@ data class TopFilterGroup(
 )
 
 object TopFilterStripPolicy {
-    const val ContainerTopPaddingDp = 8
-    const val ContainerBottomPaddingDp = 8
-    const val OptionHeightDp = 42
+    const val ContainerTopPaddingDp = 12
+    const val ContainerBottomPaddingDp = 10
+    const val GroupTopPaddingDp = 2
+    const val OptionHeightDp = 44
     const val OptionEndMarginDp = 6
     const val OptionBottomMarginDp = 6
 
