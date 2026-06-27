@@ -17,8 +17,8 @@ class MainUiPolicyTest {
         assertEquals("YouTube 업로드 곡 탐색", MainUiPolicy.topBarRole("songs"))
         assertEquals("허용된 알림 기록과 정책 제외 항목", MainUiPolicy.topBarRole("history"))
         assertEquals("알림 대상과 전송 정책", MainUiPolicy.topBarRole("settings"))
-        assertEquals("상세", MainUiPolicy.topBarTitle("goods_event_detail"))
-        assertEquals("상세", MainUiPolicy.topBarRole("goods_event_detail"))
+        assertEquals("", MainUiPolicy.topBarTitle("goods_event_detail"))
+        assertEquals("", MainUiPolicy.topBarRole("goods_event_detail"))
     }
 
     @Test
