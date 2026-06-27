@@ -2,16 +2,51 @@ package dev.stellive.hub
 
 import dev.stellive.hub.core.model.NotificationEventType
 import dev.stellive.hub.core.model.HubEventCategory
+import dev.stellive.hub.core.model.HubEventParticipationMode
 import dev.stellive.hub.core.model.HubEventStatus
 import dev.stellive.hub.core.model.NotificationPlatform
 import dev.stellive.hub.core.model.NotificationSettingState
 import dev.stellive.hub.feature.home.MainUiPolicy
 import dev.stellive.hub.feature.home.MockHubRepository
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HubEventsPolicyTest {
+    @Test
+    fun goodsEventsSummaryCardsAreHidden() {
+        assertFalse(MainUiPolicy.goodsEventsSummaryCardsVisible())
+    }
+
+    @Test
+    fun goodsEventFiltersUseExistingCategoryStatusAndParticipationMode() {
+        assertTrue(
+            MainUiPolicy.goodsEventMatchesFilter(
+                filterId = "goods",
+                category = HubEventCategory.ONLINE_GOODS,
+                status = HubEventStatus.OPEN,
+                participationMode = HubEventParticipationMode.ONLINE,
+            ),
+        )
+        assertTrue(
+            MainUiPolicy.goodsEventMatchesFilter(
+                filterId = "offline",
+                category = HubEventCategory.OFFLINE_POPUP,
+                status = HubEventStatus.OPEN,
+                participationMode = HubEventParticipationMode.HYBRID,
+            ),
+        )
+        assertFalse(
+            MainUiPolicy.goodsEventMatchesFilter(
+                filterId = "closing",
+                category = HubEventCategory.TICKETING,
+                status = HubEventStatus.UPCOMING,
+                participationMode = HubEventParticipationMode.ONLINE,
+            ),
+        )
+    }
+
     @Test
     fun displayNamesAndDefaultsIncludeHubEvents() {
         assertEquals("굿즈/행사 공개", NotificationEventType.EVENT_ANNOUNCED.displayName)

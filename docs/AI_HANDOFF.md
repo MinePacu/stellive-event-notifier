@@ -1,5 +1,21 @@
 # AI Handoff
 
+## Android Shared UI Chrome, Cards, And Filters
+
+- Android root screens no longer render duplicate large body titles/descriptions; the existing top bar owns page identity.
+- Live, Songs, and Goods/Events filters use a fixed shared top filter strip. Up to three options use equal width; larger groups scroll horizontally.
+- Songs exposes a top-bar search action and a separate search screen that retains the input view while debounced result updates replace only the results container.
+- Shared semantic card surfaces and external section/date headers are implemented without copying Samsung Health graphs, exercise UI, assets, colors, or proprietary layout.
+- Goods/Events summary rectangles were removed; existing calendar/feed data and client-side filter rules remain in use.
+
+## Mobile Status, Recent Covers, And Channel Discovery
+
+- Android song search now debounces focus/editor-triggered rerenders, avoiding removal of the active input during focus loss.
+- Android Home/Live/Songs/Goods-Events use a compact server status strip; the duplicated Songs title card was removed and the member selector summary was reduced.
+- Android and iOS Home show up to five recent cover songs from backend `/v1/music?type=cover&limit=5`; mobile code never calls YouTube directly.
+- `MusicChannelDiscoverySyncService` checks the official and active member uploads playlists, classifies cover/original candidates, deduplicates by `videoId`, preserves official playlist sources/manual overrides, and leaves uncertain member matches in review.
+- Docker includes an hourly discovery worker controlled by `MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED`, `MUSIC_CHANNEL_DISCOVERY_INTERVAL_MINUTES`, and `MUSIC_CHANNEL_DISCOVERY_RECENT_PAGES`.
+
 ## Official Stellive Music Playlist Sync Update
 
 - Official music catalog sync now uses only COVER `PLLjd981H8qSN9PQ8-X6wINqBF1GjGxusy` and ORIGINAL `PLLjd981H8qSMGC4Nir0hD2Gj9n9PDUoHX`.

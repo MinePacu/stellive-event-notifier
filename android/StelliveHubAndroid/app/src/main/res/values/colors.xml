@@ -5,6 +5,9 @@
     <color name="hub_surface_dark">#171A1A</color>
     <color name="hub_background">#F5F7F8</color>
     <color name="hub_card">#FFFFFF</color>
+    <color name="hub_card_surface">#FFFFFF</color>
+    <color name="hub_card_surface_compact">#EEF2F2</color>
+    <color name="hub_filter_fade">#E6F5F7F8</color>
     <color name="hub_text">#172326</color>
     <color name="hub_text_muted">#667579</color>
     <color name="hub_text_subtle">#8C999C</color>

@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stellive Hub Admin Mobile Mockup</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d0e0c;
+      --surface: #141712;
+      --surface-2: #0f110e;
+      --field: #090a09;
+      --line: #2a3027;
+      --line-strong: #3a4436;
+      --text: #edf1e8;
+      --muted: #a4ad9d;
+      --quiet: #747d6e;
+      --good: #8bc79a;
+      --warn: #d9aa55;
+      --bad: #dd7770;
+      --focus: #7fb58a;
+      --button: #1b2018;
+      --button-hover: #232a20;
+      font-family: "Aptos", "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    .mobile-page {
+      width: min(100%, 430px);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 12px 12px 84px;
+      background: var(--bg);
+    }
+
+    .top {
+      display: grid;
+      gap: 10px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    h1 {
+      font-size: 19px;
+      font-weight: 700;
+    }
+
+    h2 {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    h3 {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .token {
+      display: grid;
+      gap: 6px;
+    }
+
+    label {
+      color: #d9dfd2;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: var(--field);
+      color: var(--text);
+      padding: 8px 10px;
+      outline: none;
+    }
+
+    textarea {
+      min-height: 88px;
+      resize: vertical;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: var(--focus);
+      outline: 2px solid rgba(127, 181, 138, 0.45);
+      outline-offset: 1px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 2px 0;
+    }
+
+    .tab {
+      flex: 0 0 auto;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface-2);
+      color: var(--muted);
+      padding: 0 10px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .tab[aria-current="page"] {
+      border-color: var(--line-strong);
+      color: var(--text);
+      background: #1b2118;
+    }
+
+    .section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      margin-top: 12px;
+      overflow: hidden;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 44px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-2);
+    }
+
+    .section-body {
+      padding: 12px;
+    }
+
+    .rows {
+      display: grid;
+      gap: 0;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: minmax(110px, 0.42fr) minmax(0, 1fr);
+      gap: 10px;
+      padding: 9px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .row:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .row:last-child {
+      padding-bottom: 0;
+    }
+
+    .key {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .value {
+      min-width: 0;
+      word-break: break-word;
+    }
+
+    .state {
+      display: inline-block;
+      min-width: 68px;
+      border: 1px solid var(--line-strong);
+      border-radius: 4px;
+      padding: 2px 6px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .state.good {
+      border-color: rgba(139, 199, 154, 0.45);
+      color: var(--good);
+    }
+
+    .state.warn {
+      border-color: rgba(217, 170, 85, 0.5);
+      color: var(--warn);
+    }
+
+    .state.bad {
+      border-color: rgba(221, 119, 112, 0.5);
+      color: var(--bad);
+    }
+
+    button {
+      min-height: 38px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: var(--button);
+      color: var(--text);
+      padding: 0 12px;
+      cursor: default;
+    }
+
+    button:hover {
+      background: var(--button-hover);
+    }
+
+    button.primary {
+      border-color: #6c9f75;
+      background: #243323;
+    }
+
+    button.danger {
+      border-color: #7c413d;
+      color: #ffd9d5;
+    }
+
+    .button-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .adapter {
+      display: grid;
+      gap: 7px;
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .adapter:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .adapter-top,
+    .event-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .adapter-title,
+    .event-title {
+      font-weight: 700;
+    }
+
+    .note,
+    .meta {
+      color: var(--quiet);
+      font-size: 12px;
+    }
+
+    .filters,
+    .form-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .event-card {
+      display: grid;
+      gap: 6px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      padding: 9px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .event-card:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .event-card.active {
+      margin: 0 -8px;
+      padding: 9px 8px;
+      border: 1px solid var(--line-strong);
+      background: #11170f;
+    }
+
+    .form-section {
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+      margin-top: 12px;
+    }
+
+    .form-section:first-child {
+      border-top: 0;
+      padding-top: 0;
+      margin-top: 0;
+    }
+
+    .form-section h3 {
+      margin-bottom: 10px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .image-policy {
+      display: grid;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      background: var(--field);
+    }
+
+    .image-box {
+      display: grid;
+      place-items: center;
+      min-height: 56px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      color: var(--quiet);
+      font-size: 12px;
+    }
+
+    .log-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      color: var(--muted);
+    }
+
+    .log-list li + li {
+      margin-top: 8px;
+    }
+
+    .bottom-actions {
+      position: fixed;
+      left: 50%;
+      bottom: 0;
+      width: min(100%, 430px);
+      border-top: 1px solid var(--line);
+      background: var(--bg);
+      padding: 10px 12px 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-left: calc(min(100%, 430px) / -2);
+    }
+
+    @media (min-width: 720px) {
+      .mobile-page {
+        border-left: 1px solid var(--line);
+        border-right: 1px solid var(--line);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="mobile-page">
+    <header class="top">
+      <h1>Stellive Hub Admin</h1>
+      <div class="token">
+        <label for="token">Internal API bearer token</label>
+        <input id="token" type="password" value="••••••••••••" autocomplete="off">
+      </div>
+      <nav class="tabs" aria-label="Admin sections">
+        <a class="tab" href="#overview" aria-current="page">Overview</a>
+        <a class="tab" href="#actions">Actions</a>
+        <a class="tab" href="#adapters">Adapters</a>
+        <a class="tab" href="#hub-events">Hub events</a>
+      </nav>
+    </header>
+
+    <section id="overview" class="section">
+      <div class="section-head">
+        <h2>Overview</h2>
+        <strong class="state good">current</strong>
+      </div>
+      <div class="section-body rows">
+        <div class="row">
+          <div class="key">Service</div>
+          <div class="value">stellive-hub-api</div>
+        </div>
+        <div class="row">
+          <div class="key">Database</div>
+          <div class="value"><strong class="state good">ok</strong> PostgreSQL reachable</div>
+        </div>
+        <div class="row">
+          <div class="key">Queue</div>
+          <div class="value">12 queued, 1 locked, 2 failed</div>
+        </div>
+        <div class="row">
+          <div class="key">Delivery</div>
+          <div class="value">94 sent, 31 skipped, 2 failed</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="actions" class="section">
+      <div class="section-head">
+        <h2>Actions</h2>
+      </div>
+      <div class="section-body button-grid">
+        <button type="button" class="primary">Drain jobs</button>
+        <button type="button">Renew YouTube</button>
+        <button type="button">Poll CHZZK</button>
+        <button type="button">Special days</button>
+      </div>
+    </section>
+
+    <section id="adapters" class="section">
+      <div class="section-head">
+        <h2>Adapters</h2>
+      </div>
+      <div class="section-body">
+        <article class="adapter">
+          <div class="adapter-top">
+            <div class="adapter-title">YouTube</div>
+            <strong class="state good">enabled</strong>
+          </div>
+          <div class="note">WebSub configured / checked 14:07 KST</div>
+        </article>
+        <article class="adapter">
+          <div class="adapter-top">
+            <div class="adapter-title">CHZZK</div>
+            <strong class="state good">enabled</strong>
+          </div>
+          <div class="note">Client-auth live-list verified / checked 14:06 KST</div>
+        </article>
+        <article class="adapter">
+          <div class="adapter-top">
+            <div class="adapter-title">X</div>
+            <strong class="state">disabled</strong>
+          </div>
+          <div class="note">x_no_free_official_api</div>
+        </article>
+        <article class="adapter">
+          <div class="adapter-top">
+            <div class="adapter-title">Naver Cafe</div>
+            <strong class="state">disabled</strong>
+          </div>
+          <div class="note">deferred_for_mvp</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Secrets and flags</h2>
+      </div>
+      <div class="section-body rows">
+        <div class="row">
+          <div class="key">Admin token</div>
+          <div class="value"><strong class="state good">set</strong></div>
+        </div>
+        <div class="row">
+          <div class="key">Internal token</div>
+          <div class="value"><strong class="state good">set</strong></div>
+        </div>
+        <div class="row">
+          <div class="key">FCM key</div>
+          <div class="value"><strong class="state warn">missing</strong></div>
+        </div>
+        <div class="row">
+          <div class="key">X free API</div>
+          <div class="value">false</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="hub-events" class="section">
+      <div class="section-head">
+        <h2>Hub events</h2>
+        <button type="button">Refresh</button>
+      </div>
+      <div class="section-body">
+        <div class="filters">
+          <div class="field">
+            <label for="state-filter">Publication state</label>
+            <select id="state-filter">
+              <option>All</option>
+              <option>Draft</option>
+              <option>Published</option>
+              <option>Inactive</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="event-search">Search</label>
+            <input id="event-search" value="goods">
+          </div>
+        </div>
+
+        <div style="margin-top: 12px;">
+          <article class="event-card active">
+            <div class="event-top">
+              <div>
+                <div class="event-title">Official goods reservation window</div>
+                <div class="meta">online_goods / official / updated 13:58</div>
+              </div>
+              <strong class="state warn">draft</strong>
+            </div>
+          </article>
+          <article class="event-card">
+            <div class="event-top">
+              <div>
+                <div class="event-title">Gen2 offline collaboration schedule</div>
+                <div class="meta">offline_popup / gen2 / updated yesterday</div>
+              </div>
+              <strong class="state good">published</strong>
+            </div>
+          </article>
+        </div>
+
+        <form class="form-grid" aria-label="Hub event editor">
+          <div class="form-section">
+            <h3>Basic information</h3>
+            <div class="form-grid">
+              <div class="field">
+                <label for="title">Title</label>
+                <input id="title" value="Official goods reservation window">
+              </div>
+              <div class="field">
+                <label for="summary">Summary</label>
+                <textarea id="summary">Reservation opens after the official announcement window. Calendar and widgets stay text-first.</textarea>
+              </div>
+              <div class="field">
+                <label for="category">Category</label>
+                <select id="category">
+                  <option>online_goods</option>
+                  <option>ticketing</option>
+                  <option>offline_popup</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="generation">Generation</label>
+                <input id="generation" value="official">
+                <div class="note">Allowed examples: official, gen1, gen2, gen3.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h3>Source and image metadata</h3>
+            <div class="form-grid">
+              <div class="field">
+                <label for="source-type">Source type</label>
+                <select id="source-type">
+                  <option>official</option>
+                  <option>member</option>
+                  <option>official_collab</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="source-url">Source URL</label>
+                <input id="source-url" value="https://example.invalid/official-notice">
+              </div>
+              <div class="image-policy">
+                <div class="image-box">No bundled image</div>
+                <div class="note">HTTPS metadata only when policy allows. No uploads, logos, screenshots, fan art, or copied assets.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h3>Schedule and links</h3>
+            <div class="form-grid">
+              <div class="field">
+                <label for="starts">Starts at</label>
+                <input id="starts" value="2026-07-01 18:00">
+              </div>
+              <div class="field">
+                <label for="ends">Ends at</label>
+                <input id="ends" value="2026-07-12 23:59">
+              </div>
+              <div class="field">
+                <label for="purchase">Purchase URL</label>
+                <input id="purchase" value="https://example.invalid/store">
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Validation and audit</h2>
+      </div>
+      <div class="section-body">
+        <ul class="log-list">
+          <li><strong class="state good">ok</strong> Official category is 기타 and member is blank.</li>
+          <li><strong class="state good">ok</strong> No image upload or copied asset field.</li>
+          <li>2026-06-26 13:58 KST / draft saved / admin</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <div class="bottom-actions" aria-label="Hub event actions">
+    <button type="button">Validate</button>
+    <button type="button" class="primary">Save</button>
+    <button type="button" class="danger">Delete</button>
+  </div>
+</body>
+</html>

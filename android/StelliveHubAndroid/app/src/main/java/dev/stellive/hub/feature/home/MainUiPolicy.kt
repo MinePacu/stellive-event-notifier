@@ -5,9 +5,14 @@ import dev.stellive.hub.core.model.NotificationPlatform
 import dev.stellive.hub.core.model.NotificationSettingState
 import dev.stellive.hub.core.model.CatalogRole
 import dev.stellive.hub.core.model.HubMember
+import dev.stellive.hub.core.model.HubEventCategory
+import dev.stellive.hub.core.model.HubEventParticipationMode
 import dev.stellive.hub.core.model.HubEventStatus
 import dev.stellive.hub.core.model.SongCatalogItem
+import dev.stellive.hub.core.model.SongType
 import kotlin.math.roundToInt
+import dev.stellive.hub.ui.components.TopFilterGroup
+import dev.stellive.hub.ui.components.TopFilterOption
 import java.text.NumberFormat
 import java.time.Duration
 import java.time.Instant
@@ -77,6 +82,7 @@ object MainUiPolicy {
     fun topBarTitle(screenId: String): String = when (screenId) {
         "live" -> "라이브"
         "songs" -> "노래"
+        "song_search" -> "노래 검색"
         "history" -> "기록"
         "settings" -> "설정"
         "settings_delivery" -> "전달 방식"
@@ -93,6 +99,7 @@ object MainUiPolicy {
     fun topBarRole(screenId: String): String = when (screenId) {
         "live" -> "방송 상태와 CHZZK 대상 현황"
         "songs" -> "YouTube 업로드 곡 탐색"
+        "song_search" -> "제목 또는 멤버"
         "history" -> "허용된 알림 기록과 정책 제외 항목"
         "settings" -> "알림 대상과 전송 정책"
         "settings_delivery" -> "알림 전달과 제한"
@@ -128,6 +135,8 @@ object MainUiPolicy {
 
     fun homeSummaryCardsVisible(): Boolean = false
 
+    fun goodsEventsSummaryCardsVisible(): Boolean = false
+
     fun songGenerationFilters(): List<SongFilterOption> = listOf(
         SongFilterOption("all", "전체"),
         SongFilterOption("gen1", "1기생"),
@@ -140,6 +149,62 @@ object MainUiPolicy {
         SongFilterOption("original", "오리지널"),
         SongFilterOption("cover", "커버")
     )
+
+    fun songTopFilterGroups(
+        selectedGenerationId: String,
+        selectedType: String,
+    ): List<TopFilterGroup> = listOf(
+        TopFilterGroup(
+            id = "generation",
+            options = songGenerationFilters().map { TopFilterOption(it.id, it.label) },
+            selectedId = selectedGenerationId,
+        ),
+        TopFilterGroup(
+            id = "type",
+            options = songTypeFilters().map { TopFilterOption(it.id, it.label) },
+            selectedId = selectedType,
+        ),
+    )
+
+    fun liveTopFilterGroups(selectedId: String): List<TopFilterGroup> = listOf(
+        TopFilterGroup(
+            id = "status",
+            options = listOf(
+                TopFilterOption("live", "방송 중"),
+                TopFilterOption("all", "전체"),
+                TopFilterOption("offline", "오프라인"),
+            ),
+            selectedId = selectedId,
+        ),
+    )
+
+    fun goodsEventsTopFilterGroups(selectedId: String): List<TopFilterGroup> = listOf(
+        TopFilterGroup(
+            id = "category",
+            options = listOf(
+                TopFilterOption("all", "전체"),
+                TopFilterOption("goods", "굿즈"),
+                TopFilterOption("ticketing", "티켓"),
+                TopFilterOption("offline", "오프라인"),
+                TopFilterOption("closing", "마감 임박"),
+            ),
+            selectedId = selectedId,
+        ),
+    )
+
+    fun goodsEventMatchesFilter(
+        filterId: String,
+        category: HubEventCategory,
+        status: HubEventStatus,
+        participationMode: HubEventParticipationMode,
+    ): Boolean = when (filterId) {
+        "goods" -> category == HubEventCategory.ONLINE_GOODS || category == HubEventCategory.ONLINE_COLLAB
+        "ticketing" -> category == HubEventCategory.TICKETING
+        "offline" -> participationMode == HubEventParticipationMode.OFFLINE ||
+            participationMode == HubEventParticipationMode.HYBRID
+        "closing" -> status == HubEventStatus.CLOSING_SOON
+        else -> true
+    }
 
     fun songExternalUrl(rawUrl: String?): String? {
         val trimmed = rawUrl?.trim().orEmpty()
@@ -166,6 +231,27 @@ object MainUiPolicy {
         }
 
     fun canClearSongMemberFilter(selectedMemberId: String): Boolean = selectedMemberId != "all"
+
+    fun songMemberFilterSummary(
+        members: List<HubMember>,
+        selectedMemberId: String,
+        visibleCount: Int,
+    ): String = "${songMemberFilterLabel(members, selectedMemberId)} · ${visibleCount}곡"
+
+    fun normalizedSongQuery(query: String): String = query.trim()
+
+    fun recentCoverSongs(songs: List<SongCatalogItem>, limit: Int = 5): List<SongCatalogItem> =
+        songs.asSequence()
+            .filter { it.type == SongType.COVER }
+            .sortedByDescending { it.publishedAt }
+            .take(limit.coerceAtLeast(0))
+            .toList()
+
+    fun serverConnectionLabel(sourceLabel: String): String = when {
+        sourceLabel.contains("실패") || sourceLabel.contains("목업") -> "오프라인"
+        sourceLabel.contains("데이터 없음") || sourceLabel.contains("캐시") -> "캐시 표시 중"
+        else -> "서버 연결됨"
+    }
 
     fun songThumbnailHeightDp(widthDp: Int): Int = (widthDp / SONG_THUMBNAIL_ASPECT_RATIO).roundToInt()
 
