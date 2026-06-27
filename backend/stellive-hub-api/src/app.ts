@@ -32,6 +32,7 @@ import { MusicSyncService } from "./music/musicSyncService.js";
 import { OfficialStelliveMusicSyncService } from "./music/officialStelliveMusicSyncService.js";
 import { MusicChannelDiscoveryReclassificationService } from "./music/musicChannelDiscoveryReclassificationService.js";
 import { MusicChannelDiscoverySyncService } from "./music/musicChannelDiscoverySyncService.js";
+import { MusicSourceTypeRepairService } from "./music/musicSourceTypeRepairService.js";
 import { officialStelliveMusicSourcePlaylistSeeds, TARGET_MUSIC_MEMBER_IDS } from "./music/musicSourcePlaylists.js";
 import { WebhookSubscriptionRepository } from "./repositories/webhookSubscriptionRepository.js";
 import SongIngestionService from "./songs/songIngestionService.js";
@@ -311,6 +312,9 @@ function createDefaultMusicSyncService(
   const discoveryReclassificationService = new MusicChannelDiscoveryReclassificationService({
     repository,
   });
+  const sourceTypeRepairService = new MusicSourceTypeRepairService({
+    repository,
+  });
   return {
     musicSync: {
       syncAllMusic: async (mode) => {
@@ -323,6 +327,7 @@ function createDefaultMusicSyncService(
       },
       discoverChannelUploads: () => discoveryService.discover(),
       reclassifyDiscoveredUploads: () => discoveryReclassificationService.reclassify(),
+      repairSourceTypeMismatches: () => sourceTypeRepairService.repair(),
       listReviewCandidates: ({ limit } = {}) => repository.listReviewCandidates?.({ limit }) ?? Promise.resolve([]),
       upsertOverride: async (videoId, input) => {
         const item = await repository.getMusicItemByVideoId(videoId) as { id?: string; youtubeVideoId?: string } | null;

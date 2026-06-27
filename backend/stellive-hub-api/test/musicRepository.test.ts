@@ -314,6 +314,58 @@ it("uses playlist position, published date, and id cursor conditions for playlis
       orderBy: [{ type: "asc" }, { title: "asc" }],
     });
   });
+
+  it("lists and repairs source-backed type mismatches", async () => {
+    const prisma = {
+      musicItem: {
+        findMany: vi.fn(async () => [{
+          id: "music-1",
+          youtubeVideoId: "video-1",
+          title: "Original Song",
+          type: "cover",
+          rawCategoryHint: "COVER",
+          classificationStatus: "AUTO_CLASSIFIED",
+          sourcePlaylist: {
+            type: "original",
+            rawCategoryHint: "ORIGINAL",
+          },
+        }]),
+        updateMany: vi.fn(async () => ({ count: 1 })),
+      },
+    };
+    const repository = new PrismaMusicRepository(prisma);
+
+    await expect(repository.listSourceTypeMismatches()).resolves.toEqual([{
+      id: "music-1",
+      youtubeVideoId: "video-1",
+      title: "Original Song",
+      type: "cover",
+      rawCategoryHint: "COVER",
+      classificationStatus: "AUTO_CLASSIFIED",
+      sourcePlaylist: {
+        type: "original",
+        rawCategoryHint: "ORIGINAL",
+      },
+    }]);
+    await repository.repairMusicItemSourceType("music-1", "original", "ORIGINAL");
+
+    expect(prisma.musicItem.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        sourcePlaylistId: { not: null },
+        classificationStatus: { notIn: ["MANUAL_CONFIRMED", "MANUAL_EXCLUDED"] },
+      }),
+    }));
+    expect(prisma.musicItem.updateMany).toHaveBeenCalledWith({
+      where: { id: "music-1" },
+      data: {
+        type: "original",
+        rawCategoryHint: "ORIGINAL",
+        classificationStatus: "AUTO_CLASSIFIED",
+        isExcluded: false,
+        exclusionReason: null,
+      },
+    });
+  });
 });
 
 describe("PrismaMusicSyncRunRepository", () => {

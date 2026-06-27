@@ -171,6 +171,40 @@ describe("music internal routes", () => {
     expect(reclassifyDiscoveredUploads).toHaveBeenCalledOnce();
   });
 
+  it("runs source type mismatch repair route", async () => {
+    const repairSourceTypeMismatches = vi.fn(async () => ({
+      status: "ok",
+      checked: 2,
+      repaired: 1,
+      manualSkipped: 1,
+    }));
+    const app = await buildApp({
+      env,
+      useProcessEnv: false,
+      internalRoutes: {
+        dependencies: createInternalDeps({
+          musicSync: { syncAllMusic: vi.fn(), repairSourceTypeMismatches },
+        }),
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/music/repair-source-type-mismatches",
+      headers: authHeaders,
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      status: "ok",
+      checked: 2,
+      repaired: 1,
+      manualSkipped: 1,
+    });
+    expect(repairSourceTypeMismatches).toHaveBeenCalledOnce();
+  });
+
   it("exposes review, override, sync log, and quota estimate routes", async () => {
     const listReviewCandidates = vi.fn(async () => [{ videoId: "video-1" }]);
     const upsertOverride = vi.fn(async () => ({ videoId: "video-1", forceExcluded: true }));

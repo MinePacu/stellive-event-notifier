@@ -106,6 +106,7 @@ export interface InternalRouteDependencies {
     syncOfficialStelliveMusicPlaylists?(mode: "light" | "full" | "manual"): MaybePromise<unknown>;
     discoverChannelUploads?(): MaybePromise<unknown>;
     reclassifyDiscoveredUploads?(): MaybePromise<unknown>;
+    repairSourceTypeMismatches?(): MaybePromise<unknown>;
     listReviewCandidates?(filters?: { limit?: number }): MaybePromise<unknown[]>;
     upsertOverride?(videoId: string, input: Record<string, unknown>): MaybePromise<unknown>;
     listSyncRuns?(limit?: number): MaybePromise<unknown[]>;
@@ -419,6 +420,13 @@ app.post("/v1/internal/schedulers/music/reclassify-discovered-uploads", async ()
     return { status: "disabled", reason: "music_discovery_reclassification_not_configured" };
   }
   return dependencies.musicSync.reclassifyDiscoveredUploads();
+});
+
+app.post("/v1/internal/schedulers/music/repair-source-type-mismatches", async () => {
+  if (!dependencies.musicSync?.repairSourceTypeMismatches) {
+    return { status: "disabled", reason: "music_source_type_repair_not_configured" };
+  }
+  return dependencies.musicSync.repairSourceTypeMismatches();
 });
 
   app.post("/v1/internal/schedulers/hub-events/statuses/reconcile", async () => {

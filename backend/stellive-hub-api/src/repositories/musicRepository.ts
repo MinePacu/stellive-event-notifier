@@ -122,6 +122,19 @@ export interface MusicItemReclassificationRecord {
   classificationStatus?: string | null;
 }
 
+export interface MusicSourceTypeMismatchRecord {
+  id: string;
+  youtubeVideoId: string;
+  title: string;
+  type: MusicItemType;
+  rawCategoryHint?: string | null;
+  classificationStatus?: string | null;
+  sourcePlaylist?: {
+    type: "cover" | "original" | "other";
+    rawCategoryHint: SourcePlaylistRawCategoryHint;
+  } | null;
+}
+
 export interface MarkMissingFromSourceInput {
   sourcePlaylistId: string;
   seenYoutubeVideoIds: string[];
@@ -449,6 +462,32 @@ export class PrismaMusicRepository {
         ...(input.rawCategoryHint !== undefined ? { rawCategoryHint: input.rawCategoryHint } : {}),
         ...(input.fetchedAt !== undefined ? { fetchedAt: input.fetchedAt } : {}),
         ...(input.lastSeenAt ? { lastSeenAt: input.lastSeenAt } : {}),
+      },
+    });
+  }
+
+  async listSourceTypeMismatches(limit = 1000): Promise<MusicSourceTypeMismatchRecord[]> {
+    const rows = await this.prisma.musicItem!.findMany!({
+      where: {
+        sourcePlaylistId: { not: null },
+        classificationStatus: { notIn: ["MANUAL_CONFIRMED", "MANUAL_EXCLUDED"] },
+      },
+      include: { sourcePlaylist: true },
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+      take: Math.min(Math.max(limit, 1), 5000),
+    } as unknown) as unknown as MusicSourceTypeMismatchRecord[];
+    return rows.filter((row) => row.sourcePlaylist?.type && row.type !== row.sourcePlaylist.type);
+  }
+
+  async repairMusicItemSourceType(id: string, type: MusicItemType, rawCategoryHint: string): Promise<void> {
+    await this.prisma.musicItem!.updateMany!({
+      where: { id },
+      data: {
+        type,
+        rawCategoryHint,
+        classificationStatus: "AUTO_CLASSIFIED",
+        isExcluded: false,
+        exclusionReason: null,
       },
     });
   }
