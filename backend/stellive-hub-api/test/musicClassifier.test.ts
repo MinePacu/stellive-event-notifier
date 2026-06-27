@@ -45,6 +45,7 @@ describe("music classifier", () => {
     expect(detectInstrumental("Off Vocal version")).toBe(true);
     expect(detectExcludeCandidate("teaser preview", "")).toEqual({ isExcluded: true, reason: "teaser" });
     expect(detectExcludeCandidate("normal cover", "#shorts")).toEqual({ isExcluded: true, reason: "shorts" });
+    expect(detectExcludeCandidate("[4K] 호시아이 / 텐코 시부키 3D Live Cover", "")).toEqual({ isExcluded: false, reason: null });
     expect(detectSpecialFlags("J-POP Mashup OST Remix", "")).toEqual(["mashup", "ost", "remix"]);
     expect(detectSpecialFlags("추억의 투니버스 메들리", "")).toEqual(["medley"]);
   });
