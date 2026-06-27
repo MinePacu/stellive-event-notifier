@@ -70,7 +70,7 @@ object MainUiPolicy {
         if (hasLiveMembers && screenId in setOf("home", "live")) LIVE_CLOCK_REFRESH_DELAY_MILLIS else null
 
     fun showsSettingsTopBarAction(screenId: String, canGoBack: Boolean): Boolean =
-        true
+        !canGoBack && screenId in primaryNavigationItems().map { it.screenId }
 
     fun showsTopBarText(screenId: String): Boolean =
         screenId == "goods_event_detail" || screenId == "history" || screenId == "settings" || screenId.startsWith("settings_")

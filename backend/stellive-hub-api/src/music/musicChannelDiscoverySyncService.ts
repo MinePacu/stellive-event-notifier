@@ -68,6 +68,14 @@ function overrideRecord(value: unknown): ManualOverrideRecord | null {
   };
 }
 
+function existingSourceBackedType(existing: Record<string, unknown>): MusicItemType | null {
+  if (typeof existing.sourcePlaylistId !== "string") return null;
+  if (existing.type === "cover" || existing.type === "original" || existing.type === "other") {
+    return existing.type;
+  }
+  return null;
+}
+
 export class MusicChannelDiscoverySyncService {
   constructor(private readonly options: MusicChannelDiscoverySyncServiceOptions) {}
 
@@ -136,8 +144,13 @@ export class MusicChannelDiscoverySyncService {
 
         const existing = record(await this.options.repository.getMusicItemByVideoId(videoId));
         const manualOverride = overrideRecord(await this.options.repository.getOverrideByVideoId(videoId));
+        const preservedSourceType = existingSourceBackedType(existing);
+        const itemType = (manualOverride?.forcedType as MusicItemType | undefined) ?? preservedSourceType ?? songClassification.type;
+        const rawCategoryHint = typeof existing.sourcePlaylistId === "string" && typeof existing.rawCategoryHint === "string"
+          ? existing.rawCategoryHint
+          : itemType.toUpperCase();
         const classification = classifyVideo({
-          sourceTypes: [songClassification.type],
+          sourceTypes: [itemType],
           title: detail?.title ?? discovered.candidate.title,
           description: detail?.description,
           duration: detail?.duration ?? discovered.candidate.duration,
@@ -182,7 +195,7 @@ export class MusicChannelDiscoverySyncService {
           title: detail?.title ?? discovered.candidate.title,
           normalizedTitle: normalizeTitle(detail?.title ?? discovered.candidate.title),
           description: detail?.description ?? null,
-          type: (manualOverride?.forcedType as MusicItemType | undefined) ?? songClassification.type,
+          type: itemType,
           sourcePlaylistId: typeof existing.sourcePlaylistId === "string" ? existing.sourcePlaylistId : null,
           publishedAt: detail?.publishedAt ?? discovered.candidate.publishedAt,
           thumbnailUrl: detail?.thumbnailUrl ?? discovered.candidate.thumbnailUrl ?? null,
@@ -208,7 +221,7 @@ export class MusicChannelDiscoverySyncService {
           specialFlags: classification.specialFlags,
           fetchedAt: (this.options.now ?? (() => new Date()))(),
           lastSeenAt: (this.options.now ?? (() => new Date()))(),
-          rawCategoryHint: songClassification.type.toUpperCase(),
+          rawCategoryHint,
         }));
         const musicItemId = typeof saved.id === "string" ? saved.id : typeof existing.id === "string" ? existing.id : videoId;
         await this.options.repository.replaceMusicItemMembers(musicItemId, links);
