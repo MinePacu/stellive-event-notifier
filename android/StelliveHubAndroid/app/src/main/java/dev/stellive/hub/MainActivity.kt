@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import android.graphics.Color
@@ -2725,14 +2726,15 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
 
     private fun heroTagChip(text: String, tone: HubEventHeroTagTone): Chip =
         rowChip(text).apply {
-            val (textColorRes, backgroundColorRes) = when (tone) {
-                HubEventHeroTagTone.STATUS -> Pair(R.color.hub_success, R.color.hub_success_soft)
-                HubEventHeroTagTone.CATEGORY -> Pair(R.color.hub_warning, R.color.hub_warning_soft)
-                HubEventHeroTagTone.PARTICIPATION -> Pair(R.color.hub_primary, R.color.hub_accent_soft)
+            val textColorRes = when (tone) {
+                HubEventHeroTagTone.STATUS -> R.color.hub_success
+                HubEventHeroTagTone.CATEGORY -> R.color.hub_warning
+                HubEventHeroTagTone.PARTICIPATION -> R.color.hub_primary
             }
-            setTextColor(color(textColorRes))
-            chipBackgroundColor = ContextCompat.getColorStateList(context, backgroundColorRes)
-            chipStrokeColor = ContextCompat.getColorStateList(context, backgroundColorRes)
+            val tagColor = color(textColorRes)
+            setTextColor(tagColor)
+            chipBackgroundColor = ColorStateList.valueOf(tagColor.withAlpha(82))
+            chipStrokeColor = ColorStateList.valueOf(tagColor.withAlpha(112))
             (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dp(6)
         }
 
@@ -2809,7 +2811,10 @@ private fun baseCard(style: HubCardStyle = HubCardStyle.STANDARD): MaterialCardV
             if (stroke != null) setStroke(dp(1), stroke)
         }
 
-    private fun color(id: Int): Int = ContextCompat.getColor(this, id)
+private fun color(id: Int): Int = ContextCompat.getColor(this, id)
+
+private fun Int.withAlpha(alpha: Int): Int =
+    Color.argb(alpha, Color.red(this), Color.green(this), Color.blue(this))
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }
