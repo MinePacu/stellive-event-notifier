@@ -2733,9 +2733,20 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
             }
             val tagColor = color(textColorRes)
             setTextColor(tagColor)
-            chipBackgroundColor = ColorStateList.valueOf(tagColor.withAlpha(82))
-            chipStrokeColor = ColorStateList.valueOf(tagColor.withAlpha(112))
-            (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dp(6)
+            minWidth = 0
+            minHeight = 0
+            chipMinHeight = dp(32).toFloat()
+            chipStartPadding = dp(9).toFloat()
+            chipEndPadding = dp(9).toFloat()
+            textStartPadding = 0f
+            textEndPadding = 0f
+            iconStartPadding = 0f
+            iconEndPadding = 0f
+            closeIconStartPadding = 0f
+            closeIconEndPadding = 0f
+            chipBackgroundColor = ColorStateList.valueOf(tagColor.withAlpha(46))
+            chipStrokeColor = ColorStateList.valueOf(tagColor.withAlpha(72))
+            (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dp(10)
         }
 
     private fun rowChip(text: String): Chip = Chip(this).apply {
