@@ -534,6 +534,12 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(Set(tags.map(\.label)).count, tags.count)
     }
 
+    func testHubEventHeroTagStyleUsesReadableImageOverlayOpacities() {
+        XCTAssertEqual(HubEventHeroTagStyle.backgroundOpacity, 0.78, accuracy: 0.001)
+        XCTAssertEqual(HubEventHeroTagStyle.borderOpacity, 0.95, accuracy: 0.001)
+        XCTAssertEqual(HubEventHeroTagStyle.shadowOpacity, 0.35, accuracy: 0.001)
+    }
+
     func testCalendarEntryDisplaysStartOnlyEventAsStartTime() {
         let store = MockHubStore()
         let entry = store.calendarDays(for: "all")

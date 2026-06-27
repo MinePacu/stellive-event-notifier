@@ -312,19 +312,34 @@ private struct HubEventHeroImage: View {
     }
 }
 
+enum HubEventHeroTagStyle {
+    static let backgroundOpacity = 0.78
+    static let borderOpacity = 0.95
+    static let shadowOpacity = 0.35
+}
+
 private struct HubEventHeroTagView: View {
     let tag: HubEventHeroTag
 
     var body: some View {
         Text(tag.label)
             .font(.caption.weight(.bold))
-            .foregroundStyle(foreground)
+            .foregroundStyle(Color.black.opacity(0.78))
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(background, in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(toneColor.opacity(HubEventHeroTagStyle.borderOpacity), lineWidth: 1)
+            }
+            .shadow(
+                color: .black.opacity(HubEventHeroTagStyle.shadowOpacity),
+                radius: 3,
+                y: 1
+            )
     }
 
-    private var foreground: Color {
+    private var toneColor: Color {
         switch tag.tone {
         case .status:
             return Color(red: 0.22, green: 0.78, blue: 0.61)
@@ -336,7 +351,7 @@ private struct HubEventHeroTagView: View {
     }
 
     private var background: Color {
-        foreground.opacity(0.18)
+        toneColor.opacity(HubEventHeroTagStyle.backgroundOpacity)
     }
 }
 
