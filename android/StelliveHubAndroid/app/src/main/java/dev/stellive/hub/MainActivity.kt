@@ -2744,8 +2744,8 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
             iconEndPadding = 0f
             closeIconStartPadding = 0f
             closeIconEndPadding = 0f
-            chipBackgroundColor = ColorStateList.valueOf(tagColor.withAlpha(46))
-            chipStrokeColor = ColorStateList.valueOf(tagColor.withAlpha(72))
+            chipBackgroundColor = ColorStateList.valueOf(tagColor.withAlpha(150))
+            chipStrokeColor = ColorStateList.valueOf(tagColor.withAlpha(150))
             (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dp(10)
         }
 
