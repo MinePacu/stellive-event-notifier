@@ -9,20 +9,16 @@ import org.junit.Test
 
 class TopBarTextPolicyTest {
     @Test
-    fun topBarTextShowsAtRestAndOnlyGoodsDetailKeepsItWhileScrolling() {
+    fun topBarTextShowsAtRestAndNeverSticksWhileScrolling() {
         listOf("home", "live", "songs", "goods_events", "settings", "song_search", "settings_delivery", "goods_event_detail").forEach {
             assertTrue(MainScreenChromePolicy.spec(it).showTopBarTitleAtRest)
+            assertFalse(MainScreenChromePolicy.spec(it).keepTopBarTitleWhenScrolled)
         }
-        assertFalse(MainScreenChromePolicy.spec("home").keepTopBarTitleWhenScrolled)
-        assertFalse(MainScreenChromePolicy.spec("settings").keepTopBarTitleWhenScrolled)
-        assertFalse(MainScreenChromePolicy.spec("song_search").keepTopBarTitleWhenScrolled)
-        assertFalse(MainScreenChromePolicy.spec("settings_delivery").keepTopBarTitleWhenScrolled)
-        assertTrue(MainScreenChromePolicy.spec("goods_event_detail").keepTopBarTitleWhenScrolled)
     }
 
     @Test
-    fun goodsEventDetailTopBarUsesEventTitleAndDetailSubtitle() {
-        assertEquals("콜라보 팝업", MainUiPolicy.goodsEventDetailTopBarTitle("콜라보 팝업"))
-        assertEquals("상세", MainUiPolicy.goodsEventDetailTopBarRole())
+    fun goodsEventDetailTopBarTextIsHidden() {
+        assertEquals("", MainUiPolicy.goodsEventDetailTopBarTitle("콜라보 팝업"))
+        assertEquals("", MainUiPolicy.goodsEventDetailTopBarRole())
     }
 }

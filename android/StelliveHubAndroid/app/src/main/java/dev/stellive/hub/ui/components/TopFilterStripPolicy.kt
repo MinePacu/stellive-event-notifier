@@ -17,8 +17,15 @@ data class TopFilterGroup(
 )
 
 object TopFilterStripPolicy {
-    fun layoutMode(optionCount: Int): FilterStripLayoutMode =
-        if (optionCount <= 3) FilterStripLayoutMode.EQUAL_WIDTH
+    const val ContainerTopPaddingDp = 12
+    const val ContainerBottomPaddingDp = 10
+    const val GroupTopPaddingDp = 2
+    const val OptionHeightDp = 44
+    const val OptionEndMarginDp = 6
+    const val OptionBottomMarginDp = 6
+
+    fun layoutMode(optionCount: Int, maxOptionCountInStrip: Int = optionCount): FilterStripLayoutMode =
+        if (optionCount <= 3 && maxOptionCountInStrip <= 3) FilterStripLayoutMode.EQUAL_WIDTH
         else FilterStripLayoutMode.HORIZONTAL_SCROLL
 
     fun showsTrailingOverflowHint(): Boolean = false

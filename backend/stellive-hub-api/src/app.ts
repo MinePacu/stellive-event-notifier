@@ -92,6 +92,22 @@ export function createMusicMemberUpsertInputs(catalog = new CatalogService()) {
     }));
 }
 
+export function createMusicMemberAliasInputs(catalog = new CatalogService()) {
+  const targetIds = new Set<string>(TARGET_MUSIC_MEMBER_IDS);
+  return catalog.getMembers()
+    .filter((member) => targetIds.has(member.id))
+    .map((member) => ({
+      id: member.id,
+      aliases: [
+        member.koreanName,
+        member.englishName,
+        member.platforms?.youtubeHandle,
+        member.platforms?.youtubeChannelId,
+      ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+      youtubeChannelId: member.platforms?.youtubeChannelId ?? null,
+    }));
+}
+
 function createDefaultNotificationWorker(env: AppEnv): NotificationWorker {
   const fcmClient = createFcmClient({
     projectId: env.FCM_PROJECT_ID,
@@ -233,15 +249,7 @@ function createDefaultMusicSyncService(
   if (dependencies?.musicSync) return {};
   if (!env.MUSIC_SYNC_ENABLED || !env.YOUTUBE_API_KEY) return {};
   const catalog = new CatalogService();
-  const members = catalog.getMembers().map((member) => ({
-    id: member.id,
-    aliases: [
-      member.koreanName,
-      member.englishName,
-      member.platforms?.youtubeHandle,
-      member.platforms?.youtubeChannelId,
-    ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
-  }));
+  const members = createMusicMemberAliasInputs(catalog);
   const repository = new PrismaMusicRepository();
   const syncRuns = new PrismaMusicSyncRunRepository();
   const youtube = new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl });

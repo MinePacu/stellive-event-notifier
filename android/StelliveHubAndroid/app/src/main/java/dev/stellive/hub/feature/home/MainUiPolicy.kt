@@ -70,14 +70,14 @@ object MainUiPolicy {
         if (hasLiveMembers && screenId in setOf("home", "live")) LIVE_CLOCK_REFRESH_DELAY_MILLIS else null
 
     fun showsSettingsTopBarAction(screenId: String, canGoBack: Boolean): Boolean =
-        !canGoBack && screenId in primaryNavigationItems().map { it.screenId }
+        true
 
     fun showsTopBarText(screenId: String): Boolean =
         screenId == "goods_event_detail" || screenId == "history" || screenId == "settings" || screenId.startsWith("settings_")
 
-    fun goodsEventDetailTopBarTitle(eventTitle: String): String = eventTitle
+    fun goodsEventDetailTopBarTitle(eventTitle: String): String = ""
 
-    fun goodsEventDetailTopBarRole(): String = "상세"
+    fun goodsEventDetailTopBarRole(): String = ""
 
     fun topBarTitle(screenId: String): String = when (screenId) {
         "live" -> "라이브"
@@ -92,7 +92,7 @@ object MainUiPolicy {
         "settings_hub_events" -> "굿즈/행사"
         "settings_advanced" -> "고급 설정"
         "goods_events" -> "굿즈/행사"
-        "goods_event_detail" -> "상세"
+        "goods_event_detail" -> ""
         else -> "홈"
     }
 
@@ -109,7 +109,7 @@ object MainUiPolicy {
         "settings_hub_events" -> "공식 출처 굿즈와 행사"
         "settings_advanced" -> "조합 예외 규칙"
         "goods_events" -> "공식 출처의 기간성 굿즈와 행사"
-        "goods_event_detail" -> "상세"
+        "goods_event_detail" -> ""
         else -> "라이브 현황과 최근 알림"
     }
 
