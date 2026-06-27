@@ -2322,45 +2322,43 @@ private fun hubEventDetailHero(event: dev.stellive.hub.core.model.HubEvent): Fra
             }
 
             addView(
-                View(context).apply {
-                    background = GradientDrawable(
-                        GradientDrawable.Orientation.TOP_BOTTOM,
-                        intArrayOf(Color.TRANSPARENT, Color.argb(184, 0, 0, 0))
-                    )
-                },
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-                )
-            )
-
-            addView(
                 LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
-                    setPadding(dp(18), 0, dp(18), dp(10))
+                    setPadding(dp(18), 0, dp(18), 0)
                     addView(LinearLayout(context).apply {
                         orientation = LinearLayout.HORIZONTAL
                         HubEventDetailFormatting.heroTags(event).forEach { tag ->
                             addView(heroTagChip(tag.label, tag.tone))
                         }
                     })
-                    addView(TextView(context).apply {
-                        text = event.title
-                        setTextColor(Color.WHITE)
-                        textSize = 25f
-                        typeface = Typeface.DEFAULT_BOLD
-                        setPadding(0, dp(10), 0, 0)
-                        setLineSpacing(0f, 1.06f)
-                    })
-                    HubEventDetailFormatting.heroSubtitleLines(event).forEachIndexed { index, line ->
+                    addView(LinearLayout(context).apply {
+                        orientation = LinearLayout.VERTICAL
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        )
+                        setPadding(0, dp(10), 0, dp(10))
+                        background = GradientDrawable(
+                            GradientDrawable.Orientation.TOP_BOTTOM,
+                            intArrayOf(Color.argb(72, 0, 0, 0), Color.argb(184, 0, 0, 0))
+                        )
                         addView(TextView(context).apply {
-                            text = line
-                            setTextColor(Color.argb(214, 255, 255, 255))
-                            textSize = 13f
-                            typeface = if (index == 0) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-                            setPadding(0, if (index == 0) dp(7) else dp(3), 0, 0)
+                            text = event.title
+                            setTextColor(Color.WHITE)
+                            textSize = 25f
+                            typeface = Typeface.DEFAULT_BOLD
+                            setLineSpacing(0f, 1.06f)
                         })
-                    }
+                        HubEventDetailFormatting.heroSubtitleLines(event).forEachIndexed { index, line ->
+                            addView(TextView(context).apply {
+                                text = line
+                                setTextColor(Color.argb(214, 255, 255, 255))
+                                textSize = 13f
+                                typeface = if (index == 0) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                                setPadding(0, if (index == 0) dp(7) else dp(3), 0, 0)
+                            })
+                        }
+                    })
                 },
                 FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
