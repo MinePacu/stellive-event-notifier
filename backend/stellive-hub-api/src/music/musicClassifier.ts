@@ -50,6 +50,7 @@ export interface MusicVideoClassificationResult {
 }
 
 const instrumentalPattern = /\b(inst\.?|instrumental|off\s*vocal|mr)\b/i;
+const coverTitlePattern = /커버|\bcover\b|covered by|歌ってみた/i;
 const exclusionPatterns: Array<[RegExp, string]> = [
   [/#?shorts\b/i, "shorts"],
   [/\bteaser\b|티저/i, "teaser"],
@@ -90,7 +91,10 @@ export function detectExcludeCandidate(
   description: string | null | undefined,
 ): { isExcluded: boolean; reason: string | null } {
   const haystack = `${title}\n${description ?? ""}`;
-  const matched = exclusionPatterns.find(([pattern]) => pattern.test(haystack));
+  const matched = exclusionPatterns.find(([pattern, reason]) => {
+    if (reason === "3d_live" && coverTitlePattern.test(title)) return false;
+    return pattern.test(haystack);
+  });
   return matched ? { isExcluded: true, reason: matched[1] } : { isExcluded: false, reason: null };
 }
 

@@ -96,6 +96,32 @@ export interface MusicListFilters {
   includeExcluded?: boolean;
 }
 
+export interface MusicItemClassificationUpdateInput {
+  type?: MusicItemType;
+  durationSeconds?: number | null;
+  isAvailable?: boolean;
+  isExcluded?: boolean;
+  exclusionReason?: string | null;
+  classificationStatus?: string;
+  isInstrumental?: boolean;
+  specialFlags?: unknown;
+  rawCategoryHint?: string | null;
+  fetchedAt?: Date | null;
+  lastSeenAt?: Date;
+}
+
+export interface MusicItemReclassificationRecord {
+  id: string;
+  youtubeVideoId: string;
+  title: string;
+  description?: string | null;
+  type: MusicItemType;
+  duration?: string | null;
+  privacyStatus?: string | null;
+  tags?: unknown;
+  classificationStatus?: string | null;
+}
+
 export interface MarkMissingFromSourceInput {
   sourcePlaylistId: string;
   seenYoutubeVideoIds: string[];
@@ -389,6 +415,44 @@ export class PrismaMusicRepository {
     });
   }
 
+  async listDiscoveredMusicItemsForReclassification(limit = 1000): Promise<MusicItemReclassificationRecord[]> {
+    return await this.prisma.musicItem!.findMany!({
+      where: { sourcePlaylistId: null },
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+      take: Math.min(Math.max(limit, 1), 5000),
+      select: {
+        id: true,
+        youtubeVideoId: true,
+        title: true,
+        description: true,
+        type: true,
+        duration: true,
+        privacyStatus: true,
+        tags: true,
+        classificationStatus: true,
+      },
+    } as unknown) as unknown as MusicItemReclassificationRecord[];
+  }
+
+  async updateMusicItemClassification(id: string, input: MusicItemClassificationUpdateInput): Promise<void> {
+    await this.prisma.musicItem!.updateMany!({
+      where: { id },
+      data: {
+        ...(input.type ? { type: input.type } : {}),
+        ...(input.durationSeconds !== undefined ? { durationSeconds: input.durationSeconds } : {}),
+        ...(input.isAvailable !== undefined ? { isAvailable: input.isAvailable } : {}),
+        ...(input.isExcluded !== undefined ? { isExcluded: input.isExcluded } : {}),
+        ...(input.exclusionReason !== undefined ? { exclusionReason: input.exclusionReason } : {}),
+        ...(input.classificationStatus ? { classificationStatus: input.classificationStatus } : {}),
+        ...(input.isInstrumental !== undefined ? { isInstrumental: input.isInstrumental } : {}),
+        ...(input.specialFlags !== undefined ? { specialFlags: input.specialFlags } : {}),
+        ...(input.rawCategoryHint !== undefined ? { rawCategoryHint: input.rawCategoryHint } : {}),
+        ...(input.fetchedAt !== undefined ? { fetchedAt: input.fetchedAt } : {}),
+        ...(input.lastSeenAt ? { lastSeenAt: input.lastSeenAt } : {}),
+      },
+    });
+  }
+
   async listMusicItems(filters: MusicListFilters): Promise<{ items: MusicCatalogItem[]; nextCursor?: string | null }> {
     const limit = Math.min(Math.max(filters.limit ?? 50, 1), 100);
     const where: Record<string, unknown> = {
@@ -396,7 +460,10 @@ export class PrismaMusicRepository {
       isAvailable: true,
     };
     if (filters.type && filters.type !== "all") where.type = filters.type;
-    if (filters.includeExcluded !== true) where.isExcluded = false;
+    if (filters.includeExcluded !== true) {
+      where.isExcluded = false;
+      where.classificationStatus = { in: ["AUTO_CLASSIFIED", "MANUAL_CONFIRMED"] };
+    }
     if (filters.includeInstrumental !== true) where.isInstrumental = false;
     if (filters.memberId) {
       where.members = {

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { MusicChannelDiscoveryReclassificationService } from "../src/music/musicChannelDiscoveryReclassificationService.js";
 import MusicChannelDiscoverySyncService from "../src/music/musicChannelDiscoverySyncService.js";
 import { InMemoryMusicSyncLock } from "../src/music/musicLocks.js";
 
@@ -102,5 +103,80 @@ describe("MusicChannelDiscoverySyncService", () => {
       classificationStatus: "NEEDS_REVIEW",
     }));
     expect(result).toMatchObject({ inserted: 1, needsReview: 1 });
+  });
+
+  it("skips member channel clips that only have generic cover tags", async () => {
+    const upsertMusicItem = vi.fn(async (input) => ({ id: "music-3", ...input }));
+    const replaceMusicItemMembers = vi.fn(async () => undefined);
+    const service = new MusicChannelDiscoverySyncService({
+      youtube: {
+        getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
+        listUploads: async () => ({
+          status: "ok",
+          candidates: [{ ...candidate, title: "선배 생활 최대 위기 발생" }],
+          pagesFetched: 1,
+          quotaUnits: 1,
+        }),
+        fetchVideos: async () => [{
+          videoId: "video-1",
+          channelId: "channel-1",
+          title: "선배 생활 최대 위기 발생",
+          description: "치지직 생방송과 다시보기 링크",
+          tags: ["스텔라이브", "cover", "커버곡", "여자커버"],
+          duration: "PT3M",
+          privacyStatus: "public",
+        }],
+      },
+      repository: {
+        getMusicItemByVideoId: async () => null,
+        getOverrideByVideoId: async () => null,
+        upsertMusicItem,
+        replaceMusicItemMembers,
+      },
+      locks: new InMemoryMusicSyncLock(),
+      members: [{ id: "member-1", aliases: ["Member One"], youtubeChannelId: "channel-1" }],
+      targets: [{ memberId: "member-1", channelId: "channel-1" }],
+    });
+
+    const result = await service.discover();
+
+    expect(upsertMusicItem).not.toHaveBeenCalled();
+    expect(replaceMusicItemMembers).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ uniqueVideos: 1, inserted: 0, updated: 0 });
+  });
+});
+
+describe("MusicChannelDiscoveryReclassificationService", () => {
+  it("hides existing discovered clips that only matched generic cover tags", async () => {
+    const updateMusicItemClassification = vi.fn(async () => undefined);
+    const service = new MusicChannelDiscoveryReclassificationService({
+      repository: {
+        listDiscoveredMusicItemsForReclassification: async () => [{
+          id: "music-1",
+          youtubeVideoId: "video-1",
+          title: "선배 생활 최대 위기 발생",
+          description: "치지직 생방송과 다시보기 링크",
+          type: "cover",
+          duration: "PT3M",
+          privacyStatus: "public",
+          tags: ["스텔라이브", "cover", "커버곡"],
+          classificationStatus: "AUTO_CLASSIFIED",
+        }],
+        updateMusicItemClassification,
+      },
+    });
+
+    await expect(service.reclassify()).resolves.toEqual({
+      status: "ok",
+      checked: 1,
+      hidden: 1,
+      kept: 0,
+      manualSkipped: 0,
+    });
+    expect(updateMusicItemClassification).toHaveBeenCalledWith("music-1", expect.objectContaining({
+      classificationStatus: "NEEDS_REVIEW",
+      isExcluded: true,
+      exclusionReason: "non_music_upload",
+    }));
   });
 });

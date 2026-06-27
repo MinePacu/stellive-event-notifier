@@ -167,6 +167,7 @@ describe("PrismaMusicRepository", () => {
         isPublic: true,
         isAvailable: true,
         isExcluded: false,
+        classificationStatus: { in: ["AUTO_CLASSIFIED", "MANUAL_CONFIRMED"] },
         isInstrumental: false,
         members: {
           some: {

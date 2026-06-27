@@ -30,6 +30,7 @@ import { PrismaSongRepository } from "./repositories/songRepository.js";
 import { InMemoryMusicSyncLock } from "./music/musicLocks.js";
 import { MusicSyncService } from "./music/musicSyncService.js";
 import { OfficialStelliveMusicSyncService } from "./music/officialStelliveMusicSyncService.js";
+import { MusicChannelDiscoveryReclassificationService } from "./music/musicChannelDiscoveryReclassificationService.js";
 import { MusicChannelDiscoverySyncService } from "./music/musicChannelDiscoverySyncService.js";
 import { officialStelliveMusicSourcePlaylistSeeds, TARGET_MUSIC_MEMBER_IDS } from "./music/musicSourcePlaylists.js";
 import { WebhookSubscriptionRepository } from "./repositories/webhookSubscriptionRepository.js";
@@ -307,6 +308,9 @@ function createDefaultMusicSyncService(
     maxPages: env.MUSIC_CHANNEL_DISCOVERY_RECENT_PAGES,
     lockTtlMs: env.MUSIC_SYNC_LOCK_SECONDS * 1_000,
   });
+  const discoveryReclassificationService = new MusicChannelDiscoveryReclassificationService({
+    repository,
+  });
   return {
     musicSync: {
       syncAllMusic: async (mode) => {
@@ -318,6 +322,7 @@ function createDefaultMusicSyncService(
         return officialService.syncOfficialStelliveMusicPlaylists(mode);
       },
       discoverChannelUploads: () => discoveryService.discover(),
+      reclassifyDiscoveredUploads: () => discoveryReclassificationService.reclassify(),
       listReviewCandidates: ({ limit } = {}) => repository.listReviewCandidates?.({ limit }) ?? Promise.resolve([]),
       upsertOverride: async (videoId, input) => {
         const item = await repository.getMusicItemByVideoId(videoId) as { id?: string; youtubeVideoId?: string } | null;
