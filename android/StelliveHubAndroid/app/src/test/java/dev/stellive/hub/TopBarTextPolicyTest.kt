@@ -1,6 +1,7 @@
 package dev.stellive.hub
 
 import dev.stellive.hub.feature.home.MainUiPolicy
+import dev.stellive.hub.ui.chrome.MainScreenChromePolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -8,15 +9,15 @@ import org.junit.Test
 
 class TopBarTextPolicyTest {
     @Test
-    fun topBarTextOnlyShowsForSettingsAndGoodsEventDetail() {
-        assertFalse(MainUiPolicy.showsTopBarText("home"))
-        assertFalse(MainUiPolicy.showsTopBarText("live"))
-        assertFalse(MainUiPolicy.showsTopBarText("history"))
-        assertFalse(MainUiPolicy.showsTopBarText("goods_events"))
-
-        assertTrue(MainUiPolicy.showsTopBarText("settings"))
-        assertTrue(MainUiPolicy.showsTopBarText("settings_delivery"))
-        assertTrue(MainUiPolicy.showsTopBarText("goods_event_detail"))
+    fun topBarTextShowsAtRestAndOnlyGoodsDetailKeepsItWhileScrolling() {
+        listOf("home", "live", "songs", "goods_events", "settings", "song_search", "settings_delivery", "goods_event_detail").forEach {
+            assertTrue(MainScreenChromePolicy.spec(it).showTopBarTitleAtRest)
+        }
+        assertFalse(MainScreenChromePolicy.spec("home").keepTopBarTitleWhenScrolled)
+        assertFalse(MainScreenChromePolicy.spec("settings").keepTopBarTitleWhenScrolled)
+        assertFalse(MainScreenChromePolicy.spec("song_search").keepTopBarTitleWhenScrolled)
+        assertFalse(MainScreenChromePolicy.spec("settings_delivery").keepTopBarTitleWhenScrolled)
+        assertTrue(MainScreenChromePolicy.spec("goods_event_detail").keepTopBarTitleWhenScrolled)
     }
 
     @Test

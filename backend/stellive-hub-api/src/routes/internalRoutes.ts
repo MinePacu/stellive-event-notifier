@@ -104,6 +104,7 @@ export interface InternalRouteDependencies {
       quotaUnits?: number;
     }>;
     syncOfficialStelliveMusicPlaylists?(mode: "light" | "full" | "manual"): MaybePromise<unknown>;
+    discoverChannelUploads?(): MaybePromise<unknown>;
     listReviewCandidates?(filters?: { limit?: number }): MaybePromise<unknown[]>;
     upsertOverride?(videoId: string, input: Record<string, unknown>): MaybePromise<unknown>;
     listSyncRuns?(limit?: number): MaybePromise<unknown[]>;
@@ -399,8 +400,18 @@ app.post("/v1/internal/schedulers/chzzk/live-status", async () => {
     if (!parsed.ok) return reply.code(400).send({ error: "special_day_materialization_body_invalid" });
 
     const result = await dependencies.specialDayYearMaterializer.materializeYear(parsed.value);
-    return { ok: true, ...result };
-  });
+  return { ok: true, ...result };
+});
+
+app.post("/v1/internal/schedulers/music/discover-channel-uploads", async () => {
+  if (!options.env.MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED) {
+    return { status: "disabled", reason: "music_channel_discovery_sync_disabled" };
+  }
+  if (!dependencies.musicSync?.discoverChannelUploads) {
+    return { status: "not_available", reason: "music_channel_discovery_sync_not_configured" };
+  }
+  return dependencies.musicSync.discoverChannelUploads();
+});
 
   app.post("/v1/internal/schedulers/hub-events/statuses/reconcile", async () => {
     const now = dependencies.now?.() ?? new Date();

@@ -3,6 +3,8 @@ package dev.stellive.hub
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AndroidColorTokenPolicyTest {
@@ -13,6 +15,8 @@ class AndroidColorTokenPolicyTest {
         assertEquals("#F5F7F8", colors["hub_background"])
         assertEquals("#FFFFFF", colors["hub_card"])
         assertEquals("#D9E2E4", colors["hub_line"])
+        assertTrue(colors.containsKey("hub_card_surface"))
+        assertNotEquals(colors["hub_background"], colors["hub_card_surface"])
     }
 
     @Test
@@ -24,6 +28,8 @@ class AndroidColorTokenPolicyTest {
         assertEquals("#2A2A2A", colors["hub_line"])
         assertEquals("#D1000000", colors["hub_top_bar_glass"])
         assertEquals("#F2000000", colors["hub_top_bar_glass_scrolled"])
+        assertTrue(colors.containsKey("hub_card_surface"))
+        assertNotEquals(colors["hub_background"], colors["hub_card_surface"])
     }
 
     private fun colorsFrom(path: String): Map<String, String> {

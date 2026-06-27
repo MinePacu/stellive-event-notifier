@@ -12,5 +12,6 @@
     <string name="tab_settings">설정</string>
     <string name="action_back">이전 화면</string>
     <string name="action_settings">설정</string>
+    <string name="action_song_search">노래 검색</string>
     <string name="hub_calendar_widget_description">굿즈와 행사 일정을 보여주는 캘린더 위젯</string>
 </resources>

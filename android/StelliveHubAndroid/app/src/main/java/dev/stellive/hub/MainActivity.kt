@@ -36,6 +36,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.isVisible
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
@@ -78,6 +79,12 @@ import java.time.YearMonth
 import kotlin.concurrent.thread
 import dev.stellive.hub.feature.home.SettingsHubRow
 import dev.stellive.hub.feature.home.StatusSummaryItem
+import dev.stellive.hub.ui.chrome.MainScreenChromePolicy
+import dev.stellive.hub.ui.components.HubCardFactory
+import dev.stellive.hub.ui.components.HubCardStyle
+import dev.stellive.hub.ui.components.SectionHeaderView
+import dev.stellive.hub.ui.components.TopFilterGroup
+import dev.stellive.hub.ui.components.TopFilterStripView
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -117,8 +124,16 @@ private var draggingLiveMemberId: String? = null
 private var selectedSongGenerationId = "all"
 private var selectedSongType = "all"
 private var selectedSongQuery = ""
+private var appliedSongQuery = ""
 private var selectedSongPage = 1
 private var selectedSongMemberId = "all"
+private val songSearchHandler = Handler(Looper.getMainLooper())
+private var pendingSongSearchRender: Runnable? = null
+private var cachedSongItems: List<SongCatalogItem> = emptyList()
+private var cachedSongType: String? = null
+private var songSearchResultsContainer: LinearLayout? = null
+private var homeRecentCoverSongs: List<SongCatalogItem>? = null
+private var isLoadingHomeRecentCoverSongs = false
 private var selectedHubEventId: String? = null
     private var goodsEventsDays: List<HubCalendarDay> = emptyList()
     private var goodsEvents: List<HubEvent> = emptyList()
@@ -127,8 +142,10 @@ private var selectedHubEventId: String? = null
     private var serverHubEventDetail: HubEvent? = null
     private var selectedAppearanceMode = AppearanceMode.SYSTEM
     private val targetNotificationEnabledOverrides = mutableMapOf<String, Boolean>()
-    private var notificationPermissionRequested = false
+private var notificationPermissionRequested = false
     private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    private val cardFactory by lazy { HubCardFactory(this) }
+    private val topFilterStrip by lazy { TopFilterStripView(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         selectedAppearanceMode = readAppearanceMode()
@@ -164,6 +181,7 @@ private var selectedHubEventId: String? = null
 
     override fun onDestroy() {
         liveClockHandler.removeCallbacks(liveClockTicker)
+        pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
         liveClockTextViews.clear()
         super.onDestroy()
     }
@@ -203,6 +221,22 @@ private var selectedHubEventId: String? = null
     private fun visibleServerConnectionDebugLogs(): List<String> =
         MainUiPolicy.debugServerConnectionLogs(debugModeEnabled, serverConnectionDebugLogs)
 
+    private fun serverStatusStrip(): MaterialCardView =
+        baseCard().apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                bottomMargin = dp(10)
+            }
+            addView(TextView(context).apply {
+                text = "● ${MainUiPolicy.serverConnectionLabel(liveStatusSourceLabel)}"
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 12f
+                setPadding(dp(12), dp(7), dp(12), dp(7))
+            })
+        }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -234,6 +268,9 @@ private var selectedHubEventId: String? = null
     private fun setupTopBarActions() {
         binding.topBarSettings.setOnClickListener {
             navigateTo(HubScreen.SETTINGS, addToBackStack = true)
+        }
+        binding.topBarSongSearch.setOnClickListener {
+            navigateTo(HubScreen.SONG_SEARCH, addToBackStack = true)
         }
     }
 
@@ -278,9 +315,15 @@ private var selectedHubEventId: String? = null
     }
 
     private fun renderScreen(screen: HubScreen) {
+        if (screen != HubScreen.SONG_SEARCH) {
+            pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
+            pendingSongSearchRender = null
+            songSearchResultsContainer = null
+        }
         when (screen) {
 HubScreen.HOME -> renderHome()
 HubScreen.SONGS -> renderSongs()
+HubScreen.SONG_SEARCH -> renderSongSearch()
 HubScreen.SONG_MEMBER_FILTER -> renderSongMemberFilter()
 HubScreen.GOODS_EVENTS -> renderGoodsEvents()
             HubScreen.GOODS_EVENT_DETAIL -> renderHubEventDetail()
@@ -320,24 +363,19 @@ HubScreen.GOODS_EVENTS -> renderGoodsEvents()
         }
     }
 
-    private fun updateNavigationChrome() {
+private fun updateNavigationChrome() {
         val canGoBack = navigationHistory.canGoBack
-        binding.topBarBack.visibility = if (canGoBack) View.VISIBLE else View.GONE
+        val spec = MainScreenChromePolicy.spec(navigationHistory.currentScreen.id, canGoBack)
+        binding.topBarBack.isVisible = canGoBack
         binding.topBarTitleGroup.setPaddingRelative(
             dp(MainUiPolicy.topBarTitleStartInsetDp(canGoBack)),
             binding.topBarTitleGroup.paddingTop,
             binding.topBarTitleGroup.paddingEnd,
             binding.topBarTitleGroup.paddingBottom
         )
-        binding.topBarTitleGroup.visibility =
-            if (MainUiPolicy.showsTopBarText(navigationHistory.currentScreen.id)) View.VISIBLE else View.INVISIBLE
-        binding.topBarSettings.visibility = if (
-            MainUiPolicy.showsSettingsTopBarAction(navigationHistory.currentScreen.id, canGoBack)
-        ) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
+        binding.topBarTitleGroup.isVisible = spec.showTopBarTitleAtRest
+        binding.topBarSettings.isVisible = spec.showSettingsAction
+        binding.topBarSongSearch.isVisible = spec.showSongSearchAction
     }
 
     private fun screenForItem(itemId: Int): HubScreen = when (itemId) {
@@ -350,6 +388,7 @@ HubScreen.GOODS_EVENTS -> renderGoodsEvents()
     private fun itemForScreen(screen: HubScreen): Int? = when (screen) {
 HubScreen.HOME -> R.id.tab_home
 HubScreen.SONGS -> R.id.tab_songs
+HubScreen.SONG_SEARCH -> R.id.tab_songs
 HubScreen.SONG_MEMBER_FILTER -> R.id.tab_songs
 HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
         HubScreen.GOODS_EVENT_DETAIL -> R.id.tab_goods_events
@@ -364,15 +403,18 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
         HubScreen.SETTINGS_ADVANCED -> null
     }
 
-    private fun startScreen(screenId: String, title: String, role: String) {
+private fun startScreen(screenId: String, title: String, role: String) {
         liveClockHandler.removeCallbacks(liveClockTicker)
         liveClockTextViews.clear()
         binding.collapsedTitle.text = MainUiPolicy.topBarTitle(screenId)
         binding.collapsedRole.text = MainUiPolicy.topBarRole(screenId)
         binding.contentList.removeAllViews()
+        clearTopFilters()
         applyContentTopPadding(underTopBar = false)
-        binding.contentList.addView(screenTitle(title))
-        binding.contentList.addView(screenCopy(role))
+        if (MainScreenChromePolicy.spec(screenId, navigationHistory.canGoBack).showExpandedBodyHeader) {
+            binding.contentList.addView(screenTitle(title))
+            binding.contentList.addView(screenCopy(role))
+        }
         binding.contentScroll.post {
             binding.contentScroll.scrollTo(0, 0)
             updateTopBarScrolled(false)
@@ -380,9 +422,45 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
     }
 
     private fun applyContentTopPadding(underTopBar: Boolean) {
-        val topPadding = if (underTopBar) 0 else systemTopInsetPx + dp(86)
+        val overlayHeight = binding.topGlassOverlay.height.takeIf { it > 0 } ?: (systemTopInsetPx + dp(52))
+        val topPadding = if (underTopBar) 0 else overlayHeight
         val horizontalPadding = if (underTopBar) 0 else dp(18)
         binding.contentList.setPadding(horizontalPadding, topPadding, horizontalPadding, dp(20))
+    }
+
+    private fun bindTopFilters(
+        groups: List<TopFilterGroup>,
+        onSelected: (groupId: String, optionId: String) -> Unit,
+    ) {
+        binding.topFilterContainer.removeAllViews()
+        topFilterStrip.bind(groups, onSelected)
+        (topFilterStrip.parent as? ViewGroup)?.removeView(topFilterStrip)
+        if (groups.isNotEmpty()) {
+            binding.contentList.addView(
+                topFilterStrip,
+                0,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    bottomMargin = dp(6)
+                },
+            )
+        }
+        binding.topFilterContainer.isVisible = false
+        binding.topBarFadeSpace.layoutParams = binding.topBarFadeSpace.layoutParams.apply {
+            height = 0
+        }
+        binding.topGlassOverlay.post { applyContentTopPadding(underTopBar = false) }
+    }
+
+    private fun clearTopFilters() {
+        binding.topFilterContainer.removeAllViews()
+        (topFilterStrip.parent as? ViewGroup)?.removeView(topFilterStrip)
+        binding.topFilterContainer.isVisible = false
+        binding.topBarFadeSpace.layoutParams = binding.topBarFadeSpace.layoutParams.apply {
+            height = 0
+        }
     }
 
     private fun liveMembersForUi(): List<HubMember> =
@@ -408,7 +486,7 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
             role = "지금 라이브, 최근 알림, 마감 임박 굿즈/행사를 확인합니다."
         )
         binding.contentList.addView(sectionLabel("지금 라이브"))
-        binding.contentList.addView(compactEventCard("라이브 데이터", liveStatusSourceLabel, listOf("상태")))
+        binding.contentList.addView(serverStatusStrip())
         if (liveMembersForUi().isEmpty()) {
             binding.contentList.addView(
                 compactEventCard("현재 라이브 없음", "서버 갱신 기준으로 표시합니다.", listOf("대기"))
@@ -420,6 +498,24 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
                 binding.contentList.addView(moreLiveMembersButton())
             }
         }
+        binding.contentList.addView(sectionLabel("최근 커버곡"))
+        when (val recentCovers = homeRecentCoverSongs) {
+            null -> binding.contentList.addView(
+                compactEventCard("불러오는 중", "서버에서 최근 커버곡을 확인하고 있습니다.", listOf("노래"))
+            )
+            emptyList<SongCatalogItem>() -> binding.contentList.addView(
+                compactEventCard("최근 커버곡 없음", "등록된 커버곡이 없습니다.", listOf("노래"))
+            )
+            else -> recentCovers.forEach { binding.contentList.addView(songCard(it)) }
+        }
+        binding.contentList.addView(
+            compactEventCard("노래 전체 보기", "커버곡과 오리지널 곡 전체 목록으로 이동합니다.", listOf("전체")).apply {
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { navigateToRoot(HubScreen.SONGS) }
+            }
+        )
+        loadHomeRecentCoverSongsIfNeeded()
         binding.contentList.addView(sectionLabel("최근 알림"))
         if (repository.recentHistoryPreview.isEmpty()) {
             binding.contentList.addView(
@@ -471,6 +567,18 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
         }
     }
 
+    private fun loadHomeRecentCoverSongsIfNeeded() {
+        if (homeRecentCoverSongs != null || isLoadingHomeRecentCoverSongs) return
+        isLoadingHomeRecentCoverSongs = true
+        CoroutineScope(Dispatchers.Main).launch {
+            homeRecentCoverSongs = serverRepository.recentCoverSongs(limit = 5)
+            isLoadingHomeRecentCoverSongs = false
+            if (navigationHistory.currentScreen == HubScreen.HOME) {
+                renderHome()
+            }
+        }
+    }
+
     private fun moreLiveMembersButton(): Chip =
         Chip(this).apply {
             text = "더보기"
@@ -499,48 +607,13 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
             title = "굿즈/행사",
             role = "공식/멤버/공식 콜라보 출처가 있는 기간성 정보만 표시합니다."
         )
-        binding.contentList.addView(
-            summaryGrid(
-                listOf(
-                    StatusSummaryItem(repository.hubEventsSummary.openCount.toString(), "진행 중"),
-                    StatusSummaryItem(repository.hubEventsSummary.upcomingCount.toString(), "예정"),
-                    StatusSummaryItem(repository.hubEventsSummary.closingSoonCount.toString(), "마감 임박")
-                )
-            )
-        )
-        binding.contentList.addView(staticChips("전체", "굿즈", "티켓", "오프라인", "마감 임박"))
-        loadServerGoodsEvents()
-        return
-        binding.contentList.addView(
-            HubEventsCalendarView(
-                context = this,
-                days = repository.calendarDaysForFilter("all"),
-                initialMonth = goodsEventsSelectedMonth,
-                showModeControls = false,
-                onMonthChanged = { month ->
-                    goodsEventsSelectedMonth = month
-                    if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS) {
-                        renderServerGoodsEvents(goodsEventsDays, goodsEvents)
-                    }
-                },
-            ) { eventId ->
-                selectedHubEventId = eventId
-                navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
-            }
-        )
-
-        repository.calendarDaysForFilter("all").forEach { day ->
-            binding.contentList.addView(calendarDayHeader(calendarDayHeaderText(day)))
-            day.entries.forEach { entry ->
-                repository.hubEvents.firstOrNull { it.id == entry.eventId }?.let { event ->
-                    binding.contentList.addView(hubEventCard(event))
-                }
-            }
+        bindTopFilters(MainUiPolicy.goodsEventsTopFilterGroups(selectedFilter)) { _, optionId ->
+            selectedFilter = optionId
+            if (goodsEventsDays.isEmpty()) renderGoodsEvents()
+            else renderServerGoodsEvents(goodsEventsDays, goodsEvents)
         }
-        binding.contentList.addView(
-            noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
-                .withGoodsEventsNoticeTopMargin()
-        )
+        binding.contentList.addView(serverStatusStrip())
+        loadServerGoodsEvents()
     }
 
     private fun loadServerGoodsEvents() {
@@ -560,25 +633,39 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
         }
     }
 
-private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<HubEvent>) {
+    private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<HubEvent>) {
         goodsEventsDays = days
         goodsEvents = events
-        val monthDays = days.filter { it.date.take(7) == goodsEventsSelectedMonth.toString() }
-        binding.contentList.removeAllViews()
-        binding.contentList.addView(
-            summaryGrid(
-                listOf(
-                    StatusSummaryItem(events.count { it.status == dev.stellive.hub.core.model.HubEventStatus.OPEN }.toString(), "진행 중"),
-                    StatusSummaryItem(events.count { it.status == dev.stellive.hub.core.model.HubEventStatus.UPCOMING }.toString(), "예정"),
-                    StatusSummaryItem(events.count { it.status == dev.stellive.hub.core.model.HubEventStatus.CLOSING_SOON }.toString(), "마감 임박")
+        val filteredDays = days.mapNotNull { day ->
+            val entries = day.entries.filter { entry ->
+                MainUiPolicy.goodsEventMatchesFilter(
+                    selectedFilter,
+                    entry.category,
+                    entry.status,
+                    entry.participationMode,
                 )
+            }
+            day.copy(entries = entries).takeIf { entries.isNotEmpty() }
+        }
+        val filteredEvents = events.filter { event ->
+            MainUiPolicy.goodsEventMatchesFilter(
+                selectedFilter,
+                event.category,
+                event.status,
+                event.participationMode,
             )
-        )
-        binding.contentList.addView(staticChips("전체", "굿즈", "티켓", "오프라인", "마감 임박"))
+        }
+        val monthDays = filteredDays.filter { it.date.take(7) == goodsEventsSelectedMonth.toString() }
+        binding.contentList.removeAllViews()
+        bindTopFilters(MainUiPolicy.goodsEventsTopFilterGroups(selectedFilter)) { _, optionId ->
+            selectedFilter = optionId
+            renderServerGoodsEvents(goodsEventsDays, goodsEvents)
+        }
+        binding.contentList.addView(serverStatusStrip())
         binding.contentList.addView(
             HubEventsCalendarView(
                 context = this,
-                days = days,
+                days = filteredDays,
                 initialMonth = goodsEventsSelectedMonth,
                 showModeControls = false,
                 onMonthChanged = { month ->
@@ -595,7 +682,7 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
         val feedRows = CalendarUiPolicy.feedRenderRowsForMonth(
             days = monthDays,
             month = goodsEventsSelectedMonth,
-            events = events,
+            events = filteredEvents,
         )
         var previousHeader: String? = null
         feedRows.forEach { row ->
@@ -630,13 +717,10 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
         return CalendarUiPolicy.entryPeriodDateText(periodEntry)
     }
 
-    private fun calendarDayHeader(date: String): TextView = TextView(this).apply {
-        text = date
-        setTextColor(color(R.color.hub_text))
-        setTextSize(15f)
-        setTypeface(typeface, Typeface.BOLD)
-        setPadding(dp(2), dp(18), dp(2), dp(8))
-    }
+private fun calendarDayHeader(date: String): SectionHeaderView =
+        SectionHeaderView(this).bind(date).apply {
+            setPadding(dp(2), dp(18), dp(2), dp(8))
+        }
 
     private fun renderHubEventDetail() {
         val eventId = selectedHubEventId
@@ -744,8 +828,11 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
             title = getString(R.string.live_title),
             role = "Foreground 상태 갱신은 화면 표시용입니다. 백그라운드 알림은 서버 중심 푸시로 처리합니다."
         )
-        binding.contentList.addView(liveStatusChips())
-        binding.contentList.addView(compactEventCard("라이브 데이터", liveStatusSourceLabel, listOf("상태")))
+        bindTopFilters(MainUiPolicy.liveTopFilterGroups(selectedLiveStatusFilter)) { _, optionId ->
+            selectedLiveStatusFilter = optionId
+            renderLive()
+        }
+        binding.contentList.addView(serverStatusStrip())
         val members = liveStatusFilteredMembersForUi()
         if (members.isEmpty()) {
             binding.contentList.addView(compactEventCard("조건에 맞는 멤버 없음", "다른 라이브 상태 필터를 선택해 확인할 수 있습니다.", listOf("필터")))
@@ -824,33 +911,44 @@ private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<Hub
     }
 
 private fun renderSongs() {
+        pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
+        pendingSongSearchRender = null
         startScreen(
             screenId = "songs",
             title = getString(R.string.songs_title),
             role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
         )
-        binding.contentList.addView(
-            compactEventCard(
-                title = "노래",
-                body = "모바일 앱은 YouTube를 직접 호출하지 않고 서버 API의 캐시된 곡 목록만 표시합니다.",
-                pills = listOf("YouTube", "서버 캐시")
-            )
-        )
-        binding.contentList.addView(songSearchCard())
-        binding.contentList.addView(songFilterChips())
+        bindTopFilters(
+            MainUiPolicy.songTopFilterGroups(selectedSongGenerationId, selectedSongType),
+        ) { groupId, optionId ->
+            when (groupId) {
+                "generation" -> selectedSongGenerationId = optionId
+                "type" -> {
+                    selectedSongType = optionId
+                    cachedSongType = null
+                }
+            }
+            selectedSongPage = 1
+            renderSongs()
+        }
+        binding.contentList.addView(serverStatusStrip())
         binding.contentList.addView(noticeCard("불러오는 중 · 서버에서 노래 목록을 가져오고 있습니다."))
 
         CoroutineScope(Dispatchers.Main).launch {
-            val songs = serverRepository.songs(
-                generationId = "all",
-                type = selectedSongType,
-            )
+            val songItems = if (cachedSongType == selectedSongType && cachedSongItems.isNotEmpty()) {
+                cachedSongItems
+            } else {
+                serverRepository.songs(generationId = "all", type = selectedSongType).items.also {
+                    cachedSongItems = it
+                    cachedSongType = selectedSongType
+                }
+            }
             val memberGenerationById = (serverMembers ?: repository.members).associate { it.id to it.generationId }
-val visibleSongs = songs.items.filter { song ->
-MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
-MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
-MainUiPolicy.songMatchesQuery(song, selectedSongQuery)
-}
+            val visibleSongs = songItems.filter { song ->
+                MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
+                    MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
+                    MainUiPolicy.songMatchesQuery(song, selectedSongQuery)
+            }
             val safePage = MainUiPolicy.coerceSongPage(selectedSongPage, visibleSongs.size)
             selectedSongPage = safePage
             val pagedSongs = MainUiPolicy.songPageItems(visibleSongs, safePage)
@@ -860,17 +958,22 @@ MainUiPolicy.songMatchesQuery(song, selectedSongQuery)
                 title = getString(R.string.songs_title),
                 role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
             )
-            binding.contentList.addView(
-                compactEventCard(
-                    title = "노래",
-                    body = "모바일 앱은 YouTube를 직접 호출하지 않고 서버 API의 캐시된 곡 목록만 표시합니다.",
-                    pills = listOf("YouTube", "서버 캐시")
-                )
-            )
-binding.contentList.addView(songSearchCard())
-binding.contentList.addView(songFilterChips())
-binding.contentList.addView(songMemberFilterCard(serverMembers ?: repository.members, visibleSongs.size))
-if (visibleSongs.isEmpty()) {
+            bindTopFilters(
+                MainUiPolicy.songTopFilterGroups(selectedSongGenerationId, selectedSongType),
+            ) { groupId, optionId ->
+                when (groupId) {
+                    "generation" -> selectedSongGenerationId = optionId
+                    "type" -> {
+                        selectedSongType = optionId
+                        cachedSongType = null
+                    }
+                }
+                selectedSongPage = 1
+                renderSongs()
+            }
+            binding.contentList.addView(serverStatusStrip())
+            binding.contentList.addView(songMemberFilterCard(serverMembers ?: repository.members, visibleSongs.size))
+            if (visibleSongs.isEmpty()) {
                 binding.contentList.addView(noticeCard("표시할 노래가 없습니다. 필터를 바꾸거나 나중에 다시 확인해 주세요."))
             } else {
                 pagedSongs.forEach { song ->
@@ -878,11 +981,56 @@ if (visibleSongs.isEmpty()) {
                 }
                 if (MainUiPolicy.songPageCount(visibleSongs.size) > 1) {
                     binding.contentList.addView(songPageControl(visibleSongs.size))
+                }
+            }
+        }
     }
-}
 
-}
-}
+    private fun renderSongSearch() {
+        startScreen(
+            screenId = "song_search",
+            title = "노래 검색",
+            role = "제목 또는 멤버 이름으로 검색합니다.",
+        )
+        binding.collapsedTitle.text = "노래 검색"
+        binding.collapsedRole.text = "제목 또는 멤버"
+        binding.contentList.addView(songSearchCard())
+        songSearchResultsContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }.also(binding.contentList::addView)
+        refreshSongSearchResults()
+    }
+
+    private fun refreshSongSearchResults() {
+        val container = songSearchResultsContainer ?: return
+        container.removeAllViews()
+        val renderItems: (List<SongCatalogItem>) -> Unit = { items ->
+            val memberGenerationById = (serverMembers ?: repository.members).associate { it.id to it.generationId }
+            val visibleSongs = items.filter { song ->
+                MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
+                    MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
+                    MainUiPolicy.songMatchesQuery(song, selectedSongQuery)
+            }
+            if (visibleSongs.isEmpty()) {
+                container.addView(noticeCard("검색 결과가 없습니다."))
+            } else {
+                visibleSongs.forEach { container.addView(songCard(it)) }
+            }
+        }
+        if (cachedSongType == selectedSongType && cachedSongItems.isNotEmpty()) {
+            renderItems(cachedSongItems)
+            return
+        }
+        container.addView(noticeCard("검색할 노래 목록을 불러오는 중입니다."))
+        CoroutineScope(Dispatchers.Main).launch {
+            val items = serverRepository.songs(generationId = "all", type = selectedSongType).items
+            cachedSongItems = items
+            cachedSongType = selectedSongType
+            if (navigationHistory.currentScreen != HubScreen.SONG_SEARCH) return@launch
+            container.removeAllViews()
+            renderItems(items)
+        }
+    }
 
 private fun setSelectedSongMember(memberId: String) {
 selectedSongMemberId = memberId
@@ -890,7 +1038,7 @@ selectedSongPage = 1
 }
 
 private fun songSearchCard(): MaterialCardView =
-        baseCard().apply {
+        baseCard(HubCardStyle.COMPACT).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
             }
@@ -903,16 +1051,12 @@ private fun songSearchCard(): MaterialCardView =
                 textSize = 14f
                 setPadding(dp(13), dp(8), dp(13), dp(8))
                 setOnEditorActionListener { view, _, _ ->
-                    selectedSongQuery = view.text?.toString().orEmpty()
-                    selectedSongPage = 1
-                    renderSongs()
+                    scheduleSongSearchRender(view.text?.toString().orEmpty())
                     true
                 }
                 setOnFocusChangeListener { view, hasFocus ->
                     if (!hasFocus) {
-                        selectedSongQuery = (view as EditText).text?.toString().orEmpty()
-                        selectedSongPage = 1
-                        renderSongs()
+                        scheduleSongSearchRender((view as EditText).text?.toString().orEmpty())
                     }
                 }
                 addTextChangedListener(object : TextWatcher {
@@ -928,6 +1072,20 @@ private fun songSearchCard(): MaterialCardView =
             addView(input)
         }
 
+private fun scheduleSongSearchRender(rawQuery: String) {
+    val normalized = MainUiPolicy.normalizedSongQuery(rawQuery)
+    selectedSongQuery = normalized
+    selectedSongPage = 1
+    pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
+    if (normalized == appliedSongQuery) return
+    pendingSongSearchRender = Runnable {
+        pendingSongSearchRender = null
+        if (navigationHistory.currentScreen != HubScreen.SONG_SEARCH) return@Runnable
+        appliedSongQuery = normalized
+        refreshSongSearchResults()
+    }.also { songSearchHandler.postDelayed(it, 150L) }
+}
+
     private fun songFilterChips(): LinearLayout =
         LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -938,42 +1096,53 @@ private fun songSearchCard(): MaterialCardView =
             addView(songFilterRow(MainUiPolicy.songTypeFilters(), selectedSongType) { selectedSongType = it })
         }
 
-private fun songMemberFilterCard(members: List<HubMember>, visibleCount: Int): LinearLayout =
-    LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
+private fun songMemberFilterCard(members: List<HubMember>, visibleCount: Int): MaterialCardView =
+    baseCard(HubCardStyle.INTERACTIVE).apply {
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
+            LinearLayout.LayoutParams.WRAP_CONTENT,
         ).apply {
             bottomMargin = dp(10)
         }
-        addView(
-            compactEventCard(
-                title = "멤버",
-                body = "${MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberId)} · ${visibleCount}곡",
-                pills = listOf("선택")
-            ).apply {
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { navigateTo(HubScreen.SONG_MEMBER_FILTER, addToBackStack = true) }
-            }
-        )
-        if (MainUiPolicy.canClearSongMemberFilter(selectedSongMemberId)) {
+        isClickable = true
+        isFocusable = true
+        setOnClickListener { navigateTo(HubScreen.SONG_MEMBER_FILTER, addToBackStack = true) }
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(15), dp(14), dp(15), dp(14))
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(context).apply {
+                    text = "멤버"
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                })
+                addView(TextView(context).apply {
+                    text = MainUiPolicy.songMemberFilterSummary(members, selectedSongMemberId, visibleCount)
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 12f
+                    setPadding(0, dp(4), 0, 0)
+                })
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = dp(12)
+            })
             addView(TextView(context).apply {
-                text = "전체로 보기"
+                text = MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberId) + " ›"
                 gravity = Gravity.CENTER
-                setTextColor(color(R.color.hub_primary))
+                maxLines = 1
+                setTextColor(color(R.color.hub_text))
                 textSize = 13f
                 typeface = Typeface.DEFAULT_BOLD
-                setPadding(0, dp(8), 0, dp(8))
-                isClickable = true
-                isFocusable = true
-                setOnClickListener {
-                    setSelectedSongMember("all")
-                    renderSongs()
-                }
+                background = rounded(
+                    fill = color(R.color.hub_card_surface_compact),
+                    radius = dp(18),
+                    stroke = color(R.color.hub_line),
+                )
+                setPadding(dp(12), dp(7), dp(12), dp(7))
             })
-        }
+        })
     }
 
 private fun renderSongMemberFilter() {
@@ -1028,7 +1197,7 @@ private fun songFilterRow(
         }
 
     private fun songCard(song: SongCatalogItem): MaterialCardView =
-        baseCard().apply {
+        baseCard(HubCardStyle.INTERACTIVE).apply {
             val externalUrl = MainUiPolicy.songExternalUrl(song.youtubeUrl)
             isClickable = externalUrl != null
             isFocusable = externalUrl != null
@@ -1197,18 +1366,18 @@ private fun songFilterRow(
             title = "전달 방식",
             role = "실시간 우선은 OS와 플랫폼 정책을 우회하지 않습니다."
         )
+        binding.contentList.addView(sectionLabel("전달 방식"))
         binding.contentList.addView(
             settingsPanel(
-                title = "전달 방식",
                 rows = listOf(
                     SettingRow("전달 방식", "표준 또는 realtime_best_effort. 비활성 알림을 다시 켜지는 않습니다.", null, settings.deliveryMode.name),
                     SettingRow("최대한 실시간으로 알림 받기", MainUiPolicy.realtimeDisclosureLines().joinToString(" "), settings.deliveryMode == DeliveryMode.REALTIME_BEST_EFFORT)
                 )
             )
         )
+        binding.contentList.addView(sectionLabel("조용한 시간, 키워드, rate limit"))
         binding.contentList.addView(
             settingsPanel(
-                title = "조용한 시간, 키워드, rate limit",
                 rows = listOf(
                     SettingRow("조용한 시간", "${settings.quietHours.start}-${settings.quietHours.end} ${settings.quietHours.timezone}", settings.quietHours.enabled),
                     SettingRow("키워드 필터", "CHZZK chat 푸시는 명시 필터가 있어야 허용됩니다.", settings.keywordFilters.hasExplicitFilters),
@@ -1226,9 +1395,9 @@ private fun songFilterRow(
             title = "대상별 알림",
             role = "기수/카테고리와 개별 항목을 분리해서 제어합니다."
         )
+        binding.contentList.addView(sectionLabel("카테고리"))
         binding.contentList.addView(
             settingsPanel(
-                title = "카테고리",
                 rows = listOf(
                     SettingRow("1기생, 2기생, 3기생", "활성 멤버만 표시합니다. Former 멤버는 MVP에서 제외합니다.", settings.generationEnabled["gen1"] == true && settings.generationEnabled["gen2"] == true && settings.generationEnabled["gen3"] == true),
                     SettingRow("감자", "강지는 대표 항목으로만 포함합니다.", settings.generationEnabled["gamja"] == true),
@@ -1265,9 +1434,9 @@ private fun songFilterRow(
             title = "플랫폼별 알림",
             role = "플랫폼별 허용 여부"
         )
+        binding.contentList.addView(sectionLabel("플랫폼별 알림"))
         binding.contentList.addView(
             settingsPanel(
-                title = "플랫폼별 알림",
                 rows = NotificationPlatform.entries.map { platform ->
                     SettingRow(
                         title = platform.displayName,
@@ -1293,9 +1462,9 @@ private fun songFilterRow(
             title = "이벤트 타입별 알림",
             role = "이벤트 종류별 허용 여부"
         )
+        binding.contentList.addView(sectionLabel("이벤트 타입별 알림"))
         binding.contentList.addView(
             settingsPanel(
-                title = "이벤트 타입별 알림",
                 rows = MainUiPolicy.settingsEventTypeRows(settings).map { row ->
                     SettingRow(
                         title = row.title,
@@ -1312,9 +1481,9 @@ private fun songFilterRow(
                 pills = listOf("조용한 시간", "차단 키워드", "rate limit")
             )
         )
+        binding.contentList.addView(sectionLabel("채팅 알림"))
         binding.contentList.addView(
             settingsPanel(
-                title = "채팅 알림",
                 rows = listOf(
                     SettingRow("치지직 채팅 알림", "기본 OFF입니다. 키워드 또는 역할 필터를 설정한 경우에만 제한적으로 사용합니다.", settings.chatEnabled),
                     SettingRow("Push 전달 가능", "명시 필터가 있을 때만 푸시 전송 대상으로 쓸 수 있습니다.", null, if (settings.canEnableChzzkChatPush) "필터 설정됨" else "필터 필요")
@@ -1337,9 +1506,9 @@ private fun songFilterRow(
             title = "굿즈/행사",
             role = "온라인 한정 굿즈와 오프라인 공식 행사를 중심으로 봅니다."
         )
+        binding.contentList.addView(sectionLabel("굿즈/행사"))
         binding.contentList.addView(
             settingsPanel(
-                title = "굿즈/행사",
                 rows = MainUiPolicy.settingsHubEventRows(
                     hubEventsEnabled = settings.platformEnabled[NotificationPlatform.HUB_EVENT] == true,
                     deadlineSoonEnabled = settings.eventTypeEnabled[NotificationEventType.EVENT_DEADLINE_SOON] == true
@@ -1357,9 +1526,9 @@ private fun songFilterRow(
             title = "고급 조합 설정",
             role = "복잡한 예외 규칙은 필요할 때만 조정합니다."
         )
+        binding.contentList.addView(sectionLabel("조합 설정"))
         binding.contentList.addView(
             settingsPanel(
-                title = "조합 설정",
                 rows = settings.combinationPreferences.map { preference ->
                     SettingRow(
                         title = preference.label,
@@ -1604,11 +1773,15 @@ private fun moveLiveMember(member: HubMember, offset: Int) {
         }
     }
 
-    private fun updateTopBarScrolled(scrolled: Boolean) {
-        val alpha = if (scrolled) 1f else 0f
+private fun updateTopBarScrolled(scrolled: Boolean) {
+        val spec = MainScreenChromePolicy.spec(
+            navigationHistory.currentScreen.id,
+            navigationHistory.canGoBack,
+        )
+        val alpha = if (!scrolled || spec.keepTopBarTitleWhenScrolled) 1f else 0f
         binding.collapsedTitle.alpha = alpha
         binding.collapsedRole.alpha = alpha
-        binding.topBarDivider.alpha = alpha
+        binding.topBarDivider.alpha = if (scrolled) 1f else 0f
         binding.topBar.elevation = 0f
         updateTopBarGlass(scrolled)
     }
@@ -1651,13 +1824,8 @@ private fun moveLiveMember(member: HubMember, offset: Int) {
         setPadding(0, 0, 0, dp(16))
     }
 
-    private fun sectionLabel(text: String): TextView = TextView(this).apply {
-        this.text = text
-        setTextColor(color(R.color.hub_text_muted))
-        textSize = 13f
-        typeface = Typeface.DEFAULT_BOLD
-        setPadding(0, dp(4), 0, dp(8))
-    }
+private fun sectionLabel(text: String): SectionHeaderView =
+        SectionHeaderView(this).bind(text)
 
     private fun summaryGrid(items: List<StatusSummaryItem>): LinearLayout {
         val container = LinearLayout(this).apply {
@@ -1913,8 +2081,8 @@ private fun moveLiveMember(member: HubMember, offset: Int) {
         setPadding(dp(8), dp(5), dp(8), dp(5))
     }
 
-    private fun liveMemberRow(member: HubMember, showOrderControls: Boolean = false): MaterialCardView =
-        baseCard().apply {
+private fun liveMemberRow(member: HubMember, showOrderControls: Boolean = false): MaterialCardView =
+        baseCard(HubCardStyle.INTERACTIVE).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
             }
@@ -2305,8 +2473,8 @@ private fun hubEventDetailHero(event: dev.stellive.hub.core.model.HubEvent): Fra
         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
     }
 
-    private fun compactEventCard(title: String, body: String, pills: List<String>, thumbnailUrl: String? = null): MaterialCardView =
-        baseCard().apply {
+private fun compactEventCard(title: String, body: String, pills: List<String>, thumbnailUrl: String? = null): MaterialCardView =
+        baseCard(HubCardStyle.COMPACT).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
             }
@@ -2465,7 +2633,7 @@ private fun hubEventDetailHero(event: dev.stellive.hub.core.model.HubEvent): Fra
         addView(pillRow(listOf(item.eventType, item.deliveryMode.name.lowercase(), "${item.deliveryLatencyMs ?: "-"}ms")))
     }
 
-    private fun settingsPanel(title: String, rows: List<SettingRow>): MaterialCardView =
+    private fun settingsPanel(title: String? = null, rows: List<SettingRow>): MaterialCardView =
         baseCard().apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(12)
@@ -2474,13 +2642,15 @@ private fun hubEventDetailHero(event: dev.stellive.hub.core.model.HubEvent): Fra
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(15), dp(15), dp(15), dp(15))
             }
-            content.addView(TextView(context).apply {
-                text = title
-                setTextColor(color(R.color.hub_text))
-                textSize = 15f
-                typeface = Typeface.DEFAULT_BOLD
-                setPadding(0, 0, 0, dp(10))
-            })
+            title?.let { panelTitle ->
+                content.addView(TextView(context).apply {
+                    text = panelTitle
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setPadding(0, 0, 0, dp(10))
+                })
+            }
             rows.forEachIndexed { index, row ->
                 if (index > 0) content.addView(divider())
                 content.addView(settingRowView(row))
@@ -2652,13 +2822,8 @@ private fun hubEventDetailHero(event: dev.stellive.hub.core.model.HubEvent): Fra
         setPadding(dp(8), dp(4), dp(8), dp(4))
     }
 
-    private fun baseCard(): MaterialCardView = MaterialCardView(this).apply {
-        radius = dp(8).toFloat()
-        cardElevation = 0f
-        setCardBackgroundColor(color(R.color.hub_card))
-        strokeWidth = dp(1)
-        strokeColor = color(R.color.hub_line)
-    }
+private fun baseCard(style: HubCardStyle = HubCardStyle.STANDARD): MaterialCardView =
+        cardFactory.create(style)
 
     private fun divider(): View = View(this).apply {
         setBackgroundColor(color(R.color.hub_line))

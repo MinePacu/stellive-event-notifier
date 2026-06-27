@@ -36,7 +36,6 @@ languages:
 - swift
 - kotlin
 - markdown
-- java
 - json
 - yaml
 - html

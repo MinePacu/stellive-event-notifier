@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stellive Hub Serena UI Mockup</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #eef2f2;
+      --bg: #f5f7f8;
+      --surface: #ffffff;
+      --surface-alt: #f7f8f6;
+      --surface-compact: #eef2f2;
+      --line: #d9e2e4;
+      --line-strong: #c5d0d2;
+      --text: #172326;
+      --muted: #667579;
+      --subtle: #8c999c;
+      --primary: #315c64;
+      --primary-soft: #e8f5f3;
+      --secondary: #7a5e2d;
+      --warning-soft: #f7f3e8;
+      --success: #18815f;
+      --success-soft: #e8f6ef;
+      --radius: 8px;
+      --radius-card: 10px;
+      --font: "IBM Plex Sans KR", "Pretendard", "Noto Sans KR", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--page);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .document-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .document-title {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .document-meta {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+    }
+
+    .page {
+      width: min(1360px, 100%);
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .review-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .review-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      padding: 12px;
+    }
+
+    .review-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    .review-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .screens {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(260px, 1fr));
+      gap: 14px;
+      align-items: start;
+    }
+
+    .device {
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      background: #111515;
+      padding: 7px;
+      box-shadow: 0 2px 8px rgba(23, 35, 38, 0.08);
+    }
+
+    .screen {
+      min-height: 760px;
+      overflow: hidden;
+      border-radius: 8px;
+      background: var(--bg);
+      display: grid;
+      grid-template-rows: auto auto auto 1fr auto;
+    }
+
+    .statusbar {
+      display: flex;
+      justify-content: space-between;
+      padding: 9px 14px 5px;
+      background: var(--bg);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 50px;
+      padding: 0 13px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(247, 248, 246, 0.96);
+    }
+
+    .topbar-main {
+      min-width: 0;
+    }
+
+    .screen-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 16px;
+      font-weight: 750;
+      line-height: 1.2;
+    }
+
+    .screen-role {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .button {
+      min-width: 36px;
+      height: 32px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 0 9px;
+    }
+
+    .filters {
+      display: flex;
+      gap: 6px;
+      padding: 9px 12px;
+      overflow-x: auto;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+      scrollbar-width: none;
+    }
+
+    .filters::-webkit-scrollbar {
+      display: none;
+    }
+
+    .filter {
+      flex: 0 0 auto;
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-alt);
+      color: var(--muted);
+      padding: 0 10px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .filter.is-active {
+      border-color: rgba(49, 92, 100, 0.36);
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    .content {
+      overflow: auto;
+      padding: 12px;
+    }
+
+    .server-strip {
+      margin-bottom: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 8px 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .section {
+      margin-bottom: 16px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 0 2px 8px;
+    }
+
+    .section-name {
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .section-action {
+      border: 0;
+      background: transparent;
+      color: var(--primary);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 0;
+    }
+
+    .row-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .row {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      padding: 10px;
+    }
+
+    .row.compact {
+      display: grid;
+      grid-template-columns: 38px 1fr auto;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .avatar {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-alt);
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .thumbnail {
+      width: 48px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-alt);
+      color: var(--subtle);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .row-main {
+      min-width: 0;
+    }
+
+    .row-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 14px;
+      font-weight: 750;
+    }
+
+    .row-meta {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .state {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 4px 7px;
+      background: var(--surface-alt);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .state.live,
+    .state.open {
+      border-color: rgba(24, 129, 95, 0.22);
+      background: var(--success-soft);
+      color: var(--success);
+    }
+
+    .state.due {
+      border-color: rgba(122, 94, 45, 0.24);
+      background: var(--warning-soft);
+      color: var(--secondary);
+    }
+
+    .stats-line {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .stats-line strong {
+      color: var(--text);
+      font-weight: 750;
+    }
+
+    .search {
+      width: 100%;
+      height: 36px;
+      margin-bottom: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .selector-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+
+    .calendar {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+
+    .calendar-head {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+
+    .day {
+      min-height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .day.has-event {
+      border: 1px solid rgba(49, 92, 100, 0.24);
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 750;
+    }
+
+    .day.is-selected {
+      background: var(--primary);
+      color: #ffffff;
+      font-weight: 750;
+    }
+
+    .notice {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface-alt);
+      padding: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bottom-nav {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      min-height: 60px;
+      border-top: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .nav-item {
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 3px;
+      color: var(--subtle);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .nav-mark {
+      width: 20px;
+      height: 3px;
+      border-radius: 2px;
+      background: transparent;
+    }
+
+    .nav-item.is-active {
+      color: var(--primary);
+    }
+
+    .nav-item.is-active .nav-mark {
+      background: var(--primary);
+    }
+
+    @media (max-width: 1180px) {
+      .screens {
+        grid-template-columns: repeat(2, minmax(280px, 1fr));
+      }
+    }
+
+    @media (max-width: 760px) {
+      .document-bar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .document-meta {
+        text-align: left;
+      }
+
+      .review-grid,
+      .screens {
+        grid-template-columns: 1fr;
+      }
+
+      .page {
+        padding: 12px;
+      }
+
+      .device {
+        width: min(420px, 100%);
+        margin: 0 auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="document-bar">
+    <div class="document-title">Stellive Hub mobile UI mockup</div>
+    <div class="document-meta">Serena symbols: MainActivity, MainScreenChromePolicy, HubCardFactory, SongsView, HubEventsView</div>
+  </header>
+
+  <main class="page">
+    <section class="review-grid" aria-label="analysis">
+      <article class="review-card">
+        <strong>현재 Android 구조</strong>
+        <p>루트 화면은 `MainActivity`가 렌더링하고, 공통 chrome, card, top filter 구성 요소가 분리되어 있습니다.</p>
+      </article>
+      <article class="review-card">
+        <strong>현재 iOS 구조</strong>
+        <p>`List`와 `Section` 중심이며, 노래와 굿즈/행사 화면에는 큰 header card와 capsule 필터가 남아 있습니다.</p>
+      </article>
+      <article class="review-card">
+        <strong>목업 적용 기준</strong>
+        <p>프로젝트 색상 토큰을 유지하고, 이미지/로고 없이 placeholder와 텍스트 우선 구조로 화면 밀도를 맞췄습니다.</p>
+      </article>
+    </section>
+
+    <section class="screens" aria-label="mobile screens">
+      <article class="device" aria-label="home screen">
+        <div class="screen">
+          <div class="statusbar"><div>9:41</div><div>5G 88%</div></div>
+          <div class="topbar">
+            <div class="topbar-main">
+              <div class="screen-title">홈</div>
+              <div class="screen-role">라이브, 최근 커버곡, 마감 임박 일정</div>
+            </div>
+            <button class="button">설정</button>
+          </div>
+          <div class="filters">
+            <button class="filter is-active">전체</button>
+            <button class="filter">라이브</button>
+            <button class="filter">노래</button>
+            <button class="filter">굿즈/행사</button>
+          </div>
+          <div class="content">
+            <div class="server-strip">서버 기준 업데이트: 방금 전</div>
+            <section class="section">
+              <div class="section-head">
+                <div class="section-name">지금 라이브</div>
+                <button class="section-action">전체 보기</button>
+              </div>
+              <div class="row-list">
+                <article class="row compact">
+                  <div class="avatar">유니</div>
+                  <div class="row-main">
+                    <div class="row-title">아야츠노 유니</div>
+                    <div class="row-meta">CHZZK · 42분째 방송 중</div>
+                  </div>
+                  <div class="state live">라이브</div>
+                </article>
+                <article class="row compact">
+                  <div class="avatar">히나</div>
+                  <div class="row-main">
+                    <div class="row-title">시라유키 히나</div>
+                    <div class="row-meta">CHZZK · 11분째 방송 중</div>
+                  </div>
+                  <div class="state live">라이브</div>
+                </article>
+              </div>
+            </section>
+            <section class="section">
+              <div class="section-head">
+                <div class="section-name">최근 커버곡</div>
+                <button class="section-action">노래로 이동</button>
+              </div>
+              <div class="row-list">
+                <article class="row compact">
+                  <div class="thumbnail">16:9</div>
+                  <div class="row-main">
+                    <div class="row-title">밤 산책 커버</div>
+                    <div class="row-meta">아야츠노 유니 · YouTube 업로드</div>
+                  </div>
+                  <div class="state">커버</div>
+                </article>
+                <article class="row compact">
+                  <div class="thumbnail">16:9</div>
+                  <div class="row-main">
+                    <div class="row-title">푸른 궤도 커버</div>
+                    <div class="row-meta">텐코 시부키 · YouTube 업로드</div>
+                  </div>
+                  <div class="state">커버</div>
+                </article>
+              </div>
+            </section>
+            <section class="section">
+              <div class="section-head">
+                <div class="section-name">마감 임박 굿즈/행사</div>
+                <button class="section-action">캘린더</button>
+              </div>
+              <article class="row compact">
+                <div class="avatar">행사</div>
+                <div class="row-main">
+                  <div class="row-title">SIX STAR STELLIVE</div>
+                  <div class="row-meta">2026-06-26~2026-07-12 · 공식 출처</div>
+                </div>
+                <div class="state due">마감 임박</div>
+              </article>
+            </section>
+          </div>
+          <nav class="bottom-nav">
+            <div class="nav-item is-active"><div class="nav-mark"></div><div>홈</div></div>
+            <div class="nav-item"><div class="nav-mark"></div><div>라이브</div></div>
+            <div class="nav-item"><div class="nav-mark"></div><div>노래</div></div>
+            <div class="nav-item"><div class="nav-mark"></div><div>굿즈/행사</div></div>
+          </nav>
+        </div>
+      </article>
+
+      <article class="device" aria-label="live screen">
+        <div class="screen">
+          <div class="statusbar"><div>9:41</div><div>5G 88%</div></div>
+          <div class="topbar">
+            <div class="topbar-main">
+              <div class="screen-title">라이브</div>
+              <div class="screen-role">멤버 우선순위와 상태 필터</div>
+            </div>
+            <button class="button">정렬</button>
+          </div>
+          <div class="filters">
+            <button class="filter is-active">전체</button>
+            <button class="filter">라이브</button>
+            <button class="filter">오프라인</button>
+            <button class="filter">1기생</button>
+            <button class="filter">2기생</button>
+            <button class="filter">3기생</button>
+          </div>
+          <div class="content">
+            <div class="server-strip">CHZZK 상태는 backend `/v1/live-status` 캐시 기준입니다.</div>
+            <section class="section">
+              <div class="section-head">
+                <div class="section-name">방송 중</div>
+                <button class="section-action">우선순위 편집</button>
+              </div>
+              <div class="row-list">
+                <article class="row compact">
+                  <div class="avatar">유니</div>
+                  <div class="row-main">
+                    <div class="row-title">아야츠노 유니</div>
+                    <div class="row-meta">42분 · 시청자 수는 API 제공 시 표시</div>
+                  </div>
+                  <div class="state live">ON</div>
+                </article>
+                <article class="row compact">
+                  <div class="avatar">히나</div>
+                  <div class="row-main">
+                    <div class="row-title">시라유키 히나</div>
+                    <div class="row-meta">11분 · 사용자 설정 허용됨</div>
+                  </div>
+                  <div class="state live">ON</div>
+                </article>
+              </div>
+            </section>
+            <section class="section">
+              <div class="section-head">
+                <div class="section-name">오프라인</div>
+              </div>
+              <div class="row-list">
+                <article class="row compact">
+                  <div class="avatar">마시</div>
+                  <div class="row-main">
+                    <div class="row-title">네네코 마시로</div>
+                    <div class="row-meta">최근 갱신 4분 전</div>
+                  </div>
+                  <div class="state">OFF</div>
+                </article>
+                <article class="row compact">
+                  <div class="avatar">리제</div>
+                  <div class="row-main">
+                    <div class="row-title">아카네 리제</div>
+                    <div class="row-meta">최근 갱신 6분 전</div>
+                  </div>
+                  <div class="state">OFF</div>
+                </article>
+              </div>
+            </section>
+          </div>
+          <nav class="bottom-nav">
+            <div class="nav-item"><div class="nav-mark"></div><div>홈</div></div>
+            <div class="nav-item is-active"><div class="nav-mark"></div><div>라이브</div></div>
+            <div class="nav-item"><div class="nav-mark"></div><div>노래</div></div>
+            <div class="nav-item"><div class="nav-mark"></div><div>굿즈/행사</div></div>
+          </nav>
+        </div>
+      </article>
+
+      <article class="device" aria-label="songs screen">
+        <div class="screen">
+          <div class="statusbar"><div>9:41</div><div>5G 88%</div></div>
+          <div class="topbar">
+            <div class="topbar-main">
+              <div class="screen-title">노래</div>
+              <div class="screen-role">서버 캐시 기반 오리지널/커버 목록</div>
+            </div>
+            <button class="button">검색</button>
+          </div>
+          <div class="filters">
+            <button class="filter is-active">전체</button>
+            <button class="filter">1기생</button>
+            <button class="filter">2기생</button>
+            <button class="filter">3기생</button>
+            <button class="filter">오리지널</button>
+            <button class="filter">커버</button>
+          </div>
+          <div class="content">
+            <input class="search" placeholder="곡명 또는 멤버 검색" aria-label="song search">
+            <div class="stats-line"><strong>128</strong> 전체 · <strong>31</strong> 오리지널 · <strong>97</strong> 커버</div>
+            <div class="selector-row">
+              <div>
+                <div class="row-title">멤버</div>
+                <div class="row-meta">전체 멤버 · 128곡 표시</div>
+              </div>
+              <button class="button">변경</button>
+            </div>
+            <section class="section">
+              <div class="section-head">
+                <div class="section-name">노래 목록</div>
+                <button class="section-action">최신순</button>
+              </div>
+              <div class="row-list">
+                <article class="row compact">
+                  <div class="thumbnail">16:9</div>
+                  <div class="row-main">
+                    <div class="row-title">별빛 항로</div>
+                    <div class="row-meta">아카네 리제 · 2기생 · YouTube 업로드</div>
+                  </div>
+                  <div class="state open">오리지널</div>
+                </article>
+                <article class="row compact">
+                  <div class="thumbnail">16:9</div>
+                  <div class="row-main">
+                    <div class="row-title">밤 산책 커버</div>
+                    <div class="row-meta">아야츠노 유니 · 1기생 · YouTube 업로드</div>
+                  </div>
+                  <div class="state">커버</div>
+                </article>
+                <article class="row compact">
+                  <div class="thumbnail">16:9</div>
+                  <div class="row-main">
+                    <div class="row-title">푸른 궤도 커버</div>
+                    <div class="row-meta">텐코 시부키 · 3기생 · YouTube 업로드</div>
+                  </div>
+                  <div class="state">커버</div>
+                </article>
+              </div>
+            </section>
+          </div>
+          <nav class="bottom-nav">
+            <div class="nav-item"><div class="nav-mark"></div><div>홈</div></div>
+            <div class="nav-item"><div class="nav-mark"></div><div>라이브</div></div>
+            <div class="nav-item is-active"><div class="nav-mark"></div><div>노래</div></div>
+            <div class="nav-item"><div class="nav-mark"></div><div>굿즈/행사</div></div>
+          </nav>
+        </div>
+      </article>
+
+      <article class="device" aria-label="goods and events screen">
+        <div class="screen">
+          <div class="statusbar"><div>9:41</div><div>5G 88%</div></div>
+          <div class="topbar">
+            <div class="topbar-main">
+              <div class="screen-title">굿즈/행사</div>
+              <div class="screen-role">공식 출처의 기간성 정보</div>
+            </div>
+            <button class="button">갱신</button>
+          </div>
+          <div class="filters">
+            <button class="filter is-active">전체</button>
+            <button class="filter">굿즈</button>
+            <button class="filter">티켓</button>
+            <button class="filter">오프라인</button>
+            <button class="filter">마감 임박</button>
+          </div>
+          <div class="content">
+            <div class="calendar">
+              <div class="calendar-head"><div>2026년 6월</div><div>월 변경</div></div>
+              <div class="calendar-grid">
+                <div class="day">1</div><div class="day">2</div><div class="day">3</div><div class="day">4</div><div class="day">5</div><div class="day">6</div><div class="day">7</div>
+                <div class="day">8</div><div class="day">9</div><div class="day">10</div><div class="day has-event">11</div><div class="day has-event">12</div><div class="day">13</div><div class="day">14</div>
+                <div class="day">15</div><div class="day">16</div><div class="day">17</div><div class="day">18</div><div class="day">19</div><div class="day">20</div><div class="day">21</div>
+                <div class="day">22</div><div class="day">23</div><div class="day">24</div><div class="day">25</div><div class="day is-selected">26</div><div class="day has-event">27</div><div class="day has-event">28</div>
+              </div>
+            </div>
+            <section class="section">
+              <div class="section-head">
+                <div class="section-name">2026-06-26~2026-07-12</div>
+                <button class="section-action">상세</button>
+              </div>
+              <article class="row compact">
+                <div class="avatar">행사</div>
+                <div class="row-main">
+                  <div class="row-title">SIX STAR STELLIVE</div>
+                  <div class="row-meta">공식 출처 · 장소 정보 확인 필요</div>
+                </div>
+                <div class="state due">마감 임박</div>
+              </article>
+            </section>
+            <section class="section">
+              <div class="section-head">
+                <div class="section-name">2026-06-30</div>
+              </div>
+              <article class="row compact">
+                <div class="avatar">기념</div>
+                <div class="row-main">
+                  <div class="row-title">멤버 생일</div>
+                  <div class="row-meta">특별일 · 캘린더 표시 전용</div>
+                </div>
+                <div class="state">일정</div>
+              </article>
+            </section>
+            <div class="notice">방송, 일반 업로드, 팬 주최 이벤트는 이 피드에 포함하지 않습니다. 공식 YouTube 라이브 알림도 생성하지 않습니다.</div>
+          </div>
+          <nav class="bottom-nav">
+            <div class="nav-item"><div class="nav-mark"></div><div>홈</div></div>
+            <div class="nav-item"><div class="nav-mark"></div><div>라이브</div></div>
+            <div class="nav-item"><div class="nav-mark"></div><div>노래</div></div>
+            <div class="nav-item is-active"><div class="nav-mark"></div><div>굿즈/행사</div></div>
+          </nav>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

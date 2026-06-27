@@ -36,6 +36,7 @@ final class ServerHubStore: ObservableObject {
     @Published private(set) var serverHubEvents: [HubEvent] = []
     @Published private(set) var serverCalendarDays: [HubCalendarDay] = []
     @Published private(set) var serverSongs: [SongCatalogItem] = []
+    @Published private(set) var recentCoverSongs: [SongCatalogItem] = []
     @Published private(set) var serverSongFacets: SongFacetsResponse?
     @Published private(set) var hubEventDetailCache: [String: HubEvent] = [:]
 
@@ -136,6 +137,18 @@ final class ServerHubStore: ObservableObject {
             if serverSongs.isEmpty {
                 serverSongs = fallback.songs(generationId: generationId, memberId: memberId, type: type, query: query).items
             }
+        }
+    }
+
+    func refreshRecentCoverSongs(limit: Int = 5) async {
+        do {
+            let response = try await api.music(type: "cover", cursor: nil, limit: limit)
+            recentCoverSongs = IOSSongPagePolicy.recentCoverSongs(response.items, limit: limit)
+        } catch {
+            recentCoverSongs = IOSSongPagePolicy.recentCoverSongs(
+                serverSongs.isEmpty ? fallback.songs(type: "cover").items : serverSongs,
+                limit: limit
+            )
         }
     }
 

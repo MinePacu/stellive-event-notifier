@@ -60,6 +60,17 @@ class MainUiPolicyTest {
     }
 
     @Test
+    fun liveAndGoodsEventTopFiltersKeepExistingIds() {
+        val live = MainUiPolicy.liveTopFilterGroups("all").single()
+        val goods = MainUiPolicy.goodsEventsTopFilterGroups("all").single()
+
+        assertEquals(listOf("live", "all", "offline"), live.options.map { it.id })
+        assertEquals(listOf("all", "goods", "ticketing", "offline", "closing"), goods.options.map { it.id })
+        assertEquals("all", live.selectedId)
+        assertEquals("all", goods.selectedId)
+    }
+
+    @Test
     fun homeHubEventsListActionKeepsFullListReachableWhenClosingSoonExists() {
         val action = MainUiPolicy.homeHubEventsListAction(closingSoonCount = 1)
 
@@ -176,6 +187,13 @@ class MainUiPolicyTest {
 
         assertTrue(MainUiPolicy.debugServerConnectionLogs(debugModeEnabled = false, logs = logs).isEmpty())
         assertEquals(logs, MainUiPolicy.debugServerConnectionLogs(debugModeEnabled = true, logs = logs))
+    }
+
+    @Test
+    fun serverConnectionLabelDistinguishesConnectedCachedAndOffline() {
+        assertEquals("서버 연결됨", MainUiPolicy.serverConnectionLabel("서버 liveStatus"))
+        assertEquals("캐시 표시 중", MainUiPolicy.serverConnectionLabel("서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음"))
+        assertEquals("오프라인", MainUiPolicy.serverConnectionLabel("서버 연결 실패 · 앱 내 목업"))
     }
 
     @Test

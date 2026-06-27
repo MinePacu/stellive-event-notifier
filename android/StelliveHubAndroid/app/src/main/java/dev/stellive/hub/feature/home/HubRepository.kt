@@ -7,6 +7,7 @@ import dev.stellive.hub.core.model.HubEventsSummary
 import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.NotificationSettingState
 import dev.stellive.hub.core.model.SongFacets
+import dev.stellive.hub.core.model.SongCatalogItem
 import dev.stellive.hub.core.model.SongListResult
 import java.time.LocalDate
 
@@ -36,6 +37,8 @@ interface HubRepository {
         query: String? = null,
         cursor: String? = null,
     ): SongListResult
+    suspend fun recentCoverSongs(limit: Int = 5): List<SongCatalogItem> =
+        songs(type = "cover").items.take(limit)
     suspend fun songFacets(
         generationId: String? = null,
         memberId: String? = null,

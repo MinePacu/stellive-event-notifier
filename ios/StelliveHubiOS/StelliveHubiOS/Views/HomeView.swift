@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject private var store: MockHubStore
+    @EnvironmentObject private var serverStore: ServerHubStore
     @State private var path = NavigationPath()
 
     var body: some View {
@@ -25,6 +26,24 @@ struct HomeView: View {
                                 Label("더보기", systemImage: "chevron.right")
                             }
                         }
+                    }
+                }
+
+                Section("최근 커버곡") {
+                    if serverStore.recentCoverSongs.isEmpty {
+                        Text("최근 커버곡을 불러오는 중입니다.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(serverStore.recentCoverSongs) { song in
+                            SongRow(song: song)
+                        }
+                    }
+
+                    NavigationLink {
+                        SongsView()
+                    } label: {
+                        Text("노래 전체 보기")
                     }
                 }
 
@@ -71,6 +90,9 @@ struct HomeView: View {
             .settingsToolbar(path: $path)
             .navigationDestination(for: HubMember.self) { member in
                 MemberDetailView(member: member)
+            }
+            .task {
+                await serverStore.refreshRecentCoverSongs()
             }
         }
     }

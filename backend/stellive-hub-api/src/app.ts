@@ -30,6 +30,7 @@ import { PrismaSongRepository } from "./repositories/songRepository.js";
 import { InMemoryMusicSyncLock } from "./music/musicLocks.js";
 import { MusicSyncService } from "./music/musicSyncService.js";
 import { OfficialStelliveMusicSyncService } from "./music/officialStelliveMusicSyncService.js";
+import { MusicChannelDiscoverySyncService } from "./music/musicChannelDiscoverySyncService.js";
 import { officialStelliveMusicSourcePlaylistSeeds, TARGET_MUSIC_MEMBER_IDS } from "./music/musicSourcePlaylists.js";
 import { WebhookSubscriptionRepository } from "./repositories/webhookSubscriptionRepository.js";
 import SongIngestionService from "./songs/songIngestionService.js";
@@ -273,6 +274,31 @@ function createDefaultMusicSyncService(
     lightMaxPages: env.MUSIC_LIGHT_SYNC_MAX_PAGES,
     lockTtlMs: env.MUSIC_SYNC_LOCK_SECONDS * 1_000,
   });
+  const discoveryTargets = catalog
+    .getMembers()
+    .filter((member) =>
+      member.id === "stellive-official" ||
+      member.generationId === "gen1" ||
+      member.generationId === "gen2" ||
+      member.generationId === "gen3"
+    )
+    .flatMap((member) => {
+      const channelId = member.platforms?.youtubeChannelId;
+      if (!channelId) return [];
+      return [{
+        memberId: member.id === "stellive-official" ? undefined : member.id,
+        channelId,
+      }];
+    });
+  const discoveryService = new MusicChannelDiscoverySyncService({
+    repository: repository as never,
+    youtube,
+    locks,
+    members,
+    targets: discoveryTargets,
+    maxPages: env.MUSIC_CHANNEL_DISCOVERY_RECENT_PAGES,
+    lockTtlMs: env.MUSIC_SYNC_LOCK_SECONDS * 1_000,
+  });
   return {
     musicSync: {
       syncAllMusic: async (mode) => {
@@ -283,6 +309,7 @@ function createDefaultMusicSyncService(
         await syncCatalogMusicMembers();
         return officialService.syncOfficialStelliveMusicPlaylists(mode);
       },
+      discoverChannelUploads: () => discoveryService.discover(),
       listReviewCandidates: ({ limit } = {}) => repository.listReviewCandidates?.({ limit }) ?? Promise.resolve([]),
       upsertOverride: async (videoId, input) => {
         const item = await repository.getMusicItemByVideoId(videoId) as { id?: string; youtubeVideoId?: string } | null;

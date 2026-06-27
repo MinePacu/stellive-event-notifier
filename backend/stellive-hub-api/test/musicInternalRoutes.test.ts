@@ -112,6 +112,29 @@ describe("music internal routes", () => {
     expect(syncOfficialStelliveMusicPlaylists).toHaveBeenCalledWith("manual");
   });
 
+  it("runs channel discovery only when enabled", async () => {
+    const discoverChannelUploads = vi.fn(async () => ({ status: "ok", uniqueVideos: 3 }));
+    const enabledApp = await buildApp({
+      env: { ...env, MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED: "true" },
+      useProcessEnv: false,
+      internalRoutes: {
+        dependencies: createInternalDeps({
+          musicSync: { syncAllMusic: vi.fn(), discoverChannelUploads },
+        }),
+      },
+    });
+
+    const enabled = await enabledApp.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/music/discover-channel-uploads",
+      headers: authHeaders,
+    });
+    await enabledApp.close();
+
+    expect(enabled.json()).toEqual({ status: "ok", uniqueVideos: 3 });
+    expect(discoverChannelUploads).toHaveBeenCalledOnce();
+  });
+
   it("exposes review, override, sync log, and quota estimate routes", async () => {
     const listReviewCandidates = vi.fn(async () => [{ videoId: "video-1" }]);
     const upsertOverride = vi.fn(async () => ({ videoId: "video-1", forceExcluded: true }));

@@ -117,6 +117,9 @@ Environment variables:
 YOUTUBE_API_KEY=
 YOUTUBE_API_BASE_URL=https://www.googleapis.com/youtube/v3
 MUSIC_SYNC_ENABLED=false
+MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED=false
+MUSIC_CHANNEL_DISCOVERY_INTERVAL_MINUTES=60
+MUSIC_CHANNEL_DISCOVERY_RECENT_PAGES=1
 MUSIC_CACHE_TTL_SECONDS=600
 MUSIC_CACHE_STALE_SECONDS=600
 MUSIC_SYNC_LOCK_SECONDS=30
@@ -136,6 +139,15 @@ curl -H "Authorization: Bearer <INTERNAL_API_TOKEN>" \
   -H "content-type: application/json" \
   -d '{"mode":"light"}' \
   http://localhost:4000/v1/internal/schedulers/music/sync-official-playlists
+```
+
+When channel discovery is enabled, the worker checks the official channel and active member uploads playlists once per configured interval. It only ingests metadata classified as cover/original, deduplicates by `videoId`, and leaves ambiguous official-channel matches in `NEEDS_REVIEW`. Official COVER/ORIGINAL playlists remain authoritative and existing official source mappings are preserved.
+
+Manual channel discovery trigger:
+
+```bash
+curl -X POST -H "Authorization: Bearer <INTERNAL_API_TOKEN>" \
+  http://localhost:4000/v1/internal/schedulers/music/discover-channel-uploads
 ```
 
 Quota estimate:
