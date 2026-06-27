@@ -24,6 +24,14 @@ class TopFilterStripPolicyTest {
     }
 
     @Test
+    fun siblingRowsUseScrollModeWhenAnyRowHasMoreThanThreeOptions() {
+        assertEquals(
+            FilterStripLayoutMode.HORIZONTAL_SCROLL,
+            TopFilterStripPolicy.layoutMode(optionCount = 3, maxOptionCountInStrip = 4),
+        )
+    }
+
+    @Test
     fun filterStripDoesNotShowExtraSelectionOrOverflowHints() {
         assertFalse(TopFilterStripPolicy.showsTrailingOverflowHint())
         assertFalse(TopFilterStripPolicy.showsSelectedCheckIcon())

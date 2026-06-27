@@ -27,16 +27,18 @@ class TopFilterStripView(context: Context) : LinearLayout(context) {
         onSelected: (groupId: String, optionId: String) -> Unit,
     ) {
         removeAllViews()
+        val maxOptionCountInStrip = groups.maxOfOrNull { it.options.size } ?: 0
         groups.forEach { group ->
-            addView(filterGroup(group, onSelected))
+            addView(filterGroup(group, maxOptionCountInStrip, onSelected))
         }
     }
 
     private fun filterGroup(
         group: TopFilterGroup,
+        maxOptionCountInStrip: Int,
         onSelected: (groupId: String, optionId: String) -> Unit,
     ): View {
-        val mode = TopFilterStripPolicy.layoutMode(group.options.size)
+        val mode = TopFilterStripPolicy.layoutMode(group.options.size, maxOptionCountInStrip)
         val optionRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL

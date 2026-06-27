@@ -24,8 +24,8 @@ object TopFilterStripPolicy {
     const val OptionEndMarginDp = 6
     const val OptionBottomMarginDp = 6
 
-    fun layoutMode(optionCount: Int): FilterStripLayoutMode =
-        if (optionCount <= 3) FilterStripLayoutMode.EQUAL_WIDTH
+    fun layoutMode(optionCount: Int, maxOptionCountInStrip: Int = optionCount): FilterStripLayoutMode =
+        if (optionCount <= 3 && maxOptionCountInStrip <= 3) FilterStripLayoutMode.EQUAL_WIDTH
         else FilterStripLayoutMode.HORIZONTAL_SCROLL
 
     fun showsTrailingOverflowHint(): Boolean = false

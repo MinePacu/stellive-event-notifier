@@ -2322,9 +2322,23 @@ private fun hubEventDetailHero(event: dev.stellive.hub.core.model.HubEvent): Fra
             }
 
             addView(
+                View(context).apply {
+                    background = GradientDrawable(
+                        GradientDrawable.Orientation.TOP_BOTTOM,
+                        intArrayOf(Color.TRANSPARENT, Color.argb(188, 0, 0, 0))
+                    )
+                },
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    dp(172),
+                    Gravity.BOTTOM
+                )
+            )
+
+            addView(
                 LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
-                    setPadding(dp(18), 0, dp(18), 0)
+                    setPadding(dp(18), 0, dp(18), dp(10))
                     addView(LinearLayout(context).apply {
                         orientation = LinearLayout.HORIZONTAL
                         HubEventDetailFormatting.heroTags(event).forEach { tag ->
@@ -2333,15 +2347,7 @@ private fun hubEventDetailHero(event: dev.stellive.hub.core.model.HubEvent): Fra
                     })
                     addView(LinearLayout(context).apply {
                         orientation = LinearLayout.VERTICAL
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT
-                        )
-                        setPadding(0, dp(10), 0, dp(10))
-                        background = GradientDrawable(
-                            GradientDrawable.Orientation.TOP_BOTTOM,
-                            intArrayOf(Color.argb(72, 0, 0, 0), Color.argb(184, 0, 0, 0))
-                        )
+                        setPadding(0, dp(10), 0, 0)
                         addView(TextView(context).apply {
                             text = event.title
                             setTextColor(Color.WHITE)
@@ -2742,8 +2748,9 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
             iconEndPadding = 0f
             closeIconStartPadding = 0f
             closeIconEndPadding = 0f
-            chipBackgroundColor = ColorStateList.valueOf(tagColor.withAlpha(150))
-            chipStrokeColor = ColorStateList.valueOf(tagColor.withAlpha(150))
+            chipBackgroundColor = ColorStateList.valueOf(tagColor.withAlpha(112))
+            chipStrokeColor = ColorStateList.valueOf(tagColor.withAlpha(88))
+            rippleColor = ColorStateList.valueOf(Color.TRANSPARENT)
             (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dp(10)
         }
 
