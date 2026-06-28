@@ -298,6 +298,7 @@ function createDefaultMusicSyncService(
       return [{
         memberId: member.id === "stellive-official" ? undefined : member.id,
         channelId,
+        maxResults: member.id === "stellive-official" ? 10 : 50,
       }];
     });
   const discoveryService = new MusicChannelDiscoverySyncService({
@@ -306,6 +307,7 @@ function createDefaultMusicSyncService(
     locks,
     members,
     targets: discoveryTargets,
+    songIngestion: createDefaultSongIngestionService(),
     maxPages: env.MUSIC_CHANNEL_DISCOVERY_RECENT_PAGES,
     lockTtlMs: env.MUSIC_SYNC_LOCK_SECONDS * 1_000,
   });

@@ -64,7 +64,8 @@ struct SongsView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            List {
+            ScrollViewReader { songListProxy in
+                List {
                 HubHeaderCard(
                     iconText: "♪",
                 title: "노래",
@@ -141,19 +142,26 @@ struct SongsView: View {
                     }
                 }
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Color(uiColor: .systemGroupedBackground))
-        .settingsToolbar(path: $path)
-        .onChange(of: selectedGenerationId) { _ in selectedPage = 1 }
-        .onChange(of: selectedType) { _ in selectedPage = 1 }
-        .onChange(of: selectedMemberId) { _ in selectedPage = 1 }
-        .onChange(of: query) { _ in selectedPage = 1 }
-            .refreshable {
-                await refreshSongs()
-            }
-            .task {
-                await refreshSongs()
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+                .background(Color(uiColor: .systemGroupedBackground))
+                .settingsToolbar(path: $path)
+                .onChange(of: selectedGenerationId) { _ in selectedPage = 1 }
+                .onChange(of: selectedType) { _ in selectedPage = 1 }
+                .onChange(of: selectedMemberId) { _ in selectedPage = 1 }
+                .onChange(of: query) { _ in selectedPage = 1 }
+                .onChange(of: selectedPage) { _ in
+                    guard let firstSongId = pagedSongs.first?.id else { return }
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        songListProxy.scrollTo(firstSongId, anchor: .top)
+                    }
+                }
+                .refreshable {
+                    await refreshSongs()
+                }
+                .task {
+                    await refreshSongs()
+                }
             }
         }
     }
@@ -171,6 +179,7 @@ struct SongsView: View {
             Button("이전") {
                 selectedPage = max(1, currentPage - 1)
             }
+            .buttonStyle(.borderless)
             .disabled(currentPage == 1)
 
             Spacer()
@@ -184,6 +193,7 @@ struct SongsView: View {
             Button("다음") {
                 selectedPage = min(IOSSongPagePolicy.pageCount(totalItems: songs.count), currentPage + 1)
             }
+            .buttonStyle(.borderless)
             .disabled(currentPage == IOSSongPagePolicy.pageCount(totalItems: songs.count))
         }
     }
@@ -208,6 +218,18 @@ struct SongRow: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+
+                    if let premiereLabel = IOSSongPagePolicy.premiereStatusLabel(for: song) {
+                        Text(premiereLabel)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(Color(.tertiarySystemGroupedBackground))
+                            )
+                    }
 
                     if let publishedAt = song.publishedAt {
                         Text(publishedAt, style: .date)

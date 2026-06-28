@@ -19,6 +19,7 @@ import dev.stellive.hub.core.network.SongFacetsResponseDto
 import dev.stellive.hub.core.network.SongFilterCountDto
 import dev.stellive.hub.core.network.SongListResponseDto
 import dev.stellive.hub.core.network.SongThumbnailDto
+import dev.stellive.hub.core.network.YoutubePremiereMetadataDto
 import dev.stellive.hub.feature.home.MockHubRepository
 import dev.stellive.hub.feature.home.ServerHubRepository
 import java.time.LocalDate
@@ -131,6 +132,49 @@ class ServerHubRepositoryTest {
         assertEquals("video-1", songs.items.first().id)
         assertEquals("cover", songs.items.first().type.apiValue)
         assertEquals("https://img.youtube.com/vi/video-1/hqdefault.jpg", songs.items.first().thumbnailUrl)
+    }
+
+    @Test
+    fun songsPreservePremiereMetadataFromOfficialMusicDtos() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            musicResponses = ArrayDeque(listOf(
+                MusicListResponseDto(
+                    items = listOf(
+                        MusicCatalogItemDto(
+                            id = "video-1",
+                            youtubeVideoId = "video-1",
+                            title = "Premiere Cover",
+                            type = "cover",
+                            publishedAt = "2026-06-27T18:21:27.000Z",
+                            members = listOf(
+                                MusicMemberSummaryDto(
+                                    id = "aokumo-rin",
+                                    nameKo = "아오쿠모 린",
+                                    nameEn = "Aokumo Rin",
+                                    role = "MAIN",
+                                ),
+                            ),
+                            youtubeUrl = "https://www.youtube.com/watch?v=video-1",
+                            premiere = YoutubePremiereMetadataDto(
+                                classification = "assumed",
+                                state = "scheduled",
+                                scheduledStartAt = "2026-06-28T08:00:00.000Z",
+                            ),
+                        ),
+                    ),
+                ),
+            ))
+        }
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val song = repository.songs(type = "cover").items.single()
+
+        assertEquals("scheduled", song.premiere?.state)
+        assertEquals("2026-06-28T08:00:00Z", song.premiere?.scheduledStartAt.toString())
     }
 
     @Test

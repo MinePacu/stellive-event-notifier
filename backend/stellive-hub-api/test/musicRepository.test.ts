@@ -72,6 +72,13 @@ describe("PrismaMusicRepository", () => {
       classificationStatus: "AUTO_CLASSIFIED",
       isInstrumental: false,
       specialFlags: [],
+      youtubePresentationType: "premiere_assumed",
+      youtubePremiereState: "scheduled",
+      youtubeScheduledStartAt: "2026-07-01T12:00:00.000Z",
+      youtubeActualStartAt: null,
+      youtubeActualEndAt: null,
+      youtubeMetadataFetchedAt: new Date("2026-06-28T00:00:00.000Z"),
+      listingPriority: 1,
       fetchedAt: new Date("2026-06-22T00:00:00.000Z"),
       lastSeenAt: new Date("2026-06-22T00:00:00.000Z"),
       playlistPosition: 0,
@@ -111,6 +118,7 @@ describe("PrismaMusicRepository", () => {
         durationSeconds: 201,
         privacyStatus: "public",
         classificationStatus: "AUTO_CLASSIFIED",
+        youtubePremiereState: "scheduled",
       }),
     }));
     expect(prisma.musicItemSourcePlaylist.upsert).toHaveBeenCalledWith(expect.objectContaining({
@@ -140,6 +148,11 @@ describe("PrismaMusicRepository", () => {
           durationSeconds: 201,
           isInstrumental: false,
           specialFlags: [],
+          youtubePresentationType: "premiere_assumed",
+          youtubePremiereState: "scheduled",
+          youtubeScheduledStartAt: new Date("2026-07-01T12:00:00.000Z"),
+          youtubeActualStartAt: null,
+          youtubeActualEndAt: null,
           sourcePlaylistId: "source-1",
           members: [{
             memberId: "akane-lize",
@@ -183,10 +196,15 @@ describe("PrismaMusicRepository", () => {
     youtubeVideoId: "video-1",
     durationSeconds: 201,
     isInstrumental: false,
+    premiere: {
+      classification: "assumed",
+      state: "scheduled",
+      scheduledStartAt: "2026-07-01T12:00:00.000Z",
+    },
   });
 });
 
-it("uses published date and id cursor conditions for publishedAt descending music pages", async () => {
+it("uses premiere priority and date cursor conditions for published music pages", async () => {
   const prisma = {
     musicItem: {
       findMany: vi.fn(async () => []),
@@ -194,8 +212,10 @@ it("uses published date and id cursor conditions for publishedAt descending musi
   };
   const repository = new PrismaMusicRepository(prisma);
   const cursor = Buffer.from(JSON.stringify({
-    v: 1,
+    v: 2,
     sort: "publishedAt_desc",
+    listingPriority: 1,
+    scheduledStartAt: "2026-07-01T00:00:00.000Z",
     publishedAt: "2026-06-01T00:00:00.000Z",
     id: "music-100",
   })).toString("base64url");
@@ -210,14 +230,19 @@ it("uses published date and id cursor conditions for publishedAt descending musi
   expect(prisma.musicItem.findMany).toHaveBeenCalledWith(expect.objectContaining({
     where: expect.objectContaining({
       OR: [
-        { publishedAt: { lt: new Date("2026-06-01T00:00:00.000Z") } },
+        { listingPriority: { gt: 1 } },
         {
-          publishedAt: new Date("2026-06-01T00:00:00.000Z"),
+          listingPriority: 1,
+          youtubeScheduledStartAt: { gt: new Date("2026-07-01T00:00:00.000Z") },
+        },
+        {
+          listingPriority: 1,
+          youtubeScheduledStartAt: new Date("2026-07-01T00:00:00.000Z"),
           id: { gt: "music-100" },
         },
       ],
     }),
-    orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
+    orderBy: [{ listingPriority: "asc" }, { youtubeScheduledStartAt: "asc" }, { publishedAt: "desc" }, { id: "asc" }],
     take: 101,
   }));
 });
@@ -230,8 +255,10 @@ it("uses playlist position, published date, and id cursor conditions for playlis
   };
   const repository = new PrismaMusicRepository(prisma);
   const cursor = Buffer.from(JSON.stringify({
-    v: 1,
+    v: 2,
     sort: "playlistOrder",
+    listingPriority: 2,
+    scheduledStartAt: null,
     playlistPosition: 100,
     publishedAt: "2026-06-01T00:00:00.000Z",
     id: "music-100",
@@ -313,6 +340,35 @@ it("uses playlist position, published date, and id cursor conditions for playlis
       where: { isActive: true },
       orderBy: [{ type: "asc" }, { title: "asc" }],
     });
+  });
+
+  it("bulk loads existing discovery metadata by YouTube video id", async () => {
+    const rows = [{ id: "music-1", youtubeVideoId: "video-1", title: "Song", type: "cover" }];
+    const prisma = { musicItem: { findMany: vi.fn(async () => rows) } };
+    const repository = new PrismaMusicRepository(prisma);
+
+    await expect(repository.getMusicItemsByVideoIds(["video-1", "video-2"])).resolves.toEqual(rows);
+    expect(prisma.musicItem.findMany).toHaveBeenCalledWith({
+      where: { youtubeVideoId: { in: ["video-1", "video-2"] } },
+    });
+  });
+
+  it("preserves existing premiere fields when a sync upsert has no broadcast metadata", async () => {
+    const upsert = vi.fn(async (_args: unknown) => ({ id: "music-1", youtubeVideoId: "video-1" }));
+    const repository = new PrismaMusicRepository({ musicItem: { upsert } });
+
+    await repository.upsertMusicItem({
+      youtubeVideoId: "video-1",
+      title: "Song",
+      type: "cover",
+      isPublic: true,
+      lastSeenAt: new Date("2026-06-28T00:00:00.000Z"),
+    });
+
+    const args = upsert.mock.calls[0][0] as { create: Record<string, unknown>; update: Record<string, unknown> };
+    expect(args.create).toMatchObject({ youtubePresentationType: "regular", listingPriority: 2 });
+    expect(args.update).not.toHaveProperty("youtubePresentationType");
+    expect(args.update).not.toHaveProperty("youtubePremiereState");
   });
 
   it("lists and repairs source-backed type mismatches", async () => {

@@ -14,6 +14,103 @@ const candidate = {
 };
 
 describe("MusicChannelDiscoverySyncService", () => {
+  it("limits official discovery to 10 items, dedupes by video id, and stores premiere metadata only once", async () => {
+    const listUploads = vi.fn(async () => ({
+      status: "ok" as const,
+      candidates: [candidate, { ...candidate }],
+      pagesFetched: 1,
+      quotaUnits: 1,
+    }));
+    const upsertMusicItem = vi.fn(async (input) => ({ id: "official-music-1", ...input }));
+    const ingestYoutubeUpload = vi.fn(async () => ({ ingested: false as const, reason: "unsupported_song_generation" as const }));
+    const service = new MusicChannelDiscoverySyncService({
+      youtube: {
+        getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "official-uploads" }),
+        listUploads,
+        fetchVideos: async () => [{
+          videoId: "video-1",
+          channelId: "official-channel",
+          title: "Official Song Cover",
+          description: "",
+          tags: ["cover"],
+          duration: "PT3M",
+          privacyStatus: "public",
+          liveBroadcastContent: "upcoming",
+          scheduledStartTime: "2026-07-01T12:00:00.000Z",
+        }],
+      },
+      repository: {
+        getMusicItemByVideoId: async () => null,
+        getOverrideByVideoId: async () => null,
+        upsertMusicItem,
+        replaceMusicItemMembers: async () => undefined,
+      },
+      songIngestion: { ingestYoutubeUpload },
+      locks: new InMemoryMusicSyncLock(),
+      members: [],
+      targets: [{ channelId: "official-channel", maxResults: 10 }],
+    });
+
+    const result = await service.discover();
+
+    expect(listUploads).toHaveBeenCalledWith(expect.objectContaining({ maxResults: 10 }));
+    expect(upsertMusicItem).toHaveBeenCalledTimes(1);
+    expect(upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
+      youtubeVideoId: "video-1",
+      youtubePresentationType: "premiere_assumed",
+      youtubePremiereState: "scheduled",
+      youtubeScheduledStartAt: "2026-07-01T12:00:00.000Z",
+    }));
+    expect(ingestYoutubeUpload).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ uniqueVideos: 1, inserted: 1 });
+  });
+
+  it("reuses fresh completed metadata without spending a video detail request", async () => {
+    const fetchVideos = vi.fn(async () => []);
+    const upsertMusicItem = vi.fn(async (input) => ({ id: "music-1", ...input }));
+    const service = new MusicChannelDiscoverySyncService({
+      youtube: {
+        getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
+        listUploads: async () => ({ status: "ok", candidates: [candidate], pagesFetched: 1, quotaUnits: 1 }),
+        fetchVideos,
+      },
+      repository: {
+        getMusicItemsByVideoIds: async () => [{
+          id: "music-1",
+          youtubeVideoId: "video-1",
+          title: "New Song Cover",
+          type: "cover",
+          channelId: "channel-1",
+          duration: "PT3M",
+          privacyStatus: "public",
+          publishedAt: new Date(candidate.publishedAt),
+          youtubePresentationType: "premiere_assumed",
+          youtubePremiereState: "completed",
+          youtubeScheduledStartAt: new Date("2026-06-25T00:00:00.000Z"),
+          youtubeActualStartAt: new Date("2026-06-25T00:00:00.000Z"),
+          youtubeActualEndAt: new Date("2026-06-25T00:03:00.000Z"),
+          youtubeMetadataFetchedAt: new Date("2026-06-28T00:00:00.000Z"),
+        }],
+        getMusicItemByVideoId: async () => ({ id: "music-1" }),
+        getOverrideByVideoId: async () => null,
+        upsertMusicItem,
+        replaceMusicItemMembers: async () => undefined,
+      },
+      locks: new InMemoryMusicSyncLock(),
+      members: [{ id: "member-1", aliases: ["Member One"] }],
+      targets: [{ memberId: "member-1", channelId: "channel-1" }],
+      now: () => new Date("2026-06-28T12:00:00.000Z"),
+    });
+
+    await service.discover();
+
+    expect(fetchVideos).not.toHaveBeenCalled();
+    expect(upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
+      youtubePremiereState: "completed",
+      youtubeActualEndAt: "2026-06-25T00:03:00.000Z",
+    }));
+  });
+
   it("dedupes uploads, preserves official source, and links the channel member", async () => {
     const fetchVideos = vi.fn(async () => [{
       videoId: "video-1",

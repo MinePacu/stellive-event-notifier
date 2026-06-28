@@ -16,6 +16,8 @@ import dev.stellive.hub.ui.components.TopFilterOption
 import java.text.NumberFormat
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 data class StatusSummaryItem(
@@ -61,6 +63,9 @@ data class SettingsCardSpacing(
 object MainUiPolicy {
     const val SONG_PAGE_SIZE = 20
     const val SONG_THUMBNAIL_ASPECT_RATIO = 16f / 9f
+    private val songPremiereZoneId: ZoneId = ZoneId.of("Asia/Seoul")
+    private val songPremiereDateTimeFormatter: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("M월 d일 HH:mm", Locale.KOREAN).withZone(songPremiereZoneId)
 
     val settingsCardSpacing = SettingsCardSpacing(
         contentVerticalPaddingDp = 10,
@@ -276,6 +281,14 @@ object MainUiPolicy {
             ?.joinToString(" · ")
             ?: song.memberName?.takeIf { it.isNotBlank() }
             ?: "스텔라이브"
+
+    fun songPremiereStatusLabel(song: SongCatalogItem): String? = when (song.premiere?.state) {
+        "scheduled" -> song.premiere.scheduledStartAt
+            ?.let { "최초 공개 예정 · ${songPremiereDateTimeFormatter.format(it)}" }
+            ?: "최초 공개 예정"
+        "live" -> "최초 공개 중"
+        else -> null
+    }
 
     fun songMatchesGeneration(
         song: SongCatalogItem,

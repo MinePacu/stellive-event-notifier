@@ -1130,6 +1130,25 @@ components:
         height:
           type: integer
           minimum: 1
+    YoutubePremiereMetadata:
+      type: object
+      required: [classification, state, scheduledStartAt, actualStartAt, actualEndAt]
+      properties:
+        classification:
+          type: string
+          const: assumed
+        state:
+          type: string
+          enum: [scheduled, live, completed, unknown]
+        scheduledStartAt:
+          type: [string, "null"]
+          format: date-time
+        actualStartAt:
+          type: [string, "null"]
+          format: date-time
+        actualEndAt:
+          type: [string, "null"]
+          format: date-time
     SongCatalogItem:
       type: object
       required:
@@ -1170,6 +1189,8 @@ components:
         publishedAt:
           type: string
           format: date-time
+        premiere:
+          $ref: "#/components/schemas/YoutubePremiereMetadata"
     SongFacetSummary:
       type: object
       required:
@@ -1347,6 +1368,8 @@ components:
           type:
             - string
             - "null"
+        premiere:
+          $ref: "#/components/schemas/YoutubePremiereMetadata"
     MusicListResponse:
       type: object
       required:

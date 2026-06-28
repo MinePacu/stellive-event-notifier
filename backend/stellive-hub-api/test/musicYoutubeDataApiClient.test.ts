@@ -141,7 +141,7 @@ describe("YoutubeDataApiClient music playlist methods", () => {
     }]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const firstUrl = new URL(fetchImpl.mock.calls[0][0] as string);
-    expect(firstUrl.searchParams.get("part")).toBe("snippet,contentDetails,status");
+    expect(firstUrl.searchParams.get("part")).toBe("snippet,contentDetails,status,liveStreamingDetails");
     expect(firstUrl.searchParams.get("id")!.split(",")).toHaveLength(50);
   });
 

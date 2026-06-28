@@ -7,6 +7,7 @@ import type {
 } from "../adapters/youtube/youtubeDataApiClient.js";
 import type { MusicItemMemberInput, MusicItemUpsertInput } from "../repositories/musicRepository.js";
 import { classifySongUpload } from "../songs/songClassifier.js";
+import { classifyYoutubePremiere } from "../adapters/youtube/youtubePremiereClassifier.js";
 import { classifyVideo, normalizeTitle } from "./musicClassifier.js";
 import type { MusicSyncLock } from "./musicLocks.js";
 import { matchMusicMembers, type MusicMemberAliasInput } from "./musicMemberMatcher.js";
@@ -14,6 +15,7 @@ import { matchMusicMembers, type MusicMemberAliasInput } from "./musicMemberMatc
 export interface MusicChannelDiscoveryTarget {
   memberId?: string;
   channelId: string;
+  maxResults?: number;
 }
 
 interface DiscoveryYoutubePort {
@@ -22,15 +24,21 @@ interface DiscoveryYoutubePort {
     channelId: string;
     uploadsPlaylistId: string;
     maxPages: number;
+    maxResults?: number;
   }): Promise<YoutubeListUploadsResult>;
   fetchVideos(videoIds: string[]): Promise<YoutubeVideoDetail[]>;
 }
 
 interface DiscoveryRepository {
+  getMusicItemsByVideoIds?(videoIds: string[]): Promise<unknown[]>;
   getMusicItemByVideoId(videoId: string): Promise<unknown>;
   getOverrideByVideoId(videoId: string): Promise<unknown>;
   upsertMusicItem(input: MusicItemUpsertInput): Promise<unknown>;
   replaceMusicItemMembers(musicItemId: string, links: MusicItemMemberInput[]): Promise<void>;
+}
+
+interface DiscoverySongIngestionPort {
+  ingestYoutubeUpload(candidate: YoutubeUploadCandidate): Promise<unknown>;
 }
 
 interface ManualOverrideRecord {
@@ -46,6 +54,7 @@ export interface MusicChannelDiscoverySyncServiceOptions {
   locks: MusicSyncLock;
   members: MusicMemberAliasInput[];
   targets: MusicChannelDiscoveryTarget[];
+  songIngestion?: DiscoverySongIngestionPort;
   maxPages?: number;
   lockTtlMs?: number;
   now?: () => Date;
@@ -74,6 +83,45 @@ function existingSourceBackedType(existing: Record<string, unknown>): MusicItemT
     return existing.type;
   }
   return null;
+}
+
+function dateString(value: unknown): string | undefined {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value !== "string") return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+}
+
+function shouldRefreshVideo(existing: Record<string, unknown> | undefined, now: Date): boolean {
+  if (!existing) return true;
+  if (["scheduled", "live", "unknown"].includes(String(existing.youtubePremiereState ?? ""))) return true;
+  const fetchedAt = dateString(existing.youtubeMetadataFetchedAt);
+  return !fetchedAt || now.getTime() - new Date(fetchedAt).getTime() >= 24 * 60 * 60 * 1_000;
+}
+
+function detailFromExisting(existing: Record<string, unknown>): YoutubeVideoDetail {
+  return {
+    videoId: String(existing.youtubeVideoId),
+    channelId: typeof existing.channelId === "string" ? existing.channelId : undefined,
+    channelTitle: typeof existing.channelTitle === "string" ? existing.channelTitle : undefined,
+    title: typeof existing.title === "string" ? existing.title : undefined,
+    description: typeof existing.description === "string" ? existing.description : undefined,
+    publishedAt: dateString(existing.publishedAt),
+    tags: Array.isArray(existing.tags) ? existing.tags.filter((tag): tag is string => typeof tag === "string") : [],
+    duration: typeof existing.duration === "string" ? existing.duration : undefined,
+    privacyStatus: typeof existing.privacyStatus === "string" ? existing.privacyStatus : undefined,
+    liveBroadcastContent: existing.youtubePremiereState === "scheduled"
+      ? "upcoming"
+      : existing.youtubePremiereState === "live"
+        ? "live"
+        : "none",
+    scheduledStartTime: dateString(existing.youtubeScheduledStartAt),
+    actualStartTime: dateString(existing.youtubeActualStartAt),
+    actualEndTime: dateString(existing.youtubeActualEndAt),
+    thumbnailUrl: typeof existing.thumbnailUrl === "string" ? existing.thumbnailUrl : undefined,
+    thumbnailWidth: typeof existing.thumbnailWidth === "number" ? existing.thumbnailWidth : undefined,
+    thumbnailHeight: typeof existing.thumbnailHeight === "number" ? existing.thumbnailHeight : undefined,
+  };
 }
 
 export class MusicChannelDiscoverySyncService {
@@ -114,6 +162,7 @@ export class MusicChannelDiscoverySyncService {
             channelId: target.channelId,
             uploadsPlaylistId: playlist.uploadsPlaylistId,
             maxPages: Math.max(1, Math.trunc(this.options.maxPages ?? 1)),
+            maxResults: target.maxResults ?? 50,
           });
           summary.apiCallsEstimated += uploads.quotaUnits;
           if (uploads.status !== "ok") continue;
@@ -127,11 +176,25 @@ export class MusicChannelDiscoverySyncService {
       }
 
       summary.uniqueVideos = candidates.size;
-      const details = candidates.size > 0
-        ? await this.options.youtube.fetchVideos([...candidates.keys()])
+      const videoIds = [...candidates.keys()];
+      const existingRows = this.options.repository.getMusicItemsByVideoIds
+        ? await this.options.repository.getMusicItemsByVideoIds(videoIds)
         : [];
-      summary.apiCallsEstimated += Math.ceil(candidates.size / 50);
-      const detailsById = new Map(details.map((detail) => [detail.videoId, detail]));
+      const existingById = new Map(existingRows.map((row) => {
+        const value = record(row);
+        return [String(value.youtubeVideoId), value] as const;
+      }));
+      const now = (this.options.now ?? (() => new Date()))();
+      const refreshIds = videoIds.filter((videoId) => shouldRefreshVideo(existingById.get(videoId), now));
+      const details = refreshIds.length > 0 ? await this.options.youtube.fetchVideos(refreshIds) : [];
+      summary.apiCallsEstimated += Math.ceil(refreshIds.length / 50);
+      const detailsById = new Map<string, YoutubeVideoDetail>([
+        ...existingRows.map((row) => {
+          const value = record(row);
+          return [String(value.youtubeVideoId), detailFromExisting(value)] as const;
+        }),
+        ...details.map((detail) => [detail.videoId, detail] as const),
+      ]);
 
       for (const [videoId, discovered] of candidates) {
         const detail = detailsById.get(videoId);
@@ -142,10 +205,17 @@ export class MusicChannelDiscoverySyncService {
         });
         if (songClassification.type !== "cover" && songClassification.type !== "original") continue;
 
-        const existing = record(await this.options.repository.getMusicItemByVideoId(videoId));
+        const existing = existingById.get(videoId) ?? record(await this.options.repository.getMusicItemByVideoId(videoId));
         const manualOverride = overrideRecord(await this.options.repository.getOverrideByVideoId(videoId));
         const preservedSourceType = existingSourceBackedType(existing);
         const itemType = (manualOverride?.forcedType as MusicItemType | undefined) ?? preservedSourceType ?? songClassification.type;
+        const premiere = classifyYoutubePremiere({
+          musicType: itemType,
+          liveBroadcastContent: detail?.liveBroadcastContent,
+          scheduledStartTime: detail?.scheduledStartTime,
+          actualStartTime: detail?.actualStartTime,
+          actualEndTime: detail?.actualEndTime,
+        });
         const rawCategoryHint = typeof existing.sourcePlaylistId === "string" && typeof existing.rawCategoryHint === "string"
           ? existing.rawCategoryHint
           : itemType.toUpperCase();
@@ -219,12 +289,39 @@ export class MusicChannelDiscoverySyncService {
           classificationStatus,
           isInstrumental: classification.isInstrumental,
           specialFlags: classification.specialFlags,
+          youtubePresentationType: premiere.presentationType,
+          youtubePremiereState: premiere.state,
+          youtubeScheduledStartAt: premiere.scheduledStartAt,
+          youtubeActualStartAt: premiere.actualStartAt,
+          youtubeActualEndAt: premiere.actualEndAt,
+          youtubeMetadataFetchedAt: (this.options.now ?? (() => new Date()))(),
+          listingPriority: premiere.listingPriority,
           fetchedAt: (this.options.now ?? (() => new Date()))(),
           lastSeenAt: (this.options.now ?? (() => new Date()))(),
           rawCategoryHint,
         }));
         const musicItemId = typeof saved.id === "string" ? saved.id : typeof existing.id === "string" ? existing.id : videoId;
         await this.options.repository.replaceMusicItemMembers(musicItemId, links);
+        if (discovered.target.memberId) {
+          await this.options.songIngestion?.ingestYoutubeUpload({
+            ...discovered.candidate,
+            title: detail?.title ?? discovered.candidate.title,
+            description: detail?.description,
+            tags: detail?.tags,
+            channelId: detail?.channelId ?? discovered.candidate.channelId,
+            channelTitle: detail?.channelTitle,
+            publishedAt: detail?.publishedAt ?? discovered.candidate.publishedAt,
+            thumbnailUrl: detail?.thumbnailUrl ?? discovered.candidate.thumbnailUrl,
+            thumbnailWidth: detail?.thumbnailWidth ?? discovered.candidate.thumbnailWidth,
+            thumbnailHeight: detail?.thumbnailHeight ?? discovered.candidate.thumbnailHeight,
+            duration: detail?.duration ?? discovered.candidate.duration,
+            privacyStatus: detail?.privacyStatus ?? discovered.candidate.privacyStatus,
+            liveBroadcastContent: detail?.liveBroadcastContent,
+            scheduledStartTime: detail?.scheduledStartTime,
+            actualStartTime: detail?.actualStartTime,
+            actualEndTime: detail?.actualEndTime,
+          });
+        }
         if (typeof existing.id === "string") summary.updated += 1;
         else summary.inserted += 1;
       }

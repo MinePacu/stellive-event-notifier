@@ -10,6 +10,13 @@ export interface YoutubeUploadCandidate {
   thumbnailHeight?: number;
   duration?: string;
   privacyStatus?: string;
+  description?: string;
+  tags?: string[];
+  channelTitle?: string;
+  liveBroadcastContent?: string;
+  scheduledStartTime?: string;
+  actualStartTime?: string;
+  actualEndTime?: string;
 }
 
 export type YoutubeAtomParseResult =

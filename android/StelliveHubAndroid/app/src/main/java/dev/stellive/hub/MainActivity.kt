@@ -1188,6 +1188,16 @@ private fun songFilterRow(
                 textSize = 12f
                 setPadding(0, dp(5), 0, 0)
             })
+            MainUiPolicy.songPremiereStatusLabel(song)?.let { label ->
+                content.addView(rowChip(label).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply {
+                        topMargin = dp(7)
+                    }
+                })
+            }
             row.addView(content)
             addView(row)
         }

@@ -11,6 +11,8 @@ describe("Prisma song schema", () => {
   it("defines normalized song storage and YouTube channel state", () => {
     expect(prismaSchema).toContain("model Song");
     expect(prismaSchema).toContain("dedupeKey                 String   @unique");
+    expect(prismaSchema).toContain("youtubePresentationType");
+    expect(prismaSchema).toContain("youtubeScheduledStartAt");
     expect(prismaSchema).toContain("@@index([generationId])");
     expect(prismaSchema).toContain("@@index([memberId])");
     expect(prismaSchema).toContain("@@index([songType])");
@@ -39,6 +41,11 @@ describe("PrismaSongRepository", () => {
             thumbnailUrl: "https://i.ytimg.com/vi/abc123/maxresdefault.jpg",
             thumbnailWidth: 1280,
             thumbnailHeight: 720,
+            youtubePresentationType: "premiere_assumed",
+            youtubePremiereState: "scheduled",
+            youtubeScheduledStartAt: new Date("2026-07-01T12:00:00.000Z"),
+            youtubeActualStartAt: null,
+            youtubeActualEndAt: null,
             publishedAt: new Date("2026-06-21T12:00:00.000Z"),
           };
         },
@@ -63,16 +70,30 @@ describe("PrismaSongRepository", () => {
       thumbnailUrl: "https://i.ytimg.com/vi/abc123/maxresdefault.jpg",
       thumbnailWidth: 1280,
       thumbnailHeight: 720,
+      youtubePresentationType: "premiere_assumed",
+      youtubePremiereState: "scheduled",
+      youtubeScheduledStartAt: "2026-07-01T12:00:00.000Z",
+      youtubeActualStartAt: null,
+      youtubeActualEndAt: null,
+      youtubeMetadataFetchedAt: new Date("2026-06-28T00:00:00.000Z"),
+      listingPriority: 1,
       publishedAt: "2026-06-21T12:00:00.000Z",
     });
 
     expect(calls).toEqual([expect.objectContaining({
       where: { dedupeKey: "youtube:upload:UC123:abc123" },
-      create: expect.objectContaining({ youtubeVideoId: "abc123", generationId: "gen2", songType: "original" }),
-      update: expect.objectContaining({ title: "별빛 항로", songType: "original" }),
+      create: expect.objectContaining({ youtubeVideoId: "abc123", generationId: "gen2", songType: "original", youtubePremiereState: "scheduled" }),
+      update: expect.objectContaining({ title: "별빛 항로", songType: "original", youtubePremiereState: "scheduled" }),
     })]);
     expect(song).toMatchObject({ id: "song-1", generationId: "gen2", type: "original" });
     expect(song.thumbnail).toEqual({ url: "https://i.ytimg.com/vi/abc123/maxresdefault.jpg", width: 1280, height: 720 });
+    expect(song.premiere).toEqual({
+      classification: "assumed",
+      state: "scheduled",
+      scheduledStartAt: "2026-07-01T12:00:00.000Z",
+      actualStartAt: null,
+      actualEndAt: null,
+    });
   });
 
   it("queries songs with supported mobile filters", async () => {
@@ -111,8 +132,39 @@ describe("PrismaSongRepository", () => {
           { memberName: { contains: "커버", mode: "insensitive" } },
         ],
       },
-      orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
+      orderBy: [{ listingPriority: "asc" }, { youtubeScheduledStartAt: "asc" }, { publishedAt: "desc" }, { id: "asc" }],
       take: 11,
+    })]);
+  });
+
+  it("applies composite premiere cursor conditions without losing filters", async () => {
+    const calls: unknown[] = [];
+    const repository = new PrismaSongRepository({
+      song: {
+        async upsert() { throw new Error("unused"); },
+        async findMany(args: unknown) { calls.push(args); return []; },
+      },
+    });
+    const cursor = Buffer.from(JSON.stringify({
+      v: 2,
+      listingPriority: 1,
+      scheduledStartAt: "2026-07-01T12:00:00.000Z",
+      publishedAt: "2026-06-21T12:00:00.000Z",
+      id: "song-1",
+    })).toString("base64url");
+
+    await repository.listSongs({ generationId: "gen2", type: "cover", cursor, limit: 10 });
+
+    expect(calls).toEqual([expect.objectContaining({
+      where: expect.objectContaining({
+        generationId: "gen2",
+        songType: "cover",
+        AND: [{ OR: [
+          { listingPriority: { gt: 1 } },
+          { listingPriority: 1, youtubeScheduledStartAt: { gt: new Date("2026-07-01T12:00:00.000Z") } },
+          { listingPriority: 1, youtubeScheduledStartAt: new Date("2026-07-01T12:00:00.000Z"), id: { gt: "song-1" } },
+        ] }],
+      }),
     })]);
   });
 });

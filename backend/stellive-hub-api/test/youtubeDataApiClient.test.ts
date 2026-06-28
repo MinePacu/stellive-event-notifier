@@ -81,6 +81,7 @@ describe("YoutubeDataApiClient", () => {
       channelId: "UC123",
       uploadsPlaylistId: "UU123",
       maxPages: 1,
+      maxResults: 10,
       etag: "stored-etag",
     })).resolves.toEqual({
       status: "ok",
@@ -105,6 +106,8 @@ describe("YoutubeDataApiClient", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const init = fetchImpl.mock.calls[0][1] as RequestInit;
     expect(init.headers).toEqual({ "if-none-match": "stored-etag" });
+    const requestUrl = new URL(fetchImpl.mock.calls[0][0] as string);
+    expect(requestUrl.searchParams.get("maxResults")).toBe("10");
   });
 
   it("returns not_modified for 304 playlist responses", async () => {
@@ -142,6 +145,11 @@ describe("YoutubeDataApiClient", () => {
         },
         contentDetails: { duration: "PT3M21S" },
         status: { privacyStatus: "public" },
+        liveStreamingDetails: {
+          scheduledStartTime: "2026-06-30T12:00:00Z",
+          actualStartTime: "2026-06-30T12:01:00Z",
+          actualEndTime: "2026-06-30T12:04:30Z",
+        },
       }],
     }));
     const client = new YoutubeDataApiClient({ apiKey: "test-key", fetch: fetchImpl });
@@ -157,6 +165,9 @@ describe("YoutubeDataApiClient", () => {
       duration: "PT3M21S",
       privacyStatus: "public",
       liveBroadcastContent: "none",
+      scheduledStartTime: "2026-06-30T12:00:00.000Z",
+      actualStartTime: "2026-06-30T12:01:00.000Z",
+      actualEndTime: "2026-06-30T12:04:30.000Z",
       thumbnailUrl: "https://i.ytimg.com/vi/video-1/hqdefault.jpg",
       thumbnailWidth: 480,
       thumbnailHeight: 360,
@@ -164,5 +175,6 @@ describe("YoutubeDataApiClient", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const firstUrl = new URL(fetchImpl.mock.calls[0][0] as string);
     expect(firstUrl.searchParams.get("id")?.split(",")).toHaveLength(50);
+    expect(firstUrl.searchParams.get("part")).toContain("liveStreamingDetails");
   });
 });

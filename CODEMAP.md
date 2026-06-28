@@ -4,6 +4,8 @@
 
 - `backend/stellive-hub-api/src/music/officialStelliveMusicSyncService.ts` - Official Stellive COVER/ORIGINAL playlist sync, videoId dedupe, source mapping, manual override handling.
 - `backend/stellive-hub-api/test/musicOfficialPlaylistSyncService.test.ts` - Official playlist sync behavior tests.
+- `backend/stellive-hub-api/src/adapters/youtube/youtubePremiereClassifier.ts` - Conservative assumed-premiere state classification for cover/original YouTube videos using official broadcast metadata.
+- `backend/stellive-hub-api/test/youtubePremiereClassifier.test.ts` - Assumed-premiere scheduled/live/completed/unknown and non-music exclusion tests.
 
 ## Recent Mobile Song Page And Discovery Planning
 

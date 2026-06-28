@@ -410,6 +410,14 @@ struct MusicMemberSummary: Codable, Equatable, Hashable, Identifiable {
     let role: String?
 }
 
+struct YoutubePremiereMetadata: Codable, Equatable, Hashable {
+    let classification: String
+    let state: String
+    let scheduledStartAt: Date?
+    let actualStartAt: Date?
+    let actualEndAt: Date?
+}
+
 struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let youtubeVideoId: String
@@ -431,6 +439,7 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
     let members: [MusicMemberSummary]
     let youtubeUrl: String
     let sourcePlaylistId: String?
+    let premiere: YoutubePremiereMetadata?
 
     init(
         id: String,
@@ -452,7 +461,8 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
         generationId: String? = nil,
         generationName: String? = nil,
         sourceUrl: String? = nil,
-        thumbnail: SongThumbnail? = nil
+        thumbnail: SongThumbnail? = nil,
+        premiere: YoutubePremiereMetadata? = nil
     ) {
         self.id = id
         self.youtubeVideoId = youtubeVideoId
@@ -474,6 +484,7 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
         self.members = members
         self.youtubeUrl = youtubeUrl
         self.sourcePlaylistId = sourcePlaylistId
+        self.premiere = premiere
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -497,6 +508,7 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
         case members
         case youtubeUrl
         case sourcePlaylistId
+        case premiere
     }
 
     init(from decoder: Decoder) throws {
@@ -524,7 +536,8 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
             generationId: try container.decodeIfPresent(String.self, forKey: .generationId),
             generationName: try container.decodeIfPresent(String.self, forKey: .generationName),
             sourceUrl: sourceUrl,
-            thumbnail: try container.decodeIfPresent(SongThumbnail.self, forKey: .thumbnail)
+            thumbnail: try container.decodeIfPresent(SongThumbnail.self, forKey: .thumbnail),
+            premiere: try container.decodeIfPresent(YoutubePremiereMetadata.self, forKey: .premiere)
         )
     }
 }
@@ -582,6 +595,13 @@ enum IOSSongPagePolicy {
     static let rowInsetLeading: CGFloat = 0
     static let rowInsetBottom: CGFloat = 6
     static let rowInsetTrailing: CGFloat = 0
+    private static let premiereDateTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.timeZone = TimeZone(identifier: "Asia/Seoul")
+        formatter.dateFormat = "M월 d일 HH:mm"
+        return formatter
+    }()
 
     static func memberFilters(from members: [HubMember]) -> [SongFilterOption] {
         [SongFilterOption(id: "all", label: "전체")] + members
@@ -619,6 +639,20 @@ enum IOSSongPagePolicy {
             return memberName
         }
         return "스텔라이브"
+    }
+
+    static func premiereStatusLabel(for song: SongCatalogItem) -> String? {
+        switch song.premiere?.state {
+        case "scheduled":
+            if let scheduledStartAt = song.premiere?.scheduledStartAt {
+                return "최초 공개 예정 · \(premiereDateTimeFormatter.string(from: scheduledStartAt))"
+            }
+            return "최초 공개 예정"
+        case "live":
+            return "최초 공개 중"
+        default:
+            return nil
+        }
     }
 
     static func matchesGeneration(

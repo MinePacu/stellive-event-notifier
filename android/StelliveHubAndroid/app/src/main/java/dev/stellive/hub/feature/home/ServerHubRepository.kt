@@ -21,6 +21,7 @@ import dev.stellive.hub.core.model.SongListResult
 import dev.stellive.hub.core.model.SongMemberSummary
 import dev.stellive.hub.core.model.SongThumbnail
 import dev.stellive.hub.core.model.SongType
+import dev.stellive.hub.core.model.YoutubePremiereMetadata
 import dev.stellive.hub.core.network.BootstrapResponseDto
 import dev.stellive.hub.core.network.HubCalendarEntryDto
 import dev.stellive.hub.core.network.HubCalendarResponseDto
@@ -36,6 +37,7 @@ import dev.stellive.hub.core.network.SongCatalogItemDto
 import dev.stellive.hub.core.network.SongFacetsResponseDto
 import dev.stellive.hub.core.network.SongFilterCountDto
 import dev.stellive.hub.core.network.SongListResponseDto
+import dev.stellive.hub.core.network.YoutubePremiereMetadataDto
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -329,6 +331,7 @@ private fun MusicCatalogItemDto.toSongCatalogItemOrNull(): SongCatalogItem? {
         },
         youtubeUrl = youtubeUrl,
         sourcePlaylistId = sourcePlaylistId,
+        premiere = premiere.toYoutubePremiereMetadataOrNull(),
     )
 }
 
@@ -349,8 +352,20 @@ private fun SongCatalogItemDto.toSongCatalogItemOrNull(): SongCatalogItem? {
                 SongThumbnail(url = it.url, width = it.width, height = it.height)
             },
             publishedAt = publishedAt,
+            premiere = premiere.toYoutubePremiereMetadataOrNull(),
         )
     }
+
+private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): YoutubePremiereMetadata? {
+    if (this == null) return null
+    return YoutubePremiereMetadata(
+        classification = classification,
+        state = state,
+        scheduledStartAt = scheduledStartAt?.let(::parseInstantOrNull),
+        actualStartAt = actualStartAt?.let(::parseInstantOrNull),
+        actualEndAt = actualEndAt?.let(::parseInstantOrNull),
+    )
+}
 
     private fun SongFacetsResponseDto.toSongFacets(): SongFacets =
         SongFacets(

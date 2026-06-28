@@ -6,6 +6,7 @@ import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.SongCatalogItem
 import dev.stellive.hub.core.model.SongMemberSummary
 import dev.stellive.hub.core.model.SongType
+import dev.stellive.hub.core.model.YoutubePremiereMetadata
 import dev.stellive.hub.feature.home.MainUiPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -124,6 +125,53 @@ class SongUiPolicyTest {
 
         assertEquals("유즈하 리코 · 네네코 마시로", MainUiPolicy.songMemberDisplayText(song))
         assertEquals("스텔라이브", MainUiPolicy.songMemberDisplayText(song.copy(members = emptyList())))
+    }
+
+    @Test
+    fun songPremiereStatusLabelShowsOnlyScheduledAndLivePremieres() {
+        val baseSong = SongCatalogItem(
+            id = "video-1",
+            youtubeVideoId = "video-1",
+            title = "Premiere Cover",
+            type = SongType.COVER,
+            youtubeUrl = "https://www.youtube.com/watch?v=video-1",
+        )
+
+        assertEquals(
+            "최초 공개 예정 · 6월 28일 17:00",
+            MainUiPolicy.songPremiereStatusLabel(
+                baseSong.copy(
+                    premiere = YoutubePremiereMetadata(
+                        classification = "assumed",
+                        state = "scheduled",
+                        scheduledStartAt = Instant.parse("2026-06-28T08:00:00Z"),
+                    ),
+                ),
+            ),
+        )
+        assertEquals(
+            "최초 공개 예정",
+            MainUiPolicy.songPremiereStatusLabel(
+                baseSong.copy(premiere = YoutubePremiereMetadata(classification = "assumed", state = "scheduled")),
+            ),
+        )
+        assertEquals(
+            "최초 공개 중",
+            MainUiPolicy.songPremiereStatusLabel(
+                baseSong.copy(premiere = YoutubePremiereMetadata(classification = "assumed", state = "live")),
+            ),
+        )
+        assertNull(
+            MainUiPolicy.songPremiereStatusLabel(
+                baseSong.copy(premiere = YoutubePremiereMetadata(classification = "assumed", state = "completed")),
+            ),
+        )
+        assertNull(
+            MainUiPolicy.songPremiereStatusLabel(
+                baseSong.copy(premiere = YoutubePremiereMetadata(classification = "assumed", state = "unknown")),
+            ),
+        )
+        assertNull(MainUiPolicy.songPremiereStatusLabel(baseSong))
     }
 
     @Test

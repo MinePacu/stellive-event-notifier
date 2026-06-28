@@ -2,6 +2,7 @@ import type { MobileSongType, SongCatalogGenerationId } from "../../../../shared
 import type { YoutubeUploadCandidate } from "../adapters/youtube/youtubeAtomParser.js";
 import type { YoutubeSongUpsertInput } from "../repositories/songRepository.js";
 import { classifySongUpload } from "./songClassifier.js";
+import { classifyYoutubePremiere } from "../adapters/youtube/youtubePremiereClassifier.js";
 
 interface SongCatalogTarget {
   memberId: string;
@@ -45,8 +46,21 @@ export class SongIngestionService {
     if (!target) return { ingested: false, reason: "unknown_youtube_channel" };
     if (!isSongGeneration(target.generationId)) return { ingested: false, reason: "unsupported_song_generation" };
 
-    const classification = classifySongUpload({ title: candidate.title });
+    const classification = classifySongUpload({
+      title: candidate.title,
+      description: candidate.description,
+      tags: candidate.tags,
+    });
     if (!isMobileSongType(classification.type)) return { ingested: false, reason: "unknown_song_type" };
+    const premiere = classifyYoutubePremiere({
+      musicType: classification.type,
+      liveBroadcastContent: candidate.liveBroadcastContent,
+      scheduledStartTime: candidate.scheduledStartTime,
+      actualStartTime: candidate.actualStartTime,
+      actualEndTime: candidate.actualEndTime,
+    });
+    const hasBroadcastDetail = candidate.liveBroadcastContent !== undefined ||
+      Boolean(candidate.scheduledStartTime || candidate.actualStartTime || candidate.actualEndTime);
 
     const song = await this.dependencies.songs.upsertSongFromYoutubeUpload({
       youtubeVideoId: candidate.videoId,
@@ -65,6 +79,15 @@ export class SongIngestionService {
       thumbnailHeight: candidate.thumbnailHeight,
       duration: candidate.duration,
       privacyStatus: candidate.privacyStatus,
+      ...(hasBroadcastDetail ? {
+        youtubePresentationType: premiere.presentationType,
+        youtubePremiereState: premiere.state,
+        youtubeScheduledStartAt: premiere.scheduledStartAt,
+        youtubeActualStartAt: premiere.actualStartAt,
+        youtubeActualEndAt: premiere.actualEndAt,
+        youtubeMetadataFetchedAt: new Date(),
+        listingPriority: premiere.listingPriority,
+      } : {}),
       publishedAt: candidate.publishedAt,
     });
 

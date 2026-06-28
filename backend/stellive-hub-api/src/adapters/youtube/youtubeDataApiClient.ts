@@ -45,6 +45,7 @@ export interface YoutubeListUploadsInput {
   channelId: string;
   uploadsPlaylistId: string;
   maxPages: number;
+  maxResults?: number;
   etag?: string;
 }
 
@@ -75,6 +76,9 @@ export interface YoutubeVideoDetail {
   embeddable?: boolean;
   madeForKids?: boolean;
   liveBroadcastContent?: string;
+  scheduledStartTime?: string;
+  actualStartTime?: string;
+  actualEndTime?: string;
   thumbnailUrl?: string;
   thumbnailWidth?: number;
   thumbnailHeight?: number;
@@ -141,6 +145,11 @@ interface YoutubeVideoItem {
     embeddable?: boolean;
     madeForKids?: boolean;
   };
+  liveStreamingDetails?: {
+    scheduledStartTime?: string;
+    actualStartTime?: string;
+    actualEndTime?: string;
+  };
 }
 
 interface YoutubeThumbnail {
@@ -201,7 +210,7 @@ export class YoutubeDataApiClient {
       const url = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
       url.searchParams.set("part", "snippet,contentDetails,status");
       url.searchParams.set("playlistId", input.uploadsPlaylistId);
-      url.searchParams.set("maxResults", "50");
+      url.searchParams.set("maxResults", String(Math.min(50, Math.max(1, Math.trunc(input.maxResults ?? 50)))));
       url.searchParams.set("key", this.options.apiKey);
       if (pageToken) url.searchParams.set("pageToken", pageToken);
 
@@ -270,7 +279,7 @@ export class YoutubeDataApiClient {
     for (const ids of chunk(videoIds, 50)) {
       if (ids.length === 0) continue;
       const url = new URL("https://www.googleapis.com/youtube/v3/videos");
-      url.searchParams.set("part", "snippet,contentDetails,status");
+      url.searchParams.set("part", "snippet,contentDetails,status,liveStreamingDetails");
       url.searchParams.set("id", ids.join(","));
       url.searchParams.set("key", this.options.apiKey);
 
@@ -335,6 +344,15 @@ export class YoutubeDataApiClient {
       embeddable: item.status?.embeddable,
       madeForKids: item.status?.madeForKids,
       liveBroadcastContent: item.snippet?.liveBroadcastContent,
+      scheduledStartTime: item.liveStreamingDetails?.scheduledStartTime
+        ? normalizeDate(item.liveStreamingDetails.scheduledStartTime)
+        : undefined,
+      actualStartTime: item.liveStreamingDetails?.actualStartTime
+        ? normalizeDate(item.liveStreamingDetails.actualStartTime)
+        : undefined,
+      actualEndTime: item.liveStreamingDetails?.actualEndTime
+        ? normalizeDate(item.liveStreamingDetails.actualEndTime)
+        : undefined,
       thumbnailUrl: thumbnail?.url,
       thumbnailWidth: thumbnail?.width,
       thumbnailHeight: thumbnail?.height,

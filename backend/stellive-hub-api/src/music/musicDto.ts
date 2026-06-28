@@ -21,5 +21,6 @@ export function toMusicCatalogDto(item: MusicCatalogItem): MusicCatalogItem {
     })),
     youtubeUrl: item.youtubeUrl || `https://www.youtube.com/watch?v=${item.youtubeVideoId}`,
     sourcePlaylistId: item.sourcePlaylistId,
+    premiere: item.premiere,
   };
 }

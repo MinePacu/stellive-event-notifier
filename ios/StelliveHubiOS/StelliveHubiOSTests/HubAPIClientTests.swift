@@ -207,7 +207,14 @@ final class HubAPIClientTests: XCTestCase {
                         "type": "original",
                         "sourceUrl": "https://www.youtube.com/watch?v=abc123",
                         "thumbnail": {"url": "https://i.ytimg.com/vi/abc123/mqdefault.jpg", "width": 320, "height": 180},
-                        "publishedAt": "2026-06-21T12:00:00.000Z"
+                        "publishedAt": "2026-06-21T12:00:00.000Z",
+                        "premiere": {
+                          "classification": "assumed",
+                          "state": "scheduled",
+                          "scheduledStartAt": "2026-06-28T08:00:00.000Z",
+                          "actualStartAt": null,
+                          "actualEndAt": null
+                        }
                       }],
                       "nextCursor": null
                     }
@@ -229,6 +236,8 @@ final class HubAPIClientTests: XCTestCase {
         XCTAssertEqual(seenPaths, ["/v1/songs", "/v1/songs/facets"])
         XCTAssertEqual(songs.items.first?.id, "song-1")
         XCTAssertEqual(songs.items.first?.thumbnail?.width, 320)
+        XCTAssertEqual(songs.items.first?.premiere?.state, "scheduled")
+        XCTAssertEqual(songs.items.first?.premiere?.scheduledStartAt, Date(timeIntervalSince1970: 1782633600))
         XCTAssertEqual(facets.summary.original, 1)
     }
 
@@ -259,7 +268,14 @@ final class HubAPIClientTests: XCTestCase {
                   { "id": "neneko-mashiro", "nameKo": "네네코 마시로", "nameEn": "Neneko Mashiro", "role": "COLLAB" }
                 ],
                 "youtubeUrl": "https://www.youtube.com/watch?v=video-1",
-                "sourcePlaylistId": "playlist-cover"
+                "sourcePlaylistId": "playlist-cover",
+                "premiere": {
+                  "classification": "assumed",
+                  "state": "live",
+                  "scheduledStartAt": "2026-06-28T08:00:00.000Z",
+                  "actualStartAt": "2026-06-28T08:00:02.000Z",
+                  "actualEndAt": null
+                }
               }],
               "nextCursor": null
             }
@@ -270,6 +286,8 @@ final class HubAPIClientTests: XCTestCase {
 
         XCTAssertEqual(response.items.first?.members.map(\.nameKo), ["유즈하 리코", "네네코 마시로"])
         XCTAssertEqual(response.items.first?.youtubeUrl, "https://www.youtube.com/watch?v=video-1")
+        XCTAssertEqual(response.items.first?.premiere?.state, "live")
+        XCTAssertEqual(response.items.first?.premiere?.actualStartAt, Date(timeIntervalSince1970: 1782633602))
     }
 
     private func makeClient(
@@ -415,30 +433,40 @@ final class ServerHubStoreTests: XCTestCase {
 
     func testRefreshSongsUsesServerResponses() async {
         let store = makeStore { request in
-            XCTAssertEqual(request.url?.path, "/v1/songs")
+            XCTAssertEqual(request.url?.path, "/v1/music")
             return jsonResponse(statusCode: 200, body: """
                 {
                   "items": [{
                     "id": "song-1",
                     "youtubeVideoId": "abc123",
                     "title": "별빛 항로",
-                    "memberId": "akane-lize",
-                    "memberName": "아카네 리제",
-                    "generationId": "gen2",
-                    "generationName": "2기생",
                     "type": "original",
-                    "sourceUrl": "https://www.youtube.com/watch?v=abc123",
-                    "publishedAt": "2026-06-21T12:00:00.000Z"
+                    "publishedAt": "2026-06-21T12:00:00.000Z",
+                    "members": [
+                      { "id": "akane-lize", "nameKo": "아카네 리제", "nameEn": "Akane Lize", "role": "MAIN" }
+                    ],
+                    "youtubeUrl": "https://www.youtube.com/watch?v=abc123"
+                  }, {
+                    "id": "song-2",
+                    "youtubeVideoId": "def456",
+                    "title": "유니 커버",
+                    "type": "cover",
+                    "publishedAt": "2026-06-20T12:00:00.000Z",
+                    "members": [
+                      { "id": "ayatsuno-yuni", "nameKo": "아야츠노 유니", "nameEn": "Ayatsuno Yuni", "role": "MAIN" }
+                    ],
+                    "youtubeUrl": "https://www.youtube.com/watch?v=def456"
                   }],
                   "nextCursor": null
                 }
                 """)
         }
 
-        await store.refreshSongs(generationId: "gen2", type: "original")
+        await store.refreshSongs(generationId: "all", type: "all")
 
-        XCTAssertEqual(store.serverSongs.map(\.id), ["song-1"])
+        XCTAssertEqual(store.serverSongs.map(\.id), ["song-1", "song-2"])
         XCTAssertEqual(store.songs(generationId: "gen2", type: "original").items.first?.title, "별빛 항로")
+        XCTAssertEqual(store.songs(memberId: "ayatsuno-yuni", type: "cover").items.first?.title, "유니 커버")
     }
 
     func testMusicPageCollectorFetchesAllPagesAndDedupes() async throws {

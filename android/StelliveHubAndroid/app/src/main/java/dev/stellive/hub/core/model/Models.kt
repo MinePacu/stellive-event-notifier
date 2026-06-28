@@ -246,6 +246,14 @@ data class SongMemberSummary(
     val role: String? = null,
 )
 
+data class YoutubePremiereMetadata(
+    val classification: String,
+    val state: String,
+    val scheduledStartAt: Instant? = null,
+    val actualStartAt: Instant? = null,
+    val actualEndAt: Instant? = null,
+)
+
 data class SongCatalogItem(
     val id: String,
     val youtubeVideoId: String,
@@ -267,6 +275,7 @@ data class SongCatalogItem(
     val members: List<SongMemberSummary> = emptyList(),
     val youtubeUrl: String = sourceUrl ?: "https://www.youtube.com/watch?v=$youtubeVideoId",
     val sourcePlaylistId: String? = null,
+    val premiere: YoutubePremiereMetadata? = null,
 )
 
 data class SongFilterCount(

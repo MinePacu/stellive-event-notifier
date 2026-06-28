@@ -48,6 +48,13 @@ export interface YoutubeSongUpsertInput {
   thumbnailHeight?: number;
   duration?: string;
   privacyStatus?: string;
+  youtubePresentationType?: "regular" | "premiere_assumed";
+  youtubePremiereState?: "scheduled" | "live" | "completed" | "unknown" | null;
+  youtubeScheduledStartAt?: string | null;
+  youtubeActualStartAt?: string | null;
+  youtubeActualEndAt?: string | null;
+  youtubeMetadataFetchedAt?: Date | null;
+  listingPriority?: number;
   publishedAt: string;
 }
 
@@ -64,7 +71,21 @@ interface SongRecord {
   thumbnailUrl?: string | null;
   thumbnailWidth?: number | null;
   thumbnailHeight?: number | null;
+  youtubePresentationType?: string | null;
+  youtubePremiereState?: string | null;
+  youtubeScheduledStartAt?: Date | null;
+  youtubeActualStartAt?: Date | null;
+  youtubeActualEndAt?: Date | null;
+  listingPriority?: number | null;
   publishedAt: Date;
+}
+
+interface SongCursorPayload {
+  v: 2;
+  listingPriority: number;
+  scheduledStartAt: string | null;
+  publishedAt: string;
+  id: string;
 }
 
 interface SongDelegate {
@@ -76,6 +97,58 @@ interface SongDelegate {
 
 function toDate(value: string): Date {
   return new Date(value);
+}
+
+function toDateOrNull(value: string | null | undefined): Date | null {
+  return value ? new Date(value) : null;
+}
+
+function decodeSongCursor(cursor: string | undefined): SongCursorPayload | null {
+  if (!cursor) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<SongCursorPayload>;
+    if (parsed.v === 2 && typeof parsed.id === "string" && typeof parsed.listingPriority === "number" && typeof parsed.publishedAt === "string") {
+      return parsed as SongCursorPayload;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function encodeSongCursor(record: SongRecord): string {
+  const payload: SongCursorPayload = {
+    v: 2,
+    listingPriority: record.listingPriority ?? 2,
+    scheduledStartAt: record.youtubeScheduledStartAt?.toISOString() ?? null,
+    publishedAt: record.publishedAt.toISOString(),
+    id: record.id,
+  };
+  return Buffer.from(JSON.stringify(payload)).toString("base64url");
+}
+
+function appendSongCursor(where: Record<string, unknown>, cursor: SongCursorPayload | null): void {
+  if (!cursor) return;
+  const scheduledStartAt = cursor.scheduledStartAt ? new Date(cursor.scheduledStartAt) : null;
+  const branches: Record<string, unknown>[] = [{ listingPriority: { gt: cursor.listingPriority } }];
+  if (cursor.listingPriority < 2) {
+    branches.push(...(scheduledStartAt
+      ? [
+          { listingPriority: cursor.listingPriority, youtubeScheduledStartAt: { gt: scheduledStartAt } },
+          { listingPriority: cursor.listingPriority, youtubeScheduledStartAt: scheduledStartAt, id: { gt: cursor.id } },
+        ]
+      : [
+          { listingPriority: cursor.listingPriority, youtubeScheduledStartAt: { not: null } },
+          { listingPriority: cursor.listingPriority, youtubeScheduledStartAt: null, id: { gt: cursor.id } },
+        ]));
+  } else {
+    const publishedAt = new Date(cursor.publishedAt);
+    branches.push(
+      { listingPriority: cursor.listingPriority, publishedAt: { lt: publishedAt } },
+      { listingPriority: cursor.listingPriority, publishedAt, id: { gt: cursor.id } },
+    );
+  }
+  where.AND = [{ OR: branches }];
 }
 
 function toSongCatalogItem(record: SongRecord): SongCatalogItem {
@@ -95,6 +168,17 @@ function toSongCatalogItem(record: SongRecord): SongCatalogItem {
       height: record.thumbnailHeight,
     } : undefined,
     publishedAt: record.publishedAt.toISOString(),
+    ...(record.youtubePresentationType === "premiere_assumed" && record.youtubePremiereState
+      ? {
+          premiere: {
+            classification: "assumed" as const,
+            state: record.youtubePremiereState as "scheduled" | "live" | "completed" | "unknown",
+            scheduledStartAt: record.youtubeScheduledStartAt?.toISOString() ?? null,
+            actualStartAt: record.youtubeActualStartAt?.toISOString() ?? null,
+            actualEndAt: record.youtubeActualEndAt?.toISOString() ?? null,
+          },
+        }
+      : {}),
   };
 }
 
@@ -162,12 +246,30 @@ export class PrismaSongRepository implements SongRepository {
       thumbnailHeight: input.thumbnailHeight,
       duration: input.duration,
       privacyStatus: input.privacyStatus,
+      ...(input.youtubePresentationType !== undefined ? {
+        youtubePresentationType: input.youtubePresentationType,
+        youtubePremiereState: input.youtubePremiereState ?? null,
+        youtubeScheduledStartAt: toDateOrNull(input.youtubeScheduledStartAt),
+        youtubeActualStartAt: toDateOrNull(input.youtubeActualStartAt),
+        youtubeActualEndAt: toDateOrNull(input.youtubeActualEndAt),
+        youtubeMetadataFetchedAt: input.youtubeMetadataFetchedAt ?? null,
+        listingPriority: input.listingPriority ?? 2,
+      } : {}),
       publishedAt: toDate(input.publishedAt),
     };
 
     const record = await this.prisma.song.upsert({
       where: { dedupeKey: input.dedupeKey },
-      create: data,
+      create: {
+        ...data,
+        youtubePresentationType: input.youtubePresentationType ?? "regular",
+        youtubePremiereState: input.youtubePremiereState ?? null,
+        youtubeScheduledStartAt: toDateOrNull(input.youtubeScheduledStartAt),
+        youtubeActualStartAt: toDateOrNull(input.youtubeActualStartAt),
+        youtubeActualEndAt: toDateOrNull(input.youtubeActualEndAt),
+        youtubeMetadataFetchedAt: input.youtubeMetadataFetchedAt ?? null,
+        listingPriority: input.listingPriority ?? 2,
+      },
       update: data,
     });
     return toSongCatalogItem(record);
@@ -175,13 +277,16 @@ export class PrismaSongRepository implements SongRepository {
 
   async listSongs(filters: SongListFilters): Promise<{ items: SongCatalogItem[]; nextCursor: string | null }> {
     const limit = filters.limit ?? 30;
+    const where = listWhere(filters);
+    appendSongCursor(where, decodeSongCursor(filters.cursor));
     const records = await this.prisma.song.findMany({
-      where: listWhere(filters),
-      orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
+      where,
+      orderBy: [{ listingPriority: "asc" }, { youtubeScheduledStartAt: "asc" }, { publishedAt: "desc" }, { id: "asc" }],
       take: limit + 1,
     });
     const visible = records.slice(0, limit);
-    const nextCursor = records.length > limit ? records[limit].id : null;
+    const last = visible.at(-1);
+    const nextCursor = records.length > limit && last ? encodeSongCursor(last) : null;
     return { items: visible.map(toSongCatalogItem), nextCursor };
   }
 

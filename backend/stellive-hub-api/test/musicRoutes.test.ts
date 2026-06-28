@@ -19,6 +19,13 @@ const item: MusicCatalogItem = {
   members: [{ id: "ayatsuno-yuni", nameKo: "아야츠노 유니", nameEn: "Ayatsuno Yuni", role: "main" }],
   youtubeUrl: "https://www.youtube.com/watch?v=video-1",
   sourcePlaylistId: "source-1",
+  premiere: {
+    classification: "assumed",
+    state: "scheduled",
+    scheduledStartAt: "2026-07-01T12:00:00.000Z",
+    actualStartAt: null,
+    actualEndAt: null,
+  },
 };
 
 async function buildRouteApp() {

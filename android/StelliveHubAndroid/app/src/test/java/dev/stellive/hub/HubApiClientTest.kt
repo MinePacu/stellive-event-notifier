@@ -275,6 +275,67 @@ class HubApiClientTest {
     }
 
     @Test
+    fun songAndMusicDtosDecodePremiereMetadata() {
+        val songsJson = """
+            {
+              "items": [
+                {
+                  "id": "song-1",
+                  "youtubeVideoId": "abc123",
+                  "title": "물떼새",
+                  "memberId": "aokumo-rin",
+                  "memberName": "아오쿠모 린",
+                  "generationId": "gen3",
+                  "generationName": "3기생",
+                  "type": "cover",
+                  "sourceUrl": "https://www.youtube.com/watch?v=abc123",
+                  "publishedAt": "2026-06-27T18:21:27.000Z",
+                  "premiere": {
+                    "classification": "assumed",
+                    "state": "scheduled",
+                    "scheduledStartAt": "2026-06-28T08:00:00.000Z",
+                    "actualStartAt": null,
+                    "actualEndAt": null
+                  }
+                }
+              ],
+              "nextCursor": null
+            }
+        """.trimIndent()
+        val musicJson = """
+            {
+              "items": [
+                {
+                  "id": "music-1",
+                  "youtubeVideoId": "abc123",
+                  "title": "물떼새",
+                  "type": "cover",
+                  "publishedAt": "2026-06-27T18:21:27.000Z",
+                  "members": [],
+                  "youtubeUrl": "https://www.youtube.com/watch?v=abc123",
+                  "premiere": {
+                    "classification": "assumed",
+                    "state": "live",
+                    "scheduledStartAt": "2026-06-28T08:00:00.000Z",
+                    "actualStartAt": "2026-06-28T08:00:02.000Z",
+                    "actualEndAt": null
+                  }
+                }
+              ],
+              "nextCursor": null
+            }
+        """.trimIndent()
+
+        val songs = HubApiClient.moshi().adapter(SongListResponseDto::class.java).fromJson(songsJson)
+        val music = HubApiClient.moshi().adapter(MusicListResponseDto::class.java).fromJson(musicJson)
+
+        assertEquals("scheduled", songs?.items?.single()?.premiere?.state)
+        assertEquals("2026-06-28T08:00:00.000Z", songs?.items?.single()?.premiere?.scheduledStartAt)
+        assertEquals("live", music?.items?.single()?.premiere?.state)
+        assertEquals("2026-06-28T08:00:02.000Z", music?.items?.single()?.premiere?.actualStartAt)
+    }
+
+    @Test
     fun musicClientReturnsOfficialMusicResponse() = runTest {
         val fakeApi = FakeHubApi(
             musicResponse = MusicListResponseDto(

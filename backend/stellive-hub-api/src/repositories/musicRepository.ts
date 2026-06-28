@@ -52,6 +52,13 @@ export interface MusicItemUpsertInput {
   classificationStatus?: string;
   isInstrumental?: boolean;
   specialFlags?: unknown;
+  youtubePresentationType?: "regular" | "premiere_assumed";
+  youtubePremiereState?: "scheduled" | "live" | "completed" | "unknown" | null;
+  youtubeScheduledStartAt?: string | null;
+  youtubeActualStartAt?: string | null;
+  youtubeActualEndAt?: string | null;
+  youtubeMetadataFetchedAt?: Date | null;
+  listingPriority?: number;
   fetchedAt?: Date | null;
   lastSeenAt: Date;
   playlistPosition?: number | null;
@@ -120,6 +127,11 @@ export interface MusicItemReclassificationRecord {
   privacyStatus?: string | null;
   tags?: unknown;
   classificationStatus?: string | null;
+  youtubePresentationType?: string | null;
+  youtubePremiereState?: string | null;
+  youtubeScheduledStartAt?: Date | null;
+  youtubeActualStartAt?: Date | null;
+  youtubeActualEndAt?: Date | null;
 }
 
 export interface MusicSourceTypeMismatchRecord {
@@ -180,6 +192,12 @@ interface MusicItemRecord {
   type: string;
   publishedAt?: Date | null;
   playlistPosition?: number | null;
+  listingPriority?: number | null;
+  youtubePresentationType?: string | null;
+  youtubePremiereState?: string | null;
+  youtubeScheduledStartAt?: Date | null;
+  youtubeActualStartAt?: Date | null;
+  youtubeActualEndAt?: Date | null;
   thumbnailUrl?: string | null;
   duration?: string | null;
   durationSeconds?: number | null;
@@ -223,13 +241,26 @@ function toMusicCatalogItem(record: MusicItemRecord): MusicCatalogItem {
     })),
     youtubeUrl: `https://www.youtube.com/watch?v=${record.youtubeVideoId}`,
     sourcePlaylistId: record.sourcePlaylistId ?? null,
+    ...(record.youtubePresentationType === "premiere_assumed" && record.youtubePremiereState
+      ? {
+          premiere: {
+            classification: "assumed" as const,
+            state: record.youtubePremiereState as "scheduled" | "live" | "completed" | "unknown",
+            scheduledStartAt: record.youtubeScheduledStartAt?.toISOString() ?? null,
+            actualStartAt: record.youtubeActualStartAt?.toISOString() ?? null,
+            actualEndAt: record.youtubeActualEndAt?.toISOString() ?? null,
+          },
+        }
+      : {}),
   };
 }
 
 interface MusicCursorPayload {
-  v: 1;
+  v: 2;
   sort: MusicSort;
   id: string;
+  listingPriority: number;
+  scheduledStartAt?: string | null;
   publishedAt?: string | null;
   playlistPosition?: number | null;
 }
@@ -240,9 +271,11 @@ function normalizedMusicSort(sort: MusicSort | undefined): MusicSort {
 
 function encodeMusicCursor(record: MusicItemRecord, sort: MusicSort): string {
   const payload: MusicCursorPayload = {
-    v: 1,
+    v: 2,
     sort,
     id: record.id,
+    listingPriority: record.listingPriority ?? 2,
+    scheduledStartAt: record.youtubeScheduledStartAt?.toISOString() ?? null,
     publishedAt: record.publishedAt?.toISOString() ?? null,
     playlistPosition: record.playlistPosition ?? null,
   };
@@ -253,7 +286,9 @@ function decodeMusicCursor(cursor: string | undefined): MusicCursorPayload | { l
   if (!cursor) return null;
   try {
     const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<MusicCursorPayload>;
-    if (parsed.v === 1 && typeof parsed.id === "string") return parsed as MusicCursorPayload;
+    if (parsed.v === 2 && typeof parsed.id === "string" && typeof parsed.listingPriority === "number") {
+      return parsed as MusicCursorPayload;
+    }
   } catch {
     return { legacyId: cursor };
   }
@@ -283,12 +318,26 @@ function appendCursorWhere(where: Record<string, unknown>, cursor: MusicCursorPa
     ];
     return;
   }
+  const scheduledStartAt = cursor.scheduledStartAt ? new Date(cursor.scheduledStartAt) : null;
+  if (cursor.listingPriority < 2) {
+    where.OR = [
+      { listingPriority: { gt: cursor.listingPriority } },
+      ...(scheduledStartAt
+        ? [
+            { listingPriority: cursor.listingPriority, youtubeScheduledStartAt: { gt: scheduledStartAt } },
+            { listingPriority: cursor.listingPriority, youtubeScheduledStartAt: scheduledStartAt, id: { gt: cursor.id } },
+          ]
+        : [
+            { listingPriority: cursor.listingPriority, youtubeScheduledStartAt: { not: null } },
+            { listingPriority: cursor.listingPriority, youtubeScheduledStartAt: null, id: { gt: cursor.id } },
+          ]),
+    ];
+    return;
+  }
   where.OR = [
-    { publishedAt: { lt: publishedAt ?? new Date(0) } },
-    {
-      publishedAt,
-      id: { gt: cursor.id },
-    },
+    { listingPriority: { gt: cursor.listingPriority } },
+    { listingPriority: cursor.listingPriority, publishedAt: { lt: publishedAt ?? new Date(0) } },
+    { listingPriority: cursor.listingPriority, publishedAt, id: { gt: cursor.id } },
   ];
 }
 
@@ -361,6 +410,15 @@ export class PrismaMusicRepository {
       classificationStatus: input.classificationStatus ?? "AUTO_CLASSIFIED",
       isInstrumental: input.isInstrumental ?? false,
       specialFlags: input.specialFlags ?? [],
+      ...(input.youtubePresentationType !== undefined ? {
+        youtubePresentationType: input.youtubePresentationType,
+        youtubePremiereState: input.youtubePremiereState ?? null,
+        youtubeScheduledStartAt: toNullableDate(input.youtubeScheduledStartAt),
+        youtubeActualStartAt: toNullableDate(input.youtubeActualStartAt),
+        youtubeActualEndAt: toNullableDate(input.youtubeActualEndAt),
+        youtubeMetadataFetchedAt: input.youtubeMetadataFetchedAt ?? null,
+        listingPriority: input.listingPriority ?? 2,
+      } : {}),
       fetchedAt: input.fetchedAt,
       lastSeenAt: input.lastSeenAt,
       playlistPosition: input.playlistPosition,
@@ -370,7 +428,16 @@ export class PrismaMusicRepository {
 
     return this.prisma.musicItem!.upsert!({
       where: { youtubeVideoId: input.youtubeVideoId },
-      create: data,
+      create: {
+        ...data,
+        youtubePresentationType: input.youtubePresentationType ?? "regular",
+        youtubePremiereState: input.youtubePremiereState ?? null,
+        youtubeScheduledStartAt: toNullableDate(input.youtubeScheduledStartAt),
+        youtubeActualStartAt: toNullableDate(input.youtubeActualStartAt),
+        youtubeActualEndAt: toNullableDate(input.youtubeActualEndAt),
+        youtubeMetadataFetchedAt: input.youtubeMetadataFetchedAt ?? null,
+        listingPriority: input.listingPriority ?? 2,
+      },
       update: data,
     });
   }
@@ -390,6 +457,11 @@ export class PrismaMusicRepository {
 
   async getMusicItemByVideoId(videoId: string): Promise<unknown | null> {
     return this.prisma.musicItem!.findUnique?.({ where: { youtubeVideoId: videoId } }) ?? null;
+  }
+
+  async getMusicItemsByVideoIds(videoIds: string[]): Promise<unknown[]> {
+    if (videoIds.length === 0) return [];
+    return this.prisma.musicItem!.findMany!({ where: { youtubeVideoId: { in: videoIds } } });
   }
 
   async getOverrideByVideoId(videoId: string): Promise<unknown | null> {
@@ -519,7 +591,7 @@ export class PrismaMusicRepository {
 
     const orderBy = sort === "playlistOrder"
       ? [{ playlistPosition: "asc" }, { publishedAt: "desc" }, { id: "asc" }]
-      : [{ publishedAt: "desc" }, { id: "asc" }];
+      : [{ listingPriority: "asc" }, { youtubeScheduledStartAt: "asc" }, { publishedAt: "desc" }, { id: "asc" }];
 
     const rows = await this.prisma.musicItem!.findMany!({
       where,

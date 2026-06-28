@@ -202,9 +202,10 @@ final class ServerHubStore: ObservableObject {
 
     func songs(generationId: String? = nil, memberId: String? = nil, type: String? = nil, query: String? = nil) -> SongListResponse {
         let source = serverSongs.isEmpty ? fallback.songs(generationId: generationId, memberId: memberId, type: type, query: query).items : serverSongs
+        let memberGenerationById = Dictionary(uniqueKeysWithValues: fallback.members.map { ($0.id, $0.generationId) })
         let filtered = source.filter { song in
-            let generationMatches = generationId == nil || generationId == "all" || song.generationId == generationId
-            let memberMatches = memberId == nil || memberId == "all" || song.memberId == memberId
+            let generationMatches = generationId == nil || generationId == "all" || IOSSongPagePolicy.matchesGeneration(song, selectedGenerationId: generationId ?? "all", memberGenerationById: memberGenerationById)
+            let memberMatches = IOSSongPagePolicy.matchesMember(song, selectedMemberId: memberId ?? "all")
             let typeMatches = type == nil || type == "all" || song.type.rawValue == type
             let queryText = query ?? ""
             let queryMatches = queryText.isEmpty || song.title.localizedCaseInsensitiveContains(queryText) || IOSSongPagePolicy.memberDisplayText(song).localizedCaseInsensitiveContains(queryText)

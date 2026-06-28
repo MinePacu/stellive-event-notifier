@@ -157,6 +157,14 @@ data class SongThumbnailDto(
     val height: Int,
 )
 
+data class YoutubePremiereMetadataDto(
+    val classification: String,
+    val state: String,
+    val scheduledStartAt: String? = null,
+    val actualStartAt: String? = null,
+    val actualEndAt: String? = null,
+)
+
 data class SongCatalogItemDto(
     val id: String,
     val youtubeVideoId: String,
@@ -169,6 +177,7 @@ data class SongCatalogItemDto(
     val sourceUrl: String,
     val thumbnail: SongThumbnailDto? = null,
     val publishedAt: String,
+    val premiere: YoutubePremiereMetadataDto? = null,
 )
 
 data class SongListResponseDto(
@@ -198,6 +207,7 @@ data class MusicCatalogItemDto(
     val members: List<MusicMemberSummaryDto> = emptyList(),
     val youtubeUrl: String,
     val sourcePlaylistId: String? = null,
+    val premiere: YoutubePremiereMetadataDto? = null,
 )
 
 data class MusicListResponseDto(

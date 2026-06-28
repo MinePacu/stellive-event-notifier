@@ -136,6 +136,111 @@ final class SongUiPolicyTests: XCTestCase {
         XCTAssertEqual(IOSSongPagePolicy.memberDisplayText(emptyMembers), "스텔라이브")
     }
 
+    func testSongPremiereStatusLabelShowsOnlyScheduledAndLivePremieres() {
+        let baseSong = SongCatalogItem(
+            id: "video-1",
+            youtubeVideoId: "video-1",
+            title: "Premiere Cover",
+            type: .cover,
+            youtubeUrl: "https://www.youtube.com/watch?v=video-1"
+        )
+
+        XCTAssertEqual(
+            IOSSongPagePolicy.premiereStatusLabel(
+                for: SongCatalogItem(
+                    id: baseSong.id,
+                    youtubeVideoId: baseSong.youtubeVideoId,
+                    title: baseSong.title,
+                    type: baseSong.type,
+                    youtubeUrl: baseSong.youtubeUrl,
+                    premiere: YoutubePremiereMetadata(
+                        classification: "assumed",
+                        state: "scheduled",
+                        scheduledStartAt: Date(timeIntervalSince1970: 1_782_633_600),
+                        actualStartAt: nil,
+                        actualEndAt: nil
+                    )
+                )
+            ),
+            "최초 공개 예정 · 6월 28일 17:00"
+        )
+        XCTAssertEqual(
+            IOSSongPagePolicy.premiereStatusLabel(
+                for: SongCatalogItem(
+                    id: baseSong.id,
+                    youtubeVideoId: baseSong.youtubeVideoId,
+                    title: baseSong.title,
+                    type: baseSong.type,
+                    youtubeUrl: baseSong.youtubeUrl,
+                    premiere: YoutubePremiereMetadata(
+                        classification: "assumed",
+                        state: "scheduled",
+                        scheduledStartAt: nil,
+                        actualStartAt: nil,
+                        actualEndAt: nil
+                    )
+                )
+            ),
+            "최초 공개 예정"
+        )
+        XCTAssertEqual(
+            IOSSongPagePolicy.premiereStatusLabel(
+                for: SongCatalogItem(
+                    id: baseSong.id,
+                    youtubeVideoId: baseSong.youtubeVideoId,
+                    title: baseSong.title,
+                    type: baseSong.type,
+                    youtubeUrl: baseSong.youtubeUrl,
+                    premiere: YoutubePremiereMetadata(
+                        classification: "assumed",
+                        state: "live",
+                        scheduledStartAt: nil,
+                        actualStartAt: nil,
+                        actualEndAt: nil
+                    )
+                )
+            ),
+            "최초 공개 중"
+        )
+        XCTAssertNil(
+            IOSSongPagePolicy.premiereStatusLabel(
+                for: SongCatalogItem(
+                    id: baseSong.id,
+                    youtubeVideoId: baseSong.youtubeVideoId,
+                    title: baseSong.title,
+                    type: baseSong.type,
+                    youtubeUrl: baseSong.youtubeUrl,
+                    premiere: YoutubePremiereMetadata(
+                        classification: "assumed",
+                        state: "completed",
+                        scheduledStartAt: nil,
+                        actualStartAt: nil,
+                        actualEndAt: nil
+                    )
+                )
+            )
+        )
+        XCTAssertNil(
+            IOSSongPagePolicy.premiereStatusLabel(
+                for: SongCatalogItem(
+                    id: baseSong.id,
+                    youtubeVideoId: baseSong.youtubeVideoId,
+                    title: baseSong.title,
+                    type: baseSong.type,
+                    youtubeUrl: baseSong.youtubeUrl,
+                    premiere: YoutubePremiereMetadata(
+                        classification: "assumed",
+                        state: "unknown",
+                        scheduledStartAt: nil,
+                        actualStartAt: nil,
+                        actualEndAt: nil
+                    )
+                )
+            )
+        )
+        XCTAssertNil(IOSSongPagePolicy.premiereStatusLabel(for: baseSong))
+    }
+
     func testHistoryIsReachableFromSettingsRows() {
         let store = MockHubStore()
         let rows = SettingsNavigationPolicy.hubRows(settings: store.settings, members: store.members)

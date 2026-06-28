@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { songGenerationFilterValues, songTypeValues } from "../../../shared/schemas/domain.js";
 import type { SongFacetsResponse, SongListResponse } from "../../../shared/schemas/mobileApi.js";
 
 describe("mobile song API contract", () => {
+  it("documents optional assumed premiere metadata in OpenAPI", () => {
+    const openapi = readFileSync(new URL("../../../shared/openapi/openapi.yaml", import.meta.url), "utf8");
+    expect(openapi).toContain("YoutubePremiereMetadata:");
+    expect(openapi.match(/premiere:\n\s+\$ref: \"#\/components\/schemas\/YoutubePremiereMetadata\"/g)).toHaveLength(2);
+  });
+
   it("keeps mobile song type values explicit and stable", () => {
     expect(songTypeValues).toEqual(["original", "cover", "unknown"]);
   });
@@ -62,6 +69,13 @@ describe("mobile song API contract", () => {
             height: 720,
           },
           publishedAt: "2026-06-21T12:00:00.000Z",
+          premiere: {
+            classification: "assumed",
+            state: "scheduled",
+            scheduledStartAt: "2026-07-01T12:00:00.000Z",
+            actualStartAt: null,
+            actualEndAt: null,
+          },
         },
       ],
       nextCursor: null,

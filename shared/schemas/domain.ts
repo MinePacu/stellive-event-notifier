@@ -97,6 +97,16 @@ export interface SongThumbnail {
   height: number;
 }
 
+export type YoutubePremiereState = "scheduled" | "live" | "completed" | "unknown";
+
+export interface YoutubePremiereMetadata {
+  classification: "assumed";
+  state: YoutubePremiereState;
+  scheduledStartAt: string | null;
+  actualStartAt: string | null;
+  actualEndAt: string | null;
+}
+
 export interface SongCatalogItem {
   id: string;
   youtubeVideoId: string;
@@ -109,6 +119,7 @@ export interface SongCatalogItem {
   sourceUrl: string;
   thumbnail?: SongThumbnail;
   publishedAt: string;
+  premiere?: YoutubePremiereMetadata;
 }
 
 export interface SongFilterCount {
@@ -155,6 +166,7 @@ export interface MusicCatalogItem {
   members: MusicMemberSummary[];
   youtubeUrl: string;
   sourcePlaylistId: string | null;
+  premiere?: YoutubePremiereMetadata;
 }
 
 export interface PlatformEvent {
