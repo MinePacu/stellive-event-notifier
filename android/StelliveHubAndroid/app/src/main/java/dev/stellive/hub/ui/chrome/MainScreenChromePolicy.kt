@@ -19,7 +19,7 @@ object MainScreenChromePolicy {
             showExpandedBodyHeader = screenId in expandedBodyHeaderScreens,
             showTopBarTitleAtRest = true,
             keepTopBarTitleWhenScrolled = screenId in titleStickyWhileScrollingScreens,
-            showSettingsAction = true,
+            showSettingsAction = screenId != "settings" && !screenId.startsWith("settings_"),
             showSongSearchAction = screenId == "songs" && !canGoBack,
         )
     }

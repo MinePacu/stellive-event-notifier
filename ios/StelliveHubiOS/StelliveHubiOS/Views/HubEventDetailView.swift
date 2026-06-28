@@ -8,6 +8,17 @@ private enum HubEventDetailColors {
     static let line = Color(.separator)
 }
 
+enum HubEventDetailContentSection: Hashable {
+    case actions
+    case summary
+    case info
+    case notice
+}
+
+enum HubEventDetailLayoutPolicy {
+    static let contentOrder: [HubEventDetailContentSection] = [.actions, .summary, .info, .notice]
+}
+
 struct HubEventDetailView: View {
     let event: HubEvent
 
@@ -18,13 +29,9 @@ struct HubEventDetailView: View {
                 VStack(spacing: 0) {
                     hero
                     VStack(spacing: 14) {
-                        detailSection(HubEventDetailFormatting.summaryLabel) {
-                            summaryCard
+                        ForEach(HubEventDetailLayoutPolicy.contentOrder, id: \.self) { section in
+                            contentSection(section)
                         }
-                        detailSection("행사 정보") {
-                            infoCard
-                        }
-                        noticeCard
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 18)
@@ -38,6 +45,24 @@ struct HubEventDetailView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+    }
+
+    @ViewBuilder
+    private func contentSection(_ section: HubEventDetailContentSection) -> some View {
+        switch section {
+        case .actions:
+            ctaRow
+        case .summary:
+            detailSection(HubEventDetailFormatting.summaryLabel) {
+                summaryCard
+            }
+        case .info:
+            detailSection("행사 정보") {
+                infoCard
+            }
+        case .notice:
+            noticeCard
+        }
     }
 
     private var hero: some View {
@@ -105,7 +130,6 @@ struct HubEventDetailView: View {
                 .font(.subheadline)
                 .foregroundStyle(HubEventDetailColors.muted)
                 .lineSpacing(3)
-            ctaRow
         }
         .padding(17)
         .background(HubEventDetailColors.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))

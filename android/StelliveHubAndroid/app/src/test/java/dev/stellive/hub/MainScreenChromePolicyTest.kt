@@ -47,7 +47,7 @@ class MainScreenChromePolicyTest {
     }
 
     @Test
-    fun settingsActionIsVisibleOnEveryScreen() {
+    fun settingsActionIsVisibleOutsideSettingsFlow() {
         listOf(
             "home",
             "live",
@@ -55,9 +55,23 @@ class MainScreenChromePolicyTest {
             "goods_events",
             "goods_event_detail",
             "song_search",
-            "settings_delivery",
         ).forEach { screenId ->
             assertTrue(MainScreenChromePolicy.spec(screenId, canGoBack = screenId != "home").showSettingsAction)
+        }
+    }
+
+    @Test
+    fun settingsActionIsHiddenThroughoutSettingsFlow() {
+        listOf(
+            "settings",
+            "settings_delivery",
+            "settings_targets",
+            "settings_platforms",
+            "settings_event_types",
+            "settings_hub_events",
+            "settings_advanced",
+        ).forEach { screenId ->
+            assertFalse(MainScreenChromePolicy.spec(screenId, canGoBack = true).showSettingsAction)
         }
     }
 

@@ -2599,12 +2599,13 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
 
     private fun settingsPanel(title: String? = null, rows: List<SettingRow>): MaterialCardView =
         baseCard().apply {
+            val spacing = MainUiPolicy.settingsCardSpacing
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(12)
+                bottomMargin = dp(spacing.bottomMarginDp)
             }
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(15), dp(15), dp(15), dp(15))
+                setPadding(dp(15), dp(spacing.contentVerticalPaddingDp), dp(15), dp(spacing.contentVerticalPaddingDp))
             }
             title?.let { panelTitle ->
                 content.addView(TextView(context).apply {
@@ -2691,7 +2692,8 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
     private fun settingRowView(row: SettingRow): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(0, dp(10), 0, dp(10))
+        val verticalPadding = dp(MainUiPolicy.settingsCardSpacing.rowVerticalPaddingDp)
+        setPadding(0, verticalPadding, 0, verticalPadding)
         addView(LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             addView(TextView(context).apply {
@@ -2737,6 +2739,8 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
             }
             val tagColor = color(textColorRes)
             setTextColor(tagColor)
+            gravity = Gravity.CENTER
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
             minWidth = 0
             minHeight = 0
             chipMinHeight = dp(32).toFloat()

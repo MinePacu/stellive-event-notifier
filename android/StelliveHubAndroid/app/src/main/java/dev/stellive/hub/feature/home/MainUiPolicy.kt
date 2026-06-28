@@ -52,9 +52,21 @@ data class SettingsPolicyRow(
     val checked: Boolean?
 )
 
+data class SettingsCardSpacing(
+    val contentVerticalPaddingDp: Int,
+    val rowVerticalPaddingDp: Int,
+    val bottomMarginDp: Int,
+)
+
 object MainUiPolicy {
     const val SONG_PAGE_SIZE = 20
     const val SONG_THUMBNAIL_ASPECT_RATIO = 16f / 9f
+
+    val settingsCardSpacing = SettingsCardSpacing(
+        contentVerticalPaddingDp = 10,
+        rowVerticalPaddingDp = 6,
+        bottomMarginDp = 8,
+    )
 
     private const val TOP_BAR_ACTION_ICON_INSET_DP = 10
     private const val LIVE_CLOCK_REFRESH_DELAY_MILLIS = 1_000L

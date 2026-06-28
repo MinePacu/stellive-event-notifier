@@ -43,6 +43,17 @@ struct IOSPrimaryNavigationPolicy {
     )
 
     static let titlelessPrimaryScreens: Set<String> = ["home", "live", "songs", "hubEvents"]
+
+    static func showsSettingsButton(pathCount: Int, settingsRouteDepth: Int?) -> Bool {
+        if settingsAccess.showsOnlyOnPrimaryRoots && pathCount > 0 {
+            return false
+        }
+        guard settingsAccess.suppressesPrimaryButtonWithinSettingsFlow,
+              let settingsRouteDepth else {
+            return true
+        }
+        return pathCount < settingsRouteDepth
+    }
 }
 
 struct ContentView: View {
@@ -121,9 +132,13 @@ private enum SettingsToolbarRoute: Hashable {
 
 private struct SettingsToolbarModifier: ViewModifier {
     @Binding var path: NavigationPath
+    @State private var settingsRouteDepth: Int?
 
     private var showsToolbarButton: Bool {
-        !IOSPrimaryNavigationPolicy.settingsAccess.showsOnlyOnPrimaryRoots || path.isEmpty
+        IOSPrimaryNavigationPolicy.showsSettingsButton(
+            pathCount: path.count,
+            settingsRouteDepth: settingsRouteDepth
+        )
     }
 
     func body(content: Content) -> some View {
@@ -131,6 +146,8 @@ private struct SettingsToolbarModifier: ViewModifier {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        guard settingsRouteDepth == nil else { return }
+                        settingsRouteDepth = path.count + 1
                         path.append(SettingsToolbarRoute.settings)
                     } label: {
                         Image(systemName: IOSPrimaryNavigationPolicy.settingsAccess.systemImage)
@@ -145,6 +162,11 @@ private struct SettingsToolbarModifier: ViewModifier {
                 switch route {
                 case .settings:
                     SettingsContentView()
+                }
+            }
+            .onChange(of: path.count) { newCount in
+                if let settingsRouteDepth, newCount < settingsRouteDepth {
+                    self.settingsRouteDepth = nil
                 }
             }
     }

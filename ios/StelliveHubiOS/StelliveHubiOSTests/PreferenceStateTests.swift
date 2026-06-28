@@ -54,7 +54,7 @@ final class PreferenceStateTests: XCTestCase {
         let store = MockHubStore()
         let rows = SettingsNavigationPolicy.hubRows(settings: store.settings, members: store.members)
 
-        XCTAssertEqual(rows.map(\.route), [.delivery, .targets, .platforms, .eventTypes, .hubEvents, .advanced])
+        XCTAssertEqual(rows.map(\.route), [.history, .delivery, .targets, .platforms, .eventTypes, .hubEvents, .advanced])
         XCTAssertEqual(rows.first { $0.route == .delivery }?.summary, "표준")
         XCTAssertEqual(rows.first { $0.route == .platforms }?.summary, "4/5")
         XCTAssertEqual(rows.first { $0.route == .hubEvents }?.summary, "켜짐 · 마감 임박 ON")
@@ -131,6 +131,20 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertTrue(IOSPrimaryNavigationPolicy.settingsAccess.reusesPresenterNavigationStack)
         XCTAssertFalse(IOSPrimaryNavigationPolicy.settingsAccess.showsOnlyOnPrimaryRoots)
         XCTAssertTrue(IOSPrimaryNavigationPolicy.settingsAccess.suppressesPrimaryButtonWithinSettingsFlow)
+    }
+
+    func testSettingsToolbarVisibilityFollowsSettingsRouteDepth() {
+        XCTAssertTrue(IOSPrimaryNavigationPolicy.showsSettingsButton(pathCount: 2, settingsRouteDepth: nil))
+        XCTAssertTrue(IOSPrimaryNavigationPolicy.showsSettingsButton(pathCount: 1, settingsRouteDepth: 2))
+        XCTAssertFalse(IOSPrimaryNavigationPolicy.showsSettingsButton(pathCount: 2, settingsRouteDepth: 2))
+        XCTAssertFalse(IOSPrimaryNavigationPolicy.showsSettingsButton(pathCount: 3, settingsRouteDepth: 2))
+    }
+
+    func testHubEventDetailPlacesActionsBeforeSummary() {
+        XCTAssertEqual(
+            HubEventDetailLayoutPolicy.contentOrder,
+            [.actions, .summary, .info, .notice]
+        )
     }
 
     func testHomeSummaryCountsLiveMembersAndRecentNotifications() {

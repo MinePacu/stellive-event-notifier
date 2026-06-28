@@ -37,6 +37,15 @@ class MainUiPolicyTest {
     }
 
     @Test
+    fun settingsCardsUseCompactVerticalSpacing() {
+        val spacing = MainUiPolicy.settingsCardSpacing
+
+        assertEquals(10, spacing.contentVerticalPaddingDp)
+        assertEquals(6, spacing.rowVerticalPaddingDp)
+        assertEquals(8, spacing.bottomMarginDp)
+    }
+
+    @Test
     fun topBarTitleStartInsetAlignsRootScreensWithChromePadding() {
         assertEquals(10, MainUiPolicy.topBarTitleStartInsetDp(canGoBack = false))
         assertEquals(10, MainUiPolicy.topBarTitleStartInsetDp(canGoBack = true))
