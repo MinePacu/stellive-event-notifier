@@ -14,6 +14,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.CalendarContract
 import android.text.Editable
 import android.text.TextWatcher
@@ -28,6 +29,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -90,6 +92,8 @@ import dev.stellive.hub.ui.components.SectionHeaderView
 import dev.stellive.hub.ui.components.TopFilterGroup
 import dev.stellive.hub.ui.components.TopFilterOption
 
+private const val EXIT_BACK_PRESS_INTERVAL_MS = 2_000L
+
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 private data class LiveClockTextView(
@@ -119,6 +123,7 @@ private lateinit var binding: ActivityMainBinding
     private var systemTopInsetPx = 0
     private val serverConnectionDebugLogs = mutableListOf("bootstrap: 대기 중")
     private val navigationHistory = MainNavigationHistory()
+    private var lastRootBackPressedAt = 0L
 private var selectedFilter = "all"
 private var selectedLiveStatusFilter = "all"
 private var liveMemberPriorityIds: List<String> = emptyList()
@@ -290,7 +295,7 @@ private var notificationPermissionRequested = false
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (!navigateBack()) finish()
+                    handleSystemBackPressed()
                 }
             }
         )
@@ -298,6 +303,7 @@ private var notificationPermissionRequested = false
 
     private fun navigateTo(screen: HubScreen, addToBackStack: Boolean) {
         if (addToBackStack && screen == navigationHistory.currentScreen) return
+        lastRootBackPressedAt = 0L
         if (addToBackStack) {
             navigationHistory.select(screen)
         }
@@ -307,6 +313,7 @@ private var notificationPermissionRequested = false
     }
 
     private fun navigateToRoot(screen: HubScreen) {
+        lastRootBackPressedAt = 0L
         if (screen == navigationHistory.currentScreen && !navigationHistory.canGoBack) return
         navigationHistory.selectRoot(screen)
         renderScreen(screen)
@@ -318,6 +325,29 @@ private var notificationPermissionRequested = false
         val previous = navigationHistory.goBack() ?: return false
         renderScreen(previous)
         updateSelectedBottomNavigation(previous)
+        updateNavigationChrome()
+        return true
+    }
+
+    private fun handleSystemBackPressed() {
+        if (navigateBackToCurrentRoot()) {
+            lastRootBackPressedAt = 0L
+            return
+        }
+
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastRootBackPressedAt <= EXIT_BACK_PRESS_INTERVAL_MS) {
+            finish()
+            return
+        }
+        lastRootBackPressedAt = now
+        Toast.makeText(this, "한 번 더 뒤로 가면 앱이 종료됩니다.", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun navigateBackToCurrentRoot(): Boolean {
+        val root = navigationHistory.goBackToCurrentRoot() ?: return false
+        renderScreen(root)
+        updateSelectedBottomNavigation(root)
         updateNavigationChrome()
         return true
     }
