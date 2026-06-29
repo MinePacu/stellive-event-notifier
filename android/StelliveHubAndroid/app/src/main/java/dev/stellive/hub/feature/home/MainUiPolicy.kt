@@ -48,6 +48,12 @@ data class SongDisplayText(
     val subtitle: String,
 )
 
+data class LoadingPresentation(
+    val title: String,
+    val body: String,
+    val chipLabel: String,
+)
+
 data class SettingsHubRow(
     val screenId: String,
     val title: String,
@@ -282,10 +288,8 @@ object MainUiPolicy {
     fun normalizedSongQuery(query: String): String = query.trim()
 
     fun recentSongs(songs: List<SongCatalogItem>, limit: Int = 5): List<SongCatalogItem> =
-        songs.asSequence()
-            .sortedByDescending { it.publishedAt }
+        sortSongs(songs, "publishedAt_desc")
             .take(limit.coerceAtLeast(0))
-            .toList()
 
     fun songSortLabel(sortId: String): String =
         songSortOptions().firstOrNull { it.id == sortId }?.label ?: "최신순"
@@ -295,6 +299,42 @@ object MainUiPolicy {
         sourceLabel.contains("데이터 없음") || sourceLabel.contains("캐시") -> "캐시 표시 중"
         else -> "서버 연결됨"
     }
+
+    fun homeRecentSongsLoadingPresentation(): LoadingPresentation = LoadingPresentation(
+        title = "최근 곡 확인 중",
+        body = "서버에서 최신 오리지널곡과 커버곡을 불러오고 있습니다.",
+        chipLabel = "노래",
+    )
+
+    fun goodsEventsLoadingPresentation(): LoadingPresentation = LoadingPresentation(
+        title = "굿즈/행사 불러오는 중",
+        body = "서버에서 게시된 굿즈/행사 목록과 캘린더를 가져오고 있습니다.",
+        chipLabel = "굿즈/행사",
+    )
+
+    fun hubEventDetailLoadingPresentation(): LoadingPresentation = LoadingPresentation(
+        title = "상세 정보 불러오는 중",
+        body = "서버에서 선택한 굿즈/행사 상세 정보를 가져오고 있습니다.",
+        chipLabel = "상세",
+    )
+
+    fun songsLoadingPresentation(): LoadingPresentation = LoadingPresentation(
+        title = "노래 목록 불러오는 중",
+        body = "서버 캐시에서 오리지널곡과 커버곡 목록을 가져오고 있습니다.",
+        chipLabel = "노래",
+    )
+
+    fun songSearchLoadingPresentation(): LoadingPresentation = LoadingPresentation(
+        title = "검색 준비 중",
+        body = "검색할 노래 목록을 서버에서 불러오고 있습니다.",
+        chipLabel = "검색",
+    )
+
+    fun songSearchTransitionLoadingPresentation(): LoadingPresentation = LoadingPresentation(
+        title = "노래 검색 여는 중",
+        body = "검색 화면을 준비하고 있습니다.",
+        chipLabel = "검색",
+    )
 
     fun songThumbnailHeightDp(widthDp: Int): Int = (widthDp / SONG_THUMBNAIL_ASPECT_RATIO).roundToInt()
 

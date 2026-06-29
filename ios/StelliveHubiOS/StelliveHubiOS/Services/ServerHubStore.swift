@@ -39,6 +39,11 @@ final class ServerHubStore: ObservableObject {
     @Published private(set) var recentSongs: [SongCatalogItem] = []
     @Published private(set) var serverSongFacets: SongFacetsResponse?
     @Published private(set) var hubEventDetailCache: [String: HubEvent] = [:]
+    @Published private(set) var isRefreshingHubEvents = false
+    @Published private(set) var isRefreshingCalendar = false
+    @Published private(set) var isRefreshingSongs = false
+    @Published private(set) var isRefreshingRecentSongs = false
+    @Published private(set) var loadingHubEventDetailIds: Set<String> = []
 
     init(
         api: HubAPIClient,
@@ -80,6 +85,8 @@ final class ServerHubStore: ObservableObject {
     }
 
     func refreshHubEvents(filter: String = "all", from: Date? = nil, to: Date? = nil) async {
+        isRefreshingHubEvents = true
+        defer { isRefreshingHubEvents = false }
         let formatter = Self.calendarDateFormatter
         do {
             let generationId = builtInHubEventFilters.contains(filter) ? nil : filter
@@ -102,6 +109,8 @@ final class ServerHubStore: ObservableObject {
     }
 
     func refreshCalendar(from: Date, to: Date, timezone: TimeZone = .current) async {
+        isRefreshingCalendar = true
+        defer { isRefreshingCalendar = false }
         let formatter = Self.calendarDateFormatter
         do {
             let response = try await api.hubEventsCalendar(
@@ -124,6 +133,8 @@ final class ServerHubStore: ObservableObject {
         query: String? = nil,
         cursor: String? = nil
     ) async {
+        isRefreshingSongs = true
+        defer { isRefreshingSongs = false }
         do {
             let normalizedType = type == "all" ? nil : type
             let items = try await MusicPageCollector.collect { pageCursor, pageLimit in
@@ -141,9 +152,14 @@ final class ServerHubStore: ObservableObject {
     }
 
     func refreshRecentSongs(limit: Int = 5) async {
+        isRefreshingRecentSongs = true
+        defer { isRefreshingRecentSongs = false }
         do {
-            let response = try await api.music(type: nil, cursor: nil, limit: limit, sort: "publishedAt_desc")
-            recentSongs = IOSSongPagePolicy.recentSongs(response.items, limit: limit)
+            let items = try await MusicPageCollector.collect { pageCursor, pageLimit in
+                try await api.music(type: nil, cursor: pageCursor, limit: pageLimit, sort: "publishedAt_desc")
+            }
+            serverSongs = items
+            recentSongs = IOSSongPagePolicy.recentSongs(items, limit: limit)
         } catch {
             recentSongs = IOSSongPagePolicy.recentSongs(
                 serverSongs.isEmpty ? fallback.songs().items : serverSongs,
@@ -168,6 +184,8 @@ final class ServerHubStore: ObservableObject {
     }
 
     func loadHubEventDetail(id: String) async -> HubEvent? {
+        loadingHubEventDetailIds.insert(id)
+        defer { loadingHubEventDetailIds.remove(id) }
         do {
             let event = try await api.hubEvent(id: id).toHubEvent()
             hubEventDetailCache[id] = event
@@ -198,6 +216,10 @@ final class ServerHubStore: ObservableObject {
 
     func cachedHubEvent(id: String) -> HubEvent? {
         hubEventDetailCache[id] ?? serverHubEvents.first(where: { $0.id == id })
+    }
+
+    func isLoadingHubEventDetail(id: String) -> Bool {
+        loadingHubEventDetailIds.contains(id)
     }
 
     func songs(generationId: String? = nil, memberId: String? = nil, type: String? = nil, query: String? = nil) -> SongListResponse {

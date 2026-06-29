@@ -604,9 +604,14 @@ class SongUiPolicyTest {
             SongCatalogItem("original", "original", "Original", SongType.ORIGINAL, publishedAt = Instant.parse("2026-06-01T00:00:00Z")),
             SongCatalogItem("new", "new", "New", SongType.COVER, publishedAt = Instant.parse("2026-06-02T00:00:00Z")),
             SongCatalogItem("middle", "middle", "Middle", SongType.COVER, publishedAt = Instant.parse("2026-05-01T00:00:00Z")),
+            SongCatalogItem("same-date-z", "same-date-z", "Zeta", SongType.COVER, publishedAt = Instant.parse("2026-06-03T00:00:00Z")),
+            SongCatalogItem("same-date-a", "same-date-a", "Alpha", SongType.ORIGINAL, publishedAt = Instant.parse("2026-06-03T00:00:00Z")),
         )
 
-        assertEquals(listOf("new", "original"), MainUiPolicy.recentSongs(songs, limit = 2).map { it.id })
+        assertEquals(
+            MainUiPolicy.sortSongs(songs, "publishedAt_desc").take(3).map { it.id },
+            MainUiPolicy.recentSongs(songs, limit = 3).map { it.id },
+        )
     }
 
     @Test

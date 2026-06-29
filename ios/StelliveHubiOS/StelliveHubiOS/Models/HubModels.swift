@@ -995,11 +995,7 @@ enum IOSSongPagePolicy {
     }
 
     static func recentSongs(_ songs: [SongCatalogItem], limit: Int = 5) -> [SongCatalogItem] {
-        Array(
-            songs
-                .sorted { ($0.publishedAt ?? .distantPast) > ($1.publishedAt ?? .distantPast) }
-                .prefix(max(0, limit))
-        )
+        Array(sortedSongs(songs, sortId: "publishedAt_desc").prefix(max(0, limit)))
     }
 
     static func thumbnailUrlCandidates(for song: SongCatalogItem) -> [URL] {

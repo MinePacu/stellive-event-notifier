@@ -4,6 +4,7 @@ import dev.stellive.hub.feature.home.MainUiPolicy
 import dev.stellive.hub.core.model.NotificationPlatform
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -203,6 +204,28 @@ class MainUiPolicyTest {
         assertEquals("서버 연결됨", MainUiPolicy.serverConnectionLabel("서버 liveStatus"))
         assertEquals("캐시 표시 중", MainUiPolicy.serverConnectionLabel("서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음"))
         assertEquals("오프라인", MainUiPolicy.serverConnectionLabel("서버 연결 실패 · 앱 내 목업"))
+    }
+
+    @Test
+    fun loadingPresentationsSeparateLoadingCopyFromEmptyStateCopy() {
+        val presentations = listOf(
+            MainUiPolicy.homeRecentSongsLoadingPresentation(),
+            MainUiPolicy.goodsEventsLoadingPresentation(),
+            MainUiPolicy.hubEventDetailLoadingPresentation(),
+            MainUiPolicy.songsLoadingPresentation(),
+            MainUiPolicy.songSearchLoadingPresentation(),
+            MainUiPolicy.songSearchTransitionLoadingPresentation(),
+        )
+
+        assertEquals("최근 곡 확인 중", presentations[0].title)
+        assertEquals("굿즈/행사 불러오는 중", presentations[1].title)
+        assertEquals("상세 정보 불러오는 중", presentations[2].title)
+        assertEquals("노래 목록 불러오는 중", presentations[3].title)
+        assertEquals("검색 준비 중", presentations[4].title)
+        assertEquals("노래 검색 여는 중", presentations[5].title)
+        assertNotEquals(MainUiPolicy.songSearchLoadingPresentation().body, MainUiPolicy.songSearchTransitionLoadingPresentation().body)
+        assertTrue(presentations.all { it.body.isNotBlank() && it.chipLabel.isNotBlank() })
+        assertFalse(presentations.any { it.title.contains("없음") || it.body.contains("없습니다") })
     }
 
     @Test

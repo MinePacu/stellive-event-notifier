@@ -135,20 +135,15 @@ class ServerHubRepository(
     }
 
     override suspend fun recentSongs(limit: Int): List<SongCatalogItem> {
-        return when (
-            val result = remoteDataSource.music(
-                type = null,
-                cursor = null,
-                limit = limit,
-                sort = "publishedAt_desc",
-            )
-        ) {
-            is HubNetworkResult.Success -> result.value.items.mapNotNull { it.toSongCatalogItemOrNull() }
-            is HubNetworkResult.Failure -> MainUiPolicy.recentSongs(
-                songCache?.items ?: fallback.songs().items,
-                limit,
-            )
+        val result = fetchAllMusicPages(memberId = null, type = null)
+        if (result != null) {
+            songCache = result
+            return MainUiPolicy.recentSongs(result.items, limit)
         }
+        return MainUiPolicy.recentSongs(
+            songCache?.items ?: fallback.songs().items,
+            limit,
+        )
     }
 
     private suspend fun fetchAllMusicPages(

@@ -223,6 +223,30 @@ class ServerHubRepositoryTest {
     @Test
     fun recentSongsRequestsLatestItemsWithoutTypeFilter() = runTest {
         val remote = RecordingRemoteDataSource()
+        fun musicResponse(vararg songs: Pair<String, String>, nextCursor: String?): MusicListResponseDto =
+            MusicListResponseDto(
+                items = songs.map { (videoId, publishedAt) ->
+                    MusicCatalogItemDto(
+                        id = videoId,
+                        youtubeVideoId = videoId,
+                        title = "Cover $videoId",
+                        type = "cover",
+                        publishedAt = publishedAt,
+                        members = emptyList(),
+                        youtubeUrl = "https://www.youtube.com/watch?v=$videoId",
+                    )
+                },
+                nextCursor = nextCursor,
+            )
+        remote.musicResponses += musicResponse(
+            "old" to "2026-04-01T00:00:00.000Z",
+            nextCursor = "cursor-2",
+        )
+        remote.musicResponses += musicResponse(
+            "newest" to "2026-06-29T00:00:00.000Z",
+            "middle" to "2026-06-28T00:00:00.000Z",
+            nextCursor = null,
+        )
         val repository = ServerHubRepository(
             remoteDataSource = remote,
             deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
@@ -232,9 +256,10 @@ class ServerHubRepositoryTest {
         val songs = repository.recentSongs(limit = 5)
 
         assertNull(remote.lastMusicType)
-        assertEquals(5, remote.musicLimits.single())
+        assertEquals(listOf(null, "cursor-2"), remote.musicCursors)
+        assertEquals(listOf(100, 100), remote.musicLimits)
         assertEquals("publishedAt_desc", remote.lastMusicSort)
-        assertEquals(1, songs.size)
+        assertEquals(listOf("newest", "middle", "old"), songs.map { it.id })
     }
 
     @Test

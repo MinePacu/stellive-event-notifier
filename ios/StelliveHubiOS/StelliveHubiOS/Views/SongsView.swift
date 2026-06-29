@@ -134,7 +134,12 @@ struct SongsView: View {
         }
 
                 Section("노래 목록") {
-                    if songs.isEmpty {
+                    if serverStore.isRefreshingSongs && serverStore.serverSongs.isEmpty {
+                        LoadingStateRow(
+                            title: "노래 목록 불러오는 중",
+                            message: "서버 캐시에서 오리지널곡과 커버곡 목록을 가져오고 있습니다."
+                        )
+                    } else if songs.isEmpty {
                         Text("표시할 노래 없음")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)

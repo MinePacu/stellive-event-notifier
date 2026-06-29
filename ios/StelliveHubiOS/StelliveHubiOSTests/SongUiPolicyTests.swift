@@ -714,11 +714,27 @@ final class SongUiPolicyTests: XCTestCase {
                 publishedAt: Date(timeIntervalSince1970: 200),
                 youtubeUrl: "https://www.youtube.com/watch?v=new-cover"
             ),
+            SongCatalogItem(
+                id: "same-date-z",
+                youtubeVideoId: "same-date-z",
+                title: "Zeta",
+                type: .cover,
+                publishedAt: Date(timeIntervalSince1970: 400),
+                youtubeUrl: "https://www.youtube.com/watch?v=same-date-z"
+            ),
+            SongCatalogItem(
+                id: "same-date-a",
+                youtubeVideoId: "same-date-a",
+                title: "Alpha",
+                type: .original,
+                publishedAt: Date(timeIntervalSince1970: 400),
+                youtubeUrl: "https://www.youtube.com/watch?v=same-date-a"
+            ),
         ]
 
         XCTAssertEqual(
-            IOSSongPagePolicy.recentSongs(songs, limit: 2).map(\.id),
-            ["original", "new-cover"]
+            IOSSongPagePolicy.recentSongs(songs, limit: 3).map(\.id),
+            IOSSongPagePolicy.sortedSongs(songs, sortId: "publishedAt_desc").prefix(3).map(\.id)
         )
     }
 

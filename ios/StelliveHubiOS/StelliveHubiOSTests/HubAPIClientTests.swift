@@ -385,25 +385,53 @@ final class ServerHubStoreTests: XCTestCase {
     }
 
     func testRefreshRecentSongsRequestsLatestItemsWithoutTypeFilter() async {
+        var cursors: [String?] = []
         let store = makeStore { request in
             XCTAssertEqual(request.url?.path, "/v1/music")
             let components = URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)
             let queryItems = components?.queryItems ?? []
 
             XCTAssertNil(queryItems.first { $0.name == "type" })
-            XCTAssertEqual(queryItems.first(where: { $0.name == "limit" })?.value, "5")
+            XCTAssertEqual(queryItems.first(where: { $0.name == "limit" })?.value, "100")
             XCTAssertEqual(queryItems.first(where: { $0.name == "sort" })?.value, "publishedAt_desc")
+            let cursor = queryItems.first(where: { $0.name == "cursor" })?.value
+            cursors.append(cursor)
+
+            if cursor == nil {
+                return jsonResponse(statusCode: 200, body: """
+                    {
+                      "items": [{
+                        "id": "old",
+                        "youtubeVideoId": "old",
+                        "title": "Old",
+                        "type": "cover",
+                        "publishedAt": "2026-04-01T00:00:00.000Z",
+                        "members": [],
+                        "youtubeUrl": "https://www.youtube.com/watch?v=old"
+                      }],
+                      "nextCursor": "cursor-2"
+                    }
+                    """)
+            }
 
             return jsonResponse(statusCode: 200, body: """
                 {
                   "items": [{
-                    "id": "music-1",
-                    "youtubeVideoId": "music-1",
-                    "title": "Original",
-                    "type": "original",
+                    "id": "newest",
+                    "youtubeVideoId": "newest",
+                    "title": "Newest",
+                    "type": "cover",
+                    "publishedAt": "2026-06-29T00:00:00.000Z",
+                    "members": [],
+                    "youtubeUrl": "https://www.youtube.com/watch?v=newest"
+                  }, {
+                    "id": "middle",
+                    "youtubeVideoId": "middle",
+                    "title": "Middle",
+                    "type": "cover",
                     "publishedAt": "2026-06-28T00:00:00.000Z",
                     "members": [],
-                    "youtubeUrl": "https://www.youtube.com/watch?v=music-1"
+                    "youtubeUrl": "https://www.youtube.com/watch?v=middle"
                   }],
                   "nextCursor": null
                 }
@@ -412,7 +440,89 @@ final class ServerHubStoreTests: XCTestCase {
 
         await store.refreshRecentSongs(limit: 5)
 
-        XCTAssertEqual(store.recentSongs.map(\.id), ["music-1"])
+        XCTAssertEqual(cursors, [nil, "cursor-2"])
+        XCTAssertEqual(store.recentSongs.map(\.id), ["newest", "middle", "old"])
+    }
+
+    func testRefreshRecentSongsTogglesLoadingState() async {
+        let store = makeStore { _ in
+            Thread.sleep(forTimeInterval: 0.05)
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "items": [],
+                  "nextCursor": null
+                }
+                """)
+        }
+
+        XCTAssertFalse(store.isRefreshingRecentSongs)
+        let task = Task { await store.refreshRecentSongs(limit: 5) }
+        while !store.isRefreshingRecentSongs {
+            await Task.yield()
+        }
+        XCTAssertTrue(store.isRefreshingRecentSongs)
+        await task.value
+        XCTAssertFalse(store.isRefreshingRecentSongs)
+    }
+
+    func testRefreshSongsTogglesLoadingState() async {
+        let store = makeStore { _ in
+            Thread.sleep(forTimeInterval: 0.05)
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "items": [],
+                  "nextCursor": null
+                }
+                """)
+        }
+
+        XCTAssertFalse(store.isRefreshingSongs)
+        let task = Task { await store.refreshSongs(type: "cover") }
+        while !store.isRefreshingSongs {
+            await Task.yield()
+        }
+        XCTAssertTrue(store.isRefreshingSongs)
+        await task.value
+        XCTAssertFalse(store.isRefreshingSongs)
+    }
+
+    func testHubEventRefreshesToggleLoadingStates() async {
+        let store = makeStore { request in
+            Thread.sleep(forTimeInterval: 0.05)
+            if request.url?.path == "/v1/hub-events/calendar" {
+                return jsonResponse(statusCode: 200, body: """
+                    {
+                      "days": []
+                    }
+                    """)
+            }
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "items": [],
+                  "nextCursor": null
+                }
+                """)
+        }
+        let from = Date(timeIntervalSince1970: 1_750_000_000)
+        let to = Date(timeIntervalSince1970: 1_750_086_400)
+
+        XCTAssertFalse(store.isRefreshingHubEvents)
+        let eventsTask = Task { await store.refreshHubEvents(from: from, to: to) }
+        while !store.isRefreshingHubEvents {
+            await Task.yield()
+        }
+        XCTAssertTrue(store.isRefreshingHubEvents)
+        await eventsTask.value
+        XCTAssertFalse(store.isRefreshingHubEvents)
+
+        XCTAssertFalse(store.isRefreshingCalendar)
+        let calendarTask = Task { await store.refreshCalendar(from: from, to: to) }
+        while !store.isRefreshingCalendar {
+            await Task.yield()
+        }
+        XCTAssertTrue(store.isRefreshingCalendar)
+        await calendarTask.value
+        XCTAssertFalse(store.isRefreshingCalendar)
     }
 
     func testDetail404ReturnsNilWithoutSynthesizingFallbackEvent() async {

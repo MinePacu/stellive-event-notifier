@@ -30,8 +30,13 @@ struct HomeView: View {
                 }
 
                 Section("최근 곡") {
-                    if serverStore.recentSongs.isEmpty {
-                        Text("최근 곡을 불러오는 중입니다.")
+                    if serverStore.isRefreshingRecentSongs && serverStore.recentSongs.isEmpty {
+                        LoadingStateRow(
+                            title: "최근 곡 확인 중",
+                            message: "서버에서 최신 오리지널곡과 커버곡을 불러오고 있습니다."
+                        )
+                    } else if serverStore.recentSongs.isEmpty {
+                        Text("최근 곡 없음")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
@@ -96,6 +101,28 @@ struct HomeView: View {
                 await serverStore.refreshRecentSongs()
             }
         }
+    }
+}
+
+struct LoadingStateRow: View {
+    let title: String
+    let message: String
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            ProgressView()
+                .controlSize(.regular)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 6)
     }
 }
 
