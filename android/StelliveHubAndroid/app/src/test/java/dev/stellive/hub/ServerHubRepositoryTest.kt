@@ -221,7 +221,7 @@ class ServerHubRepositoryTest {
     }
 
     @Test
-    fun recentCoverSongsRequestsOnlyTheLatestRequestedItems() = runTest {
+    fun recentSongsRequestsLatestItemsWithoutTypeFilter() = runTest {
         val remote = RecordingRemoteDataSource()
         val repository = ServerHubRepository(
             remoteDataSource = remote,
@@ -229,9 +229,9 @@ class ServerHubRepositoryTest {
             fallback = MockHubRepository(),
         )
 
-        val songs = repository.recentCoverSongs(limit = 5)
+        val songs = repository.recentSongs(limit = 5)
 
-        assertEquals("cover", remote.lastMusicType)
+        assertNull(remote.lastMusicType)
         assertEquals(5, remote.musicLimits.single())
         assertEquals("publishedAt_desc", remote.lastMusicSort)
         assertEquals(1, songs.size)

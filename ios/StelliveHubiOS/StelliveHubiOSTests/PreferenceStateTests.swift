@@ -140,6 +140,14 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertFalse(IOSPrimaryNavigationPolicy.showsSettingsButton(pathCount: 3, settingsRouteDepth: 2))
     }
 
+    func testSettingsToolbarAppliesToNonSettingsPagesOnly() {
+        XCTAssertTrue(IOSPrimaryNavigationPolicy.shouldAttachSettingsToolbar(screenId: "home"))
+        XCTAssertTrue(IOSPrimaryNavigationPolicy.shouldAttachSettingsToolbar(screenId: "member_detail"))
+        XCTAssertTrue(IOSPrimaryNavigationPolicy.shouldAttachSettingsToolbar(screenId: "hub_event_detail"))
+        XCTAssertFalse(IOSPrimaryNavigationPolicy.shouldAttachSettingsToolbar(screenId: "settings"))
+        XCTAssertFalse(IOSPrimaryNavigationPolicy.shouldAttachSettingsToolbar(screenId: "settings_delivery"))
+    }
+
     func testHubEventDetailPlacesActionsBeforeSummary() {
         XCTAssertEqual(
             HubEventDetailLayoutPolicy.contentOrder,

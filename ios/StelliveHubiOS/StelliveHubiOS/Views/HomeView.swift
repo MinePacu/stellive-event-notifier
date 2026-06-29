@@ -29,14 +29,14 @@ struct HomeView: View {
                     }
                 }
 
-                Section("최근 커버곡") {
-                    if serverStore.recentCoverSongs.isEmpty {
-                        Text("최근 커버곡을 불러오는 중입니다.")
+                Section("최근 곡") {
+                    if serverStore.recentSongs.isEmpty {
+                        Text("최근 곡을 불러오는 중입니다.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(serverStore.recentCoverSongs) { song in
-                            SongRow(song: song)
+                        ForEach(serverStore.recentSongs) { song in
+                            SongRow(song: song, catalogMembers: store.members)
                                 .listRowInsets(IOSSongPagePolicy.songRowInsets)
                         }
                     }
@@ -93,7 +93,7 @@ struct HomeView: View {
                 MemberDetailView(member: member)
             }
             .task {
-                await serverStore.refreshRecentCoverSongs()
+                await serverStore.refreshRecentSongs()
             }
         }
     }

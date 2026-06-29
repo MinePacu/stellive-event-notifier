@@ -410,6 +410,11 @@ struct MusicMemberSummary: Codable, Equatable, Hashable, Identifiable {
     let role: String?
 }
 
+struct SongDisplayText: Equatable {
+    let title: String
+    let subtitle: String
+}
+
 struct YoutubePremiereMetadata: Codable, Equatable, Hashable {
     let classification: String
     let state: String
@@ -589,6 +594,14 @@ enum IOSSongPagePolicy {
         .init(id: "original", label: "오리지널"),
         .init(id: "cover", label: "커버")
     ]
+
+    static let sortOptions: [SongFilterOption] = [
+        .init(id: "publishedAt_desc", label: "최신순"),
+        .init(id: "publishedAt_asc", label: "오래된순"),
+        .init(id: "title_asc", label: "제목순"),
+        .init(id: "member_asc", label: "멤버순")
+    ]
+
     static let thumbnailAspectRatio: CGFloat = 16.0 / 9.0
     static let thumbnailSize = CGSize(width: 96, height: 54)
     static let rowInsetTop: CGFloat = 6
@@ -623,22 +636,272 @@ enum IOSSongPagePolicy {
         selectedMemberId != "all"
     }
 
-    static func memberDisplayText(_ song: SongCatalogItem) -> String {
-        let names = song.members
-            .map { $0.nameKo.isEmpty ? ($0.nameEn ?? "") : $0.nameKo }
-            .filter { !$0.isEmpty }
-        let uniqueNames = names.reduce(into: [String]()) { result, name in
-            if !result.contains(name) {
-                result.append(name)
+    static func displayText(for song: SongCatalogItem, catalogMembers: [HubMember] = []) -> SongDisplayText {
+        let parsed = parsedSongTitle(song)
+        return SongDisplayText(
+            title: parsed.title.isEmpty ? song.title.trimmingCharacters(in: .whitespacesAndNewlines) : parsed.title,
+            subtitle: subtitleDisplayText(for: song, parsedArtistNames: parsed.artistNames, catalogMembers: catalogMembers)
+        )
+    }
+
+    static func titleDisplayText(_ song: SongCatalogItem) -> String {
+        displayText(for: song).title
+    }
+
+    static func memberDisplayText(_ song: SongCatalogItem, catalogMembers: [HubMember] = []) -> String {
+        displayText(for: song, catalogMembers: catalogMembers).subtitle
+    }
+
+    private struct ParsedSongTitle {
+        let title: String
+        let artistNames: [String]
+    }
+
+    private static func parsedSongTitle(_ song: SongCatalogItem) -> ParsedSongTitle {
+        let normalizedRawTitle = removeLeadingMediaTags(song.title).trimmingCharacters(in: .whitespacesAndNewlines)
+        if song.type == .cover {
+            return parsedCoverSongTitle(normalizedRawTitle)
+        }
+        return parsedOriginalSongTitle(normalizedRawTitle)
+    }
+
+    private static func parsedCoverSongTitle(_ normalizedRawTitle: String) -> ParsedSongTitle {
+        guard let delimiter = lastCoverPerformerDelimiter(in: normalizedRawTitle) else {
+            return ParsedSongTitle(title: cleanSongTitle(normalizedRawTitle), artistNames: [])
+        }
+        let left = String(normalizedRawTitle[..<delimiter.range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let right = String(normalizedRawTitle[delimiter.range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return ParsedSongTitle(title: cleanSongTitle(left), artistNames: artistNames(from: right))
+    }
+
+    private static func parsedOriginalSongTitle(_ normalizedRawTitle: String) -> ParsedSongTitle {
+        let quotedTitle = firstQuotedTitle(in: normalizedRawTitle)
+        let delimiter = lastTopLevelDelimiter(in: normalizedRawTitle, delimiters: [" | ", "|"])
+        if let quotedTitle {
+            let artists = delimiter.map {
+                artistNames(from: String(normalizedRawTitle[..<$0.range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines))
+            } ?? []
+            return ParsedSongTitle(title: cleanSongTitle(quotedTitle), artistNames: artists)
+        }
+        guard let delimiter else {
+            return ParsedSongTitle(title: cleanSongTitle(normalizedRawTitle), artistNames: [])
+        }
+        let left = String(normalizedRawTitle[..<delimiter.range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let right = String(normalizedRawTitle[delimiter.range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return ParsedSongTitle(title: cleanSongTitle(right), artistNames: artistNames(from: left))
+    }
+
+    private static func lastCoverPerformerDelimiter(in value: String) -> (range: Range<String.Index>, delimiter: String)? {
+        topLevelDelimiters(in: value, delimiters: ["|", "ㅣ", " / "])
+            .reversed()
+            .first { delimiter in
+                let right = String(value[delimiter.range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                return looksLikeCoverPerformerSegment(right)
+            }
+    }
+
+    private static func looksLikeCoverPerformerSegment(_ segment: String) -> Bool {
+        segment.range(
+            of: "\\b(3D\\s+Live\\s+Cover|Live\\s+Cover|Cover|covered\\s+by)\\b|【\\s*COVER\\s*】|커버",
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil
+    }
+
+    private static func lastTopLevelDelimiter(in value: String, delimiters: [String]) -> (range: Range<String.Index>, delimiter: String)? {
+        topLevelDelimiters(in: value, delimiters: delimiters).last
+    }
+
+    private static func topLevelDelimiters(in value: String, delimiters: [String]) -> [(range: Range<String.Index>, delimiter: String)] {
+        var result: [(range: Range<String.Index>, delimiter: String)] = []
+        var roundDepth = 0
+        var squareDepth = 0
+        var japaneseDepth = 0
+        var index = value.startIndex
+        while index < value.endIndex {
+            switch value[index] {
+            case "(":
+                roundDepth += 1
+            case ")":
+                roundDepth = max(0, roundDepth - 1)
+            case "[":
+                squareDepth += 1
+            case "]":
+                squareDepth = max(0, squareDepth - 1)
+            case "【", "「", "『":
+                japaneseDepth += 1
+            case "】", "」", "』":
+                japaneseDepth = max(0, japaneseDepth - 1)
+            default:
+                break
+            }
+            if roundDepth == 0, squareDepth == 0, japaneseDepth == 0 {
+                if let delimiter = delimiters.first(where: { value[index...].hasPrefix($0) }) {
+                    let upperBound = value.index(index, offsetBy: delimiter.count)
+                    result.append((range: index..<upperBound, delimiter: delimiter))
+                    index = upperBound
+                    continue
+                }
+            }
+            index = value.index(after: index)
+        }
+        return result
+    }
+
+    private static func firstQuotedTitle(in value: String) -> String? {
+        for pattern in ["‘([^’]+)’", "'([^']+)'", "“([^”]+)”", "\"([^\"]+)\""] {
+            if let range = value.range(of: pattern, options: .regularExpression) {
+                let matched = String(value[range])
+                let trimmed = trimWrappingQuotes(matched)
+                if !trimmed.isEmpty {
+                    return trimmed
+                }
             }
         }
-        if !uniqueNames.isEmpty {
-            return uniqueNames.joined(separator: " · ")
+        return nil
+    }
+
+    private static func cleanSongTitle(_ value: String) -> String {
+        deduplicateRepeatedTitle(
+            trimWrappingQuotes(
+                removeMusicVideoSuffix(removeLeadingMediaTags(value)).trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        )
+    }
+
+    private static func removeLeadingMediaTags(_ value: String) -> String {
+        var result = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pattern = "^\\[(4K|8K|MV|Official MV|Official Music Video)\\]\\s*"
+        while result.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil {
+            result = result.replacingOccurrences(of: pattern, with: "", options: [.regularExpression, .caseInsensitive])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return result
+    }
+
+    private static func removeMusicVideoSuffix(_ value: String) -> String {
+        value.replacingOccurrences(
+            of: "\\s*(Official\\s+)?(Music\\s+Video|MV)\\s*$",
+            with: "",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func trimWrappingQuotes(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "'\"‘’“”"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func deduplicateRepeatedTitle(_ value: String) -> String {
+        let words = value.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        guard words.count >= 2, words.count.isMultiple(of: 2) else { return value }
+        let midpoint = words.count / 2
+        let left = words.prefix(midpoint).joined(separator: " ")
+        let right = words.suffix(midpoint).joined(separator: " ")
+        return left.caseInsensitiveCompare(right) == .orderedSame ? left : value
+    }
+
+    private static func artistNames(from segment: String) -> [String] {
+        let cleaned = trimWrappingQuotes(
+            segment.replacingOccurrences(
+                of: "\\b(3D\\s+Live\\s+Cover|Live\\s+Cover|Cover|covered\\s+by)\\b|【\\s*COVER\\s*】|커버|\\b불러보았다\\b",
+                with: "",
+                options: [.regularExpression, .caseInsensitive]
+            )
+            .replacingOccurrences(
+                of: "\\s*(Official\\s+)?(Music\\s+Video|MV)\\s*$",
+                with: "",
+                options: [.regularExpression, .caseInsensitive]
+            )
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        guard !cleaned.isEmpty else { return [] }
+        let delimiters = ["&", "＆", ",", "、", "/", "+", "×", " x ", " X ", " and "]
+        let parts = delimiters.reduce([cleaned]) { values, delimiter in
+            values.flatMap { $0.components(separatedBy: delimiter) }
+        }
+        return uniqueNames(
+            parts
+                .map { trimWrappingQuotes($0).replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression) }
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+    }
+
+    private static func subtitleDisplayText(
+        for song: SongCatalogItem,
+        parsedArtistNames: [String],
+        catalogMembers: [HubMember]
+    ) -> String {
+        if parsedArtistNames.contains(where: { normalizedNameKey($0) == normalizedNameKey("스텔라이브") }) {
+            return "스텔라이브"
+        }
+        let memberNames = songMemberNames(song)
+        let groupDisplayName = generationGroupDisplayName(for: song, catalogMembers: catalogMembers)
+        let baseNames = groupDisplayName.map { [$0] } ?? memberNames
+        let blockedArtistKeys = Set(
+            (memberNames + catalogMembers.flatMap { [$0.koreanName, $0.englishName, $0.unitName, $0.generationName] })
+                .map(normalizedNameKey)
+        )
+        let externalNames = parsedArtistNames.filter { !isBlockedArtistName($0, blockedArtistKeys: blockedArtistKeys) }
+        let names = uniqueNames(baseNames + externalNames).filter { !$0.isEmpty }
+        if !names.isEmpty {
+            return names.joined(separator: " · ")
         }
         if let memberName = song.memberName, !memberName.isEmpty {
             return memberName
         }
         return "스텔라이브"
+    }
+
+    private static func isBlockedArtistName(_ name: String, blockedArtistKeys: Set<String>) -> Bool {
+        let nameKey = normalizedNameKey(name)
+        return blockedArtistKeys.contains { blockedKey in
+            !blockedKey.isEmpty && (nameKey == blockedKey || nameKey.contains(blockedKey) || blockedKey.contains(nameKey))
+        }
+    }
+
+    private static func songMemberNames(_ song: SongCatalogItem) -> [String] {
+        uniqueNames(
+            song.members
+                .map { $0.nameKo.isEmpty ? ($0.nameEn ?? "") : $0.nameKo }
+                .filter { !$0.isEmpty }
+        )
+    }
+
+    private static func generationGroupDisplayName(for song: SongCatalogItem, catalogMembers: [HubMember]) -> String? {
+        let songMemberIds = Set(song.members.map(\.id))
+        guard !songMemberIds.isEmpty, !catalogMembers.isEmpty else { return nil }
+        let activeCatalogMembers = catalogMembers.filter {
+            $0.catalogRole == .member && $0.activeStatus == .active
+        }
+        let songCatalogMembers = activeCatalogMembers.filter { songMemberIds.contains($0.id) }
+        guard let generationId = songCatalogMembers.first?.generationId else { return nil }
+        guard songCatalogMembers.allSatisfy({ $0.generationId == generationId }) else { return nil }
+        let generationMembers = activeCatalogMembers.filter { $0.generationId == generationId }
+        guard !generationMembers.isEmpty, songMemberIds == Set(generationMembers.map(\.id)) else { return nil }
+        let representative = generationMembers[0]
+        let unitName = representative.unitName.isEmpty ? nil : representative.unitName
+        let generationName = representative.generationName.isEmpty ? generationId : representative.generationName
+        if let unitName, unitName != generationName {
+            return "\(unitName) (\(generationName))"
+        }
+        return generationName
+    }
+
+    private static func uniqueNames(_ names: [String]) -> [String] {
+        names.reduce(into: [String]()) { result, name in
+            if !result.contains(where: { normalizedNameKey($0) == normalizedNameKey(name) }) {
+                result.append(name)
+            }
+        }
+    }
+
+    private static func normalizedNameKey(_ value: String) -> String {
+        value.lowercased().replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
     }
 
     static func premiereStatusLabel(for song: SongCatalogItem) -> String? {
@@ -666,12 +929,13 @@ enum IOSSongPagePolicy {
         return song.members.contains { memberGenerationById[$0.id] == selectedGenerationId }
     }
 
-    static func matchesQuery(_ song: SongCatalogItem, query: String) -> Bool {
+    static func matchesQuery(_ song: SongCatalogItem, query: String, catalogMembers: [HubMember] = []) -> Bool {
         if query.isEmpty {
             return true
         }
-        return song.title.localizedCaseInsensitiveContains(query) ||
-            memberDisplayText(song).localizedCaseInsensitiveContains(query)
+        let display = displayText(for: song, catalogMembers: catalogMembers)
+        return display.title.localizedCaseInsensitiveContains(query) ||
+            display.subtitle.localizedCaseInsensitiveContains(query)
     }
 
     static func pageCount(totalItems: Int, pageSize: Int = Self.pageSize) -> Int {
@@ -690,10 +954,49 @@ enum IOSSongPagePolicy {
         return Array(songs[start..<end])
     }
 
-    static func recentCoverSongs(_ songs: [SongCatalogItem], limit: Int = 5) -> [SongCatalogItem] {
+    static func sortedSongs(_ songs: [SongCatalogItem], sortId: String) -> [SongCatalogItem] {
+        songs.sorted { left, right in
+            switch sortId {
+            case "publishedAt_asc":
+                return comparePublishedAt(left, right, newestFirst: false)
+            case "title_asc":
+                return compareTitle(left, right)
+            case "member_asc":
+                let memberOrder = memberDisplayText(left).localizedStandardCompare(memberDisplayText(right))
+                if memberOrder != .orderedSame {
+                    return memberOrder == .orderedAscending
+                }
+                return compareTitle(left, right)
+            default:
+                return comparePublishedAt(left, right, newestFirst: true)
+            }
+        }
+    }
+
+    private static func comparePublishedAt(_ left: SongCatalogItem, _ right: SongCatalogItem, newestFirst: Bool) -> Bool {
+        switch (left.publishedAt, right.publishedAt) {
+        case let (leftDate?, rightDate?) where leftDate != rightDate:
+            return newestFirst ? leftDate > rightDate : leftDate < rightDate
+        case (nil, _?):
+            return false
+        case (_?, nil):
+            return true
+        default:
+            return compareTitle(left, right)
+        }
+    }
+
+    private static func compareTitle(_ left: SongCatalogItem, _ right: SongCatalogItem) -> Bool {
+        let titleOrder = left.title.localizedStandardCompare(right.title)
+        if titleOrder != .orderedSame {
+            return titleOrder == .orderedAscending
+        }
+        return left.id < right.id
+    }
+
+    static func recentSongs(_ songs: [SongCatalogItem], limit: Int = 5) -> [SongCatalogItem] {
         Array(
             songs
-                .filter { $0.type == .cover }
                 .sorted { ($0.publishedAt ?? .distantPast) > ($1.publishedAt ?? .distantPast) }
                 .prefix(max(0, limit))
         )

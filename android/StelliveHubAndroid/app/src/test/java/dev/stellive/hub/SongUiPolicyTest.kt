@@ -37,15 +37,74 @@ class SongUiPolicyTest {
     }
 
     @Test
+    fun songFilterSegmentRowsUseTwelveDpDividerSpacing() {
+        assertEquals(12, MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
+    }
+
+    @Test
     fun songTopFiltersExposeGenerationAndTypeGroups() {
         val groups = MainUiPolicy.songTopFilterGroups(
             selectedGenerationId = "gen2",
             selectedType = "cover",
+            selectedSortId = "member_asc",
         )
 
-        assertEquals(listOf("generation", "type"), groups.map { it.id })
+        assertEquals(listOf("generation", "type", "sort"), groups.map { it.id })
         assertEquals("gen2", groups[0].selectedId)
         assertEquals("cover", groups[1].selectedId)
+        assertEquals("member_asc", groups[2].selectedId)
+    }
+
+    @Test
+    fun songSortOptionsExposeStableLabelsAndDefault() {
+        assertEquals(
+            listOf("publishedAt_desc", "publishedAt_asc", "title_asc", "member_asc"),
+            MainUiPolicy.songSortOptions().map { it.id },
+        )
+        assertEquals(
+            listOf("최신순", "오래된순", "제목순", "멤버순"),
+            MainUiPolicy.songSortOptions().map { it.label },
+        )
+    }
+
+    @Test
+    fun songSortOrdersByDateTitleAndMemberWithUndatedItemsLast() {
+        val older = songCatalogItem(
+            id = "older",
+            title = "Beta",
+            memberName = "Alice",
+            publishedAt = "2026-06-20T00:00:00Z",
+        )
+        val newer = songCatalogItem(
+            id = "newer",
+            title = "Alpha",
+            memberName = "Bob",
+            publishedAt = "2026-06-22T00:00:00Z",
+        )
+        val undated = songCatalogItem(
+            id = "undated",
+            title = "Gamma",
+            memberName = "Carol",
+            publishedAt = null,
+        )
+        val songs = listOf(older, undated, newer)
+
+        assertEquals(
+            listOf("newer", "older", "undated"),
+            MainUiPolicy.sortSongs(songs, "publishedAt_desc").map { it.id },
+        )
+        assertEquals(
+            listOf("older", "newer", "undated"),
+            MainUiPolicy.sortSongs(songs, "publishedAt_asc").map { it.id },
+        )
+        assertEquals(
+            listOf("newer", "older", "undated"),
+            MainUiPolicy.sortSongs(songs, "title_asc").map { it.id },
+        )
+        assertEquals(
+            listOf("older", "newer", "undated"),
+            MainUiPolicy.sortSongs(songs, "member_asc").map { it.id },
+        )
     }
 
     @Test
@@ -125,6 +184,305 @@ class SongUiPolicyTest {
 
         assertEquals("유즈하 리코 · 네네코 마시로", MainUiPolicy.songMemberDisplayText(song))
         assertEquals("스텔라이브", MainUiPolicy.songMemberDisplayText(song.copy(members = emptyList())))
+    }
+
+    @Test
+    fun songTitleDisplayTextUsesOnlySongTitle() {
+        val song = SongCatalogItem(
+            id = "video-1",
+            youtubeVideoId = "video-1",
+            title = "  Stellar Light  ",
+            type = SongType.COVER,
+            members = listOf(SongMemberSummary(id = "ayatsuno-yuni", nameKo = "아야츠노 유니")),
+            youtubeUrl = "https://www.youtube.com/watch?v=video-1",
+        )
+
+        assertEquals("Stellar Light", MainUiPolicy.songTitleDisplayText(song))
+    }
+
+    @Test
+    fun songDisplayTextParsesCoverTitleFormats() {
+        val member = SongMemberSummary(id = "ayatsuno-yuni", nameKo = "아야츠노 유니")
+        val songs = listOf(
+            SongCatalogItem(
+                id = "slash",
+                youtubeVideoId = "slash",
+                title = "Stellar Light / 아야츠노 유니 Cover",
+                type = SongType.COVER,
+                members = listOf(member),
+            ),
+            SongCatalogItem(
+                id = "pipe",
+                youtubeVideoId = "pipe",
+                title = "Stellar Light | 아야츠노 유니 Cover",
+                type = SongType.COVER,
+                members = listOf(member),
+            ),
+            SongCatalogItem(
+                id = "live",
+                youtubeVideoId = "live",
+                title = "[4K] Stellar Light | 아야츠노 유니 3D Live Cover",
+                type = SongType.COVER,
+                members = listOf(member),
+            ),
+        )
+
+        songs.forEach { song ->
+            val display = MainUiPolicy.songDisplayText(song)
+            assertEquals("Stellar Light", display.title)
+            assertEquals("아야츠노 유니", display.subtitle)
+        }
+    }
+
+    @Test
+    fun songDisplayTextPreservesCoverOriginalArtistDetailsFromDbPatterns() {
+        val shibuki = SongMemberSummary(id = "tenko-shibuki", nameKo = "텐코 시부키")
+        val hina = SongMemberSummary(id = "shirayuki-hina", nameKo = "시라유키 히나")
+        val lize = SongMemberSummary(id = "akane-lize", nameKo = "아카네 리제")
+
+        val slashInParentheses = MainUiPolicy.songDisplayText(
+            SongCatalogItem(
+                id = "slash-in-parentheses",
+                youtubeVideoId = "slash-in-parentheses",
+                title = "친애하는 소년이여 (拝啓、少年よ / Hump Back)  / 텐코 시부키 (Tenko Shibuki) cover",
+                type = SongType.COVER,
+                members = listOf(shibuki),
+            ),
+        )
+        val pipeOriginalArtist = MainUiPolicy.songDisplayText(
+            SongCatalogItem(
+                id = "pipe-original-artist",
+                youtubeVideoId = "pipe-original-artist",
+                title = "Mrs. GREEN APPLE - 춘수(春愁) | 시라유키 히나 Cover",
+                type = SongType.COVER,
+                members = listOf(hina),
+            ),
+        )
+        val koreanPipe = MainUiPolicy.songDisplayText(
+            SongCatalogItem(
+                id = "korean-pipe",
+                youtubeVideoId = "korean-pipe",
+                title = "orion - [米津玄師 / 요네즈 켄시] ㅣ아카네 리제(Akane Lize) 【COVER】",
+                type = SongType.COVER,
+                members = listOf(lize),
+            ),
+        )
+
+        assertEquals("친애하는 소년이여 (拝啓、少年よ / Hump Back)", slashInParentheses.title)
+        assertEquals("텐코 시부키", slashInParentheses.subtitle)
+        assertEquals("Mrs. GREEN APPLE - 춘수(春愁)", pipeOriginalArtist.title)
+        assertEquals("시라유키 히나", pipeOriginalArtist.subtitle)
+        assertEquals("orion - [米津玄師 / 요네즈 켄시]", koreanPipe.title)
+        assertEquals("아카네 리제", koreanPipe.subtitle)
+    }
+
+    @Test
+    fun songDisplayTextCompactsDbCoverGenerationGroupPattern() {
+        val catalogMembers = listOf(
+            songMember("neneko-mashiro", "네네코 마시로", "gen2", generationName = "2기생", unitName = "Universe"),
+            songMember("shirayuki-hina", "시라유키 히나", "gen2", generationName = "2기생", unitName = "Universe"),
+            songMember("arahashi-tabi", "아라하시 타비", "gen2", generationName = "2기생", unitName = "Universe"),
+            songMember("akane-lize", "아카네 리제", "gen2", generationName = "2기생", unitName = "Universe"),
+        )
+        val display = MainUiPolicy.songDisplayText(
+            SongCatalogItem(
+                id = "blackhole",
+                youtubeVideoId = "blackhole",
+                title = "[4K] BLACKHOLE - IVE / 유니버스 (Universe) Cover",
+                type = SongType.COVER,
+                members = catalogMembers.map { SongMemberSummary(id = it.id, nameKo = it.koreanName) },
+            ),
+            catalogMembers,
+        )
+
+        assertEquals("BLACKHOLE - IVE", display.title)
+        assertEquals("Universe (2기생)", display.subtitle)
+    }
+
+    @Test
+    fun songDisplayTextParsesOriginalTitleFormats() {
+        val member = SongMemberSummary(id = "ayatsuno-yuni", nameKo = "아야츠노 유니")
+
+        assertEquals(
+            "Stellar Light",
+            MainUiPolicy.songDisplayText(
+                SongCatalogItem(
+                    id = "original",
+                    youtubeVideoId = "original",
+                    title = "아야츠노 유니 | Stellar Light",
+                    type = SongType.ORIGINAL,
+                    members = listOf(member),
+                ),
+            ).title,
+        )
+        assertEquals(
+            "Stellar Light",
+            MainUiPolicy.songDisplayText(
+                SongCatalogItem(
+                    id = "quoted",
+                    youtubeVideoId = "quoted",
+                    title = "아야츠노 유니 | 'Stellar Light'",
+                    type = SongType.ORIGINAL,
+                    members = listOf(member),
+                ),
+            ).title,
+        )
+        assertEquals(
+            "Stellar Light",
+            MainUiPolicy.songDisplayText(
+                SongCatalogItem(
+                    id = "music-video",
+                    youtubeVideoId = "music-video",
+                    title = "아야츠노 유니 | 'Stellar Light' Music Video",
+                    type = SongType.ORIGINAL,
+                    members = listOf(member),
+                ),
+            ).title,
+        )
+    }
+
+    @Test
+    fun songDisplayTextParsesDbOriginalTitleFormats() {
+        val yuni = SongMemberSummary(id = "ayatsuno-yuni", nameKo = "아야츠노 유니")
+        val quotedMusicVideo = MainUiPolicy.songDisplayText(
+            SongCatalogItem(
+                id = "bbijilge",
+                youtubeVideoId = "bbijilge",
+                title = "아야츠노 유니 ( Ayatsuno Yuni ) | ‘삐질게 (BBiJilGe)’ Music Video",
+                type = SongType.ORIGINAL,
+                members = listOf(yuni),
+            ),
+        )
+        val noPipeQuoted = MainUiPolicy.songDisplayText(
+            SongCatalogItem(
+                id = "milky-way",
+                youtubeVideoId = "milky-way",
+                title = "STELLIVE (스텔라이브) ‘Milky Way’ Music Video",
+                type = SongType.ORIGINAL,
+                members = emptyList(),
+            ),
+        )
+        val iSeparatorQuoted = MainUiPolicy.songDisplayText(
+            SongCatalogItem(
+                id = "star-trail",
+                youtubeVideoId = "star-trail",
+                title = "스텔라이브 (StelLive) I 'STAR TRAIL (스타트레일)'",
+                type = SongType.ORIGINAL,
+                members = emptyList(),
+            ),
+        )
+
+        assertEquals("삐질게 (BBiJilGe)", quotedMusicVideo.title)
+        assertEquals("아야츠노 유니", quotedMusicVideo.subtitle)
+        assertEquals("Milky Way", noPipeQuoted.title)
+        assertEquals("스텔라이브", noPipeQuoted.subtitle)
+        assertEquals("STAR TRAIL (스타트레일)", iSeparatorQuoted.title)
+        assertEquals("스텔라이브", iSeparatorQuoted.subtitle)
+    }
+
+    @Test
+    fun songDisplayTextAddsExternalCollaboratorsFromTitleArtistSegment() {
+        val display = MainUiPolicy.songDisplayText(
+            SongCatalogItem(
+                id = "collab",
+                youtubeVideoId = "collab",
+                title = "Stellar Light | 아야츠노 유니 & 외부 보컬 Cover",
+                type = SongType.COVER,
+                members = listOf(SongMemberSummary(id = "ayatsuno-yuni", nameKo = "아야츠노 유니")),
+            ),
+        )
+
+        assertEquals("Stellar Light", display.title)
+        assertEquals("아야츠노 유니 · 외부 보컬", display.subtitle)
+    }
+
+    @Test
+    fun songDisplayTextAddsExternalCollaboratorFromDbCoverPerformerSegment() {
+        val display = MainUiPolicy.songDisplayText(
+            SongCatalogItem(
+                id = "pop-stars",
+                youtubeVideoId = "pop-stars",
+                title = "[4K] POP/STARS / Nerissa Ravencroft(네리사 레이븐크로프트) x 아오쿠모 린(Aokumo Rin) Cover",
+                type = SongType.COVER,
+                members = listOf(SongMemberSummary(id = "aokumo-rin", nameKo = "아오쿠모 린")),
+            ),
+        )
+
+        assertEquals("POP/STARS", display.title)
+        assertEquals("아오쿠모 린 · Nerissa Ravencroft(네리사 레이븐크로프트)", display.subtitle)
+    }
+
+    @Test
+    fun songDisplayTextCompactsFullGenerationGroupOnly() {
+        val catalogMembers = listOf(
+            songMember("member-a", "멤버 A", "gen2", generationName = "2기생", unitName = "Universe"),
+            songMember("member-b", "멤버 B", "gen2", generationName = "2기생", unitName = "Universe"),
+            songMember("member-c", "멤버 C", "gen3", generationName = "3기생", unitName = "Cliche"),
+        )
+        val fullGroup = SongCatalogItem(
+            id = "group",
+            youtubeVideoId = "group",
+            title = "Universe | 'Stellar Light' Music Video",
+            type = SongType.ORIGINAL,
+            members = listOf(
+                SongMemberSummary(id = "member-a", nameKo = "멤버 A"),
+                SongMemberSummary(id = "member-b", nameKo = "멤버 B"),
+            ),
+        )
+        val partialGroup = fullGroup.copy(
+            id = "partial",
+            youtubeVideoId = "partial",
+            members = listOf(SongMemberSummary(id = "member-a", nameKo = "멤버 A")),
+        )
+
+        assertEquals("Universe (2기생)", MainUiPolicy.songDisplayText(fullGroup, catalogMembers).subtitle)
+        assertEquals("멤버 A", MainUiPolicy.songDisplayText(partialGroup, catalogMembers).subtitle)
+    }
+
+    @Test
+    fun songDisplayTextUsesStelliveGroupNameAsIs() {
+        val display = MainUiPolicy.songDisplayText(
+            SongCatalogItem(
+                id = "stellive",
+                youtubeVideoId = "stellive",
+                title = "스텔라이브 | 'Stellar Light' Music Video",
+                type = SongType.ORIGINAL,
+                members = emptyList(),
+            ),
+        )
+
+        assertEquals("Stellar Light", display.title)
+        assertEquals("스텔라이브", display.subtitle)
+    }
+
+    @Test
+    fun songDisplayTextDeduplicatesRepeatedParsedTitle() {
+        val display = MainUiPolicy.songDisplayText(
+            SongCatalogItem(
+                id = "repeated",
+                youtubeVideoId = "repeated",
+                title = "Stellar Light Stellar Light | 아야츠노 유니 Cover",
+                type = SongType.COVER,
+                members = listOf(SongMemberSummary(id = "ayatsuno-yuni", nameKo = "아야츠노 유니")),
+            ),
+        )
+
+        assertEquals("Stellar Light", display.title)
+    }
+
+    @Test
+    fun songMatchesQueryUsesParsedTitleAndSubtitle() {
+        val song = SongCatalogItem(
+            id = "query",
+            youtubeVideoId = "query",
+            title = "Stellar Light | 아야츠노 유니 & 외부 보컬 Cover",
+            type = SongType.COVER,
+            members = listOf(SongMemberSummary(id = "ayatsuno-yuni", nameKo = "아야츠노 유니")),
+        )
+
+        assertTrue(MainUiPolicy.songMatchesQuery(song, "Stellar Light"))
+        assertTrue(MainUiPolicy.songMatchesQuery(song, "외부 보컬"))
+        assertFalse(MainUiPolicy.songMatchesQuery(song, "Cover"))
     }
 
     @Test
@@ -240,7 +598,7 @@ class SongUiPolicyTest {
     }
 
     @Test
-    fun recentCoverSongsAreNewestFirstAndLimited() {
+    fun recentSongsAreNewestFirstAcrossCoversAndOriginals() {
         val songs = listOf(
             SongCatalogItem("old", "old", "Old", SongType.COVER, publishedAt = Instant.parse("2026-01-01T00:00:00Z")),
             SongCatalogItem("original", "original", "Original", SongType.ORIGINAL, publishedAt = Instant.parse("2026-06-01T00:00:00Z")),
@@ -248,7 +606,7 @@ class SongUiPolicyTest {
             SongCatalogItem("middle", "middle", "Middle", SongType.COVER, publishedAt = Instant.parse("2026-05-01T00:00:00Z")),
         )
 
-        assertEquals(listOf("new", "middle"), MainUiPolicy.recentCoverSongs(songs, limit = 2).map { it.id })
+        assertEquals(listOf("new", "original"), MainUiPolicy.recentSongs(songs, limit = 2).map { it.id })
     }
 
     @Test
@@ -274,15 +632,32 @@ class SongUiPolicyTest {
         name: String,
         generationId: String,
         role: CatalogRole = CatalogRole.MEMBER,
+        generationName: String = generationId,
+        unitName: String = generationId,
     ): HubMember = HubMember(
         id = id,
         koreanName = name,
         englishName = id,
         generationId = generationId,
-        generationName = generationId,
-        unitName = generationId,
+        generationName = generationName,
+        unitName = unitName,
         catalogRole = role,
         activeStatus = ActiveStatus.ACTIVE,
         isPerson = role == CatalogRole.MEMBER,
+    )
+
+    private fun songCatalogItem(
+        id: String,
+        title: String,
+        memberName: String,
+        publishedAt: String?,
+    ): SongCatalogItem = SongCatalogItem(
+        id = id,
+        youtubeVideoId = id,
+        title = title,
+        type = SongType.COVER,
+        publishedAt = publishedAt?.let(Instant::parse) ?: Instant.EPOCH,
+        members = listOf(SongMemberSummary(id = "$id-member", nameKo = memberName)),
+        youtubeUrl = "https://www.youtube.com/watch?v=$id",
     )
 }

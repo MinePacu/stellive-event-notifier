@@ -125,6 +125,7 @@ private var draggingLiveMemberId: String? = null
     private var selectedHistoryMemberFilterId = "all"
 private var selectedSongGenerationId = "all"
 private var selectedSongType = "all"
+private var selectedSongSortId = "publishedAt_desc"
 private var selectedSongQuery = ""
 private var appliedSongQuery = ""
 private var selectedSongPage = 1
@@ -134,8 +135,8 @@ private var pendingSongSearchRender: Runnable? = null
 private var cachedSongItems: List<SongCatalogItem> = emptyList()
 private var cachedSongType: String? = null
 private var songSearchResultsContainer: LinearLayout? = null
-private var homeRecentCoverSongs: List<SongCatalogItem>? = null
-private var isLoadingHomeRecentCoverSongs = false
+private var homeRecentSongs: List<SongCatalogItem>? = null
+private var isLoadingHomeRecentSongs = false
 private var selectedHubEventId: String? = null
     private var goodsEventsDays: List<HubCalendarDay> = emptyList()
     private var goodsEvents: List<HubEvent> = emptyList()
@@ -500,15 +501,15 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 binding.contentList.addView(moreLiveMembersButton())
             }
         }
-        binding.contentList.addView(sectionLabel("최근 커버곡"))
-        when (val recentCovers = homeRecentCoverSongs) {
+        binding.contentList.addView(sectionLabel("최근 곡"))
+        when (val recentSongs = homeRecentSongs) {
             null -> binding.contentList.addView(
-                compactEventCard("불러오는 중", "서버에서 최근 커버곡을 확인하고 있습니다.", listOf("노래"))
+                compactEventCard("불러오는 중", "서버에서 최근 곡을 확인하고 있습니다.", listOf("노래"))
             )
             emptyList<SongCatalogItem>() -> binding.contentList.addView(
-                compactEventCard("최근 커버곡 없음", "등록된 커버곡이 없습니다.", listOf("노래"))
+                compactEventCard("최근 곡 없음", "등록된 곡이 없습니다.", listOf("노래"))
             )
-            else -> recentCovers.forEach { binding.contentList.addView(songCard(it)) }
+            else -> recentSongs.forEach { binding.contentList.addView(songCard(it)) }
         }
         binding.contentList.addView(
             compactEventCard("노래 전체 보기", "커버곡과 오리지널 곡 전체 목록으로 이동합니다.", listOf("전체")).apply {
@@ -517,7 +518,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 setOnClickListener { navigateToRoot(HubScreen.SONGS) }
             }
         )
-        loadHomeRecentCoverSongsIfNeeded()
+        loadHomeRecentSongsIfNeeded()
         binding.contentList.addView(sectionLabel("최근 알림"))
         if (repository.recentHistoryPreview.isEmpty()) {
             binding.contentList.addView(
@@ -569,12 +570,12 @@ private fun startScreen(screenId: String, title: String, role: String) {
         }
     }
 
-    private fun loadHomeRecentCoverSongsIfNeeded() {
-        if (homeRecentCoverSongs != null || isLoadingHomeRecentCoverSongs) return
-        isLoadingHomeRecentCoverSongs = true
+    private fun loadHomeRecentSongsIfNeeded() {
+        if (homeRecentSongs != null || isLoadingHomeRecentSongs) return
+        isLoadingHomeRecentSongs = true
         CoroutineScope(Dispatchers.Main).launch {
-            homeRecentCoverSongs = serverRepository.recentCoverSongs(limit = 5)
-            isLoadingHomeRecentCoverSongs = false
+            homeRecentSongs = serverRepository.recentSongs(limit = 5)
+            isLoadingHomeRecentSongs = false
             if (navigationHistory.currentScreen == HubScreen.HOME) {
                 renderHome()
             }
@@ -880,19 +881,8 @@ private fun renderSongs() {
             title = getString(R.string.songs_title),
             role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
         )
-        bindTopFilters(
-            MainUiPolicy.songTopFilterGroups(selectedSongGenerationId, selectedSongType),
-        ) { groupId, optionId ->
-            when (groupId) {
-                "generation" -> selectedSongGenerationId = optionId
-                "type" -> {
-                    selectedSongType = optionId
-                    cachedSongType = null
-                }
-            }
-            selectedSongPage = 1
-            renderSongs()
-        }
+        clearTopFilters()
+        binding.contentList.addView(songFilterPanel())
         binding.contentList.addView(serverStatusStrip())
         binding.contentList.addView(noticeCard("불러오는 중 · 서버에서 노래 목록을 가져오고 있습니다."))
 
@@ -905,12 +895,16 @@ private fun renderSongs() {
                     cachedSongType = selectedSongType
                 }
             }
-            val memberGenerationById = (serverMembers ?: repository.members).associate { it.id to it.generationId }
-            val visibleSongs = songItems.filter { song ->
-                MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
-                    MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
-                    MainUiPolicy.songMatchesQuery(song, selectedSongQuery)
-            }
+            val songCatalogMembers = serverMembers ?: repository.members
+            val memberGenerationById = songCatalogMembers.associate { it.id to it.generationId }
+            val visibleSongs = MainUiPolicy.sortSongs(
+                songItems.filter { song ->
+                    MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
+                        MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
+                        MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers)
+                },
+                selectedSongSortId,
+            )
             val safePage = MainUiPolicy.coerceSongPage(selectedSongPage, visibleSongs.size)
             selectedSongPage = safePage
             val pagedSongs = MainUiPolicy.songPageItems(visibleSongs, safePage)
@@ -920,26 +914,14 @@ private fun renderSongs() {
                 title = getString(R.string.songs_title),
                 role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
             )
-            bindTopFilters(
-                MainUiPolicy.songTopFilterGroups(selectedSongGenerationId, selectedSongType),
-            ) { groupId, optionId ->
-                when (groupId) {
-                    "generation" -> selectedSongGenerationId = optionId
-                    "type" -> {
-                        selectedSongType = optionId
-                        cachedSongType = null
-                    }
-                }
-                selectedSongPage = 1
-                renderSongs()
-            }
+            clearTopFilters()
+            binding.contentList.addView(songFilterPanel())
             binding.contentList.addView(serverStatusStrip())
-            binding.contentList.addView(songMemberFilterCard(serverMembers ?: repository.members, visibleSongs.size))
             if (visibleSongs.isEmpty()) {
                 binding.contentList.addView(noticeCard("표시할 노래가 없습니다. 필터를 바꾸거나 나중에 다시 확인해 주세요."))
             } else {
                 pagedSongs.forEach { song ->
-                    binding.contentList.addView(songCard(song))
+                    binding.contentList.addView(songCard(song, songCatalogMembers))
                 }
                 if (MainUiPolicy.songPageCount(visibleSongs.size) > 1) {
                     binding.contentList.addView(songPageControl(visibleSongs.size))
@@ -967,16 +949,20 @@ private fun renderSongs() {
         val container = songSearchResultsContainer ?: return
         container.removeAllViews()
         val renderItems: (List<SongCatalogItem>) -> Unit = { items ->
-            val memberGenerationById = (serverMembers ?: repository.members).associate { it.id to it.generationId }
-            val visibleSongs = items.filter { song ->
-                MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
-                    MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
-                    MainUiPolicy.songMatchesQuery(song, selectedSongQuery)
-            }
+            val songCatalogMembers = serverMembers ?: repository.members
+            val memberGenerationById = songCatalogMembers.associate { it.id to it.generationId }
+            val visibleSongs = MainUiPolicy.sortSongs(
+                items.filter { song ->
+                    MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
+                        MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
+                        MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers)
+                },
+                selectedSongSortId,
+            )
             if (visibleSongs.isEmpty()) {
                 container.addView(noticeCard("검색 결과가 없습니다."))
             } else {
-                visibleSongs.forEach { container.addView(songCard(it)) }
+                visibleSongs.forEach { container.addView(songCard(it, songCatalogMembers)) }
             }
         }
         if (cachedSongType == selectedSongType && cachedSongItems.isNotEmpty()) {
@@ -997,6 +983,129 @@ private fun renderSongs() {
 private fun setSelectedSongMember(memberId: String) {
 selectedSongMemberId = memberId
 selectedSongPage = 1
+}
+
+private fun songFilterPanel(): MaterialCardView =
+    baseCard(HubCardStyle.COMPACT).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            bottomMargin = dp(12)
+        }
+        val members = serverMembers ?: repository.members
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(10))
+            addView(songSegmentedRow(MainUiPolicy.songGenerationFilters(), selectedSongGenerationId) { optionId ->
+                selectedSongGenerationId = optionId
+                selectedSongPage = 1
+                renderSongs()
+            }.apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
+                }
+            })
+            addView(divider())
+            addView(songSegmentedRow(MainUiPolicy.songTypeFilters(), selectedSongType) { optionId ->
+                selectedSongType = optionId
+                cachedSongType = null
+                selectedSongPage = 1
+                renderSongs()
+            }.apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    topMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
+                    bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
+                }
+            })
+            addView(divider())
+            addView(songSelectorRow("정렬", MainUiPolicy.songSortLabel(selectedSongSortId), accentValue = true) {
+                showSongSortDialog()
+            })
+            addView(divider())
+            addView(songSelectorRow("멤버", MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberId), accentValue = false) {
+                navigateTo(HubScreen.SONG_MEMBER_FILTER, addToBackStack = true)
+            })
+        })
+    }
+
+private fun songSegmentedRow(
+    filters: List<dev.stellive.hub.feature.home.SongFilterOption>,
+    selectedId: String,
+    onSelected: (String) -> Unit,
+): LinearLayout =
+    LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        weightSum = filters.size.toFloat()
+        filters.forEachIndexed { index, filter ->
+            addView(TextView(context).apply {
+                text = filter.label
+                gravity = Gravity.CENTER
+                maxLines = 1
+                setTextColor(color(if (filter.id == selectedId) R.color.hub_text else R.color.hub_text_muted))
+                textSize = 13f
+                typeface = if (filter.id == selectedId) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                background = rounded(
+                    fill = color(if (filter.id == selectedId) R.color.hub_card_surface_compact else R.color.hub_surface),
+                    radius = dp(18),
+                    stroke = if (filter.id == selectedId) color(R.color.hub_line) else Color.TRANSPARENT,
+                )
+                setPadding(dp(8), dp(8), dp(8), dp(8))
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { onSelected(filter.id) }
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (index < filters.lastIndex) marginEnd = dp(6)
+            })
+        }
+    }
+
+private fun songSelectorRow(
+    label: String,
+    value: String,
+    accentValue: Boolean,
+    onClick: () -> Unit,
+): LinearLayout =
+    LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(3), dp(9), dp(3), dp(9))
+        isClickable = true
+        isFocusable = true
+        setOnClickListener { onClick() }
+        addView(TextView(context).apply {
+            text = label
+            setTextColor(color(R.color.hub_text))
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        addView(TextView(context).apply {
+            text = "$value ›"
+            setTextColor(if (accentValue) Color.rgb(74, 144, 226) else color(R.color.hub_text))
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+        })
+    }
+
+private fun showSongSortDialog() {
+    val options = MainUiPolicy.songSortOptions()
+    val selectedIndex = options.indexOfFirst { it.id == selectedSongSortId }.coerceAtLeast(0)
+    AlertDialog.Builder(this)
+        .setTitle("정렬")
+        .setSingleChoiceItems(options.map { it.label }.toTypedArray(), selectedIndex) { dialog, which ->
+            selectedSongSortId = options[which].id
+            selectedSongPage = 1
+            dialog.dismiss()
+            renderSongs()
+        }
+        .setNegativeButton("취소", null)
+        .show()
 }
 
 private fun songSearchCard(): MaterialCardView =
@@ -1056,6 +1165,7 @@ private fun scheduleSongSearchRender(rawQuery: String) {
             }
             addView(songFilterRow(MainUiPolicy.songGenerationFilters(), selectedSongGenerationId) { selectedSongGenerationId = it })
             addView(songFilterRow(MainUiPolicy.songTypeFilters(), selectedSongType) { selectedSongType = it })
+            addView(songFilterRow(MainUiPolicy.songSortOptions(), selectedSongSortId) { selectedSongSortId = it })
         }
 
 private fun songMemberFilterCard(members: List<HubMember>, visibleCount: Int): MaterialCardView =
@@ -1158,8 +1268,9 @@ private fun songFilterRow(
             })
         }
 
-    private fun songCard(song: SongCatalogItem): MaterialCardView =
+    private fun songCard(song: SongCatalogItem, catalogMembers: List<HubMember> = serverMembers ?: repository.members): MaterialCardView =
         baseCard(HubCardStyle.INTERACTIVE).apply {
+            val displayText = MainUiPolicy.songDisplayText(song, catalogMembers)
             val externalUrl = MainUiPolicy.songExternalUrl(song.youtubeUrl)
             isClickable = externalUrl != null
             isFocusable = externalUrl != null
@@ -1177,16 +1288,24 @@ private fun songFilterRow(
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
             content.addView(TextView(context).apply {
-                text = song.title
+                text = displayText.title
                 setTextColor(color(R.color.hub_text))
                 textSize = 15f
                 typeface = Typeface.DEFAULT_BOLD
         })
         content.addView(TextView(context).apply {
-            text = "${MainUiPolicy.songMemberDisplayText(song)} · ${song.type.displayName}"
+            text = displayText.subtitle
             setTextColor(color(R.color.hub_text_muted))
                 textSize = 12f
                 setPadding(0, dp(5), 0, 0)
+            })
+            content.addView(rowChip(song.type.displayName).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    topMargin = dp(7)
+                }
             })
             MainUiPolicy.songPremiereStatusLabel(song)?.let { label ->
                 content.addView(rowChip(label).apply {

@@ -384,6 +384,37 @@ final class ServerHubStoreTests: XCTestCase {
         await store.refreshHubEvents(filter: "goods")
     }
 
+    func testRefreshRecentSongsRequestsLatestItemsWithoutTypeFilter() async {
+        let store = makeStore { request in
+            XCTAssertEqual(request.url?.path, "/v1/music")
+            let components = URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)
+            let queryItems = components?.queryItems ?? []
+
+            XCTAssertNil(queryItems.first { $0.name == "type" })
+            XCTAssertEqual(queryItems.first(where: { $0.name == "limit" })?.value, "5")
+            XCTAssertEqual(queryItems.first(where: { $0.name == "sort" })?.value, "publishedAt_desc")
+
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "items": [{
+                    "id": "music-1",
+                    "youtubeVideoId": "music-1",
+                    "title": "Original",
+                    "type": "original",
+                    "publishedAt": "2026-06-28T00:00:00.000Z",
+                    "members": [],
+                    "youtubeUrl": "https://www.youtube.com/watch?v=music-1"
+                  }],
+                  "nextCursor": null
+                }
+                """)
+        }
+
+        await store.refreshRecentSongs(limit: 5)
+
+        XCTAssertEqual(store.recentSongs.map(\.id), ["music-1"])
+    }
+
     func testDetail404ReturnsNilWithoutSynthesizingFallbackEvent() async {
         let store = makeStore { request in
             XCTAssertEqual(request.url?.path, "/v1/hub-events/missing")

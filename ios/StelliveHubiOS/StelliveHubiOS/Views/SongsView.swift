@@ -17,6 +17,7 @@ struct SongsView: View {
     @State private var path = NavigationPath()
     @State private var selectedGenerationId = "all"
     @State private var selectedType = "all"
+    @State private var selectedSortId = "publishedAt_desc"
     @State private var selectedMemberId = "all"
     @State private var query = ""
     @State private var selectedPage = 1
@@ -26,15 +27,16 @@ struct SongsView: View {
     }
 
     private var songs: [SongCatalogItem] {
-        serverStore.songs(
+        let filtered = serverStore.songs(
             generationId: "all",
             type: selectedType,
             query: ""
         ).items.filter {
             IOSSongPagePolicy.matchesGeneration($0, selectedGenerationId: selectedGenerationId, memberGenerationById: memberGenerationById) &&
                 IOSSongPagePolicy.matchesMember($0, selectedMemberId: selectedMemberId) &&
-                IOSSongPagePolicy.matchesQuery($0, query: query)
+                IOSSongPagePolicy.matchesQuery($0, query: query, catalogMembers: store.members)
         }
+        return IOSSongPagePolicy.sortedSongs(filtered, sortId: selectedSortId)
     }
 
     private var currentPage: Int {
@@ -101,6 +103,13 @@ struct SongsView: View {
             }
             .pickerStyle(.segmented)
 
+            Picker("정렬", selection: $selectedSortId) {
+                ForEach(IOSSongPagePolicy.sortOptions) { option in
+                    Text(option.label).tag(option.id)
+                }
+            }
+            .pickerStyle(.menu)
+
             NavigationLink {
                 SongMemberFilterView(
                     filters: IOSSongPagePolicy.memberFilters(from: store.members),
@@ -131,7 +140,7 @@ struct SongsView: View {
                             .foregroundStyle(.secondary)
                     } else {
                     ForEach(pagedSongs) { song in
-                        SongRow(song: song)
+                        SongRow(song: song, catalogMembers: store.members)
                             .listRowInsets(IOSSongPagePolicy.songRowInsets)
                             .listRowSeparator(.hidden)
                     }
@@ -148,6 +157,7 @@ struct SongsView: View {
                 .settingsToolbar(path: $path)
                 .onChange(of: selectedGenerationId) { _ in selectedPage = 1 }
                 .onChange(of: selectedType) { _ in selectedPage = 1 }
+                .onChange(of: selectedSortId) { _ in selectedPage = 1 }
                 .onChange(of: selectedMemberId) { _ in selectedPage = 1 }
                 .onChange(of: query) { _ in selectedPage = 1 }
                 .onChange(of: selectedPage) { _ in
@@ -201,23 +211,35 @@ struct SongsView: View {
 
 struct SongRow: View {
     let song: SongCatalogItem
+    let catalogMembers: [HubMember]
 
     var body: some View {
+        let displayText = IOSSongPagePolicy.displayText(for: song, catalogMembers: catalogMembers)
         Link(destination: URL(string: song.youtubeUrl) ?? URL(string: "https://www.youtube.com")!) {
             HStack(alignment: .top, spacing: 12) {
                     SongThumbnailView(urls: IOSSongPagePolicy.thumbnailUrlCandidates(for: song))
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(song.title)
+                    Text(displayText.title)
                         .font(.headline)
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                         .minimumScaleFactor(0.86)
 
-                    Text([IOSSongPagePolicy.memberDisplayText(song), song.type.displayName].joined(separator: " · "))
+                    Text(displayText.subtitle)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+
+                    Text(song.type.displayName)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color(.tertiarySystemGroupedBackground))
+                        )
 
                     if let premiereLabel = IOSSongPagePolicy.premiereStatusLabel(for: song) {
                         Text(premiereLabel)
