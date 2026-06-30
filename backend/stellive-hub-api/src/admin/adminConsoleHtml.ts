@@ -59,7 +59,7 @@ export function renderAdminConsoleHtml(): string {
         transform: translateX(-50%) translateY(-2px);
       }
     :root {
-      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: ui-sans-serif, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
       background: var(--admin-bg);
       color: var(--admin-text);
     }
@@ -69,8 +69,198 @@ export function renderAdminConsoleHtml(): string {
     body {
       margin: 0;
       min-height: 100vh;
-      background: var(--admin-bg);
+      background:
+        linear-gradient(180deg, rgba(18, 21, 18, 0.98), var(--admin-bg)),
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 80px);
       color: var(--admin-text);
+    }
+    .admin-app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 236px minmax(0, 1fr);
+    }
+    .admin-nav {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 18px 14px;
+      border-right: 1px solid var(--admin-border);
+      background: color-mix(in srgb, var(--admin-surface) 92%, black);
+    }
+    .admin-nav-title {
+      margin: 0 0 18px;
+      font-size: 16px;
+      font-weight: 800;
+    }
+    .admin-nav a {
+      display: block;
+      padding: 9px 10px;
+      border-radius: 7px;
+      color: var(--admin-muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .admin-nav a:hover,
+    .admin-nav a:focus-visible {
+      background: var(--admin-surface-hover);
+      color: var(--admin-text);
+      outline: 0;
+    }
+    .admin-content {
+      min-width: 0;
+      padding: 20px;
+    }
+    .admin-topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) auto auto;
+      gap: 10px;
+      align-items: end;
+      margin: -20px -20px 18px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--admin-border);
+      background: color-mix(in srgb, var(--admin-surface) 96%, black);
+    }
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .admin-page-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .admin-page-head h1 {
+      margin-top: 2px;
+    }
+    .section {
+      border: 1px solid var(--admin-border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--admin-surface) 96%, black);
+      min-width: 0;
+      overflow: hidden;
+    }
+    .section + .section {
+      margin-top: 14px;
+    }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--admin-border);
+      background: color-mix(in srgb, var(--admin-surface) 92%, black);
+    }
+    .section-head h2 {
+      margin-bottom: 0;
+    }
+    .section-body {
+      padding: 14px;
+    }
+    .split {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 9px;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      background: var(--admin-pill-bg);
+      color: var(--admin-pill-text);
+    }
+    .event-layout {
+      display: grid;
+      grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+    .event-list {
+      display: grid;
+      gap: 8px;
+      max-height: calc(100vh - 250px);
+      overflow: auto;
+    }
+    .event-row {
+      width: 100%;
+      display: grid;
+      gap: 6px;
+      padding: 11px;
+      border: 1px solid var(--admin-soft-border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--admin-surface) 88%, black);
+      text-align: left;
+      cursor: pointer;
+    }
+    .event-row:hover,
+    .event-row.active {
+      border-color: var(--admin-primary);
+      background: var(--admin-surface-hover);
+    }
+    .event-row-main {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .event-title {
+      min-width: 0;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+    .event-meta,
+    .event-updated {
+      color: var(--admin-muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .editor {
+      min-width: 0;
+    }
+    .form-section {
+      border: 1px solid var(--admin-border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--admin-surface) 94%, black);
+      overflow: hidden;
+    }
+    .form-section h3,
+    .form-section-title {
+      margin: 0;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--admin-border);
+      font-size: 14px;
+      font-weight: 800;
+    }
+    .metadata-note {
+      display: grid;
+      gap: 4px;
+      padding: 10px;
+      border: 1px solid var(--admin-soft-border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--admin-surface) 88%, black);
+      color: var(--admin-muted);
+      font-size: 12px;
+    }
+    .metadata-note strong {
+      color: var(--admin-text);
+      font-size: 13px;
+    }
+    .bottom-actions {
+      display: none;
     }
     header {
       border-bottom: 1px solid var(--admin-border);
@@ -373,7 +563,6 @@ export function renderAdminConsoleHtml(): string {
     }
 
     .hub-events-sidebar {
-      grid-column: 1 / -1;
       overflow: hidden;
     }
 
@@ -405,8 +594,6 @@ export function renderAdminConsoleHtml(): string {
     }
 
     .hub-events-list {
-      max-height: 460px;
-      overflow: auto;
       padding: 12px;
     }
 
@@ -417,7 +604,6 @@ export function renderAdminConsoleHtml(): string {
     }
 
     .hub-events-editor {
-      grid-column: 1 / -1;
       padding: 0;
       border: 0;
       background: transparent;
@@ -444,9 +630,62 @@ export function renderAdminConsoleHtml(): string {
     }
 
     @media (max-width: 1040px) {
+      .admin-app {
+        grid-template-columns: 1fr;
+      }
+      .admin-nav {
+        position: sticky;
+        top: 0;
+        z-index: 12;
+        height: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        overflow-x: auto;
+        padding: 10px 12px;
+        border-right: 0;
+        border-bottom: 1px solid var(--admin-border);
+      }
+      .admin-nav-title {
+        flex: 0 0 auto;
+        margin: 0 10px 0 0;
+      }
+      .admin-nav a {
+        flex: 0 0 auto;
+      }
+      .admin-topbar {
+        position: static;
+        margin-top: 0;
+        grid-template-columns: 1fr;
+      }
+      .split,
+      .event-layout {
+        grid-template-columns: 1fr;
+      }
       .hub-events-workspace,
       .hub-events-editor-grid,
       .hub-events-footer {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .admin-content {
+        padding: 12px;
+      }
+      .admin-topbar {
+        margin: -12px -12px 12px;
+        padding: 12px;
+      }
+      .admin-page-head,
+      .section-head {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .event-list {
+        max-height: none;
+      }
+      .event-row {
         grid-template-columns: 1fr;
       }
     }
@@ -468,6 +707,10 @@ export function renderAdminConsoleHtml(): string {
         align-items: stretch;
       }
       main,
+      .admin-app,
+      .admin-content,
+      .admin-topbar,
+      .section,
       .shell,
       .panel,
       .card,
@@ -494,6 +737,29 @@ export function renderAdminConsoleHtml(): string {
         display: flex;
         flex-wrap: wrap;
       }
+      .topbar-actions,
+      .refresh-controls,
+      .action-controls,
+      .hub-events-toolbar {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+      }
+      .bottom-actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 9;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin: 12px -14px -14px;
+        padding: 10px 14px;
+        border-top: 1px solid var(--admin-border);
+        background: color-mix(in srgb, var(--admin-surface) 96%, black);
+      }
+      .bottom-actions button {
+        width: 100%;
+      }
       input,
       select,
       textarea,
@@ -512,23 +778,16 @@ export function renderAdminConsoleHtml(): string {
   </style>
 </head>
 <body>
-  <header>
-    <div class="header-inner">
-      <div class="header-copy">
-        <h1>Stellive Hub Admin</h1>
-        <p class="subtle">Lightweight operational console for internal diagnostics and bounded maintenance actions.</p>
-      </div>
-      <div class="header-actions">
-        ${renderAdminThemeControl()}
-        <form class="logout-form" method="post" action="/admin/logout">
-          <button class="logout-button" type="submit">Log out</button>
-        </form>
-      </div>
-    </div>
-  </header>
-  <main class="stack">
-    <section class="panel stack">
-      <div class="toolbar">
+  <div class="admin-app">
+    <nav class="admin-nav" aria-label="Admin console sections">
+      <div class="admin-nav-title">Stellive Hub Admin</div>
+      <a href="#overview-section">Overview</a>
+      <a href="#operations-section">Operations</a>
+      <a href="#adapters-section">Adapters</a>
+      <a href="#hub-events-section">Hub events</a>
+    </nav>
+    <main class="admin-content stack">
+      <div class="admin-topbar">
         <div class="field">
             <label class="has-tooltip" data-tooltip="Store the internal API bearer token in this browser only." title="Store the internal API bearer token in this browser only." for="internal-token">Internal API bearer token</label>
           <input id="internal-token" type="password" autocomplete="off" spellcheck="false" placeholder="Required for /v1/internal/* requests">
@@ -542,66 +801,103 @@ export function renderAdminConsoleHtml(): string {
           </label>
           <span id="auto-refresh-status" class="auto-refresh-status pill disabled" aria-live="polite">Off</span>
         </div>
-        <div class="action-controls">
-          <button id="drain" type="button">Drain jobs</button>
-          <button id="renew-youtube" type="button">Renew YouTube</button>
-          <button id="poll-chzzk" type="button">Poll CHZZK</button>
-              <button class="has-tooltip" data-tooltip="Recalculate special day calendar status." title="Recalculate special day calendar status." id="recalculate-special-days" type="button">Recalculate special days</button>
+        <div class="topbar-actions">
+          ${renderAdminThemeControl()}
+          <form class="logout-form" method="post" action="/admin/logout">
+            <button class="logout-button" type="submit">Log out</button>
+          </form>
         </div>
       </div>
-      <div id="message" class="message">Enter the internal API token, then refresh.</div>
-    </section>
 
-    <section id="overview" class="grid" aria-live="polite"></section>
-
-    <section class="panel">
-      <h2>Adapters</h2>
-      <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Source</th>
-            <th>Status</th>
-            <th>Reason</th>
-            <th>Last checked</th>
-          </tr>
-        </thead>
-        <tbody id="adapters"></tbody>
-      </table>
+      <div class="admin-page-head">
+        <div>
+          <h1>Stellive Hub Admin</h1>
+          <p class="subtle">Internal diagnostics and bounded maintenance actions.</p>
+        </div>
+        <div id="message" class="message">Enter the internal API token, then refresh.</div>
       </div>
-    </section>
 
-    <section class="panel">
-      <h2>Secrets readiness</h2>
-      <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>State</th>
-          </tr>
-        </thead>
-        <tbody id="secrets"></tbody>
-      </table>
-      </div>
-    </section>
+      <section id="overview-section" class="section">
+        <div class="section-head">
+          <h2>Overview</h2>
+        </div>
+        <div class="section-body">
+          <section id="overview" class="grid" aria-live="polite"></section>
+        </div>
+      </section>
 
-    <section class="panel">
-      <h2>Feature flags</h2>
-      <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Value</th>
-          </tr>
-        </thead>
-        <tbody id="feature-flags"></tbody>
-      </table>
-      </div>
-    </section>
-      <section class="panel stack" data-admin-section="hub-events">
-        <div class="section-heading">
+      <section id="operations-section" class="section">
+        <div class="section-head">
+          <h2>Operations</h2>
+        </div>
+        <div class="section-body split">
+          <div class="panel">
+            <h2>Schedulers and jobs</h2>
+            <div class="action-controls">
+              <button id="drain" type="button">Drain jobs</button>
+              <button id="renew-youtube" type="button">Renew YouTube</button>
+              <button id="poll-chzzk" type="button">Poll CHZZK</button>
+              <button class="has-tooltip" data-tooltip="Recalculate special day calendar status." title="Recalculate special day calendar status." id="recalculate-special-days" type="button">Recalculate special days</button>
+            </div>
+          </div>
+          <div class="panel">
+            <h2>Run state</h2>
+            <p class="subtle">Actions use the active admin session and do not expose stored server secrets.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="adapters-section" class="section">
+        <div class="section-head">
+          <h2>Adapters</h2>
+        </div>
+        <div class="section-body split">
+          <div class="panel">
+            <h2>Adapter health</h2>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Source</th>
+                    <th>Status</th>
+                    <th>Reason</th>
+                    <th>Last checked</th>
+                  </tr>
+                </thead>
+                <tbody id="adapters"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="panel">
+            <h2>Secrets and feature flags</h2>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>State</th>
+                  </tr>
+                </thead>
+                <tbody id="secrets"></tbody>
+              </table>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody id="feature-flags"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="hub-events-section" class="section stack" data-admin-section="hub-events">
+        <div class="section-head">
           <div>
             <h2>Hub events</h2>
             <p class="subtle">Goods and event schedule publishing controls.</p>
@@ -616,9 +912,9 @@ export function renderAdminConsoleHtml(): string {
             <button data-hub-event-action="delete" id="hub-event-delete" type="button">Delete</button>
           </div>
         </div>
-        <div class="hub-events-workspace">
-          <div class="hub-events-sidebar">
-            <div class="events-card">
+        <div class="section-body">
+        <div class="event-layout hub-events-workspace">
+          <div class="hub-events-sidebar events-card">
             <div class="card-body events-card-body">
               <h3>Events</h3>
               <p class="subtle">Filter and select existing Hub events.</p>
@@ -653,21 +949,13 @@ export function renderAdminConsoleHtml(): string {
                 <input id="hub-event-search" type="search" autocomplete="off" spellcheck="false">
               </div>
             </div>
-            <div class="table-scroll">
-            <div class="hub-events-list">
-              <table>
-                <thead><tr><th aria-label="Select"></th><th>Title</th><th>State</th><th>Status</th><th>Updated</th></tr></thead>
-                <tbody id="hub-event-list"></tbody>
-              </table>
+            <div id="hub-event-list" class="event-list hub-events-list" role="list" aria-label="Hub events"></div>
             </div>
-            </div>
-            </div>
-            </div>
-            <div class="hub-events-editor">
+            <div class="editor hub-events-editor">
           <form id="hub-event-form" class="hub-events-editor-grid">
             <input id="hub-event-id" type="hidden">
-            <div class="hub-events-section">
-              <h3 class="hub-events-section-title">Basic information</h3>
+            <div class="form-section hub-events-section">
+              <h3 class="form-section-title hub-events-section-title">Basic information</h3>
               <div class="hub-events-section-body">
                 <div class="field"><label for="hub-event-title">Title</label><input id="hub-event-title" name="title" autocomplete="off"></div>
                 <div class="field"><label for="hub-event-summary">Summary</label><textarea id="hub-event-summary" name="summary" rows="3"></textarea></div>
@@ -680,8 +968,8 @@ export function renderAdminConsoleHtml(): string {
                 <div class="field"><label for="hub-event-member">Member</label><input id="hub-event-member" name="memberId" autocomplete="off" placeholder="akane-lize"><p class="subtle">Example: akane-lize. Leave blank for generation-wide or official events.</p></div>
               </div>
             </div>
-            <div class="hub-events-section">
-              <h3 class="hub-events-section-title">Source and thumbnail</h3>
+            <div class="form-section hub-events-section">
+              <h3 class="form-section-title hub-events-section-title">Source and thumbnail</h3>
               <div class="hub-events-section-body">
                 <div class="hub-events-two">
                   <div class="field"><label for="hub-event-source-type">Source type</label><select id="hub-event-source-type" name="sourceType"><option value="official">Official</option><option value="member">Member</option><option value="official_collab">Official collab</option></select></div>
@@ -689,21 +977,26 @@ export function renderAdminConsoleHtml(): string {
                 </div>
                 <div class="field"><label for="hub-event-source-url">Source URL</label><input id="hub-event-source-url" name="sourceUrl" type="url" autocomplete="off"></div>
                 <div class="field"><label for="hub-event-source-label">Source label</label><input id="hub-event-source-label" name="sourceLabel" autocomplete="off"></div>
+                <div class="metadata-note" aria-label="Image metadata policy">
+                  <strong>No bundled image</strong>
+                  <span>Metadata only. HTTPS references may be reviewed, but no uploads or copied assets are accepted.</span>
+                  <span>No uploads or copied assets.</span>
+                </div>
                 <div class="field"><label for="hub-event-image-url">Image URL</label><input id="hub-event-image-url" name="imageUrl" type="url" autocomplete="off"></div>
                 <div class="field"><label for="hub-event-image-source-label">Image source label</label><input id="hub-event-image-source-label" name="imageSourceLabel" autocomplete="off"></div>
                 <div class="field"><label for="hub-event-image-source-url">Image source URL</label><input id="hub-event-image-source-url" name="imageSourceUrl" type="url" autocomplete="off"></div>
               </div>
             </div>
-            <div class="hub-events-section">
-              <h3 class="hub-events-section-title">Schedule</h3>
+            <div class="form-section hub-events-section">
+              <h3 class="form-section-title hub-events-section-title">Schedule</h3>
               <div class="hub-events-section-body">
                 <div class="field"><label for="hub-event-announced-at">Announced at</label><input id="hub-event-announced-at" name="announcedAt" type="datetime-local"></div>
                 <div class="field"><label for="hub-event-starts-at">Starts at</label><input id="hub-event-starts-at" name="startsAt" type="datetime-local"></div>
                 <div class="field"><label for="hub-event-ends-at">Ends at</label><input id="hub-event-ends-at" name="endsAt" type="datetime-local"></div>
               </div>
             </div>
-            <div class="hub-events-section">
-              <h3 class="hub-events-section-title">Links and venue</h3>
+            <div class="form-section hub-events-section">
+              <h3 class="form-section-title hub-events-section-title">Links and venue</h3>
               <div class="hub-events-section-body">
                 <div class="field"><label for="hub-event-purchase-url">Purchase URL</label><input id="hub-event-purchase-url" name="purchaseUrl" type="url" autocomplete="off"></div>
                 <div class="field"><label for="hub-event-ticket-url">Ticket URL</label><input id="hub-event-ticket-url" name="ticketUrl" type="url" autocomplete="off"></div>
@@ -715,12 +1008,19 @@ export function renderAdminConsoleHtml(): string {
           </form>
           </div>
         </div>
+        <div class="bottom-actions" aria-label="Hub event mobile actions">
+          <button type="button" data-mobile-hub-event-action="validate">Validate</button>
+          <button type="button" data-mobile-hub-event-action="save-draft">Save draft</button>
+          <button type="button" data-mobile-hub-event-action="delete">Delete</button>
+        </div>
         <div class="hub-events-footer">
           <div class="hub-events-section panel validation-panel"><h3>Validation</h3><ul id="hub-event-validation" class="message-list"></ul></div>
           <div class="hub-events-section panel audit-log-panel"><h3>Audit log</h3><ul id="hub-event-audit-log" class="message-list"></ul></div>
         </div>
+        </div>
       </section>
     </main>
+  </div>
   ${renderAdminThemeBehaviorScript()}
   <script>
     const endpoints = {
@@ -1156,6 +1456,9 @@ export function renderAdminConsoleHtml(): string {
       hubEventListRoot.querySelectorAll('input[data-hub-event-select="true"]').forEach(function (checkbox) {
         checkbox.checked = checkbox.getAttribute("data-hub-event-id") === selectedHubEventId;
       });
+      hubEventListRoot.querySelectorAll(".event-row").forEach(function (row) {
+        row.classList.toggle("active", row.getAttribute("data-hub-event-id") === selectedHubEventId);
+      });
     }
 
     function collectHubEventInput() {
@@ -1256,22 +1559,51 @@ export function renderAdminConsoleHtml(): string {
     function renderHubEvents(events) {
       hubEventListRoot.replaceChildren();
       if (!events.length) {
-        const row = document.createElement("tr");
-        const cell = document.createElement("td");
-        cell.colSpan = 5;
-        cell.textContent = "No hub events found.";
-        row.appendChild(cell);
-        hubEventListRoot.appendChild(row);
+        const empty = document.createElement("div");
+        empty.className = "empty event-row";
+        empty.textContent = "No hub events found.";
+        hubEventListRoot.appendChild(empty);
         return;
       }
       events.forEach(function (event) {
-        const row = document.createElement("tr");
-        const selectCell = document.createElement("td");
+        const row = document.createElement("div");
+        row.className = "event-row";
+        row.dataset.hubEventId = event.id;
+        row.setAttribute("role", "button");
+        row.tabIndex = 0;
+        if (event.id === selectedHubEventId) {
+          row.classList.add("active");
+        }
+
+        const main = document.createElement("div");
+        main.className = "event-row-main";
+        const title = document.createElement("div");
+        title.className = "event-title";
+        title.textContent = event.title || "Untitled event";
+        const state = createPill(event.publicationState || "draft");
+        state.classList.add("status");
+        main.appendChild(title);
+        main.appendChild(state);
+
+        const meta = document.createElement("div");
+        meta.className = "event-meta";
+        meta.textContent = [
+          event.category,
+          event.generationId,
+          event.memberId,
+          event.status
+        ].filter(Boolean).join(" / ") || "-";
+
+        const updated = document.createElement("div");
+        updated.className = "event-updated";
+        updated.textContent = "Updated " + (formatLastCheckedAt(event.updatedAt) || "-");
+
         const select = document.createElement("input");
         select.type = "checkbox";
         select.dataset.hubEventSelect = "true";
         select.dataset.hubEventId = event.id;
         select.checked = event.id === selectedHubEventId;
+        select.setAttribute("aria-label", "Select " + (event.title || "hub event"));
         select.addEventListener("click", function (clickEvent) {
           clickEvent.stopPropagation();
         });
@@ -1286,17 +1618,22 @@ export function renderAdminConsoleHtml(): string {
             setSelectedHubEventId("");
           }
         });
-        selectCell.appendChild(select);
-        row.appendChild(selectCell);
-        [event.title, event.publicationState, event.status, formatLastCheckedAt(event.updatedAt)].forEach(function (value) {
-          const cell = document.createElement("td");
-          cell.textContent = value || "-";
-          row.appendChild(cell);
-        });
+        row.appendChild(main);
+        row.appendChild(meta);
+        row.appendChild(updated);
+        row.appendChild(select);
         row.addEventListener("click", function () {
           setSelectedHubEventId(event.id);
           bindHubEventForm(event);
           loadHubEventAuditLog(event.id);
+        });
+        row.addEventListener("keydown", function (keyboardEvent) {
+          if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
+            keyboardEvent.preventDefault();
+            setSelectedHubEventId(event.id);
+            bindHubEventForm(event);
+            loadHubEventAuditLog(event.id);
+          }
         });
         hubEventListRoot.appendChild(row);
       });
@@ -1377,6 +1714,20 @@ export function renderAdminConsoleHtml(): string {
     document.getElementById("hub-event-cancel").addEventListener("click", function () { return runHubEventUiAction("Cancel hub event", function () { return runHubEventAction("cancel"); }); });
     document.getElementById("hub-event-deactivate").addEventListener("click", function () { return runHubEventUiAction("Deactivate hub event", function () { return runHubEventAction("deactivate"); }); });
     document.getElementById("hub-event-delete").addEventListener("click", function () { return runHubEventUiAction("Delete hub event", deleteHubEvent); });
+    document.querySelectorAll("[data-mobile-hub-event-action]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        const action = button.getAttribute("data-mobile-hub-event-action");
+        if (action === "validate") {
+          return runHubEventUiAction("Validate hub event", function () { return validateHubEvent("publish"); });
+        }
+        if (action === "save-draft") {
+          return runHubEventUiAction("Save hub event", saveHubEventDraft);
+        }
+        if (action === "delete") {
+          return runHubEventUiAction("Delete hub event", deleteHubEvent);
+        }
+      });
+    });
 
     document.getElementById("refresh").addEventListener("click", function () {
       return refreshDashboard({ source: "manual" });

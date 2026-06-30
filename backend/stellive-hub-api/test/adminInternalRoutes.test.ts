@@ -71,6 +71,21 @@ function expectAdminThemeSupport(html: string) {
 }
 
 function expectHubEventAdminConsoleSupport(html: string) {
+  expect(html).toContain('class="admin-app"');
+  expect(html).toContain('class="admin-nav"');
+  expect(html).toContain('class="admin-content');
+  expect(html).toContain('class="admin-topbar"');
+  expect(html).toContain('class="section"');
+  expect(html).toContain('class="section-head"');
+  expect(html).toContain('class="section-body"');
+  expect(html).toContain('class="section-body split"');
+  expect(html).toContain('class="event-layout');
+  expect(html).toContain('class="event-list');
+  expect(html).toContain('className = "event-row"');
+  expect(html).toContain('class="editor');
+  expect(html).toContain('class="form-section');
+  expect(html).toContain('class="bottom-actions"');
+  expect(html).toContain('@media (max-width: 760px)');
   expect(html).toContain('data-admin-section="hub-events"');
   expect(html).toContain('data-hub-event-action="save-draft"');
   expect(html).toContain('data-hub-event-action="publish"');
@@ -78,6 +93,9 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain('data-hub-event-action="deactivate"');
   expect(html).toContain('data-hub-event-action="delete"');
   expect(html).not.toContain('type="file"');
+  expect(html).toContain("No bundled image");
+  expect(html).toContain("Metadata only");
+  expect(html).toContain("No uploads or copied assets");
   expect(html).toContain('id="hub-event-image-url"');
   expect(html).toContain('id="hub-event-image-policy-state"');
   expect(html).not.toContain('name="logoUrl"');
