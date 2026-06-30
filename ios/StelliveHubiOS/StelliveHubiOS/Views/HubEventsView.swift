@@ -67,28 +67,37 @@ struct HubEventsView: View {
                 )
             }
 
-            ForEach(selectedMonthFeedSections) { section in
-                Section(section.title) {
-                    ForEach(section.rows) { row in
-                        if row.entry.entryKind == .hubEvent {
-                            if let event = serverStore.cachedHubEvent(id: row.entry.eventId) {
-                                if HubCalendarDeepLinkPolicy.canNavigateToDetail(row.entry) {
-                                    HubEventNavigationRow(event: event)
-                                } else {
-                                    HubEventRow(event: event)
+            if isInitialHubEventsLoading {
+                Section(selectedMonthFeedTitle) {
+                    LoadingStateRow(
+                        title: "굿즈/행사 불러오는 중",
+                        message: "서버에서 게시된 굿즈/행사 목록과 캘린더를 가져오고 있습니다."
+                    )
+                }
+            } else {
+                ForEach(selectedMonthFeedSections) { section in
+                    Section(section.title) {
+                        ForEach(section.rows) { row in
+                            if row.entry.entryKind == .hubEvent {
+                                if let event = serverStore.cachedHubEvent(id: row.entry.eventId) {
+                                    if HubCalendarDeepLinkPolicy.canNavigateToDetail(row.entry) {
+                                        HubEventNavigationRow(event: event)
+                                    } else {
+                                        HubEventRow(event: event)
+                                    }
                                 }
+                            } else {
+                                HubCalendarRow(entry: row.entry)
                             }
-                        } else {
-                            HubCalendarRow(entry: row.entry)
                         }
                     }
                 }
-            }
 
-            if selectedMonthRenderableFeedRows.isEmpty {
-                Section(selectedMonthFeedTitle) {
-                    Text("선택한 월에 표시할 일정이 없습니다.")
-                        .secondaryNoticeTextStyle()
+                if selectedMonthRenderableFeedRows.isEmpty {
+                    Section(selectedMonthFeedTitle) {
+                        Text("선택한 월에 표시할 일정이 없습니다.")
+                            .secondaryNoticeTextStyle()
+                    }
                 }
             }
 
@@ -107,6 +116,10 @@ struct HubEventsView: View {
         .onChange(of: selectedFilter) { _ in
             Task { await refreshServerHubEvents() }
         }
+    }
+
+    private var isInitialHubEventsLoading: Bool {
+        (serverStore.isRefreshingHubEvents || serverStore.isRefreshingCalendar) && selectedMonthRenderableFeedRows.isEmpty
     }
 
     private func refreshServerHubEvents() async {

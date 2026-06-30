@@ -2,11 +2,13 @@ package dev.stellive.hub
 
 import dev.stellive.hub.core.device.DeviceIdStore
 import dev.stellive.hub.core.network.BootstrapResponseDto
+import dev.stellive.hub.core.network.BootstrapCatalogDto
 import dev.stellive.hub.core.network.HubCalendarResponseDto
 import dev.stellive.hub.core.network.HubEventDto
 import dev.stellive.hub.core.network.HubEventsListResponseDto
 import dev.stellive.hub.core.network.HubNetworkResult
 import dev.stellive.hub.core.network.LiveStatusDto
+import dev.stellive.hub.core.network.MemberDto
 import dev.stellive.hub.core.network.MusicCatalogItemDto
 import dev.stellive.hub.core.network.MusicListResponseDto
 import dev.stellive.hub.core.network.MusicMemberSummaryDto
@@ -51,6 +53,7 @@ class ServerHubRepositoryTest {
         assertEquals(1234, yuni.liveViewerCount)
         assertEquals("https://chzzk.naver.com/live/chzzk-channel-id", yuni.livePlatformUrl)
         assertEquals("https://img.example/yuni.jpg", yuni.channelImageUrl)
+        assertEquals("https://yt.example/yuni.jpg", yuni.profileImageUrl)
         assertEquals("2026-06-11T03:01:00Z", yuni.liveLastCheckedAt.toString())
         val huya = state.members.first { it.id == "sakihane-huya" }
         assertFalse(huya.isLive)
@@ -59,6 +62,8 @@ class ServerHubRepositoryTest {
         assertNull(huya.liveViewerCount)
         assertNull(huya.livePlatformUrl)
         assertNull(huya.liveLastCheckedAt)
+        assertNull(huya.channelImageUrl)
+        assertEquals("https://yt.example/huya.jpg", huya.profileImageUrl)
     }
 
     @Test
@@ -221,20 +226,45 @@ class ServerHubRepositoryTest {
     }
 
     @Test
-    fun recentCoverSongsRequestsOnlyTheLatestRequestedItems() = runTest {
+    fun recentSongsRequestsLatestItemsWithoutTypeFilter() = runTest {
         val remote = RecordingRemoteDataSource()
+        fun musicResponse(vararg songs: Pair<String, String>, nextCursor: String?): MusicListResponseDto =
+            MusicListResponseDto(
+                items = songs.map { (videoId, publishedAt) ->
+                    MusicCatalogItemDto(
+                        id = videoId,
+                        youtubeVideoId = videoId,
+                        title = "Cover $videoId",
+                        type = "cover",
+                        publishedAt = publishedAt,
+                        members = emptyList(),
+                        youtubeUrl = "https://www.youtube.com/watch?v=$videoId",
+                    )
+                },
+                nextCursor = nextCursor,
+            )
+        remote.musicResponses += musicResponse(
+            "old" to "2026-04-01T00:00:00.000Z",
+            nextCursor = "cursor-2",
+        )
+        remote.musicResponses += musicResponse(
+            "newest" to "2026-06-29T00:00:00.000Z",
+            "middle" to "2026-06-28T00:00:00.000Z",
+            nextCursor = null,
+        )
         val repository = ServerHubRepository(
             remoteDataSource = remote,
             deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
             fallback = MockHubRepository(),
         )
 
-        val songs = repository.recentCoverSongs(limit = 5)
+        val songs = repository.recentSongs(limit = 5)
 
-        assertEquals("cover", remote.lastMusicType)
-        assertEquals(5, remote.musicLimits.single())
+        assertNull(remote.lastMusicType)
+        assertEquals(listOf(null, "cursor-2"), remote.musicCursors)
+        assertEquals(listOf(100, 100), remote.musicLimits)
         assertEquals("publishedAt_desc", remote.lastMusicSort)
-        assertEquals(1, songs.size)
+        assertEquals(listOf("newest", "middle", "old"), songs.map { it.id })
     }
 
     @Test
@@ -286,6 +316,35 @@ class ServerHubRepositoryTest {
                         xDisabledReason = "x_notifications_dropped_for_mvp",
                         hubCalendarEnabled = true,
                     foregroundRealtimeEnabled = false,
+                ),
+                catalog = BootstrapCatalogDto(
+                    generations = emptyList(),
+                    members = listOf(
+                        MemberDto(
+                            id = "ayatsuno-yuni",
+                            koreanName = "아야츠노 유니",
+                            englishName = "Ayatsuno Yuni",
+                            generationId = "gen1",
+                            generationName = "1기생",
+                            unitName = "Everys",
+                            catalogRole = "member",
+                            activeStatus = "active",
+                            isPerson = true,
+                            profileImageUrl = "https://yt.example/yuni.jpg",
+                        ),
+                        MemberDto(
+                            id = "sakihane-huya",
+                            koreanName = "사키하네 후야",
+                            englishName = "Sakihane Huya",
+                            generationId = "gen1",
+                            generationName = "1기생",
+                            unitName = "Everys",
+                            catalogRole = "member",
+                            activeStatus = "active",
+                            isPerson = true,
+                            profileImageUrl = "https://yt.example/huya.jpg",
+                        ),
+                    ),
                 ),
                 device = null,
                 liveStatus = listOf(

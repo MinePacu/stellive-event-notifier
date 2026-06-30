@@ -15,6 +15,7 @@ import registerSongRoutes from "./songRoutes.js";
 import type { DeliveryAttempt, HubCalendarSpecialDay, PlatformEvent, UserNotificationPreference } from "../types.js";
 import type { BootstrapResponse, MobilePlatform } from "../../../../shared/schemas/mobileApi.js";
 import type { SongRepository } from "../repositories/songRepository.js";
+import type { Member } from "../types.js";
 
 const catalog = new CatalogService();
 const defaultHubEvents = new HubEventService(catalog);
@@ -45,6 +46,9 @@ export interface AppRouteDependencies {
       locale?: string;
       timezone?: string;
     }): Promise<BootstrapResponse>;
+  };
+  memberProfileImages?: {
+    hydrateMembers(members: Member[]): Promise<Member[]>;
   };
   devices?: {
     getDevice?(deviceId: string): Promise<{ deviceId: string; tokenStatus: string | undefined } | undefined>;
@@ -127,6 +131,10 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
     fallbackPreferences: preferences,
     fallbackBootstrap: async (query) => {
       const deviceId = String(query.deviceId ?? "dev-device");
+      const members = catalog.getMembers();
+      const hydratedMembers = options.dependencies?.memberProfileImages
+        ? await options.dependencies.memberProfileImages.hydrateMembers(members)
+        : members;
       return {
         config: {
           unofficialProject: true,
@@ -146,7 +154,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
         },
         hubEventsSummary: await hubEvents.summary(),
         generations: catalog.getGenerations(),
-        members: catalog.getMembers(),
+        members: hydratedMembers,
         preferences: preferences.get(deviceId) ?? [],
         liveStatus: await liveStatusRepository.listDiagnostics(50).catch(() => []),
         realtime: realtime.status(),
@@ -155,11 +163,19 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
   });
 
   app.get("/v1/generations", async () => catalog.getGenerations());
-  app.get("/v1/members", async () => catalog.getMembers());
+  app.get("/v1/members", async () => {
+    const members = catalog.getMembers();
+    return options.dependencies?.memberProfileImages
+      ? options.dependencies.memberProfileImages.hydrateMembers(members)
+      : members;
+  });
   app.get("/v1/members/:id", async (request, reply) => {
     const member = catalog.getMember((request.params as { id: string }).id);
     if (!member) return reply.notFound("member not found");
-    return member;
+    const hydratedMembers = options.dependencies?.memberProfileImages
+      ? await options.dependencies.memberProfileImages.hydrateMembers([member])
+      : [member];
+    return hydratedMembers[0];
   });
 
   app.get("/v1/preferences/resolved", async (request) => {

@@ -3,6 +3,7 @@ package dev.stellive.hub.feature.home
 import dev.stellive.hub.core.model.NotificationEventType
 import dev.stellive.hub.core.model.NotificationPlatform
 import dev.stellive.hub.core.model.NotificationSettingState
+import dev.stellive.hub.core.model.ActiveStatus
 import dev.stellive.hub.core.model.CatalogRole
 import dev.stellive.hub.core.model.HubMember
 import dev.stellive.hub.core.model.HubEventCategory
@@ -13,6 +14,7 @@ import dev.stellive.hub.core.model.SongType
 import kotlin.math.roundToInt
 import dev.stellive.hub.ui.components.TopFilterGroup
 import dev.stellive.hub.ui.components.TopFilterOption
+import java.text.Collator
 import java.text.NumberFormat
 import java.time.Duration
 import java.time.Instant
@@ -41,6 +43,17 @@ data class SongFilterOption(
     val label: String
 )
 
+data class SongDisplayText(
+    val title: String,
+    val subtitle: String,
+)
+
+data class LoadingPresentation(
+    val title: String,
+    val body: String,
+    val chipLabel: String,
+)
+
 data class SettingsHubRow(
     val screenId: String,
     val title: String,
@@ -63,9 +76,13 @@ data class SettingsCardSpacing(
 object MainUiPolicy {
     const val SONG_PAGE_SIZE = 20
     const val SONG_THUMBNAIL_ASPECT_RATIO = 16f / 9f
+    const val SONG_FILTER_SEGMENT_SPACING_DP = 12
     private val songPremiereZoneId: ZoneId = ZoneId.of("Asia/Seoul")
     private val songPremiereDateTimeFormatter: DateTimeFormatter =
         DateTimeFormatter.ofPattern("M월 d일 HH:mm", Locale.KOREAN).withZone(songPremiereZoneId)
+    private val songTextCollator: Collator = Collator.getInstance(Locale.KOREAN).apply {
+        strength = Collator.PRIMARY
+    }
 
     val settingsCardSpacing = SettingsCardSpacing(
         contentVerticalPaddingDp = 10,
@@ -100,6 +117,7 @@ object MainUiPolicy {
         "live" -> "라이브"
         "songs" -> "노래"
         "song_search" -> "노래 검색"
+        "song_member_filter" -> "노래 멤버 선택"
         "history" -> "기록"
         "settings" -> "설정"
         "settings_delivery" -> "전달 방식"
@@ -117,6 +135,7 @@ object MainUiPolicy {
         "live" -> "방송 상태와 CHZZK 대상 현황"
         "songs" -> "YouTube 업로드 곡 탐색"
         "song_search" -> "제목 또는 멤버"
+        "song_member_filter" -> "노래 목록을 멤버별로 좁혀 봅니다"
         "history" -> "허용된 알림 기록과 정책 제외 항목"
         "settings" -> "알림 대상과 전송 정책"
         "settings_delivery" -> "알림 전달과 제한"
@@ -167,9 +186,17 @@ object MainUiPolicy {
         SongFilterOption("cover", "커버")
     )
 
+    fun songSortOptions(): List<SongFilterOption> = listOf(
+        SongFilterOption("publishedAt_desc", "최신순"),
+        SongFilterOption("publishedAt_asc", "오래된순"),
+        SongFilterOption("title_asc", "제목순"),
+        SongFilterOption("member_asc", "멤버순")
+    )
+
     fun songTopFilterGroups(
         selectedGenerationId: String,
         selectedType: String,
+        selectedSortId: String = "publishedAt_desc",
     ): List<TopFilterGroup> = listOf(
         TopFilterGroup(
             id = "generation",
@@ -180,6 +207,11 @@ object MainUiPolicy {
             id = "type",
             options = songTypeFilters().map { TopFilterOption(it.id, it.label) },
             selectedId = selectedType,
+        ),
+        TopFilterGroup(
+            id = "sort",
+            options = songSortOptions().map { TopFilterOption(it.id, it.label) },
+            selectedId = selectedSortId,
         ),
     )
 
@@ -257,12 +289,12 @@ object MainUiPolicy {
 
     fun normalizedSongQuery(query: String): String = query.trim()
 
-    fun recentCoverSongs(songs: List<SongCatalogItem>, limit: Int = 5): List<SongCatalogItem> =
-        songs.asSequence()
-            .filter { it.type == SongType.COVER }
-            .sortedByDescending { it.publishedAt }
+    fun recentSongs(songs: List<SongCatalogItem>, limit: Int = 5): List<SongCatalogItem> =
+        sortSongs(songs, "publishedAt_desc")
             .take(limit.coerceAtLeast(0))
-            .toList()
+
+    fun songSortLabel(sortId: String): String =
+        songSortOptions().firstOrNull { it.id == sortId }?.label ?: "최신순"
 
     fun serverConnectionLabel(sourceLabel: String): String = when {
         sourceLabel.contains("실패") || sourceLabel.contains("목업") -> "오프라인"
@@ -270,17 +302,287 @@ object MainUiPolicy {
         else -> "서버 연결됨"
     }
 
+    fun homeRecentSongsLoadingPresentation(): LoadingPresentation = LoadingPresentation(
+        title = "최근 곡 확인 중",
+        body = "서버에서 최신 오리지널곡과 커버곡을 불러오고 있습니다.",
+        chipLabel = "노래",
+    )
+
+    fun goodsEventsLoadingPresentation(): LoadingPresentation = LoadingPresentation(
+        title = "굿즈/행사 불러오는 중",
+        body = "서버에서 게시된 굿즈/행사 목록과 캘린더를 가져오고 있습니다.",
+        chipLabel = "굿즈/행사",
+    )
+
+    fun hubEventDetailLoadingPresentation(): LoadingPresentation = LoadingPresentation(
+        title = "상세 정보 불러오는 중",
+        body = "서버에서 선택한 굿즈/행사 상세 정보를 가져오고 있습니다.",
+        chipLabel = "상세",
+    )
+
+    fun songsLoadingPresentation(): LoadingPresentation = LoadingPresentation(
+        title = "노래 목록 불러오는 중",
+        body = "서버 캐시에서 오리지널곡과 커버곡 목록을 가져오고 있습니다.",
+        chipLabel = "노래",
+    )
+
+    fun songSearchLoadingPresentation(): LoadingPresentation = LoadingPresentation(
+        title = "검색 준비 중",
+        body = "검색할 노래 목록을 서버에서 불러오고 있습니다.",
+        chipLabel = "검색",
+    )
+
+    fun songSearchTransitionLoadingPresentation(): LoadingPresentation = LoadingPresentation(
+        title = "노래 검색 여는 중",
+        body = "검색 화면을 준비하고 있습니다.",
+        chipLabel = "검색",
+    )
+
     fun songThumbnailHeightDp(widthDp: Int): Int = (widthDp / SONG_THUMBNAIL_ASPECT_RATIO).roundToInt()
 
-    fun songMemberDisplayText(song: SongCatalogItem): String =
-        song.members
-            .map { it.nameKo.ifBlank { it.nameEn.orEmpty() } }
+    fun songDisplayText(song: SongCatalogItem, catalogMembers: List<HubMember> = emptyList()): SongDisplayText {
+        val parsed = parsedSongTitle(song)
+        return SongDisplayText(
+            title = parsed.title.ifBlank { song.title.trim() },
+            subtitle = songSubtitleDisplayText(song, parsed.artistNames, catalogMembers),
+        )
+    }
+
+    fun songTitleDisplayText(song: SongCatalogItem): String = songDisplayText(song).title
+
+    fun songMemberDisplayText(song: SongCatalogItem, catalogMembers: List<HubMember> = emptyList()): String =
+        songDisplayText(song, catalogMembers).subtitle
+
+    private data class ParsedSongTitle(
+        val title: String,
+        val artistNames: List<String>,
+    )
+
+    private fun parsedSongTitle(song: SongCatalogItem): ParsedSongTitle {
+        val normalizedRawTitle = removeLeadingMediaTags(song.title).trim()
+        return when (song.type) {
+            SongType.COVER -> parsedCoverSongTitle(normalizedRawTitle)
+            SongType.ORIGINAL -> parsedOriginalSongTitle(normalizedRawTitle)
+        }
+    }
+
+    private fun parsedCoverSongTitle(normalizedRawTitle: String): ParsedSongTitle {
+        val delimiter = lastCoverPerformerDelimiter(normalizedRawTitle)
+            ?: return ParsedSongTitle(cleanSongTitle(normalizedRawTitle), emptyList())
+        val left = normalizedRawTitle.substring(0, delimiter.first).trim()
+        val right = normalizedRawTitle.substring(delimiter.first + delimiter.second.length).trim()
+        return ParsedSongTitle(
+            title = cleanSongTitle(left),
+            artistNames = artistNamesFromSegment(right),
+        )
+    }
+
+    private fun parsedOriginalSongTitle(normalizedRawTitle: String): ParsedSongTitle {
+        val quotedTitle = firstQuotedTitle(normalizedRawTitle)
+        val delimiter = lastTopLevelDelimiter(normalizedRawTitle, listOf(" | ", "|"))
+        return when {
+            quotedTitle != null -> ParsedSongTitle(
+                title = cleanSongTitle(quotedTitle),
+                artistNames = delimiter?.let {
+                    artistNamesFromSegment(normalizedRawTitle.substring(0, it.first).trim())
+                }.orEmpty(),
+            )
+            delimiter != null -> {
+                val left = normalizedRawTitle.substring(0, delimiter.first).trim()
+                val right = normalizedRawTitle.substring(delimiter.first + delimiter.second.length).trim()
+                ParsedSongTitle(
+                    title = cleanSongTitle(right),
+                    artistNames = artistNamesFromSegment(left),
+                )
+            }
+            else -> ParsedSongTitle(cleanSongTitle(normalizedRawTitle), emptyList())
+        }
+    }
+
+    private fun lastCoverPerformerDelimiter(value: String): Pair<Int, String>? =
+        topLevelDelimiters(value, listOf("|", "ㅣ", " / "))
+            .asReversed()
+            .firstOrNull { delimiter ->
+                val right = value.substring(delimiter.first + delimiter.second.length).trim()
+                looksLikeCoverPerformerSegment(right)
+            }
+
+    private fun looksLikeCoverPerformerSegment(segment: String): Boolean =
+        Regex("\\b(3D\\s+Live\\s+Cover|Live\\s+Cover|Cover|covered\\s+by)\\b|【\\s*COVER\\s*】|커버", RegexOption.IGNORE_CASE)
+            .containsMatchIn(segment)
+
+    private fun lastTopLevelDelimiter(value: String, delimiters: List<String>): Pair<Int, String>? =
+        topLevelDelimiters(value, delimiters).lastOrNull()
+
+    private fun topLevelDelimiters(value: String, delimiters: List<String>): List<Pair<Int, String>> {
+        val result = mutableListOf<Pair<Int, String>>()
+        var roundDepth = 0
+        var squareDepth = 0
+        var japaneseDepth = 0
+        var index = 0
+        while (index < value.length) {
+            when (value[index]) {
+                '(' -> roundDepth++
+                ')' -> roundDepth = (roundDepth - 1).coerceAtLeast(0)
+                '[' -> squareDepth++
+                ']' -> squareDepth = (squareDepth - 1).coerceAtLeast(0)
+                '【', '「', '『' -> japaneseDepth++
+                '】', '」', '』' -> japaneseDepth = (japaneseDepth - 1).coerceAtLeast(0)
+            }
+            if (roundDepth == 0 && squareDepth == 0 && japaneseDepth == 0) {
+                val delimiter = delimiters.firstOrNull { value.startsWith(it, index) }
+                if (delimiter != null) {
+                    result += index to delimiter
+                    index += delimiter.length
+                    continue
+                }
+            }
+            index++
+        }
+        return result
+    }
+
+    private fun firstQuotedTitle(value: String): String? {
+        val patterns = listOf(
+            Regex("‘([^’]+)’"),
+            Regex("'([^']+)'"),
+            Regex("“([^”]+)”"),
+            Regex("\"([^\"]+)\""),
+        )
+        return patterns.firstNotNullOfOrNull { pattern ->
+            pattern.find(value)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }
+        }
+    }
+
+    private fun cleanSongTitle(value: String): String =
+        deduplicateRepeatedTitle(
+            trimWrappingQuotes(
+                removeMusicVideoSuffix(removeLeadingMediaTags(value)).trim()
+            ).replace(Regex("\\s+"), " ")
+        )
+
+    private fun removeLeadingMediaTags(value: String): String {
+        var result = value.trim()
+        val mediaTag = Regex("^\\[(4K|8K|MV|Official MV|Official Music Video)]\\s*", RegexOption.IGNORE_CASE)
+        while (mediaTag.containsMatchIn(result)) {
+            result = mediaTag.replace(result, "").trim()
+        }
+        return result
+    }
+
+    private fun removeMusicVideoSuffix(value: String): String =
+        Regex("\\s*(Official\\s+)?(Music\\s+Video|MV)\\s*$", RegexOption.IGNORE_CASE)
+            .replace(value, "")
+            .trim()
+
+    private fun trimWrappingQuotes(value: String): String =
+        value.trim().trim('\'', '"', '‘', '’', '“', '”').trim()
+
+    private fun deduplicateRepeatedTitle(value: String): String {
+        val words = value.split(Regex("\\s+")).filter { it.isNotBlank() }
+        if (words.size < 2 || words.size % 2 != 0) return value
+        val midpoint = words.size / 2
+        val left = words.take(midpoint).joinToString(" ")
+        val right = words.drop(midpoint).joinToString(" ")
+        return if (left.equals(right, ignoreCase = true)) left else value
+    }
+
+    private fun artistNamesFromSegment(segment: String): List<String> {
+        val cleaned = trimWrappingQuotes(
+            Regex("\\b(3D\\s+Live\\s+Cover|Live\\s+Cover|Cover|covered\\s+by)\\b|【\\s*COVER\\s*】|커버|\\b불러보았다\\b", RegexOption.IGNORE_CASE)
+                .replace(segment, "")
+                .let(::removeMusicVideoSuffix)
+                .replace(Regex("\\s+"), " ")
+                .trim()
+        )
+        if (cleaned.isBlank()) return emptyList()
+        return cleaned
+            .split(Regex("\\s*(?:&|＆|,|、|/|\\+|×|\\s+[xX]\\s+|\\s+and\\s+)\\s*"))
+            .map { trimWrappingQuotes(it).replace(Regex("\\s+"), " ").trim() }
             .filter { it.isNotBlank() }
-            .distinct()
+            .distinctBy { normalizedNameKey(it) }
+    }
+
+    private fun songSubtitleDisplayText(
+        song: SongCatalogItem,
+        parsedArtistNames: List<String>,
+        catalogMembers: List<HubMember>,
+    ): String {
+        if (parsedArtistNames.any { normalizedNameKey(it) == normalizedNameKey("스텔라이브") }) {
+            return "스텔라이브"
+        }
+        val memberNames = songMemberNames(song)
+        val groupDisplayName = generationGroupDisplayName(song, catalogMembers)
+        val baseNames = if (groupDisplayName != null) listOf(groupDisplayName) else memberNames
+        val blockedArtistKeys = (memberNames + catalogMembers.flatMap { listOf(it.koreanName, it.englishName, it.unitName, it.generationName) })
+            .map(::normalizedNameKey)
+            .toSet()
+        val externalNames = parsedArtistNames.filter { !isBlockedArtistName(it, blockedArtistKeys) }
+        return (baseNames + externalNames)
+            .filter { it.isNotBlank() }
+            .distinctBy { normalizedNameKey(it) }
             .takeIf { it.isNotEmpty() }
             ?.joinToString(" · ")
             ?: song.memberName?.takeIf { it.isNotBlank() }
             ?: "스텔라이브"
+    }
+
+    private fun isBlockedArtistName(name: String, blockedArtistKeys: Set<String>): Boolean {
+        val nameKey = normalizedNameKey(name)
+        return blockedArtistKeys.any { blockedKey ->
+            blockedKey.isNotBlank() && (nameKey == blockedKey || nameKey.contains(blockedKey) || blockedKey.contains(nameKey))
+        }
+    }
+
+    private fun songMemberNames(song: SongCatalogItem): List<String> =
+        song.members
+            .map { it.nameKo.ifBlank { it.nameEn.orEmpty() } }
+            .filter { it.isNotBlank() }
+            .distinctBy { normalizedNameKey(it) }
+
+    private fun generationGroupDisplayName(song: SongCatalogItem, catalogMembers: List<HubMember>): String? {
+        val songMemberIds = song.members.map { it.id }.toSet()
+        if (songMemberIds.isEmpty() || catalogMembers.isEmpty()) return null
+        val activeCatalogMembers = catalogMembers.filter {
+            it.catalogRole == CatalogRole.MEMBER && it.activeStatus == ActiveStatus.ACTIVE
+        }
+        val songCatalogMembers = activeCatalogMembers.filter { it.id in songMemberIds }
+        val generationId = songCatalogMembers.firstOrNull()?.generationId ?: return null
+        if (songCatalogMembers.any { it.generationId != generationId }) return null
+        val generationMembers = activeCatalogMembers.filter { it.generationId == generationId }
+        if (generationMembers.isEmpty() || songMemberIds != generationMembers.map { it.id }.toSet()) return null
+        val representative = generationMembers.first()
+        val unitName = representative.unitName.takeIf { it.isNotBlank() }
+        val generationName = representative.generationName.takeIf { it.isNotBlank() } ?: generationId
+        return if (unitName != null && unitName != generationName) "$unitName ($generationName)" else generationName
+    }
+
+    private fun normalizedNameKey(value: String): String =
+        value.lowercase(Locale.ROOT).replace(Regex("\\s+"), "")
+
+    fun sortSongs(songs: List<SongCatalogItem>, sortId: String): List<SongCatalogItem> =
+        songs.sortedWith(
+            when (sortId) {
+                "publishedAt_asc" -> compareBy<SongCatalogItem> { it.publishedAt == Instant.EPOCH }
+                    .thenBy { it.publishedAt }
+                    .thenComparator { left, right -> compareSongTitle(left, right) }
+                "title_asc" -> Comparator { left, right -> compareSongTitle(left, right) }
+                "member_asc" -> Comparator { left, right -> compareSongMember(left, right) }
+                else -> compareBy<SongCatalogItem> { it.publishedAt == Instant.EPOCH }
+                    .thenComparator { left, right -> right.publishedAt.compareTo(left.publishedAt) }
+                    .thenComparator { left, right -> compareSongTitle(left, right) }
+            }
+        )
+
+    private fun compareSongTitle(left: SongCatalogItem, right: SongCatalogItem): Int {
+        val byTitle = songTextCollator.compare(left.title, right.title)
+        return if (byTitle != 0) byTitle else left.id.compareTo(right.id)
+    }
+
+    private fun compareSongMember(left: SongCatalogItem, right: SongCatalogItem): Int {
+        val byMember = songTextCollator.compare(songMemberDisplayText(left), songMemberDisplayText(right))
+        return if (byMember != 0) byMember else compareSongTitle(left, right)
+    }
 
     fun songPremiereStatusLabel(song: SongCatalogItem): String? = when (song.premiere?.state) {
         "scheduled" -> song.premiere.scheduledStartAt
@@ -299,10 +601,11 @@ object MainUiPolicy {
         return song.members.any { memberGenerationById[it.id] == selectedGenerationId }
     }
 
-    fun songMatchesQuery(song: SongCatalogItem, query: String): Boolean {
+    fun songMatchesQuery(song: SongCatalogItem, query: String, catalogMembers: List<HubMember> = emptyList()): Boolean {
         if (query.isBlank()) return true
-        return song.title.contains(query, ignoreCase = true) ||
-            songMemberDisplayText(song).contains(query, ignoreCase = true)
+        val display = songDisplayText(song, catalogMembers)
+        return display.title.contains(query, ignoreCase = true) ||
+            display.subtitle.contains(query, ignoreCase = true)
     }
 
     fun songPageCount(totalItems: Int, pageSize: Int = SONG_PAGE_SIZE): Int {

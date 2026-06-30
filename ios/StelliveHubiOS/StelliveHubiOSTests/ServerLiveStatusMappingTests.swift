@@ -40,6 +40,19 @@ final class ServerLiveStatusMappingTests: XCTestCase {
                         "foregroundRealtimeEnabled": false
                       },
                       "preferences": [],
+                      "catalog": {
+                        "generations": [],
+                        "members": [
+                          {
+                            "id": "ayatsuno-yuni",
+                            "profileImageUrl": "https://yt.example/yuni.jpg"
+                          },
+                          {
+                            "id": "sakihane-huya",
+                            "profileImageUrl": "https://yt.example/huya.jpg"
+                          }
+                        ]
+                      },
                       "liveStatus": [
                         {
                           "memberId": "ayatsuno-yuni",
@@ -78,6 +91,7 @@ final class ServerLiveStatusMappingTests: XCTestCase {
         XCTAssertEqual(yuni.liveTitle, "Live title")
         XCTAssertEqual(yuni.liveViewerCount, 123)
         XCTAssertEqual(yuni.channelImageURL, URL(string: "https://img.example/yuni.jpg"))
+        XCTAssertEqual(yuni.profileImageURL, URL(string: "https://yt.example/yuni.jpg"))
         XCTAssertEqual(yuni.livePlatformURL, URL(string: "https://chzzk.naver.com/live/chzzk-channel-id"))
         XCTAssertEqual(yuni.liveLastCheckedAt, ISO8601DateFormatter.withFractionalSeconds.date(from: "2026-06-11T03:01:00.000Z"))
 
@@ -87,6 +101,7 @@ final class ServerLiveStatusMappingTests: XCTestCase {
         XCTAssertNil(huya.liveTitle)
         XCTAssertNil(huya.liveViewerCount)
         XCTAssertNil(huya.channelImageURL)
+        XCTAssertEqual(huya.profileImageURL, URL(string: "https://yt.example/huya.jpg"))
         XCTAssertNil(huya.livePlatformURL)
         XCTAssertNil(huya.liveLastCheckedAt)
     }

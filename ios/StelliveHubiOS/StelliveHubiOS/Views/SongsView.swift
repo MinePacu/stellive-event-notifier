@@ -17,6 +17,7 @@ struct SongsView: View {
     @State private var path = NavigationPath()
     @State private var selectedGenerationId = "all"
     @State private var selectedType = "all"
+    @State private var selectedSortId = "publishedAt_desc"
     @State private var selectedMemberId = "all"
     @State private var query = ""
     @State private var selectedPage = 1
@@ -26,15 +27,16 @@ struct SongsView: View {
     }
 
     private var songs: [SongCatalogItem] {
-        serverStore.songs(
+        let filtered = serverStore.songs(
             generationId: "all",
             type: selectedType,
             query: ""
         ).items.filter {
             IOSSongPagePolicy.matchesGeneration($0, selectedGenerationId: selectedGenerationId, memberGenerationById: memberGenerationById) &&
                 IOSSongPagePolicy.matchesMember($0, selectedMemberId: selectedMemberId) &&
-                IOSSongPagePolicy.matchesQuery($0, query: query)
+                IOSSongPagePolicy.matchesQuery($0, query: query, catalogMembers: store.members)
         }
+        return IOSSongPagePolicy.sortedSongs(filtered, sortId: selectedSortId)
     }
 
     private var currentPage: Int {
@@ -46,18 +48,19 @@ struct SongsView: View {
     }
 
     private var facets: SongFacetsResponse {
-        SongFacetsResponse(
-            summary: SongFacetSummary(
-                total: songs.count,
-                original: songs.filter { $0.type == .original }.count,
-                cover: songs.filter { $0.type == .cover }.count
-            ),
+        let allSongs = serverStore.songs(
+            generationId: "all",
+            type: "all",
+            query: ""
+        ).items
+        return SongFacetsResponse(
+            summary: IOSSongPagePolicy.summaryCounts(for: allSongs, filteredSongs: songs),
             generationFilters: IOSSongPagePolicy.generationFilters.map {
-                SongFilterCount(id: $0.id, label: $0.label, generationId: $0.id == "all" ? nil : $0.id, count: songs.count)
+                SongFilterCount(id: $0.id, label: $0.label, generationId: $0.id == "all" ? nil : $0.id, count: allSongs.count)
             },
             memberFilters: [],
             typeFilters: IOSSongPagePolicy.typeFilters.map {
-                SongFilterCount(id: $0.id, label: $0.label, generationId: nil, count: songs.count)
+                SongFilterCount(id: $0.id, label: $0.label, generationId: nil, count: allSongs.count)
             }
         )
     }
@@ -101,9 +104,17 @@ struct SongsView: View {
             }
             .pickerStyle(.segmented)
 
+            Picker("정렬", selection: $selectedSortId) {
+                ForEach(IOSSongPagePolicy.sortOptions) { option in
+                    Text(option.label).tag(option.id)
+                }
+            }
+            .pickerStyle(.menu)
+
             NavigationLink {
                 SongMemberFilterView(
                     filters: IOSSongPagePolicy.memberFilters(from: store.members),
+                    members: store.members,
                     selectedMemberId: $selectedMemberId,
                     selectedPage: $selectedPage
                 )
@@ -125,13 +136,18 @@ struct SongsView: View {
         }
 
                 Section("노래 목록") {
-                    if songs.isEmpty {
+                    if serverStore.isRefreshingSongs && serverStore.serverSongs.isEmpty {
+                        LoadingStateRow(
+                            title: "노래 목록 불러오는 중",
+                            message: "서버 캐시에서 오리지널곡과 커버곡 목록을 가져오고 있습니다."
+                        )
+                    } else if songs.isEmpty {
                         Text("표시할 노래 없음")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
                     ForEach(pagedSongs) { song in
-                        SongRow(song: song)
+                        SongRow(song: song, catalogMembers: store.members)
                             .listRowInsets(IOSSongPagePolicy.songRowInsets)
                             .listRowSeparator(.hidden)
                     }
@@ -148,6 +164,7 @@ struct SongsView: View {
                 .settingsToolbar(path: $path)
                 .onChange(of: selectedGenerationId) { _ in selectedPage = 1 }
                 .onChange(of: selectedType) { _ in selectedPage = 1 }
+                .onChange(of: selectedSortId) { _ in selectedPage = 1 }
                 .onChange(of: selectedMemberId) { _ in selectedPage = 1 }
                 .onChange(of: query) { _ in selectedPage = 1 }
                 .onChange(of: selectedPage) { _ in
@@ -201,23 +218,35 @@ struct SongsView: View {
 
 struct SongRow: View {
     let song: SongCatalogItem
+    let catalogMembers: [HubMember]
 
     var body: some View {
+        let displayText = IOSSongPagePolicy.displayText(for: song, catalogMembers: catalogMembers)
         Link(destination: URL(string: song.youtubeUrl) ?? URL(string: "https://www.youtube.com")!) {
             HStack(alignment: .top, spacing: 12) {
                     SongThumbnailView(urls: IOSSongPagePolicy.thumbnailUrlCandidates(for: song))
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(song.title)
+                    Text(displayText.title)
                         .font(.headline)
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                         .minimumScaleFactor(0.86)
 
-                    Text([IOSSongPagePolicy.memberDisplayText(song), song.type.displayName].joined(separator: " · "))
+                    Text(displayText.subtitle)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+
+                    Text(song.type.displayName)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color(.tertiarySystemGroupedBackground))
+                        )
 
                     if let premiereLabel = IOSSongPagePolicy.premiereStatusLabel(for: song) {
                         Text(premiereLabel)
@@ -253,9 +282,14 @@ struct SongRow: View {
 
 private struct SongMemberFilterView: View {
     let filters: [SongFilterOption]
+    let members: [HubMember]
     @Binding var selectedMemberId: String
     @Binding var selectedPage: Int
     @Environment(\.dismiss) private var dismiss
+
+    private var memberById: [String: HubMember] {
+        Dictionary(uniqueKeysWithValues: members.map { ($0.id, $0) })
+    }
 
     var body: some View {
         List(filters) { filter in
@@ -264,14 +298,35 @@ private struct SongMemberFilterView: View {
                 selectedPage = 1
                 dismiss()
             } label: {
-                HStack {
-                    Text(filter.label)
+                HStack(spacing: 12) {
+                    if let member = memberById[filter.id] {
+                        MemberAvatarView(member: member, size: 42, source: .youtubeProfile)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(filter.label)
+                            .foregroundStyle(.primary)
+                        Text(selectedMemberId == filter.id ? "현재 적용 중" : "탭해서 선택")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     Spacer()
+
                     if selectedMemberId == filter.id {
-                        Image(systemName: "checkmark")
+                        Text("선택됨")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(Color(.tertiarySystemGroupedBackground))
+                            )
                     }
                 }
             }
+            .buttonStyle(.plain)
         }
         .navigationTitle("노래 멤버 선택")
     }

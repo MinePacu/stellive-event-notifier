@@ -44,6 +44,10 @@ struct IOSPrimaryNavigationPolicy {
 
     static let titlelessPrimaryScreens: Set<String> = ["home", "live", "songs", "hubEvents"]
 
+    static func shouldAttachSettingsToolbar(screenId: String) -> Bool {
+        screenId != "settings" && !screenId.hasPrefix("settings_")
+    }
+
     static func showsSettingsButton(pathCount: Int, settingsRouteDepth: Int?) -> Bool {
         if settingsAccess.showsOnlyOnPrimaryRoots && pathCount > 0 {
             return false
@@ -151,7 +155,15 @@ private struct SettingsToolbarModifier: ViewModifier {
                         path.append(SettingsToolbarRoute.settings)
                     } label: {
                         Image(systemName: IOSPrimaryNavigationPolicy.settingsAccess.systemImage)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.primary)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(Color(.secondarySystemGroupedBackground))
+                            )
                     }
+                    .buttonStyle(.plain)
                     .accessibilityLabel("설정")
                     .accessibilityHidden(!showsToolbarButton)
                     .disabled(!showsToolbarButton)

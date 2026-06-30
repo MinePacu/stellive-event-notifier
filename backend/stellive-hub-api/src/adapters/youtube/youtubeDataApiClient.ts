@@ -41,6 +41,27 @@ export type YoutubeFetchPlaylistItemsResult =
       quotaUnits: number;
     };
 
+export interface YoutubeChannelProfile {
+  channelId: string;
+  title?: string;
+  customUrl?: string;
+  handle?: string;
+  profileImageUrl?: string;
+  fetchedAt: string;
+}
+
+export type YoutubeFetchChannelProfilesResult =
+  | {
+      status: "ok";
+      profiles: YoutubeChannelProfile[];
+      quotaUnits: number;
+    }
+  | {
+      status: "quota_exceeded" | "error";
+      profiles: [];
+      quotaUnits: number;
+    };
+
 export interface YoutubeListUploadsInput {
   channelId: string;
   uploadsPlaylistId: string;
@@ -93,6 +114,12 @@ interface YoutubeListWrapper<T> {
 
 interface YoutubeChannelItem {
   id?: string;
+  snippet?: {
+    title?: string;
+    customUrl?: string;
+    handle?: string;
+    thumbnails?: Record<string, YoutubeThumbnail | undefined>;
+  };
   contentDetails?: {
     relatedPlaylists?: {
       uploads?: string;
@@ -168,6 +195,14 @@ function pickThumbnail(thumbnails: Record<string, YoutubeThumbnail | undefined> 
   return thumbnails?.maxres ?? thumbnails?.standard ?? thumbnails?.high ?? thumbnails?.medium ?? thumbnails?.default;
 }
 
+function pickChannelProfileThumbnail(thumbnails: Record<string, YoutubeThumbnail | undefined> | undefined): YoutubeThumbnail | undefined {
+  return [thumbnails?.high, thumbnails?.medium, thumbnails?.default].find((thumbnail) => httpsUrl(thumbnail?.url));
+}
+
+function httpsUrl(value: string | undefined): string | undefined {
+  return value?.startsWith("https://") ? value : undefined;
+}
+
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let index = 0; index < items.length; index += size) {
@@ -196,6 +231,35 @@ export class YoutubeDataApiClient {
     if (!response.ok || !uploadsPlaylistId) return { status: "not_found", channelId };
 
     return { status: "ok", channelId, uploadsPlaylistId, etag: body.etag };
+  }
+
+  async fetchChannelProfilesByIds(channelIds: string[]): Promise<YoutubeFetchChannelProfilesResult> {
+    const profiles: YoutubeChannelProfile[] = [];
+    let quotaUnits = 0;
+    const uniqueIds = Array.from(new Set(channelIds.map((id) => id.trim()).filter(Boolean)));
+
+    for (const ids of chunk(uniqueIds, 50)) {
+      if (ids.length === 0) continue;
+      const url = new URL("https://www.googleapis.com/youtube/v3/channels");
+      url.searchParams.set("part", "snippet");
+      url.searchParams.set("id", ids.join(","));
+      url.searchParams.set("key", this.options.apiKey);
+
+      quotaUnits += 1;
+      const response = await this.fetchImpl(url.toString());
+      const body = await response.json() as YoutubeListWrapper<YoutubeChannelItem>;
+      if (!response.ok) {
+        return {
+          status: response.status === 403 ? "quota_exceeded" : "error",
+          profiles: [],
+          quotaUnits,
+        };
+      }
+
+      profiles.push(...(body.items ?? []).flatMap((item) => this.toChannelProfile(item)));
+    }
+
+    return { status: "ok", profiles, quotaUnits };
   }
 
   async listUploads(input: YoutubeListUploadsInput): Promise<YoutubeListUploadsResult> {
@@ -289,6 +353,19 @@ export class YoutubeDataApiClient {
       details.push(...(body.items ?? []).flatMap((item) => this.toVideoDetail(item)));
     }
     return details;
+  }
+
+  private toChannelProfile(item: YoutubeChannelItem): YoutubeChannelProfile[] {
+    if (!item.id) return [];
+    const thumbnail = pickChannelProfileThumbnail(item.snippet?.thumbnails);
+    return [{
+      channelId: item.id,
+      title: item.snippet?.title,
+      customUrl: item.snippet?.customUrl,
+      handle: item.snippet?.handle,
+      profileImageUrl: thumbnail?.url,
+      fetchedAt: new Date().toISOString(),
+    }];
   }
 
   private toUploadCandidate(channelId: string, item: YoutubePlaylistItem): YoutubeUploadCandidate[] {

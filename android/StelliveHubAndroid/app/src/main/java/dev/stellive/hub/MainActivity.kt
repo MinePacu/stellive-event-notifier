@@ -14,6 +14,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.CalendarContract
 import android.text.Editable
 import android.text.TextWatcher
@@ -26,7 +27,9 @@ import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -63,6 +66,7 @@ import dev.stellive.hub.feature.calendar.HubEventsCalendarView
 import dev.stellive.hub.feature.home.HubScreen
 import dev.stellive.hub.feature.home.HubRepository
 import dev.stellive.hub.feature.home.LiveMemberOrderingPolicy
+import dev.stellive.hub.feature.home.LoadingPresentation
 import dev.stellive.hub.core.network.HubApiClient
 import dev.stellive.hub.feature.home.MainUiPolicy
 import dev.stellive.hub.feature.home.MainNavigationHistory
@@ -86,7 +90,9 @@ import dev.stellive.hub.ui.components.HubCardFactory
 import dev.stellive.hub.ui.components.HubCardStyle
 import dev.stellive.hub.ui.components.SectionHeaderView
 import dev.stellive.hub.ui.components.TopFilterGroup
-import dev.stellive.hub.ui.components.TopFilterStripView
+import dev.stellive.hub.ui.components.TopFilterOption
+
+private const val EXIT_BACK_PRESS_INTERVAL_MS = 2_000L
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -117,6 +123,7 @@ private lateinit var binding: ActivityMainBinding
     private var systemTopInsetPx = 0
     private val serverConnectionDebugLogs = mutableListOf("bootstrap: 대기 중")
     private val navigationHistory = MainNavigationHistory()
+    private var lastRootBackPressedAt = 0L
 private var selectedFilter = "all"
 private var selectedLiveStatusFilter = "all"
 private var liveMemberPriorityIds: List<String> = emptyList()
@@ -125,6 +132,7 @@ private var draggingLiveMemberId: String? = null
     private var selectedHistoryMemberFilterId = "all"
 private var selectedSongGenerationId = "all"
 private var selectedSongType = "all"
+private var selectedSongSortId = "publishedAt_desc"
 private var selectedSongQuery = ""
 private var appliedSongQuery = ""
 private var selectedSongPage = 1
@@ -134,8 +142,8 @@ private var pendingSongSearchRender: Runnable? = null
 private var cachedSongItems: List<SongCatalogItem> = emptyList()
 private var cachedSongType: String? = null
 private var songSearchResultsContainer: LinearLayout? = null
-private var homeRecentCoverSongs: List<SongCatalogItem>? = null
-private var isLoadingHomeRecentCoverSongs = false
+private var homeRecentSongs: List<SongCatalogItem>? = null
+private var isLoadingHomeRecentSongs = false
 private var selectedHubEventId: String? = null
     private var goodsEventsDays: List<HubCalendarDay> = emptyList()
     private var goodsEvents: List<HubEvent> = emptyList()
@@ -147,7 +155,6 @@ private var selectedHubEventId: String? = null
 private var notificationPermissionRequested = false
     private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
     private val cardFactory by lazy { HubCardFactory(this) }
-    private val topFilterStrip by lazy { TopFilterStripView(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         selectedAppearanceMode = readAppearanceMode()
@@ -272,7 +279,11 @@ private var notificationPermissionRequested = false
             navigateTo(HubScreen.SETTINGS, addToBackStack = true)
         }
         binding.topBarSongSearch.setOnClickListener {
-            navigateTo(HubScreen.SONG_SEARCH, addToBackStack = true)
+            renderSongSearchTransitionLoading()
+            binding.topBarSongSearch.isEnabled = false
+            binding.root.post {
+                navigateTo(HubScreen.SONG_SEARCH, addToBackStack = true)
+            }
         }
     }
 
@@ -284,7 +295,7 @@ private var notificationPermissionRequested = false
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (!navigateBack()) finish()
+                    handleSystemBackPressed()
                 }
             }
         )
@@ -292,6 +303,7 @@ private var notificationPermissionRequested = false
 
     private fun navigateTo(screen: HubScreen, addToBackStack: Boolean) {
         if (addToBackStack && screen == navigationHistory.currentScreen) return
+        lastRootBackPressedAt = 0L
         if (addToBackStack) {
             navigationHistory.select(screen)
         }
@@ -301,6 +313,7 @@ private var notificationPermissionRequested = false
     }
 
     private fun navigateToRoot(screen: HubScreen) {
+        lastRootBackPressedAt = 0L
         if (screen == navigationHistory.currentScreen && !navigationHistory.canGoBack) return
         navigationHistory.selectRoot(screen)
         renderScreen(screen)
@@ -312,6 +325,29 @@ private var notificationPermissionRequested = false
         val previous = navigationHistory.goBack() ?: return false
         renderScreen(previous)
         updateSelectedBottomNavigation(previous)
+        updateNavigationChrome()
+        return true
+    }
+
+    private fun handleSystemBackPressed() {
+        if (navigateBackToCurrentRoot()) {
+            lastRootBackPressedAt = 0L
+            return
+        }
+
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastRootBackPressedAt <= EXIT_BACK_PRESS_INTERVAL_MS) {
+            finish()
+            return
+        }
+        lastRootBackPressedAt = now
+        Toast.makeText(this, "한 번 더 뒤로 가면 앱이 종료됩니다.", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun navigateBackToCurrentRoot(): Boolean {
+        val root = navigationHistory.goBackToCurrentRoot() ?: return false
+        renderScreen(root)
+        updateSelectedBottomNavigation(root)
         updateNavigationChrome()
         return true
     }
@@ -430,35 +466,8 @@ private fun startScreen(screenId: String, title: String, role: String) {
         binding.contentList.setPadding(horizontalPadding, topPadding, horizontalPadding, dp(20))
     }
 
-    private fun bindTopFilters(
-        groups: List<TopFilterGroup>,
-        onSelected: (groupId: String, optionId: String) -> Unit,
-    ) {
-        binding.topFilterContainer.removeAllViews()
-        topFilterStrip.bind(groups, onSelected)
-        (topFilterStrip.parent as? ViewGroup)?.removeView(topFilterStrip)
-        if (groups.isNotEmpty()) {
-            binding.contentList.addView(
-                topFilterStrip,
-                0,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply {
-                    bottomMargin = dp(6)
-                },
-            )
-        }
-        binding.topFilterContainer.isVisible = false
-        binding.topBarFadeSpace.layoutParams = binding.topBarFadeSpace.layoutParams.apply {
-            height = 0
-        }
-        binding.topGlassOverlay.post { applyContentTopPadding(underTopBar = false) }
-    }
-
     private fun clearTopFilters() {
         binding.topFilterContainer.removeAllViews()
-        (topFilterStrip.parent as? ViewGroup)?.removeView(topFilterStrip)
         binding.topFilterContainer.isVisible = false
         binding.topBarFadeSpace.layoutParams = binding.topBarFadeSpace.layoutParams.apply {
             height = 0
@@ -500,15 +509,15 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 binding.contentList.addView(moreLiveMembersButton())
             }
         }
-        binding.contentList.addView(sectionLabel("최근 커버곡"))
-        when (val recentCovers = homeRecentCoverSongs) {
+        binding.contentList.addView(sectionLabel("최근 곡"))
+        when (val recentSongs = homeRecentSongs) {
             null -> binding.contentList.addView(
-                compactEventCard("불러오는 중", "서버에서 최근 커버곡을 확인하고 있습니다.", listOf("노래"))
+                loadingCard(MainUiPolicy.homeRecentSongsLoadingPresentation())
             )
             emptyList<SongCatalogItem>() -> binding.contentList.addView(
-                compactEventCard("최근 커버곡 없음", "등록된 커버곡이 없습니다.", listOf("노래"))
+                compactEventCard("최근 곡 없음", "등록된 곡이 없습니다.", listOf("노래"))
             )
-            else -> recentCovers.forEach { binding.contentList.addView(songCard(it)) }
+            else -> recentSongs.forEach { binding.contentList.addView(songCard(it)) }
         }
         binding.contentList.addView(
             compactEventCard("노래 전체 보기", "커버곡과 오리지널 곡 전체 목록으로 이동합니다.", listOf("전체")).apply {
@@ -517,7 +526,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 setOnClickListener { navigateToRoot(HubScreen.SONGS) }
             }
         )
-        loadHomeRecentCoverSongsIfNeeded()
+        loadHomeRecentSongsIfNeeded()
         binding.contentList.addView(sectionLabel("최근 알림"))
         if (repository.recentHistoryPreview.isEmpty()) {
             binding.contentList.addView(
@@ -569,12 +578,12 @@ private fun startScreen(screenId: String, title: String, role: String) {
         }
     }
 
-    private fun loadHomeRecentCoverSongsIfNeeded() {
-        if (homeRecentCoverSongs != null || isLoadingHomeRecentCoverSongs) return
-        isLoadingHomeRecentCoverSongs = true
+    private fun loadHomeRecentSongsIfNeeded() {
+        if (homeRecentSongs != null || isLoadingHomeRecentSongs) return
+        isLoadingHomeRecentSongs = true
         CoroutineScope(Dispatchers.Main).launch {
-            homeRecentCoverSongs = serverRepository.recentCoverSongs(limit = 5)
-            isLoadingHomeRecentCoverSongs = false
+            homeRecentSongs = serverRepository.recentSongs(limit = 5)
+            isLoadingHomeRecentSongs = false
             if (navigationHistory.currentScreen == HubScreen.HOME) {
                 renderHome()
             }
@@ -609,17 +618,17 @@ private fun startScreen(screenId: String, title: String, role: String) {
             title = "굿즈/행사",
             role = "공식/멤버/공식 콜라보 출처가 있는 기간성 정보만 표시합니다."
         )
-        bindTopFilters(MainUiPolicy.goodsEventsTopFilterGroups(selectedFilter)) { _, optionId ->
+        binding.contentList.addView(filterPanel(MainUiPolicy.goodsEventsTopFilterGroups(selectedFilter)) { _, optionId ->
             selectedFilter = optionId
             if (goodsEventsDays.isEmpty()) renderGoodsEvents()
             else renderServerGoodsEvents(goodsEventsDays, goodsEvents)
-        }
+        })
         binding.contentList.addView(serverStatusStrip())
         loadServerGoodsEvents()
     }
 
     private fun loadServerGoodsEvents() {
-        binding.contentList.addView(noticeCard("불러오는 중 · 서버에서 게시된 굿즈/행사 목록과 캘린더를 가져오고 있습니다."))
+        binding.contentList.addView(loadingCard(MainUiPolicy.goodsEventsLoadingPresentation()))
         CoroutineScope(Dispatchers.Main).launch {
             val today = LocalDate.now()
             val from = today.minusMonths(1)
@@ -659,10 +668,10 @@ private fun startScreen(screenId: String, title: String, role: String) {
         }
         val monthDays = filteredDays.filter { it.date.take(7) == goodsEventsSelectedMonth.toString() }
         binding.contentList.removeAllViews()
-        bindTopFilters(MainUiPolicy.goodsEventsTopFilterGroups(selectedFilter)) { _, optionId ->
+        binding.contentList.addView(filterPanel(MainUiPolicy.goodsEventsTopFilterGroups(selectedFilter)) { _, optionId ->
             selectedFilter = optionId
             renderServerGoodsEvents(goodsEventsDays, goodsEvents)
-        }
+        })
         binding.contentList.addView(serverStatusStrip())
         binding.contentList.addView(
             HubEventsCalendarView(
@@ -732,7 +741,7 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
                 title = "상세",
                 role = "선택한 굿즈/행사를 불러오고 있습니다."
             )
-            binding.contentList.addView(noticeCard("불러오는 중 · 서버에서 상세 정보를 가져오고 있습니다."))
+            binding.contentList.addView(loadingCard(MainUiPolicy.hubEventDetailLoadingPresentation()))
             CoroutineScope(Dispatchers.Main).launch {
                 serverHubEventDetail = serverRepository.hubEventDetail(eventId)
                 serverHubEventDetailLoadedId = eventId
@@ -790,10 +799,10 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
             title = getString(R.string.live_title),
             role = "Foreground 상태 갱신은 화면 표시용입니다. 백그라운드 알림은 서버 중심 푸시로 처리합니다."
         )
-        bindTopFilters(MainUiPolicy.liveTopFilterGroups(selectedLiveStatusFilter)) { _, optionId ->
+        binding.contentList.addView(filterPanel(MainUiPolicy.liveTopFilterGroups(selectedLiveStatusFilter)) { _, optionId ->
             selectedLiveStatusFilter = optionId
             renderLive()
-        }
+        })
         binding.contentList.addView(serverStatusStrip())
         val members = liveStatusFilteredMembersForUi()
         if (members.isEmpty()) {
@@ -880,21 +889,10 @@ private fun renderSongs() {
             title = getString(R.string.songs_title),
             role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
         )
-        bindTopFilters(
-            MainUiPolicy.songTopFilterGroups(selectedSongGenerationId, selectedSongType),
-        ) { groupId, optionId ->
-            when (groupId) {
-                "generation" -> selectedSongGenerationId = optionId
-                "type" -> {
-                    selectedSongType = optionId
-                    cachedSongType = null
-                }
-            }
-            selectedSongPage = 1
-            renderSongs()
-        }
+        clearTopFilters()
+        binding.contentList.addView(songFilterPanel())
         binding.contentList.addView(serverStatusStrip())
-        binding.contentList.addView(noticeCard("불러오는 중 · 서버에서 노래 목록을 가져오고 있습니다."))
+        binding.contentList.addView(loadingCard(MainUiPolicy.songsLoadingPresentation()))
 
         CoroutineScope(Dispatchers.Main).launch {
             val songItems = if (cachedSongType == selectedSongType && cachedSongItems.isNotEmpty()) {
@@ -905,12 +903,16 @@ private fun renderSongs() {
                     cachedSongType = selectedSongType
                 }
             }
-            val memberGenerationById = (serverMembers ?: repository.members).associate { it.id to it.generationId }
-            val visibleSongs = songItems.filter { song ->
-                MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
-                    MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
-                    MainUiPolicy.songMatchesQuery(song, selectedSongQuery)
-            }
+            val songCatalogMembers = serverMembers ?: repository.members
+            val memberGenerationById = songCatalogMembers.associate { it.id to it.generationId }
+            val visibleSongs = MainUiPolicy.sortSongs(
+                songItems.filter { song ->
+                    MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
+                        MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
+                        MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers)
+                },
+                selectedSongSortId,
+            )
             val safePage = MainUiPolicy.coerceSongPage(selectedSongPage, visibleSongs.size)
             selectedSongPage = safePage
             val pagedSongs = MainUiPolicy.songPageItems(visibleSongs, safePage)
@@ -920,26 +922,14 @@ private fun renderSongs() {
                 title = getString(R.string.songs_title),
                 role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
             )
-            bindTopFilters(
-                MainUiPolicy.songTopFilterGroups(selectedSongGenerationId, selectedSongType),
-            ) { groupId, optionId ->
-                when (groupId) {
-                    "generation" -> selectedSongGenerationId = optionId
-                    "type" -> {
-                        selectedSongType = optionId
-                        cachedSongType = null
-                    }
-                }
-                selectedSongPage = 1
-                renderSongs()
-            }
+            clearTopFilters()
+            binding.contentList.addView(songFilterPanel())
             binding.contentList.addView(serverStatusStrip())
-            binding.contentList.addView(songMemberFilterCard(serverMembers ?: repository.members, visibleSongs.size))
             if (visibleSongs.isEmpty()) {
                 binding.contentList.addView(noticeCard("표시할 노래가 없습니다. 필터를 바꾸거나 나중에 다시 확인해 주세요."))
             } else {
                 pagedSongs.forEach { song ->
-                    binding.contentList.addView(songCard(song))
+                    binding.contentList.addView(songCard(song, songCatalogMembers))
                 }
                 if (MainUiPolicy.songPageCount(visibleSongs.size) > 1) {
                     binding.contentList.addView(songPageControl(visibleSongs.size))
@@ -949,6 +939,7 @@ private fun renderSongs() {
     }
 
     private fun renderSongSearch() {
+        binding.topBarSongSearch.isEnabled = true
         startScreen(
             screenId = "song_search",
             title = "노래 검색",
@@ -963,27 +954,42 @@ private fun renderSongs() {
         refreshSongSearchResults()
     }
 
+    private fun renderSongSearchTransitionLoading() {
+        startScreen(
+            screenId = "song_search",
+            title = "노래 검색",
+            role = "제목 또는 멤버 이름으로 검색합니다.",
+        )
+        binding.collapsedTitle.text = "노래 검색"
+        binding.collapsedRole.text = "제목 또는 멤버"
+        binding.contentList.addView(loadingCard(MainUiPolicy.songSearchTransitionLoadingPresentation()))
+    }
+
     private fun refreshSongSearchResults() {
         val container = songSearchResultsContainer ?: return
         container.removeAllViews()
         val renderItems: (List<SongCatalogItem>) -> Unit = { items ->
-            val memberGenerationById = (serverMembers ?: repository.members).associate { it.id to it.generationId }
-            val visibleSongs = items.filter { song ->
-                MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
-                    MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
-                    MainUiPolicy.songMatchesQuery(song, selectedSongQuery)
-            }
+            val songCatalogMembers = serverMembers ?: repository.members
+            val memberGenerationById = songCatalogMembers.associate { it.id to it.generationId }
+            val visibleSongs = MainUiPolicy.sortSongs(
+                items.filter { song ->
+                    MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
+                        MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
+                        MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers)
+                },
+                selectedSongSortId,
+            )
             if (visibleSongs.isEmpty()) {
                 container.addView(noticeCard("검색 결과가 없습니다."))
             } else {
-                visibleSongs.forEach { container.addView(songCard(it)) }
+                visibleSongs.forEach { container.addView(songCard(it, songCatalogMembers)) }
             }
         }
         if (cachedSongType == selectedSongType && cachedSongItems.isNotEmpty()) {
             renderItems(cachedSongItems)
             return
         }
-        container.addView(noticeCard("검색할 노래 목록을 불러오는 중입니다."))
+        container.addView(loadingCard(MainUiPolicy.songSearchLoadingPresentation()))
         CoroutineScope(Dispatchers.Main).launch {
             val items = serverRepository.songs(generationId = "all", type = selectedSongType).items
             cachedSongItems = items
@@ -997,6 +1003,190 @@ private fun renderSongs() {
 private fun setSelectedSongMember(memberId: String) {
 selectedSongMemberId = memberId
 selectedSongPage = 1
+}
+
+private fun filterPanel(
+    groups: List<TopFilterGroup>,
+    onSelected: (groupId: String, optionId: String) -> Unit,
+): MaterialCardView =
+    baseCard(HubCardStyle.COMPACT).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            bottomMargin = dp(12)
+        }
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(10))
+            groups.forEachIndexed { index, group ->
+                if (index > 0) {
+                    addView(divider())
+                }
+                addView(segmentedFilterRow(group.options, group.selectedId) { optionId ->
+                    onSelected(group.id, optionId)
+                }.apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply {
+                        if (index > 0) topMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
+                        if (index < groups.lastIndex) bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
+                    }
+                })
+            }
+        })
+    }
+
+private fun songFilterPanel(): MaterialCardView =
+    baseCard(HubCardStyle.COMPACT).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            bottomMargin = dp(12)
+        }
+        val members = serverMembers ?: repository.members
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(10))
+            addView(songSegmentedRow(MainUiPolicy.songGenerationFilters(), selectedSongGenerationId) { optionId ->
+                selectedSongGenerationId = optionId
+                selectedSongPage = 1
+                renderSongs()
+            }.apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
+                }
+            })
+            addView(divider())
+            addView(songSegmentedRow(MainUiPolicy.songTypeFilters(), selectedSongType) { optionId ->
+                selectedSongType = optionId
+                cachedSongType = null
+                selectedSongPage = 1
+                renderSongs()
+            }.apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    topMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
+                    bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
+                }
+            })
+            addView(divider())
+            addView(songSelectorRow("정렬", MainUiPolicy.songSortLabel(selectedSongSortId), accentValue = true) {
+                showSongSortDialog()
+            })
+            addView(divider())
+            addView(songSelectorRow("멤버", MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberId), accentValue = false) {
+                navigateTo(HubScreen.SONG_MEMBER_FILTER, addToBackStack = true)
+            })
+        })
+    }
+
+private fun segmentedFilterRow(
+    filters: List<TopFilterOption>,
+    selectedId: String,
+    onSelected: (String) -> Unit,
+): LinearLayout =
+    LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        weightSum = filters.size.toFloat()
+        filters.forEachIndexed { index, filter ->
+            addView(filterSegmentView(filter.id, filter.label, filter.id == selectedId) {
+                onSelected(filter.id)
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (index < filters.lastIndex) marginEnd = dp(6)
+            })
+        }
+    }
+
+private fun songSegmentedRow(
+    filters: List<dev.stellive.hub.feature.home.SongFilterOption>,
+    selectedId: String,
+    onSelected: (String) -> Unit,
+): LinearLayout =
+    LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        weightSum = filters.size.toFloat()
+        filters.forEachIndexed { index, filter ->
+            addView(filterSegmentView(filter.id, filter.label, filter.id == selectedId) {
+                onSelected(filter.id)
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (index < filters.lastIndex) marginEnd = dp(6)
+            })
+        }
+    }
+
+private fun filterSegmentView(
+    id: String,
+    label: String,
+    selected: Boolean,
+    onSelected: () -> Unit,
+): TextView =
+    TextView(this).apply {
+        text = label
+        gravity = Gravity.CENTER
+        maxLines = 1
+        setTextColor(color(if (selected) R.color.hub_text else R.color.hub_text_muted))
+        textSize = 13f
+        typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+        background = rounded(
+            fill = color(if (selected) R.color.hub_card_surface_compact else R.color.hub_surface),
+            radius = dp(18),
+            stroke = if (selected) color(R.color.hub_line) else Color.TRANSPARENT,
+        )
+        setPadding(dp(8), dp(8), dp(8), dp(8))
+        isClickable = true
+        isFocusable = true
+        contentDescription = label
+        setOnClickListener { onSelected() }
+    }
+
+private fun songSelectorRow(
+    label: String,
+    value: String,
+    accentValue: Boolean,
+    onClick: () -> Unit,
+): LinearLayout =
+    LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(3), dp(9), dp(3), dp(9))
+        isClickable = true
+        isFocusable = true
+        setOnClickListener { onClick() }
+        addView(TextView(context).apply {
+            text = label
+            setTextColor(color(R.color.hub_text))
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        addView(TextView(context).apply {
+            text = "$value ›"
+            setTextColor(if (accentValue) Color.rgb(74, 144, 226) else color(R.color.hub_text))
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+        })
+    }
+
+private fun showSongSortDialog() {
+    val options = MainUiPolicy.songSortOptions()
+    val selectedIndex = options.indexOfFirst { it.id == selectedSongSortId }.coerceAtLeast(0)
+    AlertDialog.Builder(this)
+        .setTitle("정렬")
+        .setSingleChoiceItems(options.map { it.label }.toTypedArray(), selectedIndex) { dialog, which ->
+            selectedSongSortId = options[which].id
+            selectedSongPage = 1
+            dialog.dismiss()
+            renderSongs()
+        }
+        .setNegativeButton("취소", null)
+        .show()
 }
 
 private fun songSearchCard(): MaterialCardView =
@@ -1056,6 +1246,7 @@ private fun scheduleSongSearchRender(rawQuery: String) {
             }
             addView(songFilterRow(MainUiPolicy.songGenerationFilters(), selectedSongGenerationId) { selectedSongGenerationId = it })
             addView(songFilterRow(MainUiPolicy.songTypeFilters(), selectedSongType) { selectedSongType = it })
+            addView(songFilterRow(MainUiPolicy.songSortOptions(), selectedSongSortId) { selectedSongSortId = it })
         }
 
 private fun songMemberFilterCard(members: List<HubMember>, visibleCount: Int): MaterialCardView =
@@ -1109,17 +1300,18 @@ private fun songMemberFilterCard(members: List<HubMember>, visibleCount: Int): M
 
 private fun renderSongMemberFilter() {
     val members = serverMembers ?: repository.members
+    val memberById = members.associateBy { it.id }
     startScreen(
         screenId = "song_member_filter",
         title = "노래 멤버 선택",
-        role = "노래 목록을 멤버별로 좁혀 봅니다."
+        role = "노래 목록을 멤버별로 좁혀 봅니다"
     )
     MainUiPolicy.songMemberFilters(members).forEach { option ->
         binding.contentList.addView(
-            compactEventCard(
-                title = option.label,
-                body = if (option.id == selectedSongMemberId) "선택됨" else "탭해서 선택",
-                pills = if (option.id == selectedSongMemberId) listOf("선택됨") else emptyList()
+            songMemberFilterOptionCard(
+                option = option,
+                member = memberById[option.id],
+                selected = option.id == selectedSongMemberId,
             ).apply {
                 isClickable = true
                 isFocusable = true
@@ -1134,6 +1326,52 @@ private fun renderSongMemberFilter() {
     }
 }
 
+private fun songMemberFilterOptionCard(
+        option: dev.stellive.hub.feature.home.SongFilterOption,
+        member: HubMember?,
+        selected: Boolean,
+    ): MaterialCardView =
+        baseCard(HubCardStyle.INTERACTIVE).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(10)
+            }
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+            }
+            if (member != null) {
+                row.addView(songMemberProfileAvatar(member, dp(42)), LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                    marginEnd = dp(12)
+                })
+            }
+            row.addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(context).apply {
+                    text = option.label
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                    maxLines = 1
+                })
+                addView(TextView(context).apply {
+                    text = if (selected) "현재 적용 중" else "탭해서 선택"
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 12f
+                    setPadding(0, dp(4), 0, 0)
+                })
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            if (selected) {
+                row.addView(rowChip("선택됨"), LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    marginStart = dp(12)
+                })
+            }
+            addView(row)
+        }
+
 private fun songFilterRow(
         filters: List<dev.stellive.hub.feature.home.SongFilterOption>,
         selectedId: String,
@@ -1144,7 +1382,7 @@ private fun songFilterRow(
             addView(ChipGroup(context).apply {
                 isSingleLine = true
                 filters.forEach { filter ->
-                    addView(Chip(context).apply {
+                    addView(centerChipText(Chip(context).apply {
                         text = filter.label
                         isCheckable = true
                         isChecked = filter.id == selectedId
@@ -1153,13 +1391,14 @@ private fun songFilterRow(
                             selectedSongPage = 1
                             renderSongs()
                         }
-                    })
+                    }))
                 }
             })
         }
 
-    private fun songCard(song: SongCatalogItem): MaterialCardView =
+    private fun songCard(song: SongCatalogItem, catalogMembers: List<HubMember> = serverMembers ?: repository.members): MaterialCardView =
         baseCard(HubCardStyle.INTERACTIVE).apply {
+            val displayText = MainUiPolicy.songDisplayText(song, catalogMembers)
             val externalUrl = MainUiPolicy.songExternalUrl(song.youtubeUrl)
             isClickable = externalUrl != null
             isFocusable = externalUrl != null
@@ -1177,16 +1416,24 @@ private fun songFilterRow(
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
             content.addView(TextView(context).apply {
-                text = song.title
+                text = displayText.title
                 setTextColor(color(R.color.hub_text))
                 textSize = 15f
                 typeface = Typeface.DEFAULT_BOLD
         })
         content.addView(TextView(context).apply {
-            text = "${MainUiPolicy.songMemberDisplayText(song)} · ${song.type.displayName}"
+            text = displayText.subtitle
             setTextColor(color(R.color.hub_text_muted))
                 textSize = 12f
                 setPadding(0, dp(5), 0, 0)
+            })
+            content.addView(rowChip(song.type.displayName).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    topMargin = dp(7)
+                }
             })
             MainUiPolicy.songPremiereStatusLabel(song)?.let { label ->
                 content.addView(rowChip(label).apply {
@@ -1844,9 +2091,9 @@ private fun sectionLabel(text: String): SectionHeaderView =
             addView(content)
         }
 
-    private fun filterChips(): HorizontalScrollView =
+private fun filterChips(): HorizontalScrollView =
         chipsContainer(repository.filters.map { filter ->
-            Chip(this).apply {
+            centerChipText(Chip(this).apply {
                 text = filter.displayName
                 isCheckable = true
                 isChecked = filter.id == selectedFilter
@@ -1861,12 +2108,12 @@ private fun sectionLabel(text: String): SectionHeaderView =
                     selectedFilter = filter.id
                     renderHome()
                 }
-            }
+            })
         })
 
     private fun staticChips(vararg labels: String): HorizontalScrollView =
         chipsContainer(labels.mapIndexed { index, label ->
-            Chip(this).apply {
+            centerChipText(Chip(this).apply {
                 text = label
                 isCheckable = false
                 chipStrokeWidth = dp(1).toFloat()
@@ -1875,7 +2122,7 @@ private fun sectionLabel(text: String): SectionHeaderView =
                     context,
                     if (index == 0) R.color.hub_accent_soft else R.color.hub_card
                 )
-            }
+            })
         })
 
     private fun liveStatusChips(): HorizontalScrollView {
@@ -1885,7 +2132,7 @@ private fun sectionLabel(text: String): SectionHeaderView =
             "offline" to "오프라인"
         )
         return chipsContainer(filters.map { (id, label) ->
-            Chip(this).apply {
+            centerChipText(Chip(this).apply {
                 text = label
                 isCheckable = true
                 isChecked = id == selectedLiveStatusFilter
@@ -1899,7 +2146,7 @@ private fun sectionLabel(text: String): SectionHeaderView =
                     selectedLiveStatusFilter = id
                     renderLive()
                 }
-            }
+            })
         })
     }
 
@@ -1914,7 +2161,21 @@ private fun sectionLabel(text: String): SectionHeaderView =
             })
         }
 
-    private fun noticeCard(text: String): TextView = TextView(this).apply {
+private fun loadingCard(presentation: LoadingPresentation): MaterialCardView =
+        baseCard(HubCardStyle.COMPACT).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(14)
+            }
+            contentDescription = presentation.title
+            addView(ProgressBar(context).apply {
+                isIndeterminate = true
+                indeterminateTintList = ColorStateList.valueOf(color(R.color.hub_primary))
+            }, FrameLayout.LayoutParams(dp(36), dp(36), Gravity.CENTER).apply {
+                setMargins(0, dp(18), 0, dp(18))
+            })
+        }
+
+private fun noticeCard(text: String): TextView = TextView(this).apply {
         this.text = text
         setTextColor(color(R.color.hub_warning))
         textSize = 12f
@@ -1959,6 +2220,20 @@ private fun sectionLabel(text: String): SectionHeaderView =
             }
             if (showsLiveIndicator && member.isLive) {
                 addView(liveIndicator(size), FrameLayout.LayoutParams(dp(12), dp(12), Gravity.BOTTOM or Gravity.END))
+            }
+        }
+
+    private fun songMemberProfileAvatar(member: HubMember, size: Int): FrameLayout =
+        FrameLayout(this).apply {
+            addView(
+                avatarText(member, size),
+                FrameLayout.LayoutParams(size, size)
+            )
+            member.profileImageUrl?.takeIf { it.startsWith("https://") }?.let { imageUrl ->
+                addView(
+                    channelImageAvatar(imageUrl, size),
+                    FrameLayout.LayoutParams(size, size)
+                )
             }
         }
 
@@ -2039,8 +2314,10 @@ private fun sectionLabel(text: String): SectionHeaderView =
         else -> "OFFLINE"
     }
 
-    private fun statusBadge(text: String, positive: Boolean): TextView = TextView(this).apply {
+private fun statusBadge(text: String, positive: Boolean): TextView = TextView(this).apply {
         this.text = text
+        gravity = Gravity.CENTER
+        textAlignment = View.TEXT_ALIGNMENT_CENTER
         setTextColor(if (positive) color(R.color.hub_success) else color(R.color.hub_text_muted))
         textSize = 11f
         typeface = Typeface.DEFAULT_BOLD
@@ -2768,8 +3045,9 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
             (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dp(10)
         }
 
-    private fun rowChip(text: String): Chip = Chip(this).apply {
+private fun rowChip(text: String): Chip = Chip(this).apply {
         this.text = text
+        centerChipText(this)
         val isWarning = text.contains("필터") || text.contains("확인")
         val isOff = text.contains("OFF") || text.contains("제외") || text.contains("unsupported")
         val isGood = text.contains("LIVE") || text.contains("CHZZK") || text.contains("YouTube") || text.contains("X")
@@ -2799,8 +3077,10 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
         )
     }
 
-    private fun pill(text: String, good: Boolean): TextView = TextView(this).apply {
+private fun pill(text: String, good: Boolean): TextView = TextView(this).apply {
         this.text = text
+        gravity = Gravity.CENTER
+        textAlignment = View.TEXT_ALIGNMENT_CENTER
         val isWarning = text.contains("필터") || text.contains("확인")
         val isOff = text.contains("OFF") || text.contains("제외") || text.contains("unsupported")
         setTextColor(
@@ -2824,6 +3104,13 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
             stroke = color(R.color.hub_line)
         )
         setPadding(dp(8), dp(4), dp(8), dp(4))
+    }
+
+    private fun centerChipText(chip: Chip): Chip = chip.apply {
+        gravity = Gravity.CENTER
+        textAlignment = View.TEXT_ALIGNMENT_CENTER
+        textStartPadding = 0f
+        textEndPadding = 0f
     }
 
 private fun baseCard(style: HubCardStyle = HubCardStyle.STANDARD): MaterialCardView =
