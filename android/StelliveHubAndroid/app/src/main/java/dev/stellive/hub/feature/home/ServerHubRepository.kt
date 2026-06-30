@@ -29,6 +29,7 @@ import dev.stellive.hub.core.network.HubEventDto
 import dev.stellive.hub.core.network.HubApiClient
 import dev.stellive.hub.core.network.HubNetworkResult
 import dev.stellive.hub.core.network.LiveStatusDto
+import dev.stellive.hub.core.network.MemberDto
 import dev.stellive.hub.core.network.MusicCatalogItemDto
 import dev.stellive.hub.core.network.MusicListResponseDto
 import dev.stellive.hub.core.network.RegisterDeviceRequestDto
@@ -68,7 +69,9 @@ class ServerHubRepository(
             if (response.value.device == null) {
                 registerDevice()
             }
-            return fallback.bootstrap().mergeLiveStatus(response.value.liveStatus)
+            return fallback.bootstrap()
+                .mergeCatalogProfileImages(response.value.effectiveCatalog.members)
+                .mergeLiveStatus(response.value.liveStatus)
         }
         return fallback.bootstrap().copy(liveStatusSourceLabel = "서버 연결 실패 · 앱 내 목업")
     }
@@ -134,21 +137,16 @@ class ServerHubRepository(
         return songCache ?: fallback.songs(generationId, memberId, type, query, cursor)
     }
 
-    override suspend fun recentCoverSongs(limit: Int): List<SongCatalogItem> {
-        return when (
-            val result = remoteDataSource.music(
-                type = "cover",
-                cursor = null,
-                limit = limit,
-                sort = "publishedAt_desc",
-            )
-        ) {
-            is HubNetworkResult.Success -> result.value.items.mapNotNull { it.toSongCatalogItemOrNull() }
-            is HubNetworkResult.Failure -> MainUiPolicy.recentCoverSongs(
-                songCache?.items ?: fallback.songs(type = "cover").items,
-                limit,
-            )
+    override suspend fun recentSongs(limit: Int): List<SongCatalogItem> {
+        val result = fetchAllMusicPages(memberId = null, type = null)
+        if (result != null) {
+            songCache = result
+            return MainUiPolicy.recentSongs(result.items, limit)
         }
+        return MainUiPolicy.recentSongs(
+            songCache?.items ?: fallback.songs().items,
+            limit,
+        )
     }
 
     private suspend fun fetchAllMusicPages(
@@ -243,6 +241,16 @@ class ServerHubRepository(
                     channelImageUrl = status.channelImageUrl,
                 )
             }
+        )
+    }
+
+    private fun HubDataState.mergeCatalogProfileImages(membersFromServer: List<MemberDto>): HubDataState {
+        if (membersFromServer.isEmpty()) return this
+        val profileImageByMemberId = membersFromServer.associate { it.id to it.profileImageUrl }
+        return copy(
+            members = members.map { member ->
+                member.copy(profileImageUrl = profileImageByMemberId[member.id] ?: member.profileImageUrl)
+            },
         )
     }
 

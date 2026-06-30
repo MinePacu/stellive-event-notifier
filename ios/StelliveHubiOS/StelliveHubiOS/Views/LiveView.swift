@@ -3,7 +3,6 @@ import SwiftUI
 struct LiveView: View {
     @EnvironmentObject private var store: MockHubStore
     @State private var path = NavigationPath()
-    @State private var showsSettings = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -47,22 +46,7 @@ struct LiveView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(Color(uiColor: .systemGroupedBackground))
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showsSettings = true
-                    } label: {
-                        Image(systemName: IOSPrimaryNavigationPolicy.settingsAccess.systemImage)
-                    }
-                    .accessibilityLabel("설정")
-                }
-            }
-            .sheet(isPresented: $showsSettings) {
-                NavigationStack {
-                    SettingsView()
-                        .environmentObject(store)
-                }
-            }
+            .settingsToolbar(path: $path)
             .navigationBarTitleDisplayMode(.inline)
         }
     }

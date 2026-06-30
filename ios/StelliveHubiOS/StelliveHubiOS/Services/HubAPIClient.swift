@@ -85,6 +85,12 @@ struct GenerationResponse: Codable, Equatable {
 
 struct MemberResponse: Codable, Equatable {
     let id: String
+    let profileImageUrl: String?
+
+    init(id: String, profileImageUrl: String? = nil) {
+        self.id = id
+        self.profileImageUrl = profileImageUrl
+    }
 }
 
 struct PreferenceResponse: Codable, Equatable {

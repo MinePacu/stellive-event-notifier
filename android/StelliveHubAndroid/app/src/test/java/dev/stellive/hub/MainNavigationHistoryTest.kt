@@ -55,4 +55,38 @@ class MainNavigationHistoryTest {
         assertEquals(HubScreen.GOODS_EVENTS, history.goBack())
         assertEquals(HubScreen.GOODS_EVENTS, history.currentScreen)
     }
+
+    @Test
+    fun subPageSystemBackReturnsToCurrentRoot() {
+        val history = MainNavigationHistory()
+
+        history.selectRoot(HubScreen.SONGS)
+        history.select(HubScreen.SONG_SEARCH)
+
+        assertEquals(HubScreen.SONGS, history.goBackToCurrentRoot())
+        assertEquals(HubScreen.SONGS, history.currentScreen)
+        assertFalse(history.canGoBack)
+    }
+
+    @Test
+    fun settingsSystemBackReturnsToOpeningRoot() {
+        val history = MainNavigationHistory()
+
+        history.selectRoot(HubScreen.LIVE)
+        history.select(HubScreen.SETTINGS)
+
+        assertEquals(HubScreen.LIVE, history.goBackToCurrentRoot())
+        assertEquals(HubScreen.LIVE, history.currentScreen)
+        assertFalse(history.canGoBack)
+    }
+
+    @Test
+    fun rootSystemBackHasNoNavigationTarget() {
+        val history = MainNavigationHistory()
+
+        history.selectRoot(HubScreen.GOODS_EVENTS)
+
+        assertNull(history.goBackToCurrentRoot())
+        assertEquals(HubScreen.GOODS_EVENTS, history.currentScreen)
+    }
 }

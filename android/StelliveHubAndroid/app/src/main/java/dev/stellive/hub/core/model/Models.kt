@@ -167,6 +167,7 @@ data class HubMember(
     val livePlatformUrl: String? = null,
     val liveLastCheckedAt: Instant? = null,
     val channelImageUrl: String? = null,
+    val profileImageUrl: String? = null,
 )
 
 data class HubEvent(

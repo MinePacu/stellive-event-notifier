@@ -3,6 +3,7 @@ import { ChzzkAuthClient } from "./adapters/chzzk/chzzkAuthClient.js";
 import ChzzkApiClient from "./adapters/chzzk/chzzkApiClient.js";
 import ChzzkOpenApiAdapter from "./adapters/chzzk/chzzkOpenApiAdapter.js";
 import { CatalogService } from "./catalog/catalog.js";
+import { MemberProfileImageHydrator } from "./catalog/memberProfileImageHydrator.js";
 import ChzzkEventIngestor from "./events/chzzkEventIngestor.js";
 import YoutubeWebSubSubscriptionService from "./adapters/youtube/youtubeWebSubSubscriptionService.js";
 import YoutubeDataApiClient from "./adapters/youtube/youtubeDataApiClient.js";
@@ -243,6 +244,21 @@ function createDefaultYoutubeSongBackfillScheduler(
   };
 }
 
+function createDefaultMemberProfileImageHydrator(
+  env: AppEnv,
+  dependencies: AppRouteDependencies | undefined,
+  fetchImpl?: typeof fetch,
+): Pick<AppRouteDependencies, "memberProfileImages"> {
+  if (dependencies?.memberProfileImages) return {};
+  if (!env.YOUTUBE_API_KEY) return {};
+  return {
+    memberProfileImages: new MemberProfileImageHydrator({
+      youtube: new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl }),
+      stateRepository: new PlatformApiStateRepository(),
+    }),
+  };
+}
+
 function createDefaultMusicSyncService(
   env: AppEnv,
   dependencies: Partial<InternalRouteDependencies> | undefined,
@@ -421,7 +437,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
     }
   });
   await app.register(swaggerUi, { routePrefix: "/docs" });
-  const appRouteDependencies: AppRouteDependencies = { ...options.appRoutes?.dependencies };
+  const appRouteDependencies: AppRouteDependencies = {
+    ...createDefaultMemberProfileImageHydrator(env, options.appRoutes?.dependencies, options.chzzkLiveApiFetch),
+    ...options.appRoutes?.dependencies,
+  };
   if (!appRouteDependencies.hubEvents && env.HUB_EVENTS_STORAGE_MODE === "prisma") {
     appRouteDependencies.hubEvents = new HubEventRepository();
   }
@@ -454,7 +473,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
       },
       hubEvents: {
         summary: async () => hubEvents.summary()
-      }
+      },
+      memberProfileImages: appRouteDependencies.memberProfileImages
     });
   }
 

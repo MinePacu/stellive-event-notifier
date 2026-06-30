@@ -46,7 +46,8 @@ describe("catalog seed policy", () => {
     expect(missing).toEqual([]);
     expect(catalog.getMember("ayatsuno-yuni")?.platforms.youtubeChannelId).toBe("UClbYIn9LDbbFZ9w2shX3K0g");
     expect(catalog.getMember("shirayuki-hina")?.platforms.youtubeChannelId).toBe("UC1afpiIuBDcjYlmruAa0HiA");
-    expect(catalog.getMember("neneko-mashiro")?.platforms.youtubeChannelId).toBe("UCnQt1xFonbwyexeHfYe6VaA");
+    expect(catalog.getMember("neneko-mashiro")?.platforms.youtubeChannelId).toBe("UC_eeSpMBz8PG4ssdBPnP07g");
+    expect(catalog.getMember("neneko-mashiro")?.platforms.youtubeHandle).toBe("@neneko_mashiro");
     expect(catalog.getMember("akane-lize")?.platforms.youtubeChannelId).toBe("UC7-m6jQLinZQWIbwm9W-1iw");
     expect(catalog.getMember("arahashi-tabi")?.platforms.youtubeChannelId).toBe("UCAHVQ44O81aehLWfy9O6Elw");
   });

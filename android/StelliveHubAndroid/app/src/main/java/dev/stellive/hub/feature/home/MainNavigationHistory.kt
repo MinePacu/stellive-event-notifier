@@ -20,6 +20,7 @@ enum class HubScreen(val id: String) {
 
 class MainNavigationHistory(initialScreen: HubScreen = HubScreen.HOME) {
     private val previousScreens = mutableListOf<HubScreen>()
+    private var currentRoot: HubScreen = initialScreen.rootScreen()
     var currentScreen: HubScreen = initialScreen
         private set
 
@@ -34,6 +35,7 @@ class MainNavigationHistory(initialScreen: HubScreen = HubScreen.HOME) {
 
     fun selectRoot(screen: HubScreen) {
         previousScreens.clear()
+        currentRoot = screen.rootScreen()
         currentScreen = screen
     }
 
@@ -42,4 +44,21 @@ class MainNavigationHistory(initialScreen: HubScreen = HubScreen.HOME) {
         currentScreen = previous
         return previous
     }
+
+    fun goBackToCurrentRoot(): HubScreen? {
+        if (currentScreen == currentRoot) return null
+        previousScreens.clear()
+        currentScreen = currentRoot
+        return currentRoot
+    }
+}
+
+fun HubScreen.rootScreen(): HubScreen = when (this) {
+    HubScreen.LIVE -> HubScreen.LIVE
+    HubScreen.SONGS,
+    HubScreen.SONG_SEARCH,
+    HubScreen.SONG_MEMBER_FILTER -> HubScreen.SONGS
+    HubScreen.GOODS_EVENTS,
+    HubScreen.GOODS_EVENT_DETAIL -> HubScreen.GOODS_EVENTS
+    else -> HubScreen.HOME
 }

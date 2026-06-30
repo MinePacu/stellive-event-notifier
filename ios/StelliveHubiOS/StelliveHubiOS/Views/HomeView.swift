@@ -29,14 +29,19 @@ struct HomeView: View {
                     }
                 }
 
-                Section("최근 커버곡") {
-                    if serverStore.recentCoverSongs.isEmpty {
-                        Text("최근 커버곡을 불러오는 중입니다.")
+                Section("최근 곡") {
+                    if serverStore.isRefreshingRecentSongs && serverStore.recentSongs.isEmpty {
+                        LoadingStateRow(
+                            title: "최근 곡 확인 중",
+                            message: "서버에서 최신 오리지널곡과 커버곡을 불러오고 있습니다."
+                        )
+                    } else if serverStore.recentSongs.isEmpty {
+                        Text("최근 곡 없음")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(serverStore.recentCoverSongs) { song in
-                            SongRow(song: song)
+                        ForEach(serverStore.recentSongs) { song in
+                            SongRow(song: song, catalogMembers: store.members)
                                 .listRowInsets(IOSSongPagePolicy.songRowInsets)
                         }
                     }
@@ -93,9 +98,31 @@ struct HomeView: View {
                 MemberDetailView(member: member)
             }
             .task {
-                await serverStore.refreshRecentCoverSongs()
+                await serverStore.refreshRecentSongs()
             }
         }
+    }
+}
+
+struct LoadingStateRow: View {
+    let title: String
+    let message: String
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            ProgressView()
+                .controlSize(.regular)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 6)
     }
 }
 
@@ -378,10 +405,16 @@ struct MemberRow: View {
     }
 }
 
+enum MemberAvatarSource {
+    case liveChannel
+    case youtubeProfile
+}
+
 struct MemberAvatarView: View {
     let member: HubMember
     var size: CGFloat = 44
     var showsLiveRing = false
+    var source: MemberAvatarSource = .liveChannel
 
     var body: some View {
         ZStack {
@@ -390,8 +423,8 @@ struct MemberAvatarView: View {
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            if let channelImageURL = member.channelImageURL {
-                AsyncImage(url: channelImageURL) { phase in
+            if let imageURL {
+                AsyncImage(url: imageURL) { phase in
                     if let image = phase.image {
                         image
                             .resizable()
@@ -421,6 +454,15 @@ struct MemberAvatarView: View {
 
     private var label: String {
         member.catalogRole == .officialChannel ? "공식" : String(member.koreanName.prefix(2))
+    }
+
+    private var imageURL: URL? {
+        switch source {
+        case .liveChannel:
+            return member.channelImageURL
+        case .youtubeProfile:
+            return member.profileImageURL
+        }
     }
 
     private var backgroundColor: Color {
