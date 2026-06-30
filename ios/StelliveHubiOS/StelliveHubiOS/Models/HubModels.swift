@@ -954,6 +954,14 @@ enum IOSSongPagePolicy {
         return Array(songs[start..<end])
     }
 
+    static func summaryCounts(for allSongs: [SongCatalogItem], filteredSongs: [SongCatalogItem]) -> SongFacetSummary {
+        SongFacetSummary(
+            total: allSongs.count,
+            original: allSongs.filter { $0.type == .original }.count,
+            cover: allSongs.filter { $0.type == .cover }.count
+        )
+    }
+
     static func sortedSongs(_ songs: [SongCatalogItem], sortId: String) -> [SongCatalogItem] {
         songs.sorted { left, right in
             switch sortId {

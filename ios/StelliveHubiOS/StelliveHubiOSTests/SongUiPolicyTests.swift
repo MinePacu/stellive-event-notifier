@@ -127,6 +127,39 @@ final class SongUiPolicyTests: XCTestCase {
         XCTAssertEqual(IOSSongPagePolicy.clampedPage(0, totalItems: songs.count, pageSize: 20), 1)
     }
 
+    func testSongSummaryCountsUseAllSongsRatherThanFilteredSongs() {
+        let allSongs = [
+            SongCatalogItem(
+                id: "original",
+                youtubeVideoId: "original",
+                title: "Original",
+                type: .original,
+                youtubeUrl: "https://www.youtube.com/watch?v=original"
+            ),
+            SongCatalogItem(
+                id: "cover-1",
+                youtubeVideoId: "cover-1",
+                title: "Cover 1",
+                type: .cover,
+                youtubeUrl: "https://www.youtube.com/watch?v=cover-1"
+            ),
+            SongCatalogItem(
+                id: "cover-2",
+                youtubeVideoId: "cover-2",
+                title: "Cover 2",
+                type: .cover,
+                youtubeUrl: "https://www.youtube.com/watch?v=cover-2"
+            ),
+        ]
+        let filteredSongs = [allSongs[0]]
+
+        let summary = IOSSongPagePolicy.summaryCounts(for: allSongs, filteredSongs: filteredSongs)
+
+        XCTAssertEqual(summary.total, 3)
+        XCTAssertEqual(summary.original, 1)
+        XCTAssertEqual(summary.cover, 2)
+    }
+
     func testSongMemberDisplayJoinsCollaborationMembers() {
         let song = SongCatalogItem(
             id: "video-1",

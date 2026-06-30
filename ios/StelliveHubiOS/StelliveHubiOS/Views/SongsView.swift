@@ -48,18 +48,19 @@ struct SongsView: View {
     }
 
     private var facets: SongFacetsResponse {
-        SongFacetsResponse(
-            summary: SongFacetSummary(
-                total: songs.count,
-                original: songs.filter { $0.type == .original }.count,
-                cover: songs.filter { $0.type == .cover }.count
-            ),
+        let allSongs = serverStore.songs(
+            generationId: "all",
+            type: "all",
+            query: ""
+        ).items
+        return SongFacetsResponse(
+            summary: IOSSongPagePolicy.summaryCounts(for: allSongs, filteredSongs: songs),
             generationFilters: IOSSongPagePolicy.generationFilters.map {
-                SongFilterCount(id: $0.id, label: $0.label, generationId: $0.id == "all" ? nil : $0.id, count: songs.count)
+                SongFilterCount(id: $0.id, label: $0.label, generationId: $0.id == "all" ? nil : $0.id, count: allSongs.count)
             },
             memberFilters: [],
             typeFilters: IOSSongPagePolicy.typeFilters.map {
-                SongFilterCount(id: $0.id, label: $0.label, generationId: nil, count: songs.count)
+                SongFilterCount(id: $0.id, label: $0.label, generationId: nil, count: allSongs.count)
             }
         )
     }
