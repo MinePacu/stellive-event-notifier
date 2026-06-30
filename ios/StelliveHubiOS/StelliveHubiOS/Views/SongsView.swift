@@ -114,6 +114,7 @@ struct SongsView: View {
             NavigationLink {
                 SongMemberFilterView(
                     filters: IOSSongPagePolicy.memberFilters(from: store.members),
+                    members: store.members,
                     selectedMemberId: $selectedMemberId,
                     selectedPage: $selectedPage
                 )
@@ -281,9 +282,14 @@ struct SongRow: View {
 
 private struct SongMemberFilterView: View {
     let filters: [SongFilterOption]
+    let members: [HubMember]
     @Binding var selectedMemberId: String
     @Binding var selectedPage: Int
     @Environment(\.dismiss) private var dismiss
+
+    private var memberById: [String: HubMember] {
+        Dictionary(uniqueKeysWithValues: members.map { ($0.id, $0) })
+    }
 
     var body: some View {
         List(filters) { filter in
@@ -292,14 +298,35 @@ private struct SongMemberFilterView: View {
                 selectedPage = 1
                 dismiss()
             } label: {
-                HStack {
-                    Text(filter.label)
+                HStack(spacing: 12) {
+                    if let member = memberById[filter.id] {
+                        MemberAvatarView(member: member, size: 42)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(filter.label)
+                            .foregroundStyle(.primary)
+                        Text(selectedMemberId == filter.id ? "현재 적용 중" : "탭해서 선택")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     Spacer()
+
                     if selectedMemberId == filter.id {
-                        Image(systemName: "checkmark")
+                        Text("선택됨")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(Color(.tertiarySystemGroupedBackground))
+                            )
                     }
                 }
             }
+            .buttonStyle(.plain)
         }
         .navigationTitle("노래 멤버 선택")
     }

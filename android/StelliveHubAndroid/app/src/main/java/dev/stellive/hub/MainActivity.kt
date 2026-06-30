@@ -1300,17 +1300,18 @@ private fun songMemberFilterCard(members: List<HubMember>, visibleCount: Int): M
 
 private fun renderSongMemberFilter() {
     val members = serverMembers ?: repository.members
+    val memberById = members.associateBy { it.id }
     startScreen(
         screenId = "song_member_filter",
         title = "노래 멤버 선택",
-        role = "노래 목록을 멤버별로 좁혀 봅니다."
+        role = "노래 목록을 멤버별로 좁혀 봅니다"
     )
     MainUiPolicy.songMemberFilters(members).forEach { option ->
         binding.contentList.addView(
-            compactEventCard(
-                title = option.label,
-                body = if (option.id == selectedSongMemberId) "선택됨" else "탭해서 선택",
-                pills = if (option.id == selectedSongMemberId) listOf("선택됨") else emptyList()
+            songMemberFilterOptionCard(
+                option = option,
+                member = memberById[option.id],
+                selected = option.id == selectedSongMemberId,
             ).apply {
                 isClickable = true
                 isFocusable = true
@@ -1324,6 +1325,52 @@ private fun renderSongMemberFilter() {
         )
     }
 }
+
+private fun songMemberFilterOptionCard(
+        option: dev.stellive.hub.feature.home.SongFilterOption,
+        member: HubMember?,
+        selected: Boolean,
+    ): MaterialCardView =
+        baseCard(HubCardStyle.INTERACTIVE).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(10)
+            }
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+            }
+            if (member != null) {
+                row.addView(memberAvatar(member, dp(42)), LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                    marginEnd = dp(12)
+                })
+            }
+            row.addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(context).apply {
+                    text = option.label
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                    maxLines = 1
+                })
+                addView(TextView(context).apply {
+                    text = if (selected) "현재 적용 중" else "탭해서 선택"
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 12f
+                    setPadding(0, dp(4), 0, 0)
+                })
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            if (selected) {
+                row.addView(rowChip("선택됨"), LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    marginStart = dp(12)
+                })
+            }
+            addView(row)
+        }
 
 private fun songFilterRow(
         filters: List<dev.stellive.hub.feature.home.SongFilterOption>,
