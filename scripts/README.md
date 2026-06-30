@@ -57,3 +57,29 @@ LOG_TAIL_LINES=200 scripts/android-build.sh
 ```
 
 For Codex work, ask Codex to run these scripts instead of raw Gradle, adb, xcodebuild, or simctl commands. That keeps long build/install output out of the conversation context while preserving the full log file locally for debugging.
+
+## Internal Backend Server
+
+- `server-sync.sh` syncs the current workspace to the server configured by `SERVER_SSH_TARGET`, with generated folders and secret env files excluded.
+- `server-rebuild.sh` runs Docker Compose on the server with `up -d --build --force-recreate`.
+- `server-status.sh` writes a limited container status and API log tail to a local log file.
+- `server-sync-rebuild.sh` runs sync, rebuild, and status in sequence.
+
+Defaults:
+
+```bash
+SERVER_SSH_TARGET= # required, for example user@host
+SERVER_PROJECT_DIR=~/StelLiveNoti
+SERVER_COMPOSE_FILE=backend/stellive-hub-api/docker-compose.yml
+SERVER_LOG_TAIL=40
+```
+
+Keep `SERVER_SSH_TARGET` in your shell environment or an untracked local env file. Do not commit real server usernames, hosts, private IP addresses, tokens, or credentials.
+
+These scripts do not print full `rsync`, Docker build, or container logs to the terminal. Full command output is stored under `scripts/logs/`; failures print the log path and the last `${LOG_TAIL_LINES:-160}` lines. The status script also keeps Docker Compose logs bounded with `--tail=$SERVER_LOG_TAIL`.
+
+For Codex server refresh work, run:
+
+```bash
+scripts/server-sync-rebuild.sh
+```

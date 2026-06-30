@@ -27,6 +27,7 @@ ios/StelliveHubiOS/Config/Local.xcconfig
 # Local design mockups
 .superpowers/
 qa-screenshots/
+scripts/logs/
 
 # Secrets
 .env
