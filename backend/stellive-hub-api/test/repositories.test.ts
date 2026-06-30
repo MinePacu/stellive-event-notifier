@@ -561,6 +561,35 @@ describe("HubEventRepository", () => {
     ]);
   });
 
+  it("returns admin list pagination cursors while preserving cursor skip", async () => {
+    const calls: unknown[] = [];
+    const repository = new HubEventRepository({
+      hubEvent: {
+        findMany: async (args: unknown) => {
+          calls.push(args);
+          return [
+            { ...record, id: "event-2" },
+            { ...record, id: "event-3" },
+            { ...record, id: "event-4" }
+          ];
+        }
+      }
+    });
+
+    const result = await repository.listAdmin({ limit: 2, cursor: "event-1" });
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        take: 3,
+        cursor: { id: "event-1" },
+        skip: 1
+      })
+    ]);
+    expect(result.items.map((item) => item.id)).toEqual(["event-2", "event-3"]);
+    expect(result.nextCursor).toBe("event-4");
+  });
+
   it("gets only published non-deleted hub event details", async () => {
     const calls: unknown[] = [];
     const repository = new HubEventRepository({

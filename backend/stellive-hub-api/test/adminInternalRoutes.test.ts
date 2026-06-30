@@ -71,6 +71,17 @@ function expectAdminThemeSupport(html: string) {
 }
 
 function expectHubEventAdminConsoleSupport(html: string) {
+  const navHubEventsIndex = html.indexOf('<a href="#hub-events-section">Hub events</a>');
+  const navAdaptersIndex = html.indexOf('<a href="#adapters-section">Adapters</a>');
+  const hubEventsSectionIndex = html.indexOf('id="hub-events-section"');
+  const adaptersSectionIndex = html.indexOf('id="adapters-section"');
+
+  expect(navHubEventsIndex).toBeGreaterThan(-1);
+  expect(navAdaptersIndex).toBeGreaterThan(-1);
+  expect(navHubEventsIndex).toBeLessThan(navAdaptersIndex);
+  expect(hubEventsSectionIndex).toBeGreaterThan(-1);
+  expect(adaptersSectionIndex).toBeGreaterThan(-1);
+  expect(hubEventsSectionIndex).toBeLessThan(adaptersSectionIndex);
   expect(html).toContain('class="admin-app"');
   expect(html).toContain('class="admin-nav"');
   expect(html).toContain('class="admin-content');
@@ -83,6 +94,12 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain('class="event-list');
   expect(html).toContain('className = "event-row"');
   expect(html).toContain('class="editor');
+  expect(html).toContain("hub-event-editor-panel");
+  expect(html).toContain('class="hub-event-list-panel');
+  expect(html).toContain('class="hub-event-pagination"');
+  expect(html).toContain('id="hub-event-prev-page"');
+  expect(html).toContain('id="hub-event-next-page"');
+  expect(html).toContain('id="hub-event-pagination-status"');
   expect(html).toContain('class="form-section');
   expect(html).toContain('class="bottom-actions"');
   expect(html).toContain('@media (max-width: 760px)');
@@ -96,6 +113,12 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain("No bundled image");
   expect(html).toContain("Metadata only");
   expect(html).toContain("No uploads or copied assets");
+  expect(html).toContain('class="image-policy-help"');
+  expect(html).toContain("official_runtime_url");
+  expect(html).toContain("third_party_allowed");
+  expect(html).toContain("verify_required");
+  expect(html).toContain("blocked");
+  expect(html).toContain("sourceUrl, purchaseUrl, ticketUrl");
   expect(html).toContain('id="hub-event-image-url"');
   expect(html).toContain('id="hub-event-image-policy-state"');
   expect(html).not.toContain('name="logoUrl"');
