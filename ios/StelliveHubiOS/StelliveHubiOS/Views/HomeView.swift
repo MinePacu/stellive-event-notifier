@@ -405,10 +405,16 @@ struct MemberRow: View {
     }
 }
 
+enum MemberAvatarSource {
+    case liveChannel
+    case youtubeProfile
+}
+
 struct MemberAvatarView: View {
     let member: HubMember
     var size: CGFloat = 44
     var showsLiveRing = false
+    var source: MemberAvatarSource = .liveChannel
 
     var body: some View {
         ZStack {
@@ -417,8 +423,8 @@ struct MemberAvatarView: View {
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            if let channelImageURL = member.channelImageURL {
-                AsyncImage(url: channelImageURL) { phase in
+            if let imageURL {
+                AsyncImage(url: imageURL) { phase in
                     if let image = phase.image {
                         image
                             .resizable()
@@ -448,6 +454,15 @@ struct MemberAvatarView: View {
 
     private var label: String {
         member.catalogRole == .officialChannel ? "공식" : String(member.koreanName.prefix(2))
+    }
+
+    private var imageURL: URL? {
+        switch source {
+        case .liveChannel:
+            return member.channelImageURL
+        case .youtubeProfile:
+            return member.profileImageURL
+        }
     }
 
     private var backgroundColor: Color {

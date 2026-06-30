@@ -25,6 +25,15 @@ final class HubAPIClientTests: XCTestCase {
                     "foregroundRealtimeEnabled": false
                   },
                   "preferences": [],
+                  "catalog": {
+                    "generations": [],
+                    "members": [
+                      {
+                        "id": "ayatsuno-yuni",
+                        "profileImageUrl": "https://yt.example/yuni.jpg"
+                      }
+                    ]
+                  },
                   "liveStatus": [],
                   "hubEventsSummary": {
                     "openCount": 0,
@@ -41,6 +50,7 @@ final class HubAPIClientTests: XCTestCase {
         let response = try await client.bootstrap(deviceId: "device-1")
 
         XCTAssertEqual(response.config.catalogVersion, "seed-2026-06-01")
+        XCTAssertEqual(response.effectiveCatalog.members.first?.profileImageUrl, "https://yt.example/yuni.jpg")
         XCTAssertEqual(response.serverTime, "2026-06-11T03:00:00.000Z")
     }
 

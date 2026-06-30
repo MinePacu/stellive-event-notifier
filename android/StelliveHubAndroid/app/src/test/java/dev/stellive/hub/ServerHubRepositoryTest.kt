@@ -2,11 +2,13 @@ package dev.stellive.hub
 
 import dev.stellive.hub.core.device.DeviceIdStore
 import dev.stellive.hub.core.network.BootstrapResponseDto
+import dev.stellive.hub.core.network.BootstrapCatalogDto
 import dev.stellive.hub.core.network.HubCalendarResponseDto
 import dev.stellive.hub.core.network.HubEventDto
 import dev.stellive.hub.core.network.HubEventsListResponseDto
 import dev.stellive.hub.core.network.HubNetworkResult
 import dev.stellive.hub.core.network.LiveStatusDto
+import dev.stellive.hub.core.network.MemberDto
 import dev.stellive.hub.core.network.MusicCatalogItemDto
 import dev.stellive.hub.core.network.MusicListResponseDto
 import dev.stellive.hub.core.network.MusicMemberSummaryDto
@@ -51,6 +53,7 @@ class ServerHubRepositoryTest {
         assertEquals(1234, yuni.liveViewerCount)
         assertEquals("https://chzzk.naver.com/live/chzzk-channel-id", yuni.livePlatformUrl)
         assertEquals("https://img.example/yuni.jpg", yuni.channelImageUrl)
+        assertEquals("https://yt.example/yuni.jpg", yuni.profileImageUrl)
         assertEquals("2026-06-11T03:01:00Z", yuni.liveLastCheckedAt.toString())
         val huya = state.members.first { it.id == "sakihane-huya" }
         assertFalse(huya.isLive)
@@ -59,6 +62,8 @@ class ServerHubRepositoryTest {
         assertNull(huya.liveViewerCount)
         assertNull(huya.livePlatformUrl)
         assertNull(huya.liveLastCheckedAt)
+        assertNull(huya.channelImageUrl)
+        assertEquals("https://yt.example/huya.jpg", huya.profileImageUrl)
     }
 
     @Test
@@ -311,6 +316,35 @@ class ServerHubRepositoryTest {
                         xDisabledReason = "x_notifications_dropped_for_mvp",
                         hubCalendarEnabled = true,
                     foregroundRealtimeEnabled = false,
+                ),
+                catalog = BootstrapCatalogDto(
+                    generations = emptyList(),
+                    members = listOf(
+                        MemberDto(
+                            id = "ayatsuno-yuni",
+                            koreanName = "아야츠노 유니",
+                            englishName = "Ayatsuno Yuni",
+                            generationId = "gen1",
+                            generationName = "1기생",
+                            unitName = "Everys",
+                            catalogRole = "member",
+                            activeStatus = "active",
+                            isPerson = true,
+                            profileImageUrl = "https://yt.example/yuni.jpg",
+                        ),
+                        MemberDto(
+                            id = "sakihane-huya",
+                            koreanName = "사키하네 후야",
+                            englishName = "Sakihane Huya",
+                            generationId = "gen1",
+                            generationName = "1기생",
+                            unitName = "Everys",
+                            catalogRole = "member",
+                            activeStatus = "active",
+                            isPerson = true,
+                            profileImageUrl = "https://yt.example/huya.jpg",
+                        ),
+                    ),
                 ),
                 device = null,
                 liveStatus = listOf(

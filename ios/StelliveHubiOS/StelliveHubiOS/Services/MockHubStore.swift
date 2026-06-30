@@ -53,6 +53,7 @@ final class MockHubStore: ObservableObject {
     @Published private(set) var serverConnectionDebugLogs = ["bootstrap: 대기 중"]
 
     func applyBootstrap(_ response: BootstrapResponse) {
+        mergeProfileImages(response.effectiveCatalog.members)
         guard response.liveStatus.isEmpty == false else {
             liveStatusSourceLabel = "서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음"
             recordServerConnectionDebugLog("bootstrap: \(liveStatusSourceLabel)")
@@ -82,6 +83,19 @@ final class MockHubStore: ObservableObject {
             updatedMember.channelImageURL = status.channelImageUrl.flatMap(URL.init(string:))
             updatedMember.livePlatformURL = status.platformUrl.flatMap(URL.init(string:))
             updatedMember.liveLastCheckedAt = Self.parseInstant(status.lastCheckedAt)
+            return updatedMember
+        }
+    }
+
+    private func mergeProfileImages(_ serverMembers: [MemberResponse]) {
+        let profileImageByMemberID = Dictionary(uniqueKeysWithValues: serverMembers.map { ($0.id, $0.profileImageUrl) })
+        members = members.map { member in
+            var updatedMember = member
+            if let rawURL = profileImageByMemberID[member.id] ?? nil,
+               let url = URL(string: rawURL),
+               url.scheme == "https" {
+                updatedMember.profileImageURL = url
+            }
             return updatedMember
         }
     }

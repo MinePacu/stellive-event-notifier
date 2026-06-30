@@ -300,7 +300,7 @@ private struct SongMemberFilterView: View {
             } label: {
                 HStack(spacing: 12) {
                     if let member = memberById[filter.id] {
-                        MemberAvatarView(member: member, size: 42)
+                        MemberAvatarView(member: member, size: 42, source: .youtubeProfile)
                     }
 
                     VStack(alignment: .leading, spacing: 4) {

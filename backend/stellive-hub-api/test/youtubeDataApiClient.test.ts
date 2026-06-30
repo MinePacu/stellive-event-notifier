@@ -177,4 +177,55 @@ describe("YoutubeDataApiClient", () => {
     expect(firstUrl.searchParams.get("id")?.split(",")).toHaveLength(50);
     expect(firstUrl.searchParams.get("part")).toContain("liveStreamingDetails");
   });
+
+  it("fetches channel profile thumbnails in channel id batches", async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request, _init?: RequestInit): Promise<Response> => {
+      const url = new URL(input as string);
+      const ids = url.searchParams.get("id")?.split(",") ?? [];
+      return jsonResponse({
+        items: ids.map((id, index) => ({
+          id,
+          snippet: {
+            title: `Channel ${id}`,
+            customUrl: `@custom-${id}`,
+            handle: `@handle-${id}`,
+            thumbnails: index === 0
+              ? { high: { url: `https://yt.example/${id}/high.jpg` } }
+              : { high: { url: `http://yt.example/${id}/high.jpg` }, medium: { url: `https://yt.example/${id}/medium.jpg` } },
+          },
+        })),
+      });
+    });
+    const client = new YoutubeDataApiClient({ apiKey: "test-key", fetch: fetchImpl });
+    const ids = Array.from({ length: 51 }, (_, index) => `UC${index + 1}`);
+
+    const result = await client.fetchChannelProfilesByIds(ids);
+
+    expect(result.status).toBe("ok");
+    expect(result.quotaUnits).toBe(2);
+    expect(result.profiles).toHaveLength(51);
+    expect(result.profiles[0]).toMatchObject({
+      channelId: "UC1",
+      title: "Channel UC1",
+      customUrl: "@custom-UC1",
+      handle: "@handle-UC1",
+      profileImageUrl: "https://yt.example/UC1/high.jpg",
+    });
+    expect(result.profiles[1].profileImageUrl).toBe("https://yt.example/UC2/medium.jpg");
+    const firstUrl = new URL(fetchImpl.mock.calls[0][0] as string);
+    expect(firstUrl.pathname).toBe("/youtube/v3/channels");
+    expect(firstUrl.searchParams.get("part")).toBe("snippet");
+    expect(firstUrl.searchParams.get("id")?.split(",")).toHaveLength(50);
+  });
+
+  it("returns quota_exceeded for channel profile 403 responses", async () => {
+    const fetchImpl = vi.fn(async (): Promise<Response> => jsonResponse({ error: "quota" }, { status: 403 }));
+    const client = new YoutubeDataApiClient({ apiKey: "test-key", fetch: fetchImpl });
+
+    await expect(client.fetchChannelProfilesByIds(["UC1"])).resolves.toEqual({
+      status: "quota_exceeded",
+      profiles: [],
+      quotaUnits: 1,
+    });
+  });
 });

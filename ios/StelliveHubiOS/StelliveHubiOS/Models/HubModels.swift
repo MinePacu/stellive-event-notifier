@@ -1125,6 +1125,7 @@ struct HubMember: Identifiable, Hashable {
     var liveTitle: String? = nil
     var liveViewerCount: Int? = nil
     var channelImageURL: URL? = nil
+    var profileImageURL: URL? = nil
     var livePlatformURL: URL? = nil
     var liveLastCheckedAt: Date? = nil
 
@@ -1149,6 +1150,7 @@ struct HubMember: Identifiable, Hashable {
         liveTitle: String? = nil,
         liveViewerCount: Int? = nil,
         channelImageURL: URL? = nil,
+        profileImageURL: URL? = nil,
         livePlatformURL: URL? = nil,
         liveLastCheckedAt: Date? = nil
     ) {
@@ -1172,6 +1174,7 @@ struct HubMember: Identifiable, Hashable {
         self.liveTitle = liveTitle
         self.liveViewerCount = liveViewerCount
         self.channelImageURL = channelImageURL
+        self.profileImageURL = profileImageURL
         self.livePlatformURL = livePlatformURL
         self.liveLastCheckedAt = liveLastCheckedAt
     }

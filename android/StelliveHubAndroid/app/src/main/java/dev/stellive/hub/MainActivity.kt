@@ -1341,7 +1341,7 @@ private fun songMemberFilterOptionCard(
                 setPadding(dp(14), dp(12), dp(14), dp(12))
             }
             if (member != null) {
-                row.addView(memberAvatar(member, dp(42)), LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                row.addView(songMemberProfileAvatar(member, dp(42)), LinearLayout.LayoutParams(dp(42), dp(42)).apply {
                     marginEnd = dp(12)
                 })
             }
@@ -2220,6 +2220,20 @@ private fun noticeCard(text: String): TextView = TextView(this).apply {
             }
             if (showsLiveIndicator && member.isLive) {
                 addView(liveIndicator(size), FrameLayout.LayoutParams(dp(12), dp(12), Gravity.BOTTOM or Gravity.END))
+            }
+        }
+
+    private fun songMemberProfileAvatar(member: HubMember, size: Int): FrameLayout =
+        FrameLayout(this).apply {
+            addView(
+                avatarText(member, size),
+                FrameLayout.LayoutParams(size, size)
+            )
+            member.profileImageUrl?.takeIf { it.startsWith("https://") }?.let { imageUrl ->
+                addView(
+                    channelImageAvatar(imageUrl, size),
+                    FrameLayout.LayoutParams(size, size)
+                )
             }
         }
 

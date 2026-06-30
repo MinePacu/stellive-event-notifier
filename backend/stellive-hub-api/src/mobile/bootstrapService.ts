@@ -36,12 +36,17 @@ interface HubEventsLike {
   summary(): Promise<HubEventsSummary> | HubEventsSummary;
 }
 
+interface MemberProfileImageHydratorLike {
+  hydrateMembers(members: Member[]): Promise<Member[]>;
+}
+
 export interface BootstrapServiceDependencies {
   catalog: CatalogLike;
   devices: DeviceLike;
   preferences: PreferenceLike;
   liveStatus: LiveStatusLike;
   hubEvents: HubEventsLike;
+  memberProfileImages?: MemberProfileImageHydratorLike;
   clock?: () => Date;
 }
 
@@ -82,6 +87,10 @@ export default class BootstrapService {
       ? await this.dependencies.preferences.listForDevice(input.deviceId)
       : [];
     const liveStatus = await this.dependencies.liveStatus.listDiagnostics();
+    const members = this.dependencies.catalog.getMembers().filter(isCatalogVisible);
+    const hydratedMembers = this.dependencies.memberProfileImages
+      ? await this.dependencies.memberProfileImages.hydrateMembers(members)
+      : members;
 
     return {
       config: {
@@ -102,7 +111,7 @@ export default class BootstrapService {
         : undefined,
       catalog: {
         generations: this.dependencies.catalog.getGenerations(),
-        members: this.dependencies.catalog.getMembers().filter(isCatalogVisible),
+        members: hydratedMembers,
       },
       preferences,
       liveStatus,
