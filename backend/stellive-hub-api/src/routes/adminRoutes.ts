@@ -203,7 +203,7 @@ function renderAdminLoginHtml(errorMessage?: string): string {
     <style>
       ${renderAdminThemeStyle()}
       :root {
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: ui-sans-serif, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
         background: var(--admin-bg);
         color: var(--admin-text);
       }
@@ -215,19 +215,58 @@ function renderAdminLoginHtml(errorMessage?: string): string {
         min-height: 100vh;
         display: grid;
         place-items: center;
-        background: var(--admin-bg);
+        background: linear-gradient(180deg, var(--admin-bg), color-mix(in srgb, var(--admin-bg) 90%, var(--admin-primary) 10%));
         color: var(--admin-text);
       }
-      main {
-        width: min(100% - 32px, 420px);
-      }
-      form {
+      .login-shell {
+        width: min(100% - 32px, 1280px);
+        min-height: min(720px, calc(100vh - 32px));
         display: grid;
+        grid-template-columns: minmax(0, 1.16fr) minmax(400px, 0.84fr);
+        border: 1px solid color-mix(in srgb, var(--admin-border) 72%, transparent);
+        border-radius: 24px;
+        background: color-mix(in srgb, var(--admin-surface) 76%, transparent);
+        box-shadow: 0 24px 70px rgba(34, 48, 78, 0.12);
+        overflow: hidden;
+      }
+      .login-copy {
+        display: grid;
+        align-content: center;
+        gap: 24px;
+        padding: 42px;
+        background:
+          radial-gradient(circle at 14% 16%, color-mix(in srgb, var(--admin-accent) 28%, transparent), transparent 34%),
+          radial-gradient(circle at 84% 80%, color-mix(in srgb, var(--admin-primary) 16%, transparent), transparent 32%),
+          linear-gradient(160deg, color-mix(in srgb, var(--admin-surface) 96%, white), color-mix(in srgb, var(--admin-bg) 86%, white));
+      }
+      :root[data-theme="dark"] .login-shell {
+        background: rgba(17, 25, 42, 0.78);
+        border-color: rgba(170, 184, 255, 0.10);
+        box-shadow: 0 32px 88px rgba(2, 6, 23, 0.48);
+      }
+      :root[data-theme="dark"] .login-copy {
+        background:
+          radial-gradient(circle at 14% 16%, rgba(112, 214, 190, 0.18), transparent 34%),
+          radial-gradient(circle at 84% 80%, rgba(170, 184, 255, 0.20), transparent 32%),
+          linear-gradient(160deg, #17233a, #111a2c);
+      }
+      .login-panel {
+        display: grid;
+        align-items: center;
+        padding: 34px;
+        background: color-mix(in srgb, var(--admin-surface) 86%, transparent);
+      }
+      .login-card {
+        display: grid;
+        width: 100%;
+        max-width: 420px;
+        margin: 0 auto;
         gap: 16px;
-        padding: 24px;
+        padding: 26px;
         border: 1px solid var(--admin-border);
-        border-radius: 8px;
-        background: var(--admin-surface);
+        border-radius: 24px;
+        background: color-mix(in srgb, var(--admin-surface) 92%, transparent);
+        box-shadow: 0 12px 28px rgba(34, 48, 78, 0.08);
       }
       .login-header {
         display: flex;
@@ -237,7 +276,39 @@ function renderAdminLoginHtml(errorMessage?: string): string {
       }
       h1 {
         margin: 0;
-        font-size: 1.5rem;
+        font-size: 1.45rem;
+      }
+      .login-copy h2 {
+        margin: 0;
+        max-width: 520px;
+        font-size: clamp(2rem, 5vw, 3.6rem);
+        line-height: 1;
+        letter-spacing: -0.02em;
+      }
+      .login-copy p,
+      .login-flow p,
+      .login-note {
+        margin: 0;
+        color: var(--admin-muted);
+        line-height: 1.6;
+      }
+      .login-flow {
+        display: grid;
+        gap: 12px;
+        max-width: 560px;
+      }
+      .login-flow-item {
+        padding: 14px 0;
+        border-top: 1px solid var(--admin-border);
+      }
+      .login-flow-item strong {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--admin-text);
+      }
+      .login-card-title {
+        display: grid;
+        gap: 4px;
       }
       label {
         display: grid;
@@ -261,8 +332,8 @@ function renderAdminLoginHtml(errorMessage?: string): string {
       }
       .login-button {
         border: 0;
-        border-radius: 6px;
-        padding: 10px 12px;
+        border-radius: 8px;
+        padding: 11px 12px;
         font: inherit;
         font-weight: 700;
         color: var(--admin-primary-text);
@@ -275,6 +346,10 @@ function renderAdminLoginHtml(errorMessage?: string): string {
         font-weight: 600;
       }
       @media (max-width: 460px) {
+        .login-shell {
+          grid-template-columns: 1fr;
+          align-items: stretch;
+        }
         .login-header {
           display: grid;
           gap: 12px;
@@ -283,19 +358,39 @@ function renderAdminLoginHtml(errorMessage?: string): string {
     </style>
   </head>
   <body>
-    <main>
-      <form method="post" action="/admin/login" autocomplete="off">
+    <main class="login-shell" aria-label="Stellive Hub Admin login">
+      <section class="login-copy" aria-label="Admin access overview">
+        <h1>Stellive Hub Admin</h1>
+        <h2>Secure access for hub operations.</h2>
+        <p>Dashboard is for status review, Hub events is for publishing work, and Settings keeps tokens and console preferences separated from the login step.</p>
+        <div class="login-flow">
+          <div class="login-flow-item">
+            <strong>Admin session first</strong>
+            <p>Sign in with the admin console token to open the server-rendered console.</p>
+          </div>
+          <div class="login-flow-item">
+            <strong>Internal token later</strong>
+            <p>Enter the Internal API bearer token after login in Settings when an internal operation needs it.</p>
+          </div>
+        </div>
+      </section>
+      <section class="login-panel">
+      <form method="post" action="/admin/login" class="login-card" autocomplete="off">
         <div class="login-header">
-          <h1>Stellive Hub Admin</h1>
+          <div class="login-card-title">
+            <h1>Sign in</h1>
+            <p class="login-note">Admin session access only.</p>
+          </div>
           ${renderAdminThemeControl()}
         </div>
         ${errorHtml}
         <label>
-          Admin token
+          Admin console token
           <input name="token" type="password" required autofocus autocomplete="current-password">
         </label>
-        <button class="login-button" type="submit">Log in</button>
+        <button class="login-button" type="submit">Sign in</button>
       </form>
+      </section>
     </main>
     ${renderAdminThemeBehaviorScript()}
   </body>

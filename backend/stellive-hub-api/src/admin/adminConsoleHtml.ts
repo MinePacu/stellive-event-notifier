@@ -70,59 +70,88 @@ export function renderAdminConsoleHtml(): string {
       margin: 0;
       min-height: 100vh;
       background:
-        linear-gradient(180deg, rgba(18, 21, 18, 0.98), var(--admin-bg)),
-        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 80px);
+        radial-gradient(circle at 14% 12%, color-mix(in srgb, var(--admin-accent) 18%, transparent), transparent 30%),
+        radial-gradient(circle at 82% 4%, color-mix(in srgb, var(--admin-primary) 14%, transparent), transparent 27%),
+        linear-gradient(135deg, color-mix(in srgb, var(--admin-bg) 88%, white), var(--admin-bg));
       color: var(--admin-text);
+      font-size: 14px;
+      line-height: 1.45;
     }
     .admin-app {
-      min-height: 100vh;
+      width: min(100% - 28px, 1480px);
+      min-height: calc(100vh - 28px);
+      margin: 14px auto;
       display: grid;
-      grid-template-columns: 236px minmax(0, 1fr);
+      grid-template-columns: 244px minmax(0, 1fr);
+      border: 1px solid color-mix(in srgb, var(--admin-border) 72%, transparent);
+      border-radius: 28px;
+      background: color-mix(in srgb, var(--admin-surface) 76%, transparent);
+      box-shadow: 0 24px 70px rgba(34, 48, 78, 0.12);
+      overflow: hidden;
     }
     .admin-nav {
-      position: sticky;
-      top: 0;
-      height: 100vh;
-      padding: 18px 14px;
+      position: static;
+      min-height: 100%;
+      padding: 26px 18px;
       border-right: 1px solid var(--admin-border);
-      background: color-mix(in srgb, var(--admin-surface) 92%, black);
+      background: color-mix(in srgb, var(--admin-surface) 84%, transparent);
     }
     .admin-nav-title {
-      margin: 0 0 18px;
-      font-size: 16px;
-      font-weight: 800;
+      margin: 0 0 24px;
+      padding: 0 8px;
+      font-size: 17px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      color: var(--admin-primary);
     }
-    .admin-nav a {
-      display: block;
-      padding: 9px 10px;
-      border-radius: 7px;
+    .admin-nav button {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      border: 0;
+      min-height: 42px;
+      padding: 0 12px;
+      border-radius: 15px;
+      background: transparent;
       color: var(--admin-muted);
-      font-size: 13px;
+      font: inherit;
+      font-size: 12px;
       font-weight: 700;
+      text-align: left;
       text-decoration: none;
+      cursor: pointer;
     }
-    .admin-nav a:hover,
-    .admin-nav a:focus-visible {
+    .admin-nav button:hover,
+    .admin-nav button:focus-visible {
       background: var(--admin-surface-hover);
       color: var(--admin-text);
       outline: 0;
     }
+    .admin-nav button[aria-current="page"] {
+      background: color-mix(in srgb, var(--admin-primary) 10%, transparent);
+      color: var(--admin-primary);
+      box-shadow: none;
+    }
     .admin-content {
       min-width: 0;
-      padding: 20px;
+      padding: 26px 24px 30px;
     }
     .admin-topbar {
-      position: sticky;
-      top: 0;
-      z-index: 10;
+      position: static;
       display: grid;
-      grid-template-columns: minmax(260px, 1fr) auto auto;
-      gap: 10px;
-      align-items: end;
-      margin: -20px -20px 18px;
-      padding: 14px 20px;
-      border-bottom: 1px solid var(--admin-border);
-      background: color-mix(in srgb, var(--admin-surface) 96%, black);
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 16px;
+      align-items: center;
+      margin: 0 0 18px;
+      padding: 0;
+      border-bottom: 0;
+      background: transparent;
+    }
+    .page {
+      display: none;
+    }
+    .page.active {
+      display: block;
     }
     .topbar-actions {
       display: flex;
@@ -143,10 +172,11 @@ export function renderAdminConsoleHtml(): string {
     }
     .section {
       border: 1px solid var(--admin-border);
-      border-radius: 8px;
-      background: color-mix(in srgb, var(--admin-surface) 96%, black);
+      border-radius: 20px;
+      background: color-mix(in srgb, var(--admin-surface) 93%, transparent);
       min-width: 0;
       overflow: hidden;
+      box-shadow: 0 12px 28px rgba(34, 48, 78, 0.08);
     }
     .section + .section {
       margin-top: 14px;
@@ -156,15 +186,42 @@ export function renderAdminConsoleHtml(): string {
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 13px 14px;
+      padding: 16px 18px 10px;
       border-bottom: 1px solid var(--admin-border);
-      background: color-mix(in srgb, var(--admin-surface) 92%, black);
+      background: transparent;
     }
     .section-head h2 {
       margin-bottom: 0;
     }
     .section-body {
-      padding: 14px;
+      padding: 14px 18px 18px;
+    }
+    :root[data-theme="dark"] body {
+      background:
+        radial-gradient(circle at 14% 12%, rgba(112, 214, 190, 0.16), transparent 30%),
+        radial-gradient(circle at 82% 4%, rgba(170, 184, 255, 0.18), transparent 27%),
+        linear-gradient(135deg, #101827, var(--admin-bg));
+    }
+    :root[data-theme="dark"] .admin-app {
+      background: rgba(17, 25, 42, 0.78);
+      border-color: rgba(170, 184, 255, 0.12);
+      box-shadow: 0 32px 88px rgba(2, 6, 23, 0.48);
+    }
+    :root[data-theme="dark"] .admin-nav {
+      background: rgba(20, 31, 51, 0.58);
+    }
+    :root[data-theme="dark"] .admin-content {
+      background:
+        radial-gradient(circle at 78% 10%, rgba(112, 214, 190, 0.08), transparent 28%),
+        transparent;
+    }
+    :root[data-theme="dark"] .section,
+    :root[data-theme="dark"] .panel,
+    :root[data-theme="dark"] .hub-events-sidebar,
+    :root[data-theme="dark"] .hub-events-section {
+      background: linear-gradient(180deg, rgba(24, 36, 58, 0.96), rgba(18, 28, 46, 0.96));
+      border-color: var(--admin-border);
+      box-shadow: 0 16px 34px rgba(2, 6, 23, 0.34);
     }
     .split {
       display: grid;
@@ -322,14 +379,14 @@ export function renderAdminConsoleHtml(): string {
     }
     .grid {
       display: grid;
-      gap: 12px;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
     }
     .panel {
       border: 1px solid var(--admin-border);
-      border-radius: 8px;
-      background: var(--admin-surface);
-      padding: 14px;
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--admin-surface) 94%, transparent);
+      padding: 16px;
       min-width: 0;
     }
     .toolbar {
@@ -352,8 +409,8 @@ export function renderAdminConsoleHtml(): string {
       width: 100%;
       min-width: 0;
       border: 1px solid var(--admin-input-border);
-      border-radius: 6px;
-      padding: 8px 10px;
+      border-radius: 13px;
+      padding: 10px 12px;
       font: inherit;
       font-size: 13px;
       background: var(--admin-surface);
@@ -371,7 +428,7 @@ export function renderAdminConsoleHtml(): string {
     .switch-control {
       align-items: center;
       border: 1px solid var(--admin-input-border);
-      border-radius: 6px;
+      border-radius: 13px;
       background: var(--admin-surface);
       color: var(--admin-label);
       display: inline-flex;
@@ -420,14 +477,14 @@ export function renderAdminConsoleHtml(): string {
     }
     button {
       border: 1px solid var(--admin-input-border);
-      border-radius: 6px;
+      border-radius: 13px;
       background: var(--admin-surface);
       color: var(--admin-text);
       padding: 8px 10px;
       font: inherit;
       font-size: 13px;
       cursor: pointer;
-      min-height: 36px;
+      min-height: 38px;
       white-space: nowrap;
     }
     button:hover {
@@ -448,18 +505,30 @@ export function renderAdminConsoleHtml(): string {
       opacity: 0.7;
     }
     .message {
-      min-height: 18px;
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      max-width: 100%;
+      min-height: 0;
+      margin-bottom: 12px;
+      padding: 6px 10px;
+      border: 1px solid var(--admin-soft-border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--admin-surface) 92%, var(--admin-primary) 8%);
       font-size: 13px;
       color: var(--admin-muted);
     }
+    .message:empty {
+      display: none;
+    }
     .message.error {
       color: var(--admin-danger);
+      border-color: color-mix(in srgb, var(--admin-danger) 40%, var(--admin-border) 60%);
+      background: color-mix(in srgb, var(--admin-surface) 88%, var(--admin-danger) 12%);
     }
     .metric {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
+      display: grid;
+      gap: 8px;
       padding: 8px 0;
       border-top: 1px solid var(--admin-soft-border);
       font-size: 13px;
@@ -475,7 +544,8 @@ export function renderAdminConsoleHtml(): string {
       color: var(--admin-muted);
     }
     .metric-value {
-      text-align: right;
+      text-align: left;
+      font-weight: 750;
       word-break: break-word;
     }
     .pill {
@@ -660,6 +730,91 @@ export function renderAdminConsoleHtml(): string {
       flex-wrap: wrap;
     }
 
+    .settings-grid,
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .settings-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .settings-stack,
+    .activity-list,
+    .summary-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .settings-row,
+    .summary-row,
+    .activity-item,
+    .security-item {
+      display: grid;
+      gap: 6px;
+      padding: 12px;
+      border: 1px solid var(--admin-soft-border);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--admin-surface) 94%, var(--admin-bg) 6%);
+    }
+
+    .summary-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .settings-title,
+    .activity-title,
+    .summary-title {
+      font-weight: 750;
+      color: var(--admin-text);
+    }
+
+    .settings-description,
+    .activity-description,
+    .summary-description {
+      color: var(--admin-muted);
+      line-height: 1.5;
+    }
+
+    .token-input-card {
+      display: grid;
+      gap: 12px;
+    }
+
+    .status-table {
+      margin-top: 8px;
+    }
+
+    .status-table td:last-child {
+      text-align: right;
+      font-weight: 700;
+    }
+
+    .security-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .settings-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .security-notes {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--admin-muted);
+      line-height: 1.6;
+    }
+
     .image-policy-help {
       display: grid;
       gap: 8px;
@@ -698,7 +853,7 @@ export function renderAdminConsoleHtml(): string {
         flex: 0 0 auto;
         margin: 0 10px 0 0;
       }
-      .admin-nav a {
+      .admin-nav button {
         flex: 0 0 auto;
       }
       .admin-topbar {
@@ -710,9 +865,13 @@ export function renderAdminConsoleHtml(): string {
       .event-layout {
         grid-template-columns: 1fr;
       }
+      .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
       .hub-events-workspace,
       .hub-events-editor-grid,
-      .hub-events-footer {
+      .hub-events-footer,
+      .settings-layout {
         grid-template-columns: 1fr;
       }
     }
@@ -775,6 +934,8 @@ export function renderAdminConsoleHtml(): string {
       .hub-event-actions,
       .hub-events-editor-grid,
       .hub-events-footer,
+      .settings-grid,
+      .dashboard-grid,
       .hub-events-filter-row,
       .hub-events-two,
       .hub-events-three {
@@ -829,25 +990,20 @@ export function renderAdminConsoleHtml(): string {
   <div class="admin-app">
     <nav class="admin-nav" aria-label="Admin console sections">
       <div class="admin-nav-title">Stellive Hub Admin</div>
-      <a href="#overview-section">Overview</a>
-      <a href="#hub-events-section">Hub events</a>
-      <a href="#operations-section">Operations</a>
-      <a href="#adapters-section">Adapters</a>
+      <button type="button" data-page-target="dashboard" aria-current="page">Dashboard</button>
+      <button type="button" data-page-target="hub-events">Hub events</button>
+      <button type="button" data-page-target="operations">Operations</button>
+      <button type="button" data-page-target="audit">Audit</button>
+      <button type="button" data-page-target="settings">Settings</button>
     </nav>
     <main class="admin-content stack">
       <div class="admin-topbar">
-        <div class="field">
-            <label class="has-tooltip" data-tooltip="Store the internal API bearer token in this browser only." title="Store the internal API bearer token in this browser only." for="internal-token">Internal API bearer token</label>
-          <input id="internal-token" type="password" autocomplete="off" spellcheck="false" placeholder="Required for /v1/internal/* requests">
+        <div>
+          <strong>Dashboard</strong>
+          <p class="subtle">Admin session and internal token are separate.</p>
         </div>
         <div class="refresh-controls">
               <button class="has-tooltip" data-tooltip="Refresh adapter, secret, feature flag, and job status." title="Refresh adapter, secret, feature flag, and job status." id="refresh" type="button">Refresh</button>
-          <label class="switch-control">
-            <span>Auto refresh</span>
-            <input id="auto-refresh" class="auto-refresh-input" type="checkbox">
-            <span class="auto-refresh-switch" aria-hidden="true"></span>
-          </label>
-          <span id="auto-refresh-status" class="auto-refresh-status pill disabled" aria-live="polite">Off</span>
         </div>
         <div class="topbar-actions">
           ${renderAdminThemeControl()}
@@ -857,23 +1013,80 @@ export function renderAdminConsoleHtml(): string {
         </div>
       </div>
 
-      <div class="admin-page-head">
-        <div>
-          <h1>Stellive Hub Admin</h1>
-          <p class="subtle">Internal diagnostics and bounded maintenance actions.</p>
-        </div>
-        <div id="message" class="message">Enter the internal API token, then refresh.</div>
-      </div>
+      <div id="message" class="message" aria-live="polite"></div>
 
+      <section class="page active" id="page-dashboard" data-admin-page="dashboard">
       <section id="overview-section" class="section">
         <div class="section-head">
-          <h2>Overview</h2>
+          <div>
+            <h2>Dashboard</h2>
+            <p class="subtle">Health, Database, Uptime, Queue, Events, and service status.</p>
+          </div>
         </div>
         <div class="section-body">
           <section id="overview" class="grid" aria-live="polite"></section>
         </div>
       </section>
 
+      <section id="adapters-section" class="section">
+        <div class="section-head">
+          <h2>Adapter status</h2>
+        </div>
+        <div class="section-body split">
+          <div class="panel">
+            <h2>Service overview</h2>
+            <p class="subtle">Service name, environment, queue state, delivery state, and Uptime are loaded from the internal overview response.</p>
+          </div>
+          <div class="panel">
+            <h2>Recent activity</h2>
+            <p class="subtle">Recent delivery counters and adapter status are refreshed with Dashboard.</p>
+          </div>
+          <div class="panel">
+            <h2>Adapter health</h2>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Source</th>
+                    <th>Status</th>
+                    <th>Reason</th>
+                    <th>Last checked</th>
+                  </tr>
+                </thead>
+                <tbody id="adapters"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="panel">
+            <h2>Secrets and feature flags</h2>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>State</th>
+                  </tr>
+                </thead>
+                <tbody id="secrets"></tbody>
+              </table>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody id="feature-flags"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+      </section>
+
+      <section class="page" id="page-hub-events" data-admin-page="hub-events">
       <section id="hub-events-section" class="section stack" data-admin-section="hub-events">
         <div class="section-head">
           <div>
@@ -922,10 +1135,44 @@ export function renderAdminConsoleHtml(): string {
                   </select>
                 </div>
               </div>
+              <div class="hub-events-filter-row">
+                <div class="field">
+                  <label for="hub-event-category-filter">Category</label>
+                  <select id="hub-event-category-filter">
+                    <option value="">All</option>
+                    <option value="online_goods">Online goods</option>
+                    <option value="online_collab">Online collab</option>
+                    <option value="offline_concert">Offline concert</option>
+                    <option value="offline_collab">Offline collab</option>
+                    <option value="offline_popup">Offline popup</option>
+                    <option value="ticketing">Ticketing</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="hub-event-participation-mode-filter">Participation mode</label>
+                  <select id="hub-event-participation-mode-filter">
+                    <option value="">All</option>
+                    <option value="online">Online</option>
+                    <option value="offline">Offline</option>
+                    <option value="hybrid">Hybrid</option>
+                  </select>
+                </div>
+              </div>
+              <div class="hub-events-filter-row">
+                <div class="field">
+                  <label for="hub-event-generation-filter">Generation</label>
+                  <input id="hub-event-generation-filter" autocomplete="off" placeholder="official, gen1, gen2, gen3">
+                </div>
+                <div class="field">
+                  <label for="hub-event-member-filter">Member</label>
+                  <input id="hub-event-member-filter" autocomplete="off" placeholder="akane-lize">
+                </div>
+              </div>
               <div class="field">
                 <label for="hub-event-search">Search</label>
                 <input id="hub-event-search" type="search" autocomplete="off" spellcheck="false">
               </div>
+              <label class="switch-control"><input id="hub-event-include-deleted" type="checkbox"> Include deleted</label>
             </div>
             <div id="hub-event-list" class="event-list hub-events-list" role="list" aria-label="Hub events"></div>
             <div class="hub-event-pagination" aria-label="Hub events pagination">
@@ -1007,75 +1254,175 @@ export function renderAdminConsoleHtml(): string {
         </div>
         </div>
       </section>
+      </section>
 
+      <section class="page" id="page-operations" data-admin-page="operations">
       <section id="operations-section" class="section">
         <div class="section-head">
-          <h2>Operations</h2>
+          <div>
+            <h2>Operations</h2>
+            <p class="subtle">Internal maintenance actions use the token saved in Settings.</p>
+          </div>
         </div>
-        <div class="section-body split">
+        <div class="section-body settings-layout">
           <div class="panel">
             <h2>Schedulers and jobs</h2>
-            <div class="action-controls">
-              <button id="drain" type="button">Drain jobs</button>
-              <button id="renew-youtube" type="button">Renew YouTube</button>
-              <button id="poll-chzzk" type="button">Poll CHZZK</button>
-              <button class="has-tooltip" data-tooltip="Recalculate special day calendar status." title="Recalculate special day calendar status." id="recalculate-special-days" type="button">Recalculate special days</button>
+            <div class="summary-list">
+              <div class="summary-row">
+                <div>
+                  <div class="summary-title">Notification queue</div>
+                  <div class="summary-description">Run a bounded drain for queued notification jobs.</div>
+                </div>
+                <button id="drain" type="button">Drain jobs</button>
+              </div>
+              <div class="summary-row">
+                <div>
+                  <div class="summary-title">YouTube scheduler</div>
+                  <div class="summary-description">Renew official upload webhook subscriptions.</div>
+                </div>
+                <button id="renew-youtube" type="button">Renew YouTube</button>
+              </div>
+              <div class="summary-row">
+                <div>
+                  <div class="summary-title">CHZZK live status</div>
+                  <div class="summary-description">Poll current member live state through the internal adapter.</div>
+                </div>
+                <button id="poll-chzzk" type="button">Poll CHZZK</button>
+              </div>
+              <div class="summary-row">
+                <div>
+                  <div class="summary-title">Special day status</div>
+                  <div class="summary-description">Recalculate derived calendar status for hub events.</div>
+                </div>
+                <button class="has-tooltip" data-tooltip="Recalculate special day calendar status." title="Recalculate special day calendar status." id="recalculate-special-days" type="button">Recalculate special days</button>
+              </div>
             </div>
           </div>
           <div class="panel">
             <h2>Run state</h2>
-            <p class="subtle">Actions use the active admin session and do not expose stored server secrets.</p>
+            <table class="status-table">
+              <tbody>
+                <tr><td>Admin session</td><td>Required</td></tr>
+                <tr><td>Internal bearer token</td><td>Settings only</td></tr>
+                <tr><td>Secret exposure</td><td>Never shown</td></tr>
+                <tr><td>Action result</td><td>Shown in console status</td></tr>
+              </tbody>
+            </table>
+            <div class="security-item">
+              <div class="settings-title">Credential boundary</div>
+              <div class="settings-description">Operations reads the Settings token at request time. The token field is not duplicated on this page.</div>
+            </div>
           </div>
         </div>
       </section>
+      </section>
 
-      <section id="adapters-section" class="section">
+      <section class="page" id="page-audit" data-admin-page="audit">
+      <section id="audit-section" class="section">
         <div class="section-head">
-          <h2>Adapters</h2>
-        </div>
-        <div class="section-body split">
-          <div class="panel">
-            <h2>Adapter health</h2>
-            <div class="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Source</th>
-                    <th>Status</th>
-                    <th>Reason</th>
-                    <th>Last checked</th>
-                  </tr>
-                </thead>
-                <tbody id="adapters"></tbody>
-              </table>
-            </div>
+          <div>
+            <h2>Audit</h2>
+            <p class="subtle">Recent operator-facing results and hub event audit details.</p>
           </div>
-          <div class="panel">
-            <h2>Secrets and feature flags</h2>
-            <div class="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>State</th>
-                  </tr>
-                </thead>
-                <tbody id="secrets"></tbody>
-              </table>
-            </div>
-            <div class="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Value</th>
-                  </tr>
-                </thead>
-                <tbody id="feature-flags"></tbody>
-              </table>
+        </div>
+        <div class="section-body">
+          <div class="panel" id="admin-audit-activity">
+            <h2>Recent activity</h2>
+            <div class="activity-list">
+              <div class="activity-item">
+                <div class="activity-title">Admin session</div>
+                <div class="activity-description">Login and logout are handled by the existing admin session route.</div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-title">Hub event changes</div>
+                <div class="activity-description">Validate, save draft, publish, cancel, deactivate, and delete results appear in the Hub events audit log after an event is selected.</div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-title">Adapter refresh</div>
+                <div class="activity-description">Dashboard refresh updates adapter health, secrets, feature flags, queue, and delivery counters.</div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-title">Internal operations</div>
+                <div class="activity-description">Scheduler and queue action results are reported in the console status without logging token values.</div>
+              </div>
             </div>
           </div>
         </div>
+      </section>
+      </section>
+
+      <section class="page" id="page-settings" data-admin-page="settings">
+      <section id="settings-section" class="section">
+        <div class="section-head">
+          <div>
+            <h2>Settings</h2>
+            <p class="subtle">Console credentials, theme, refresh, and page-size preferences.</p>
+          </div>
+        </div>
+        <div class="section-body settings-layout">
+          <div class="token-input-card panel">
+            <h2>Internal API bearer token</h2>
+            <p class="subtle">Used only for /v1/internal/* requests. It is stored in this browser session and is not saved on the server.</p>
+            <div class="field">
+              <label class="has-tooltip" data-tooltip="Store the internal API bearer token in this browser session only." title="Store the internal API bearer token in this browser session only." for="internal-token">Internal API bearer token</label>
+              <input id="internal-token" type="password" autocomplete="off" spellcheck="false" placeholder="Required for /v1/internal/* requests">
+            </div>
+            <div class="settings-actions">
+              <button id="internal-token-save" type="button">Use token</button>
+              <button id="internal-token-test" type="button">Test connection</button>
+              <button id="internal-token-clear" type="button">Clear</button>
+            </div>
+            <p id="settings-token-status" class="message" aria-live="polite"></p>
+          </div>
+          <div class="panel">
+            <h2>Console preferences</h2>
+            <div class="settings-stack">
+              <div class="settings-row">
+                <div class="settings-title">Theme</div>
+                <div class="settings-description">Choose the console color mode for this browser.</div>
+                ${renderAdminThemeControl()}
+              </div>
+              <div class="settings-row">
+                <div class="settings-title">Auto refresh</div>
+                <label class="switch-control">
+                  <span>Refresh Dashboard status</span>
+                  <input id="auto-refresh" class="auto-refresh-input" type="checkbox">
+                  <span class="auto-refresh-switch" aria-hidden="true"></span>
+                </label>
+                <span id="auto-refresh-status" class="auto-refresh-status pill disabled" aria-live="polite">Off</span>
+              </div>
+              <div class="settings-row">
+                <div class="settings-title">Hub event page size</div>
+                <div class="field">
+                  <label for="hub-event-page-size">Events per page</label>
+                  <select id="hub-event-page-size">
+                    <option value="10">10</option>
+                    <option value="15">15</option>
+                    <option value="25">25</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <h2>Security notes</h2>
+            <div class="security-grid">
+              <div class="security-item">
+                <div class="settings-title">Admin session first</div>
+                <div class="settings-description">The session opens the console. It does not replace internal API authorization.</div>
+              </div>
+              <div class="security-item">
+                <div class="settings-title">Internal token later</div>
+                <div class="settings-description">The bearer token is read from sessionStorage for /v1/internal/* calls only.</div>
+              </div>
+              <div class="security-item">
+                <div class="settings-title">No bundled assets</div>
+                <div class="settings-description">Uploads, base64, local paths, copied assets, logos, profile images, screenshots, and fan art are not accepted.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
       </section>
     </main>
   </div>
@@ -1100,6 +1447,12 @@ export function renderAdminConsoleHtml(): string {
     const autoRefreshStatusRoot = document.getElementById("auto-refresh-status");
     const logoutForm = document.querySelector(".logout-form");
     const buttons = Array.from(document.querySelectorAll("button"));
+    const pageButtons = Array.from(document.querySelectorAll("[data-page-target]"));
+    const pages = Array.from(document.querySelectorAll("[data-admin-page]"));
+    const internalTokenSaveButton = document.getElementById("internal-token-save");
+    const internalTokenTestButton = document.getElementById("internal-token-test");
+    const internalTokenClearButton = document.getElementById("internal-token-clear");
+    const settingsTokenStatusRoot = document.getElementById("settings-token-status");
     const internalTokenStorageKey = "stellive.admin.internalApiToken";
     const autoRefreshIntervalMs = 5000;
     let autoRefreshTimer = null;
@@ -1155,6 +1508,11 @@ export function renderAdminConsoleHtml(): string {
       messageRoot.className = isError ? "message error" : "message";
     }
 
+    function setSettingsTokenStatus(text, isError) {
+      settingsTokenStatusRoot.textContent = text;
+      settingsTokenStatusRoot.className = isError ? "message error" : "message";
+    }
+
     function setAutoRefreshStatus(text) {
       autoRefreshStatusRoot.textContent = text;
       autoRefreshStatusRoot.className = "auto-refresh-status pill " + (
@@ -1162,10 +1520,28 @@ export function renderAdminConsoleHtml(): string {
       );
     }
 
+    function setActivePage(pageName) {
+      const nextPage = pageName || "dashboard";
+      if (!messageRoot.classList.contains("error")) {
+        setMessage("", false);
+      }
+      pages.forEach(function (page) {
+        page.classList.toggle("active", page.getAttribute("data-admin-page") === nextPage);
+      });
+      pageButtons.forEach(function (button) {
+        const isCurrent = button.getAttribute("data-page-target") === nextPage;
+        if (isCurrent) {
+          button.setAttribute("aria-current", "page");
+        } else {
+          button.removeAttribute("aria-current");
+        }
+      });
+    }
+
     function requireToken() {
-      const token = tokenInput.value.trim();
+      const token = (tokenInput?.value || "").trim() || readStoredInternalToken().trim();
       if (!token) {
-        throw new Error("internal_api_token_required");
+        throw new Error("Internal API bearer token is required. Add it in Settings.");
       }
       return token;
     }
@@ -1272,18 +1648,21 @@ export function renderAdminConsoleHtml(): string {
 
     function renderOverview(data) {
       overviewRoot.replaceChildren(
-        createOverviewPanel("Service", [
-          ["name", data.service.name],
+        createOverviewPanel("Health", [
+          ["service", data.service.name],
           ["environment", data.service.environment],
-          ["uptime", createUptimeNode(data.service.uptimeSeconds)]
+          ["database", createPill(data.database.status)]
         ]),
         createOverviewPanel("Database", [
           ["status", createPill(data.database.status)],
           ["reason", data.database.reason]
         ]),
+        createOverviewPanel("Uptime", [
+          ["service uptime", createUptimeNode(data.service.uptimeSeconds)]
+        ]),
         createOverviewPanel("Queue", Object.entries(data.queue).map(([key, value]) => [key, value == null ? "-" : String(value)])),
         createOverviewPanel(
-          "Recent delivery",
+          "Events",
           Object.entries(data.recentDelivery).map(([key, value]) => [key, String(value)])
         )
       );
@@ -1493,11 +1872,16 @@ export function renderAdminConsoleHtml(): string {
     const hubEventAuditRoot = document.getElementById("hub-event-audit-log");
     const hubEventStateFilter = document.getElementById("hub-event-state-filter");
     const hubEventStatusFilter = document.getElementById("hub-event-status-filter");
+    const hubEventCategoryFilter = document.getElementById("hub-event-category-filter");
+    const hubEventParticipationModeFilter = document.getElementById("hub-event-participation-mode-filter");
+    const hubEventGenerationFilter = document.getElementById("hub-event-generation-filter");
+    const hubEventMemberFilter = document.getElementById("hub-event-member-filter");
+    const hubEventIncludeDeleted = document.getElementById("hub-event-include-deleted");
     const hubEventSearch = document.getElementById("hub-event-search");
     const hubEventPaginationStatus = document.getElementById("hub-event-pagination-status");
     const hubEventPrevPage = document.getElementById("hub-event-prev-page");
     const hubEventNextPage = document.getElementById("hub-event-next-page");
-    const hubEventPageLimit = 10;
+    const hubEventPageSize = document.getElementById("hub-event-page-size");
     const hubEventPageState = {
       currentCursor: "",
       previousCursors: [],
@@ -1506,6 +1890,11 @@ export function renderAdminConsoleHtml(): string {
     };
     let hubEventSearchTimer = 0;
     let selectedHubEventId = "";
+
+    function getHubEventPageLimit() {
+      const parsed = Number.parseInt(hubEventPageSize?.value || "10", 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 10;
+    }
 
     function toIsoFromLocal(value) {
       if (!value) return undefined;
@@ -1725,10 +2114,15 @@ export function renderAdminConsoleHtml(): string {
       }
       const cursor = typeof settings.cursor === "string" ? settings.cursor : hubEventPageState.currentCursor;
       const params = new URLSearchParams();
-      params.set("limit", String(hubEventPageLimit));
+      params.set("limit", String(getHubEventPageLimit()));
       if (cursor) params.set("cursor", cursor);
       if (hubEventStateFilter.value) params.set("publicationState", hubEventStateFilter.value);
       if (hubEventStatusFilter.value) params.set("status", hubEventStatusFilter.value);
+      if (hubEventCategoryFilter.value) params.set("category", hubEventCategoryFilter.value);
+      if (hubEventParticipationModeFilter.value) params.set("participationMode", hubEventParticipationModeFilter.value);
+      if (hubEventGenerationFilter.value.trim()) params.set("generationId", hubEventGenerationFilter.value.trim());
+      if (hubEventMemberFilter.value.trim()) params.set("memberId", hubEventMemberFilter.value.trim());
+      if (hubEventIncludeDeleted.checked) params.set("includeDeleted", "true");
       if (hubEventSearch.value.trim()) params.set("query", hubEventSearch.value.trim());
       const path = endpoints.hubEvents + (params.toString() ? "?" + params.toString() : "");
       const result = await adminApi(path);
@@ -1826,6 +2220,19 @@ export function renderAdminConsoleHtml(): string {
     hubEventStatusFilter.addEventListener("change", function () {
       return runHubEventUiAction("Filter hub events", function () { return refreshHubEvents({ resetPage: true }); });
     });
+    [hubEventCategoryFilter, hubEventParticipationModeFilter, hubEventIncludeDeleted, hubEventPageSize].forEach(function (filter) {
+      filter.addEventListener("change", function () {
+        return runHubEventUiAction("Filter hub events", function () { return refreshHubEvents({ resetPage: true }); });
+      });
+    });
+    [hubEventGenerationFilter, hubEventMemberFilter].forEach(function (filter) {
+      filter.addEventListener("input", function () {
+        window.clearTimeout(hubEventSearchTimer);
+        hubEventSearchTimer = window.setTimeout(function () {
+          runHubEventUiAction("Filter hub events", function () { return refreshHubEvents({ resetPage: true }); });
+        }, 250);
+      });
+    });
     hubEventSearch.addEventListener("input", function () {
       window.clearTimeout(hubEventSearchTimer);
       hubEventSearchTimer = window.setTimeout(function () {
@@ -1872,6 +2279,23 @@ export function renderAdminConsoleHtml(): string {
       return runHubEventUiAction("Recalculate special days", function () {
         return adminApi(endpoints.recalculateSpecialDays, { method: "POST" });
       });
+    });
+    pageButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        setActivePage(button.getAttribute("data-page-target"));
+      });
+    });
+    internalTokenSaveButton.addEventListener("click", function () {
+      persistInternalToken();
+      setSettingsTokenStatus(tokenInput.value.trim() ? "Token stored for this session." : "Token cleared.", false);
+    });
+    internalTokenTestButton.addEventListener("click", function () {
+      return refreshDashboard({ source: "manual" });
+    });
+    internalTokenClearButton.addEventListener("click", function () {
+      tokenInput.value = "";
+      clearStoredInternalToken();
+      setSettingsTokenStatus("Token cleared.", false);
     });
     autoRefreshInput.addEventListener("change", function () {
       if (autoRefreshInput.checked) {

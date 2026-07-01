@@ -47,53 +47,55 @@ export function renderAdminThemeStyle(): string {
   return `
     :root {
       color-scheme: light dark;
-      --admin-bg: #f3f5f8;
+      --admin-bg: #f5f7fb;
       --admin-surface: #ffffff;
-      --admin-surface-hover: #eef3f8;
-      --admin-text: #1f2733;
-      --admin-muted: #657286;
-      --admin-label: #526073;
-      --admin-border: #d6dde7;
-      --admin-soft-border: #edf1f5;
-      --admin-input-border: #bcc7d4;
-      --admin-danger: #a13224;
-      --admin-primary: #2563eb;
+      --admin-surface-hover: #eef4fb;
+      --admin-text: #111827;
+      --admin-muted: #657084;
+      --admin-label: #384358;
+      --admin-border: #d8e0ec;
+      --admin-soft-border: #edf2f7;
+      --admin-input-border: #b9c5d6;
+      --admin-danger: #b42318;
+      --admin-primary: #243b73;
       --admin-primary-text: #ffffff;
-      --admin-pill-bg: #e9edf3;
-      --admin-pill-text: #344155;
-      --admin-pill-ok-bg: #dbeee1;
-      --admin-pill-ok-text: #19643a;
+      --admin-accent: #14b8a6;
+      --admin-pill-bg: #edf2f7;
+      --admin-pill-text: #334155;
+      --admin-pill-ok-bg: #d9f4ec;
+      --admin-pill-ok-text: #0f766e;
       --admin-pill-neutral-bg: #edf0f5;
       --admin-pill-neutral-text: #556274;
       --admin-pill-danger-bg: #fde5df;
       --admin-pill-danger-text: #9a3222;
-      --admin-pill-warning-bg: #fff0cd;
-      --admin-pill-warning-text: #865d00;
+      --admin-pill-warning-bg: #fff6d8;
+      --admin-pill-warning-text: #8a5a00;
     }
 
     :root[data-theme="dark"] {
-      --admin-bg: #0b0c0b;
-      --admin-surface: #121411;
-      --admin-surface-hover: #171a16;
-      --admin-text: #f1f4ec;
-      --admin-muted: #a9b0a4;
-      --admin-label: #d9ded5;
-      --admin-border: #2a3029;
-      --admin-soft-border: #20261f;
-      --admin-input-border: #3b4539;
-      --admin-danger: #f17878;
-      --admin-primary: #7dd3a7;
+      --admin-bg: #0f172a;
+      --admin-surface: #172033;
+      --admin-surface-hover: #202b42;
+      --admin-text: #e5edf7;
+      --admin-muted: #9aa8bd;
+      --admin-label: #cbd5e1;
+      --admin-border: #2d3a52;
+      --admin-soft-border: #223049;
+      --admin-input-border: #40516d;
+      --admin-danger: #fb7185;
+      --admin-primary: #818cf8;
       --admin-primary-text: #ffffff;
-      --admin-pill-bg: #1b211a;
-      --admin-pill-text: #d9ded5;
-      --admin-pill-ok-bg: #133625;
-      --admin-pill-ok-text: #b7f7cf;
-      --admin-pill-neutral-bg: #20241f;
-      --admin-pill-neutral-text: #cfd6ca;
+      --admin-accent: #2dd4bf;
+      --admin-pill-bg: #223049;
+      --admin-pill-text: #dbe7f5;
+      --admin-pill-ok-bg: #123b36;
+      --admin-pill-ok-text: #99f6e4;
+      --admin-pill-neutral-bg: #26334a;
+      --admin-pill-neutral-text: #cbd5e1;
       --admin-pill-danger-bg: #432020;
       --admin-pill-danger-text: #ffd7d7;
-      --admin-pill-warning-bg: #413016;
-      --admin-pill-warning-text: #f8d98b;
+      --admin-pill-warning-bg: #423518;
+      --admin-pill-warning-text: #fde68a;
     }
 
     :root[data-theme="black"] {
