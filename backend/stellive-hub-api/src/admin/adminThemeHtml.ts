@@ -224,6 +224,14 @@ export function renderAdminThemeBehaviorScript(): string {
         });
       }
 
+      var quickToggle = document.getElementById("theme-toggle");
+      if (quickToggle) {
+        quickToggle.addEventListener("click", function () {
+          var currentTheme = document.documentElement.dataset.theme;
+          applyPreference(currentTheme === "dark" || currentTheme === "black" ? "light" : "dark", true);
+        });
+      }
+
       if (mediaQuery) {
         var onSystemThemeChange = function () {
           if (document.documentElement.dataset.themePreference === "system") {

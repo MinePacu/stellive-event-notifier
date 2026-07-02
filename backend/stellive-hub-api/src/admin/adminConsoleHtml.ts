@@ -179,10 +179,11 @@ export function renderAdminConsoleHtml(): string {
       min-width: 0;
       padding: 24px 28px 30px;
     }
-    .admin-topbar {
+    .admin-topbar,
+    .topbar {
       position: static;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 16px;
       align-items: center;
       margin: 0 0 18px;
@@ -190,33 +191,38 @@ export function renderAdminConsoleHtml(): string {
       border-bottom: 0;
       background: transparent;
     }
-    .admin-tabs {
+    .admin-tabs,
+    .tabs {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 16px;
       min-width: 0;
       overflow-x: auto;
-      padding-bottom: 2px;
+      padding: 3px 0;
     }
-    .admin-tabs button {
+    .admin-tabs button,
+    .tabs button {
       flex: 0 0 auto;
       min-height: 34px;
       border: 0;
       border-bottom: 2px solid transparent;
       border-radius: 0;
-      padding: 7px 10px;
+      padding: 8px 2px;
       background: transparent;
       box-shadow: none;
       color: var(--admin-muted);
-      font-size: 13px;
-      font-weight: 750;
+      font-size: 12px;
+      font-weight: 780;
     }
     .admin-tabs button:hover,
-    .admin-tabs button:focus-visible {
-      background: color-mix(in srgb, var(--admin-surface-hover) 62%, transparent);
+    .admin-tabs button:focus-visible,
+    .tabs button:hover,
+    .tabs button:focus-visible {
+      background: transparent;
       color: var(--admin-text);
     }
-    .admin-tabs button[aria-current="page"] {
+    .admin-tabs button[aria-current="page"],
+    .tabs button[aria-current="page"] {
       border-bottom-color: var(--admin-primary);
       color: var(--admin-primary);
     }
@@ -226,12 +232,76 @@ export function renderAdminConsoleHtml(): string {
     .page.active {
       display: block;
     }
-    .topbar-actions {
+    .topbar-actions,
+    .top-actions {
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      flex-wrap: wrap;
-      gap: 8px;
+      flex-wrap: nowrap;
+      gap: 12px;
+    }
+    .icon-button {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      min-height: 38px;
+      padding: 0;
+      border: 1px solid var(--admin-border);
+      border-radius: 14px;
+      background: var(--admin-surface);
+      color: var(--admin-primary);
+      box-shadow: none;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .icon-button:hover,
+    .icon-button:focus-visible {
+      background: var(--admin-surface-hover);
+      outline: 0;
+    }
+    .profile {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 180px;
+      padding: 7px 10px;
+      border: 1px solid var(--admin-border);
+      border-radius: 17px;
+      background: var(--admin-surface);
+      color: var(--admin-text);
+      box-shadow: none;
+      text-align: left;
+      cursor: pointer;
+    }
+    .profile:hover,
+    .profile:focus-visible {
+      background: var(--admin-surface-hover);
+      outline: 0;
+    }
+    .avatar {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      flex: 0 0 auto;
+      border-radius: 13px;
+      background: linear-gradient(145deg, #ffd9c8, #f2a58f);
+      color: #7e3020;
+      font-weight: 900;
+    }
+    .profile small {
+      display: block;
+      color: var(--admin-muted);
+      font-size: 10px;
+      line-height: 1.1;
+    }
+    .profile strong {
+      display: block;
+      color: var(--admin-text);
+      font-size: 13px;
+      line-height: 1.15;
     }
     .admin-sidebar-card {
       align-self: end;
@@ -252,17 +322,23 @@ export function renderAdminConsoleHtml(): string {
       color: var(--admin-muted);
       font-size: 12px;
     }
-    .admin-page-head {
+    .admin-page-head,
+    .page-head {
       display: flex;
-      align-items: flex-start;
       justify-content: space-between;
-      gap: 16px;
+      align-items: flex-end;
+      gap: 18px;
       margin-bottom: 16px;
     }
-    .admin-page-head h1 {
-      margin-top: 2px;
+    .admin-page-head h1,
+    .page-head h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
     }
-    .section {
+    .section,
+    .card {
       border: 1px solid var(--admin-border);
       border-radius: 20px;
       background: color-mix(in srgb, var(--admin-surface) 93%, transparent);
@@ -273,7 +349,8 @@ export function renderAdminConsoleHtml(): string {
     .section + .section {
       margin-top: 14px;
     }
-    .section-head {
+    .section-head,
+    .card-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -285,7 +362,8 @@ export function renderAdminConsoleHtml(): string {
     .section-head h2 {
       margin-bottom: 0;
     }
-    .section-body {
+    .section-body,
+    .card-body {
       padding: 14px 18px 18px;
     }
     :root[data-theme="dark"] body {
@@ -333,6 +411,7 @@ export function renderAdminConsoleHtml(): string {
         transparent;
     }
     :root[data-theme="dark"] .section,
+    :root[data-theme="dark"] .card,
     :root[data-theme="dark"] .panel,
     :root[data-theme="dark"] .hub-events-sidebar,
     :root[data-theme="dark"] .hub-events-section {
@@ -494,7 +573,8 @@ export function renderAdminConsoleHtml(): string {
       display: grid;
       gap: 12px;
     }
-    .grid {
+    .grid,
+    .metric-row {
       display: grid;
       gap: 14px;
       grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -510,14 +590,29 @@ export function renderAdminConsoleHtml(): string {
     .overview-card {
       display: grid;
       gap: 8px;
-      min-height: 0;
+      min-height: 92px;
+      padding: 16px;
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--admin-surface) 92%, transparent);
+      box-shadow: 0 10px 24px rgba(34, 48, 78, 0.08);
       align-self: start;
     }
     .overview-card h2 {
-      margin-bottom: 2px;
+      margin: 0;
+      color: var(--admin-text);
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
     }
-    .overview-card .metric {
-      padding: 6px 0;
+    .metric-label {
+      color: var(--admin-muted);
+      font-size: 12px;
+    }
+    .metric-hint {
+      color: var(--admin-muted);
+      font-size: 12px;
+      line-height: 1.35;
     }
     .overview-primary {
       font-size: 1.35rem;
@@ -1074,7 +1169,8 @@ export function renderAdminConsoleHtml(): string {
       .event-layout {
         grid-template-columns: 1fr;
       }
-      .grid {
+      .grid,
+      .metric-row {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
       .hub-events-workspace,
@@ -1092,9 +1188,6 @@ export function renderAdminConsoleHtml(): string {
       .admin-topbar {
         margin: -12px -12px 12px;
         padding: 12px;
-      }
-      .admin-tabs {
-        display: none;
       }
       .admin-page-head,
       .section-head {
@@ -1199,49 +1292,56 @@ export function renderAdminConsoleHtml(): string {
   </style>
 </head>
 <body>
-  <div class="admin-app">
-    <nav class="admin-nav" aria-label="Admin console sections">
-      <div class="admin-brand">
-        <div class="admin-brand-mark" aria-hidden="true"></div>
-        <div class="admin-brand-title">Stellive Hub Admin</div>
+  <div class="shell admin-app">
+    <nav class="sidebar admin-nav" aria-label="Admin console sections">
+      <div class="brand admin-brand">
+        <div class="brand-mark admin-brand-mark" aria-hidden="true"></div>
+        <div class="brand-title admin-brand-title">Stellive Hub Admin</div>
       </div>
-      <div class="admin-nav-links">
-        <button type="button" data-page-target="dashboard" aria-current="page">Dashboard<span class="admin-nav-dot" aria-hidden="true"></span></button>
-        <button type="button" data-page-target="hub-events">Hub events<span class="admin-nav-dot" aria-hidden="true"></span></button>
-        <button type="button" data-page-target="operations">Operations<span class="admin-nav-dot" aria-hidden="true"></span></button>
-        <button type="button" data-page-target="audit">Audit<span class="admin-nav-dot" aria-hidden="true"></span></button>
-        <button type="button" data-page-target="settings">Settings<span class="admin-nav-dot" aria-hidden="true"></span></button>
+      <div class="nav admin-nav-links">
+        <button type="button" data-page-target="dashboard" aria-current="page">Dashboard<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="hub-events">Hub events<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="operations">Operations<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="audit">Audit<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="settings">Settings<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
       </div>
       <div class="admin-sidebar-card">
         <strong>Session active</strong>
         <span>Internal API access is configured in Settings only.</span>
       </div>
     </nav>
-    <main class="admin-content stack">
-      <div class="admin-topbar">
-        <div>
-          <strong id="admin-current-page-title">Dashboard</strong>
-          <p id="admin-current-page-description" class="subtle">Admin session and internal token are separate.</p>
-          <nav class="admin-tabs" aria-label="Quick page tabs">
-            <button type="button" data-page-target="dashboard" aria-current="page">Dashboard</button>
-            <button type="button" data-page-target="hub-events">Hub events</button>
-            <button type="button" data-page-target="operations">Operations</button>
-            <button type="button" data-page-target="audit">Audit</button>
-            <button type="button" data-page-target="settings">Settings</button>
-          </nav>
-        </div>
-        <div class="refresh-controls">
-              <button class="has-tooltip" data-tooltip="Refresh adapter, secret, feature flag, and job status." title="Refresh adapter, secret, feature flag, and job status." id="refresh" type="button">Refresh</button>
-        </div>
-        <div class="topbar-actions">
-          ${renderAdminThemeControl()}
+    <main class="main admin-content stack">
+      <div class="topbar admin-topbar">
+        <nav class="tabs admin-tabs" aria-label="Quick page tabs">
+          <button type="button" data-page-target="dashboard" aria-current="page">Dashboard</button>
+          <button type="button" data-page-target="hub-events">Hub events</button>
+          <button type="button" data-page-target="operations">Operations</button>
+          <button type="button" data-page-target="audit">Audit</button>
+          <button type="button" data-page-target="settings">Settings</button>
+        </nav>
+        <div class="top-actions topbar-actions">
+          <button class="icon-button has-tooltip" data-tooltip="Refresh adapter, secret, feature flag, and job status." title="Refresh adapter, secret, feature flag, and job status." id="refresh" type="button" aria-label="Refresh">&#8635;</button>
+          <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle dark mode">&#9790;</button>
+          <button class="icon-button" type="button" aria-label="Console status">&#9825;</button>
           <form class="logout-form" method="post" action="/admin/logout">
-            <button class="logout-button" type="submit">Log out</button>
+            <button class="profile" type="submit" aria-label="Log out">
+              <span class="avatar" aria-hidden="true">A</span>
+              <span>
+                <small>Welcome back,</small>
+                <strong>Admin</strong>
+              </span>
+            </button>
           </form>
         </div>
       </div>
 
       <div id="message" class="message" aria-live="polite"></div>
+      <div class="page-head admin-page-head">
+        <div>
+          <h1 id="admin-current-page-title">Dashboard</h1>
+          <p id="admin-current-page-description" class="subtle">Admin session and internal token are separate.</p>
+        </div>
+      </div>
 
       <section class="page active" id="page-dashboard" data-admin-page="dashboard">
       <section id="overview-section" class="section">
@@ -1252,7 +1352,7 @@ export function renderAdminConsoleHtml(): string {
           </div>
         </div>
         <div class="section-body">
-          <section id="overview" class="grid" aria-live="polite"></section>
+          <section id="overview" class="metric-row grid" aria-live="polite"></section>
         </div>
       </section>
 
@@ -1847,17 +1947,26 @@ export function renderAdminConsoleHtml(): string {
       return row;
     }
 
-    function createOverviewPanel(title, rows) {
+    function createOverviewPanel(title, valueNode, hint) {
       const section = document.createElement("section");
       section.className = "panel overview-card";
 
-      const heading = document.createElement("h2");
-      heading.textContent = title;
-      section.appendChild(heading);
+      const label = document.createElement("div");
+      label.className = "metric-label";
+      label.textContent = title;
 
-      for (const [key, value] of rows) {
-        section.appendChild(createMetricRow(key, value));
+      const value = document.createElement("h2");
+      if (valueNode instanceof Node) {
+        value.appendChild(valueNode);
+      } else {
+        value.textContent = valueNode == null || valueNode === "" ? "-" : String(valueNode);
       }
+
+      const detail = document.createElement("div");
+      detail.className = "metric-hint";
+      detail.textContent = hint || "";
+
+      section.append(label, value, detail);
 
       return section;
     }
@@ -1982,25 +2091,19 @@ export function renderAdminConsoleHtml(): string {
 
     function renderOverview(data) {
       overviewRoot.replaceChildren(
-        createOverviewPanel("Health", [
-          ["status", createPill(data.database.status)],
-          ["service", data.service.name]
-        ]),
-        createOverviewPanel("Database", [
-          ["status", createPill(data.database.status)],
-          ["reason", data.database.reason]
-        ]),
-        createOverviewPanel("Uptime", [
-          ["service uptime", createUptimeNode(data.service.uptimeSeconds)]
-        ]),
-        createOverviewPanel("Queue", [
-          ["queued", data.queue.queued == null ? "-" : String(data.queue.queued)],
-          ["failed", data.queue.failed == null ? "-" : String(data.queue.failed)]
-        ]),
-        createOverviewPanel("Events", [
-          ["sent", data.recentDelivery.sent == null ? "-" : String(data.recentDelivery.sent)],
-          ["failed", data.recentDelivery.failed == null ? "-" : String(data.recentDelivery.failed)]
-        ])
+        createOverviewPanel("Health", createPill(data.database.status), data.service.name),
+        createOverviewPanel("Database", data.database.status || "-", data.database.reason || "-"),
+        createOverviewPanel("Uptime", createUptimeNode(data.service.uptimeSeconds), "service uptime"),
+        createOverviewPanel(
+          "Queue",
+          data.queue.queued == null ? "-" : String(data.queue.queued),
+          (data.queue.failed == null ? "0" : String(data.queue.failed)) + " failed"
+        ),
+        createOverviewPanel(
+          "Events",
+          data.recentDelivery.sent == null ? "-" : String(data.recentDelivery.sent),
+          (data.recentDelivery.failed == null ? "0" : String(data.recentDelivery.failed)) + " failed"
+        )
       );
       renderServiceOverview(data);
       renderDashboardRecentActivity(data);
