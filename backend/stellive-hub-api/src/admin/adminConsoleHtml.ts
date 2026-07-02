@@ -106,18 +106,39 @@ export function renderAdminConsoleHtml(): string {
       padding: 26px 18px;
       border-right: 1px solid var(--admin-border);
       background: color-mix(in srgb, var(--admin-surface) 84%, transparent);
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 24px;
     }
-    .admin-nav-title {
-      margin: 0 0 24px;
+    .admin-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
       padding: 0 8px;
+    }
+    .admin-brand-mark {
+      width: 32px;
+      height: 32px;
+      border: 1px solid color-mix(in srgb, var(--admin-primary) 26%, var(--admin-border) 74%);
+      border-radius: 11px 15px 11px 15px;
+      background: color-mix(in srgb, var(--admin-primary) 18%, var(--admin-accent) 18%);
+      transform: rotate(-12deg);
+    }
+    .admin-brand-title {
       font-size: 17px;
       font-weight: 900;
       letter-spacing: -0.02em;
       color: var(--admin-primary);
     }
+    .admin-nav-links {
+      display: grid;
+      gap: 7px;
+      align-content: start;
+    }
     .admin-nav button {
       display: flex;
       align-items: center;
+      gap: 12px;
       width: 100%;
       border: 0;
       min-height: 42px;
@@ -131,6 +152,17 @@ export function renderAdminConsoleHtml(): string {
       text-align: left;
       text-decoration: none;
       cursor: pointer;
+    }
+    .admin-nav-dot {
+      width: 6px;
+      height: 6px;
+      margin-left: auto;
+      border-radius: 999px;
+      background: var(--admin-primary);
+      opacity: 0;
+    }
+    .admin-nav button[aria-current="page"] .admin-nav-dot {
+      opacity: 1;
     }
     .admin-nav button:hover,
     .admin-nav button:focus-visible {
@@ -201,6 +233,25 @@ export function renderAdminConsoleHtml(): string {
       flex-wrap: wrap;
       gap: 8px;
     }
+    .admin-sidebar-card {
+      align-self: end;
+      padding: 16px;
+      border: 1px solid var(--admin-soft-border);
+      border-radius: 20px;
+      background: color-mix(in srgb, var(--admin-surface) 88%, var(--admin-accent) 12%);
+    }
+    .admin-sidebar-card strong {
+      display: block;
+      color: var(--admin-text);
+      font-size: 15px;
+      line-height: 1.2;
+    }
+    .admin-sidebar-card span {
+      display: block;
+      margin-top: 6px;
+      color: var(--admin-muted);
+      font-size: 12px;
+    }
     .admin-page-head {
       display: flex;
       align-items: flex-start;
@@ -250,6 +301,10 @@ export function renderAdminConsoleHtml(): string {
     }
     :root[data-theme="dark"] .admin-nav {
       background: rgba(20, 31, 51, 0.58);
+    }
+    :root[data-theme="dark"] .admin-sidebar-card {
+      background: linear-gradient(160deg, #1d2a45, #141f33);
+      border-color: var(--admin-border);
     }
     :root[data-theme="dark"] .admin-nav button,
     :root[data-theme="dark"] .admin-tabs button {
@@ -994,9 +1049,18 @@ export function renderAdminConsoleHtml(): string {
         border-right: 0;
         border-bottom: 1px solid var(--admin-border);
       }
-      .admin-nav-title {
+      .admin-brand {
         flex: 0 0 auto;
         margin: 0 10px 0 0;
+      }
+      .admin-brand-mark,
+      .admin-sidebar-card {
+        display: none;
+      }
+      .admin-nav-links {
+        display: flex;
+        gap: 8px;
+        flex: 0 0 auto;
       }
       .admin-nav button {
         flex: 0 0 auto;
@@ -1137,12 +1201,21 @@ export function renderAdminConsoleHtml(): string {
 <body>
   <div class="admin-app">
     <nav class="admin-nav" aria-label="Admin console sections">
-      <div class="admin-nav-title">Stellive Hub Admin</div>
-      <button type="button" data-page-target="dashboard" aria-current="page">Dashboard</button>
-      <button type="button" data-page-target="hub-events">Hub events</button>
-      <button type="button" data-page-target="operations">Operations</button>
-      <button type="button" data-page-target="audit">Audit</button>
-      <button type="button" data-page-target="settings">Settings</button>
+      <div class="admin-brand">
+        <div class="admin-brand-mark" aria-hidden="true"></div>
+        <div class="admin-brand-title">Stellive Hub Admin</div>
+      </div>
+      <div class="admin-nav-links">
+        <button type="button" data-page-target="dashboard" aria-current="page">Dashboard<span class="admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="hub-events">Hub events<span class="admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="operations">Operations<span class="admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="audit">Audit<span class="admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="settings">Settings<span class="admin-nav-dot" aria-hidden="true"></span></button>
+      </div>
+      <div class="admin-sidebar-card">
+        <strong>Session active</strong>
+        <span>Internal API access is configured in Settings only.</span>
+      </div>
     </nav>
     <main class="admin-content stack">
       <div class="admin-topbar">

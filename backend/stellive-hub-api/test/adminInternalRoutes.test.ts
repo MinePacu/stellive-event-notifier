@@ -89,6 +89,10 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(hubEventEditorIndex).toBeLessThan(hubEventListIndex);
   expect(html).toContain('class="admin-app"');
   expect(html).toContain('class="admin-nav"');
+  expect(html).toContain('class="admin-brand-mark"');
+  expect(html).toContain('class="admin-nav-links"');
+  expect(html).toContain('class="admin-nav-dot"');
+  expect(html).toContain('class="admin-sidebar-card"');
   expect(html).toContain('class="admin-content');
   expect(html).toContain('class="admin-topbar"');
   expect(html).toContain('class="admin-tabs"');
