@@ -228,6 +228,8 @@ export function renderAdminConsoleHtml(): string {
     }
     .page {
       display: none;
+      min-height: 0;
+      width: 100%;
     }
     .page.active {
       display: block;
@@ -342,6 +344,8 @@ export function renderAdminConsoleHtml(): string {
       border: 1px solid var(--admin-border);
       border-radius: 20px;
       background: color-mix(in srgb, var(--admin-surface) 93%, transparent);
+      align-self: start;
+      width: 100%;
       min-width: 0;
       overflow: hidden;
       box-shadow: 0 12px 28px rgba(34, 48, 78, 0.08);
@@ -355,7 +359,7 @@ export function renderAdminConsoleHtml(): string {
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 16px 18px 10px;
+      padding: 12px 18px 8px;
       border-bottom: 1px solid var(--admin-border);
       background: transparent;
     }
@@ -364,7 +368,28 @@ export function renderAdminConsoleHtml(): string {
     }
     .section-body,
     .card-body {
-      padding: 14px 18px 18px;
+      padding: 12px 18px 14px;
+    }
+    #overview-section .section-body:has(> #overview.is-empty) {
+      padding-top: 0;
+      padding-bottom: 12px;
+    }
+    #overview.is-empty {
+      display: none;
+    }
+    #operations-section .section-body,
+    #audit-section .section-body {
+      padding-top: 12px;
+      padding-bottom: 14px;
+    }
+    #operations-section .panel,
+    #audit-section .panel {
+      align-self: start;
+      width: 100%;
+    }
+    #operations-section .settings-layout,
+    #audit-section .section-body {
+      width: 100%;
     }
     :root[data-theme="dark"] body {
       background:
@@ -997,6 +1022,13 @@ export function renderAdminConsoleHtml(): string {
       border-radius: 16px;
       background: color-mix(in srgb, var(--admin-surface) 94%, var(--admin-bg) 6%);
     }
+    #operations-section .summary-row,
+    #audit-section .activity-item {
+      padding: 12px;
+    }
+    #audit-section .activity-list {
+      gap: 8px;
+    }
 
     .summary-row {
       grid-template-columns: minmax(0, 1fr) auto;
@@ -1352,7 +1384,7 @@ export function renderAdminConsoleHtml(): string {
           </div>
         </div>
         <div class="section-body">
-          <section id="overview" class="metric-row grid" aria-live="polite"></section>
+          <section id="overview" class="metric-row grid is-empty" aria-live="polite"></section>
         </div>
       </section>
 
@@ -2090,6 +2122,7 @@ export function renderAdminConsoleHtml(): string {
     }
 
     function renderOverview(data) {
+      overviewRoot.classList.remove("is-empty");
       overviewRoot.replaceChildren(
         createOverviewPanel("Health", createPill(data.database.status), data.service.name),
         createOverviewPanel("Database", data.database.status || "-", data.database.reason || "-"),
@@ -2269,6 +2302,9 @@ export function renderAdminConsoleHtml(): string {
           setAutoRefreshStatus("Every 5s");
         }
       } catch (error) {
+        if (!overviewRoot.children.length) {
+          overviewRoot.classList.add("is-empty");
+        }
         setMessage(error instanceof Error ? error.message : "unknown_error", true);
         if (source === "auto" && autoRefreshInput.checked) {
           setAutoRefreshStatus("Retrying");
