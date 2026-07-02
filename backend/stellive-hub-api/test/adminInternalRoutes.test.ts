@@ -21,7 +21,14 @@ function createFakeDependencies(overrides: Partial<InternalRouteDependencies> = 
         secrets: {},
         queue: { queued: 0, locked: 0, completed: 0, failed: 0 },
         adapters: [],
-        recentDelivery: { sent: 0, queued: 0, skipped: 0, failed: 0 }
+        recentDelivery: { sent: 0, queued: 0, skipped: 0, failed: 0 },
+        dailyDeliveryQueue: {
+          timezone: "Asia/Seoul",
+          days: 14,
+          generatedAt: "2026-07-02T00:00:00.000Z",
+          items: [],
+          totals: { sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 }
+        }
       })
     },
     notificationJobs: { listDiagnostics: async () => [] },
@@ -128,11 +135,18 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain('id="service-overview-summary"');
   expect(html).toContain('id="service-overview-status"');
   expect(html).toContain('id="dashboard-recent-activity"');
+  expect(html).toContain('id="daily-queue-section"');
+  expect(html).toContain('id="daily-queue-chart"');
+  expect(html).toContain('id="daily-queue-summary"');
+  expect(html).toContain('id="daily-queue-accessible-list"');
+  expect(html).toContain("Daily client delivery queue");
+  expect(html).toContain("Asia/Seoul");
   expect(html).toContain("System status");
   expect(html).toContain("Configuration readiness");
   expect(html).toContain("Uptime");
-  expect(html).not.toContain("chart");
   expect(html).not.toContain("graph");
+  expect(html).not.toContain("decorative-chart");
+  expect(html).not.toContain("meaningless-graph");
   expect(html).toContain('class="metric-row');
   expect(html).toContain('className = "metric-label"');
   expect(html).toContain('className = "metric-hint"');
@@ -225,6 +239,46 @@ describe("internal admin routes", () => {
 
     expect(response.statusCode).toBe(401);
     expect(response.json()).toEqual({ error: "invalid_authorization_scheme" });
+  });
+
+  it("returns daily delivery queue trend in admin overview", async () => {
+    const app = await buildTestApp({
+      adminHealthService: {
+        overview: async () => ({
+          service: { name: "stellive-hub-api", environment: "test", uptimeSeconds: 1 },
+          database: { status: "ok", reason: "fake_database_ready" },
+          featureFlags: {},
+          secrets: {},
+          queue: { queued: 0, locked: 0, completed: 0, failed: 0 },
+          adapters: [],
+          recentDelivery: { sent: 1, queued: 0, skipped: 0, failed: 0 },
+          dailyDeliveryQueue: {
+            timezone: "Asia/Seoul",
+            days: 14,
+            generatedAt: "2026-07-02T00:00:00.000Z",
+            items: [{ date: "2026-07-02", sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }],
+            totals: { sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }
+          }
+        })
+      }
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/internal/admin/overview",
+      headers: authHeaders
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      dailyDeliveryQueue: {
+        timezone: "Asia/Seoul",
+        days: 14,
+        items: [{ date: "2026-07-02", sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }],
+        totals: { sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }
+      }
+    });
+    expect(response.body).not.toContain("internal-test-token");
   });
 
   it("rejects requests when the internal token is not configured", async () => {
@@ -882,6 +936,7 @@ describe("admin console routes", () => {
     expect(response.body).toContain('name="token"');
     expect(response.body).not.toContain("Console preview");
     expect(response.body).not.toContain("Dashboard metric preview");
+    expect(response.body).not.toContain('id="daily-queue-chart"');
     expect(response.body).not.toContain('id="internal-token"');
     expectAdminThemeSupport(response.body);
     expect(response.body).not.toContain(adminToken);

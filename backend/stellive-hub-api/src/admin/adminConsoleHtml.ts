@@ -383,6 +383,9 @@ export function renderAdminConsoleHtml(): string {
     #overview.is-empty {
       display: none;
     }
+    #daily-queue-section.is-empty {
+      display: none;
+    }
     #operations-section .section-body,
     #audit-section .section-body {
       padding-top: 12px;
@@ -652,6 +655,127 @@ export function renderAdminConsoleHtml(): string {
       font-weight: 850;
       line-height: 1.1;
       color: var(--admin-text);
+    }
+    .queue-chart-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+      gap: 14px;
+      align-items: stretch;
+    }
+    .queue-chart-card {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+      padding: 14px;
+      border: 1px solid var(--admin-soft-border);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--admin-surface) 94%, var(--admin-bg) 6%);
+    }
+    .daily-queue-chart {
+      display: grid;
+      grid-template-columns: repeat(14, minmax(18px, 1fr));
+      gap: 8px;
+      align-items: end;
+      min-height: 210px;
+      padding: 8px 2px 0;
+    }
+    .queue-bar {
+      display: grid;
+      grid-template-rows: minmax(150px, 1fr) auto;
+      gap: 8px;
+      min-width: 0;
+    }
+    .queue-bar-stack {
+      display: flex;
+      flex-direction: column-reverse;
+      justify-content: flex-start;
+      height: 100%;
+      min-height: 150px;
+      overflow: hidden;
+      border: 1px solid var(--admin-soft-border);
+      border-radius: 10px 10px 6px 6px;
+      background: color-mix(in srgb, var(--admin-surface) 86%, var(--admin-bg) 14%);
+    }
+    .queue-bar-segment {
+      min-height: 3px;
+    }
+    .queue-bar-segment.sent,
+    .legend-dot.sent {
+      background: var(--admin-accent);
+    }
+    .queue-bar-segment.queued,
+    .legend-dot.queued {
+      background: var(--admin-primary);
+    }
+    .queue-bar-segment.skipped,
+    .legend-dot.skipped {
+      background: #94a3b8;
+    }
+    .queue-bar-segment.failed,
+    .legend-dot.failed {
+      background: var(--admin-danger);
+    }
+    .queue-bar-label {
+      color: var(--admin-muted);
+      font-size: 11px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .queue-chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      color: var(--admin-muted);
+      font-size: 12px;
+    }
+    .queue-chart-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+    .queue-chart-summary {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+    .queue-summary-card {
+      display: grid;
+      gap: 4px;
+      padding: 12px;
+      border: 1px solid var(--admin-soft-border);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--admin-surface) 94%, var(--admin-bg) 6%);
+    }
+    .queue-summary-label {
+      color: var(--admin-muted);
+      font-size: 12px;
+    }
+    .queue-summary-value {
+      color: var(--admin-text);
+      font-size: 20px;
+      font-weight: 850;
+      line-height: 1.1;
+    }
+    .daily-queue-empty {
+      display: grid;
+      min-height: 180px;
+      place-items: center;
+      color: var(--admin-muted);
+      text-align: center;
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
     }
     .toolbar {
       display: grid;
@@ -1206,7 +1330,8 @@ export function renderAdminConsoleHtml(): string {
         grid-template-columns: 1fr;
       }
       .split,
-      .event-layout {
+      .event-layout,
+      .queue-chart-layout {
         grid-template-columns: 1fr;
       }
       .grid,
@@ -1285,6 +1410,14 @@ export function renderAdminConsoleHtml(): string {
       .hub-events-two,
       .hub-events-three {
         grid-template-columns: 1fr;
+      }
+      .queue-chart-card {
+        overflow-x: auto;
+      }
+      .daily-queue-chart {
+        grid-template-columns: repeat(14, minmax(24px, 1fr));
+        min-width: 520px;
+        padding-bottom: 4px;
       }
       .toolbar,
       .hub-event-actions {
@@ -1393,6 +1526,28 @@ export function renderAdminConsoleHtml(): string {
         </div>
         <div class="section-body">
           <section id="overview" class="metric-row grid is-empty" aria-live="polite"></section>
+        </div>
+      </section>
+
+      <section id="daily-queue-section" class="section is-empty">
+        <div class="section-head">
+          <div>
+            <h2>Daily client delivery queue</h2>
+            <p class="subtle">Last 14 days of delivery attempts sent to clients. Timezone: Asia/Seoul.</p>
+          </div>
+        </div>
+        <div class="section-body queue-chart-layout">
+          <div class="queue-chart-card">
+            <div id="daily-queue-chart" class="daily-queue-chart" aria-label="Daily client delivery queue chart"></div>
+            <div class="queue-chart-legend" aria-label="Delivery status legend">
+              <span><i class="legend-dot sent" aria-hidden="true"></i>Sent</span>
+              <span><i class="legend-dot queued" aria-hidden="true"></i>Queued</span>
+              <span><i class="legend-dot skipped" aria-hidden="true"></i>Skipped</span>
+              <span><i class="legend-dot failed" aria-hidden="true"></i>Failed</span>
+            </div>
+          </div>
+          <aside id="daily-queue-summary" class="queue-chart-summary" aria-label="Daily delivery queue summary"></aside>
+          <ul id="daily-queue-accessible-list" class="visually-hidden"></ul>
         </div>
       </section>
 
@@ -1837,6 +1992,10 @@ export function renderAdminConsoleHtml(): string {
       };
 
     const overviewRoot = document.getElementById("overview");
+    const dailyQueueSectionRoot = document.getElementById("daily-queue-section");
+    const dailyQueueChartRoot = document.getElementById("daily-queue-chart");
+    const dailyQueueSummaryRoot = document.getElementById("daily-queue-summary");
+    const dailyQueueAccessibleListRoot = document.getElementById("daily-queue-accessible-list");
     const serviceOverviewSummaryRoot = document.getElementById("service-overview-summary");
     const serviceOverviewStatusRoot = document.getElementById("service-overview-status");
     const dashboardRecentActivityRoot = document.getElementById("dashboard-recent-activity");
@@ -2071,6 +2230,112 @@ export function renderAdminConsoleHtml(): string {
       return sent + " sent / " + skipped + " skipped / " + failed + " failed";
     }
 
+    function numericValue(value) {
+      const next = Number(value);
+      return Number.isFinite(next) && next >= 0 ? next : 0;
+    }
+
+    function shortDateLabel(dateKey) {
+      const parts = String(dateKey || "").split("-");
+      return parts.length === 3 ? parts[1] + "/" + parts[2] : String(dateKey || "-");
+    }
+
+    function formatFailureRate(totals) {
+      const total = numericValue(totals && totals.total);
+      if (total === 0) return "0%";
+      return ((numericValue(totals.failed) / total) * 100).toFixed(1) + "%";
+    }
+
+    function createQueueSummaryCard(label, value, description) {
+      const card = document.createElement("div");
+      card.className = "queue-summary-card";
+      const labelNode = document.createElement("div");
+      labelNode.className = "queue-summary-label";
+      labelNode.textContent = label;
+      const valueNode = document.createElement("div");
+      valueNode.className = "queue-summary-value";
+      valueNode.textContent = value == null || value === "" ? "-" : String(value);
+      const descriptionNode = document.createElement("div");
+      descriptionNode.className = "metric-hint";
+      descriptionNode.textContent = description || "";
+      card.append(labelNode, valueNode, descriptionNode);
+      return card;
+    }
+
+    function createQueueBarSegment(status, value, maxTotal) {
+      const segment = document.createElement("span");
+      segment.className = "queue-bar-segment " + status;
+      segment.style.height = value > 0 ? Math.max((value / maxTotal) * 100, 2) + "%" : "0";
+      segment.setAttribute("aria-hidden", "true");
+      return segment;
+    }
+
+    function renderDailyQueueChart(trend) {
+      const items = trend && Array.isArray(trend.items) ? trend.items : [];
+      const totals = trend && trend.totals ? trend.totals : { sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 };
+      dailyQueueSectionRoot.classList.remove("is-empty");
+      dailyQueueChartRoot.replaceChildren();
+      dailyQueueSummaryRoot.replaceChildren();
+      dailyQueueAccessibleListRoot.replaceChildren();
+
+      if (items.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "daily-queue-empty";
+        empty.textContent = "No delivery attempts in the selected window.";
+        dailyQueueChartRoot.appendChild(empty);
+        dailyQueueSummaryRoot.append(
+          createQueueSummaryCard("14d total", "0", "No delivery attempts returned."),
+          createQueueSummaryCard("Failure rate", "0%", "Failed delivery attempts over total attempts.")
+        );
+        return;
+      }
+
+      const maxTotal = Math.max(1, ...items.map(function (item) { return numericValue(item.total); }));
+      let peak = items[0];
+      for (const item of items) {
+        if (numericValue(item.total) > numericValue(peak.total)) {
+          peak = item;
+        }
+
+        const bar = document.createElement("div");
+        bar.className = "queue-bar";
+        bar.setAttribute(
+          "aria-label",
+          item.date + ": " + numericValue(item.sent) + " sent, " + numericValue(item.queued) + " queued, " +
+            numericValue(item.skipped) + " skipped, " + numericValue(item.failed) + " failed"
+        );
+        bar.title = bar.getAttribute("aria-label") || "";
+
+        const stack = document.createElement("div");
+        stack.className = "queue-bar-stack";
+        stack.append(
+          createQueueBarSegment("sent", numericValue(item.sent), maxTotal),
+          createQueueBarSegment("queued", numericValue(item.queued), maxTotal),
+          createQueueBarSegment("skipped", numericValue(item.skipped), maxTotal),
+          createQueueBarSegment("failed", numericValue(item.failed), maxTotal)
+        );
+
+        const label = document.createElement("div");
+        label.className = "queue-bar-label";
+        label.textContent = shortDateLabel(item.date);
+        bar.append(stack, label);
+        dailyQueueChartRoot.appendChild(bar);
+
+        const accessibleItem = document.createElement("li");
+        accessibleItem.textContent = bar.getAttribute("aria-label") || "";
+        dailyQueueAccessibleListRoot.appendChild(accessibleItem);
+      }
+
+      const today = items[items.length - 1] || { sent: 0, failed: 0 };
+      dailyQueueSummaryRoot.append(
+        createQueueSummaryCard("Today sent", numericValue(today.sent), "KST date bucket."),
+        createQueueSummaryCard("Today failed", numericValue(today.failed), "Failed attempts today."),
+        createQueueSummaryCard((trend.days || items.length) + "d total", numericValue(totals.total), "Sent, queued, skipped, and failed."),
+        createQueueSummaryCard("Failure rate", formatFailureRate(totals), "Failed attempts over total attempts."),
+        createQueueSummaryCard("Peak day", shortDateLabel(peak.date), numericValue(peak.total) + " attempts")
+      );
+    }
+
     function formatUptime(seconds) {
       const totalSeconds = Math.floor(Number(seconds));
       if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
@@ -2146,6 +2411,7 @@ export function renderAdminConsoleHtml(): string {
           (data.recentDelivery.failed == null ? "0" : String(data.recentDelivery.failed)) + " failed"
         )
       );
+      renderDailyQueueChart(data.dailyDeliveryQueue);
       renderServiceOverview(data);
       renderDashboardRecentActivity(data);
     }

@@ -84,6 +84,9 @@ model DeliveryAttempt {
   deliveryLatencyMs Int?
   retryCount        Int      @default(0)
   expiresAt         DateTime?
+
+  @@index([attemptedAt])
+  @@index([status, attemptedAt])
 }
 
 model LiveStatus {

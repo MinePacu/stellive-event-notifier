@@ -1,7 +1,7 @@
 import type { AppEnv } from "../config/env.js";
 import { loadEnv } from "../config/env.js";
 import { NotificationJobRepository } from "../jobs/notificationJobRepository.js";
-import { DeliveryAttemptRepository } from "../repositories/deliveryAttemptRepository.js";
+import { DeliveryAttemptRepository, emptyDailyDeliveryQueueTrend } from "../repositories/deliveryAttemptRepository.js";
 import { PlatformApiStateRepository } from "../repositories/platformApiStateRepository.js";
 import { getPrismaClient } from "../storage/prisma.js";
 import { getConfiguredSecretState } from "./adminAuth.js";
@@ -29,9 +29,10 @@ export class AdminHealthService {
   ) {}
 
   async overview(): Promise<AdminOverview> {
-    const [queue, recentDelivery, adapterState, database] = await Promise.all([
+    const [queue, recentDelivery, dailyDeliveryQueue, adapterState, database] = await Promise.all([
       this.readQueueSummary(),
       this.readRecentDeliverySummary(),
+      this.readDailyDeliveryQueue(),
       this.readAdapterHealth(),
       this.databaseStatus()
     ]);
@@ -48,7 +49,8 @@ export class AdminHealthService {
       secrets: this.secretReadiness(),
       queue,
       adapters: defaultAdapterHealth.map((fallback) => adapterBySource.get(fallback.source) ?? fallback),
-      recentDelivery
+      recentDelivery,
+      dailyDeliveryQueue
     };
   }
 
@@ -102,6 +104,14 @@ export class AdminHealthService {
       return await this.deliveryAttempts.summarizeRecent();
     } catch {
       return { sent: 0, queued: 0, skipped: 0, failed: 0 };
+    }
+  }
+
+  private async readDailyDeliveryQueue(): Promise<AdminOverview["dailyDeliveryQueue"]> {
+    try {
+      return await this.deliveryAttempts.summarizeDailyBuckets({ days: 14, timezone: "Asia/Seoul" });
+    } catch {
+      return emptyDailyDeliveryQueueTrend(14);
     }
   }
 

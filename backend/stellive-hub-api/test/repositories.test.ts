@@ -288,6 +288,68 @@ describe("DeliveryAttemptRepository worker writes", () => {
       }
     ]);
   });
+
+  it("summarizes daily delivery attempts in KST buckets with empty days", async () => {
+    const calls: unknown[] = [];
+    const now = new Date("2026-07-02T03:00:00.000Z");
+    const repository = new DeliveryAttemptRepository({
+      deliveryAttempt: {
+        async findMany(args: unknown) {
+          calls.push(args);
+          return [
+            { attemptedAt: new Date("2026-06-29T15:30:00.000Z"), status: "sent" },
+            { attemptedAt: new Date("2026-06-30T15:30:00.000Z"), status: "queued" },
+            { attemptedAt: new Date("2026-07-02T02:59:00.000Z"), status: "failed" },
+            { attemptedAt: new Date("2026-07-02T02:00:00.000Z"), status: "unknown" }
+          ];
+        }
+      }
+    });
+
+    const summary = await repository.summarizeDailyBuckets({ days: 4, now, timezone: "Asia/Seoul" });
+
+    expect(calls).toEqual([
+      {
+        where: {
+          attemptedAt: { gte: new Date("2026-06-28T15:00:00.000Z"), lte: now },
+          status: { in: ["sent", "queued", "skipped", "failed"] }
+        },
+        orderBy: { attemptedAt: "asc" },
+        select: { attemptedAt: true, status: true }
+      }
+    ]);
+    expect(summary).toEqual({
+      timezone: "Asia/Seoul",
+      days: 4,
+      generatedAt: now.toISOString(),
+      items: [
+        { date: "2026-06-29", sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 },
+        { date: "2026-06-30", sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 },
+        { date: "2026-07-01", sent: 0, queued: 1, skipped: 0, failed: 0, total: 1 },
+        { date: "2026-07-02", sent: 0, queued: 0, skipped: 0, failed: 1, total: 1 }
+      ],
+      totals: { sent: 1, queued: 1, skipped: 0, failed: 1, total: 3 }
+    });
+  });
+
+  it("returns zero-filled daily delivery trend when no records exist", async () => {
+    const now = new Date("2026-07-02T03:00:00.000Z");
+    const repository = new DeliveryAttemptRepository({
+      deliveryAttempt: {
+        async findMany() {
+          return [];
+        }
+      }
+    });
+
+    const summary = await repository.summarizeDailyBuckets({ days: 2, now, timezone: "Asia/Seoul" });
+
+    expect(summary.items).toEqual([
+      { date: "2026-07-01", sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 },
+      { date: "2026-07-02", sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 }
+    ]);
+    expect(summary.totals).toEqual({ sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 });
+  });
 });
 
 describe("NotificationJobRepository", () => {

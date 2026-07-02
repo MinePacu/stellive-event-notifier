@@ -19,6 +19,13 @@ function createDependencies() {
         queue: { queued: 0, locked: 0, completed: 0, failed: 0 },
         adapters: [],
         recentDelivery: { sent: 0, queued: 0, skipped: 0, failed: 0 },
+        dailyDeliveryQueue: {
+          timezone: "Asia/Seoul" as const,
+          days: 14,
+          generatedAt: "2026-07-02T00:00:00.000Z",
+          items: [],
+          totals: { sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 },
+        },
       }),
     },
     notificationJobs: { listDiagnostics: async () => [] },

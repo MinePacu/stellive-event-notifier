@@ -80,6 +80,21 @@ export interface DeliveryAttemptSummary {
   failed: number;
 }
 
+export interface DailyDeliveryQueuePoint extends DeliveryAttemptSummary {
+  date: string;
+  total: number;
+}
+
+export interface DailyDeliveryQueueTrend {
+  timezone: "Asia/Seoul";
+  days: number;
+  generatedAt: string;
+  items: DailyDeliveryQueuePoint[];
+  totals: DeliveryAttemptSummary & {
+    total: number;
+  };
+}
+
 export interface AdminOverview {
   service: {
     name: "stellive-hub-api";
@@ -95,4 +110,5 @@ export interface AdminOverview {
   queue: NotificationJobSummary;
   adapters: AdapterHealth[];
   recentDelivery: DeliveryAttemptSummary;
+  dailyDeliveryQueue: DailyDeliveryQueueTrend;
 }
