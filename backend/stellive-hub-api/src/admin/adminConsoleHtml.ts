@@ -147,6 +147,36 @@ export function renderAdminConsoleHtml(): string {
       border-bottom: 0;
       background: transparent;
     }
+    .admin-tabs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .admin-tabs button {
+      flex: 0 0 auto;
+      min-height: 34px;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      border-radius: 0;
+      padding: 7px 8px;
+      background: transparent;
+      box-shadow: none;
+      color: var(--admin-muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .admin-tabs button:hover,
+    .admin-tabs button:focus-visible {
+      background: color-mix(in srgb, var(--admin-surface-hover) 62%, transparent);
+      color: var(--admin-text);
+    }
+    .admin-tabs button[aria-current="page"] {
+      border-bottom-color: var(--admin-primary);
+      color: var(--admin-primary);
+    }
     .page {
       display: none;
     }
@@ -210,6 +240,27 @@ export function renderAdminConsoleHtml(): string {
     :root[data-theme="dark"] .admin-nav {
       background: rgba(20, 31, 51, 0.58);
     }
+    :root[data-theme="dark"] .admin-nav button,
+    :root[data-theme="dark"] .admin-tabs button {
+      background: transparent;
+      box-shadow: none;
+      color: var(--admin-muted);
+    }
+    :root[data-theme="dark"] .admin-nav button:hover,
+    :root[data-theme="dark"] .admin-tabs button:hover {
+      background: rgba(255, 255, 255, 0.035);
+      color: var(--admin-text);
+    }
+    :root[data-theme="dark"] .admin-nav button[aria-current="page"] {
+      background: transparent;
+      color: var(--admin-primary);
+      box-shadow: inset 2px 0 0 var(--admin-primary);
+    }
+    :root[data-theme="dark"] .admin-tabs button[aria-current="page"] {
+      background: transparent;
+      border-bottom-color: var(--admin-primary);
+      color: var(--admin-primary);
+    }
     :root[data-theme="dark"] .admin-content {
       background:
         radial-gradient(circle at 78% 10%, rgba(112, 214, 190, 0.08), transparent 28%),
@@ -242,23 +293,23 @@ export function renderAdminConsoleHtml(): string {
     }
     .event-layout {
       display: grid;
-      grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
-      gap: 14px;
+      grid-template-columns: 1fr;
+      gap: 18px;
       align-items: start;
     }
     .event-list {
       display: grid;
-      gap: 8px;
-      max-height: calc(100vh - 250px);
+      gap: 10px;
+      max-height: min(680px, calc(100vh - 260px));
       overflow: auto;
     }
     .event-row {
       width: 100%;
       display: grid;
       gap: 6px;
-      padding: 11px;
+      padding: 14px;
       border: 1px solid var(--admin-soft-border);
-      border-radius: 8px;
+      border-radius: 16px;
       background: color-mix(in srgb, var(--admin-surface) 88%, black);
       text-align: left;
       cursor: pointer;
@@ -290,7 +341,7 @@ export function renderAdminConsoleHtml(): string {
     }
     .form-section {
       border: 1px solid var(--admin-border);
-      border-radius: 8px;
+      border-radius: 16px;
       background: color-mix(in srgb, var(--admin-surface) 94%, black);
       overflow: hidden;
     }
@@ -384,7 +435,7 @@ export function renderAdminConsoleHtml(): string {
     }
     .panel {
       border: 1px solid var(--admin-border);
-      border-radius: 18px;
+      border-radius: 20px;
       background: color-mix(in srgb, var(--admin-surface) 94%, transparent);
       padding: 16px;
       min-width: 0;
@@ -628,17 +679,15 @@ export function renderAdminConsoleHtml(): string {
     .hub-events-editor,
     .hub-events-section {
       border: 1px solid var(--admin-border);
-      border-radius: 8px;
+      border-radius: 16px;
       background: color-mix(in srgb, var(--admin-surface) 94%, black);
     }
 
     .hub-events-sidebar {
       overflow: hidden;
-      grid-row: 2;
     }
 
     .hub-event-editor-panel {
-      grid-row: 1;
       width: 100%;
       max-width: 1280px;
     }
@@ -704,8 +753,8 @@ export function renderAdminConsoleHtml(): string {
 
     .hub-events-section-body {
       display: grid;
-      gap: 11px;
-      padding: 12px;
+      gap: 13px;
+      padding: 14px;
     }
 
     .hub-events-footer {
@@ -757,9 +806,9 @@ export function renderAdminConsoleHtml(): string {
     .security-item {
       display: grid;
       gap: 6px;
-      padding: 12px;
+      padding: 14px;
       border: 1px solid var(--admin-soft-border);
-      border-radius: 10px;
+      border-radius: 16px;
       background: color-mix(in srgb, var(--admin-surface) 94%, var(--admin-bg) 6%);
     }
 
@@ -785,11 +834,15 @@ export function renderAdminConsoleHtml(): string {
 
     .token-input-card {
       display: grid;
-      gap: 12px;
+      gap: 14px;
+      border-color: color-mix(in srgb, var(--admin-primary) 24%, var(--admin-border) 76%);
     }
 
     .status-table {
       margin-top: 8px;
+      border: 1px solid var(--admin-soft-border);
+      border-radius: 14px;
+      overflow: hidden;
     }
 
     .status-table td:last-child {
@@ -800,6 +853,27 @@ export function renderAdminConsoleHtml(): string {
     .security-grid {
       display: grid;
       gap: 10px;
+    }
+
+    .credential-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .credential-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 9px;
+      border: 1px solid color-mix(in srgb, var(--admin-primary) 22%, var(--admin-border) 78%);
+      border-radius: 999px;
+      color: var(--admin-primary);
+      background: color-mix(in srgb, var(--admin-primary) 7%, transparent);
+      font-size: 12px;
+      font-weight: 750;
+      white-space: nowrap;
     }
 
     .settings-actions {
@@ -883,6 +957,9 @@ export function renderAdminConsoleHtml(): string {
       .admin-topbar {
         margin: -12px -12px 12px;
         padding: 12px;
+      }
+      .admin-tabs {
+        display: none;
       }
       .admin-page-head,
       .section-head {
@@ -999,8 +1076,15 @@ export function renderAdminConsoleHtml(): string {
     <main class="admin-content stack">
       <div class="admin-topbar">
         <div>
-          <strong>Dashboard</strong>
-          <p class="subtle">Admin session and internal token are separate.</p>
+          <strong id="admin-current-page-title">Dashboard</strong>
+          <p id="admin-current-page-description" class="subtle">Admin session and internal token are separate.</p>
+          <nav class="admin-tabs" aria-label="Quick page tabs">
+            <button type="button" data-page-target="dashboard" aria-current="page">Dashboard</button>
+            <button type="button" data-page-target="hub-events">Hub events</button>
+            <button type="button" data-page-target="operations">Operations</button>
+            <button type="button" data-page-target="audit">Audit</button>
+            <button type="button" data-page-target="settings">Settings</button>
+          </nav>
         </div>
         <div class="refresh-controls">
               <button class="has-tooltip" data-tooltip="Refresh adapter, secret, feature flag, and job status." title="Refresh adapter, secret, feature flag, and job status." id="refresh" type="button">Refresh</button>
@@ -1035,7 +1119,12 @@ export function renderAdminConsoleHtml(): string {
         <div class="section-body split">
           <div class="panel">
             <h2>Service overview</h2>
-            <p class="subtle">Service name, environment, queue state, delivery state, and Uptime are loaded from the internal overview response.</p>
+            <div id="service-overview-summary" class="summary-list" aria-live="polite"></div>
+            <div class="table-scroll">
+              <table class="status-table">
+                <tbody id="service-overview-status"></tbody>
+              </table>
+            </div>
           </div>
           <div class="panel">
             <h2>Recent activity</h2>
@@ -1105,6 +1194,69 @@ export function renderAdminConsoleHtml(): string {
         </div>
         <div class="section-body">
         <div class="event-layout hub-events-workspace">
+          <div class="editor hub-event-editor-panel hub-events-editor">
+          <form id="hub-event-form" class="hub-event-form-wide hub-events-editor-grid">
+            <input id="hub-event-id" type="hidden">
+            <div class="form-section hub-events-section">
+              <h3 class="form-section-title hub-events-section-title">Basic information</h3>
+              <div class="hub-events-section-body">
+                <div class="field"><label for="hub-event-title">Title</label><input id="hub-event-title" name="title" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-summary">Summary</label><textarea id="hub-event-summary" name="summary" rows="3"></textarea></div>
+                <div class="hub-events-three">
+                  <div class="field"><label for="hub-event-category">Category</label><select id="hub-event-category" name="category"><option value="online_goods">Online goods</option><option value="online_collab">Online collab</option><option value="offline_concert">Offline concert</option><option value="offline_collab">Offline collab</option><option value="offline_popup">Offline popup</option><option value="ticketing">Ticketing</option></select></div>
+                  <div class="field"><label for="hub-event-participation-mode">Participation mode</label><select id="hub-event-participation-mode" name="participationMode"><option value="online">Online</option><option value="offline">Offline</option><option value="hybrid">Hybrid</option></select></div>
+                  <div class="field"><label for="hub-event-status">Status</label><select id="hub-event-status" name="status"><option value="announced">Announced</option><option value="upcoming">Upcoming</option><option value="open">Open</option><option value="closing_soon">Closing soon</option><option value="ended">Ended</option><option value="cancelled">Cancelled</option></select></div>
+                </div>
+                <div class="field"><label for="hub-event-generation">Generation</label><input id="hub-event-generation" name="generationId" autocomplete="off" value="official" placeholder="official, gen1, gen2, gen3"><p class="subtle">Examples: official, gen1, gen2, gen3. Use the member's matching generation for member-scoped events.</p></div>
+                <div class="field"><label for="hub-event-member">Member</label><input id="hub-event-member" name="memberId" autocomplete="off" placeholder="akane-lize"><p class="subtle">Example: akane-lize. Leave blank for generation-wide or official events.</p></div>
+              </div>
+            </div>
+            <div class="form-section hub-events-section">
+              <h3 class="form-section-title hub-events-section-title">Source and thumbnail</h3>
+              <div class="hub-events-section-body">
+                <div class="hub-events-two">
+                  <div class="field"><label for="hub-event-source-type">Source type</label><select id="hub-event-source-type" name="sourceType"><option value="official">Official</option><option value="member">Member</option><option value="official_collab">Official collab</option></select></div>
+                  <div class="field"><label for="hub-event-image-policy-state">Image policy state</label><select id="hub-event-image-policy-state" name="imagePolicyState"><option value="none">None</option><option value="official_runtime_url">Official runtime URL</option><option value="third_party_allowed">Third-party allowed</option><option value="verify_required">Verify required</option><option value="blocked">Blocked</option></select></div>
+                </div>
+                <div class="field"><label for="hub-event-source-url">Source URL</label><input id="hub-event-source-url" name="sourceUrl" type="url" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-source-label">Source label</label><input id="hub-event-source-label" name="sourceLabel" autocomplete="off"></div>
+                <div class="image-policy-help" aria-label="Source and image metadata help">
+                  <strong>No bundled image</strong>
+                  <div class="policy-help-grid">
+                    <span><strong>Source type:</strong> official means official notices or sources; member means member-owned sources; official_collab means official collaboration or partner sources.</span>
+                    <span><strong>Image policy state:</strong> none stores no image metadata and requires image URL/source label/source URL to stay blank; official_runtime_url and third_party_allowed require image URL, source label, and source URL; verify_required can be saved but is not treated as display-ready; blocked is not display-ready.</span>
+                    <span><strong>Common:</strong> Metadata only. No uploads or copied assets. No base64, local path, logo/poster/profile image asset fields. Displayable images require HTTPS. sourceUrl, purchaseUrl, ticketUrl must be HTTPS when filled.</span>
+                  </div>
+                </div>
+                <div class="field"><label for="hub-event-image-url">Image URL</label><input id="hub-event-image-url" name="imageUrl" type="url" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-image-source-label">Image source label</label><input id="hub-event-image-source-label" name="imageSourceLabel" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-image-source-url">Image source URL</label><input id="hub-event-image-source-url" name="imageSourceUrl" type="url" autocomplete="off"></div>
+              </div>
+            </div>
+            <div class="form-section hub-events-section">
+              <h3 class="form-section-title hub-events-section-title">Schedule</h3>
+              <div class="hub-events-section-body">
+                <div class="field"><label for="hub-event-announced-at">Announced at</label><input id="hub-event-announced-at" name="announcedAt" type="datetime-local"></div>
+                <div class="field"><label for="hub-event-starts-at">Starts at</label><input id="hub-event-starts-at" name="startsAt" type="datetime-local"></div>
+                <div class="field"><label for="hub-event-ends-at">Ends at</label><input id="hub-event-ends-at" name="endsAt" type="datetime-local"></div>
+              </div>
+            </div>
+            <div class="form-section hub-events-section">
+              <h3 class="form-section-title hub-events-section-title">Links and venue</h3>
+              <div class="hub-events-section-body">
+                <div class="field"><label for="hub-event-purchase-url">Purchase URL</label><input id="hub-event-purchase-url" name="purchaseUrl" type="url" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-ticket-url">Ticket URL</label><input id="hub-event-ticket-url" name="ticketUrl" type="url" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-venue-name">Venue name</label><input id="hub-event-venue-name" name="venueName" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-venue-address">Venue address</label><input id="hub-event-venue-address" name="venueAddress" autocomplete="off"></div>
+                <label class="switch-control"><input id="hub-event-notification-eligible" name="notificationEligible" type="checkbox" checked> Notification eligible</label>
+              </div>
+            </div>
+          </form>
+          <div class="hub-events-footer">
+            <div class="hub-events-section panel validation-panel"><h3>Validation</h3><ul id="hub-event-validation" class="message-list"></ul></div>
+            <div class="hub-events-section panel audit-log-panel"><h3>Audit log</h3><ul id="hub-event-audit-log" class="message-list"></ul></div>
+          </div>
+          </div>
           <div class="hub-event-list-panel hub-events-sidebar events-card">
             <div class="card-body events-card-body">
               <h3>Events</h3>
@@ -1182,69 +1334,6 @@ export function renderAdminConsoleHtml(): string {
                 <button id="hub-event-next-page" type="button">Next</button>
               </div>
             </div>
-            </div>
-            <div class="editor hub-event-editor-panel hub-events-editor">
-          <form id="hub-event-form" class="hub-event-form-wide hub-events-editor-grid">
-            <input id="hub-event-id" type="hidden">
-            <div class="form-section hub-events-section">
-              <h3 class="form-section-title hub-events-section-title">Basic information</h3>
-              <div class="hub-events-section-body">
-                <div class="field"><label for="hub-event-title">Title</label><input id="hub-event-title" name="title" autocomplete="off"></div>
-                <div class="field"><label for="hub-event-summary">Summary</label><textarea id="hub-event-summary" name="summary" rows="3"></textarea></div>
-                <div class="hub-events-three">
-                  <div class="field"><label for="hub-event-category">Category</label><select id="hub-event-category" name="category"><option value="online_goods">Online goods</option><option value="online_collab">Online collab</option><option value="offline_concert">Offline concert</option><option value="offline_collab">Offline collab</option><option value="offline_popup">Offline popup</option><option value="ticketing">Ticketing</option></select></div>
-                  <div class="field"><label for="hub-event-participation-mode">Participation mode</label><select id="hub-event-participation-mode" name="participationMode"><option value="online">Online</option><option value="offline">Offline</option><option value="hybrid">Hybrid</option></select></div>
-                  <div class="field"><label for="hub-event-status">Status</label><select id="hub-event-status" name="status"><option value="announced">Announced</option><option value="upcoming">Upcoming</option><option value="open">Open</option><option value="closing_soon">Closing soon</option><option value="ended">Ended</option><option value="cancelled">Cancelled</option></select></div>
-                </div>
-                <div class="field"><label for="hub-event-generation">Generation</label><input id="hub-event-generation" name="generationId" autocomplete="off" value="official" placeholder="official, gen1, gen2, gen3"><p class="subtle">Examples: official, gen1, gen2, gen3. Use the member's matching generation for member-scoped events.</p></div>
-                <div class="field"><label for="hub-event-member">Member</label><input id="hub-event-member" name="memberId" autocomplete="off" placeholder="akane-lize"><p class="subtle">Example: akane-lize. Leave blank for generation-wide or official events.</p></div>
-              </div>
-            </div>
-            <div class="form-section hub-events-section">
-              <h3 class="form-section-title hub-events-section-title">Source and thumbnail</h3>
-              <div class="hub-events-section-body">
-                <div class="hub-events-two">
-                  <div class="field"><label for="hub-event-source-type">Source type</label><select id="hub-event-source-type" name="sourceType"><option value="official">Official</option><option value="member">Member</option><option value="official_collab">Official collab</option></select></div>
-                  <div class="field"><label for="hub-event-image-policy-state">Image policy state</label><select id="hub-event-image-policy-state" name="imagePolicyState"><option value="none">None</option><option value="official_runtime_url">Official runtime URL</option><option value="third_party_allowed">Third-party allowed</option><option value="verify_required">Verify required</option><option value="blocked">Blocked</option></select></div>
-                </div>
-                <div class="field"><label for="hub-event-source-url">Source URL</label><input id="hub-event-source-url" name="sourceUrl" type="url" autocomplete="off"></div>
-                <div class="field"><label for="hub-event-source-label">Source label</label><input id="hub-event-source-label" name="sourceLabel" autocomplete="off"></div>
-                <div class="image-policy-help" aria-label="Source and image metadata help">
-                  <strong>No bundled image</strong>
-                  <div class="policy-help-grid">
-                    <span><strong>Source type:</strong> official means official notices or sources; member means member-owned sources; official_collab means official collaboration or partner sources.</span>
-                    <span><strong>Image policy state:</strong> none stores no image metadata and requires image URL/source label/source URL to stay blank; official_runtime_url and third_party_allowed require image URL, source label, and source URL; verify_required can be saved but is not treated as display-ready; blocked is not display-ready.</span>
-                    <span><strong>Common:</strong> Metadata only. No uploads or copied assets. No base64, local path, logo/poster/profile image asset fields. Displayable images require HTTPS. sourceUrl, purchaseUrl, ticketUrl must be HTTPS when filled.</span>
-                  </div>
-                </div>
-                <div class="field"><label for="hub-event-image-url">Image URL</label><input id="hub-event-image-url" name="imageUrl" type="url" autocomplete="off"></div>
-                <div class="field"><label for="hub-event-image-source-label">Image source label</label><input id="hub-event-image-source-label" name="imageSourceLabel" autocomplete="off"></div>
-                <div class="field"><label for="hub-event-image-source-url">Image source URL</label><input id="hub-event-image-source-url" name="imageSourceUrl" type="url" autocomplete="off"></div>
-              </div>
-            </div>
-            <div class="form-section hub-events-section">
-              <h3 class="form-section-title hub-events-section-title">Schedule</h3>
-              <div class="hub-events-section-body">
-                <div class="field"><label for="hub-event-announced-at">Announced at</label><input id="hub-event-announced-at" name="announcedAt" type="datetime-local"></div>
-                <div class="field"><label for="hub-event-starts-at">Starts at</label><input id="hub-event-starts-at" name="startsAt" type="datetime-local"></div>
-                <div class="field"><label for="hub-event-ends-at">Ends at</label><input id="hub-event-ends-at" name="endsAt" type="datetime-local"></div>
-              </div>
-            </div>
-            <div class="form-section hub-events-section">
-              <h3 class="form-section-title hub-events-section-title">Links and venue</h3>
-              <div class="hub-events-section-body">
-                <div class="field"><label for="hub-event-purchase-url">Purchase URL</label><input id="hub-event-purchase-url" name="purchaseUrl" type="url" autocomplete="off"></div>
-                <div class="field"><label for="hub-event-ticket-url">Ticket URL</label><input id="hub-event-ticket-url" name="ticketUrl" type="url" autocomplete="off"></div>
-                <div class="field"><label for="hub-event-venue-name">Venue name</label><input id="hub-event-venue-name" name="venueName" autocomplete="off"></div>
-                <div class="field"><label for="hub-event-venue-address">Venue address</label><input id="hub-event-venue-address" name="venueAddress" autocomplete="off"></div>
-                <label class="switch-control"><input id="hub-event-notification-eligible" name="notificationEligible" type="checkbox" checked> Notification eligible</label>
-              </div>
-            </div>
-          </form>
-          <div class="hub-events-footer">
-            <div class="hub-events-section panel validation-panel"><h3>Validation</h3><ul id="hub-event-validation" class="message-list"></ul></div>
-            <div class="hub-events-section panel audit-log-panel"><h3>Audit log</h3><ul id="hub-event-audit-log" class="message-list"></ul></div>
-          </div>
           </div>
         </div>
         <div class="bottom-actions" aria-label="Hub event mobile actions">
@@ -1361,8 +1450,13 @@ export function renderAdminConsoleHtml(): string {
         </div>
         <div class="section-body settings-layout">
           <div class="token-input-card panel">
-            <h2>Internal API bearer token</h2>
-            <p class="subtle">Used only for /v1/internal/* requests. It is stored in this browser session and is not saved on the server.</p>
+            <div class="credential-head">
+              <div>
+                <h2>Internal API bearer token</h2>
+                <p class="subtle">Used only for /v1/internal/* requests. It is stored in this browser session and is not saved on the server.</p>
+              </div>
+              <span class="credential-badge">session only</span>
+            </div>
             <div class="field">
               <label class="has-tooltip" data-tooltip="Store the internal API bearer token in this browser session only." title="Store the internal API bearer token in this browser session only." for="internal-token">Internal API bearer token</label>
               <input id="internal-token" type="password" autocomplete="off" spellcheck="false" placeholder="Required for /v1/internal/* requests">
@@ -1438,10 +1532,14 @@ export function renderAdminConsoleHtml(): string {
       };
 
     const overviewRoot = document.getElementById("overview");
+    const serviceOverviewSummaryRoot = document.getElementById("service-overview-summary");
+    const serviceOverviewStatusRoot = document.getElementById("service-overview-status");
     const adaptersRoot = document.getElementById("adapters");
     const secretsRoot = document.getElementById("secrets");
     const featureFlagsRoot = document.getElementById("feature-flags");
     const messageRoot = document.getElementById("message");
+    const currentPageTitleRoot = document.getElementById("admin-current-page-title");
+    const currentPageDescriptionRoot = document.getElementById("admin-current-page-description");
     const tokenInput = document.getElementById("internal-token");
     const autoRefreshInput = document.getElementById("auto-refresh");
     const autoRefreshStatusRoot = document.getElementById("auto-refresh-status");
@@ -1462,6 +1560,13 @@ export function renderAdminConsoleHtml(): string {
     let uptimeBaseSeconds = null;
     let uptimeBaseTimestamp = 0;
     let uptimeTimerId = null;
+    const pageCopy = {
+      dashboard: ["Dashboard", "Admin session and internal token are separate."],
+      "hub-events": ["Hub events", "Create, validate, publish, and review Hub events."],
+      operations: ["Operations", "Run bounded internal maintenance actions."],
+      audit: ["Audit", "Review operator-facing activity and event audit results."],
+      settings: ["Settings", "Manage credentials and console preferences."]
+    };
 
     function readStoredInternalToken() {
       try {
@@ -1522,6 +1627,9 @@ export function renderAdminConsoleHtml(): string {
 
     function setActivePage(pageName) {
       const nextPage = pageName || "dashboard";
+      const copy = pageCopy[nextPage] || pageCopy.dashboard;
+      currentPageTitleRoot.textContent = copy[0];
+      currentPageDescriptionRoot.textContent = copy[1];
       if (!messageRoot.classList.contains("error")) {
         setMessage("", false);
       }
@@ -1586,6 +1694,53 @@ export function renderAdminConsoleHtml(): string {
       }
 
       return section;
+    }
+
+    function createSummaryRow(title, value, description) {
+      const row = document.createElement("div");
+      row.className = "summary-row";
+      const text = document.createElement("div");
+      const titleNode = document.createElement("div");
+      titleNode.className = "summary-title";
+      titleNode.textContent = title;
+      const descriptionNode = document.createElement("div");
+      descriptionNode.className = "summary-description";
+      descriptionNode.textContent = description;
+      const valueNode = document.createElement("strong");
+      valueNode.textContent = value == null || value === "" ? "-" : String(value);
+      text.append(titleNode, descriptionNode);
+      row.append(text, valueNode);
+      return row;
+    }
+
+    function countStates(values) {
+      const entries = Object.values(values || {});
+      if (entries.length === 0) return "No data";
+      const configured = entries.filter(function (value) { return value === "configured"; }).length;
+      const missing = entries.filter(function (value) { return value === "missing"; }).length;
+      return configured + " configured / " + missing + " missing";
+    }
+
+    function summarizeAdapters(adapters) {
+      const rows = Array.isArray(adapters) ? adapters : [];
+      if (rows.length === 0) return "No diagnostics";
+      const ready = rows.filter(function (adapter) { return adapter.status === "enabled" || adapter.status === "ready"; }).length;
+      const disabled = rows.filter(function (adapter) { return adapter.status === "disabled"; }).length;
+      return ready + " ready / " + disabled + " disabled / " + rows.length + " total";
+    }
+
+    function formatQueueState(queue) {
+      const queued = queue && queue.queued != null ? queue.queued : 0;
+      const locked = queue && queue.locked != null ? queue.locked : 0;
+      const failed = queue && queue.failed != null ? queue.failed : 0;
+      return queued + " queued / " + locked + " locked / " + failed + " failed";
+    }
+
+    function formatDeliveryState(recentDelivery) {
+      const sent = recentDelivery && recentDelivery.sent != null ? recentDelivery.sent : 0;
+      const skipped = recentDelivery && recentDelivery.skipped != null ? recentDelivery.skipped : 0;
+      const failed = recentDelivery && recentDelivery.failed != null ? recentDelivery.failed : 0;
+      return sent + " sent / " + skipped + " skipped / " + failed + " failed";
     }
 
     function formatUptime(seconds) {
@@ -1665,6 +1820,29 @@ export function renderAdminConsoleHtml(): string {
           "Events",
           Object.entries(data.recentDelivery).map(([key, value]) => [key, String(value)])
         )
+      );
+      renderServiceOverview(data);
+    }
+
+    function renderServiceOverview(data) {
+      serviceOverviewSummaryRoot.replaceChildren(
+        createSummaryRow("Service", data.service.name, "API process is responding."),
+        createSummaryRow("Environment", data.service.environment, "Admin console session is active."),
+        createSummaryRow("Uptime", formatUptime(data.service.uptimeSeconds), "Since latest service start."),
+        createSummaryRow("Queue state", formatQueueState(data.queue), "Queued, locked, and failed jobs."),
+        createSummaryRow("Delivery state", formatDeliveryState(data.recentDelivery), "Sent, skipped, and failed delivery counters.")
+      );
+      renderTableRows(
+        serviceOverviewStatusRoot,
+        [
+          ["Database", createPill(data.database.status), data.database.reason || "-"],
+          ["Uptime", formatUptime(data.service.uptimeSeconds), "Live tick shown above"],
+          ["Secrets", countStates(data.secrets), "Configuration only, values hidden"],
+          ["Push / delivery", formatDeliveryState(data.recentDelivery), "Recent delivery counters"],
+          ["Adapter summary", summarizeAdapters(data.adapters), "Adapter diagnostics"]
+        ],
+        (row) => row,
+        "No service overview available."
       );
     }
 

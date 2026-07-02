@@ -75,6 +75,8 @@ function expectHubEventAdminConsoleSupport(html: string) {
   const navOperationsIndex = html.indexOf('data-page-target="operations"');
   const hubEventsSectionIndex = html.indexOf('id="page-hub-events"');
   const operationsSectionIndex = html.indexOf('id="page-operations"');
+  const hubEventEditorIndex = html.indexOf("hub-event-editor-panel");
+  const hubEventListIndex = html.indexOf("hub-event-list-panel");
 
   expect(navHubEventsIndex).toBeGreaterThan(-1);
   expect(navOperationsIndex).toBeGreaterThan(-1);
@@ -82,10 +84,16 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(hubEventsSectionIndex).toBeGreaterThan(-1);
   expect(operationsSectionIndex).toBeGreaterThan(-1);
   expect(hubEventsSectionIndex).toBeLessThan(operationsSectionIndex);
+  expect(hubEventEditorIndex).toBeGreaterThan(-1);
+  expect(hubEventListIndex).toBeGreaterThan(-1);
+  expect(hubEventEditorIndex).toBeLessThan(hubEventListIndex);
   expect(html).toContain('class="admin-app"');
   expect(html).toContain('class="admin-nav"');
   expect(html).toContain('class="admin-content');
   expect(html).toContain('class="admin-topbar"');
+  expect(html).toContain('class="admin-tabs"');
+  expect(html).toContain('aria-label="Quick page tabs"');
+  expect(html).toContain('id="admin-current-page-title"');
   expect(html).toContain('class="page active" id="page-dashboard"');
   expect(html).toContain('class="page" id="page-hub-events"');
   expect(html).toContain('class="page" id="page-operations"');
@@ -101,6 +109,8 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain('id="settings-token-status"');
   expect(html).toContain('id="hub-event-page-size"');
   expect(html).toContain("Admin session and internal token are separate");
+  expect(html).toContain('id="service-overview-summary"');
+  expect(html).toContain('id="service-overview-status"');
   expect(html).toContain("Uptime");
   expect(html).not.toContain("chart");
   expect(html).not.toContain("graph");
@@ -117,6 +127,8 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain('class="status-table"');
   expect(html).toContain('id="admin-audit-activity"');
   expect(html).toContain("Settings only");
+  expect(html).toContain('class="credential-badge"');
+  expect(html).toContain("session only");
   expect(html).not.toContain("Internal token stored for this browser session.");
   expect(html).toContain('class="event-layout');
   expect(html).toContain('class="event-list');
@@ -823,11 +835,19 @@ describe("admin console routes", () => {
     expect(response.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
     expect(response.body).toContain("Stellive Hub Admin");
     expect(response.body).toContain("Secure access for hub operations.");
+    expect(response.body).toContain('class="login-brand-mark"');
+    expect(response.body).toContain('class="login-badge"');
+    expect(response.body).toContain("Admin console");
     expect(response.body).toContain("Sign in");
     expect(response.body).toContain("Admin console token");
+    expect(response.body).toContain('class="password-wrap"');
+    expect(response.body).toContain('class="private-badge"');
+    expect(response.body).toContain("private");
     expect(response.body).toContain("Admin session first");
     expect(response.body).toContain("Internal token later");
     expect(response.body).toContain("Settings");
+    expect(response.body).toContain("@media (max-width: 920px)");
+    expect(response.body).toContain("@media (max-width: 520px)");
     expect(response.body).toContain('form method="post" action="/admin/login"');
     expect(response.body).toContain('name="token"');
     expect(response.body).not.toContain("Console preview");
