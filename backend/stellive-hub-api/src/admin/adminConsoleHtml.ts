@@ -603,6 +603,8 @@ export function renderAdminConsoleHtml(): string {
     .stack {
       display: grid;
       gap: 12px;
+      align-content: start;
+      grid-auto-rows: max-content;
     }
     .grid,
     .metric-row {
