@@ -89,6 +89,17 @@ export function renderAdminConsoleHtml(): string {
       box-shadow: 0 24px 70px rgba(34, 48, 78, 0.12);
       overflow: hidden;
     }
+    @media (min-width: 1600px) {
+      .admin-app {
+        width: min(100% - 48px, 1760px);
+        grid-template-columns: 248px minmax(0, 1fr);
+      }
+    }
+    @media (min-width: 2200px) {
+      .admin-app {
+        width: min(100% - 64px, 1920px);
+      }
+    }
     .admin-nav {
       position: static;
       min-height: 100%;
@@ -115,7 +126,7 @@ export function renderAdminConsoleHtml(): string {
       background: transparent;
       color: var(--admin-muted);
       font: inherit;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 700;
       text-align: left;
       text-decoration: none;
@@ -134,7 +145,7 @@ export function renderAdminConsoleHtml(): string {
     }
     .admin-content {
       min-width: 0;
-      padding: 26px 24px 30px;
+      padding: 24px 28px 30px;
     }
     .admin-topbar {
       position: static;
@@ -161,11 +172,11 @@ export function renderAdminConsoleHtml(): string {
       border: 0;
       border-bottom: 2px solid transparent;
       border-radius: 0;
-      padding: 7px 8px;
+      padding: 7px 10px;
       background: transparent;
       box-shadow: none;
       color: var(--admin-muted);
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 750;
     }
     .admin-tabs button:hover,
@@ -432,6 +443,7 @@ export function renderAdminConsoleHtml(): string {
       display: grid;
       gap: 14px;
       grid-template-columns: repeat(5, minmax(0, 1fr));
+      align-items: start;
     }
     .panel {
       border: 1px solid var(--admin-border);
@@ -439,6 +451,24 @@ export function renderAdminConsoleHtml(): string {
       background: color-mix(in srgb, var(--admin-surface) 94%, transparent);
       padding: 16px;
       min-width: 0;
+    }
+    .overview-card {
+      display: grid;
+      gap: 8px;
+      min-height: 0;
+      align-self: start;
+    }
+    .overview-card h2 {
+      margin-bottom: 2px;
+    }
+    .overview-card .metric {
+      padding: 6px 0;
+    }
+    .overview-primary {
+      font-size: 1.35rem;
+      font-weight: 850;
+      line-height: 1.1;
+      color: var(--admin-text);
     }
     .toolbar {
       display: grid;
@@ -579,7 +609,7 @@ export function renderAdminConsoleHtml(): string {
     }
     .metric {
       display: grid;
-      gap: 8px;
+      gap: 5px;
       padding: 8px 0;
       border-top: 1px solid var(--admin-soft-border);
       font-size: 13px;
@@ -793,6 +823,12 @@ export function renderAdminConsoleHtml(): string {
       align-items: start;
     }
 
+    .settings-column {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
     .settings-stack,
     .activity-list,
     .summary-list {
@@ -836,6 +872,41 @@ export function renderAdminConsoleHtml(): string {
       display: grid;
       gap: 14px;
       border-color: color-mix(in srgb, var(--admin-primary) 24%, var(--admin-border) 76%);
+    }
+
+    .credential-input-wrap {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--admin-input-border);
+      border-radius: 15px;
+      background: var(--admin-surface);
+      padding: 0 10px;
+    }
+
+    .credential-input-wrap input {
+      border: 0;
+      border-radius: 0;
+      padding-left: 0;
+      padding-right: 0;
+      background: transparent;
+    }
+
+    .credential-input-wrap input:focus-visible {
+      outline: 0;
+    }
+
+    .credential-icon,
+    .credential-input-badge {
+      color: var(--admin-muted);
+      font-size: 12px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .credential-input-badge {
+      color: var(--admin-primary);
     }
 
     .status-table {
@@ -1114,7 +1185,7 @@ export function renderAdminConsoleHtml(): string {
 
       <section id="adapters-section" class="section">
         <div class="section-head">
-          <h2>Adapter status</h2>
+          <h2>System status</h2>
         </div>
         <div class="section-body split">
           <div class="panel">
@@ -1128,7 +1199,7 @@ export function renderAdminConsoleHtml(): string {
           </div>
           <div class="panel">
             <h2>Recent activity</h2>
-            <p class="subtle">Recent delivery counters and adapter status are refreshed with Dashboard.</p>
+            <div id="dashboard-recent-activity" class="activity-list" aria-live="polite"></div>
           </div>
           <div class="panel">
             <h2>Adapter health</h2>
@@ -1147,7 +1218,7 @@ export function renderAdminConsoleHtml(): string {
             </div>
           </div>
           <div class="panel">
-            <h2>Secrets and feature flags</h2>
+            <h2>Configuration readiness</h2>
             <div class="table-scroll">
               <table>
                 <thead>
@@ -1449,6 +1520,7 @@ export function renderAdminConsoleHtml(): string {
           </div>
         </div>
         <div class="section-body settings-layout">
+          <div class="settings-column">
           <div class="token-input-card panel">
             <div class="credential-head">
               <div>
@@ -1459,7 +1531,11 @@ export function renderAdminConsoleHtml(): string {
             </div>
             <div class="field">
               <label class="has-tooltip" data-tooltip="Store the internal API bearer token in this browser session only." title="Store the internal API bearer token in this browser session only." for="internal-token">Internal API bearer token</label>
-              <input id="internal-token" type="password" autocomplete="off" spellcheck="false" placeholder="Required for /v1/internal/* requests">
+              <div class="credential-input-wrap">
+                <span class="credential-icon" aria-hidden="true">lock</span>
+                <input id="internal-token" type="password" autocomplete="off" spellcheck="false" placeholder="Required for /v1/internal/* requests">
+                <span class="credential-input-badge">private</span>
+              </div>
             </div>
             <div class="settings-actions">
               <button id="internal-token-save" type="button">Use token</button>
@@ -1468,6 +1544,25 @@ export function renderAdminConsoleHtml(): string {
             </div>
             <p id="settings-token-status" class="message" aria-live="polite"></p>
           </div>
+          <div class="panel">
+            <h2>Security notes</h2>
+            <div class="security-grid">
+              <div class="security-item">
+                <div class="settings-title">Admin session first</div>
+                <div class="settings-description">The session opens the console. It does not replace internal API authorization.</div>
+              </div>
+              <div class="security-item">
+                <div class="settings-title">Internal token later</div>
+                <div class="settings-description">The bearer token is read from sessionStorage for /v1/internal/* calls only.</div>
+              </div>
+              <div class="security-item">
+                <div class="settings-title">No bundled assets</div>
+                <div class="settings-description">Uploads, base64, local paths, copied assets, logos, profile images, screenshots, and fan art are not accepted.</div>
+              </div>
+            </div>
+          </div>
+          </div>
+          <div class="settings-column">
           <div class="panel">
             <h2>Console preferences</h2>
             <div class="settings-stack">
@@ -1499,21 +1594,18 @@ export function renderAdminConsoleHtml(): string {
             </div>
           </div>
           <div class="panel">
-            <h2>Security notes</h2>
+            <h2>Recommended routing</h2>
             <div class="security-grid">
               <div class="security-item">
-                <div class="settings-title">Admin session first</div>
-                <div class="settings-description">The session opens the console. It does not replace internal API authorization.</div>
+                <div class="settings-title">Dashboard</div>
+                <div class="settings-description">Use for health, uptime, queue, delivery, adapter, and configuration review.</div>
               </div>
               <div class="security-item">
-                <div class="settings-title">Internal token later</div>
-                <div class="settings-description">The bearer token is read from sessionStorage for /v1/internal/* calls only.</div>
-              </div>
-              <div class="security-item">
-                <div class="settings-title">No bundled assets</div>
-                <div class="settings-description">Uploads, base64, local paths, copied assets, logos, profile images, screenshots, and fan art are not accepted.</div>
+                <div class="settings-title">Operations</div>
+                <div class="settings-description">Use only after a Settings token is active for this browser session.</div>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </section>
@@ -1534,6 +1626,7 @@ export function renderAdminConsoleHtml(): string {
     const overviewRoot = document.getElementById("overview");
     const serviceOverviewSummaryRoot = document.getElementById("service-overview-summary");
     const serviceOverviewStatusRoot = document.getElementById("service-overview-status");
+    const dashboardRecentActivityRoot = document.getElementById("dashboard-recent-activity");
     const adaptersRoot = document.getElementById("adapters");
     const secretsRoot = document.getElementById("secrets");
     const featureFlagsRoot = document.getElementById("feature-flags");
@@ -1683,7 +1776,7 @@ export function renderAdminConsoleHtml(): string {
 
     function createOverviewPanel(title, rows) {
       const section = document.createElement("section");
-      section.className = "panel";
+      section.className = "panel overview-card";
 
       const heading = document.createElement("h2");
       heading.textContent = title;
@@ -1694,6 +1787,19 @@ export function renderAdminConsoleHtml(): string {
       }
 
       return section;
+    }
+
+    function createActivityItem(title, description) {
+      const item = document.createElement("div");
+      item.className = "activity-item";
+      const titleNode = document.createElement("div");
+      titleNode.className = "activity-title";
+      titleNode.textContent = title;
+      const descriptionNode = document.createElement("div");
+      descriptionNode.className = "activity-description";
+      descriptionNode.textContent = description;
+      item.append(titleNode, descriptionNode);
+      return item;
     }
 
     function createSummaryRow(title, value, description) {
@@ -1804,9 +1910,8 @@ export function renderAdminConsoleHtml(): string {
     function renderOverview(data) {
       overviewRoot.replaceChildren(
         createOverviewPanel("Health", [
-          ["service", data.service.name],
-          ["environment", data.service.environment],
-          ["database", createPill(data.database.status)]
+          ["status", createPill(data.database.status)],
+          ["service", data.service.name]
         ]),
         createOverviewPanel("Database", [
           ["status", createPill(data.database.status)],
@@ -1815,13 +1920,17 @@ export function renderAdminConsoleHtml(): string {
         createOverviewPanel("Uptime", [
           ["service uptime", createUptimeNode(data.service.uptimeSeconds)]
         ]),
-        createOverviewPanel("Queue", Object.entries(data.queue).map(([key, value]) => [key, value == null ? "-" : String(value)])),
-        createOverviewPanel(
-          "Events",
-          Object.entries(data.recentDelivery).map(([key, value]) => [key, String(value)])
-        )
+        createOverviewPanel("Queue", [
+          ["queued", data.queue.queued == null ? "-" : String(data.queue.queued)],
+          ["failed", data.queue.failed == null ? "-" : String(data.queue.failed)]
+        ]),
+        createOverviewPanel("Events", [
+          ["sent", data.recentDelivery.sent == null ? "-" : String(data.recentDelivery.sent)],
+          ["failed", data.recentDelivery.failed == null ? "-" : String(data.recentDelivery.failed)]
+        ])
       );
       renderServiceOverview(data);
+      renderDashboardRecentActivity(data);
     }
 
     function renderServiceOverview(data) {
@@ -1843,6 +1952,16 @@ export function renderAdminConsoleHtml(): string {
         ],
         (row) => row,
         "No service overview available."
+      );
+    }
+
+    function renderDashboardRecentActivity(data) {
+      dashboardRecentActivityRoot.replaceChildren(
+        createActivityItem("Overview refreshed", "Latest status loaded from the internal overview endpoint."),
+        createActivityItem("Queue state", formatQueueState(data.queue)),
+        createActivityItem("Delivery state", formatDeliveryState(data.recentDelivery)),
+        createActivityItem("Adapter diagnostics", summarizeAdapters(data.adapters)),
+        createActivityItem("Secrets readiness", countStates(data.secrets))
       );
     }
 

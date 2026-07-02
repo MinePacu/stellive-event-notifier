@@ -111,6 +111,9 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain("Admin session and internal token are separate");
   expect(html).toContain('id="service-overview-summary"');
   expect(html).toContain('id="service-overview-status"');
+  expect(html).toContain('id="dashboard-recent-activity"');
+  expect(html).toContain("System status");
+  expect(html).toContain("Configuration readiness");
   expect(html).toContain("Uptime");
   expect(html).not.toContain("chart");
   expect(html).not.toContain("graph");
@@ -128,7 +131,11 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain('id="admin-audit-activity"');
   expect(html).toContain("Settings only");
   expect(html).toContain('class="credential-badge"');
+  expect(html).toContain('class="credential-input-wrap"');
+  expect(html).toContain('class="settings-column"');
   expect(html).toContain("session only");
+  expect(html).toContain("@media (min-width: 1600px)");
+  expect(html).toContain("@media (min-width: 2200px)");
   expect(html).not.toContain("Internal token stored for this browser session.");
   expect(html).toContain('class="event-layout');
   expect(html).toContain('class="event-list');

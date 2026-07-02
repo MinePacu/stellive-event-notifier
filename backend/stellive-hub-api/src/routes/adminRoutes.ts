@@ -476,7 +476,7 @@ function renderAdminLoginHtml(errorMessage?: string): string {
         <label>
           <span>Admin console token <span class="private-badge">private</span></span>
           <span class="password-wrap">
-            <span class="password-icon" aria-hidden="true">#</span>
+            <span class="password-icon" aria-hidden="true">lock</span>
             <input name="token" type="password" required autofocus autocomplete="current-password" spellcheck="false" placeholder="Enter admin console token">
           </span>
         </label>
