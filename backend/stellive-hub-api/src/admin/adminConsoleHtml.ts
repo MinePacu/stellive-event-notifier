@@ -191,6 +191,13 @@ export function renderAdminConsoleHtml(): string {
       border-bottom: 0;
       background: transparent;
     }
+    .admin-topbar,
+    .admin-page-head,
+    .page {
+      width: min(100%, 1280px);
+      margin-left: auto;
+      margin-right: auto;
+    }
     .admin-tabs,
     .tabs {
       display: flex;
@@ -229,7 +236,6 @@ export function renderAdminConsoleHtml(): string {
     .page {
       display: none;
       min-height: 0;
-      width: 100%;
     }
     .page.active {
       display: block;
