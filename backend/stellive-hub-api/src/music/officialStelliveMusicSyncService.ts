@@ -130,7 +130,7 @@ export class OfficialStelliveMusicSyncService {
   }
 
   async syncOfficialStelliveMusicPlaylists(mode: OfficialSyncMode = "manual") {
-    const release = this.options.locks.acquire("music-official-stellive", this.lockTtlMs);
+    const release = await this.options.locks.acquire("music-official-stellive", this.lockTtlMs);
     if (!release) return { status: "lock_not_acquired" };
 
     const run = await this.options.syncRuns.startRun({
@@ -289,7 +289,7 @@ export class OfficialStelliveMusicSyncService {
       });
       return { status: "failed", errorMessage: message, quotaUnits };
     } finally {
-      release();
+      await release();
     }
   }
 }

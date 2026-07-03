@@ -44,7 +44,13 @@ services:
       CHZZK_LIVE_POLL_SCHEDULER_BASE_URL: http://api:4000
     command: ["npm", "run", "start:chzzk-live-worker"]
     depends_on:
-      - api
+      api:
+        condition: service_started
+        required: false
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
 
   hub-event-status-worker:
     build:
@@ -59,7 +65,13 @@ services:
       HUB_EVENT_STATUS_RECONCILE_SCHEDULER_BASE_URL: http://api:4000
     command: ["npm", "run", "start:hub-event-status-worker"]
     depends_on:
-      - api
+      api:
+        condition: service_started
+        required: false
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
 
   music-channel-discovery-worker:
     build:
@@ -74,7 +86,13 @@ services:
       MUSIC_CHANNEL_DISCOVERY_SCHEDULER_BASE_URL: http://api:4000
     command: ["npm", "run", "start:music-channel-discovery-worker"]
     depends_on:
-      - api
+      api:
+        condition: service_started
+        required: false
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
 
 volumes:
   postgres-data:

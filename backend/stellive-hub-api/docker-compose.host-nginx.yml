@@ -1,0 +1,64 @@
+x-api-worker: &api-worker
+  build:
+    context: ../..
+    dockerfile: backend/stellive-hub-api/Dockerfile
+  env_file:
+    - .env.example
+    - .env
+  environment:
+    NODE_ENV: production
+    DATABASE_URL: postgresql://stellive:stellive@postgres:5432/stellive_hub
+    REDIS_URL: redis://redis:6379
+    HUB_EVENTS_STORAGE_MODE: prisma
+  depends_on:
+    - postgres
+    - redis
+  restart: unless-stopped
+
+services:
+  api:
+    profiles: ["single-api"]
+
+  api-1:
+    <<: *api-worker
+    ports:
+      - "127.0.0.1:4001:4000"
+
+  api-2:
+    <<: *api-worker
+    ports:
+      - "127.0.0.1:4002:4000"
+
+  api-3:
+    <<: *api-worker
+    ports:
+      - "127.0.0.1:4003:4000"
+
+  api-4:
+    <<: *api-worker
+    ports:
+      - "127.0.0.1:4004:4000"
+
+  chzzk-live-worker:
+    restart: unless-stopped
+    environment:
+      CHZZK_LIVE_POLL_SCHEDULER_BASE_URL: http://api-1:4000
+    depends_on:
+      api-1:
+        condition: service_started
+
+  hub-event-status-worker:
+    restart: unless-stopped
+    environment:
+      HUB_EVENT_STATUS_RECONCILE_SCHEDULER_BASE_URL: http://api-1:4000
+    depends_on:
+      api-1:
+        condition: service_started
+
+  music-channel-discovery-worker:
+    restart: unless-stopped
+    environment:
+      MUSIC_CHANNEL_DISCOVERY_SCHEDULER_BASE_URL: http://api-1:4000
+    depends_on:
+      api-1:
+        condition: service_started

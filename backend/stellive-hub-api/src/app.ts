@@ -14,6 +14,7 @@ import sensible from "@fastify/sensible";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyRequest } from "fastify";
+import { Redis } from "ioredis";
 import { loadEnv } from "./config/env.js";
 import { HubEventRepository } from "./hub-events/hubEventRepository.js";
 import { createHubCalendarSpecialDayOccurrenceRepositoryIfAvailable } from "./hub-events/hubCalendarSpecialDayOccurrenceRepository.js";
@@ -30,7 +31,7 @@ import { PrismaMusicRepository, PrismaMusicSyncRunRepository } from "./repositor
 import PlatformEventRepository from "./repositories/platformEventRepository.js";
 import PreferenceRepository from "./repositories/preferenceRepository.js";
 import { PrismaSongRepository } from "./repositories/songRepository.js";
-import { InMemoryMusicSyncLock } from "./music/musicLocks.js";
+import { InMemoryMusicSyncLock, RedisMusicSyncLock, type RedisMusicSyncLockClient } from "./music/musicLocks.js";
 import { MusicSyncService } from "./music/musicSyncService.js";
 import { OfficialStelliveMusicSyncService } from "./music/officialStelliveMusicSyncService.js";
 import { MusicChannelDiscoveryReclassificationService } from "./music/musicChannelDiscoveryReclassificationService.js";
@@ -266,6 +267,8 @@ function createDefaultMusicSyncService(
   env: AppEnv,
   dependencies: Partial<InternalRouteDependencies> | undefined,
   fetchImpl?: typeof fetch,
+  registerClose?: (close: () => Promise<void>) => void,
+  warn?: (message: string) => void,
 ): Pick<InternalRouteDependencies, "musicSync"> {
   if (dependencies?.musicSync) return {};
   if (!env.MUSIC_SYNC_ENABLED || !env.YOUTUBE_API_KEY) return {};
@@ -274,7 +277,17 @@ function createDefaultMusicSyncService(
   const repository = new PrismaMusicRepository();
   const syncRuns = new PrismaMusicSyncRunRepository();
   const youtube = new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl, apiCallLogger: new ExternalApiCallLogRepository() });
-  const locks = new InMemoryMusicSyncLock();
+  const locks = env.REDIS_URL
+    ? new RedisMusicSyncLock(new Redis(env.REDIS_URL, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+    }) as unknown as RedisMusicSyncLockClient)
+    : new InMemoryMusicSyncLock();
+  if (locks instanceof RedisMusicSyncLock) {
+    registerClose?.(() => locks.close());
+  } else if (env.NODE_ENV === "production") {
+    warn?.("REDIS_URL is not configured; music sync locking is process-local and unsafe for multi-worker scheduling");
+  }
   const syncCatalogMusicMembers = async () => {
     for (const input of createMusicMemberUpsertInputs(catalog)) {
       await repository.upsertMember(input);
@@ -432,6 +445,9 @@ function resolveEnvInput(options: BuildAppOptions): NodeJS.ProcessEnv | Record<s
 export async function buildApp(options: BuildAppOptions = {}) {
   const env = loadEnv(resolveEnvInput(options));
   const app = Fastify({ logger: true });
+  const registerClose = (close: () => Promise<void>) => {
+    app.addHook("onClose", async () => close());
+  };
   await app.register(cors, { delegator: corsDelegator });
   await app.register(sensible);
   await app.register(swagger, {
@@ -496,7 +512,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ...createDefaultChzzkLiveAdapter(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
       ...createDefaultYoutubeSubscriptionScheduler(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
       ...createDefaultYoutubeSongBackfillScheduler(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
-      ...createDefaultMusicSyncService(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
+      ...createDefaultMusicSyncService(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch, registerClose, (message) => app.log.warn(message)),
       ...options.internalRoutes.dependencies
     }
     : {
@@ -504,7 +520,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch),
       ...createDefaultYoutubeSubscriptionScheduler(env, undefined, options.chzzkLiveApiFetch),
       ...createDefaultYoutubeSongBackfillScheduler(env, undefined, options.chzzkLiveApiFetch),
-      ...createDefaultMusicSyncService(env, undefined, options.chzzkLiveApiFetch),
+      ...createDefaultMusicSyncService(env, undefined, options.chzzkLiveApiFetch, registerClose, (message) => app.log.warn(message)),
     };
   await registerInternalRoutes(app, { env, dependencies: internalRouteDependencies });
   await registerAdminRoutes(app, { env });

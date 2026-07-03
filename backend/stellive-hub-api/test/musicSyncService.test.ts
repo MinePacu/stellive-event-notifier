@@ -131,6 +131,17 @@ describe("MusicSyncService", () => {
     release?.();
   });
 
+  it("waits for an asynchronous distributed lock and release", async () => {
+    const release = vi.fn().mockResolvedValue(undefined);
+    const locks = { acquire: vi.fn().mockResolvedValue(release) };
+    const { service, youtube } = createService({ locks });
+
+    await expect(service.syncSourcePlaylist(source, "light")).resolves.toMatchObject({ status: "ok" });
+
+    expect(youtube.fetchPlaylistItems).toHaveBeenCalledTimes(1);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
   it("continues syncing remaining sources when one source fails", async () => {
     const source2 = { ...source, id: "source-2", youtubePlaylistId: "PLoriginal", type: "original" as const };
     const { service, repository, youtube } = createService();

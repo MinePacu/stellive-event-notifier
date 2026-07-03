@@ -118,7 +118,7 @@ export class MusicSyncService {
   }
 
   async syncSourcePlaylist(source: MusicSyncSourcePlaylist, mode: MusicSyncMode): Promise<MusicSourceSyncResult> {
-    const release = this.options.locks.acquire(`music-source:${source.id}`, this.lockTtlMs);
+    const release = await this.options.locks.acquire(`music-source:${source.id}`, this.lockTtlMs);
     if (!release) return emptyResult("lock_not_acquired");
 
     const run = await this.options.syncRuns.startRun({ syncType: mode, source: source.id, startedAt: this.now() });
@@ -205,7 +205,7 @@ export class MusicSyncService {
       });
       return { ...emptyResult("failed"), quotaUnits };
     } finally {
-      release();
+      await release();
     }
   }
 
