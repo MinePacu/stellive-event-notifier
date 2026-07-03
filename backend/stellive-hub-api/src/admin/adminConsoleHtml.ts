@@ -2563,6 +2563,13 @@ export function renderAdminConsoleHtml(): string {
       externalApiResultsRoot.appendChild(row);
     }
 
+    function formatDate(value) {
+      if (!value) return "-";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "-";
+      return date.toLocaleString();
+    }
+
     function renderExternalApiResults(items) {
       externalApiResultsRoot.replaceChildren();
       if (!Array.isArray(items) || items.length === 0) {

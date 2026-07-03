@@ -10,17 +10,23 @@ const officialMember = member("stellive-official", "official_channel", "active",
 
 describe("ChzzkOpenApiAdapter", () => {
   it("polls only MVP-allowed catalog entries with CHZZK channel IDs and skips former members", async () => {
-    const apiClient = { getLiveStatus: vi.fn().mockResolvedValue(liveStatus({ isLive: false })) };
+    const secondLiveMember = member("akane-lize", "member", "active", "second-channel-id");
+    const apiClient = {
+      getLiveStatuses: vi.fn().mockResolvedValue(new Map([
+        ["chzzk-channel-id", liveStatus({ isLive: false })],
+        ["second-channel-id", liveStatus({ channelId: "second-channel-id", isLive: false })]
+      ]))
+    };
     const adapter = createAdapter({
-      members: [liveMember, noChannelMember, formerMember, officialMember],
+      members: [liveMember, secondLiveMember, noChannelMember, formerMember, officialMember],
       apiClient
     });
 
     const result = await adapter.pollLiveStatuses();
 
-    expect(apiClient.getLiveStatus).toHaveBeenCalledTimes(1);
-    expect(apiClient.getLiveStatus).toHaveBeenCalledWith("chzzk-channel-id");
-    expect(result).toMatchObject({ checked: 1, skipped: 3 });
+    expect(apiClient.getLiveStatuses).toHaveBeenCalledTimes(1);
+    expect(apiClient.getLiveStatuses).toHaveBeenCalledWith(["chzzk-channel-id", "second-channel-id"]);
+    expect(result).toMatchObject({ checked: 2, skipped: 3 });
   });
 
   it("upserts live status with startedAt from official openDate", async () => {
@@ -97,7 +103,7 @@ function createAdapter(options: {
   events?: PlatformEvent[];
   writes?: unknown[];
   statuses?: ChzzkNormalizedLiveStatus[];
-  apiClient?: { getLiveStatus: ReturnType<typeof vi.fn> };
+  apiClient?: { getLiveStatuses: ReturnType<typeof vi.fn> };
 }) {
   const statuses = options.statuses ?? [liveStatus({ isLive: false })];
   const events = options.events ?? [];
@@ -109,7 +115,12 @@ function createAdapter(options: {
       isSupportedEventForMember: (_memberId, eventType) => eventType !== "chzzk_chat"
     },
     apiClient: options.apiClient ?? {
-      getLiveStatus: vi.fn(async () => statuses.shift() ?? liveStatus({ isLive: false }))
+      getLiveStatuses: vi.fn(async (channelIds: string[]) => new Map(
+        channelIds.map((channelId) => [
+          channelId,
+          statuses.shift() ?? liveStatus({ channelId, isLive: false })
+        ])
+      ))
     },
     liveStatusRepository: {
       getByMemberId: vi.fn(async () => previousRecord(options.previous?.isLive)),

@@ -157,6 +157,7 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain('id="external-api-prune"');
   expect(html).toContain("External API calls");
   expect(html).toContain("Recent API results");
+  expect(html).toContain("function formatDate(value)");
   expect(html).toContain("Retention: 31 days");
   expect(html).toContain("Asia/Seoul");
   expect(html).toContain("System status");

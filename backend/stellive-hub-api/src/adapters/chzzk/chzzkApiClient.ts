@@ -169,20 +169,61 @@ export class ChzzkApiClient {
   }
 
   async getLiveStatus(channelId: string): Promise<ChzzkNormalizedLiveStatus> {
-    const liveStatus = await this.findLiveStatus(channelId);
-    if (liveStatus.sourceVerificationState !== "verified" || liveStatus.channelImageUrl) {
-      return liveStatus;
+    const statuses = await this.getLiveStatuses([channelId]);
+    return statuses.get(channelId) ?? unverifiedStatus(channelId);
+  }
+
+  async getLiveStatuses(channelIds: string[]): Promise<Map<string, ChzzkNormalizedLiveStatus>> {
+    const requestedIds = [...new Set(channelIds.filter(Boolean))];
+    const statuses = new Map<string, ChzzkNormalizedLiveStatus>(
+      requestedIds.map((channelId) => [channelId, verifiedOfflineStatus(channelId)])
+    );
+    const pendingIds = new Set(requestedIds);
+    let next: string | undefined;
+
+    do {
+      const response = await this.fetchLiveList(next);
+      if (!response.ok) {
+        if (requestedIds[0]) {
+          await this.handleLiveListError(requestedIds[0], response);
+        }
+        for (const channelId of pendingIds) {
+          statuses.set(channelId, unverifiedStatus(channelId));
+        }
+        return statuses;
+      }
+
+      const parsed = liveListResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        await this.writeHealth("verify_required", "chzzk_live_api_response_invalid");
+        for (const channelId of pendingIds) {
+          statuses.set(channelId, unverifiedStatus(channelId));
+        }
+        return statuses;
+      }
+
+      await this.writeHealth("enabled", "chzzk_live_api_verified");
+      for (const item of parsed.data.content.data) {
+        const channelId = item.channelId;
+        if (!channelId || !pendingIds.has(channelId)) continue;
+        statuses.set(channelId, normalizeLiveStatus(channelId, item));
+        pendingIds.delete(channelId);
+      }
+
+      if (pendingIds.size === 0) break;
+      next = parsed.data.content.page?.next ?? undefined;
+    } while (next);
+
+    for (const channelId of requestedIds) {
+      const status = statuses.get(channelId);
+      if (!status || status.sourceVerificationState !== "verified" || status.channelImageUrl) continue;
+      const metadata = await this.getChannelMetadata(channelId);
+      if (metadata.sourceVerificationState === "verified" && metadata.channelImageUrl) {
+        statuses.set(channelId, { ...status, channelImageUrl: metadata.channelImageUrl });
+      }
     }
 
-    const metadata = await this.getChannelMetadata(channelId);
-    if (metadata.sourceVerificationState !== "verified") {
-      return liveStatus;
-    }
-
-    return {
-      ...liveStatus,
-      channelImageUrl: metadata.channelImageUrl
-    };
+    return statuses;
   }
 
   private async findLiveStatus(channelId: string): Promise<ChzzkNormalizedLiveStatus> {
