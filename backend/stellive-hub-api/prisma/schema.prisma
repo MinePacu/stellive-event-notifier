@@ -117,6 +117,30 @@ model PlatformApiState {
   @@index([source, status])
 }
 
+model ExternalApiCallLog {
+  id           String   @id @default(cuid(2))
+  source       String
+  operation    String
+  method       String
+  host         String
+  path         String
+  statusCode   Int?
+  resultStatus String
+  durationMs   Int?
+  quotaUnits   Int      @default(0)
+  rateLimited  Boolean  @default(false)
+  errorCode    String?
+  errorReason  String?
+  requestedAt  DateTime
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([requestedAt])
+  @@index([source, requestedAt])
+  @@index([operation, requestedAt])
+  @@index([resultStatus, requestedAt])
+}
+
 model NotificationJob {
   id        String   @id @default(cuid(2))
   eventId   String

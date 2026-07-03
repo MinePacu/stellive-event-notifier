@@ -1,5 +1,11 @@
 import z from "zod";
 import type { AdapterHealthStatus } from "../../admin/adminTypes.js";
+import {
+  recordExternalApiCall,
+  resultStatusFromError,
+  resultStatusFromHttpStatus,
+  type ExternalApiCallLogger
+} from "../../observability/externalApiCallLogger.js";
 import type { PlatformApiStateRepository } from "../../repositories/platformApiStateRepository.js";
 
 const liveListUrl = "https://openapi.chzzk.naver.com/open/v1/lives";
@@ -84,6 +90,7 @@ interface ChzzkApiClientOptions {
   fetch?: typeof fetch;
   timeoutMs?: number;
   liveListPageSize?: number;
+  apiCallLogger?: ExternalApiCallLogger;
 }
 
 function isLiveStatus(status: string | undefined): boolean {
@@ -277,7 +284,7 @@ export class ChzzkApiClient {
     }
 
     try {
-      return await this.fetchImpl(url.toString(), {
+      return await this.fetchAndRecord(url, "chzzk.lives.list", {
         method: "GET",
         headers: this.clientAuthHeaders(),
         signal: controller.signal
@@ -294,7 +301,7 @@ export class ChzzkApiClient {
     url.searchParams.set("channelIds", channelId);
 
     try {
-      return await this.fetchImpl(url.toString(), {
+      return await this.fetchAndRecord(url, "chzzk.channels.list", {
         method: "GET",
         headers: this.clientAuthHeaders(),
         signal: controller.signal
@@ -310,6 +317,42 @@ export class ChzzkApiClient {
       "Client-Secret": this.options.clientSecret,
       "Content-Type": "application/json"
     };
+  }
+
+  private async fetchAndRecord(url: URL, operation: string, init: RequestInit): Promise<Response> {
+    const requestedAt = new Date();
+    try {
+      const response = await this.fetchImpl(url.toString(), init);
+      const resultStatus = resultStatusFromHttpStatus(response.status);
+      await recordExternalApiCall(this.options.apiCallLogger, {
+        source: "chzzk",
+        operation,
+        method: init.method ?? "GET",
+        url: url.toString(),
+        statusCode: response.status,
+        resultStatus,
+        quotaUnits: 0,
+        rateLimited: response.status === 429,
+        errorCode: response.ok || response.status === 304 ? undefined : `http_${response.status}`,
+        errorReason: response.ok || response.status === 304 ? undefined : resultStatus,
+        requestedAt
+      });
+      return response;
+    } catch (error) {
+      const resultStatus = resultStatusFromError(error);
+      await recordExternalApiCall(this.options.apiCallLogger, {
+        source: "chzzk",
+        operation,
+        method: init.method ?? "GET",
+        url: url.toString(),
+        resultStatus,
+        quotaUnits: 0,
+        errorCode: resultStatus,
+        errorReason: resultStatus,
+        requestedAt
+      });
+      throw error;
+    }
   }
 
   private async writeHealth(status: AdapterHealthStatus, reason: string): Promise<void> {

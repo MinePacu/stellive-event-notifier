@@ -26,12 +26,22 @@ function createDependencies() {
           items: [],
           totals: { sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 },
         },
+        externalApiCalls: {
+          daily: {
+            timezone: "Asia/Seoul" as const,
+            days: 14,
+            generatedAt: "2026-07-02T00:00:00.000Z",
+            items: [],
+            totals: { total: 0, ok: 0, failed: 0, rateLimited: 0, quotaExceeded: 0, quotaUnits: 0, bySource: {} },
+          },
+        },
       }),
     },
     notificationJobs: { listDiagnostics: async () => [] },
     webhookSubscriptions: { listDiagnostics: async () => [] },
     liveStatus: { listDiagnostics: async () => [] },
     deliveryAttempts: { listRecent: async () => [] },
+    externalApiCallLogs: { listRecent: async () => ({ items: [] }), pruneOlderThan: async () => ({ deleted: 0 }) },
     adapterHealth: {
       getState: async () => null,
       listAdapterHealth: async () => [],

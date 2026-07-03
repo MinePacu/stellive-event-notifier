@@ -28,6 +28,15 @@ function createFakeDependencies(overrides: Partial<InternalRouteDependencies> = 
           generatedAt: "2026-07-02T00:00:00.000Z",
           items: [],
           totals: { sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 }
+        },
+        externalApiCalls: {
+          daily: {
+            timezone: "Asia/Seoul",
+            days: 14,
+            generatedAt: "2026-07-02T00:00:00.000Z",
+            items: [],
+            totals: { total: 0, ok: 0, failed: 0, rateLimited: 0, quotaExceeded: 0, quotaUnits: 0, bySource: {} }
+          }
         }
       })
     },
@@ -35,6 +44,7 @@ function createFakeDependencies(overrides: Partial<InternalRouteDependencies> = 
     webhookSubscriptions: { listDiagnostics: async () => [] },
     liveStatus: { listDiagnostics: async () => [] },
     deliveryAttempts: { listRecent: async () => [] },
+    externalApiCallLogs: { listRecent: async () => ({ items: [] }), pruneOlderThan: async () => ({ deleted: 0 }) },
     adapterHealth: { getState: async () => null, listAdapterHealth: async () => [] },
     specialDayYearMaterializer: {
       materializeYear: async (input) => ({
@@ -140,6 +150,14 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain('id="daily-queue-summary"');
   expect(html).toContain('id="daily-queue-accessible-list"');
   expect(html).toContain("Daily client delivery queue");
+  expect(html).toContain('id="external-api-section"');
+  expect(html).toContain('id="external-api-chart"');
+  expect(html).toContain('id="external-api-summary"');
+  expect(html).toContain('id="external-api-results"');
+  expect(html).toContain('id="external-api-prune"');
+  expect(html).toContain("External API calls");
+  expect(html).toContain("Recent API results");
+  expect(html).toContain("Retention: 31 days");
   expect(html).toContain("Asia/Seoul");
   expect(html).toContain("System status");
   expect(html).toContain("Configuration readiness");
@@ -258,6 +276,15 @@ describe("internal admin routes", () => {
             generatedAt: "2026-07-02T00:00:00.000Z",
             items: [{ date: "2026-07-02", sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }],
             totals: { sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }
+          },
+          externalApiCalls: {
+            daily: {
+              timezone: "Asia/Seoul",
+              days: 14,
+              generatedAt: "2026-07-02T00:00:00.000Z",
+              items: [{ date: "2026-07-02", total: 2, ok: 1, failed: 1, rateLimited: 0, quotaExceeded: 1, quotaUnits: 2, bySource: { youtube: 2 } }],
+              totals: { total: 2, ok: 1, failed: 1, rateLimited: 0, quotaExceeded: 1, quotaUnits: 2, bySource: { youtube: 2 } }
+            }
           }
         })
       }
@@ -276,9 +303,86 @@ describe("internal admin routes", () => {
         days: 14,
         items: [{ date: "2026-07-02", sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }],
         totals: { sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }
+      },
+      externalApiCalls: {
+        daily: {
+          items: [{ date: "2026-07-02", total: 2, ok: 1, failed: 1, quotaExceeded: 1, bySource: { youtube: 2 } }],
+          totals: { total: 2, ok: 1, failed: 1, quotaExceeded: 1, bySource: { youtube: 2 } }
+        }
       }
     });
     expect(response.body).not.toContain("internal-test-token");
+  });
+
+  it("returns recent external API call results from injected dependencies", async () => {
+    const listRecent = vi.fn(async () => ({
+      items: [
+        {
+          id: "api-call-1",
+          source: "youtube",
+          operation: "youtube.videos.list",
+          method: "GET",
+          host: "www.googleapis.com",
+          path: "/youtube/v3/videos",
+          statusCode: 403,
+          resultStatus: "quota_exceeded",
+          durationMs: 120,
+          quotaUnits: 1,
+          rateLimited: false,
+          requestedAt: "2026-07-02T00:00:00.000Z"
+        }
+      ]
+    }));
+    const app = await buildTestApp({
+      externalApiCallLogs: { listRecent, pruneOlderThan: async () => ({ deleted: 0 }) },
+      now: () => new Date("2026-07-02T01:00:00.000Z")
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/internal/admin/external-api-calls?limit=25&source=youtube&resultStatus=quota_exceeded",
+      headers: authHeaders
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(listRecent).toHaveBeenCalledWith({
+      limit: 25,
+      source: "youtube",
+      operation: undefined,
+      resultStatus: "quota_exceeded",
+      now: new Date("2026-07-02T01:00:00.000Z")
+    });
+    expect(response.json()).toMatchObject({
+      items: [
+        {
+          source: "youtube",
+          operation: "youtube.videos.list",
+          host: "www.googleapis.com",
+          path: "/youtube/v3/videos",
+          resultStatus: "quota_exceeded",
+          quotaUnits: 1
+        }
+      ]
+    });
+    expect(response.body).not.toContain("internal-test-token");
+  });
+
+  it("prunes old external API call logs through the internal admin route", async () => {
+    const pruneOlderThan = vi.fn(async () => ({ deleted: 3 }));
+    const app = await buildTestApp({
+      externalApiCallLogs: { listRecent: async () => ({ items: [] }), pruneOlderThan },
+      now: () => new Date("2026-07-02T01:00:00.000Z")
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/admin/external-api-calls/prune",
+      headers: authHeaders
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ deleted: 3 });
+    expect(pruneOlderThan).toHaveBeenCalledWith({ days: 31, now: new Date("2026-07-02T01:00:00.000Z") });
   });
 
   it("rejects requests when the internal token is not configured", async () => {

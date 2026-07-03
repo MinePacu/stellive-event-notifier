@@ -386,6 +386,9 @@ export function renderAdminConsoleHtml(): string {
     #daily-queue-section.is-empty {
       display: none;
     }
+    #external-api-section.is-empty {
+      display: none;
+    }
     #operations-section .section-body,
     #audit-section .section-body {
       padding-top: 12px;
@@ -768,6 +771,60 @@ export function renderAdminConsoleHtml(): string {
       place-items: center;
       color: var(--admin-muted);
       text-align: center;
+    }
+    .external-api-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+      gap: 14px;
+      align-items: stretch;
+    }
+    .external-api-chart-card {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+      padding: 14px;
+      border: 1px solid var(--admin-soft-border);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--admin-surface) 94%, var(--admin-bg) 6%);
+    }
+    .external-api-chart {
+      display: grid;
+      grid-template-columns: repeat(14, minmax(18px, 1fr));
+      gap: 8px;
+      align-items: end;
+      min-height: 210px;
+      padding: 8px 2px 0;
+    }
+    .external-api-results-head,
+    .external-api-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: end;
+      justify-content: space-between;
+    }
+    .external-api-filters select {
+      min-width: 150px;
+    }
+    .api-source-youtube,
+    .legend-dot.api-source-youtube {
+      background: #ef4444;
+    }
+    .api-source-chzzk,
+    .legend-dot.api-source-chzzk {
+      background: var(--admin-accent);
+    }
+    .api-source-fcm,
+    .legend-dot.api-source-fcm {
+      background: #f59e0b;
+    }
+    .api-source-websub,
+    .legend-dot.api-source-websub {
+      background: var(--admin-primary);
+    }
+    .api-source-other,
+    .legend-dot.api-source-other {
+      background: #94a3b8;
     }
     .visually-hidden {
       position: absolute;
@@ -1331,7 +1388,8 @@ export function renderAdminConsoleHtml(): string {
       }
       .split,
       .event-layout,
-      .queue-chart-layout {
+      .queue-chart-layout,
+      .external-api-layout {
         grid-template-columns: 1fr;
       }
       .grid,
@@ -1411,10 +1469,12 @@ export function renderAdminConsoleHtml(): string {
       .hub-events-three {
         grid-template-columns: 1fr;
       }
-      .queue-chart-card {
+      .queue-chart-card,
+      .external-api-chart-card {
         overflow-x: auto;
       }
-      .daily-queue-chart {
+      .daily-queue-chart,
+      .external-api-chart {
         grid-template-columns: repeat(14, minmax(24px, 1fr));
         min-width: 520px;
         padding-bottom: 4px;
@@ -1548,6 +1608,69 @@ export function renderAdminConsoleHtml(): string {
           </div>
           <aside id="daily-queue-summary" class="queue-chart-summary" aria-label="Daily delivery queue summary"></aside>
           <ul id="daily-queue-accessible-list" class="visually-hidden"></ul>
+        </div>
+      </section>
+
+      <section id="external-api-section" class="section is-empty">
+        <div class="section-head">
+          <div>
+            <h2>External API calls</h2>
+            <p class="subtle">Daily outbound API calls and sanitized response results. Retention: 31 days.</p>
+          </div>
+        </div>
+        <div class="section-body external-api-layout">
+          <div class="external-api-chart-card">
+            <div id="external-api-chart" class="external-api-chart" aria-label="Daily external API call chart"></div>
+            <div id="external-api-legend" class="queue-chart-legend" aria-label="External API source legend"></div>
+          </div>
+          <aside id="external-api-summary" class="queue-chart-summary external-api-summary" aria-label="External API call summary"></aside>
+          <ul id="external-api-accessible-list" class="visually-hidden"></ul>
+        </div>
+        <div class="section-body">
+          <div class="external-api-results-head">
+            <div>
+              <h3>Recent API results</h3>
+              <p class="subtle">Sanitized results from the last 31 days only.</p>
+            </div>
+            <div class="external-api-filters">
+              <select id="external-api-source-filter" aria-label="External API source filter">
+                <option value="">All sources</option>
+                <option value="youtube">YouTube</option>
+                <option value="chzzk">CHZZK</option>
+                <option value="fcm">FCM</option>
+                <option value="websub">WebSub</option>
+              </select>
+              <select id="external-api-status-filter" aria-label="External API result filter">
+                <option value="">All results</option>
+                <option value="ok">ok</option>
+                <option value="not_modified">not_modified</option>
+                <option value="quota_exceeded">quota_exceeded</option>
+                <option value="rate_limited">rate_limited</option>
+                <option value="auth_required">auth_required</option>
+                <option value="http_error">http_error</option>
+                <option value="network_error">network_error</option>
+                <option value="timeout">timeout</option>
+                <option value="parse_error">parse_error</option>
+              </select>
+              <button id="external-api-results-refresh" type="button">Refresh results</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table class="status-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Source</th>
+                  <th>Operation</th>
+                  <th>Result</th>
+                  <th>Status</th>
+                  <th>Duration</th>
+                  <th>Quota</th>
+                </tr>
+              </thead>
+              <tbody id="external-api-results"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -1824,6 +1947,13 @@ export function renderAdminConsoleHtml(): string {
                 </div>
                 <button class="has-tooltip" data-tooltip="Recalculate special day calendar status." title="Recalculate special day calendar status." id="recalculate-special-days" type="button">Recalculate special days</button>
               </div>
+              <div class="summary-row">
+                <div>
+                  <div class="summary-title">External API logs</div>
+                  <div class="summary-description">Prune sanitized external API call logs older than 31 days.</div>
+                </div>
+                <button id="external-api-prune" type="button">Prune old API logs</button>
+              </div>
             </div>
           </div>
           <div class="panel">
@@ -1984,6 +2114,8 @@ export function renderAdminConsoleHtml(): string {
   <script>
     const endpoints = {
       overview: "/v1/internal/admin/overview",
+      externalApiCalls: "/v1/internal/admin/external-api-calls",
+      externalApiPrune: "/v1/internal/admin/external-api-calls/prune",
       drainJobs: "/v1/internal/jobs/notifications/drain",
       renewYoutube: "/v1/internal/schedulers/youtube/renew-subscriptions",
         pollChzzk: "/v1/internal/schedulers/chzzk/live-status",
@@ -1996,6 +2128,15 @@ export function renderAdminConsoleHtml(): string {
     const dailyQueueChartRoot = document.getElementById("daily-queue-chart");
     const dailyQueueSummaryRoot = document.getElementById("daily-queue-summary");
     const dailyQueueAccessibleListRoot = document.getElementById("daily-queue-accessible-list");
+    const externalApiSectionRoot = document.getElementById("external-api-section");
+    const externalApiChartRoot = document.getElementById("external-api-chart");
+    const externalApiLegendRoot = document.getElementById("external-api-legend");
+    const externalApiSummaryRoot = document.getElementById("external-api-summary");
+    const externalApiResultsRoot = document.getElementById("external-api-results");
+    const externalApiAccessibleListRoot = document.getElementById("external-api-accessible-list");
+    const externalApiSourceFilter = document.getElementById("external-api-source-filter");
+    const externalApiStatusFilter = document.getElementById("external-api-status-filter");
+    const externalApiResultsRefreshButton = document.getElementById("external-api-results-refresh");
     const serviceOverviewSummaryRoot = document.getElementById("service-overview-summary");
     const serviceOverviewStatusRoot = document.getElementById("service-overview-status");
     const dashboardRecentActivityRoot = document.getElementById("dashboard-recent-activity");
@@ -2336,6 +2477,136 @@ export function renderAdminConsoleHtml(): string {
       );
     }
 
+    function apiSourceClass(source) {
+      if (source === "youtube") return "api-source-youtube";
+      if (source === "chzzk") return "api-source-chzzk";
+      if (source === "fcm") return "api-source-fcm";
+      if (source === "websub") return "api-source-websub";
+      return "api-source-other";
+    }
+
+    function renderExternalApiChart(trend) {
+      const items = trend && Array.isArray(trend.items) ? trend.items : [];
+      const totals = trend && trend.totals ? trend.totals : { total: 0, ok: 0, failed: 0, rateLimited: 0, quotaExceeded: 0, quotaUnits: 0, bySource: {} };
+      externalApiSectionRoot.classList.remove("is-empty");
+      externalApiChartRoot.replaceChildren();
+      externalApiLegendRoot.replaceChildren();
+      externalApiSummaryRoot.replaceChildren();
+      externalApiAccessibleListRoot.replaceChildren();
+
+      const sources = Object.keys(totals.bySource || {}).sort(function (a, b) {
+        return numericValue(totals.bySource[b]) - numericValue(totals.bySource[a]);
+      });
+      const visibleSources = sources.length > 0 ? sources : ["youtube", "chzzk", "fcm", "websub", "other"];
+
+      for (const source of visibleSources) {
+        const entry = document.createElement("span");
+        const dot = document.createElement("i");
+        dot.className = "legend-dot " + apiSourceClass(source);
+        dot.setAttribute("aria-hidden", "true");
+        entry.append(dot, document.createTextNode(source));
+        externalApiLegendRoot.appendChild(entry);
+      }
+
+      if (items.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "daily-queue-empty";
+        empty.textContent = "No external API calls in the selected window.";
+        externalApiChartRoot.appendChild(empty);
+      } else {
+        const maxTotal = Math.max(1, ...items.map(function (item) { return numericValue(item.total); }));
+        for (const item of items) {
+          const bar = document.createElement("div");
+          bar.className = "queue-bar";
+          bar.setAttribute("aria-label", item.date + ": " + numericValue(item.total) + " external API calls");
+          bar.title = bar.getAttribute("aria-label") || "";
+          const stack = document.createElement("div");
+          stack.className = "queue-bar-stack";
+          for (const source of visibleSources) {
+            const count = numericValue(item.bySource && item.bySource[source]);
+            if (count === 0) continue;
+            const segment = document.createElement("span");
+            segment.className = "queue-bar-segment " + apiSourceClass(source);
+            segment.style.height = Math.max((count / maxTotal) * 100, 2) + "%";
+            segment.setAttribute("aria-hidden", "true");
+            stack.appendChild(segment);
+          }
+          const label = document.createElement("div");
+          label.className = "queue-bar-label";
+          label.textContent = shortDateLabel(item.date);
+          bar.append(stack, label);
+          externalApiChartRoot.appendChild(bar);
+          const accessibleItem = document.createElement("li");
+          accessibleItem.textContent = bar.getAttribute("aria-label") || "";
+          externalApiAccessibleListRoot.appendChild(accessibleItem);
+        }
+      }
+
+      const today = items[items.length - 1] || { total: 0, rateLimited: 0, quotaUnits: 0 };
+      const successRate = numericValue(totals.total) === 0 ? "0%" : ((numericValue(totals.ok) / numericValue(totals.total)) * 100).toFixed(1) + "%";
+      externalApiSummaryRoot.append(
+        createQueueSummaryCard("Today total", numericValue(today.total), "Outbound API calls today."),
+        createQueueSummaryCard("Success rate", successRate, "ok and not_modified over total."),
+        createQueueSummaryCard("Rate limited", numericValue(totals.rateLimited), "429 or rate-limited results."),
+        createQueueSummaryCard("Quota units", numericValue(totals.quotaUnits), "Tracked API quota cost.")
+      );
+    }
+
+    function renderExternalApiNotice(message) {
+      externalApiResultsRoot.replaceChildren();
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 7;
+      cell.className = "empty";
+      cell.textContent = message;
+      row.appendChild(cell);
+      externalApiResultsRoot.appendChild(row);
+    }
+
+    function renderExternalApiResults(items) {
+      externalApiResultsRoot.replaceChildren();
+      if (!Array.isArray(items) || items.length === 0) {
+        renderExternalApiNotice("No external API results in the last 31 days.");
+        return;
+      }
+      for (const item of items) {
+        const row = document.createElement("tr");
+        const values = [
+          formatDate(item.requestedAt),
+          item.source || "-",
+          item.operation || "-",
+          item.resultStatus || "-",
+          item.statusCode == null ? "-" : String(item.statusCode),
+          item.durationMs == null ? "-" : item.durationMs + "ms",
+          item.quotaUnits == null ? "0" : String(item.quotaUnits)
+        ];
+        for (const value of values) {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.appendChild(cell);
+        }
+        externalApiResultsRoot.appendChild(row);
+      }
+    }
+
+    async function refreshExternalApiResults() {
+      try {
+        requireToken();
+      } catch (_error) {
+        renderExternalApiNotice("Add the Internal API bearer token in Settings to load recent external API results.");
+        return;
+      }
+      const params = new URLSearchParams({ limit: "50" });
+      if (externalApiSourceFilter.value) params.set("source", externalApiSourceFilter.value);
+      if (externalApiStatusFilter.value) params.set("resultStatus", externalApiStatusFilter.value);
+      try {
+        const result = await api(endpoints.externalApiCalls + "?" + params.toString());
+        renderExternalApiResults(result.items || []);
+      } catch (error) {
+        renderExternalApiNotice(error instanceof Error ? error.message : "Unable to load external API results.");
+      }
+    }
+
     function formatUptime(seconds) {
       const totalSeconds = Math.floor(Number(seconds));
       if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
@@ -2412,6 +2683,7 @@ export function renderAdminConsoleHtml(): string {
         )
       );
       renderDailyQueueChart(data.dailyDeliveryQueue);
+      renderExternalApiChart(data.externalApiCalls && data.externalApiCalls.daily);
       renderServiceOverview(data);
       renderDashboardRecentActivity(data);
     }
@@ -2569,6 +2841,7 @@ export function renderAdminConsoleHtml(): string {
         renderAdapters(overview.adapters || []);
         renderSecrets(overview.secrets || {});
         renderFeatureFlags(overview.featureFlags || {});
+        refreshExternalApiResults();
         if (source === "manual") {
           setMessage("Overview refreshed.", false);
         }
@@ -3062,6 +3335,18 @@ export function renderAdminConsoleHtml(): string {
       return runHubEventUiAction("Recalculate special days", function () {
         return adminApi(endpoints.recalculateSpecialDays, { method: "POST" });
       });
+    });
+    document.getElementById("external-api-prune").addEventListener("click", function () {
+      return runAction("Prune external API logs", endpoints.externalApiPrune, { method: "POST" });
+    });
+    externalApiResultsRefreshButton.addEventListener("click", function () {
+      return runHubEventUiAction("Refresh external API results", refreshExternalApiResults);
+    });
+    externalApiSourceFilter.addEventListener("change", function () {
+      return runHubEventUiAction("Filter external API results", refreshExternalApiResults);
+    });
+    externalApiStatusFilter.addEventListener("change", function () {
+      return runHubEventUiAction("Filter external API results", refreshExternalApiResults);
     });
     pageButtons.forEach(function (button) {
       button.addEventListener("click", function () {
