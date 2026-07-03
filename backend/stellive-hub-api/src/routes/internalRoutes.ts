@@ -11,6 +11,7 @@ import type {
   AdapterHealth,
   AdminOverview,
   DeliveryAttemptDiagnostic,
+  ExternalApiCallListResult,
   LiveStatusDiagnostic,
   NotificationJobDiagnostic,
   WebhookSubscriptionDiagnostic
@@ -27,12 +28,19 @@ import {
 import { HubEventRepository, type HubEventStatusReconcileResult } from "../hub-events/hubEventRepository.js";
 import { NotificationJobRepository } from "../jobs/notificationJobRepository.js";
 import { DeliveryAttemptRepository } from "../repositories/deliveryAttemptRepository.js";
+import { ExternalApiCallLogRepository } from "../repositories/externalApiCallLogRepository.js";
 import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
 import { PlatformApiStateRepository } from "../repositories/platformApiStateRepository.js";
 import { WebhookSubscriptionRepository } from "../repositories/webhookSubscriptionRepository.js";
 
 interface LimitQuery {
   limit?: string | number;
+}
+
+interface ExternalApiCallQuery extends LimitQuery {
+  source?: string;
+  operation?: string;
+  resultStatus?: string;
 }
 
 type MaybePromise<T> = T | Promise<T>;
@@ -56,6 +64,16 @@ export interface InternalRouteDependencies {
   };
   deliveryAttempts: {
     listRecent(limit: number): MaybePromise<DeliveryAttemptDiagnostic[]>;
+  };
+  externalApiCallLogs: {
+    listRecent(input?: {
+      limit?: number;
+      source?: string;
+      operation?: string;
+      resultStatus?: string;
+      now?: Date;
+    }): MaybePromise<ExternalApiCallListResult>;
+    pruneOlderThan(input?: { days?: number; now?: Date }): MaybePromise<{ deleted: number }>;
   };
   adapterHealth: {
     getState(source: string, key: string): MaybePromise<{ value: unknown } | null>;
@@ -218,6 +236,7 @@ function defaultDependencies(env: AppEnv): InternalRouteDependencies {
     webhookSubscriptions: new WebhookSubscriptionRepository(),
     liveStatus: new LiveStatusRepository(),
     deliveryAttempts: new DeliveryAttemptRepository(),
+    externalApiCallLogs: new ExternalApiCallLogRepository(),
     adapterHealth,
     specialDayYearMaterializer: {
       async materializeYear(input) {
@@ -255,6 +274,21 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
   });
 
   app.get("/v1/internal/admin/overview", async () => dependencies.adminHealthService.overview());
+
+  app.get<{ Querystring: ExternalApiCallQuery }>("/v1/internal/admin/external-api-calls", async (request) => {
+    const limit = parseInternalLimit(request.query.limit, 50);
+    return dependencies.externalApiCallLogs.listRecent({
+      limit,
+      source: typeof request.query.source === "string" && request.query.source.trim() ? request.query.source.trim() : undefined,
+      operation: typeof request.query.operation === "string" && request.query.operation.trim() ? request.query.operation.trim() : undefined,
+      resultStatus: typeof request.query.resultStatus === "string" && request.query.resultStatus.trim() ? request.query.resultStatus.trim() : undefined,
+      now: dependencies.now?.() ?? new Date()
+    });
+  });
+
+  app.post("/v1/internal/admin/external-api-calls/prune", async () =>
+    dependencies.externalApiCallLogs.pruneOlderThan({ days: 31, now: dependencies.now?.() ?? new Date() })
+  );
 
   app.get<{ Querystring: LimitQuery }>("/v1/internal/adapters/health", async () => {
     const health = await dependencies.adapterHealth.listAdapterHealth();

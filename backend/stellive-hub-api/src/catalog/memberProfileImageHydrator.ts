@@ -1,28 +1,24 @@
-import type { Prisma } from "@prisma/client";
 import type { YoutubeDataApiClient, YoutubeChannelProfile } from "../adapters/youtube/youtubeDataApiClient.js";
-import type { PlatformApiStateRecord } from "../repositories/platformApiStateRepository.js";
+import {
+  isHttpsUrl,
+  type ChannelImageCacheRecord,
+  type ChannelImageCacheRepositoryPort,
+} from "../repositories/channelImageCacheRepository.js";
 import type { Member } from "../../../../shared/schemas/domain.js";
 
-const cacheSource = "youtube_channel_profile";
-const defaultTtlMs = 24 * 60 * 60 * 1_000;
+const defaultTtlMs = 7 * 24 * 60 * 60 * 1_000;
 const defaultRefreshWaitMs = 1_500;
 
 interface ProfileCacheValue {
-  memberId?: string;
   title?: string;
-  profileImageUrl?: string;
+  profileImageUrl: string;
   fetchedAt: string;
   expiresAt: string;
 }
 
-export interface MemberProfileImageStateRepository {
-  getState(source: string, key: string): Promise<PlatformApiStateRecord | null>;
-  upsertState(source: string, key: string, value: Prisma.InputJsonValue, status: string): Promise<unknown>;
-}
-
 export interface MemberProfileImageHydratorOptions {
   youtube?: Pick<YoutubeDataApiClient, "fetchChannelProfilesByIds">;
-  stateRepository: MemberProfileImageStateRepository;
+  channelImageCache: ChannelImageCacheRepositoryPort;
   ttlMs?: number;
   refreshWaitMs?: number;
   now?: () => Date;
@@ -41,41 +37,33 @@ export class MemberProfileImageHydrator {
   }
 
   async hydrateMembers(members: Member[]): Promise<Member[]> {
-    const targets = members.flatMap((member) => {
+    const channelIds = [...new Set(members.flatMap((member) => {
       const channelId = member.platforms?.youtubeChannelId;
-      if (!channelId) return [];
-      return [{ member, channelId }];
-    });
-    const cacheEntries = new Map<string, ProfileCacheValue>();
-    const staleEntries = new Map<string, ProfileCacheValue>();
+      return channelId ? [channelId] : [];
+    }))];
+    if (channelIds.length === 0) return members.map((member) => ({ ...member }));
+
     const now = this.now();
+    const initialRecords = await this.options.channelImageCache.listByChannelIds("youtube", channelIds);
+    const refreshIds = channelIds.filter((channelId) => this.shouldRefresh(initialRecords.get(channelId), now));
 
-    await Promise.all(targets.map(async ({ channelId }) => {
-      const cached = toProfileCacheValue((await this.options.stateRepository.getState(cacheSource, channelId))?.value);
-      if (!cached) return;
-      if (new Date(cached.expiresAt).getTime() > now.getTime()) {
-        cacheEntries.set(channelId, cached);
-      } else {
-        staleEntries.set(channelId, cached);
-      }
-    }));
+    if (refreshIds.length > 0) {
+      await this.refreshProfiles(refreshIds);
+    }
 
-    const missingOrExpiredIds = targets
-      .map(({ channelId }) => channelId)
-      .filter((channelId) => !cacheEntries.has(channelId));
-    if (missingOrExpiredIds.length > 0) {
-      await this.refreshProfiles(targets, missingOrExpiredIds, staleEntries);
-      for (const channelId of missingOrExpiredIds) {
-        const refreshed = toProfileCacheValue((await this.options.stateRepository.getState(cacheSource, channelId))?.value);
-        const fallback = refreshed ?? staleEntries.get(channelId);
-        if (fallback) cacheEntries.set(channelId, fallback);
-      }
+    const refreshedRecords = refreshIds.length > 0
+      ? await this.options.channelImageCache.listByChannelIds("youtube", channelIds)
+      : initialRecords;
+    const cacheEntries = new Map<string, ProfileCacheValue>();
+    for (const channelId of channelIds) {
+      const value = this.toProfileCacheValue(refreshedRecords.get(channelId) ?? initialRecords.get(channelId));
+      if (value) cacheEntries.set(channelId, value);
     }
 
     return members.map((member) => {
       const channelId = member.platforms?.youtubeChannelId;
       const cached = channelId ? cacheEntries.get(channelId) : undefined;
-      if (!cached?.profileImageUrl) return { ...member };
+      if (!channelId || !cached) return { ...member };
       return {
         ...member,
         profileImageUrl: cached.profileImageUrl,
@@ -93,73 +81,104 @@ export class MemberProfileImageHydrator {
     });
   }
 
-  private async refreshProfiles(
-    targets: Array<{ member: Member; channelId: string }>,
-    channelIds: string[],
-    staleEntries: Map<string, ProfileCacheValue>,
-  ): Promise<void> {
-    if (!this.options.youtube) return;
-    if (this.refreshInFlight) return;
-
-    const targetByChannelId = new Map(targets.map((target) => [target.channelId, target.member]));
-    const refresh = (async () => {
-      const result = await this.options.youtube?.fetchChannelProfilesByIds(channelIds);
-      if (!result || result.status !== "ok") return;
-      await Promise.all(result.profiles.map((profile) => {
-        const member = targetByChannelId.get(profile.channelId);
-        return this.writeProfileCache(profile, member?.id);
-      }));
-    })();
-    this.refreshInFlight = refresh;
-
-    try {
-      await Promise.race([refresh, sleep(this.refreshWaitMs)]);
-    } catch {
-      // Stale cache remains usable when YouTube refresh fails.
-    } finally {
-      refresh.catch(() => undefined).finally(() => {
-        this.refreshInFlight = null;
-      });
-    }
-
-    for (const [channelId, cached] of staleEntries) {
-      if (!channelIds.includes(channelId)) continue;
-      await this.options.stateRepository.upsertState(cacheSource, channelId, cached as unknown as Prisma.InputJsonValue, "stale");
-    }
+  private shouldRefresh(record: ChannelImageCacheRecord | undefined, now: Date): boolean {
+    if (!record) return true;
+    const nextRetryAt = parseDate(record.nextRetryAt);
+    if (nextRetryAt && nextRetryAt.getTime() > now.getTime()) return false;
+    const refreshedAt = parseDate(record.refreshedAt);
+    const fresh = record.status === "fresh"
+      && isHttpsUrl(record.imageUrl)
+      && refreshedAt !== null
+      && now.getTime() - refreshedAt.getTime() < this.ttlMs;
+    return !fresh;
   }
 
-  private async writeProfileCache(profile: YoutubeChannelProfile, memberId?: string): Promise<void> {
-    const fetchedAt = profile.fetchedAt;
-    const expiresAt = new Date(this.now().getTime() + this.ttlMs).toISOString();
-    const value: ProfileCacheValue = {
-      memberId,
-      title: profile.title,
-      profileImageUrl: profile.profileImageUrl,
-      fetchedAt,
-      expiresAt,
+  private toProfileCacheValue(record: ChannelImageCacheRecord | undefined): ProfileCacheValue | null {
+    if (!record || !isHttpsUrl(record.imageUrl)) return null;
+    const refreshedAt = parseDate(record.refreshedAt);
+    if (!refreshedAt) return null;
+    return {
+      title: record.title,
+      profileImageUrl: record.imageUrl,
+      fetchedAt: refreshedAt.toISOString(),
+      expiresAt: new Date(refreshedAt.getTime() + this.ttlMs).toISOString(),
     };
-    await this.options.stateRepository.upsertState(cacheSource, profile.channelId, value as unknown as Prisma.InputJsonValue, "fresh");
+  }
+
+  private async refreshProfiles(channelIds: string[]): Promise<void> {
+    if (!this.options.youtube) return;
+    if (!this.refreshInFlight) {
+      const refresh = this.performRefresh(channelIds);
+      this.refreshInFlight = refresh;
+      refresh.finally(() => {
+        if (this.refreshInFlight === refresh) this.refreshInFlight = null;
+      }).catch(() => undefined);
+    }
+    await Promise.race([this.refreshInFlight, sleep(this.refreshWaitMs)]);
+  }
+
+  private async performRefresh(channelIds: string[]): Promise<void> {
+    const now = this.now();
+    try {
+      const result = await this.options.youtube?.fetchChannelProfilesByIds(channelIds);
+      if (!result || result.status !== "ok") {
+        await this.markFailures(channelIds, `youtube_profile_${result?.status ?? "unavailable"}`, now);
+        return;
+      }
+
+      const profileByChannelId = new Map(result.profiles.map((profile) => [profile.channelId, profile]));
+      await Promise.all(channelIds.map(async (channelId) => {
+        const profile = profileByChannelId.get(channelId);
+        if (!profile) {
+          await this.markFailure(channelId, "youtube_profile_missing", now);
+          return;
+        }
+        if (!isHttpsUrl(profile.profileImageUrl)) {
+          await this.markFailure(channelId, "youtube_profile_non_https", now);
+          return;
+        }
+        await this.writeProfileCache({ ...profile, profileImageUrl: profile.profileImageUrl }, now);
+      }));
+    } catch {
+      await this.markFailures(channelIds, "youtube_profile_refresh_failed", now);
+    }
+  }
+
+  private async writeProfileCache(
+    profile: YoutubeChannelProfile & { profileImageUrl: string },
+    fallbackDate: Date,
+  ): Promise<void> {
+    const refreshedAt = parseDate(profile.fetchedAt) ?? fallbackDate;
+    await this.options.channelImageCache.upsertSuccess({
+      source: "youtube",
+      channelId: profile.channelId,
+      imageUrl: profile.profileImageUrl,
+      title: profile.title,
+      refreshedAt,
+    });
+  }
+
+  private async markFailures(channelIds: string[], reason: string, now: Date): Promise<void> {
+    await Promise.all(channelIds.map((channelId) => this.markFailure(channelId, reason, now)));
+  }
+
+  private async markFailure(channelId: string, reason: string, now: Date): Promise<void> {
+    await this.options.channelImageCache.markMissingOrFailed({
+      source: "youtube",
+      channelId,
+      reason,
+      now,
+      keepExistingUrl: true,
+    });
   }
 }
 
-function sleep(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, milliseconds)));
+function parseDate(value: string | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function toProfileCacheValue(value: unknown): ProfileCacheValue | null {
-  if (typeof value !== "object" || value === null) return null;
-  const record = value as Record<string, unknown>;
-  const fetchedAt = typeof record.fetchedAt === "string" ? record.fetchedAt : undefined;
-  const expiresAt = typeof record.expiresAt === "string" ? record.expiresAt : undefined;
-  if (!fetchedAt || !expiresAt) return null;
-  const profileImageUrl = typeof record.profileImageUrl === "string" && record.profileImageUrl.startsWith("https://")
-    ? record.profileImageUrl
-    : undefined;
-  return {
-    memberId: typeof record.memberId === "string" ? record.memberId : undefined,
-    title: typeof record.title === "string" ? record.title : undefined,
-    profileImageUrl,
-    fetchedAt,
-    expiresAt,
-  };
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

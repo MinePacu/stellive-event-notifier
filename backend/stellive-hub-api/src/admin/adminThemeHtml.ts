@@ -47,74 +47,76 @@ export function renderAdminThemeStyle(): string {
   return `
     :root {
       color-scheme: light dark;
-      --admin-bg: #f3f5f8;
+      --admin-bg: #f5f7fb;
       --admin-surface: #ffffff;
-      --admin-surface-hover: #eef3f8;
-      --admin-text: #1f2733;
-      --admin-muted: #657286;
-      --admin-label: #526073;
-      --admin-border: #d6dde7;
-      --admin-soft-border: #edf1f5;
-      --admin-input-border: #bcc7d4;
-      --admin-danger: #a13224;
-      --admin-primary: #2563eb;
+      --admin-surface-hover: #eef4fb;
+      --admin-text: #111827;
+      --admin-muted: #657084;
+      --admin-label: #384358;
+      --admin-border: #d8e0ec;
+      --admin-soft-border: #edf2f7;
+      --admin-input-border: #b9c5d6;
+      --admin-danger: #b42318;
+      --admin-primary: #243b73;
       --admin-primary-text: #ffffff;
-      --admin-pill-bg: #e9edf3;
-      --admin-pill-text: #344155;
-      --admin-pill-ok-bg: #dbeee1;
-      --admin-pill-ok-text: #19643a;
+      --admin-accent: #14b8a6;
+      --admin-pill-bg: #edf2f7;
+      --admin-pill-text: #334155;
+      --admin-pill-ok-bg: #d9f4ec;
+      --admin-pill-ok-text: #0f766e;
       --admin-pill-neutral-bg: #edf0f5;
       --admin-pill-neutral-text: #556274;
       --admin-pill-danger-bg: #fde5df;
       --admin-pill-danger-text: #9a3222;
-      --admin-pill-warning-bg: #fff0cd;
-      --admin-pill-warning-text: #865d00;
+      --admin-pill-warning-bg: #fff6d8;
+      --admin-pill-warning-text: #8a5a00;
     }
 
     :root[data-theme="dark"] {
       --admin-bg: #0f172a;
-      --admin-surface: #111827;
-      --admin-surface-hover: #1f2937;
+      --admin-surface: #172033;
+      --admin-surface-hover: #202b42;
       --admin-text: #e5edf7;
-      --admin-muted: #94a3b8;
+      --admin-muted: #9aa8bd;
       --admin-label: #cbd5e1;
-      --admin-border: #334155;
-      --admin-soft-border: #243244;
-      --admin-input-border: #475569;
-      --admin-danger: #fca5a5;
-      --admin-primary: #3b82f6;
+      --admin-border: #2d3a52;
+      --admin-soft-border: #223049;
+      --admin-input-border: #40516d;
+      --admin-danger: #fb7185;
+      --admin-primary: #818cf8;
       --admin-primary-text: #ffffff;
-      --admin-pill-bg: #243244;
-      --admin-pill-text: #d8e2ee;
-      --admin-pill-ok-bg: #123d2a;
-      --admin-pill-ok-text: #b7f7cf;
-      --admin-pill-neutral-bg: #253044;
+      --admin-accent: #2dd4bf;
+      --admin-pill-bg: #223049;
+      --admin-pill-text: #dbe7f5;
+      --admin-pill-ok-bg: #123b36;
+      --admin-pill-ok-text: #99f6e4;
+      --admin-pill-neutral-bg: #26334a;
       --admin-pill-neutral-text: #cbd5e1;
-      --admin-pill-danger-bg: #4c1d1d;
-      --admin-pill-danger-text: #fecaca;
-      --admin-pill-warning-bg: #4a3411;
+      --admin-pill-danger-bg: #432020;
+      --admin-pill-danger-text: #ffd7d7;
+      --admin-pill-warning-bg: #423518;
       --admin-pill-warning-text: #fde68a;
     }
 
     :root[data-theme="black"] {
       --admin-bg: #000000;
-      --admin-surface: #050505;
-      --admin-surface-hover: #111111;
-      --admin-text: #f2f5f8;
-      --admin-muted: #a3aab5;
-      --admin-label: #d1d5db;
-      --admin-border: #262626;
-      --admin-soft-border: #1f1f1f;
-      --admin-input-border: #3a3a3a;
-      --admin-danger: #fca5a5;
-      --admin-primary: #60a5fa;
+      --admin-surface: #050705;
+      --admin-surface-hover: #0f130f;
+      --admin-text: #f2f5ef;
+      --admin-muted: #9ea79b;
+      --admin-label: #d8ded3;
+      --admin-border: #20271f;
+      --admin-soft-border: #151a14;
+      --admin-input-border: #303a2f;
+      --admin-danger: #f17878;
+      --admin-primary: #7dd3a7;
       --admin-primary-text: #020617;
-      --admin-pill-bg: #171717;
-      --admin-pill-text: #e5e7eb;
+      --admin-pill-bg: #111610;
+      --admin-pill-text: #e2e8de;
       --admin-pill-ok-bg: #052e1a;
       --admin-pill-ok-text: #bbf7d0;
-      --admin-pill-neutral-bg: #171717;
-      --admin-pill-neutral-text: #d4d4d8;
+      --admin-pill-neutral-bg: #121612;
+      --admin-pill-neutral-text: #d7ddd2;
       --admin-pill-danger-bg: #450a0a;
       --admin-pill-danger-text: #fecaca;
       --admin-pill-warning-bg: #422006;
@@ -219,6 +221,14 @@ export function renderAdminThemeBehaviorScript(): string {
         controls[index].addEventListener("click", function (event) {
           var nextPreference = event.currentTarget.getAttribute("data-theme-option") || "system";
           applyPreference(nextPreference, true);
+        });
+      }
+
+      var quickToggle = document.getElementById("theme-toggle");
+      if (quickToggle) {
+        quickToggle.addEventListener("click", function () {
+          var currentTheme = document.documentElement.dataset.theme;
+          applyPreference(currentTheme === "dark" || currentTheme === "black" ? "light" : "dark", true);
         });
       }
 

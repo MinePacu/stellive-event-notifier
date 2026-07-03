@@ -21,13 +21,30 @@ function createFakeDependencies(overrides: Partial<InternalRouteDependencies> = 
         secrets: {},
         queue: { queued: 0, locked: 0, completed: 0, failed: 0 },
         adapters: [],
-        recentDelivery: { sent: 0, queued: 0, skipped: 0, failed: 0 }
+        recentDelivery: { sent: 0, queued: 0, skipped: 0, failed: 0 },
+        dailyDeliveryQueue: {
+          timezone: "Asia/Seoul",
+          days: 14,
+          generatedAt: "2026-07-02T00:00:00.000Z",
+          items: [],
+          totals: { sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 }
+        },
+        externalApiCalls: {
+          daily: {
+            timezone: "Asia/Seoul",
+            days: 14,
+            generatedAt: "2026-07-02T00:00:00.000Z",
+            items: [],
+            totals: { total: 0, ok: 0, failed: 0, rateLimited: 0, quotaExceeded: 0, quotaUnits: 0, bySource: {} }
+          }
+        }
       })
     },
     notificationJobs: { listDiagnostics: async () => [] },
     webhookSubscriptions: { listDiagnostics: async () => [] },
     liveStatus: { listDiagnostics: async () => [] },
     deliveryAttempts: { listRecent: async () => [] },
+    externalApiCallLogs: { listRecent: async () => ({ items: [] }), pruneOlderThan: async () => ({ deleted: 0 }) },
     adapterHealth: { getState: async () => null, listAdapterHealth: async () => [] },
     specialDayYearMaterializer: {
       materializeYear: async (input) => ({
@@ -71,6 +88,130 @@ function expectAdminThemeSupport(html: string) {
 }
 
 function expectHubEventAdminConsoleSupport(html: string) {
+  const navHubEventsIndex = html.indexOf('data-page-target="hub-events"');
+  const navOperationsIndex = html.indexOf('data-page-target="operations"');
+  const hubEventsSectionIndex = html.indexOf('id="page-hub-events"');
+  const operationsSectionIndex = html.indexOf('id="page-operations"');
+  const hubEventEditorIndex = html.indexOf("hub-event-editor-panel");
+  const hubEventListIndex = html.indexOf("hub-event-list-panel");
+  const tabsIndex = html.indexOf('class="tabs admin-tabs"');
+  const pageTitleIndex = html.indexOf('id="admin-current-page-title"');
+
+  expect(navHubEventsIndex).toBeGreaterThan(-1);
+  expect(navOperationsIndex).toBeGreaterThan(-1);
+  expect(navHubEventsIndex).toBeLessThan(navOperationsIndex);
+  expect(hubEventsSectionIndex).toBeGreaterThan(-1);
+  expect(operationsSectionIndex).toBeGreaterThan(-1);
+  expect(hubEventsSectionIndex).toBeLessThan(operationsSectionIndex);
+  expect(hubEventEditorIndex).toBeGreaterThan(-1);
+  expect(hubEventListIndex).toBeGreaterThan(-1);
+  expect(hubEventEditorIndex).toBeLessThan(hubEventListIndex);
+  expect(tabsIndex).toBeGreaterThan(-1);
+  expect(pageTitleIndex).toBeGreaterThan(-1);
+  expect(tabsIndex).toBeLessThan(pageTitleIndex);
+  expect(html).toContain('class="shell admin-app"');
+  expect(html).toContain('class="sidebar admin-nav"');
+  expect(html).toContain('class="brand-mark admin-brand-mark"');
+  expect(html).toContain('class="nav admin-nav-links"');
+  expect(html).toContain('class="dot admin-nav-dot"');
+  expect(html).toContain('class="admin-sidebar-card"');
+  expect(html).toContain('class="main admin-content');
+  expect(html).toContain('class="topbar admin-topbar"');
+  expect(html).toContain('class="tabs admin-tabs"');
+  expect(html).toContain('class="top-actions topbar-actions"');
+  expect(html).toContain('class="icon-button');
+  expect(html).toContain('id="theme-toggle"');
+  expect(html).toContain('class="profile"');
+  expect(html).toContain('class="avatar"');
+  expect(html).toContain("Welcome back,");
+  expect(html).toContain("<strong>Admin</strong>");
+  expect(html).toContain('aria-label="Quick page tabs"');
+  expect(html).toContain('id="admin-current-page-title"');
+  expect(html).toContain('class="page active" id="page-dashboard"');
+  expect(html).toContain('class="page" id="page-hub-events"');
+  expect(html).toContain('class="page" id="page-operations"');
+  expect(html).toContain('class="page" id="page-audit"');
+  expect(html).toContain('class="page" id="page-settings"');
+  expect(html).toContain('data-page-target="dashboard"');
+  expect(html).toContain('data-page-target="settings"');
+  expect(html).toContain('id="settings-section"');
+  expect(html).toContain('id="internal-token"');
+  expect(html).toContain('id="internal-token-save"');
+  expect(html).toContain('id="internal-token-test"');
+  expect(html).toContain('id="internal-token-clear"');
+  expect(html).toContain('id="settings-token-status"');
+  expect(html).toContain('id="hub-event-page-size"');
+  expect(html).toContain("Admin session and internal token are separate");
+  expect(html).toContain('id="service-overview-summary"');
+  expect(html).toContain('id="service-overview-status"');
+  expect(html).toContain('id="dashboard-recent-activity"');
+  expect(html).toContain('id="daily-queue-section"');
+  expect(html).toContain('id="daily-queue-chart"');
+  expect(html).toContain('id="daily-queue-summary"');
+  expect(html).toContain('id="daily-queue-accessible-list"');
+  expect(html).toContain("Daily client delivery queue");
+  expect(html).toContain('id="external-api-section"');
+  expect(html).toContain('id="external-api-chart"');
+  expect(html).toContain('id="external-api-tooltip"');
+  expect(html).toContain('role="tooltip"');
+  expect(html).toContain('id="external-api-summary"');
+  expect(html).toContain('id="external-api-results"');
+  expect(html).toContain('id="external-api-prune"');
+  expect(html).toContain("External API calls");
+  expect(html).toContain("Tracked quota today");
+  expect(html).toContain("Tracked quota · 14 days");
+  expect(html).toContain("YouTube list API requests");
+  expect(html).toContain("may not match provider billing exactly");
+  expect(html).not.toContain('createQueueSummaryCard("Quota units"');
+  expect(html).toContain("Recent API results");
+  expect(html).toContain("function formatDate(value)");
+  expect(html).toContain("function showExternalApiTooltip");
+  expect(html).toContain('bar.addEventListener("mouseenter"');
+  expect(html).toContain('bar.addEventListener("focus"');
+  expect(html).toContain("Retention: 31 days");
+  expect(html).toContain("Asia/Seoul");
+  expect(html).toContain("System status");
+  expect(html).toContain("Configuration readiness");
+  expect(html).toContain("Uptime");
+  expect(html).not.toContain("graph");
+  expect(html).not.toContain("decorative-chart");
+  expect(html).not.toContain("meaningless-graph");
+  expect(html).toContain('class="metric-row');
+  expect(html).toContain('className = "metric-label"');
+  expect(html).toContain('className = "metric-hint"');
+  expect(html).toContain('class="section"');
+  expect(html).toContain('class="section-head"');
+  expect(html).toContain('class="section-body"');
+  expect(html).toContain('class="section-body split"');
+  expect(html).toContain('class="section-body settings-layout"');
+  expect(html).toContain('class="summary-row"');
+  expect(html).toContain('class="activity-list"');
+  expect(html).toContain('class="settings-row"');
+  expect(html).toContain('class="token-input-card');
+  expect(html).toContain('class="security-item"');
+  expect(html).toContain('class="status-table"');
+  expect(html).toContain('id="admin-audit-activity"');
+  expect(html).toContain("Settings only");
+  expect(html).toContain('class="credential-badge"');
+  expect(html).toContain('class="credential-input-wrap"');
+  expect(html).toContain('class="settings-column"');
+  expect(html).toContain("session only");
+  expect(html).toContain("@media (min-width: 1600px)");
+  expect(html).toContain("@media (min-width: 2200px)");
+  expect(html).not.toContain("Internal token stored for this browser session.");
+  expect(html).toContain('class="event-layout');
+  expect(html).toContain('class="event-list');
+  expect(html).toContain('className = "event-row"');
+  expect(html).toContain('class="editor');
+  expect(html).toContain("hub-event-editor-panel");
+  expect(html).toContain('class="hub-event-list-panel');
+  expect(html).toContain('class="hub-event-pagination"');
+  expect(html).toContain('id="hub-event-prev-page"');
+  expect(html).toContain('id="hub-event-next-page"');
+  expect(html).toContain('id="hub-event-pagination-status"');
+  expect(html).toContain('class="form-section');
+  expect(html).toContain('class="bottom-actions"');
+  expect(html).toContain('@media (max-width: 760px)');
   expect(html).toContain('data-admin-section="hub-events"');
   expect(html).toContain('data-hub-event-action="save-draft"');
   expect(html).toContain('data-hub-event-action="publish"');
@@ -78,6 +219,15 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain('data-hub-event-action="deactivate"');
   expect(html).toContain('data-hub-event-action="delete"');
   expect(html).not.toContain('type="file"');
+  expect(html).toContain("No bundled image");
+  expect(html).toContain("Metadata only");
+  expect(html).toContain("No uploads or copied assets");
+  expect(html).toContain('class="image-policy-help"');
+  expect(html).toContain("official_runtime_url");
+  expect(html).toContain("third_party_allowed");
+  expect(html).toContain("verify_required");
+  expect(html).toContain("blocked");
+  expect(html).toContain("sourceUrl, purchaseUrl, ticketUrl");
   expect(html).toContain('id="hub-event-image-url"');
   expect(html).toContain('id="hub-event-image-policy-state"');
   expect(html).not.toContain('name="logoUrl"');
@@ -118,6 +268,132 @@ describe("internal admin routes", () => {
 
     expect(response.statusCode).toBe(401);
     expect(response.json()).toEqual({ error: "invalid_authorization_scheme" });
+  });
+
+  it("returns daily delivery queue trend in admin overview", async () => {
+    const app = await buildTestApp({
+      adminHealthService: {
+        overview: async () => ({
+          service: { name: "stellive-hub-api", environment: "test", uptimeSeconds: 1 },
+          database: { status: "ok", reason: "fake_database_ready" },
+          featureFlags: {},
+          secrets: {},
+          queue: { queued: 0, locked: 0, completed: 0, failed: 0 },
+          adapters: [],
+          recentDelivery: { sent: 1, queued: 0, skipped: 0, failed: 0 },
+          dailyDeliveryQueue: {
+            timezone: "Asia/Seoul",
+            days: 14,
+            generatedAt: "2026-07-02T00:00:00.000Z",
+            items: [{ date: "2026-07-02", sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }],
+            totals: { sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }
+          },
+          externalApiCalls: {
+            daily: {
+              timezone: "Asia/Seoul",
+              days: 14,
+              generatedAt: "2026-07-02T00:00:00.000Z",
+              items: [{ date: "2026-07-02", total: 2, ok: 1, failed: 1, rateLimited: 0, quotaExceeded: 1, quotaUnits: 2, bySource: { youtube: 2 } }],
+              totals: { total: 2, ok: 1, failed: 1, rateLimited: 0, quotaExceeded: 1, quotaUnits: 2, bySource: { youtube: 2 } }
+            }
+          }
+        })
+      }
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/internal/admin/overview",
+      headers: authHeaders
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      dailyDeliveryQueue: {
+        timezone: "Asia/Seoul",
+        days: 14,
+        items: [{ date: "2026-07-02", sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }],
+        totals: { sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }
+      },
+      externalApiCalls: {
+        daily: {
+          items: [{ date: "2026-07-02", total: 2, ok: 1, failed: 1, quotaExceeded: 1, bySource: { youtube: 2 } }],
+          totals: { total: 2, ok: 1, failed: 1, quotaExceeded: 1, bySource: { youtube: 2 } }
+        }
+      }
+    });
+    expect(response.body).not.toContain("internal-test-token");
+  });
+
+  it("returns recent external API call results from injected dependencies", async () => {
+    const listRecent = vi.fn(async () => ({
+      items: [
+        {
+          id: "api-call-1",
+          source: "youtube",
+          operation: "youtube.videos.list",
+          method: "GET",
+          host: "www.googleapis.com",
+          path: "/youtube/v3/videos",
+          statusCode: 403,
+          resultStatus: "quota_exceeded",
+          durationMs: 120,
+          quotaUnits: 1,
+          rateLimited: false,
+          requestedAt: "2026-07-02T00:00:00.000Z"
+        }
+      ]
+    }));
+    const app = await buildTestApp({
+      externalApiCallLogs: { listRecent, pruneOlderThan: async () => ({ deleted: 0 }) },
+      now: () => new Date("2026-07-02T01:00:00.000Z")
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/internal/admin/external-api-calls?limit=25&source=youtube&resultStatus=quota_exceeded",
+      headers: authHeaders
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(listRecent).toHaveBeenCalledWith({
+      limit: 25,
+      source: "youtube",
+      operation: undefined,
+      resultStatus: "quota_exceeded",
+      now: new Date("2026-07-02T01:00:00.000Z")
+    });
+    expect(response.json()).toMatchObject({
+      items: [
+        {
+          source: "youtube",
+          operation: "youtube.videos.list",
+          host: "www.googleapis.com",
+          path: "/youtube/v3/videos",
+          resultStatus: "quota_exceeded",
+          quotaUnits: 1
+        }
+      ]
+    });
+    expect(response.body).not.toContain("internal-test-token");
+  });
+
+  it("prunes old external API call logs through the internal admin route", async () => {
+    const pruneOlderThan = vi.fn(async () => ({ deleted: 3 }));
+    const app = await buildTestApp({
+      externalApiCallLogs: { listRecent: async () => ({ items: [] }), pruneOlderThan },
+      now: () => new Date("2026-07-02T01:00:00.000Z")
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/admin/external-api-calls/prune",
+      headers: authHeaders
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ deleted: 3 });
+    expect(pruneOlderThan).toHaveBeenCalledWith({ days: 31, now: new Date("2026-07-02T01:00:00.000Z") });
   });
 
   it("rejects requests when the internal token is not configured", async () => {
@@ -692,9 +968,13 @@ describe("admin console routes", () => {
     expect(response.headers["access-control-allow-origin"]).toBeUndefined();
     expect(response.body).toContain("Stellive Hub Admin");
     expect(response.body).toContain('action="/admin/logout"');
-    expect(response.body).toContain('class="refresh-controls"');
+    expect(response.body).toContain('class="top-actions topbar-actions"');
+    expect(response.body).toContain('class="icon-button has-tooltip"');
     expect(response.body).toContain('id="refresh"');
-    expect(response.body).toContain(">Refresh<");
+    expect(response.body).toContain('aria-label="Refresh"');
+    expect(response.body).toContain('id="theme-toggle"');
+    expect(response.body).toContain('class="profile"');
+    expect(response.body).toContain("Welcome back,");
     expect(response.body).toContain('class="switch-control"');
     expect(response.body).toContain('class="auto-refresh-switch"');
     expect(response.body).toContain('id="auto-refresh"');
@@ -753,8 +1033,26 @@ describe("admin console routes", () => {
     expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
     expect(response.body).toContain("Stellive Hub Admin");
+    expect(response.body).toContain("Secure access for hub operations.");
+    expect(response.body).toContain('class="login-brand-mark"');
+    expect(response.body).toContain('class="login-badge"');
+    expect(response.body).toContain("Admin console");
+    expect(response.body).toContain("Sign in");
+    expect(response.body).toContain("Admin console token");
+    expect(response.body).toContain('class="password-wrap"');
+    expect(response.body).toContain('class="private-badge"');
+    expect(response.body).toContain("private");
+    expect(response.body).toContain("Admin session first");
+    expect(response.body).toContain("Internal token later");
+    expect(response.body).toContain("Settings");
+    expect(response.body).toContain("@media (max-width: 920px)");
+    expect(response.body).toContain("@media (max-width: 520px)");
     expect(response.body).toContain('form method="post" action="/admin/login"');
     expect(response.body).toContain('name="token"');
+    expect(response.body).not.toContain("Console preview");
+    expect(response.body).not.toContain("Dashboard metric preview");
+    expect(response.body).not.toContain('id="daily-queue-chart"');
+    expect(response.body).not.toContain('id="internal-token"');
     expectAdminThemeSupport(response.body);
     expect(response.body).not.toContain(adminToken);
   });

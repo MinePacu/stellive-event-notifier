@@ -1,7 +1,8 @@
 import type { AppEnv } from "../config/env.js";
 import { loadEnv } from "../config/env.js";
 import { NotificationJobRepository } from "../jobs/notificationJobRepository.js";
-import { DeliveryAttemptRepository } from "../repositories/deliveryAttemptRepository.js";
+import { DeliveryAttemptRepository, emptyDailyDeliveryQueueTrend } from "../repositories/deliveryAttemptRepository.js";
+import { ExternalApiCallLogRepository, emptyExternalApiCallTrend } from "../repositories/externalApiCallLogRepository.js";
 import { PlatformApiStateRepository } from "../repositories/platformApiStateRepository.js";
 import { getPrismaClient } from "../storage/prisma.js";
 import { getConfiguredSecretState } from "./adminAuth.js";
@@ -24,14 +25,17 @@ export class AdminHealthService {
     private readonly env: AppEnv = loadEnv(),
     private readonly jobs = new NotificationJobRepository(),
     private readonly deliveryAttempts = new DeliveryAttemptRepository(),
+    private readonly externalApiCalls = new ExternalApiCallLogRepository(),
     private readonly platformApiState = new PlatformApiStateRepository(),
     private readonly prisma: AdminPrismaClient = getPrismaClient() as unknown as AdminPrismaClient
   ) {}
 
   async overview(): Promise<AdminOverview> {
-    const [queue, recentDelivery, adapterState, database] = await Promise.all([
+    const [queue, recentDelivery, dailyDeliveryQueue, externalApiDaily, adapterState, database] = await Promise.all([
       this.readQueueSummary(),
       this.readRecentDeliverySummary(),
+      this.readDailyDeliveryQueue(),
+      this.readExternalApiDaily(),
       this.readAdapterHealth(),
       this.databaseStatus()
     ]);
@@ -48,7 +52,11 @@ export class AdminHealthService {
       secrets: this.secretReadiness(),
       queue,
       adapters: defaultAdapterHealth.map((fallback) => adapterBySource.get(fallback.source) ?? fallback),
-      recentDelivery
+      recentDelivery,
+      dailyDeliveryQueue,
+      externalApiCalls: {
+        daily: externalApiDaily
+      }
     };
   }
 
@@ -102,6 +110,22 @@ export class AdminHealthService {
       return await this.deliveryAttempts.summarizeRecent();
     } catch {
       return { sent: 0, queued: 0, skipped: 0, failed: 0 };
+    }
+  }
+
+  private async readDailyDeliveryQueue(): Promise<AdminOverview["dailyDeliveryQueue"]> {
+    try {
+      return await this.deliveryAttempts.summarizeDailyBuckets({ days: 14, timezone: "Asia/Seoul" });
+    } catch {
+      return emptyDailyDeliveryQueueTrend(14);
+    }
+  }
+
+  private async readExternalApiDaily(): Promise<AdminOverview["externalApiCalls"]["daily"]> {
+    try {
+      return await this.externalApiCalls.summarizeDaily({ days: 14, timezone: "Asia/Seoul" });
+    } catch {
+      return emptyExternalApiCallTrend(14);
     }
   }
 

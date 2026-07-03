@@ -9,6 +9,7 @@ import YoutubeWebSubSubscriptionService from "./adapters/youtube/youtubeWebSubSu
 import YoutubeDataApiClient from "./adapters/youtube/youtubeDataApiClient.js";
 import { LiveStatusRepository } from "./repositories/liveStatusRepository.js";
 import { PlatformApiStateRepository } from "./repositories/platformApiStateRepository.js";
+import { ChannelImageCacheRepository } from "./repositories/channelImageCacheRepository.js";
 import sensible from "@fastify/sensible";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
@@ -24,6 +25,7 @@ import { createFcmClient } from "./push/fcmClient.js";
 import { FcmPushSender } from "./push/pushSender.js";
 import { DeliveryAttemptRepository } from "./repositories/deliveryAttemptRepository.js";
 import DeviceRepository from "./repositories/deviceRepository.js";
+import { ExternalApiCallLogRepository } from "./repositories/externalApiCallLogRepository.js";
 import { PrismaMusicRepository, PrismaMusicSyncRunRepository } from "./repositories/musicRepository.js";
 import PlatformEventRepository from "./repositories/platformEventRepository.js";
 import PreferenceRepository from "./repositories/preferenceRepository.js";
@@ -147,7 +149,8 @@ function createDefaultChzzkLiveAdapter(
     clientId: env.CHZZK_CLIENT_ID,
     clientSecret: env.CHZZK_CLIENT_SECRET,
     stateRepository,
-    fetch: fetchImpl
+    fetch: fetchImpl,
+    apiCallLogger: new ExternalApiCallLogRepository()
   });
   const ingestor = new ChzzkEventIngestor();
 
@@ -235,7 +238,7 @@ function createDefaultYoutubeSongBackfillScheduler(
 
   return {
     youtubeSongBackfillScheduler: new SongBackfillService({
-      youtube: new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl }),
+      youtube: new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl, apiCallLogger: new ExternalApiCallLogRepository() }),
       ingestion: createDefaultSongIngestionService(),
       targets,
       maxPages: env.YOUTUBE_SONG_BACKFILL_MAX_PAGES,
@@ -253,8 +256,8 @@ function createDefaultMemberProfileImageHydrator(
   if (!env.YOUTUBE_API_KEY) return {};
   return {
     memberProfileImages: new MemberProfileImageHydrator({
-      youtube: new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl }),
-      stateRepository: new PlatformApiStateRepository(),
+      youtube: new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl, apiCallLogger: new ExternalApiCallLogRepository() }),
+      channelImageCache: new ChannelImageCacheRepository(),
     }),
   };
 }
@@ -270,7 +273,7 @@ function createDefaultMusicSyncService(
   const members = createMusicMemberAliasInputs(catalog);
   const repository = new PrismaMusicRepository();
   const syncRuns = new PrismaMusicSyncRunRepository();
-  const youtube = new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl });
+  const youtube = new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl, apiCallLogger: new ExternalApiCallLogRepository() });
   const locks = new InMemoryMusicSyncLock();
   const syncCatalogMusicMembers = async () => {
     for (const input of createMusicMemberUpsertInputs(catalog)) {

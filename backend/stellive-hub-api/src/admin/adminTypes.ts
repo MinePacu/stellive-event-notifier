@@ -80,6 +80,82 @@ export interface DeliveryAttemptSummary {
   failed: number;
 }
 
+export interface DailyDeliveryQueuePoint extends DeliveryAttemptSummary {
+  date: string;
+  total: number;
+}
+
+export interface DailyDeliveryQueueTrend {
+  timezone: "Asia/Seoul";
+  days: number;
+  generatedAt: string;
+  items: DailyDeliveryQueuePoint[];
+  totals: DeliveryAttemptSummary & {
+    total: number;
+  };
+}
+
+export type ExternalApiCallResultStatus =
+  | "ok"
+  | "not_modified"
+  | "quota_exceeded"
+  | "rate_limited"
+  | "auth_required"
+  | "http_error"
+  | "network_error"
+  | "timeout"
+  | "parse_error"
+  | "unknown_error";
+
+export interface ExternalApiCallDailyPoint {
+  date: string;
+  total: number;
+  ok: number;
+  failed: number;
+  rateLimited: number;
+  quotaExceeded: number;
+  quotaUnits: number;
+  bySource: Record<string, number>;
+}
+
+export interface ExternalApiCallTrend {
+  timezone: "Asia/Seoul";
+  days: number;
+  generatedAt: string;
+  items: ExternalApiCallDailyPoint[];
+  totals: {
+    total: number;
+    ok: number;
+    failed: number;
+    rateLimited: number;
+    quotaExceeded: number;
+    quotaUnits: number;
+    bySource: Record<string, number>;
+  };
+}
+
+export interface ExternalApiCallRecentItem {
+  id: string;
+  source: string;
+  operation: string;
+  method: string;
+  host: string;
+  path: string;
+  statusCode?: number;
+  resultStatus: ExternalApiCallResultStatus | string;
+  durationMs?: number;
+  quotaUnits: number;
+  rateLimited: boolean;
+  errorCode?: string;
+  errorReason?: string;
+  requestedAt: string;
+  completedAt?: string;
+}
+
+export interface ExternalApiCallListResult {
+  items: ExternalApiCallRecentItem[];
+}
+
 export interface AdminOverview {
   service: {
     name: "stellive-hub-api";
@@ -95,4 +171,8 @@ export interface AdminOverview {
   queue: NotificationJobSummary;
   adapters: AdapterHealth[];
   recentDelivery: DeliveryAttemptSummary;
+  dailyDeliveryQueue: DailyDeliveryQueueTrend;
+  externalApiCalls: {
+    daily: ExternalApiCallTrend;
+  };
 }

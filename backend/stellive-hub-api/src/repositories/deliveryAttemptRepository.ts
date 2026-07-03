@@ -1,4 +1,9 @@
-import type { DeliveryAttemptDiagnostic, DeliveryAttemptSummary } from "../admin/adminTypes.js";
+import type {
+  DailyDeliveryQueuePoint,
+  DailyDeliveryQueueTrend,
+  DeliveryAttemptDiagnostic,
+  DeliveryAttemptSummary
+} from "../admin/adminTypes.js";
 import { getPrismaClient } from "../storage/prisma.js";
 
 interface DeliveryAttemptRecord {
@@ -22,6 +27,11 @@ interface DeliveryAttemptStatusRecord {
   status: string;
 }
 
+interface DeliveryAttemptTrendRecord {
+  attemptedAt: Date;
+  status: string;
+}
+
 interface DeliveryAttemptDiagnosticSelect {
   id: true;
   eventId: true;
@@ -42,7 +52,7 @@ interface DeliveryAttemptDiagnosticSelect {
 interface DeliveryAttemptDelegate {
   deliveryAttempt: {
     create?(args: { data: Record<string, unknown> }): Promise<unknown>;
-    findMany?(args: unknown): Promise<Array<DeliveryAttemptRecord | DeliveryAttemptStatusRecord>>;
+    findMany?(args: unknown): Promise<Array<DeliveryAttemptRecord | DeliveryAttemptStatusRecord | DeliveryAttemptTrendRecord>>;
   };
 }
 
@@ -118,7 +128,62 @@ function emptySummary(): DeliveryAttemptSummary {
   return { sent: 0, queued: 0, skipped: 0, failed: 0 };
 }
 
-function isDiagnosticRecord(record: DeliveryAttemptRecord | DeliveryAttemptStatusRecord): record is DeliveryAttemptRecord {
+const deliveryAttemptStatuses = ["sent", "queued", "skipped", "failed"] as const;
+type DeliveryAttemptKnownStatus = (typeof deliveryAttemptStatuses)[number];
+
+function isDeliveryAttemptKnownStatus(status: string): status is DeliveryAttemptKnownStatus {
+  return deliveryAttemptStatuses.includes(status as DeliveryAttemptKnownStatus);
+}
+
+function clampTrendDays(days: number | undefined): number {
+  if (!Number.isFinite(days)) return 14;
+  return Math.min(Math.max(Math.trunc(days ?? 14), 1), 30);
+}
+
+function formatKstDateKey(value: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(value);
+}
+
+function kstMidnightUtcFromKey(dateKey: string): Date {
+  return new Date(`${dateKey}T00:00:00+09:00`);
+}
+
+function addUtcDays(value: Date, days: number): Date {
+  const next = new Date(value);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function createEmptyPoint(date: string): DailyDeliveryQueuePoint {
+  return { date, sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 };
+}
+
+function buildKstDateKeys(days: number, now: Date): string[] {
+  const todayStart = kstMidnightUtcFromKey(formatKstDateKey(now));
+  const firstStart = addUtcDays(todayStart, -(days - 1));
+  return Array.from({ length: days }, (_, index) => formatKstDateKey(addUtcDays(firstStart, index)));
+}
+
+export function emptyDailyDeliveryQueueTrend(days = 14, now = new Date()): DailyDeliveryQueueTrend {
+  const normalizedDays = clampTrendDays(days);
+  const items = buildKstDateKeys(normalizedDays, now).map(createEmptyPoint);
+  return {
+    timezone: "Asia/Seoul",
+    days: normalizedDays,
+    generatedAt: now.toISOString(),
+    items,
+    totals: { sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 }
+  };
+}
+
+function isDiagnosticRecord(
+  record: DeliveryAttemptRecord | DeliveryAttemptStatusRecord | DeliveryAttemptTrendRecord
+): record is DeliveryAttemptRecord {
   return "eventId" in record;
 }
 
@@ -178,6 +243,55 @@ export class DeliveryAttemptRepository {
       }
     }
     return summary;
+  }
+
+  async summarizeDailyBuckets(input: { days?: number; now?: Date; timezone?: "Asia/Seoul" } = {}): Promise<DailyDeliveryQueueTrend> {
+    const days = clampTrendDays(input.days ?? 14);
+    const now = input.now ?? new Date();
+    if (!this.prisma.deliveryAttempt.findMany) return emptyDailyDeliveryQueueTrend(days, now);
+
+    const dateKeys = buildKstDateKeys(days, now);
+    const bucketByDate = new Map(dateKeys.map((date) => [date, createEmptyPoint(date)]));
+    const startAt = kstMidnightUtcFromKey(dateKeys[0] ?? formatKstDateKey(now));
+
+    const records = await this.prisma.deliveryAttempt.findMany({
+      where: {
+        attemptedAt: { gte: startAt, lte: now },
+        status: { in: [...deliveryAttemptStatuses] }
+      },
+      orderBy: { attemptedAt: "asc" },
+      select: { attemptedAt: true, status: true }
+    });
+
+    for (const record of records) {
+      if (!("attemptedAt" in record) || !(record.attemptedAt instanceof Date)) continue;
+      const status = record.status;
+      if (!isDeliveryAttemptKnownStatus(status)) continue;
+      const point = bucketByDate.get(formatKstDateKey(record.attemptedAt));
+      if (!point) continue;
+      point[status] += 1;
+      point.total += 1;
+    }
+
+    const items = dateKeys.map((date) => bucketByDate.get(date) ?? createEmptyPoint(date));
+    const totals = items.reduce(
+      (next, item) => ({
+        sent: next.sent + item.sent,
+        queued: next.queued + item.queued,
+        skipped: next.skipped + item.skipped,
+        failed: next.failed + item.failed,
+        total: next.total + item.total
+      }),
+      { sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 }
+    );
+
+    return {
+      timezone: input.timezone ?? "Asia/Seoul",
+      days,
+      generatedAt: now.toISOString(),
+      items,
+      totals
+    };
   }
 }
 

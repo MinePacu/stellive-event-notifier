@@ -72,11 +72,11 @@ describe("admin hub event routes", () => {
   it("renders the redesigned hub event console layout", () => {
     const html = renderAdminConsoleHtml();
 
-    expect(html).toContain('class="hub-events-workspace"');
-    expect(html).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));");
-    expect(html).toContain("grid-column: 1 / -1;");
-    expect(html).toContain('class="hub-events-sidebar"');
-    expect(html).toContain('class="hub-events-editor"');
+    expect(html).toContain("hub-event-editor-panel");
+    expect(html).toContain("hub-event-list-panel");
+    expect(html).toContain('id="hub-event-form"');
+    expect(html).toContain('class="event-list hub-events-list"');
+    expect(html).toContain('class="hub-event-pagination"');
     expect(html).toContain("Basic information");
     expect(html).toContain("Source and thumbnail");
     expect(html).toContain("Schedule");
@@ -158,10 +158,12 @@ describe("admin hub event routes", () => {
     const html = renderAdminConsoleHtml();
 
     expect(html).toContain('data-hub-event-select="true"');
-    expect(html).toContain('<th aria-label="Select"></th>');
-    expect(html).toContain(".hub-events-list th:first-child");
+    expect(html).toContain('className = "event-row"');
+    expect(html).toContain('classList.add("active")');
+    expect(html).toContain('hubEventListRoot.querySelectorAll(');
     expect(html).toContain('selectedHubEventId');
-    expect(html).toContain('cell.colSpan = 5');
+    expect(html).toContain('id="hub-event-prev-page"');
+    expect(html).toContain('id="hub-event-next-page"');
   });
 
   it("rejects missing admin auth", async () => {
