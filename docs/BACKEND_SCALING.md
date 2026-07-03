@@ -36,6 +36,8 @@ SSE는 Nginx에서 연결 업그레이드와 buffering 비활성화를 지원하
 
 `docker-compose.scale.yml`은 기존 단일 `api`를 `single-api` profile로 제외하고 정적 `api-1`~`api-4`와 Nginx를 추가합니다. 실행 중인 API service는 공통 Docker network alias인 `stellive-api`를 사용하며, Nginx 1.27이 이 alias의 현재 주소 집합을 다시 resolve합니다. 따라서 동일한 설정으로 2개와 4개 구성을 모두 처리합니다. 외부에는 Nginx의 `4000`만 공개됩니다.
 
+API와 singleton worker는 동일한 `stellive-hub-api:local` 이미지를 공유합니다. `api-1`만 Dockerfile을 빌드하고 나머지 API/worker service는 그 이미지를 재사용하므로 서비스 수만큼 동일 이미지를 중복 export하지 않습니다. 실행 명령에는 항상 `api-1`을 포함하세요.
+
 2 worker:
 
 ```bash

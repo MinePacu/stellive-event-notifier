@@ -16,6 +16,7 @@ services:
       - "6379:6379"
 
   api:
+    image: stellive-hub-api:local
     build:
       context: ../..
       dockerfile: backend/stellive-hub-api/Dockerfile
@@ -32,9 +33,7 @@ services:
       - redis
 
   chzzk-live-worker:
-    build:
-      context: ../..
-      dockerfile: backend/stellive-hub-api/Dockerfile
+    image: stellive-hub-api:local
     env_file:
       - .env.example
       - .env
@@ -53,9 +52,7 @@ services:
         condition: service_started
 
   hub-event-status-worker:
-    build:
-      context: ../..
-      dockerfile: backend/stellive-hub-api/Dockerfile
+    image: stellive-hub-api:local
     env_file:
       - .env.example
       - .env
@@ -74,9 +71,7 @@ services:
         condition: service_started
 
   music-channel-discovery-worker:
-    build:
-      context: ../..
-      dockerfile: backend/stellive-hub-api/Dockerfile
+    image: stellive-hub-api:local
     env_file:
       - .env.example
       - .env

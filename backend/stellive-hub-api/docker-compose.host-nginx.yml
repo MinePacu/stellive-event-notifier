@@ -1,7 +1,5 @@
 x-api-worker: &api-worker
-  build:
-    context: ../..
-    dockerfile: backend/stellive-hub-api/Dockerfile
+  image: stellive-hub-api:local
   env_file:
     - .env.example
     - .env
@@ -21,6 +19,9 @@ services:
 
   api-1:
     <<: *api-worker
+    build:
+      context: ../..
+      dockerfile: backend/stellive-hub-api/Dockerfile
     ports:
       - "127.0.0.1:4001:4000"
 

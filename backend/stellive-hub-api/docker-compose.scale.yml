@@ -1,7 +1,5 @@
 x-api-worker: &api-worker
-  build:
-    context: ../..
-    dockerfile: backend/stellive-hub-api/Dockerfile
+  image: stellive-hub-api:local
   env_file:
     - .env.example
     - .env
@@ -23,6 +21,9 @@ services:
 
   api-1:
     <<: *api-worker
+    build:
+      context: ../..
+      dockerfile: backend/stellive-hub-api/Dockerfile
     networks:
       default:
         aliases: [stellive-api]
