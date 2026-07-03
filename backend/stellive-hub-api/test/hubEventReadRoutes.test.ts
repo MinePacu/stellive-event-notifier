@@ -547,7 +547,7 @@ describe("HubEvent Prisma-backed public reads", () => {
     const detailResponse = await app.inject({ method: "GET", url: "/v1/hub-events/published-prisma-event" });
     const calendarResponse = await app.inject({
       method: "GET",
-      url: "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul",
+      url: "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul&includeSpecialDays=false",
     });
 
     await app.close();
