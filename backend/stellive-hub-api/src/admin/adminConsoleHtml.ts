@@ -1670,6 +1670,7 @@ export function renderAdminConsoleHtml(): string {
           <div>
             <h2>External API calls</h2>
             <p class="subtle">Daily outbound API calls and sanitized response results. Retention: 31 days.</p>
+            <p class="subtle">Tracked quotaUnits are calculated from recorded YouTube list API requests and may not match provider billing exactly.</p>
           </div>
         </div>
         <div class="section-body external-api-layout">
@@ -2684,8 +2685,16 @@ export function renderAdminConsoleHtml(): string {
       externalApiSummaryRoot.append(
         createQueueSummaryCard("Today total", numericValue(today.total), "Outbound API calls today."),
         createQueueSummaryCard("Success rate", successRate, "ok and not_modified over total."),
-        createQueueSummaryCard("Rate limited", numericValue(totals.rateLimited), "429 or rate-limited results."),
-        createQueueSummaryCard("Quota units", numericValue(totals.quotaUnits), "Tracked API quota cost.")
+        createQueueSummaryCard(
+          "Tracked quota today",
+          numericValue(today.quotaUnits),
+          "Tracked quotaUnits from YouTube list API requests today."
+        ),
+        createQueueSummaryCard(
+          "Tracked quota · 14 days",
+          numericValue(totals.quotaUnits),
+          "Tracked quotaUnits across the visible 14-day trend."
+        )
       );
     }
 

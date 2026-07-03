@@ -117,6 +117,27 @@ model PlatformApiState {
   @@index([source, status])
 }
 
+model ChannelImageCache {
+  id              String   @id @default(cuid(2))
+  source          String   @default("youtube")
+  channelId       String
+  imageUrl        String?
+  title           String?
+  status          String   @default("missing")
+  refreshedAt     DateTime?
+  lastAttemptedAt DateTime?
+  lastFailedAt    DateTime?
+  nextRetryAt     DateTime?
+  failureCount    Int      @default(0)
+  failureReason   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([source, channelId])
+  @@index([status, nextRetryAt])
+  @@index([refreshedAt])
+}
+
 model ExternalApiCallLog {
   id           String   @id @default(cuid(2))
   source       String

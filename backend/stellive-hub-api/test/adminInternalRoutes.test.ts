@@ -158,6 +158,11 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain('id="external-api-results"');
   expect(html).toContain('id="external-api-prune"');
   expect(html).toContain("External API calls");
+  expect(html).toContain("Tracked quota today");
+  expect(html).toContain("Tracked quota · 14 days");
+  expect(html).toContain("YouTube list API requests");
+  expect(html).toContain("may not match provider billing exactly");
+  expect(html).not.toContain('createQueueSummaryCard("Quota units"');
   expect(html).toContain("Recent API results");
   expect(html).toContain("function formatDate(value)");
   expect(html).toContain("function showExternalApiTooltip");

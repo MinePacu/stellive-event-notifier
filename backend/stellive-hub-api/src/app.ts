@@ -9,6 +9,7 @@ import YoutubeWebSubSubscriptionService from "./adapters/youtube/youtubeWebSubSu
 import YoutubeDataApiClient from "./adapters/youtube/youtubeDataApiClient.js";
 import { LiveStatusRepository } from "./repositories/liveStatusRepository.js";
 import { PlatformApiStateRepository } from "./repositories/platformApiStateRepository.js";
+import { ChannelImageCacheRepository } from "./repositories/channelImageCacheRepository.js";
 import sensible from "@fastify/sensible";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
@@ -256,7 +257,7 @@ function createDefaultMemberProfileImageHydrator(
   return {
     memberProfileImages: new MemberProfileImageHydrator({
       youtube: new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl, apiCallLogger: new ExternalApiCallLogRepository() }),
-      stateRepository: new PlatformApiStateRepository(),
+      channelImageCache: new ChannelImageCacheRepository(),
     }),
   };
 }
