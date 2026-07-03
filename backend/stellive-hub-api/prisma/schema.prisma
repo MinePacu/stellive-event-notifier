@@ -84,6 +84,9 @@ model DeliveryAttempt {
   deliveryLatencyMs Int?
   retryCount        Int      @default(0)
   expiresAt         DateTime?
+
+  @@index([attemptedAt])
+  @@index([status, attemptedAt])
 }
 
 model LiveStatus {
@@ -112,6 +115,51 @@ model PlatformApiState {
 
   @@unique([source, key])
   @@index([source, status])
+}
+
+model ChannelImageCache {
+  id              String   @id @default(cuid(2))
+  source          String   @default("youtube")
+  channelId       String
+  imageUrl        String?
+  title           String?
+  status          String   @default("missing")
+  refreshedAt     DateTime?
+  lastAttemptedAt DateTime?
+  lastFailedAt    DateTime?
+  nextRetryAt     DateTime?
+  failureCount    Int      @default(0)
+  failureReason   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([source, channelId])
+  @@index([status, nextRetryAt])
+  @@index([refreshedAt])
+}
+
+model ExternalApiCallLog {
+  id           String   @id @default(cuid(2))
+  source       String
+  operation    String
+  method       String
+  host         String
+  path         String
+  statusCode   Int?
+  resultStatus String
+  durationMs   Int?
+  quotaUnits   Int      @default(0)
+  rateLimited  Boolean  @default(false)
+  errorCode    String?
+  errorReason  String?
+  requestedAt  DateTime
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([requestedAt])
+  @@index([source, requestedAt])
+  @@index([operation, requestedAt])
+  @@index([resultStatus, requestedAt])
 }
 
 model NotificationJob {

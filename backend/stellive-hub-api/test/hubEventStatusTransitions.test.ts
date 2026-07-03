@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CatalogService } from "../src/catalog/catalog.js";
 import { HubEventRepository } from "../src/hub-events/hubEventRepository.js";
 import { HubEventService } from "../src/hub-events/hubEventService.js";
@@ -120,19 +120,25 @@ describe("HubEvent status transitions", () => {
   });
 
   it("applies time-based status transitions to Prisma-backed list and detail reads", async () => {
-    const record = hubEventRecord();
-    const repository = new HubEventRepository({
-      hubEvent: {
-        findMany: async (_args: unknown) => [record],
-        findFirst: async (_args: unknown) => record
-      }
-    });
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    try {
+      const record = hubEventRecord();
+      const repository = new HubEventRepository({
+        hubEvent: {
+          findMany: async (_args: unknown) => [record],
+          findFirst: async (_args: unknown) => record
+        }
+      });
 
-    const list = await repository.list({ status: "open" }, now);
-    const detail = await repository.getById("event-1");
+      const list = await repository.list({ status: "open" }, now);
+      const detail = await repository.getById("event-1");
 
-    expect(list.items).toHaveLength(1);
-    expect(list.items[0]?.status).toBe("open");
-    expect(detail?.status).toBe("open");
+      expect(list.items).toHaveLength(1);
+      expect(list.items[0]?.status).toBe("open");
+      expect(detail?.status).toBe("open");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

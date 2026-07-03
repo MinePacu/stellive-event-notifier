@@ -1,24 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Prisma } from "@prisma/client";
 import { MemberProfileImageHydrator } from "../src/catalog/memberProfileImageHydrator.js";
-import type { PlatformApiStateRecord } from "../src/repositories/platformApiStateRepository.js";
+import type {
+  ChannelImageCacheRecord,
+  ChannelImageCacheRepositoryPort,
+} from "../src/repositories/channelImageCacheRepository.js";
 import type { Member } from "../src/types.js";
 import type { YoutubeFetchChannelProfilesResult } from "../src/adapters/youtube/youtubeDataApiClient.js";
 
 describe("MemberProfileImageHydrator", () => {
   it("uses fresh cache without calling YouTube", async () => {
-    const state = new FakeStateRepository({
+    const cache = new FakeChannelImageCacheRepository({
       UC1: {
-        memberId: "ayatsuno-yuni",
-        profileImageUrl: "https://yt.example/yuni.jpg",
-        fetchedAt: "2026-06-29T00:00:00.000Z",
-        expiresAt: "2026-07-01T00:00:00.000Z",
+        imageUrl: "https://yt.example/yuni.jpg",
+        title: "Yuni",
+        status: "fresh",
+        refreshedAt: "2026-06-29T00:00:00.000Z",
       },
     });
     const youtube = { fetchChannelProfilesByIds: vi.fn() };
     const hydrator = new MemberProfileImageHydrator({
       youtube,
-      stateRepository: state,
+      channelImageCache: cache,
       now: () => new Date("2026-06-30T00:00:00.000Z"),
     });
 
@@ -31,7 +33,7 @@ describe("MemberProfileImageHydrator", () => {
   });
 
   it("refreshes missing cache entries once and hydrates members", async () => {
-    const state = new FakeStateRepository();
+    const cache = new FakeChannelImageCacheRepository();
     const youtube = {
       fetchChannelProfilesByIds: vi.fn(async (channelIds: string[]) => ({
         status: "ok" as const,
@@ -46,7 +48,7 @@ describe("MemberProfileImageHydrator", () => {
     };
     const hydrator = new MemberProfileImageHydrator({
       youtube,
-      stateRepository: state,
+      channelImageCache: cache,
       now: () => new Date("2026-06-30T00:00:00.000Z"),
     });
 
@@ -54,16 +56,15 @@ describe("MemberProfileImageHydrator", () => {
 
     expect(youtube.fetchChannelProfilesByIds).toHaveBeenCalledWith(["UC1"]);
     expect(members[0].profileImageUrl).toBe("https://yt.example/yuni.jpg");
-    expect(state.records.get("UC1")?.status).toBe("fresh");
+    expect(cache.records.get("UC1")?.status).toBe("fresh");
   });
 
   it("returns stale profile images when refresh fails", async () => {
-    const state = new FakeStateRepository({
+    const cache = new FakeChannelImageCacheRepository({
       UC1: {
-        memberId: "ayatsuno-yuni",
-        profileImageUrl: "https://yt.example/stale-yuni.jpg",
-        fetchedAt: "2026-06-28T00:00:00.000Z",
-        expiresAt: "2026-06-29T00:00:00.000Z",
+        imageUrl: "https://yt.example/stale-yuni.jpg",
+        status: "fresh",
+        refreshedAt: "2026-06-20T00:00:00.000Z",
       },
     });
     const youtube = {
@@ -75,40 +76,128 @@ describe("MemberProfileImageHydrator", () => {
     };
     const hydrator = new MemberProfileImageHydrator({
       youtube,
-      stateRepository: state,
+      channelImageCache: cache,
       now: () => new Date("2026-06-30T00:00:00.000Z"),
     });
 
     const members = await hydrator.hydrateMembers([member("ayatsuno-yuni", "UC1")]);
 
     expect(members[0].profileImageUrl).toBe("https://yt.example/stale-yuni.jpg");
-    expect(state.records.get("UC1")?.status).toBe("stale");
+    expect(cache.records.get("UC1")?.status).toBe("stale");
+    expect(cache.records.get("UC1")?.imageUrl).toBe("https://yt.example/stale-yuni.jpg");
+  });
+
+  it("does not retry a failed cache entry before nextRetryAt", async () => {
+    const cache = new FakeChannelImageCacheRepository({
+      UC1: {
+        status: "failed",
+        nextRetryAt: "2026-06-30T02:00:00.000Z",
+        failureCount: 1,
+      },
+    });
+    const youtube = { fetchChannelProfilesByIds: vi.fn() };
+    const hydrator = new MemberProfileImageHydrator({
+      youtube,
+      channelImageCache: cache,
+      now: () => new Date("2026-06-30T01:00:00.000Z"),
+    });
+
+    const members = await hydrator.hydrateMembers([member("ayatsuno-yuni", "UC1")]);
+
+    expect(youtube.fetchChannelProfilesByIds).not.toHaveBeenCalled();
+    expect(members[0].profileImageUrl).toBeUndefined();
+  });
+
+  it("rejects non-HTTPS profile URLs and records a retry", async () => {
+    const cache = new FakeChannelImageCacheRepository();
+    const youtube = {
+      fetchChannelProfilesByIds: vi.fn(async () => ({
+        status: "ok" as const,
+        profiles: [{
+          channelId: "UC1",
+          title: "Yuni",
+          profileImageUrl: "http://yt.example/yuni.jpg",
+          fetchedAt: "2026-06-30T00:00:00.000Z",
+        }],
+        quotaUnits: 1,
+      })),
+    };
+    const hydrator = new MemberProfileImageHydrator({
+      youtube,
+      channelImageCache: cache,
+      now: () => new Date("2026-06-30T00:00:00.000Z"),
+    });
+
+    const members = await hydrator.hydrateMembers([member("ayatsuno-yuni", "UC1")]);
+
+    expect(members[0].profileImageUrl).toBeUndefined();
+    expect(cache.records.get("UC1")).toMatchObject({ status: "failed", failureCount: 1 });
   });
 });
 
-class FakeStateRepository {
-  readonly records = new Map<string, { value: Prisma.JsonValue; status: string }>();
+class FakeChannelImageCacheRepository implements ChannelImageCacheRepositoryPort {
+  readonly records = new Map<string, ChannelImageCacheRecord>();
 
-  constructor(initial: Record<string, Record<string, unknown>> = {}) {
+  constructor(initial: Record<string, Partial<ChannelImageCacheRecord>> = {}) {
     Object.entries(initial).forEach(([key, value]) => {
-      this.records.set(key, { value: value as Prisma.JsonValue, status: "fresh" });
+      this.records.set(key, {
+        source: "youtube",
+        channelId: key,
+        status: "missing",
+        failureCount: 0,
+        ...value,
+      });
     });
   }
 
-  async getState(source: string, key: string): Promise<PlatformApiStateRecord | null> {
-    const record = this.records.get(key);
-    if (!record) return null;
-    return {
-      source,
-      key,
-      value: record.value,
-      status: record.status,
-      updatedAt: new Date("2026-06-30T00:00:00.000Z"),
-    };
+  async getByChannelId(_source: "youtube", channelId: string): Promise<ChannelImageCacheRecord | null> {
+    return this.records.get(channelId) ?? null;
   }
 
-  async upsertState(_source: string, key: string, value: Prisma.InputJsonValue, status: string): Promise<void> {
-    this.records.set(key, { value: value as Prisma.JsonValue, status });
+  async listByChannelIds(_source: "youtube", channelIds: string[]): Promise<Map<string, ChannelImageCacheRecord>> {
+    return new Map(channelIds.flatMap((channelId) => {
+      const record = this.records.get(channelId);
+      return record ? [[channelId, record]] : [];
+    }));
+  }
+
+  async upsertSuccess(input: {
+    source: "youtube";
+    channelId: string;
+    imageUrl: string;
+    title?: string;
+    refreshedAt: Date;
+  }): Promise<void> {
+    this.records.set(input.channelId, {
+      ...input,
+      refreshedAt: input.refreshedAt.toISOString(),
+      status: "fresh",
+      failureCount: 0,
+    });
+  }
+
+  async markMissingOrFailed(input: {
+    source: "youtube";
+    channelId: string;
+    reason: string;
+    now: Date;
+    keepExistingUrl?: boolean;
+  }): Promise<void> {
+    const previous = this.records.get(input.channelId);
+    const failureCount = (previous?.failureCount ?? 0) + 1;
+    this.records.set(input.channelId, {
+      source: "youtube",
+      channelId: input.channelId,
+      imageUrl: input.keepExistingUrl ? previous?.imageUrl : undefined,
+      title: previous?.title,
+      refreshedAt: previous?.refreshedAt,
+      status: input.keepExistingUrl && previous?.imageUrl ? "stale" : "failed",
+      lastAttemptedAt: input.now.toISOString(),
+      lastFailedAt: input.now.toISOString(),
+      nextRetryAt: new Date(input.now.getTime() + 60 * 60 * 1_000).toISOString(),
+      failureCount,
+      failureReason: input.reason,
+    });
   }
 }
 

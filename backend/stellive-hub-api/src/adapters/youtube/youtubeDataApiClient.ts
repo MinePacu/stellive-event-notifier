@@ -1,10 +1,17 @@
 import type { YoutubeUploadCandidate } from "./youtubeAtomParser.js";
+import {
+  recordExternalApiCall,
+  resultStatusFromError,
+  resultStatusFromHttpStatus,
+  type ExternalApiCallLogger
+} from "../../observability/externalApiCallLogger.js";
 
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export interface YoutubeDataApiClientOptions {
   apiKey: string;
   fetch?: FetchLike;
+  apiCallLogger?: ExternalApiCallLogger;
 }
 
 export type YoutubeUploadsPlaylistResult =
@@ -224,7 +231,7 @@ export class YoutubeDataApiClient {
     url.searchParams.set("id", channelId);
     url.searchParams.set("key", this.options.apiKey);
 
-    const response = await this.fetchImpl(url.toString());
+    const response = await this.fetchAndRecord(url, "youtube.channels.list", 1);
     const body = await response.json() as YoutubeListWrapper<YoutubeChannelItem>;
     const item = body.items?.find((candidate) => candidate.id === channelId) ?? body.items?.[0];
     const uploadsPlaylistId = item?.contentDetails?.relatedPlaylists?.uploads;
@@ -246,7 +253,7 @@ export class YoutubeDataApiClient {
       url.searchParams.set("key", this.options.apiKey);
 
       quotaUnits += 1;
-      const response = await this.fetchImpl(url.toString());
+      const response = await this.fetchAndRecord(url, "youtube.channels.list", 1);
       const body = await response.json() as YoutubeListWrapper<YoutubeChannelItem>;
       if (!response.ok) {
         return {
@@ -280,7 +287,7 @@ export class YoutubeDataApiClient {
 
       quotaUnits += 1;
       const headers = input.etag && page === 0 ? { "if-none-match": input.etag } : undefined;
-      const response = await this.fetchImpl(url.toString(), headers ? { headers } : undefined);
+      const response = await this.fetchAndRecord(url, "youtube.playlistItems.list", 1, headers ? { headers } : undefined);
       if (response.status === 304) return { status: "not_modified", candidates: [], pagesFetched: 0, quotaUnits };
 
       const body = await response.json() as YoutubeListWrapper<YoutubePlaylistItem>;
@@ -314,7 +321,7 @@ export class YoutubeDataApiClient {
       if (pageToken) url.searchParams.set("pageToken", pageToken);
 
       quotaUnits += 1;
-      const response = await this.fetchImpl(url.toString());
+      const response = await this.fetchAndRecord(url, "youtube.playlistItems.list", 1);
       const body = await response.json() as YoutubeListWrapper<YoutubePlaylistItem>;
       if (!response.ok) {
         return {
@@ -347,12 +354,48 @@ export class YoutubeDataApiClient {
       url.searchParams.set("id", ids.join(","));
       url.searchParams.set("key", this.options.apiKey);
 
-      const response = await this.fetchImpl(url.toString());
+      const response = await this.fetchAndRecord(url, "youtube.videos.list", 1);
       const body = await response.json() as YoutubeListWrapper<YoutubeVideoItem>;
       if (!response.ok) continue;
       details.push(...(body.items ?? []).flatMap((item) => this.toVideoDetail(item)));
     }
     return details;
+  }
+
+  private async fetchAndRecord(url: URL, operation: string, quotaUnits: number, init?: RequestInit): Promise<Response> {
+    const requestedAt = new Date();
+    try {
+      const response = await this.fetchImpl(url.toString(), init);
+      const resultStatus = resultStatusFromHttpStatus(response.status, { quotaStatusCode: 403 });
+      await recordExternalApiCall(this.options.apiCallLogger, {
+        source: "youtube",
+        operation,
+        method: init?.method ?? "GET",
+        url: url.toString(),
+        statusCode: response.status,
+        resultStatus,
+        quotaUnits,
+        rateLimited: response.status === 429,
+        errorCode: response.ok || response.status === 304 ? undefined : `http_${response.status}`,
+        errorReason: response.ok || response.status === 304 ? undefined : resultStatus,
+        requestedAt
+      });
+      return response;
+    } catch (error) {
+      const resultStatus = resultStatusFromError(error);
+      await recordExternalApiCall(this.options.apiCallLogger, {
+        source: "youtube",
+        operation,
+        method: init?.method ?? "GET",
+        url: url.toString(),
+        resultStatus,
+        quotaUnits: 0,
+        errorCode: resultStatus,
+        errorReason: resultStatus,
+        requestedAt
+      });
+      throw error;
+    }
   }
 
   private toChannelProfile(item: YoutubeChannelItem): YoutubeChannelProfile[] {

@@ -8,6 +8,7 @@ import { dirname, resolve } from "node:path";
 import { HubEventRepository } from "../src/hub-events/hubEventRepository.js";
 import { NotificationJobRepository } from "../src/jobs/notificationJobRepository.js";
 import { PlatformApiStateRepository } from "../src/repositories/platformApiStateRepository.js";
+import { ExternalApiCallLogRepository } from "../src/repositories/externalApiCallLogRepository.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const prismaSchema = readFileSync(resolve(__dirname, "../prisma/schema.prisma"), "utf8");
@@ -25,6 +26,191 @@ describe("Prisma hub event admin schema", () => {
     expect(prismaSchema).toContain("model HubEventAuditLog");
     expect(prismaSchema).toContain("@@index([hubEventId, createdAt])");
     expect(prismaSchema).toContain("@@index([action, createdAt])");
+  });
+});
+
+describe("ExternalApiCallLogRepository", () => {
+  it("records only sanitized URL metadata for outbound API calls", async () => {
+    const calls: unknown[] = [];
+    const repository = new ExternalApiCallLogRepository({
+      externalApiCallLog: {
+        create: async (args: unknown) => {
+          calls.push(args);
+          return args;
+        }
+      }
+    });
+
+    await repository.record({
+      source: "youtube",
+      operation: "youtube.videos.list",
+      method: "get",
+      url: "https://www.googleapis.com/youtube/v3/videos?key=test-key&id=video-1",
+      statusCode: 200,
+      resultStatus: "ok",
+      quotaUnits: 1,
+      requestedAt: new Date("2026-07-02T00:00:00.000Z"),
+      completedAt: new Date("2026-07-02T00:00:00.120Z")
+    });
+
+    expect(calls).toEqual([
+      {
+        data: expect.objectContaining({
+          source: "youtube",
+          operation: "youtube.videos.list",
+          method: "GET",
+          host: "www.googleapis.com",
+          path: "/youtube/v3/videos",
+          resultStatus: "ok",
+          quotaUnits: 1
+        })
+      }
+    ]);
+    expect(JSON.stringify(calls)).not.toContain("test-key");
+    expect(JSON.stringify(calls)).not.toContain("video-1");
+  });
+
+  it("summarizes daily KST buckets by result and source", async () => {
+    const repository = new ExternalApiCallLogRepository({
+      externalApiCallLog: {
+        findMany: async () => [
+          {
+            id: "api-1",
+            source: "youtube",
+            operation: "youtube.videos.list",
+            method: "GET",
+            host: "www.googleapis.com",
+            path: "/youtube/v3/videos",
+            statusCode: 200,
+            resultStatus: "ok",
+            durationMs: 10,
+            quotaUnits: 1,
+            rateLimited: false,
+            errorCode: null,
+            errorReason: null,
+            requestedAt: new Date("2026-07-01T15:30:00.000Z"),
+            completedAt: new Date("2026-07-01T15:30:00.010Z")
+          },
+          {
+            id: "api-2",
+            source: "chzzk",
+            operation: "chzzk.lives.list",
+            method: "GET",
+            host: "openapi.chzzk.naver.com",
+            path: "/open/v1/lives",
+            statusCode: 429,
+            resultStatus: "rate_limited",
+            durationMs: 20,
+            quotaUnits: 0,
+            rateLimited: true,
+            errorCode: "429",
+            errorReason: "Too Many Requests",
+            requestedAt: new Date("2026-07-02T02:00:00.000Z"),
+            completedAt: new Date("2026-07-02T02:00:00.020Z")
+          }
+        ]
+      }
+    });
+
+    const trend = await repository.summarizeDaily({ days: 2, now: new Date("2026-07-02T12:00:00.000Z") });
+
+    expect(trend.items).toEqual([
+      expect.objectContaining({ date: "2026-07-01", total: 0 }),
+      expect.objectContaining({ date: "2026-07-02", total: 2, ok: 1, failed: 1, rateLimited: 1, bySource: { youtube: 1, chzzk: 1 } })
+    ]);
+    expect(trend.totals).toMatchObject({ total: 2, ok: 1, failed: 1, rateLimited: 1, quotaUnits: 1, bySource: { youtube: 1, chzzk: 1 } });
+  });
+
+  it("limits recent external API calls to the retention window and filters", async () => {
+    const calls: unknown[] = [];
+    const repository = new ExternalApiCallLogRepository({
+      externalApiCallLog: {
+        findMany: async (args: unknown) => {
+          calls.push(args);
+          return [
+            {
+              id: "api-1",
+              source: "youtube",
+              operation: "youtube.videos.list",
+              method: "GET",
+              host: "www.googleapis.com",
+              path: "/youtube/v3/videos",
+              statusCode: 403,
+              resultStatus: "quota_exceeded",
+              durationMs: 20,
+              quotaUnits: 1,
+              rateLimited: false,
+              errorCode: "403",
+              errorReason: "quota",
+              requestedAt: new Date("2026-07-02T00:00:00.000Z"),
+              completedAt: null
+            }
+          ];
+        }
+      }
+    });
+
+    const result = await repository.listRecent({
+      limit: 5,
+      source: "youtube",
+      resultStatus: "quota_exceeded",
+      now: new Date("2026-07-02T01:00:00.000Z")
+    });
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        where: expect.objectContaining({
+          source: "youtube",
+          resultStatus: "quota_exceeded",
+          requestedAt: {
+            gte: new Date("2026-06-01T01:00:00.000Z"),
+            lte: new Date("2026-07-02T01:00:00.000Z")
+          }
+        }),
+        orderBy: { requestedAt: "desc" },
+        take: 5
+      })
+    ]);
+    expect(result.items[0]).toMatchObject({
+      id: "api-1",
+      host: "www.googleapis.com",
+      path: "/youtube/v3/videos",
+      resultStatus: "quota_exceeded",
+      requestedAt: "2026-07-02T00:00:00.000Z"
+    });
+  });
+
+  it("prunes external API call logs older than the retention period", async () => {
+    const calls: unknown[] = [];
+    const repository = new ExternalApiCallLogRepository({
+      externalApiCallLog: {
+        deleteMany: async (args: unknown) => {
+          calls.push(args);
+          return { count: 2 };
+        }
+      }
+    });
+
+    await expect(repository.pruneOlderThan({ days: 31, now: new Date("2026-07-02T01:00:00.000Z") })).resolves.toEqual({ deleted: 2 });
+    expect(calls).toEqual([
+      {
+        where: { requestedAt: { lt: new Date("2026-06-01T01:00:00.000Z") } }
+      }
+    ]);
+  });
+});
+
+describe("Prisma external API call log schema", () => {
+  it("defines retention-friendly external API observability indexes", () => {
+    expect(prismaSchema).toContain("model ExternalApiCallLog");
+    expect(prismaSchema).toContain("source       String");
+    expect(prismaSchema).toContain("operation    String");
+    expect(prismaSchema).toContain("resultStatus String");
+    expect(prismaSchema).toContain("quotaUnits   Int      @default(0)");
+    expect(prismaSchema).toContain("@@index([requestedAt])");
+    expect(prismaSchema).toContain("@@index([source, requestedAt])");
+    expect(prismaSchema).toContain("@@index([operation, requestedAt])");
+    expect(prismaSchema).toContain("@@index([resultStatus, requestedAt])");
   });
 });
 
@@ -287,6 +473,68 @@ describe("DeliveryAttemptRepository worker writes", () => {
         }
       }
     ]);
+  });
+
+  it("summarizes daily delivery attempts in KST buckets with empty days", async () => {
+    const calls: unknown[] = [];
+    const now = new Date("2026-07-02T03:00:00.000Z");
+    const repository = new DeliveryAttemptRepository({
+      deliveryAttempt: {
+        async findMany(args: unknown) {
+          calls.push(args);
+          return [
+            { attemptedAt: new Date("2026-06-29T15:30:00.000Z"), status: "sent" },
+            { attemptedAt: new Date("2026-06-30T15:30:00.000Z"), status: "queued" },
+            { attemptedAt: new Date("2026-07-02T02:59:00.000Z"), status: "failed" },
+            { attemptedAt: new Date("2026-07-02T02:00:00.000Z"), status: "unknown" }
+          ];
+        }
+      }
+    });
+
+    const summary = await repository.summarizeDailyBuckets({ days: 4, now, timezone: "Asia/Seoul" });
+
+    expect(calls).toEqual([
+      {
+        where: {
+          attemptedAt: { gte: new Date("2026-06-28T15:00:00.000Z"), lte: now },
+          status: { in: ["sent", "queued", "skipped", "failed"] }
+        },
+        orderBy: { attemptedAt: "asc" },
+        select: { attemptedAt: true, status: true }
+      }
+    ]);
+    expect(summary).toEqual({
+      timezone: "Asia/Seoul",
+      days: 4,
+      generatedAt: now.toISOString(),
+      items: [
+        { date: "2026-06-29", sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 },
+        { date: "2026-06-30", sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 },
+        { date: "2026-07-01", sent: 0, queued: 1, skipped: 0, failed: 0, total: 1 },
+        { date: "2026-07-02", sent: 0, queued: 0, skipped: 0, failed: 1, total: 1 }
+      ],
+      totals: { sent: 1, queued: 1, skipped: 0, failed: 1, total: 3 }
+    });
+  });
+
+  it("returns zero-filled daily delivery trend when no records exist", async () => {
+    const now = new Date("2026-07-02T03:00:00.000Z");
+    const repository = new DeliveryAttemptRepository({
+      deliveryAttempt: {
+        async findMany() {
+          return [];
+        }
+      }
+    });
+
+    const summary = await repository.summarizeDailyBuckets({ days: 2, now, timezone: "Asia/Seoul" });
+
+    expect(summary.items).toEqual([
+      { date: "2026-07-01", sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 },
+      { date: "2026-07-02", sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 }
+    ]);
+    expect(summary.totals).toEqual({ sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 });
   });
 });
 
@@ -559,6 +807,35 @@ describe("HubEventRepository", () => {
         take: 5
       })
     ]);
+  });
+
+  it("returns admin list pagination cursors while preserving cursor skip", async () => {
+    const calls: unknown[] = [];
+    const repository = new HubEventRepository({
+      hubEvent: {
+        findMany: async (args: unknown) => {
+          calls.push(args);
+          return [
+            { ...record, id: "event-2" },
+            { ...record, id: "event-3" },
+            { ...record, id: "event-4" }
+          ];
+        }
+      }
+    });
+
+    const result = await repository.listAdmin({ limit: 2, cursor: "event-1" });
+
+    expect(calls).toEqual([
+      expect.objectContaining({
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        take: 3,
+        cursor: { id: "event-1" },
+        skip: 1
+      })
+    ]);
+    expect(result.items.map((item) => item.id)).toEqual(["event-2", "event-3"]);
+    expect(result.nextCursor).toBe("event-4");
   });
 
   it("gets only published non-deleted hub event details", async () => {

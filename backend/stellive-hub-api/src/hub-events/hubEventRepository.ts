@@ -382,11 +382,16 @@ export class HubEventRepository {
     const records = await findMany({
       where,
       orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-      take: limit,
+      take: limit + 1,
       cursor: filters.cursor ? { id: filters.cursor } : undefined,
       skip: filters.cursor ? 1 : undefined
     });
-    return { items: records.map(toAdminHubEvent) };
+    const pageRecords = records.slice(0, limit);
+    const nextRecord = records.length > limit ? records[limit] : undefined;
+    return {
+      items: pageRecords.map(toAdminHubEvent),
+      nextCursor: nextRecord?.id
+    };
   }
 
   async getAdminById(id: string): Promise<AdminHubEvent | undefined> {

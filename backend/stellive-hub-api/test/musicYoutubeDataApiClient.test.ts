@@ -91,6 +91,29 @@ describe("YoutubeDataApiClient music playlist methods", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("records sanitized playlist API calls without storing the API key", async () => {
+    const fetchImpl = vi.fn(async (_input: string | URL | Request, _init?: RequestInit): Promise<Response> =>
+      jsonResponse({
+        kind: "youtube#playlistItemListResponse",
+        items: [{ contentDetails: { videoId: "video-1" }, snippet: { title: "cover one" } }],
+      }));
+    const apiCallLogger = { record: vi.fn(async () => undefined) };
+    const client = new YoutubeDataApiClient({ apiKey: "test-key", fetch: fetchImpl, apiCallLogger });
+
+    await expect(client.fetchPlaylistItems("PLmusic", { maxPages: 1 })).resolves.toMatchObject({ status: "ok" });
+
+    expect(apiCallLogger.record).toHaveBeenCalledWith(expect.objectContaining({
+      source: "youtube",
+      operation: "youtube.playlistItems.list",
+      method: "GET",
+      statusCode: 200,
+      resultStatus: "ok",
+      quotaUnits: 1,
+      rateLimited: false
+    }));
+    expect(JSON.stringify(apiCallLogger.record.mock.calls)).not.toContain("test-key");
+  });
+
   it("fetches video details with status and content metadata in 50-id chunks", async () => {
     const fetchImpl = vi
       .fn(async (_input: string | URL | Request, _init?: RequestInit): Promise<Response> => jsonResponse({}))
@@ -147,7 +170,8 @@ describe("YoutubeDataApiClient music playlist methods", () => {
 
   it("returns quota_exceeded without retrying when playlist request is forbidden", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ error: { code: 403 } }, { status: 403 }));
-    const client = new YoutubeDataApiClient({ apiKey: "test-key", fetch: fetchImpl });
+    const apiCallLogger = { record: vi.fn(async () => undefined) };
+    const client = new YoutubeDataApiClient({ apiKey: "test-key", fetch: fetchImpl, apiCallLogger });
 
     await expect(client.fetchPlaylistItems("PLmusic")).resolves.toEqual({
       status: "quota_exceeded",
@@ -156,5 +180,14 @@ describe("YoutubeDataApiClient music playlist methods", () => {
       quotaUnits: 1,
     });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(apiCallLogger.record).toHaveBeenCalledWith(expect.objectContaining({
+      source: "youtube",
+      operation: "youtube.playlistItems.list",
+      statusCode: 403,
+      resultStatus: "quota_exceeded",
+      quotaUnits: 1,
+      rateLimited: false,
+      errorCode: "http_403"
+    }));
   });
 });

@@ -22,12 +22,13 @@ function fakeStateRepository() {
   return repository;
 }
 
-function client(fetchMock: ReturnType<typeof vi.fn>) {
+function client(fetchMock: ReturnType<typeof vi.fn>, apiCallLogger?: { record(input: unknown): Promise<void> }) {
   return new ChzzkApiClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     stateRepository: fakeStateRepository(),
     fetch: fetchMock as unknown as typeof fetch,
+    apiCallLogger,
     liveListPageSize: 20
   });
 }
@@ -223,5 +224,68 @@ describe("ChzzkApiClient client-auth live list", () => {
       "https://openapi.chzzk.naver.com/open/v1/lives?size=20&next=cursor-2",
       expect.any(Object)
     );
+  });
+
+  it("resolves multiple catalog channels with one live-list pagination pass", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 200,
+          content: {
+            page: { next: "cursor-2" },
+            data: [{ channelId: "channel-a", status: "OPEN", liveTitle: "A", channelImageUrl: "https://img.example/a.jpg" }]
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 200,
+          content: {
+            data: [{ channelId: "channel-b", status: "OPEN", liveTitle: "B", channelImageUrl: "https://img.example/b.jpg" }]
+          }
+        })
+      );
+
+    const statuses = await client(fetchMock).getLiveStatuses(["channel-a", "channel-b"]);
+
+    expect(statuses.get("channel-a")).toMatchObject({ isLive: true, title: "A" });
+    expect(statuses.get("channel-b")).toMatchObject({ isLive: true, title: "B" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("records sanitized CHZZK live list API calls without credential values", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 200,
+          content: { data: [] }
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 200,
+          content: { data: [{ channelId: "chzzk-channel-id" }] }
+        })
+      );
+    const apiCallLogger = { record: vi.fn(async () => undefined) };
+
+    await expect(client(fetchMock, apiCallLogger).getLiveStatus("chzzk-channel-id")).resolves.toMatchObject({
+      channelId: "chzzk-channel-id",
+      isLive: false
+    });
+
+    expect(apiCallLogger.record).toHaveBeenCalledWith(expect.objectContaining({
+      source: "chzzk",
+      operation: "chzzk.lives.list",
+      method: "GET",
+      statusCode: 200,
+      resultStatus: "ok",
+      quotaUnits: 0,
+      rateLimited: false
+    }));
+    expect(JSON.stringify(apiCallLogger.record.mock.calls)).not.toContain("client-secret");
+    expect(JSON.stringify(apiCallLogger.record.mock.calls)).not.toContain("client-id");
   });
 });
