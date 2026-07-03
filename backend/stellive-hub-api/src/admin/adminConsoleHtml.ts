@@ -779,6 +779,7 @@ export function renderAdminConsoleHtml(): string {
       align-items: stretch;
     }
     .external-api-chart-card {
+      position: relative;
       display: grid;
       gap: 12px;
       min-width: 0;
@@ -794,6 +795,59 @@ export function renderAdminConsoleHtml(): string {
       align-items: end;
       min-height: 210px;
       padding: 8px 2px 0;
+    }
+    .external-api-tooltip {
+      position: absolute;
+      z-index: 20;
+      width: min(220px, calc(100% - 20px));
+      padding: 12px 14px;
+      pointer-events: none;
+      color: var(--admin-text);
+      border: 1px solid var(--admin-border);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--admin-surface) 96%, var(--admin-bg) 4%);
+      box-shadow: 0 6px 18px color-mix(in srgb, #000 26%, transparent);
+    }
+    .external-api-tooltip[hidden] {
+      display: none;
+    }
+    .external-api-tooltip-date {
+      color: var(--admin-muted);
+      font-size: 12px;
+    }
+    .external-api-tooltip-total,
+    .external-api-tooltip-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .external-api-tooltip-total {
+      margin: 4px 0 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--admin-soft-border);
+    }
+    .external-api-tooltip-total strong {
+      font-size: 18px;
+    }
+    .external-api-tooltip-row {
+      padding: 3px 0;
+      font-size: 13px;
+    }
+    .external-api-tooltip-source {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .external-api-tooltip-dot {
+      width: 7px;
+      height: 7px;
+      flex: 0 0 7px;
+      border-radius: 50%;
+    }
+    .external-api-chart .queue-bar:focus-visible .queue-bar-stack {
+      outline: 2px solid var(--admin-primary);
+      outline-offset: 2px;
     }
     .external-api-results-head,
     .external-api-filters {
@@ -1619,8 +1673,9 @@ export function renderAdminConsoleHtml(): string {
           </div>
         </div>
         <div class="section-body external-api-layout">
-          <div class="external-api-chart-card">
+          <div id="external-api-chart-card" class="external-api-chart-card">
             <div id="external-api-chart" class="external-api-chart" aria-label="Daily external API call chart"></div>
+            <div id="external-api-tooltip" class="external-api-tooltip" role="tooltip" hidden></div>
             <div id="external-api-legend" class="queue-chart-legend" aria-label="External API source legend"></div>
           </div>
           <aside id="external-api-summary" class="queue-chart-summary external-api-summary" aria-label="External API call summary"></aside>
@@ -2129,7 +2184,9 @@ export function renderAdminConsoleHtml(): string {
     const dailyQueueSummaryRoot = document.getElementById("daily-queue-summary");
     const dailyQueueAccessibleListRoot = document.getElementById("daily-queue-accessible-list");
     const externalApiSectionRoot = document.getElementById("external-api-section");
+    const externalApiChartCardRoot = document.getElementById("external-api-chart-card");
     const externalApiChartRoot = document.getElementById("external-api-chart");
+    const externalApiTooltipRoot = document.getElementById("external-api-tooltip");
     const externalApiLegendRoot = document.getElementById("external-api-legend");
     const externalApiSummaryRoot = document.getElementById("external-api-summary");
     const externalApiResultsRoot = document.getElementById("external-api-results");
@@ -2485,6 +2542,69 @@ export function renderAdminConsoleHtml(): string {
       return "api-source-other";
     }
 
+    function externalApiTooltipSources(item, visibleSources) {
+      const knownSources = ["youtube", "chzzk", "fcm", "websub", "other"];
+      const sources = Array.from(new Set(knownSources.concat(visibleSources || [])));
+      return sources.sort(function (left, right) {
+        const countDifference = numericValue(item.bySource && item.bySource[right]) - numericValue(item.bySource && item.bySource[left]);
+        return countDifference || left.localeCompare(right);
+      });
+    }
+
+    function positionExternalApiTooltip(bar) {
+      const cardRect = externalApiChartCardRoot.getBoundingClientRect();
+      const barRect = bar.getBoundingClientRect();
+      const tooltipRect = externalApiTooltipRoot.getBoundingClientRect();
+      const preferredLeft = barRect.left - cardRect.left + (barRect.width / 2) - (tooltipRect.width / 2);
+      const maxLeft = Math.max(8, cardRect.width - tooltipRect.width - 8);
+      const left = Math.min(Math.max(8, preferredLeft), maxLeft);
+      const above = barRect.top - cardRect.top - tooltipRect.height - 10;
+      const below = barRect.bottom - cardRect.top + 10;
+      const maxTop = Math.max(8, cardRect.height - tooltipRect.height - 8);
+      const top = Math.min(Math.max(8, above >= 8 ? above : below), maxTop);
+      externalApiTooltipRoot.style.left = left + "px";
+      externalApiTooltipRoot.style.top = top + "px";
+    }
+
+    function hideExternalApiTooltip() {
+      externalApiTooltipRoot.hidden = true;
+      externalApiTooltipRoot.replaceChildren();
+    }
+
+    function showExternalApiTooltip(bar, item, visibleSources) {
+      const date = document.createElement("div");
+      date.className = "external-api-tooltip-date";
+      date.textContent = item.date || "-";
+
+      const total = document.createElement("div");
+      total.className = "external-api-tooltip-total";
+      const totalLabel = document.createElement("span");
+      totalLabel.textContent = "Total calls";
+      const totalValue = document.createElement("strong");
+      totalValue.textContent = String(numericValue(item.total));
+      total.append(totalLabel, totalValue);
+
+      const rows = document.createElement("div");
+      for (const source of externalApiTooltipSources(item, visibleSources)) {
+        const row = document.createElement("div");
+        row.className = "external-api-tooltip-row";
+        const sourceLabel = document.createElement("span");
+        sourceLabel.className = "external-api-tooltip-source";
+        const dot = document.createElement("i");
+        dot.className = "external-api-tooltip-dot " + apiSourceClass(source);
+        dot.setAttribute("aria-hidden", "true");
+        sourceLabel.append(dot, document.createTextNode(source));
+        const count = document.createElement("strong");
+        count.textContent = String(numericValue(item.bySource && item.bySource[source]));
+        row.append(sourceLabel, count);
+        rows.appendChild(row);
+      }
+
+      externalApiTooltipRoot.replaceChildren(date, total, rows);
+      externalApiTooltipRoot.hidden = false;
+      positionExternalApiTooltip(bar);
+    }
+
     function renderExternalApiChart(trend) {
       const items = trend && Array.isArray(trend.items) ? trend.items : [];
       const totals = trend && trend.totals ? trend.totals : { total: 0, ok: 0, failed: 0, rateLimited: 0, quotaExceeded: 0, quotaUnits: 0, bySource: {} };
@@ -2493,6 +2613,7 @@ export function renderAdminConsoleHtml(): string {
       externalApiLegendRoot.replaceChildren();
       externalApiSummaryRoot.replaceChildren();
       externalApiAccessibleListRoot.replaceChildren();
+      hideExternalApiTooltip();
 
       const sources = Object.keys(totals.bySource || {}).sort(function (a, b) {
         return numericValue(totals.bySource[b]) - numericValue(totals.bySource[a]);
@@ -2518,6 +2639,8 @@ export function renderAdminConsoleHtml(): string {
         for (const item of items) {
           const bar = document.createElement("div");
           bar.className = "queue-bar";
+          bar.tabIndex = 0;
+          bar.setAttribute("aria-describedby", "external-api-tooltip");
           bar.setAttribute("aria-label", item.date + ": " + numericValue(item.total) + " external API calls");
           bar.title = bar.getAttribute("aria-label") || "";
           const stack = document.createElement("div");
@@ -2535,6 +2658,20 @@ export function renderAdminConsoleHtml(): string {
           label.className = "queue-bar-label";
           label.textContent = shortDateLabel(item.date);
           bar.append(stack, label);
+          bar.addEventListener("mouseenter", function () {
+            showExternalApiTooltip(bar, item, visibleSources);
+          });
+          bar.addEventListener("mouseleave", hideExternalApiTooltip);
+          bar.addEventListener("focus", function () {
+            showExternalApiTooltip(bar, item, visibleSources);
+          });
+          bar.addEventListener("blur", hideExternalApiTooltip);
+          bar.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") {
+              hideExternalApiTooltip();
+              bar.blur();
+            }
+          });
           externalApiChartRoot.appendChild(bar);
           const accessibleItem = document.createElement("li");
           accessibleItem.textContent = bar.getAttribute("aria-label") || "";

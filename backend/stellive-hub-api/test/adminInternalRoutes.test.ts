@@ -152,12 +152,17 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain("Daily client delivery queue");
   expect(html).toContain('id="external-api-section"');
   expect(html).toContain('id="external-api-chart"');
+  expect(html).toContain('id="external-api-tooltip"');
+  expect(html).toContain('role="tooltip"');
   expect(html).toContain('id="external-api-summary"');
   expect(html).toContain('id="external-api-results"');
   expect(html).toContain('id="external-api-prune"');
   expect(html).toContain("External API calls");
   expect(html).toContain("Recent API results");
   expect(html).toContain("function formatDate(value)");
+  expect(html).toContain("function showExternalApiTooltip");
+  expect(html).toContain('bar.addEventListener("mouseenter"');
+  expect(html).toContain('bar.addEventListener("focus"');
   expect(html).toContain("Retention: 31 days");
   expect(html).toContain("Asia/Seoul");
   expect(html).toContain("System status");
