@@ -50,10 +50,26 @@ interface DeliveryAttemptDiagnosticSelect {
 }
 
 interface DeliveryAttemptDelegate {
+  $queryRaw?<T = unknown>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T>;
   deliveryAttempt: {
     create?(args: { data: Record<string, unknown> }): Promise<unknown>;
     findMany?(args: unknown): Promise<Array<DeliveryAttemptRecord | DeliveryAttemptStatusRecord | DeliveryAttemptTrendRecord>>;
   };
+}
+
+interface DeliveryAttemptDailyAggregateRow {
+  date: string;
+  sent: unknown;
+  queued: unknown;
+  skipped: unknown;
+  failed: unknown;
+  total: unknown;
+}
+
+function aggregateNumber(value: unknown): number {
+  if (typeof value === "bigint") return Number(value);
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 export interface CreateDeliveryAttemptInput {
@@ -248,29 +264,35 @@ export class DeliveryAttemptRepository {
   async summarizeDailyBuckets(input: { days?: number; now?: Date; timezone?: "Asia/Seoul" } = {}): Promise<DailyDeliveryQueueTrend> {
     const days = clampTrendDays(input.days ?? 14);
     const now = input.now ?? new Date();
-    if (!this.prisma.deliveryAttempt.findMany) return emptyDailyDeliveryQueueTrend(days, now);
+    if (!this.prisma.$queryRaw) return emptyDailyDeliveryQueueTrend(days, now);
 
     const dateKeys = buildKstDateKeys(days, now);
     const bucketByDate = new Map(dateKeys.map((date) => [date, createEmptyPoint(date)]));
     const startAt = kstMidnightUtcFromKey(dateKeys[0] ?? formatKstDateKey(now));
+    const rows = await this.prisma.$queryRaw<DeliveryAttemptDailyAggregateRow[]>`
+      SELECT
+        to_char(timezone('Asia/Seoul', "attemptedAt"), 'YYYY-MM-DD') AS date,
+        count(*) FILTER (WHERE status = 'sent') AS sent,
+        count(*) FILTER (WHERE status = 'queued') AS queued,
+        count(*) FILTER (WHERE status = 'skipped') AS skipped,
+        count(*) FILTER (WHERE status = 'failed') AS failed,
+        count(*) AS total
+      FROM "DeliveryAttempt"
+      WHERE "attemptedAt" >= ${startAt}
+        AND "attemptedAt" <= ${now}
+        AND status IN ('sent', 'queued', 'skipped', 'failed')
+      GROUP BY date
+      ORDER BY date ASC
+    `;
 
-    const records = await this.prisma.deliveryAttempt.findMany({
-      where: {
-        attemptedAt: { gte: startAt, lte: now },
-        status: { in: [...deliveryAttemptStatuses] }
-      },
-      orderBy: { attemptedAt: "asc" },
-      select: { attemptedAt: true, status: true }
-    });
-
-    for (const record of records) {
-      if (!("attemptedAt" in record) || !(record.attemptedAt instanceof Date)) continue;
-      const status = record.status;
-      if (!isDeliveryAttemptKnownStatus(status)) continue;
-      const point = bucketByDate.get(formatKstDateKey(record.attemptedAt));
+    for (const row of rows) {
+      const point = bucketByDate.get(row.date);
       if (!point) continue;
-      point[status] += 1;
-      point.total += 1;
+      point.sent = aggregateNumber(row.sent);
+      point.queued = aggregateNumber(row.queued);
+      point.skipped = aggregateNumber(row.skipped);
+      point.failed = aggregateNumber(row.failed);
+      point.total = aggregateNumber(row.total);
     }
 
     const items = dateKeys.map((date) => bucketByDate.get(date) ?? createEmptyPoint(date));

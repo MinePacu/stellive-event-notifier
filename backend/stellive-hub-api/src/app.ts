@@ -151,6 +151,7 @@ function createDefaultChzzkLiveAdapter(
     clientSecret: env.CHZZK_CLIENT_SECRET,
     stateRepository,
     fetch: fetchImpl,
+    liveListMaxPages: env.CHZZK_LIVE_LIST_MAX_PAGES,
     apiCallLogger: new ExternalApiCallLogRepository()
   });
   const ingestor = new ChzzkEventIngestor();

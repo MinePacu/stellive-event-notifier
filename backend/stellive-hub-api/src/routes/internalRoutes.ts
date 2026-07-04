@@ -287,7 +287,10 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
   });
 
   app.post("/v1/internal/admin/external-api-calls/prune", async () =>
-    dependencies.externalApiCallLogs.pruneOlderThan({ days: 31, now: dependencies.now?.() ?? new Date() })
+    dependencies.externalApiCallLogs.pruneOlderThan({
+      days: options.env.EXTERNAL_API_LOG_RETENTION_DAYS,
+      now: dependencies.now?.() ?? new Date()
+    })
   );
 
   app.get<{ Querystring: LimitQuery }>("/v1/internal/adapters/health", async () => {
