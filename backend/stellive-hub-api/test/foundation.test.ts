@@ -33,6 +33,28 @@ describe("foundation configuration", () => {
     expect(env.X_FREE_STREAM_ENABLED).toBe(false);
   });
 
+  it("validates bootstrap cache TTL configuration", () => {
+    const defaults = loadEnv(baseEnv);
+    expect(defaults.BOOTSTRAP_CATALOG_CACHE_TTL_SECONDS).toBe(30);
+    expect(defaults.BOOTSTRAP_LIVE_STATUS_CACHE_TTL_SECONDS).toBe(10);
+    expect(defaults.BOOTSTRAP_HUB_EVENTS_SUMMARY_CACHE_TTL_SECONDS).toBe(30);
+
+    const configured = loadEnv({
+      ...baseEnv,
+      BOOTSTRAP_CATALOG_CACHE_TTL_SECONDS: "20",
+      BOOTSTRAP_LIVE_STATUS_CACHE_TTL_SECONDS: "5",
+      BOOTSTRAP_HUB_EVENTS_SUMMARY_CACHE_TTL_SECONDS: "25",
+    });
+    expect(configured.BOOTSTRAP_CATALOG_CACHE_TTL_SECONDS).toBe(20);
+    expect(configured.BOOTSTRAP_LIVE_STATUS_CACHE_TTL_SECONDS).toBe(5);
+    expect(configured.BOOTSTRAP_HUB_EVENTS_SUMMARY_CACHE_TTL_SECONDS).toBe(25);
+
+    expect(() => loadEnv({
+      ...baseEnv,
+      BOOTSTRAP_LIVE_STATUS_CACHE_TTL_SECONDS: "11",
+    })).toThrow(/BOOTSTRAP_LIVE_STATUS_CACHE_TTL_SECONDS/);
+  });
+
   it("parses CHZZK OAuth configuration without enabling placeholders", () => {
     const configured = loadEnv({
       ...baseEnv,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import BootstrapService from "../src/mobile/bootstrapService.js";
 import { buildApp } from "../src/app.js";
 import { mobileApiContractVersion } from "../../../shared/schemas/mobileApi.js";
@@ -215,6 +215,105 @@ describe("mobile bootstrap routes", () => {
 });
 
 describe("BootstrapService", () => {
+  it("caches only shared bootstrap data and refreshes it after TTL expiry", async () => {
+    let now = new Date("2026-07-04T00:00:00.000Z");
+    let requestVersion = 0;
+    const getGenerations = vi.fn(() => []);
+    const getMembers = vi.fn(() => []);
+    const getDevice = vi.fn(async () => ({
+      deviceId: "device-1",
+      tokenStatus: requestVersion === 0 ? "active" : "invalid",
+    }));
+    const listForDevice = vi.fn(async () => requestVersion === 0 ? [] : [{
+      deviceId: "device-1",
+      scope: "global" as const,
+      enabled: false,
+      explicitOverride: true,
+      tapAction: "open_app" as const,
+      deliveryMode: "standard" as const,
+      updatedAt: now.toISOString(),
+    }]);
+    const listDiagnostics = vi.fn(async () => []);
+    const hydrateMembers = vi.fn(async (members) => members);
+    const summary = vi.fn(async () => ({
+      openCount: 0,
+      upcomingCount: 0,
+      closingSoonCount: 0,
+      preview: [],
+    }));
+    const service = new BootstrapService({
+      catalog: { getGenerations, getMembers },
+      devices: { getDevice },
+      preferences: { listForDevice },
+      liveStatus: { listDiagnostics },
+      memberProfileImages: { hydrateMembers },
+      hubEvents: { summary },
+      clock: () => now,
+      cacheTtlSeconds: { catalog: 1, liveStatus: 1, hubEventsSummary: 1 },
+    });
+
+    const first = await service.getBootstrap({ deviceId: "device-1" });
+    requestVersion = 1;
+    now = new Date("2026-07-04T00:00:00.500Z");
+    const second = await service.getBootstrap({ deviceId: "device-1" });
+
+    expect(first.device?.tokenStatus).toBe("active");
+    expect(second.device?.tokenStatus).toBe("invalid");
+    expect(second.preferences).toHaveLength(1);
+    expect(second.serverTime).toBe("2026-07-04T00:00:00.500Z");
+    expect(getDevice).toHaveBeenCalledTimes(2);
+    expect(listForDevice).toHaveBeenCalledTimes(2);
+    expect(getGenerations).toHaveBeenCalledTimes(1);
+    expect(getMembers).toHaveBeenCalledTimes(1);
+    expect(hydrateMembers).toHaveBeenCalledTimes(1);
+    expect(listDiagnostics).toHaveBeenCalledTimes(1);
+    expect(summary).toHaveBeenCalledTimes(1);
+
+    now = new Date("2026-07-04T00:00:01.000Z");
+    await service.getBootstrap({ deviceId: "device-1" });
+
+    expect(getGenerations).toHaveBeenCalledTimes(2);
+    expect(getMembers).toHaveBeenCalledTimes(2);
+    expect(hydrateMembers).toHaveBeenCalledTimes(2);
+    expect(listDiagnostics).toHaveBeenCalledTimes(2);
+    expect(summary).toHaveBeenCalledTimes(2);
+  });
+
+  it("deduplicates concurrent shared bootstrap cache misses", async () => {
+    let resolveLiveStatus!: (value: []) => void;
+    const listDiagnostics = vi.fn(() => new Promise<[]>((resolve) => {
+      resolveLiveStatus = resolve;
+    }));
+    const hydrateMembers = vi.fn(async (members) => members);
+    const summary = vi.fn(async () => ({
+      openCount: 0,
+      upcomingCount: 0,
+      closingSoonCount: 0,
+      preview: [],
+    }));
+    const service = new BootstrapService({
+      catalog: { getGenerations: () => [], getMembers: () => [] },
+      devices: { getDevice: async () => undefined },
+      preferences: { listForDevice: async () => [] },
+      liveStatus: { listDiagnostics },
+      memberProfileImages: { hydrateMembers },
+      hubEvents: { summary },
+    });
+
+    const requests = [
+      service.getBootstrap({}),
+      service.getBootstrap({}),
+      service.getBootstrap({}),
+    ];
+    await Promise.resolve();
+    resolveLiveStatus([]);
+    await Promise.all(requests);
+
+    expect(listDiagnostics).toHaveBeenCalledTimes(1);
+    expect(hydrateMembers).toHaveBeenCalledTimes(1);
+    expect(summary).toHaveBeenCalledTimes(1);
+  });
+
   it("assembles a policy-safe server bootstrap snapshot", async () => {
     const service = new BootstrapService({
       catalog: {
