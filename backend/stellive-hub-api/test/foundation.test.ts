@@ -73,6 +73,14 @@ describe("foundation configuration", () => {
       .toThrow(/CHANNEL_IMAGE_REFRESH_WAIT_MS/);
   });
 
+  it("bounds admin observability configuration", () => {
+    const defaults = loadEnv(baseEnv);
+    expect(defaults.ADMIN_OVERVIEW_CACHE_TTL_SECONDS).toBe(15);
+
+    expect(loadEnv({ ...baseEnv, ADMIN_OVERVIEW_CACHE_TTL_SECONDS: "-1" }).ADMIN_OVERVIEW_CACHE_TTL_SECONDS).toBe(0);
+    expect(loadEnv({ ...baseEnv, ADMIN_OVERVIEW_CACHE_TTL_SECONDS: "99" }).ADMIN_OVERVIEW_CACHE_TTL_SECONDS).toBe(60);
+  });
+
   it("parses CHZZK OAuth configuration without enabling placeholders", () => {
     const configured = loadEnv({
       ...baseEnv,

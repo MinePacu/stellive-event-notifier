@@ -11,6 +11,11 @@ function booleanFlag(defaultValue: boolean) {
     });
 }
 
+function boundedInteger(defaultValue: number, min: number, max: number) {
+  return z.coerce.number().int().catch(defaultValue).default(defaultValue)
+    .transform((value) => Math.min(max, Math.max(min, value)));
+}
+
 function optionalString() {
   return z
     .string()
@@ -48,6 +53,7 @@ const envSchema = z
     BOOTSTRAP_HUB_EVENTS_SUMMARY_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(30),
     CHANNEL_IMAGE_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
     CHANNEL_IMAGE_REFRESH_WAIT_MS: z.coerce.number().int().positive().default(1500),
+    ADMIN_OVERVIEW_CACHE_TTL_SECONDS: boundedInteger(15, 0, 60),
 
     FCM_PROJECT_ID: optionalString(),
     FCM_CLIENT_EMAIL: optionalString(),

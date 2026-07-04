@@ -5,6 +5,7 @@ import { DeliveryAttemptRepository, emptyDailyDeliveryQueueTrend } from "../repo
 import { ExternalApiCallLogRepository, emptyExternalApiCallTrend } from "../repositories/externalApiCallLogRepository.js";
 import { PlatformApiStateRepository } from "../repositories/platformApiStateRepository.js";
 import { getPrismaClient } from "../storage/prisma.js";
+import { ShortTtlAsyncCache } from "../utils/shortTtlAsyncCache.js";
 import { getConfiguredSecretState } from "./adminAuth.js";
 import type { AdapterHealth, AdminOverview } from "./adminTypes.js";
 
@@ -21,16 +22,34 @@ const defaultAdapterHealth: AdapterHealth[] = [
 ];
 
 export class AdminHealthService {
+  private readonly overviewCache: ShortTtlAsyncCache<{ value: AdminOverview; capturedAtMs: number }>;
+
   constructor(
     private readonly env: AppEnv = loadEnv(),
     private readonly jobs = new NotificationJobRepository(),
     private readonly deliveryAttempts = new DeliveryAttemptRepository(),
     private readonly externalApiCalls = new ExternalApiCallLogRepository(),
     private readonly platformApiState = new PlatformApiStateRepository(),
-    private readonly prisma: AdminPrismaClient = getPrismaClient() as unknown as AdminPrismaClient
-  ) {}
+    private readonly prisma: AdminPrismaClient = getPrismaClient() as unknown as AdminPrismaClient,
+    private readonly now: () => number = Date.now
+  ) {
+    this.overviewCache = new ShortTtlAsyncCache({
+      ttlMs: this.env.ADMIN_OVERVIEW_CACHE_TTL_SECONDS * 1000,
+      now: this.now
+    });
+  }
 
   async overview(): Promise<AdminOverview> {
+    const snapshot = await this.overviewCache.getOrLoad(async () => ({
+      value: await this.calculateOverview(),
+      capturedAtMs: this.now()
+    }));
+    const value = structuredClone(snapshot.value);
+    value.service.uptimeSeconds += Math.max(0, Math.floor((this.now() - snapshot.capturedAtMs) / 1000));
+    return value;
+  }
+
+  private async calculateOverview(): Promise<AdminOverview> {
     const [queue, recentDelivery, dailyDeliveryQueue, externalApiDaily, adapterState, database] = await Promise.all([
       this.readQueueSummary(),
       this.readRecentDeliverySummary(),

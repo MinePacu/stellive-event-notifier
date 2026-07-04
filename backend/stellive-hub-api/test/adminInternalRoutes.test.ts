@@ -169,6 +169,11 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain('bar.addEventListener("mouseenter"');
   expect(html).toContain('bar.addEventListener("focus"');
   expect(html).toContain("Retention: 31 days");
+  expect(html).toContain("const autoRefreshIntervalMs = 30000");
+  expect(html).toContain('const autoRefreshLabel = "Every " + (autoRefreshIntervalMs / 1000) + "s"');
+  expect(html).not.toContain("Every 5s");
+  expect(html).not.toContain("autoRefreshIntervalMs = 5000");
+  expect(html).toContain('if (source === "manual")');
   expect(html).toContain("Asia/Seoul");
   expect(html).toContain("System status");
   expect(html).toContain("Configuration readiness");
