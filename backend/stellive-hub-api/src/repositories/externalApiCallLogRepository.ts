@@ -41,11 +41,29 @@ interface ExternalApiCallLogRecord {
 }
 
 interface ExternalApiCallLogDelegate {
+  $queryRaw?<T = unknown>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T>;
   externalApiCallLog: {
     create?(args: { data: Record<string, unknown> }): Promise<unknown>;
     findMany?(args: unknown): Promise<ExternalApiCallLogRecord[]>;
     deleteMany?(args: unknown): Promise<{ count: number }>;
   };
+}
+
+interface ExternalApiDailyAggregateRow {
+  date: string;
+  source: string;
+  total: unknown;
+  ok: unknown;
+  failed: unknown;
+  rateLimited: unknown;
+  quotaExceeded: unknown;
+  quotaUnits: unknown;
+}
+
+function aggregateNumber(value: unknown): number {
+  if (typeof value === "bigint") return Number(value);
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 const trackedResultStatuses = ["ok", "not_modified", "quota_exceeded", "rate_limited", "auth_required", "http_error", "network_error", "timeout", "parse_error", "unknown_error"];
@@ -170,34 +188,38 @@ export class ExternalApiCallLogRepository {
   async summarizeDaily(input: { days?: number; now?: Date; timezone?: "Asia/Seoul" } = {}): Promise<ExternalApiCallTrend> {
     const days = clampDays(input.days, 14);
     const now = input.now ?? new Date();
-    if (!this.prisma.externalApiCallLog.findMany) return emptyExternalApiCallTrend(days, now);
+    if (!this.prisma.$queryRaw) return emptyExternalApiCallTrend(days, now);
     const dateKeys = buildKstDateKeys(days, now);
     const bucketByDate = new Map(dateKeys.map((date) => [date, createEmptyPoint(date)]));
-    const records = await this.prisma.externalApiCallLog.findMany({
-      where: {
-        requestedAt: { gte: kstMidnightUtcFromKey(dateKeys[0] ?? formatKstDateKey(now)), lte: now }
-      },
-      orderBy: { requestedAt: "asc" },
-      select: {
-        source: true,
-        resultStatus: true,
-        quotaUnits: true,
-        rateLimited: true,
-        requestedAt: true
-      }
-    });
+    const startAt = kstMidnightUtcFromKey(dateKeys[0] ?? formatKstDateKey(now));
+    const rows = await this.prisma.$queryRaw<ExternalApiDailyAggregateRow[]>`
+      SELECT
+        to_char(timezone('Asia/Seoul', "requestedAt"), 'YYYY-MM-DD') AS date,
+        source,
+        count(*) AS total,
+        count(*) FILTER (WHERE "resultStatus" IN ('ok', 'not_modified')) AS ok,
+        count(*) FILTER (WHERE "resultStatus" NOT IN ('ok', 'not_modified')) AS failed,
+        count(*) FILTER (WHERE "resultStatus" = 'rate_limited' OR "rateLimited" = true) AS "rateLimited",
+        count(*) FILTER (WHERE "resultStatus" = 'quota_exceeded') AS "quotaExceeded",
+        coalesce(sum("quotaUnits"), 0) AS "quotaUnits"
+      FROM "ExternalApiCallLog"
+      WHERE "requestedAt" >= ${startAt}
+        AND "requestedAt" <= ${now}
+      GROUP BY date, source
+      ORDER BY date ASC, source ASC
+    `;
 
-    for (const record of records) {
-      const point = bucketByDate.get(formatKstDateKey(record.requestedAt));
+    for (const row of rows) {
+      const point = bucketByDate.get(row.date);
       if (!point) continue;
-      const status = record.resultStatus;
-      point.total += 1;
-      point.quotaUnits += record.quotaUnits ?? 0;
-      point.bySource[record.source] = (point.bySource[record.source] ?? 0) + 1;
-      if (status === "ok" || status === "not_modified") point.ok += 1;
-      else point.failed += 1;
-      if (status === "rate_limited" || record.rateLimited) point.rateLimited += 1;
-      if (status === "quota_exceeded") point.quotaExceeded += 1;
+      const total = aggregateNumber(row.total);
+      point.total += total;
+      point.ok += aggregateNumber(row.ok);
+      point.failed += aggregateNumber(row.failed);
+      point.rateLimited += aggregateNumber(row.rateLimited);
+      point.quotaExceeded += aggregateNumber(row.quotaExceeded);
+      point.quotaUnits += aggregateNumber(row.quotaUnits);
+      point.bySource[row.source] = (point.bySource[row.source] ?? 0) + total;
     }
 
     const items = dateKeys.map((date) => bucketByDate.get(date) ?? createEmptyPoint(date));

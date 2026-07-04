@@ -77,6 +77,16 @@ export interface ChzzkNormalizedLiveStatus {
   sourceVerificationState: "verified" | "verify_required";
 }
 
+export interface ChzzkLiveStatusBatchDiagnostics {
+  pagesFetched: number;
+  limited: boolean;
+  pendingUnverified: number;
+}
+
+export type ChzzkLiveStatusBatch = Map<string, ChzzkNormalizedLiveStatus> & {
+  diagnostics?: ChzzkLiveStatusBatchDiagnostics;
+};
+
 interface ChzzkChannelMetadata {
   channelId: string;
   channelImageUrl?: string;
@@ -90,6 +100,7 @@ interface ChzzkApiClientOptions {
   fetch?: typeof fetch;
   timeoutMs?: number;
   liveListPageSize?: number;
+  liveListMaxPages?: number;
   apiCallLogger?: ExternalApiCallLogger;
 }
 
@@ -161,11 +172,15 @@ export class ChzzkApiClient {
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
   private readonly liveListPageSize: number;
+  private readonly liveListMaxPages: number;
 
   constructor(private readonly options: ChzzkApiClientOptions) {
     this.fetchImpl = options.fetch ?? fetch;
     this.timeoutMs = options.timeoutMs ?? 10_000;
     this.liveListPageSize = options.liveListPageSize ?? 20;
+    this.liveListMaxPages = Number.isInteger(options.liveListMaxPages) && (options.liveListMaxPages ?? 0) > 0
+      ? Math.min(options.liveListMaxPages as number, 100)
+      : 5;
   }
 
   async getLiveStatus(channelId: string): Promise<ChzzkNormalizedLiveStatus> {
@@ -173,16 +188,19 @@ export class ChzzkApiClient {
     return statuses.get(channelId) ?? unverifiedStatus(channelId);
   }
 
-  async getLiveStatuses(channelIds: string[]): Promise<Map<string, ChzzkNormalizedLiveStatus>> {
+  async getLiveStatuses(channelIds: string[]): Promise<ChzzkLiveStatusBatch> {
     const requestedIds = [...new Set(channelIds.filter(Boolean))];
     const statuses = new Map<string, ChzzkNormalizedLiveStatus>(
       requestedIds.map((channelId) => [channelId, verifiedOfflineStatus(channelId)])
-    );
+    ) as ChzzkLiveStatusBatch;
     const pendingIds = new Set(requestedIds);
     let next: string | undefined;
+    let pagesFetched = 0;
+    let limited = false;
 
     do {
       const response = await this.fetchLiveList(next);
+      pagesFetched += 1;
       if (!response.ok) {
         if (requestedIds[0]) {
           await this.handleLiveListError(requestedIds[0], response);
@@ -190,6 +208,7 @@ export class ChzzkApiClient {
         for (const channelId of pendingIds) {
           statuses.set(channelId, unverifiedStatus(channelId));
         }
+        statuses.diagnostics = { pagesFetched, limited: false, pendingUnverified: pendingIds.size };
         return statuses;
       }
 
@@ -199,6 +218,7 @@ export class ChzzkApiClient {
         for (const channelId of pendingIds) {
           statuses.set(channelId, unverifiedStatus(channelId));
         }
+        statuses.diagnostics = { pagesFetched, limited: false, pendingUnverified: pendingIds.size };
         return statuses;
       }
 
@@ -212,7 +232,20 @@ export class ChzzkApiClient {
 
       if (pendingIds.size === 0) break;
       next = parsed.data.content.page?.next ?? undefined;
+      if (next && pagesFetched >= this.liveListMaxPages) {
+        limited = true;
+        for (const channelId of pendingIds) {
+          statuses.set(channelId, unverifiedStatus(channelId));
+        }
+        break;
+      }
     } while (next);
+
+    statuses.diagnostics = {
+      pagesFetched,
+      limited,
+      pendingUnverified: limited ? pendingIds.size : 0
+    };
 
     for (const channelId of requestedIds) {
       const status = statuses.get(channelId);

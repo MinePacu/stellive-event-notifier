@@ -10,6 +10,9 @@ export interface ChzzkLiveAdapterCounts {
   eventsCreated: number;
   skipped: number;
   verifyRequired: number;
+  pagesFetched?: number;
+  limited?: boolean;
+  pendingUnverified?: number;
 }
 
 export interface ChzzkLiveAdapterOptions {
@@ -149,13 +152,20 @@ export class ChzzkOpenApiAdapter {
     const apiClient = this.options.apiClient;
     let statuses: Map<string, ChzzkNormalizedLiveStatus>;
     if ("getLiveStatuses" in apiClient) {
-      statuses = await apiClient.getLiveStatuses(channelIds);
+      const batch = await apiClient.getLiveStatuses(channelIds);
+      statuses = batch;
+      if (batch.diagnostics) {
+        counts.pagesFetched = batch.diagnostics.pagesFetched;
+        counts.limited = batch.diagnostics.limited;
+        counts.pendingUnverified = batch.diagnostics.pendingUnverified;
+      }
     } else {
       statuses = new Map(await Promise.all(channelIds.map(async (channelId) => [
         channelId,
         await apiClient.getLiveStatus(channelId)
       ] as const)));
     }
+
     for (const { member, channelId } of targets) {
       const previous = await this.options.liveStatusRepository.getByMemberId(member.id);
       const now = this.options.clock?.() ?? new Date();
@@ -165,18 +175,23 @@ export class ChzzkOpenApiAdapter {
         platformUrl: `https://chzzk.naver.com/live/${channelId}`,
         sourceVerificationState: "verify_required" as const
       };
+      const effectiveStatus = status.sourceVerificationState === "verify_required" && previous
+        ? { ...status, isLive: previous.isLive }
+        : status;
 
       counts.checked += 1;
       if (status.sourceVerificationState === "verify_required") counts.verifyRequired += 1;
 
-      await this.options.liveStatusRepository.upsertLiveStatus(toLiveStatusInput(member, status, now, previous));
+      await this.options.liveStatusRepository.upsertLiveStatus(toLiveStatusInput(member, effectiveStatus, now, previous));
       counts.updated += 1;
 
-      const eventType = previous?.isLive === false && status.isLive
-        ? "chzzk_live_started"
-        : previous?.isLive === true && !status.isLive
-          ? "chzzk_live_ended"
-          : undefined;
+      const eventType = status.sourceVerificationState !== "verified"
+        ? undefined
+        : previous?.isLive === false && status.isLive
+          ? "chzzk_live_started"
+          : previous?.isLive === true && !status.isLive
+            ? "chzzk_live_ended"
+            : undefined;
 
       if (!eventType) continue;
       if (!this.options.catalog.isSupportedEventForMember(member.id, eventType)) continue;
