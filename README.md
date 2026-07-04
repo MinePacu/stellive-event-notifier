@@ -69,6 +69,8 @@ cp .env.example .env
 docker compose up
 ```
 
+멀티 코어 서버에서 public read API 처리 여유를 늘리려면 Docker Compose + Nginx, 기존 Host Nginx, PM2 cluster, systemd multi-instance 운영안을 정리한 [백엔드 scaling 가이드](docs/BACKEND_SCALING.md)를 참고하세요.
+
 Prisma 기반 저장소를 사용할 때는 schema generate와 migration 절차를 먼저 확인하세요.
 
 ```bash

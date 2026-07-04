@@ -18,6 +18,8 @@ Redis/BullMQ is optional, not an MVP requirement. Initial queue behavior can be 
 
 `backend/stellive-hub-api/docker-compose.yml` provides a local PostgreSQL/Redis/API stack for reproducible development and self-hosting experiments. It is not the default low-cost deployment requirement.
 
+Production public read traffic can run across two to four stateless API workers. Scheduler loops and external API polling remain singleton processes, while music synchronization uses Redis ownership locks across API workers. Docker/Host Nginx, PM2, and systemd layouts are documented in [Backend API Scaling](BACKEND_SCALING.md).
+
 See [API-First Lightweight Plan](API_FIRST_LIGHTWEIGHT_PLAN.md) for the current operating model.
 
 ## Embedded Admin Console

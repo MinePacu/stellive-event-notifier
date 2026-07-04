@@ -128,7 +128,7 @@ export class MusicChannelDiscoverySyncService {
   constructor(private readonly options: MusicChannelDiscoverySyncServiceOptions) {}
 
   async discover() {
-    const release = this.options.locks.acquire(
+    const release = await this.options.locks.acquire(
       "music-channel-discovery",
       this.options.lockTtlMs ?? 30_000,
     );
@@ -327,7 +327,7 @@ export class MusicChannelDiscoverySyncService {
       }
       return summary;
     } finally {
-      release();
+      await release();
     }
   }
 }
