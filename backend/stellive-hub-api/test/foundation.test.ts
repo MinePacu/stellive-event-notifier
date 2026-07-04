@@ -76,9 +76,12 @@ describe("foundation configuration", () => {
   it("bounds admin observability configuration", () => {
     const defaults = loadEnv(baseEnv);
     expect(defaults.ADMIN_OVERVIEW_CACHE_TTL_SECONDS).toBe(15);
+    expect(defaults.EXTERNAL_API_LOG_RETENTION_DAYS).toBe(31);
 
     expect(loadEnv({ ...baseEnv, ADMIN_OVERVIEW_CACHE_TTL_SECONDS: "-1" }).ADMIN_OVERVIEW_CACHE_TTL_SECONDS).toBe(0);
     expect(loadEnv({ ...baseEnv, ADMIN_OVERVIEW_CACHE_TTL_SECONDS: "99" }).ADMIN_OVERVIEW_CACHE_TTL_SECONDS).toBe(60);
+    expect(loadEnv({ ...baseEnv, EXTERNAL_API_LOG_RETENTION_DAYS: "1" }).EXTERNAL_API_LOG_RETENTION_DAYS).toBe(14);
+    expect(loadEnv({ ...baseEnv, EXTERNAL_API_LOG_RETENTION_DAYS: "999" }).EXTERNAL_API_LOG_RETENTION_DAYS).toBe(365);
   });
 
   it("parses CHZZK OAuth configuration without enabling placeholders", () => {

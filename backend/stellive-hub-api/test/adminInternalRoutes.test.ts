@@ -385,9 +385,15 @@ describe("internal admin routes", () => {
 
   it("prunes old external API call logs through the internal admin route", async () => {
     const pruneOlderThan = vi.fn(async () => ({ deleted: 3 }));
-    const app = await buildTestApp({
-      externalApiCallLogs: { listRecent: async () => ({ items: [] }), pruneOlderThan },
-      now: () => new Date("2026-07-02T01:00:00.000Z")
+    const app = await buildApp({
+      env: { ...testEnv, EXTERNAL_API_LOG_RETENTION_DAYS: "45" },
+      useProcessEnv: false,
+      internalRoutes: {
+        dependencies: createFakeDependencies({
+          externalApiCallLogs: { listRecent: async () => ({ items: [] }), pruneOlderThan },
+          now: () => new Date("2026-07-02T01:00:00.000Z")
+        })
+      }
     });
     const response = await app.inject({
       method: "POST",
@@ -398,7 +404,7 @@ describe("internal admin routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ deleted: 3 });
-    expect(pruneOlderThan).toHaveBeenCalledWith({ days: 31, now: new Date("2026-07-02T01:00:00.000Z") });
+    expect(pruneOlderThan).toHaveBeenCalledWith({ days: 45, now: new Date("2026-07-02T01:00:00.000Z") });
   });
 
   it("rejects requests when the internal token is not configured", async () => {
