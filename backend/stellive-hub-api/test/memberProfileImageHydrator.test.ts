@@ -8,6 +8,84 @@ import type { Member } from "../src/types.js";
 import type { YoutubeFetchChannelProfilesResult } from "../src/adapters/youtube/youtubeDataApiClient.js";
 
 describe("MemberProfileImageHydrator", () => {
+  it("refreshes under the distributed lock and releases ownership", async () => {
+    const cache = new FakeChannelImageCacheRepository();
+    const release = vi.fn();
+    const refreshLock = { acquire: vi.fn(async () => release) };
+    const youtube = {
+      fetchChannelProfilesByIds: vi.fn(async () => ({
+        status: "ok" as const,
+        profiles: [{
+          channelId: "UC1",
+          title: "Yuni",
+          profileImageUrl: "https://yt.example/yuni.jpg",
+          fetchedAt: "2026-06-30T00:00:00.000Z",
+        }],
+        quotaUnits: 1,
+      })),
+    };
+    const hydrator = new MemberProfileImageHydrator({
+      youtube,
+      channelImageCache: cache,
+      refreshLock,
+    });
+
+    await hydrator.hydrateMembers([member("ayatsuno-yuni", "UC1")]);
+
+    expect(refreshLock.acquire).toHaveBeenCalledWith("youtube:UC1", 30_000);
+    expect(youtube.fetchChannelProfilesByIds).toHaveBeenCalledTimes(1);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call YouTube when another worker owns the refresh lock", async () => {
+    const cache = new FakeChannelImageCacheRepository();
+    const youtube = { fetchChannelProfilesByIds: vi.fn() };
+    const hydrator = new MemberProfileImageHydrator({
+      youtube,
+      channelImageCache: cache,
+      refreshLock: { acquire: vi.fn(async () => null) },
+      refreshWaitMs: 1,
+    });
+
+    await hydrator.hydrateMembers([member("ayatsuno-yuni", "UC1")]);
+
+    expect(youtube.fetchChannelProfilesByIds).not.toHaveBeenCalled();
+    expect(cache.listCalls).toBe(2);
+  });
+
+  it("does not call YouTube when distributed lock acquisition fails", async () => {
+    const cache = new FakeChannelImageCacheRepository();
+    const youtube = { fetchChannelProfilesByIds: vi.fn() };
+    const hydrator = new MemberProfileImageHydrator({
+      youtube,
+      channelImageCache: cache,
+      refreshLock: { acquire: vi.fn(async () => { throw new Error("redis unavailable"); }) },
+      refreshWaitMs: 1,
+    });
+
+    await hydrator.hydrateMembers([member("ayatsuno-yuni", "UC1")]);
+
+    expect(youtube.fetchChannelProfilesByIds).not.toHaveBeenCalled();
+    expect(cache.listCalls).toBe(2);
+  });
+
+  it("returns original members without calling YouTube when the cache read fails", async () => {
+    const cache = new FakeChannelImageCacheRepository();
+    cache.listError = new Error("channel image cache unavailable");
+    const youtube = { fetchChannelProfilesByIds: vi.fn() };
+    const hydrator = new MemberProfileImageHydrator({
+      youtube,
+      channelImageCache: cache,
+    });
+    const original = member("ayatsuno-yuni", "UC1");
+
+    const members = await hydrator.hydrateMembers([original]);
+
+    expect(members).toEqual([original]);
+    expect(members[0]).not.toBe(original);
+    expect(youtube.fetchChannelProfilesByIds).not.toHaveBeenCalled();
+  });
+
   it("uses fresh cache without calling YouTube", async () => {
     const cache = new FakeChannelImageCacheRepository({
       UC1: {
@@ -137,6 +215,8 @@ describe("MemberProfileImageHydrator", () => {
 
 class FakeChannelImageCacheRepository implements ChannelImageCacheRepositoryPort {
   readonly records = new Map<string, ChannelImageCacheRecord>();
+  listError?: Error;
+  listCalls = 0;
 
   constructor(initial: Record<string, Partial<ChannelImageCacheRecord>> = {}) {
     Object.entries(initial).forEach(([key, value]) => {
@@ -155,6 +235,8 @@ class FakeChannelImageCacheRepository implements ChannelImageCacheRepositoryPort
   }
 
   async listByChannelIds(_source: "youtube", channelIds: string[]): Promise<Map<string, ChannelImageCacheRecord>> {
+    this.listCalls += 1;
+    if (this.listError) throw this.listError;
     return new Map(channelIds.flatMap((channelId) => {
       const record = this.records.get(channelId);
       return record ? [[channelId, record]] : [];
