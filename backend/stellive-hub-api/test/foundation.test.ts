@@ -77,11 +77,14 @@ describe("foundation configuration", () => {
     const defaults = loadEnv(baseEnv);
     expect(defaults.ADMIN_OVERVIEW_CACHE_TTL_SECONDS).toBe(15);
     expect(defaults.EXTERNAL_API_LOG_RETENTION_DAYS).toBe(31);
+    expect(defaults.CHZZK_LIVE_LIST_MAX_PAGES).toBe(5);
 
     expect(loadEnv({ ...baseEnv, ADMIN_OVERVIEW_CACHE_TTL_SECONDS: "-1" }).ADMIN_OVERVIEW_CACHE_TTL_SECONDS).toBe(0);
     expect(loadEnv({ ...baseEnv, ADMIN_OVERVIEW_CACHE_TTL_SECONDS: "99" }).ADMIN_OVERVIEW_CACHE_TTL_SECONDS).toBe(60);
     expect(loadEnv({ ...baseEnv, EXTERNAL_API_LOG_RETENTION_DAYS: "1" }).EXTERNAL_API_LOG_RETENTION_DAYS).toBe(14);
     expect(loadEnv({ ...baseEnv, EXTERNAL_API_LOG_RETENTION_DAYS: "999" }).EXTERNAL_API_LOG_RETENTION_DAYS).toBe(365);
+    expect(loadEnv({ ...baseEnv, CHZZK_LIVE_LIST_MAX_PAGES: "0" }).CHZZK_LIVE_LIST_MAX_PAGES).toBe(5);
+    expect(loadEnv({ ...baseEnv, CHZZK_LIVE_LIST_MAX_PAGES: "invalid" }).CHZZK_LIVE_LIST_MAX_PAGES).toBe(5);
   });
 
   it("parses CHZZK OAuth configuration without enabling placeholders", () => {

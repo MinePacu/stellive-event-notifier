@@ -103,6 +103,7 @@ const envSchema = z
     CHZZK_OAUTH_ENABLED: booleanFlag(false),
     CHZZK_TOKEN_REFRESH_SKEW_SECONDS: z.coerce.number().int().positive().default(300),
     CHZZK_LIVE_POLLING_ENABLED: booleanFlag(false),
+    CHZZK_LIVE_LIST_MAX_PAGES: z.coerce.number().int().positive().max(100).catch(5).default(5),
 
     DB_NOTIFICATION_QUEUE_ENABLED: booleanFlag(true),
     FOREGROUND_SSE_ENABLED: booleanFlag(false),

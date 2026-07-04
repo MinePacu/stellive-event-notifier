@@ -83,6 +83,31 @@ describe("ChzzkOpenApiAdapter", () => {
     expect(endedEvents[0].type).toBe("chzzk_live_ended");
   });
 
+
+  it("preserves a previous live state when the latest status is unverified", async () => {
+    const events: PlatformEvent[] = [];
+    const writes: Array<Record<string, unknown>> = [];
+    const adapter = createAdapter({
+      previous: { isLive: true },
+      events,
+      writes,
+      statuses: [liveStatus({ isLive: false, sourceVerificationState: "verify_required" })]
+    });
+
+    await expect(adapter.pollLiveStatuses()).resolves.toMatchObject({
+      eventsCreated: 0,
+      verifyRequired: 1
+    });
+
+    expect(events).toHaveLength(0);
+    expect(writes[0]).toMatchObject({
+      isLive: true,
+      sourceVerificationState: "verify_required",
+      startedAt: new Date("2026-06-11T02:00:00.000Z"),
+      lastTransitionAt: new Date("2026-06-11T02:00:00.000Z")
+    });
+  });
+
   it("never emits chzzk_chat", async () => {
     const events: PlatformEvent[] = [];
     const adapter = createAdapter({
@@ -148,6 +173,7 @@ function liveStatus(overrides: Partial<ChzzkNormalizedLiveStatus>): ChzzkNormali
 
 function previousRecord(isLive: boolean | undefined) {
   if (isLive === undefined) return null;
+  const previousTransition = isLive ? new Date("2026-06-11T02:00:00.000Z") : null;
   return {
     memberId: "ayatsuno-yuni",
     generationId: "gen1",
@@ -155,11 +181,11 @@ function previousRecord(isLive: boolean | undefined) {
     title: null,
     thumbnailUrl: null,
     viewerCount: null,
-    startedAt: null,
+    startedAt: previousTransition,
     platformUrl: null,
     lastCheckedAt: new Date("2026-06-11T03:00:00.000Z"),
     sourceVerificationState: "verified",
-    lastTransitionAt: null
+    lastTransitionAt: previousTransition
   };
 }
 
