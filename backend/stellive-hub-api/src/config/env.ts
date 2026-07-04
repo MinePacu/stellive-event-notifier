@@ -30,6 +30,19 @@ function optionalUrl() {
     .transform((value) => (value ? value : undefined));
 }
 
+function ianaTimeZone(defaultValue: string) {
+  return z.string().default(defaultValue).superRefine((value, context) => {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date(0));
+    } catch {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "must be a valid IANA time zone",
+      });
+    }
+  });
+}
+
 export function isConfiguredSecret(value: string | undefined): boolean {
   if (!value) return false;
   const normalized = value.trim();
@@ -64,6 +77,10 @@ const envSchema = z
     MUSIC_SYNC_ENABLED: booleanFlag(false),
     MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED: booleanFlag(false),
     MUSIC_CHANNEL_DISCOVERY_INTERVAL_MINUTES: z.coerce.number().int().positive().default(60),
+    MUSIC_CHANNEL_DISCOVERY_PEAK_INTERVAL_MINUTES: z.coerce.number().int().positive().default(5),
+    MUSIC_CHANNEL_DISCOVERY_PEAK_START_HOUR: z.coerce.number().int().min(0).max(23).default(12),
+    MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR: z.coerce.number().int().min(1).max(24).default(24),
+    MUSIC_CHANNEL_DISCOVERY_TIME_ZONE: ianaTimeZone("Asia/Seoul"),
     MUSIC_CHANNEL_DISCOVERY_RECENT_PAGES: z.coerce.number().int().positive().default(1),
     MUSIC_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
     MUSIC_CACHE_STALE_SECONDS: z.coerce.number().int().positive().default(600),
@@ -104,6 +121,15 @@ const envSchema = z
     ADMIN_CONSOLE_ENABLED: booleanFlag(false),
     ADMIN_CONSOLE_TOKEN: optionalString(),
     ADMIN_CONSOLE_COOKIE_SECURE: booleanFlag(false)
+  })
+  .superRefine((env, context) => {
+    if (env.MUSIC_CHANNEL_DISCOVERY_PEAK_START_HOUR >= env.MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR"],
+        message: "must be greater than MUSIC_CHANNEL_DISCOVERY_PEAK_START_HOUR",
+      });
+    }
   })
   .transform((env) => ({
     ...env,

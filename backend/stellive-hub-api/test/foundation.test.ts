@@ -73,6 +73,51 @@ describe("foundation configuration", () => {
       .toThrow(/CHANNEL_IMAGE_REFRESH_WAIT_MS/);
   });
 
+  it("validates music channel discovery peak schedule configuration", () => {
+    const defaults = loadEnv(baseEnv);
+    expect(defaults.MUSIC_CHANNEL_DISCOVERY_INTERVAL_MINUTES).toBe(60);
+    expect(defaults.MUSIC_CHANNEL_DISCOVERY_PEAK_INTERVAL_MINUTES).toBe(5);
+    expect(defaults.MUSIC_CHANNEL_DISCOVERY_PEAK_START_HOUR).toBe(12);
+    expect(defaults.MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR).toBe(24);
+    expect(defaults.MUSIC_CHANNEL_DISCOVERY_TIME_ZONE).toBe("Asia/Seoul");
+
+    const configured = loadEnv({
+      ...baseEnv,
+      MUSIC_CHANNEL_DISCOVERY_INTERVAL_MINUTES: "30",
+      MUSIC_CHANNEL_DISCOVERY_PEAK_INTERVAL_MINUTES: "3",
+      MUSIC_CHANNEL_DISCOVERY_PEAK_START_HOUR: "10",
+      MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR: "22",
+      MUSIC_CHANNEL_DISCOVERY_TIME_ZONE: "Asia/Tokyo",
+    });
+    expect(configured.MUSIC_CHANNEL_DISCOVERY_INTERVAL_MINUTES).toBe(30);
+    expect(configured.MUSIC_CHANNEL_DISCOVERY_PEAK_INTERVAL_MINUTES).toBe(3);
+    expect(configured.MUSIC_CHANNEL_DISCOVERY_PEAK_START_HOUR).toBe(10);
+    expect(configured.MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR).toBe(22);
+    expect(configured.MUSIC_CHANNEL_DISCOVERY_TIME_ZONE).toBe("Asia/Tokyo");
+
+    expect(() => loadEnv({
+      ...baseEnv,
+      MUSIC_CHANNEL_DISCOVERY_PEAK_INTERVAL_MINUTES: "0",
+    })).toThrow(/MUSIC_CHANNEL_DISCOVERY_PEAK_INTERVAL_MINUTES/);
+    expect(() => loadEnv({
+      ...baseEnv,
+      MUSIC_CHANNEL_DISCOVERY_PEAK_START_HOUR: "24",
+    })).toThrow(/MUSIC_CHANNEL_DISCOVERY_PEAK_START_HOUR/);
+    expect(() => loadEnv({
+      ...baseEnv,
+      MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR: "25",
+    })).toThrow(/MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR/);
+    expect(() => loadEnv({
+      ...baseEnv,
+      MUSIC_CHANNEL_DISCOVERY_PEAK_START_HOUR: "18",
+      MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR: "12",
+    })).toThrow(/MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR/);
+    expect(() => loadEnv({
+      ...baseEnv,
+      MUSIC_CHANNEL_DISCOVERY_TIME_ZONE: "Mars/Olympus_Mons",
+    })).toThrow(/MUSIC_CHANNEL_DISCOVERY_TIME_ZONE/);
+  });
+
   it("parses CHZZK OAuth configuration without enabling placeholders", () => {
     const configured = loadEnv({
       ...baseEnv,
