@@ -10,6 +10,7 @@ import type {
   Member,
   UserNotificationPreference,
 } from "../types.js";
+import { ShortTtlAsyncCache } from "../utils/shortTtlAsyncCache.js";
 
 type CatalogMember = Omit<Member, "activeStatus"> & { activeStatus: string };
 
@@ -40,6 +41,17 @@ interface MemberProfileImageHydratorLike {
   hydrateMembers(members: Member[]): Promise<Member[]>;
 }
 
+interface BootstrapCacheTtlSeconds {
+  catalog?: number;
+  liveStatus?: number;
+  hubEventsSummary?: number;
+}
+
+interface HydratedCatalog {
+  generations: Generation[];
+  members: Member[];
+}
+
 export interface BootstrapServiceDependencies {
   catalog: CatalogLike;
   devices: DeviceLike;
@@ -48,6 +60,7 @@ export interface BootstrapServiceDependencies {
   hubEvents: HubEventsLike;
   memberProfileImages?: MemberProfileImageHydratorLike;
   clock?: () => Date;
+  cacheTtlSeconds?: BootstrapCacheTtlSeconds;
 }
 
 function isCatalogVisible(member: CatalogMember): member is Member {
@@ -68,9 +81,25 @@ function tokenStatus(value: string | undefined): DeviceTokenStatus | undefined {
 
 export default class BootstrapService {
   private readonly clock: () => Date;
+  private readonly catalogCache: ShortTtlAsyncCache<HydratedCatalog>;
+  private readonly liveStatusCache: ShortTtlAsyncCache<LiveStatus[]>;
+  private readonly hubEventsSummaryCache: ShortTtlAsyncCache<HubEventsSummary>;
 
   constructor(private readonly dependencies: BootstrapServiceDependencies) {
     this.clock = dependencies.clock ?? (() => new Date());
+    const now = () => this.clock().getTime();
+    this.catalogCache = new ShortTtlAsyncCache({
+      ttlMs: (dependencies.cacheTtlSeconds?.catalog ?? 30) * 1_000,
+      now,
+    });
+    this.liveStatusCache = new ShortTtlAsyncCache({
+      ttlMs: (dependencies.cacheTtlSeconds?.liveStatus ?? 10) * 1_000,
+      now,
+    });
+    this.hubEventsSummaryCache = new ShortTtlAsyncCache({
+      ttlMs: (dependencies.cacheTtlSeconds?.hubEventsSummary ?? 30) * 1_000,
+      now,
+    });
   }
 
   async getBootstrap(input: {
@@ -86,11 +115,22 @@ export default class BootstrapService {
     const preferences = input.deviceId
       ? await this.dependencies.preferences.listForDevice(input.deviceId)
       : [];
-    const liveStatus = await this.dependencies.liveStatus.listDiagnostics();
-    const members = this.dependencies.catalog.getMembers().filter(isCatalogVisible);
-    const hydratedMembers = this.dependencies.memberProfileImages
-      ? await this.dependencies.memberProfileImages.hydrateMembers(members)
-      : members;
+    const liveStatus = await this.liveStatusCache.getOrLoad(() =>
+      this.dependencies.liveStatus.listDiagnostics(),
+    );
+    const catalog = await this.catalogCache.getOrLoad(async () => {
+      const members = this.dependencies.catalog.getMembers().filter(isCatalogVisible);
+      const hydratedMembers = this.dependencies.memberProfileImages
+        ? await this.dependencies.memberProfileImages.hydrateMembers(members)
+        : members;
+      return {
+        generations: this.dependencies.catalog.getGenerations(),
+        members: hydratedMembers,
+      };
+    });
+    const hubEventsSummary = await this.hubEventsSummaryCache.getOrLoad(() =>
+      this.dependencies.hubEvents.summary(),
+    );
 
     return {
       config: {
@@ -110,12 +150,12 @@ export default class BootstrapService {
           }
         : undefined,
       catalog: {
-        generations: this.dependencies.catalog.getGenerations(),
-        members: hydratedMembers,
+        generations: catalog.generations,
+        members: catalog.members,
       },
       preferences,
       liveStatus,
-      hubEventsSummary: await this.dependencies.hubEvents.summary(),
+      hubEventsSummary,
       serverTime: this.clock().toISOString(),
     };
   }

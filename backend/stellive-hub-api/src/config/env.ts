@@ -43,6 +43,9 @@ const envSchema = z
     DATABASE_URL: z.string().min(1),
     REDIS_URL: optionalString(),
     HUB_EVENTS_STORAGE_MODE: z.enum(["memory", "prisma"]).default("memory"),
+    BOOTSTRAP_CATALOG_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(30),
+    BOOTSTRAP_LIVE_STATUS_CACHE_TTL_SECONDS: z.coerce.number().int().positive().max(10).default(10),
+    BOOTSTRAP_HUB_EVENTS_SUMMARY_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(30),
 
     FCM_PROJECT_ID: optionalString(),
     FCM_CLIENT_EMAIL: optionalString(),

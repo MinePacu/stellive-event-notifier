@@ -493,7 +493,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
       hubEvents: {
         summary: async () => hubEvents.summary()
       },
-      memberProfileImages: appRouteDependencies.memberProfileImages
+      memberProfileImages: appRouteDependencies.memberProfileImages,
+      cacheTtlSeconds: {
+        catalog: env.BOOTSTRAP_CATALOG_CACHE_TTL_SECONDS,
+        liveStatus: env.BOOTSTRAP_LIVE_STATUS_CACHE_TTL_SECONDS,
+        hubEventsSummary: env.BOOTSTRAP_HUB_EVENTS_SUMMARY_CACHE_TTL_SECONDS
+      }
     });
   }
 
