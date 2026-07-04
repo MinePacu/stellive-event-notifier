@@ -252,13 +252,26 @@ function createDefaultMemberProfileImageHydrator(
   env: AppEnv,
   dependencies: AppRouteDependencies | undefined,
   fetchImpl?: typeof fetch,
+  registerClose?: (close: () => Promise<void>) => void,
 ): Pick<AppRouteDependencies, "memberProfileImages"> {
   if (dependencies?.memberProfileImages) return {};
   if (!env.YOUTUBE_API_KEY) return {};
+  const refreshLock = env.REDIS_URL
+    ? new RedisMusicSyncLock(new Redis(env.REDIS_URL, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+    }) as unknown as RedisMusicSyncLockClient, {
+      keyPrefix: "stellive-hub:channel-image-refresh-lock",
+    })
+    : undefined;
+  if (refreshLock) registerClose?.(() => refreshLock.close());
   return {
     memberProfileImages: new MemberProfileImageHydrator({
       youtube: new YoutubeDataApiClient({ apiKey: env.YOUTUBE_API_KEY, fetch: fetchImpl, apiCallLogger: new ExternalApiCallLogRepository() }),
       channelImageCache: new ChannelImageCacheRepository(),
+      ttlMs: env.CHANNEL_IMAGE_CACHE_TTL_SECONDS * 1_000,
+      refreshWaitMs: env.CHANNEL_IMAGE_REFRESH_WAIT_MS,
+      refreshLock,
     }),
   };
 }
@@ -457,7 +470,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
   });
   await app.register(swaggerUi, { routePrefix: "/docs" });
   const appRouteDependencies: AppRouteDependencies = {
-    ...createDefaultMemberProfileImageHydrator(env, options.appRoutes?.dependencies, options.chzzkLiveApiFetch),
+    ...createDefaultMemberProfileImageHydrator(
+      env,
+      options.appRoutes?.dependencies,
+      options.chzzkLiveApiFetch,
+      registerClose,
+    ),
     ...options.appRoutes?.dependencies,
   };
   if (!appRouteDependencies.hubEvents && env.HUB_EVENTS_STORAGE_MODE === "prisma") {

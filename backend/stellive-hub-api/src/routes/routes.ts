@@ -17,6 +17,7 @@ import type { DeliveryAttempt, HubCalendarSpecialDay, PlatformEvent, UserNotific
 import type { BootstrapResponse, MobilePlatform } from "../../../../shared/schemas/mobileApi.js";
 import type { SongRepository } from "../repositories/songRepository.js";
 import type { Member } from "../types.js";
+import { ShortTtlAsyncCache } from "../utils/shortTtlAsyncCache.js";
 
 const catalog = new CatalogService();
 const defaultHubEvents = new HubEventService(catalog);
@@ -125,6 +126,13 @@ function sampleEvent(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
 export async function registerRoutes(app: FastifyInstance, options: AppRouteOptions = {}) {
   const liveStatusRepository = options.dependencies?.liveStatus ?? new LiveStatusRepository();
   const hubEvents = options.dependencies?.hubEvents ?? defaultHubEvents;
+  const hydratedMembersCache = new ShortTtlAsyncCache<Member[]>({ ttlMs: 30_000 });
+  const getHydratedMembers = () => hydratedMembersCache.getOrLoad(async () => {
+    const members = catalog.getMembers();
+    return options.dependencies?.memberProfileImages
+      ? options.dependencies.memberProfileImages.hydrateMembers(members)
+      : members;
+  });
   app.get("/health", async () => ({
     ok: true,
     service: "stellive-hub-api",
@@ -172,19 +180,12 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
   });
 
   app.get("/v1/generations", async () => catalog.getGenerations());
-  app.get("/v1/members", async () => {
-    const members = catalog.getMembers();
-    return options.dependencies?.memberProfileImages
-      ? options.dependencies.memberProfileImages.hydrateMembers(members)
-      : members;
-  });
+  app.get("/v1/members", async () => getHydratedMembers());
   app.get("/v1/members/:id", async (request, reply) => {
-    const member = catalog.getMember((request.params as { id: string }).id);
+    const members = await getHydratedMembers();
+    const member = members.find(({ id }) => id === (request.params as { id: string }).id);
     if (!member) return reply.notFound("member not found");
-    const hydratedMembers = options.dependencies?.memberProfileImages
-      ? await options.dependencies.memberProfileImages.hydrateMembers([member])
-      : [member];
-    return hydratedMembers[0];
+    return member;
   });
 
   app.get("/v1/preferences/resolved", async (request) => {

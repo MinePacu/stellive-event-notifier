@@ -55,6 +55,24 @@ describe("foundation configuration", () => {
     })).toThrow(/BOOTSTRAP_LIVE_STATUS_CACHE_TTL_SECONDS/);
   });
 
+  it("validates channel image cache timing configuration", () => {
+    const defaults = loadEnv(baseEnv);
+    expect(defaults.CHANNEL_IMAGE_CACHE_TTL_SECONDS).toBe(604800);
+    expect(defaults.CHANNEL_IMAGE_REFRESH_WAIT_MS).toBe(1500);
+
+    const configured = loadEnv({
+      ...baseEnv,
+      CHANNEL_IMAGE_CACHE_TTL_SECONDS: "3600",
+      CHANNEL_IMAGE_REFRESH_WAIT_MS: "250",
+    });
+    expect(configured.CHANNEL_IMAGE_CACHE_TTL_SECONDS).toBe(3600);
+    expect(configured.CHANNEL_IMAGE_REFRESH_WAIT_MS).toBe(250);
+    expect(() => loadEnv({ ...baseEnv, CHANNEL_IMAGE_CACHE_TTL_SECONDS: "0" }))
+      .toThrow(/CHANNEL_IMAGE_CACHE_TTL_SECONDS/);
+    expect(() => loadEnv({ ...baseEnv, CHANNEL_IMAGE_REFRESH_WAIT_MS: "0" }))
+      .toThrow(/CHANNEL_IMAGE_REFRESH_WAIT_MS/);
+  });
+
   it("parses CHZZK OAuth configuration without enabling placeholders", () => {
     const configured = loadEnv({
       ...baseEnv,
