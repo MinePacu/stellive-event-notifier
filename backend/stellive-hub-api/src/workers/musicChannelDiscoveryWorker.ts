@@ -1,5 +1,10 @@
 import { pathToFileURL } from "node:url";
 import loadEnv from "../config/env.js";
+import type { AppEnv } from "../config/env.js";
+import {
+  msUntilNextMusicDiscovery,
+  type MusicChannelDiscoverySchedule,
+} from "./musicChannelDiscoverySchedule.js";
 
 function schedulerBaseUrl(): string {
   const env = loadEnv();
@@ -21,16 +26,41 @@ export async function discoverOnce(fetchImpl: typeof fetch = fetch): Promise<voi
   if (!response.ok) throw new Error(`music_channel_discovery_http_${response.status}`);
 }
 
+function scheduleFromEnv(env: AppEnv): MusicChannelDiscoverySchedule {
+  return {
+    offPeakIntervalMinutes: env.MUSIC_CHANNEL_DISCOVERY_INTERVAL_MINUTES,
+    peakIntervalMinutes: env.MUSIC_CHANNEL_DISCOVERY_PEAK_INTERVAL_MINUTES,
+    peakStartHour: env.MUSIC_CHANNEL_DISCOVERY_PEAK_START_HOUR,
+    peakEndHour: env.MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR,
+    timeZone: env.MUSIC_CHANNEL_DISCOVERY_TIME_ZONE,
+  };
+}
+
+export interface DiscoveryCycleOptions {
+  discover?: () => Promise<void>;
+  now?: () => Date;
+  schedule: MusicChannelDiscoverySchedule;
+  logError?: (message: string, error: unknown) => void;
+}
+
+export async function runDiscoveryCycle(options: DiscoveryCycleOptions): Promise<number> {
+  try {
+    await (options.discover ?? (() => discoverOnce()))();
+  } catch (error) {
+    (options.logError ?? console.error)("music channel discovery failed", error);
+  }
+  return msUntilNextMusicDiscovery(
+    (options.now ?? (() => new Date()))(),
+    options.schedule,
+  );
+}
+
 async function main(): Promise<void> {
   const env = loadEnv();
-  const intervalMs = env.MUSIC_CHANNEL_DISCOVERY_INTERVAL_MINUTES * 60_000;
+  const schedule = scheduleFromEnv(env);
   for (;;) {
-    try {
-      await discoverOnce();
-    } catch (error) {
-      console.error("music channel discovery failed", error);
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    const delayMs = await runDiscoveryCycle({ schedule });
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 }
 
