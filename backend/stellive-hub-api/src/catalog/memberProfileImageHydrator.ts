@@ -8,6 +8,13 @@ import type { Member } from "../../../../shared/schemas/domain.js";
 
 const defaultTtlMs = 7 * 24 * 60 * 60 * 1_000;
 const defaultRefreshWaitMs = 1_500;
+const refreshLockTtlMs = 30_000;
+
+type RefreshLockRelease = () => void | Promise<void>;
+
+export interface ChannelImageRefreshLock {
+  acquire(key: string, ttlMs: number): RefreshLockRelease | null | Promise<RefreshLockRelease | null>;
+}
 
 interface ProfileCacheValue {
   title?: string;
@@ -21,6 +28,7 @@ export interface MemberProfileImageHydratorOptions {
   channelImageCache: ChannelImageCacheRepositoryPort;
   ttlMs?: number;
   refreshWaitMs?: number;
+  refreshLock?: ChannelImageRefreshLock;
   now?: () => Date;
 }
 
@@ -44,15 +52,20 @@ export class MemberProfileImageHydrator {
     if (channelIds.length === 0) return members.map((member) => ({ ...member }));
 
     const now = this.now();
-    const initialRecords = await this.options.channelImageCache.listByChannelIds("youtube", channelIds);
+    let initialRecords: Map<string, ChannelImageCacheRecord>;
+    try {
+      initialRecords = await this.options.channelImageCache.listByChannelIds("youtube", channelIds);
+    } catch {
+      return members.map((member) => ({ ...member }));
+    }
     const refreshIds = channelIds.filter((channelId) => this.shouldRefresh(initialRecords.get(channelId), now));
 
     if (refreshIds.length > 0) {
-      await this.refreshProfiles(refreshIds);
+      await this.refreshProfiles(refreshIds).catch(() => undefined);
     }
 
     const refreshedRecords = refreshIds.length > 0
-      ? await this.options.channelImageCache.listByChannelIds("youtube", channelIds)
+      ? await this.options.channelImageCache.listByChannelIds("youtube", channelIds).catch(() => initialRecords)
       : initialRecords;
     const cacheEntries = new Map<string, ProfileCacheValue>();
     for (const channelId of channelIds) {
@@ -108,13 +121,38 @@ export class MemberProfileImageHydrator {
   private async refreshProfiles(channelIds: string[]): Promise<void> {
     if (!this.options.youtube) return;
     if (!this.refreshInFlight) {
-      const refresh = this.performRefresh(channelIds);
+      const refresh = this.performRefreshWithLock(channelIds);
       this.refreshInFlight = refresh;
       refresh.finally(() => {
         if (this.refreshInFlight === refresh) this.refreshInFlight = null;
       }).catch(() => undefined);
     }
     await Promise.race([this.refreshInFlight, sleep(this.refreshWaitMs)]);
+  }
+
+  private async performRefreshWithLock(channelIds: string[]): Promise<void> {
+    if (!this.options.refreshLock) {
+      await this.performRefresh(channelIds);
+      return;
+    }
+
+    const lockKey = `youtube:${[...channelIds].sort().join(",")}`;
+    let release: RefreshLockRelease | null;
+    try {
+      release = await this.options.refreshLock.acquire(lockKey, refreshLockTtlMs);
+    } catch {
+      return;
+    }
+    if (!release) {
+      await sleep(this.refreshWaitMs);
+      return;
+    }
+
+    try {
+      await this.performRefresh(channelIds);
+    } finally {
+      await Promise.resolve(release()).catch(() => undefined);
+    }
   }
 
   private async performRefresh(channelIds: string[]): Promise<void> {

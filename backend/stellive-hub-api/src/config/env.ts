@@ -46,6 +46,8 @@ const envSchema = z
     BOOTSTRAP_CATALOG_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(30),
     BOOTSTRAP_LIVE_STATUS_CACHE_TTL_SECONDS: z.coerce.number().int().positive().max(10).default(10),
     BOOTSTRAP_HUB_EVENTS_SUMMARY_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(30),
+    CHANNEL_IMAGE_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
+    CHANNEL_IMAGE_REFRESH_WAIT_MS: z.coerce.number().int().positive().default(1500),
 
     FCM_PROJECT_ID: optionalString(),
     FCM_CLIENT_EMAIL: optionalString(),
