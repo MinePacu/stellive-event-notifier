@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { hostname } from "node:os";
 import { CatalogService } from "../catalog/catalog.js";
 import { productionHubCalendarSpecialDays } from "../hub-events/hubCalendarSpecialDayCatalog.js";
 import type { SpecialDayOccurrence } from "../hub-events/hubCalendarSpecialDayMaterializer.js";
@@ -124,7 +125,15 @@ function sampleEvent(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
 export async function registerRoutes(app: FastifyInstance, options: AppRouteOptions = {}) {
   const liveStatusRepository = options.dependencies?.liveStatus ?? new LiveStatusRepository();
   const hubEvents = options.dependencies?.hubEvents ?? defaultHubEvents;
-  app.get("/health", async () => ({ ok: true, service: "stellive-hub-api" }));
+  app.get("/health", async () => ({
+    ok: true,
+    service: "stellive-hub-api",
+    pid: process.pid,
+    hostname: hostname(),
+    uptimeSeconds: Math.floor(process.uptime()),
+    nodeEnv: process.env.NODE_ENV ?? "development",
+    version: process.env.npm_package_version ?? "0.1.0"
+  }));
 
   await registerAppRoutes(app, {
     dependencies: options.dependencies,

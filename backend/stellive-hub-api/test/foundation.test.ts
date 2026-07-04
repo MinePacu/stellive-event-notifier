@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadEnv } from "../src/config/env.js";
-import { getPrismaClient } from "../src/storage/prisma.js";
+import { disconnectPrismaClient, getPrismaClient } from "../src/storage/prisma.js";
 
 const baseEnv = {
   DATABASE_URL: "postgresql://stellive:stellive@localhost:5432/stellive_hub"
@@ -74,5 +74,15 @@ describe("Prisma storage", () => {
     const second = getPrismaClient();
 
     expect(second).toBe(first);
+  });
+
+  it("disconnects an initialized client at most once", async () => {
+    const client = getPrismaClient();
+    const disconnect = vi.spyOn(client, "$disconnect").mockResolvedValue();
+
+    await disconnectPrismaClient();
+    await disconnectPrismaClient();
+
+    expect(disconnect).toHaveBeenCalledTimes(1);
   });
 });

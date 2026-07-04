@@ -16,6 +16,7 @@ services:
       - "6379:6379"
 
   api:
+    image: stellive-hub-api:local
     build:
       context: ../..
       dockerfile: backend/stellive-hub-api/Dockerfile
@@ -32,9 +33,7 @@ services:
       - redis
 
   chzzk-live-worker:
-    build:
-      context: ../..
-      dockerfile: backend/stellive-hub-api/Dockerfile
+    image: stellive-hub-api:local
     env_file:
       - .env.example
       - .env
@@ -44,12 +43,16 @@ services:
       CHZZK_LIVE_POLL_SCHEDULER_BASE_URL: http://api:4000
     command: ["npm", "run", "start:chzzk-live-worker"]
     depends_on:
-      - api
+      api:
+        condition: service_started
+        required: false
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
 
   hub-event-status-worker:
-    build:
-      context: ../..
-      dockerfile: backend/stellive-hub-api/Dockerfile
+    image: stellive-hub-api:local
     env_file:
       - .env.example
       - .env
@@ -59,12 +62,16 @@ services:
       HUB_EVENT_STATUS_RECONCILE_SCHEDULER_BASE_URL: http://api:4000
     command: ["npm", "run", "start:hub-event-status-worker"]
     depends_on:
-      - api
+      api:
+        condition: service_started
+        required: false
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
 
   music-channel-discovery-worker:
-    build:
-      context: ../..
-      dockerfile: backend/stellive-hub-api/Dockerfile
+    image: stellive-hub-api:local
     env_file:
       - .env.example
       - .env
@@ -74,7 +81,13 @@ services:
       MUSIC_CHANNEL_DISCOVERY_SCHEDULER_BASE_URL: http://api:4000
     command: ["npm", "run", "start:music-channel-discovery-worker"]
     depends_on:
-      - api
+      api:
+        condition: service_started
+        required: false
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
 
 volumes:
   postgres-data:
