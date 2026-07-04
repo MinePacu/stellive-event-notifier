@@ -12,7 +12,10 @@
 - `docs/superpowers/plans/2026-06-25-mobile-song-page-status-recent-cover-discovery-design-plan.md` - Feature design for Android song page UI fixes, compact server status, home recent covers, and hourly music channel discovery.
 - `docs/superpowers/plans/2026-06-25-mobile-song-page-status-recent-cover-discovery-code-design-application-plan.md` - Code design/application plan with token-minimized investigation and focused test scope for the same work.
 - `backend/stellive-hub-api/src/music/musicChannelDiscoverySyncService.ts` - Official/member uploads discovery into the normalized music catalog with dedupe, review, and override preservation.
-- `backend/stellive-hub-api/src/workers/musicChannelDiscoveryWorker.ts` - Configurable hourly internal discovery trigger worker.
+- `backend/stellive-hub-api/src/workers/musicChannelDiscoveryWorker.ts` - Calls the internal music discovery scheduler immediately and recalculates a boundary-aware delay after every attempt.
+- `backend/stellive-hub-api/src/workers/musicChannelDiscoverySchedule.ts` - Pure IANA-time-zone peak-window policy for the music discovery worker.
+- `backend/stellive-hub-api/test/musicChannelDiscoveryWorker.test.ts` - Verifies success/failure cycle delay recalculation without real waiting.
+- `backend/stellive-hub-api/test/musicChannelDiscoverySchedule.test.ts` - Verifies KST peak/off-peak boundaries and time-zone-independent delay calculation.
 - `backend/stellive-hub-api/test/musicChannelDiscoverySyncService.test.ts` - Focused discovery dedupe, source preservation, member-link, and review tests.
 
 ## Android Shared UI Chrome Planning

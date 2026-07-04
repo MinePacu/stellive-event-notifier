@@ -14,7 +14,7 @@
 - Android Home/Live/Songs/Goods-Events use a compact server status strip; the duplicated Songs title card was removed and the member selector summary was reduced.
 - Android and iOS Home show up to five recent cover songs from backend `/v1/music?type=cover&limit=5`; mobile code never calls YouTube directly.
 - `MusicChannelDiscoverySyncService` checks the official and active member uploads playlists, classifies cover/original candidates, deduplicates by `videoId`, preserves official playlist sources/manual overrides, and leaves uncertain member matches in review.
-- Docker includes an hourly discovery worker controlled by `MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED`, `MUSIC_CHANNEL_DISCOVERY_INTERVAL_MINUTES`, and `MUSIC_CHANNEL_DISCOVERY_RECENT_PAGES`.
+- Docker includes a single discovery worker that runs every 5 minutes from 12:00 through 23:59 KST and every 60 minutes otherwise. The boundary-aware schedule is controlled by `MUSIC_CHANNEL_DISCOVERY_INTERVAL_MINUTES`, `MUSIC_CHANNEL_DISCOVERY_PEAK_INTERVAL_MINUTES`, `MUSIC_CHANNEL_DISCOVERY_PEAK_START_HOUR`, `MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR`, and `MUSIC_CHANNEL_DISCOVERY_TIME_ZONE`; `MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED` remains the feature flag.
 
 ## Official Stellive Music Playlist Sync Update
 
