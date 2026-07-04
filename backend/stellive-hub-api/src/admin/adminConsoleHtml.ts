@@ -2216,7 +2216,8 @@ export function renderAdminConsoleHtml(): string {
     const internalTokenClearButton = document.getElementById("internal-token-clear");
     const settingsTokenStatusRoot = document.getElementById("settings-token-status");
     const internalTokenStorageKey = "stellive.admin.internalApiToken";
-    const autoRefreshIntervalMs = 5000;
+    const autoRefreshIntervalMs = 30000;
+    const autoRefreshLabel = "Every " + (autoRefreshIntervalMs / 1000) + "s";
     let autoRefreshTimer = null;
     let refreshInFlight = false;
     let actionInFlight = false;
@@ -2985,7 +2986,7 @@ export function renderAdminConsoleHtml(): string {
         setBusy(true);
         setMessage("Loading overview...", false);
       } else {
-        setAutoRefreshStatus("Every 5s");
+        setAutoRefreshStatus(autoRefreshLabel);
       }
 
       try {
@@ -2994,12 +2995,14 @@ export function renderAdminConsoleHtml(): string {
         renderAdapters(overview.adapters || []);
         renderSecrets(overview.secrets || {});
         renderFeatureFlags(overview.featureFlags || {});
-        refreshExternalApiResults();
+        if (source === "manual") {
+          await refreshExternalApiResults();
+        }
         if (source === "manual") {
           setMessage("Overview refreshed.", false);
         }
         if (autoRefreshInput.checked) {
-          setAutoRefreshStatus("Every 5s");
+          setAutoRefreshStatus(autoRefreshLabel);
         }
       } catch (error) {
         if (!overviewRoot.children.length) {
@@ -3019,7 +3022,7 @@ export function renderAdminConsoleHtml(): string {
       if (autoRefreshTimer) {
         return;
       }
-      setAutoRefreshStatus("Every 5s");
+      setAutoRefreshStatus(autoRefreshLabel);
       autoRefreshTimer = window.setInterval(function () {
         refreshDashboard({ source: "auto" });
       }, autoRefreshIntervalMs);

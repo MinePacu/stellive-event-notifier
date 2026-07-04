@@ -22,14 +22,19 @@ function fakeStateRepository() {
   return repository;
 }
 
-function client(fetchMock: ReturnType<typeof vi.fn>, apiCallLogger?: { record(input: unknown): Promise<void> }) {
+function client(
+  fetchMock: ReturnType<typeof vi.fn>,
+  apiCallLogger?: { record(input: unknown): Promise<void> },
+  liveListMaxPages?: number
+) {
   return new ChzzkApiClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     stateRepository: fakeStateRepository(),
     fetch: fetchMock as unknown as typeof fetch,
     apiCallLogger,
-    liveListPageSize: 20
+    liveListPageSize: 20,
+    liveListMaxPages
   });
 }
 
@@ -252,6 +257,33 @@ describe("ChzzkApiClient client-auth live list", () => {
     expect(statuses.get("channel-a")).toMatchObject({ isLive: true, title: "A" });
     expect(statuses.get("channel-b")).toMatchObject({ isLive: true, title: "B" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+
+  it("limits live-list pagination and marks unseen channels unverified", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({
+        code: 200,
+        content: {
+          page: { next: "cursor-2" },
+          data: [{ channelId: "channel-a", status: "OPEN", liveTitle: "A", channelImageUrl: "https://img.example/a.jpg" }]
+        }
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        code: 200,
+        content: {
+          page: { next: "cursor-3" },
+          data: []
+        }
+      }));
+
+    const statuses = await client(fetchMock, undefined, 2).getLiveStatuses(["channel-a", "channel-b"]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(statuses.get("channel-a")).toMatchObject({ isLive: true, sourceVerificationState: "verified" });
+    expect(statuses.get("channel-b")).toMatchObject({ isLive: false, sourceVerificationState: "verify_required" });
+    expect(statuses.diagnostics).toEqual({ pagesFetched: 2, limited: true, pendingUnverified: 1 });
   });
 
   it("records sanitized CHZZK live list API calls without credential values", async () => {
