@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import PlatformEventRepository from "../src/repositories/platformEventRepository.js";
 import DeviceRepository from "../src/repositories/deviceRepository.js";
 import { DeliveryAttemptRepository } from "../src/repositories/deliveryAttemptRepository.js";
@@ -71,49 +71,38 @@ describe("ExternalApiCallLogRepository", () => {
   });
 
   it("summarizes daily KST buckets by result and source", async () => {
-    const repository = new ExternalApiCallLogRepository({
-      externalApiCallLog: {
-        findMany: async () => [
-          {
-            id: "api-1",
-            source: "youtube",
-            operation: "youtube.videos.list",
-            method: "GET",
-            host: "www.googleapis.com",
-            path: "/youtube/v3/videos",
-            statusCode: 200,
-            resultStatus: "ok",
-            durationMs: 10,
-            quotaUnits: 1,
-            rateLimited: false,
-            errorCode: null,
-            errorReason: null,
-            requestedAt: new Date("2026-07-01T15:30:00.000Z"),
-            completedAt: new Date("2026-07-01T15:30:00.010Z")
-          },
-          {
-            id: "api-2",
-            source: "chzzk",
-            operation: "chzzk.lives.list",
-            method: "GET",
-            host: "openapi.chzzk.naver.com",
-            path: "/open/v1/lives",
-            statusCode: 429,
-            resultStatus: "rate_limited",
-            durationMs: 20,
-            quotaUnits: 0,
-            rateLimited: true,
-            errorCode: "429",
-            errorReason: "Too Many Requests",
-            requestedAt: new Date("2026-07-02T02:00:00.000Z"),
-            completedAt: new Date("2026-07-02T02:00:00.020Z")
-          }
-        ]
+    const queryRaw = vi.fn(async () => [
+      {
+        date: "2026-07-02",
+        source: "youtube",
+        total: 1n,
+        ok: "1",
+        failed: 0n,
+        rateLimited: 0n,
+        quotaExceeded: 0n,
+        quotaUnits: "1"
+      },
+      {
+        date: "2026-07-02",
+        source: "chzzk",
+        total: 1n,
+        ok: 0n,
+        failed: "1",
+        rateLimited: 1n,
+        quotaExceeded: 0n,
+        quotaUnits: 0n
       }
-    });
+    ]);
+    const findMany = vi.fn(() => { throw new Error("findMany must not be used for daily aggregation"); });
+    const repository = new ExternalApiCallLogRepository({
+      externalApiCallLog: { findMany },
+      $queryRaw: queryRaw
+    } as never);
 
     const trend = await repository.summarizeDaily({ days: 2, now: new Date("2026-07-02T12:00:00.000Z") });
 
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(findMany).not.toHaveBeenCalled();
     expect(trend.items).toEqual([
       expect.objectContaining({ date: "2026-07-01", total: 0 }),
       expect.objectContaining({ date: "2026-07-02", total: 2, ok: 1, failed: 1, rateLimited: 1, bySource: { youtube: 1, chzzk: 1 } })
@@ -476,34 +465,22 @@ describe("DeliveryAttemptRepository worker writes", () => {
   });
 
   it("summarizes daily delivery attempts in KST buckets with empty days", async () => {
-    const calls: unknown[] = [];
+    const queryRaw = vi.fn(async () => [
+      { date: "2026-06-30", sent: 1n, queued: "0", skipped: 0n, failed: 0n, total: 1n },
+      { date: "2026-07-01", sent: 0n, queued: "1", skipped: 0n, failed: 0n, total: 1n },
+      { date: "2026-07-02", sent: 0n, queued: "0", skipped: 0n, failed: 1n, total: 1n }
+    ]);
+    const findMany = vi.fn(() => { throw new Error("findMany must not be used for daily aggregation"); });
     const now = new Date("2026-07-02T03:00:00.000Z");
     const repository = new DeliveryAttemptRepository({
-      deliveryAttempt: {
-        async findMany(args: unknown) {
-          calls.push(args);
-          return [
-            { attemptedAt: new Date("2026-06-29T15:30:00.000Z"), status: "sent" },
-            { attemptedAt: new Date("2026-06-30T15:30:00.000Z"), status: "queued" },
-            { attemptedAt: new Date("2026-07-02T02:59:00.000Z"), status: "failed" },
-            { attemptedAt: new Date("2026-07-02T02:00:00.000Z"), status: "unknown" }
-          ];
-        }
-      }
-    });
+      deliveryAttempt: { findMany },
+      $queryRaw: queryRaw
+    } as never);
 
     const summary = await repository.summarizeDailyBuckets({ days: 4, now, timezone: "Asia/Seoul" });
 
-    expect(calls).toEqual([
-      {
-        where: {
-          attemptedAt: { gte: new Date("2026-06-28T15:00:00.000Z"), lte: now },
-          status: { in: ["sent", "queued", "skipped", "failed"] }
-        },
-        orderBy: { attemptedAt: "asc" },
-        select: { attemptedAt: true, status: true }
-      }
-    ]);
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(findMany).not.toHaveBeenCalled();
     expect(summary).toEqual({
       timezone: "Asia/Seoul",
       days: 4,
@@ -521,12 +498,9 @@ describe("DeliveryAttemptRepository worker writes", () => {
   it("returns zero-filled daily delivery trend when no records exist", async () => {
     const now = new Date("2026-07-02T03:00:00.000Z");
     const repository = new DeliveryAttemptRepository({
-      deliveryAttempt: {
-        async findMany() {
-          return [];
-        }
-      }
-    });
+      deliveryAttempt: {},
+      $queryRaw: vi.fn(async () => [])
+    } as never);
 
     const summary = await repository.summarizeDailyBuckets({ days: 2, now, timezone: "Asia/Seoul" });
 
