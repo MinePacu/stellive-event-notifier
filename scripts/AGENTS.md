@@ -19,6 +19,8 @@ Read this file only for repository scripts, local tooling, PR/MR helpers, or ope
 - Use detected scopes to select only relevant context and focused checks.
 - Do not inspect unrelated platform files or full diffs when path summaries and targeted diffs are enough.
 - Do not run full backend, Android, and iOS verification together unless detected scopes require it or the user explicitly asks.
+- Use `scripts/commit-push-lite.sh --push-all` only when the same commit must be pushed to resolved GitHub and GitLab remotes.
+- Commit messages must follow the `Commit Message Formatting` section below. Locate that heading and read only its small relevant range.
 - For GitHub PR inspection use `scripts/check-pr-lite.sh <pr-number>`.
 - For an explicitly authorized merge use `scripts/merge-pr-lite.sh <pr-number>`; add `--yes` only for approved non-interactive execution.
 - PR helpers are metadata/checks-first and must not fetch full diffs, comments, or CI logs automatically.
