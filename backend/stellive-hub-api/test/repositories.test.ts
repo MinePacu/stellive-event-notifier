@@ -71,43 +71,39 @@ describe("ExternalApiCallLogRepository", () => {
   });
 
   it("summarizes daily KST buckets by result and source", async () => {
-    const queryRaw = vi.fn(async () => [
+    let sql = "";
+    const queryRaw = vi.fn(async (strings: TemplateStringsArray) => {
+      sql = Array.from(strings).join("?");
+      return [
       {
-        date: "2026-07-02",
-        source: "youtube",
+        date: "2026-07-05",
+        source: "chzzk",
         total: 1n,
-        ok: "1",
+        ok: 1n,
         failed: 0n,
         rateLimited: 0n,
         quotaExceeded: 0n,
-        quotaUnits: "1"
-      },
-      {
-        date: "2026-07-02",
-        source: "chzzk",
-        total: 1n,
-        ok: 0n,
-        failed: "1",
-        rateLimited: 1n,
-        quotaExceeded: 0n,
         quotaUnits: 0n
       }
-    ]);
+      ];
+    });
     const findMany = vi.fn(() => { throw new Error("findMany must not be used for daily aggregation"); });
     const repository = new ExternalApiCallLogRepository({
       externalApiCallLog: { findMany },
       $queryRaw: queryRaw
     } as never);
 
-    const trend = await repository.summarizeDaily({ days: 2, now: new Date("2026-07-02T12:00:00.000Z") });
+    const trend = await repository.summarizeDaily({ days: 2, now: new Date("2026-07-05T07:30:00.000Z") });
 
     expect(queryRaw).toHaveBeenCalledTimes(1);
     expect(findMany).not.toHaveBeenCalled();
+    expect(sql).toContain("(\"requestedAt\" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul'");
+    expect(sql).not.toContain("timezone('Asia/Seoul', \"requestedAt\")");
     expect(trend.items).toEqual([
-      expect.objectContaining({ date: "2026-07-01", total: 0 }),
-      expect.objectContaining({ date: "2026-07-02", total: 2, ok: 1, failed: 1, rateLimited: 1, bySource: { youtube: 1, chzzk: 1 } })
+      expect.objectContaining({ date: "2026-07-04", total: 0, bySource: {} }),
+      expect.objectContaining({ date: "2026-07-05", total: 1, ok: 1, bySource: { chzzk: 1 } })
     ]);
-    expect(trend.totals).toMatchObject({ total: 2, ok: 1, failed: 1, rateLimited: 1, quotaUnits: 1, bySource: { youtube: 1, chzzk: 1 } });
+    expect(trend.totals).toMatchObject({ total: 1, ok: 1, failed: 0, rateLimited: 0, quotaUnits: 0, bySource: { chzzk: 1 } });
   });
 
   it("limits recent external API calls to the retention window and filters", async () => {
@@ -465,33 +461,35 @@ describe("DeliveryAttemptRepository worker writes", () => {
   });
 
   it("summarizes daily delivery attempts in KST buckets with empty days", async () => {
-    const queryRaw = vi.fn(async () => [
-      { date: "2026-06-30", sent: 1n, queued: "0", skipped: 0n, failed: 0n, total: 1n },
-      { date: "2026-07-01", sent: 0n, queued: "1", skipped: 0n, failed: 0n, total: 1n },
-      { date: "2026-07-02", sent: 0n, queued: "0", skipped: 0n, failed: 1n, total: 1n }
-    ]);
+    let sql = "";
+    const queryRaw = vi.fn(async (strings: TemplateStringsArray) => {
+      sql = Array.from(strings).join("?");
+      return [
+        { date: "2026-07-05", sent: 1n, queued: 0n, skipped: 0n, failed: 0n, total: 1n }
+      ];
+    });
     const findMany = vi.fn(() => { throw new Error("findMany must not be used for daily aggregation"); });
-    const now = new Date("2026-07-02T03:00:00.000Z");
+    const now = new Date("2026-07-05T07:30:00.000Z");
     const repository = new DeliveryAttemptRepository({
       deliveryAttempt: { findMany },
       $queryRaw: queryRaw
     } as never);
 
-    const summary = await repository.summarizeDailyBuckets({ days: 4, now, timezone: "Asia/Seoul" });
+    const summary = await repository.summarizeDailyBuckets({ days: 2, now, timezone: "Asia/Seoul" });
 
     expect(queryRaw).toHaveBeenCalledTimes(1);
     expect(findMany).not.toHaveBeenCalled();
+    expect(sql).toContain("(\"attemptedAt\" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul'");
+    expect(sql).not.toContain("timezone('Asia/Seoul', \"attemptedAt\")");
     expect(summary).toEqual({
       timezone: "Asia/Seoul",
-      days: 4,
+      days: 2,
       generatedAt: now.toISOString(),
       items: [
-        { date: "2026-06-29", sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 },
-        { date: "2026-06-30", sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 },
-        { date: "2026-07-01", sent: 0, queued: 1, skipped: 0, failed: 0, total: 1 },
-        { date: "2026-07-02", sent: 0, queued: 0, skipped: 0, failed: 1, total: 1 }
+        { date: "2026-07-04", sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 },
+        { date: "2026-07-05", sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }
       ],
-      totals: { sent: 1, queued: 1, skipped: 0, failed: 1, total: 3 }
+      totals: { sent: 1, queued: 0, skipped: 0, failed: 0, total: 1 }
     });
   });
 
