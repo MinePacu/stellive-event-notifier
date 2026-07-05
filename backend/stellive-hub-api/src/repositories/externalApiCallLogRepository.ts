@@ -194,7 +194,7 @@ export class ExternalApiCallLogRepository {
     const startAt = kstMidnightUtcFromKey(dateKeys[0] ?? formatKstDateKey(now));
     const rows = await this.prisma.$queryRaw<ExternalApiDailyAggregateRow[]>`
       SELECT
-        to_char(("requestedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') AS date,
+        to_char("requestedAt" AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') AS date,
         source,
         count(*) AS total,
         count(*) FILTER (WHERE "resultStatus" IN ('ok', 'not_modified')) AS ok,
