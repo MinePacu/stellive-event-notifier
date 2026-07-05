@@ -16,7 +16,10 @@ LOG_FILE="$(new_log_file "$ROOT" "ios-build-simulator")"
 require_command xcodebuild
 mkdir -p "$IOS_DERIVED_DATA_DIR"
 
-mapfile -t PROJECT_ARG < <(ios_project_arg "$IOS_PROJECT_DIR")
+PROJECT_ARG=()
+while IFS= read -r project_arg; do
+  PROJECT_ARG+=("$project_arg")
+done < <(ios_project_arg "$IOS_PROJECT_DIR")
 
 run_logged "$LOG_FILE" \
   xcodebuild build \
