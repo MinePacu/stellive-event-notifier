@@ -15,6 +15,10 @@ Read this file only for repository scripts, local tooling, PR/MR helpers, or ope
 ## Merge Helpers
 
 - Use `scripts/affected-scope.sh [base-ref]` to select context from changed paths without reading file contents.
+- Before commit or push preparation, run `scripts/pre-commit-scope.sh <base-ref>` or `scripts/pre-commit-scope.sh --staged`.
+- Use detected scopes to select only relevant context and focused checks.
+- Do not inspect unrelated platform files or full diffs when path summaries and targeted diffs are enough.
+- Do not run full backend, Android, and iOS verification together unless detected scopes require it or the user explicitly asks.
 - For GitHub PR inspection use `scripts/check-pr-lite.sh <pr-number>`.
 - For an explicitly authorized merge use `scripts/merge-pr-lite.sh <pr-number>`; add `--yes` only for approved non-interactive execution.
 - PR helpers are metadata/checks-first and must not fetch full diffs, comments, or CI logs automatically.

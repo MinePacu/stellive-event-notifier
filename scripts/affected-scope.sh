@@ -45,7 +45,7 @@ while IFS= read -r FILE_PATH; do
     docs/*|mockups/*|README.md|CODEMAP.md) printf '%s\n' docs >>"$SCOPES_FILE" ;;
     scripts/*) printf '%s\n' scripts >>"$SCOPES_FILE" ;;
     .github/*|.gitlab-ci.yml) printf '%s\n' ci >>"$SCOPES_FILE" ;;
-    AGENTS.md|.gitignore|.dockerignore) printf '%s\n' root >>"$SCOPES_FILE" ;;
+    AGENTS.md|.gitignore|.dockerignore|.serena/*) printf '%s\n' root >>"$SCOPES_FILE" ;;
     */*) : ;;
     ?*) printf '%s\n' root >>"$SCOPES_FILE" ;;
   esac
