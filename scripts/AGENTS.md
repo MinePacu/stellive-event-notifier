@@ -46,6 +46,8 @@ Use `minepacu@192.168.50.9` only when Docker-hosted backend or admin-console ver
 - Admin console: `http://192.168.50.9:4000/admin`
 - Sync the current workspace before rebuilding, excluding `.git/`, `.gradle/`, `node_modules/`, `dist/`, `build/`, `qa-screenshots/`, `.DS_Store`, `.env`, and `.env.*`.
 - Never transfer secrets, credentials, production device tokens, profile images, logos, fan art, captures, or prohibited media.
-- Use the compose file `backend/stellive-hub-api/docker-compose.yml`; rebuild with `up -d --build --force-recreate`, then check container state and only the required API log tail.
+- Use the compose file `backend/stellive-hub-api/docker-compose.yml`; rebuild with `up -d --build --remove-orphans`, then check container state and only the required API log tail.
+- Do not use `docker compose restart` to apply Compose, `env_file`, `environment`, or `.env` changes, because restart does not recreate containers with updated configuration.
+- Use `--force-recreate` only when explicitly requested, when a normal `up -d --build --remove-orphans` does not apply the expected configuration, when stale or inconsistent containers are suspected, or when container recovery is required.
 - If rebuilt images leave stale containers, use `up -d --no-build --force-recreate --remove-orphans` with the same compose file.
 - Keep server testing scoped to the requested behavior. Do not deploy unrelated experiments.

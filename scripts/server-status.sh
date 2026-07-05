@@ -9,7 +9,7 @@ ROOT="$(project_root)"
 SERVER_SSH_TARGET="${SERVER_SSH_TARGET:-}"
 SERVER_PROJECT_DIR="${SERVER_PROJECT_DIR:-~/StelLiveNoti}"
 SERVER_COMPOSE_FILE="${SERVER_COMPOSE_FILE:-backend/stellive-hub-api/docker-compose.yml}"
-SERVER_LOG_TAIL="${SERVER_LOG_TAIL:-40}"
+SERVER_LOG_TAIL="${SERVER_LOG_TAIL:-0}"
 LOG_FILE="$(new_log_file "$ROOT" "server-status")"
 
 require_command ssh
@@ -18,7 +18,15 @@ if [[ -z "$SERVER_SSH_TARGET" ]]; then
   exit 1
 fi
 
-REMOTE_COMMAND="cd $SERVER_PROJECT_DIR && docker ps --format 'table {{.Names}}\t{{.Status}}' | sed -n '1p;/stellive-hub-api/p' && docker compose -f $SERVER_COMPOSE_FILE logs --no-color --tail=$SERVER_LOG_TAIL api"
-run_logged "$LOG_FILE" ssh "$SERVER_SSH_TARGET" "$REMOTE_COMMAND"
+if [[ ! "$SERVER_LOG_TAIL" =~ ^[0-9]+$ ]]; then
+  echo "error: SERVER_LOG_TAIL must be a non-negative integer." >&2
+  exit 1
+fi
 
-echo "Server status check succeeded. Log saved: $LOG_FILE"
+REMOTE_COMMAND="cd $SERVER_PROJECT_DIR && docker ps --format 'table {{.Names}}\t{{.Status}}' | sed -n '1p;/stellive-hub-api/p'"
+if (( SERVER_LOG_TAIL > 0 )); then
+  REMOTE_COMMAND+=" && docker compose -f $SERVER_COMPOSE_FILE logs --no-color --tail=$SERVER_LOG_TAIL api"
+fi
+
+run_logged "$LOG_FILE" ssh "$SERVER_SSH_TARGET" "$REMOTE_COMMAND"
+cat "$LOG_FILE"
