@@ -20,7 +20,7 @@ Allowed production files:
 - `android/StelliveHubAndroid/app/src/main/res/drawable/bg_top_bar_button_glass.xml`
 - `android/StelliveHubAndroid/app/src/main/res/values/colors.xml`
 - `android/StelliveHubAndroid/app/src/main/res/values-night/colors.xml`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 
 Do not modify:
 
@@ -153,7 +153,7 @@ rtk adb -s adb-R3CN80F8E4N-xdQWoe._adb-tls-connect._tcp install -r android/Stell
 - [ ] Capture live page after scrolling:
 
 ```bash
-rtk adb -s adb-R3CN80F8E4N-xdQWoe._adb-tls-connect._tcp shell am start -n dev.stellive.hub/.MainActivity
+rtk adb -s adb-R3CN80F8E4N-xdQWoe._adb-tls-connect._tcp shell am start -n dev.minepacu.stelliveeventnotifier/.MainActivity
 rtk adb -s adb-R3CN80F8E4N-xdQWoe._adb-tls-connect._tcp exec-out screencap -p > /private/tmp/stellive-android-live-topbar-fade.png
 ```
 

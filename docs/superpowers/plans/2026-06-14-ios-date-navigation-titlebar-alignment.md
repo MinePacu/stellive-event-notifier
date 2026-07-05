@@ -18,9 +18,9 @@ Modify:
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarView.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarViewModel.swift` only if the existing actions cannot fully support the mockup states.
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift` only if state/action behavior changes.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt` only if a reusable topbar spacing policy helper is needed.
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt` only if a policy helper is added.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt` only if a reusable topbar spacing policy helper is needed.
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt` only if a policy helper is added.
 
 Reference:
 - `mockups/ios-date-navigation-redesign-mockup.html`
@@ -36,7 +36,7 @@ Reference:
 - [ ] Avoid broad filesystem scans, full project builds, or full test suites unless focused checks fail in a way that requires broader context.
 - [ ] Run focused tests first:
   - iOS: `rtk xcodebuild test -project ios/StelliveHubiOS/StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination "platform=iOS Simulator,name=iPhone 16" -only-testing:StelliveHubiOSTests/HubEventsCalendarViewModelTests`
-  - Android: `rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.stellive.hub.MainUiPolicyTest`
+  - Android: `rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest`
 - [ ] If UI screenshots are needed, capture one focused screen per platform and delete temporary screenshots before final handoff unless the user explicitly asks to keep them.
 - [ ] Summarize verification output instead of pasting full build logs.
 

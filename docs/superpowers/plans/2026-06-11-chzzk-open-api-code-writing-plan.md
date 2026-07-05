@@ -592,12 +592,12 @@ rtk git commit -m "test(api): cover CHZZK notification policy"
 **Files**
 
 Create:
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ChzzkBackendBoundaryTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ChzzkBackendBoundaryTest.kt`
 
 Modify:
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
 
 - [ ] Add `ChzzkBackendBoundaryTest.kt` that scans Android app source files and fails if it finds:
   - `CHZZK_CLIENT_ID`
@@ -614,7 +614,7 @@ Modify:
 Working directory: `android/StelliveHubAndroid`
 
 ```bash
-rtk proxy ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ChzzkBackendBoundaryTest
+rtk proxy ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ChzzkBackendBoundaryTest
 ```
 
 Expected: PASS if app code already respects the boundary; FAIL if a direct CHZZK reference exists.
@@ -626,7 +626,7 @@ Expected: PASS if app code already respects the boundary; FAIL if a direct CHZZK
 - [ ] Run focused Android UI tests.
 
 ```bash
-rtk proxy ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ChzzkBackendBoundaryTest --tests dev.stellive.hub.MainUiPolicyTest
+rtk proxy ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ChzzkBackendBoundaryTest --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest
 ```
 
 Expected: PASS.
@@ -634,7 +634,7 @@ Expected: PASS.
 - [ ] Commit this task.
 
 ```bash
-rtk git add android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ChzzkBackendBoundaryTest.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt
+rtk git add android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ChzzkBackendBoundaryTest.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt
 rtk git commit -m "test(android): enforce CHZZK backend boundary"
 ```
 

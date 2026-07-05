@@ -22,11 +22,11 @@ ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarViewModel.swift
 ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarView.swift
 ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift
 ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarViewModel.kt
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarView.kt
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt
-android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsCalendarViewModelTest.kt
-android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarViewModel.kt
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarView.kt
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt
+android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsCalendarViewModelTest.kt
+android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt
 ```
 
 - [ ] Prefer ViewModel tests over UI screenshots.
@@ -42,14 +42,14 @@ Modify:
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarView.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarViewModel.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarView.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsCalendarViewModelTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarViewModel.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarView.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsCalendarViewModelTest.kt`
 
 Modify only if shared helper logic moves there:
 
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt`
 
 Do not modify:
 
@@ -64,7 +64,7 @@ Do not modify:
 - [ ] Run:
 
 ```bash
-rtk rg -n "visibleEntries|selectedMonth|selectMonth|goToNextMonth|goToPreviousMonth|eventList|선택한 범위|noticeCard|방송/라이브/업로드|HubEventRow|HubEventImagePolicy" ios/StelliveHubiOS/StelliveHubiOS/Views ios/StelliveHubiOS/StelliveHubiOSTests android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub
+rtk rg -n "visibleEntries|selectedMonth|selectMonth|goToNextMonth|goToPreviousMonth|eventList|선택한 범위|noticeCard|방송/라이브/업로드|HubEventRow|HubEventImagePolicy" ios/StelliveHubiOS/StelliveHubiOS/Views ios/StelliveHubiOS/StelliveHubiOSTests android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier
 ```
 
 - [ ] Read short windows only around matches:
@@ -73,9 +73,9 @@ rtk rg -n "visibleEntries|selectedMonth|selectMonth|goToNextMonth|goToPreviousMo
 rtk proxy sed -n '1,220p' ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarViewModel.swift
 rtk proxy sed -n '1,260p' ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarView.swift
 rtk proxy sed -n '1,220p' ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift
-rtk proxy sed -n '240,290p' android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarViewModel.kt
-rtk proxy sed -n '300,335p' android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarView.kt
-rtk proxy sed -n '500,525p' android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt
+rtk proxy sed -n '240,290p' android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarViewModel.kt
+rtk proxy sed -n '300,335p' android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarView.kt
+rtk proxy sed -n '500,525p' android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt
 ```
 
 Expected: Confirm selected day/range drives the calendar-local list, and page-level feed can be made month-scoped.
@@ -188,7 +188,7 @@ HubEventImagePolicy.displayURL(for: event.image)
 
 ## Step 8: Add Failing Android ViewModel Tests
 
-- [ ] Modify `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsCalendarViewModelTest.kt`.
+- [ ] Modify `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsCalendarViewModelTest.kt`.
 - [ ] Add a test proving visible entries include all events in the selected month, not only selected date:
 
 ```kotlin
@@ -230,7 +230,7 @@ fun monthNavigationUpdatesVisibleEntriesToTargetMonth() {
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubEventsCalendarViewModelTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventsCalendarViewModelTest
 ```
 
 Expected: FAIL because `visibleEntries` still follows selected date/range.
@@ -295,7 +295,7 @@ rtk xcodebuild test -project ios/StelliveHubiOS/StelliveHubiOS.xcodeproj -scheme
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubEventsCalendarViewModelTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventsCalendarViewModelTest
 ```
 
 Expected: PASS. If iOS simulator is unavailable, report that specific environment limitation.

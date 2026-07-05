@@ -73,9 +73,9 @@ Android/iOS 노래 페이지가 서버에 저장된 공식 커버곡 목록을 �
 
 ### Android
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
   - `/v1/music`, `/v1/members/:id/music` cursor 순회와 중복 제거를 담당한다.
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`
   - `nextCursor`가 있을 때 여러 페이지를 합치는지 검증한다.
 
 ### iOS
@@ -112,7 +112,7 @@ rtk npm test -- musicRepository
 - Android:
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ServerHubRepositoryTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 - iOS:

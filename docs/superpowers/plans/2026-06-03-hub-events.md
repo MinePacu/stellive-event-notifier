@@ -33,18 +33,18 @@ Shared and backend:
 
 Android:
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`  
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`  
   Adds hub event enums, model, summary model, filters, and event notification types.
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`  
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`  
   Adds seed hub events, effective summary accessors, filtering helpers, and Gangzi/gamja exclusion checks.
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`  
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`  
   Adds labels and ordering rules for `굿즈/행사`.
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainNavigationHistory.kt`  
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainNavigationHistory.kt`  
   Adds a non-tab `GOODS_EVENTS` screen for navigation from home preview.
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`  
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`  
   Adds home preview, list screen, detail-like cards, and no new bottom tab.
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt`
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
 
 iOS:
 
@@ -895,7 +895,7 @@ git commit -m "feat: expose hub event APIs"
 
 - Modify: `backend/stellive-hub-api/test/preferenceResolution.test.ts`
 - Modify: `backend/stellive-hub-api/test/hubEvents.test.ts`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
 - Modify: `ios/StelliveHubiOS/StelliveHubiOS/Models/HubModels.swift`
 
 - [ ] **Step 1: Add backend preference regression tests**
@@ -970,7 +970,7 @@ Run Android after creating the test:
 
 ```bash
 cd android/StelliveHubAndroid
-./gradlew testDebugUnitTest --tests dev.stellive.hub.HubEventsPolicyTest
+./gradlew testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventsPolicyTest
 ```
 
 Expected: FAIL because Android event enum entries do not exist yet.
@@ -986,7 +986,7 @@ Expected: FAIL because iOS event enum entries do not exist yet.
 
 - [ ] **Step 4: Add Android event enum entries**
 
-Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`:
+Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`:
 
 ```kotlin
 enum class NotificationPlatform(val displayName: String) {
@@ -1108,7 +1108,7 @@ Expected: backend PASS now; Android/iOS PASS after their model tasks.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add shared/schemas/domain.ts backend/stellive-hub-api/test/preferenceResolution.test.ts backend/stellive-hub-api/test/hubEvents.test.ts android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt ios/StelliveHubiOS/StelliveHubiOS/Models/HubModels.swift
+git add shared/schemas/domain.ts backend/stellive-hub-api/test/preferenceResolution.test.ts backend/stellive-hub-api/test/hubEvents.test.ts android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt ios/StelliveHubiOS/StelliveHubiOS/Models/HubModels.swift
 git commit -m "feat: add hub event notification types"
 ```
 
@@ -1118,23 +1118,23 @@ git commit -m "feat: add hub event notification types"
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Create: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Create: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt`
 
 - [ ] **Step 1: Write failing Android policy tests**
 
-Create `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt`:
+Create `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt`:
 
 ```kotlin
-package dev.stellive.hub
+package dev.minepacu.stelliveeventnotifier
 
-import dev.stellive.hub.core.model.HubEventCategory
-import dev.stellive.hub.core.model.HubEventStatus
-import dev.stellive.hub.core.model.NotificationEventType
-import dev.stellive.hub.feature.home.MainUiPolicy
-import dev.stellive.hub.feature.home.MockHubRepository
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
+import dev.minepacu.stelliveeventnotifier.core.model.NotificationEventType
+import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
+import dev.minepacu.stelliveeventnotifier.feature.home.MockHubRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -1189,14 +1189,14 @@ Run:
 
 ```bash
 cd android/StelliveHubAndroid
-./gradlew testDebugUnitTest --tests dev.stellive.hub.HubEventsPolicyTest
+./gradlew testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventsPolicyTest
 ```
 
 Expected: FAIL because hub event models and helpers do not exist.
 
 - [ ] **Step 3: Add Android models**
 
-Add to `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`:
+Add to `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`:
 
 ```kotlin
 enum class HubEventCategory(val displayName: String) {
@@ -1367,7 +1367,7 @@ fun hubEventStatusRank(status: HubEventStatus): Int = when (status) {
 }
 ```
 
-Add `import dev.stellive.hub.core.model.HubEventStatus`.
+Add `import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus`.
 
 - [ ] **Step 6: Run Android tests**
 
@@ -1375,7 +1375,7 @@ Run:
 
 ```bash
 cd android/StelliveHubAndroid
-./gradlew testDebugUnitTest --tests dev.stellive.hub.HubEventsPolicyTest --tests dev.stellive.hub.MainUiPolicyTest
+./gradlew testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventsPolicyTest --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest
 ```
 
 Expected: PASS.
@@ -1383,7 +1383,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt
+git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt
 git commit -m "feat: add Android hub event models"
 ```
 
@@ -1393,9 +1393,9 @@ git commit -m "feat: add Android hub event models"
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainNavigationHistory.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainNavigationHistoryTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainNavigationHistory.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainNavigationHistoryTest.kt`
 
 - [ ] **Step 1: Add failing navigation test**
 
@@ -1420,7 +1420,7 @@ Run:
 
 ```bash
 cd android/StelliveHubAndroid
-./gradlew testDebugUnitTest --tests dev.stellive.hub.MainNavigationHistoryTest
+./gradlew testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.MainNavigationHistoryTest
 ```
 
 Expected: FAIL because `GOODS_EVENTS` does not exist.
@@ -1534,7 +1534,7 @@ Expected: PASS.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainNavigationHistory.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainNavigationHistoryTest.kt
+git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainNavigationHistory.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainNavigationHistoryTest.kt
 git commit -m "feat: add Android hub events screen"
 ```
 

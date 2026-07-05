@@ -30,8 +30,8 @@ Steps use checkbox (`- [ ]`) syntax for tracking.
 Create:
 
 - `backend/stellive-hub-api/test/hubEventImagePolicy.test.ts`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/hubevents/HubEventImagePolicy.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventImagePolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/hubevents/HubEventImagePolicy.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventImagePolicyTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/HubEventImagePolicy.swift`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubEventImagePolicyTests.swift`
 
@@ -50,10 +50,10 @@ Modify:
 - `backend/stellive-hub-api/test/adminHubEventRoutes.test.ts`
 - `backend/stellive-hub-api/test/pushPayloadFactory.test.ts`
 - `backend/stellive-hub-api/test/mobileBootstrap.test.ts`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubApiClientTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubApiClientTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Models/HubModels.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/HubAPIClient.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift`
@@ -129,20 +129,20 @@ export interface HubEventImage {
 
 ## Android Implementation Steps
 
-- [ ] In `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventImagePolicyTest.kt`, add failing tests for display eligibility of all five policy states, missing URL, invalid URL, and HTTP URL.
-- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`, add `enum class HubEventImagePolicyState` with serialized API values.
-- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`, add `data class HubEventImage(policyState, url, sourceLabel, sourceUrl, altText)`.
-- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`, add `val image: HubEventImage? = null` to `HubEvent`.
-- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/hubevents/HubEventImagePolicy.kt`, implement `fun canDisplayHubEventImage(image: HubEventImage?): Boolean`.
-- [ ] Run `rtk ./gradlew test --tests dev.stellive.hub.HubEventImagePolicyTest` from `android/StelliveHubAndroid`; expected result: pass.
-- [ ] In `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubApiClientTest.kt`, add a failing JSON decode test for `HubEventDto.image` with allowed metadata and `image = null`.
-- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt`, add DTOs for image metadata and map them to `HubEventImage`.
-- [ ] Run `rtk ./gradlew test --tests dev.stellive.hub.HubApiClientTest` from `android/StelliveHubAndroid`; expected result: pass.
-- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`, add a private `loadHubEventImage(imageView, image)` helper that uses existing OkHttp/coroutines, decodes with `BitmapFactory`, and never writes to disk.
-- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`, update `hubEventCard` to add an `ImageView` only when `canDisplayHubEventImage(event.image)` returns true.
-- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`, collapse/remove the `ImageView` on load failure; do not leave a blank box or error copy.
-- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`, update detail rendering for `GOODS_EVENT_DETAIL` with the same optional image policy gate.
-- [ ] In `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt`, add assertions that text-only HubEvent cards remain the default policy and no user-facing no-image copy is introduced in policy constants.
+- [ ] In `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventImagePolicyTest.kt`, add failing tests for display eligibility of all five policy states, missing URL, invalid URL, and HTTP URL.
+- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`, add `enum class HubEventImagePolicyState` with serialized API values.
+- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`, add `data class HubEventImage(policyState, url, sourceLabel, sourceUrl, altText)`.
+- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`, add `val image: HubEventImage? = null` to `HubEvent`.
+- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/hubevents/HubEventImagePolicy.kt`, implement `fun canDisplayHubEventImage(image: HubEventImage?): Boolean`.
+- [ ] Run `rtk ./gradlew test --tests dev.minepacu.stelliveeventnotifier.HubEventImagePolicyTest` from `android/StelliveHubAndroid`; expected result: pass.
+- [ ] In `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubApiClientTest.kt`, add a failing JSON decode test for `HubEventDto.image` with allowed metadata and `image = null`.
+- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt`, add DTOs for image metadata and map them to `HubEventImage`.
+- [ ] Run `rtk ./gradlew test --tests dev.minepacu.stelliveeventnotifier.HubApiClientTest` from `android/StelliveHubAndroid`; expected result: pass.
+- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`, add a private `loadHubEventImage(imageView, image)` helper that uses existing OkHttp/coroutines, decodes with `BitmapFactory`, and never writes to disk.
+- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`, update `hubEventCard` to add an `ImageView` only when `canDisplayHubEventImage(event.image)` returns true.
+- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`, collapse/remove the `ImageView` on load failure; do not leave a blank box or error copy.
+- [ ] In `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`, update detail rendering for `GOODS_EVENT_DETAIL` with the same optional image policy gate.
+- [ ] In `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt`, add assertions that text-only HubEvent cards remain the default policy and no user-facing no-image copy is introduced in policy constants.
 - [ ] Run `rtk ./gradlew test` from `android/StelliveHubAndroid`; expected result: Android unit tests pass.
 
 ## iOS Implementation Steps

@@ -13,10 +13,10 @@
 ## Token-Minimized Work Rules
 
 - Read only these files unless a compile error points elsewhere:
-  - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-  - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-  - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainNavigationHistory.kt`
-  - `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+  - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+  - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+  - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainNavigationHistory.kt`
+  - `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
   - `ios/StelliveHubiOS/StelliveHubiOS/Views/SongsView.swift`
   - `ios/StelliveHubiOS/StelliveHubiOSTests/SongUiPolicyTests.swift`
 - Use `rtk rg` for symbol lookup: `renderSongs`, `SongRow`, `SongThumbnailView`, `songMatchesGeneration`, `songPageItems`, `youtubeUrl`.
@@ -31,7 +31,7 @@ Run only tests tied to changed code:
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 ```bash
@@ -44,9 +44,9 @@ Run broader Android/iOS build only if focused tests expose compile errors in sha
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
 
 - [ ] **Step 1: Add failing URL policy tests**
 
@@ -66,7 +66,7 @@ fun songExternalUrlAcceptsHttpAndHttpsOnly() {
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 Expected: `songExternalUrl` is missing.
@@ -101,7 +101,7 @@ Keep existing `openExternalUrl()` as the only external-launch path.
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 Expected: URL policy tests pass.
@@ -110,9 +110,9 @@ Expected: URL policy tests pass.
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
 - Modify: `ios/StelliveHubiOS/StelliveHubiOS/Views/SongsView.swift`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
 - Test: `ios/StelliveHubiOS/StelliveHubiOSTests/SongUiPolicyTests.swift`
 
 - [ ] **Step 1: Add failing Android member filter tests**
@@ -155,7 +155,7 @@ XCTAssertTrue(IOSSongPagePolicy.canClearMemberFilter("neneko-mashiro"))
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 ```bash
@@ -232,10 +232,10 @@ Run the same Android/iOS focused commands. Expected: member policy tests pass.
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainNavigationHistory.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainNavigationHistory.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
 
 - [ ] **Step 1: Add screen id**
 
@@ -342,7 +342,7 @@ MainUiPolicy.songMemberFilters(currentMembers).forEach { option ->
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 Expected: focused policy tests pass; UI compile errors, if any, are local to `MainActivity.kt`.
@@ -448,10 +448,10 @@ Expected: focused policy tests pass.
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 - Modify: `ios/StelliveHubiOS/StelliveHubiOS/Views/SongsView.swift`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
 - Test: `ios/StelliveHubiOS/StelliveHubiOSTests/SongUiPolicyTests.swift`
 
 - [ ] **Step 1: Add failing aspect tests**
@@ -529,7 +529,7 @@ Apply the same frame to placeholder/fallback.
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 ```bash
@@ -546,7 +546,7 @@ Expected: aspect policy tests pass and song UI files compile.
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 - [ ] **Step 2: iOS focused test**

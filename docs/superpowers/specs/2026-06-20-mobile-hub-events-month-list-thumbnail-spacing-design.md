@@ -89,11 +89,11 @@ The current `HubEventsCalendarView` owns the selected day/range list through `ev
 
 Expected touch points:
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarViewModel.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarView.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsCalendarViewModelTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt` only if policy helpers move there.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarViewModel.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarView.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsCalendarViewModelTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt` only if policy helpers move there.
 
 The current Android ViewModel computes `visibleEntries` from selected day/range. It should expose month-filtered entries or month-filtered dates. `HubEventsCalendarView` should stop rendering the selected day/range empty message under the calendar. `MainActivity` should keep rendering date-section event cards and add notice top margin.
 

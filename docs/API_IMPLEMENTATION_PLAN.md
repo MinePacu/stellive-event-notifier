@@ -176,7 +176,7 @@ X_FREE_POLLING_ENABLED=false
 - `backend/stellive-hub-api/src/adapters/chzzk/chzzkOpenApiAdapter.ts` polls catalog CHZZK channel IDs, updates live-status cache, and emits started/ended platform events.
 - `backend/stellive-hub-api/src/routes/internalRoutes.ts` exposes `POST /v1/internal/schedulers/chzzk/live-status`.
 - `backend/stellive-hub-api/src/repositories/liveStatusRepository.ts` stores normalized cache rows used by `/v1/live-status`.
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ChzzkBackendBoundaryTest.kt` and `ios/StelliveHubiOS/StelliveHubiOSTests/ChzzkBackendBoundaryTests.swift` enforce the mobile backend boundary.
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ChzzkBackendBoundaryTest.kt` and `ios/StelliveHubiOS/StelliveHubiOSTests/ChzzkBackendBoundaryTests.swift` enforce the mobile backend boundary.
 
 **Rules**
 

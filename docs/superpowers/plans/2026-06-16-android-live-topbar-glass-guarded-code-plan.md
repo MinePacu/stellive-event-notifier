@@ -14,7 +14,7 @@ Implementation Plan
 
 Allowed production files:
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 - `android/StelliveHubAndroid/app/src/main/res/layout/activity_main.xml`
 - `android/StelliveHubAndroid/app/src/main/res/values/colors.xml`
 - `android/StelliveHubAndroid/app/src/main/res/drawable/bg_top_bar_glass.xml`
@@ -61,7 +61,7 @@ rtk git status --short
 - [ ] Run:
 
 ```bash
-rtk grep "topBar\\|collapsedTitle\\|topBarDivider\\|configureTopBarGlass\\|updateTopBarGlass" android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt
+rtk grep "topBar\\|collapsedTitle\\|topBarDivider\\|configureTopBarGlass\\|updateTopBarGlass" android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt
 ```
 
 - [ ] Run:

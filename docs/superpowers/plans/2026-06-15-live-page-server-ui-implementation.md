@@ -23,7 +23,7 @@
 
 Create:
 
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/LivePageServerUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/LivePageServerUiPolicyTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/LivePageServerModelTests.swift`
 
 Modify:
@@ -32,12 +32,12 @@ Modify:
 - `shared/schemas/mobileApi.ts`
 - `backend/stellive-hub-api/src/app.ts`
 - `backend/stellive-hub-api/test/appRoutes.test.ts`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiClient.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiClient.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/HubAPIClient.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/MockHubStore.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/ServerHubStore.swift`
@@ -110,7 +110,7 @@ Based on `docs/mockups/live-page-mobile-preview.html`:
 
 ## Step 2: Preserve Live Fields In Android Models
 
-- [ ] Extend `HubMember` in `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt` with:
+- [ ] Extend `HubMember` in `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt` with:
   - `liveTitle: String? = null`
   - `liveViewerCount: Int? = null`
   - `livePlatformUrl: String? = null`
@@ -121,7 +121,7 @@ Based on `docs/mockups/live-page-mobile-preview.html`:
 - [ ] Add `LivePageServerUiPolicyTest.kt` coverage for merge behavior:
   - live server row populates title, viewer count, started time, and platform URL
   - missing server row clears live-specific fields
-- [ ] Run `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.LivePageServerUiPolicyTest` from `android/StelliveHubAndroid`.
+- [ ] Run `rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.LivePageServerUiPolicyTest` from `android/StelliveHubAndroid`.
 
 ## Step 3: Add Android UI Formatters
 
@@ -137,7 +137,7 @@ Based on `docs/mockups/live-page-mobile-preview.html`:
   - `1,234`
   - missing title fallback
   - missing viewer count hidden state
-- [ ] Run `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.LivePageServerUiPolicyTest`.
+- [ ] Run `rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.LivePageServerUiPolicyTest`.
 
 ## Step 4: Implement Android Live Card UI
 
@@ -210,7 +210,7 @@ Based on `docs/mockups/live-page-mobile-preview.html`:
 - [ ] Launch Android against the backend base URL and verify the Live page shows broadcast title, elapsed time, viewer count, and CHZZK action.
 - [ ] Launch iOS against the backend base URL and verify the same display.
 - [ ] Confirm neither app calls CHZZK directly by running the existing backend-boundary tests:
-  - Android: `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ChzzkBackendBoundaryTest`
+  - Android: `rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ChzzkBackendBoundaryTest`
   - iOS: run `ChzzkBackendBoundaryTests` in the iOS test target.
 
 ## Acceptance Criteria

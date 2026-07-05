@@ -318,8 +318,8 @@ fun needsCalendarFetch(targetFrom: LocalDate, targetTo: LocalDate, loadedFrom: L
 권장 검증:
 
 ```bash
-rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
-rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.stellive.hub.HubEventsCalendarViewModelTest
+rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
+rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventsCalendarViewModelTest
 ```
 
 ### iOS

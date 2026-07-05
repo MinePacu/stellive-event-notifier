@@ -29,7 +29,7 @@
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest --tests dev.stellive.hub.MainUiPolicyTest --tests dev.stellive.hub.ServerHubRepositoryTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest
 ```
 
 - iOS home/recent cover policy 변경:
@@ -53,24 +53,24 @@ rtk npm test -- musicYoutubeDataApiClient musicChannelDiscoverySyncService music
 
 ### Android
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
   - 노래 페이지 중복 설명 카드 제거/축소.
   - iOS와 유사한 멤버 필터 selector card 표시.
   - 검색 입력 재렌더 debounce 또는 submit 방식 적용.
   - 홈/라이브/노래/굿즈·행사 server status strip 추가.
   - 홈 최근 커버곡 section 추가.
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
   - member filter selector label/count 정책.
   - server status display text 정책.
   - search query normalization/debounce eligibility 정책.
   - home recent cover slicing 정책.
-- Modify if needed: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/HubRepository.kt`
+- Modify if needed: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/HubRepository.kt`
   - 홈 최근 커버곡이 repository contract로 필요할 경우 helper 추가.
-- Modify if needed: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
+- Modify if needed: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
   - 기존 `songs()` 또는 `music()` 호출 결과에서 cover 최신곡 재사용.
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
-- Test if repository changes: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
+- Test if repository changes: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`
 
 ### iOS
 
@@ -115,9 +115,9 @@ rtk npm test -- musicYoutubeDataApiClient musicChannelDiscoverySyncService music
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
 
 - [ ] Add policy tests for selected member label, count text, clear availability, and member-only options.
 - [ ] Replace the current large `compactEventCard("멤버", ...)` member selector with a smaller selector row/card using the existing Android colors/card shapes.
@@ -139,9 +139,9 @@ assertFalse(MainUiPolicy.canClearSongMemberFilter("all"))
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
 
 - [ ] Remove the large body card that repeats the page title `노래`.
 - [ ] Add a compact source/status strip if explanatory text is still needed.
@@ -158,9 +158,9 @@ assertEquals("서버 캐시 기반 · YouTube 직접 호출 없음", MainUiPolic
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
 
 - [ ] Add a small reusable `serverStatusStrip()` builder in `MainActivity`.
 - [ ] Add it to Home, Live, Songs, Goods/Events render paths.
@@ -178,9 +178,9 @@ assertEquals("오프라인", MainUiPolicy.serverConnectionLabel(isUsingFallback 
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
 
 - [ ] Before changing code, reproduce or inspect the crash path around `songSearchCard()` and callbacks.
 - [ ] Stop calling `renderSongs()` synchronously from every text-change callback.
@@ -201,11 +201,11 @@ assertEquals("stella", MainUiPolicy.normalizedSongQuery("  stella  "))
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Modify if needed: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
-- Test if repository changes: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Modify if needed: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
+- Test if repository changes: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`
 
 - [ ] Add `recentCoverSongs(songs, limit)` policy helper.
 - [ ] Render up to 5 recent cover songs on Home.

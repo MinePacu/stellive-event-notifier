@@ -591,8 +591,8 @@ Android:
 
 ```bash
 cd android/StelliveHubAndroid
-./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.*Network*
-./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.*Device*
+./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.*Network*
+./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.*Device*
 ```
 
 iOS:

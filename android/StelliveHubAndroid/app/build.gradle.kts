@@ -17,11 +17,11 @@ plugins {
 }
 
 android {
-    namespace = "dev.stellive.hub"
+    namespace = "dev.minepacu.stelliveeventnotifier"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.stellive.hub"
+        applicationId = "dev.minepacu.stelliveeventnotifier"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

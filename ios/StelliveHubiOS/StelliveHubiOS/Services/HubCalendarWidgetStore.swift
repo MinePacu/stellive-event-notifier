@@ -1,7 +1,7 @@
 import Foundation
 
 enum HubCalendarWidgetStore {
-    static let appGroupIdentifier = "group.dev.stellive.hub"
+    static let appGroupIdentifier = "group.dev.minepacu.stelliveeventnotifier"
 
     private static let fileName = "hub-calendar-widget-snapshot.json"
 
