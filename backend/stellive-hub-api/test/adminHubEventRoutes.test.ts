@@ -130,6 +130,15 @@ describe("admin hub event routes", () => {
     }
   });
 
+  it("defaults the hub event status filter to open while keeping all statuses and ended available", () => {
+    const html = renderAdminConsoleHtml();
+
+    expect(html).toContain('id="hub-event-status-filter"');
+    expect(html).toContain('<option value="open" selected>Open</option>');
+    expect(html).toContain('<option value="">All statuses</option>');
+    expect(html).toContain('<option value="ended">Ended</option>');
+  });
+
   it("renders backend-supported hub event option values and operator guidance", () => {
     const html = renderAdminConsoleHtml();
 
@@ -201,6 +210,19 @@ describe("admin hub event routes", () => {
     expect(response.headers["access-control-allow-origin"]).toBeUndefined();
     expect(response.json()).toEqual({ items: [event] });
     expect(service.list).toHaveBeenCalledWith(expect.objectContaining({ publicationState: "draft", limit: 5 }));
+  });
+
+  it("passes the ended status filter to the admin hub event list service", async () => {
+    const { app, service } = await buildTestApp();
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/admin/hub-events?status=ended&limit=5",
+      headers: { authorization: "Bearer admin-token" }
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(service.list).toHaveBeenCalledWith(expect.objectContaining({ status: "ended", limit: 5 }));
   });
 
   it("passes explicit null date fields from update requests", async () => {

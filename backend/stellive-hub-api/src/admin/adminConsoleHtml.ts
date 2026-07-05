@@ -1893,12 +1893,12 @@ export function renderAdminConsoleHtml(): string {
                   </select>
                 </div>
                 <div class="field">
-                  <label class="has-tooltip" data-tooltip="Filter the events list by public-facing status." title="Filter the events list by public-facing status." for="hub-event-status-filter">Public status</label>
+                  <label class="has-tooltip" data-tooltip="Defaults to open events. Select Ended to review finished events." title="Defaults to open events. Select Ended to review finished events." for="hub-event-status-filter">Public status</label>
                   <select id="hub-event-status-filter">
-                    <option value="">All</option>
+                    <option value="open" selected>Open</option>
+                    <option value="">All statuses</option>
                     <option value="announced">Announced</option>
                     <option value="upcoming">Upcoming</option>
-                    <option value="open">Open</option>
                     <option value="closing_soon">Closing soon</option>
                     <option value="ended">Ended</option>
                     <option value="cancelled">Cancelled</option>
