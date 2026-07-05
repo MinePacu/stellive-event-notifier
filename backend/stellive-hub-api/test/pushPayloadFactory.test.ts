@@ -151,11 +151,24 @@ describe("buildPushPayload", () => {
     expect(payload.notification.imageUrl).toBe("https://example.com/event.jpg");
     expect(payload.android.notification?.imageUrl).toBe("https://example.com/event.jpg");
     expect(payload.apns.fcmOptions?.imageUrl).toBe("https://example.com/event.jpg");
-    expect(payload.data).not.toHaveProperty("thumbnailUrl");
+    for (const key of [
+      "imageUrl",
+      "thumbnailUrl",
+      "image",
+      "logoUrl",
+      "profileImage",
+      "posterUrl",
+      "rawPayload"
+    ]) {
+      expect(payload.data).not.toHaveProperty(key);
+    }
   });
 
-  it("omits unsafe thumbnail URLs from provider image fields", () => {
-    for (const thumbnailUrl of ["http://example.com/event.jpg", "not-a-url"]) {
+  it.each([
+    "http://example.com/event.jpg",
+    "not-a-url",
+    `https://example.com/${"a".repeat(2049)}`
+  ])("omits unsafe thumbnail URL %s from provider image fields", (thumbnailUrl) => {
       const payload = buildPushPayload({
         event: event({ thumbnailUrl }),
         resolution: resolution(),
@@ -166,8 +179,22 @@ describe("buildPushPayload", () => {
       expect(payload.android).not.toHaveProperty("notification");
       expect(payload.apns).not.toHaveProperty("fcmOptions");
       expect(payload.data).not.toHaveProperty("thumbnailUrl");
-    }
   });
+
+  it.each(["token", "key", "secret", "signature", "auth", "credential"])(
+    "omits thumbnail URLs whose query parameter key contains %s",
+    (credentialKey) => {
+      const payload = buildPushPayload({
+        event: event({ thumbnailUrl: `https://example.com/event.jpg?image_${credentialKey}_value=redacted` }),
+        resolution: resolution(),
+        deliveryLevel: "immediate_push" as NotificationDeliveryLevel
+      });
+
+      expect(payload.notification).not.toHaveProperty("imageUrl");
+      expect(payload.android).not.toHaveProperty("notification");
+      expect(payload.apns).not.toHaveProperty("fcmOptions");
+    }
+  );
 
   it("does not include HubEvent image metadata in push payload data", () => {
     const payload = buildPushPayload({
@@ -177,16 +204,28 @@ describe("buildPushPayload", () => {
             policyState: "official_runtime_url",
             url: "https://example.com/event.jpg",
             bytes: "not-allowed"
-          }
+          },
+          logoUrl: "https://example.com/logo.png",
+          profileImage: "https://example.com/profile.png",
+          posterUrl: "https://example.com/poster.png",
+          providerResponse: { private: "not-allowed" }
         }
       }),
       resolution: resolution(),
       deliveryLevel: "immediate_push" as NotificationDeliveryLevel
     });
 
-    expect(JSON.stringify(payload.data)).not.toContain("event.jpg");
-    expect(JSON.stringify(payload.data)).not.toContain("bytes");
-    expect(payload.data).not.toHaveProperty("image");
-    expect(payload.data).not.toHaveProperty("thumbnailUrl");
+    const serialized = JSON.stringify(payload);
+    for (const forbiddenValue of [
+      "event.jpg",
+      "bytes",
+      "logo.png",
+      "profile.png",
+      "poster.png",
+      "providerResponse",
+      "not-allowed"
+    ]) {
+      expect(serialized).not.toContain(forbiddenValue);
+    }
   });
 });

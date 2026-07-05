@@ -135,6 +135,61 @@ describe("hub event notification candidates", () => {
     });
   });
 
+  it.each(["official_runtime_url", "third_party_allowed"] as const)(
+    "maps an allowed %s HubEvent image to PlatformEvent.thumbnailUrl",
+    (policyState) => {
+      const [candidate] = buildHubEventNotificationCandidates({
+        action: "publish",
+        after: adminEvent({
+          image: {
+            policyState,
+            url: "https://example.com/event.jpg"
+          }
+        }),
+        now
+      });
+
+      expect(candidate.thumbnailUrl).toBe("https://example.com/event.jpg");
+    }
+  );
+
+  it.each(["verify_required", "blocked", "none"] as const)(
+    "omits a %s HubEvent image from PlatformEvent.thumbnailUrl",
+    (policyState) => {
+      const [candidate] = buildHubEventNotificationCandidates({
+        action: "publish",
+        after: adminEvent({
+          image: {
+            policyState,
+            url: "https://example.com/event.jpg"
+          }
+        }),
+        now
+      });
+
+      expect(candidate.thumbnailUrl).toBeUndefined();
+    }
+  );
+
+  it.each([
+    "http://example.com/event.jpg",
+    "not-a-url",
+    "https://example.com/event.jpg?access_token=redacted"
+  ])("omits unsafe HubEvent image URL %s from PlatformEvent.thumbnailUrl", (url) => {
+    const [candidate] = buildHubEventNotificationCandidates({
+      action: "publish",
+      after: adminEvent({
+        image: {
+          policyState: "official_runtime_url",
+          url
+        }
+      }),
+      now
+    });
+
+    expect(candidate.thumbnailUrl).toBeUndefined();
+  });
+
   it("stores created platform events and enqueues notification jobs from admin publish", async () => {
     const fake = createRepository(adminEvent());
     const platformEvents: PlatformEvent[] = [];

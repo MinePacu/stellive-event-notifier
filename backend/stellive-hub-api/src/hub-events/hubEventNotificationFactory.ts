@@ -1,4 +1,5 @@
 import type { PlatformEvent, PlatformEventType } from "../types.js";
+import { normalizeSafeImageUrl } from "../notification/imageUrlPolicy.js";
 import type { AdminHubEvent, HubEventAdminAction } from "./hubEventAdminTypes.js";
 
 export interface HubEventNotificationCandidateInput {
@@ -24,6 +25,17 @@ function metadataFor(event: AdminHubEvent, action: HubEventAdminAction) {
   };
 }
 
+function notificationImageUrl(event: AdminHubEvent): string | undefined {
+  if (
+    event.image?.policyState !== "official_runtime_url" &&
+    event.image?.policyState !== "third_party_allowed"
+  ) {
+    return undefined;
+  }
+
+  return normalizeSafeImageUrl(event.image.url);
+}
+
 function candidate(
   event: AdminHubEvent,
   type: PlatformEventType,
@@ -41,6 +53,7 @@ function candidate(
     generationId: event.generationId,
     title: event.title,
     body: event.summary ?? event.sourceLabel,
+    thumbnailUrl: notificationImageUrl(event),
     platformUrl: event.purchaseUrl ?? event.ticketUrl ?? event.sourceUrl,
     appDeepLink: `stellivehub://hub-events/${event.id}`,
     occurredAt: timestamp,
