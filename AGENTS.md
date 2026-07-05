@@ -1,168 +1,55 @@
 # Stellive Notification Hub Agent Rules
 
-These rules apply from the repository root to every subdirectory. Read this file before changing code, docs, tests, seeds, or generated configuration.
+Read this file first. It is a lightweight routing document.
 
-This project is an unofficial open-source fan project with no direct monetization plan. Non-profit and open-source status does not remove copyright, portrait/publicity, trademark, platform API, or terms-of-service obligations.
+Do not automatically read all project documents. Choose the smallest relevant context from the user request and changed paths. A deeper `AGENTS.md` extends or overrides this file for its subtree.
 
-Non-negotiable rules:
-- Do not include Former members in the MVP member catalog, notification targets, UI filters, or seed data.
-- The member catalog may include only `active` or `upcoming` entries.
-- Gangzi is not a generation member. Include Gangzi as a `representative` entry in the `gamja` category with `roleLabel: "스텔라이브 대표"`.
-- The `official` category is displayed as `기타` and includes Stellive official YouTube and X notification targets.
-- Stellive official YouTube supports upload notifications only. Do not create official YouTube live scheduled/started/ended notifications.
-- Prefer official APIs and platform terms. Do not implement unauthorized crawling, login-cookie scraping, private cafe collection, or bypass access.
-- Never commit API secrets, tokens, OAuth credentials, raw private platform responses, or production device tokens.
-- Do not commit profile image binaries, official logos, fan art, captured images, or unauthorized member assets.
-- Use placeholder avatars by default. Show platform API image URLs only conditionally and with fallback behavior.
-- Do not clone Samsung One UI, Apple Settings, CHZZK, YouTube, X, Naver, or Stellive proprietary logos/assets/designs.
-- Android may reference the general mood of spacious mobile settings UIs; iOS may reference grouped settings patterns. Both must remain original.
-- Keep a server-mediated/API-first event ingestion architecture. A lightweight backend or managed control plane handles protected API access, dedupe, preference enforcement, and push fan-out; mobile apps handle settings UI, local history/cache, deep links, and foreground display.
-- User notification preferences are authoritative. Global off blocks every notification.
-- Users must be able to configure global, platform, event type, generation/category, and individual member/Gangzi/official-channel notification settings.
-- Users must be able to enable `realtime_best_effort`. It never guarantees instant delivery and must not bypass API, OS, push-service, battery, or rate-limit policies.
-- `chzzk_chat` is off by default and should require explicit filters before push delivery.
+## Fast Paths
 
-Before starting new work, read:
-- `docs/PROJECT_RULES.md`
-- `docs/NOTIFICATION_POLICY.md`
-- `docs/REALTIME_DELIVERY.md`
-- `docs/API_IMPLEMENTATION_PLAN.md` before implementing backend/API integrations, ingestion adapters, notification jobs, or push delivery.
-- `docs/AI_HANDOFF.md`
+### Work Area Routing
 
+- Backend/API/ingestion/push: `backend/stellive-hub-api/AGENTS.md`
+- Android: `android/StelliveHubAndroid/AGENTS.md`
+- iOS: `ios/StelliveHubiOS/AGENTS.md`
+- Documentation: `docs/AGENTS.md`
+- Helper, build, merge, and server-operation scripts: `scripts/AGENTS.md`
+- Shared contracts, seeds, or root metadata: use the common rules below and inspect only directly relevant documentation.
 
-<!-- headroom:rtk-instructions -->
-# RTK (Rust Token Killer) - Token-Optimized Commands
+### Merge-Only PR/MR Work
 
-When running shell commands, **always prefix with `rtk`**. This reduces context
-usage by 60-90% with zero behavior change. If rtk has no filter for a command,
-it passes through unchanged — so it is always safe to use.
+Use this path when the user only asks to check, prepare, or perform a PR/MR merge. It takes precedence over normal repository exploration and handoff-reading rules, without relaxing security or explicit user instructions.
 
-## Key Commands
-```bash
-# Git (59-80% savings)
-rtk git status          rtk git diff            rtk git log
+- Do not inspect the repository, full diff, or full CI logs.
+- Do not read `CODEMAP.md`, `docs/AI_HANDOFF.md`, `docs/superpowers/**`, or `docs/handoff/archive/**` unless a conflict or failed check directly references one.
+- Do not run local tests unless the user explicitly asks.
+- Check only target branch, draft status, mergeability/conflicts, required checks, and merge method.
+- For a failed check, inspect only its name and at most the final 100 relevant log lines.
+- If blocked, report the blocker and stop. If successful, report only the PR/MR number, merge commit SHA, and branch-cleanup result.
+- For GitHub use `scripts/check-pr-lite.sh` and `scripts/merge-pr-lite.sh`. Apply the same principles to GitLab only when its CLI and remote configuration are confirmed.
 
-# Files & Search (60-75% savings)
-rtk ls <path>           rtk read <file>         rtk grep <pattern>
-rtk find <pattern>      rtk diff <file>
+## Repository-Wide Rules
 
-# Test (90-99% savings) — shows failures only
-rtk pytest tests/       rtk cargo test          rtk test <cmd>
+- This is an unofficial, non-profit open-source fan project. Copyright, portrait/publicity, trademark, platform API, and terms-of-service obligations still apply.
+- Never commit secrets, tokens, OAuth credentials, raw private platform responses, production device tokens, private config, or prohibited media assets.
+- Prefer official APIs. Do not implement unauthorized crawling, login-cookie scraping, private cafe collection, or access bypasses.
+- Do not commit profile images, official logos, fan art, captured images, or unauthorized member assets. Use placeholder avatars; platform API image URLs require fallback behavior.
+- Do not clone proprietary service or brand designs. Platform UIs may use familiar native patterns but must remain original.
+- The member catalog may contain only `active` or `upcoming` members. Former members are excluded from the MVP catalog, targets, filters, tests, and seeds.
+- Gangzi is a `representative` in `gamja`, not a generation member, with `roleLabel: "스텔라이브 대표"`.
+- Display `official` as `기타`; it contains Stellive official YouTube and X targets. Official YouTube supports upload notifications only.
+- Keep protected API access, dedupe, preference enforcement, and push fan-out server-mediated. Mobile clients own settings UI, local history/cache, deep links, and foreground presentation.
+- User preferences are authoritative: global off blocks all notifications. Preserve global, platform, event-type, category/generation, and individual target controls.
+- `realtime_best_effort` never guarantees instant delivery or bypasses opt-out, quiet hours, API, OS, push, battery, or rate-limit policies. `chzzk_chat` is off by default and requires explicit filters.
+- Preserve unrelated working-tree changes. Follow the closest scoped `AGENTS.md` before editing.
 
-# Build & Lint (80-90% savings) — shows errors only
-rtk tsc                 rtk lint                rtk cargo build
-rtk prettier --check    rtk mypy                rtk ruff check
+## Archived And Historical Context
 
-# Analysis (70-90% savings)
-rtk err <cmd>           rtk log <file>          rtk json <file>
-rtk summary <cmd>       rtk deps                rtk env
+Archived or historical documents are not active instructions. Do not read `docs/handoff/archive/**`, archived logs, or broad `docs/superpowers/**` history during normal work unless the user explicitly requests historical context or a current document links to a specific relevant file.
 
-# GitHub (26-87% savings)
-rtk gh pr view <n>      rtk gh run list         rtk gh issue list
+## Command And Tool Defaults
 
-# Infrastructure (85% savings)
-rtk docker ps           rtk kubectl get         rtk docker logs <c>
-
-# Package managers (70-90% savings)
-rtk pip list            rtk pnpm install        rtk npm run <script>
-```
-
-## Rules
-- In command chains, prefix each segment: `rtk git add . && rtk git commit -m "msg"`
-- For debugging, use raw command without rtk prefix
-- `rtk proxy <cmd>` runs command without filtering but tracks usage
-
-## Search Tool Selection
-- When exploring files, consult `CODEMAP.md` alongside direct filesystem search to identify relevant files and avoid unnecessary traversal.
-- Use `fd` for file and directory discovery instead of `find`.
-- Use `rg` before `grep` when fast text search is the priority.
-- Use `ast-grep` when deeper analysis requires understanding syntax structure rather than plain text matching.
-
-## Serena Tool Usage
-
-- If Serena MCP tools are available, use them when they materially improve repository navigation, symbol-level code understanding, or targeted edits.
-- Before using Serena tools for a coding task, call Serena's `initial_instructions` tool and follow its active project guidance.
-- Prefer Serena's semantic tools for symbol discovery, reference lookup, and focused code edits; use `rg`, `fd`, `ast-grep`, and direct file reads when they are simpler or more precise.
-- Serena usage does not override this file, project rules, RTK command prefixing, privacy/secrets restrictions, or platform/API policy requirements.
-<!-- /headroom:rtk-instructions -->
-
-## Commit Message Formatting
-
-When the user asks for a commit message that lists changed items, write the body as consecutive bullet lines with no blank line between bullets.
-
-- Use real line breaks between bullet items.
-- Do not write literal `\n` characters in commit messages.
-- Do not pass each bullet as a separate `git commit -m` body paragraph, because Git renders blank lines between paragraphs.
-- Prefer a message file for multi-line commit bodies:
-
-```bash
-rtk sh -lc "printf '%s\n' 'commit subject' '- First changed item' '- Second changed item' '- Third changed item' > /private/tmp/commit_msg && rtk git commit -F /private/tmp/commit_msg"
-```
-
-- The rendered commit body should look like this:
-
-```text
-- First changed item
-- Second changed item
-- Third changed item
-```
-
-## Internal Backend Test Server
-
-Use the internal server computer `minepacu@192.168.50.9` for later Codex backend test automation when a Docker-hosted backend is needed.
-
-- The test service port is fixed to `4000`.
-- Connect by SSH and run Docker directly on the server computer.
-- Test URLs should use `http://192.168.50.9:4000` plus the required path.
-- The admin console URL is `http://192.168.50.9:4000/admin`.
-- Transfer required project files to the server computer by command before building there.
-- On the server computer, the project must live at `~/StelLiveNoti`.
-- The contents of `~/StelLiveNoti` must mirror the current workspace structure, excluding dependency/build-heavy folders such as `node_modules`.
-- If the server computer has insufficient disk space, clear build caches and other safe generated caches, then retry the transfer/build/run step.
-- Do not transfer secrets, production credentials, production device tokens, profile image binaries, official logos, fan art, captured images, copied media assets, or other files prohibited by the project rules.
-
-### Server Sync, Rebuild, And Test Flow
-
-Use this flow when a later Codex session needs to test backend or admin-console changes on the internal server.
-
-1. Sync the current workspace to the server, excluding generated and secret-heavy paths:
-
-```bash
-rtk rsync -az --delete \
-  --exclude '.git/' \
-  --exclude '.gradle/' \
-  --exclude 'node_modules/' \
-  --exclude 'dist/' \
-  --exclude 'build/' \
-  --exclude 'qa-screenshots/' \
-  --exclude '.DS_Store' \
-  --exclude '.env' \
-  --exclude '.env.*' \
-  ./ minepacu@192.168.50.9:~/StelLiveNoti/
-```
-
-2. Rebuild and recreate the Docker services on the server:
-
-```bash
-rtk ssh minepacu@192.168.50.9 'cd ~/StelLiveNoti && docker compose -f backend/stellive-hub-api/docker-compose.yml up -d --build --force-recreate'
-```
-
-3. Confirm all containers are running:
-
-```bash
-rtk ssh minepacu@192.168.50.9 'docker ps --format "table {{.Names}}\t{{.Status}}" | grep stellive-hub-api'
-```
-
-4. Check API startup logs:
-
-```bash
-rtk ssh minepacu@192.168.50.9 'cd ~/StelLiveNoti && docker compose -f backend/stellive-hub-api/docker-compose.yml logs --no-color --tail=40 api'
-```
-
-5. For admin-console work, open `http://192.168.50.9:4000/admin`, sign in with the admin session, enter the internal API bearer token from the operator's local environment, and verify the target form or route manually.
-
-Notes:
-
-- If `up -d --build --force-recreate` builds images but leaves old containers running, run the same compose file with `up -d --no-build --force-recreate --remove-orphans`.
-- Never write real admin tokens, internal API tokens, Firebase credentials, OAuth credentials, or production device tokens into this file, shell history snippets, commits, issues, or logs.
-- Keep server testing scoped to the requested backend/admin behavior. Do not deploy unrelated local experiments unless the user explicitly asks for them.
+- Prefer targeted searches and focused file reads over full-file or full-repository dumps.
+- Use `CODEMAP.md` only as a routing aid when needed. Do not read every area codemap or all docs by default.
+- Prefix shell command segments with `rtk` when available. Detailed script conventions live in `scripts/AGENTS.md`.
+- Use Serena tools only when available and materially useful for symbol-level understanding or targeted edits.
+- Internal server, Docker, rsync, remote-log, and commit-message procedures live in `scripts/AGENTS.md`; do not load them for unrelated work.
