@@ -217,6 +217,6 @@ xcodebuild -project StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination
 
 ## 라이선스 및 주의
 
-프로젝트 코드와 문서는 Apache License 2.0을 따릅니다. 단, 이 라이선스는 스텔라이브 또는 제3자 플랫폼의 상표, 초상, 콘텐츠, API 응답, 이미지, 로고, 팬아트, 캡처물에 대한 사용 권리를 제공하지 않습니다.
+프로젝트 코드와 문서는 [Apache License 2.0](LICENSE)을 따릅니다. 단, 이 라이선스는 스텔라이브 또는 제3자 플랫폼의 상표, 초상, 콘텐츠, API 응답, 이미지, 로고, 팬아트, 캡처물에 대한 사용 권리를 제공하지 않습니다.
 
 앱과 백엔드는 플랫폼 API와 사용자 선호도 정책을 준수하는 서버 중재형 구조를 유지해야 합니다. 모바일 앱은 보호된 플랫폼 API credential을 직접 보유하거나 외부 플랫폼 private endpoint를 직접 호출하지 않습니다.
