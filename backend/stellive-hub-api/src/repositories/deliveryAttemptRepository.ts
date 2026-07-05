@@ -269,9 +269,10 @@ export class DeliveryAttemptRepository {
     const dateKeys = buildKstDateKeys(days, now);
     const bucketByDate = new Map(dateKeys.map((date) => [date, createEmptyPoint(date)]));
     const startAt = kstMidnightUtcFromKey(dateKeys[0] ?? formatKstDateKey(now));
+    // Prisma stores these UTC values in a PostgreSQL timestamp without time zone column.
     const rows = await this.prisma.$queryRaw<DeliveryAttemptDailyAggregateRow[]>`
       SELECT
-        to_char("attemptedAt" AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') AS date,
+        to_char(("attemptedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') AS date,
         count(*) FILTER (WHERE status = 'sent') AS sent,
         count(*) FILTER (WHERE status = 'queued') AS queued,
         count(*) FILTER (WHERE status = 'skipped') AS skipped,

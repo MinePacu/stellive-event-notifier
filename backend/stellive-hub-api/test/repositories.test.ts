@@ -97,8 +97,9 @@ describe("ExternalApiCallLogRepository", () => {
 
     expect(queryRaw).toHaveBeenCalledTimes(1);
     expect(findMany).not.toHaveBeenCalled();
-    expect(sql).toContain("\"requestedAt\" AT TIME ZONE 'Asia/Seoul'");
-    expect(sql).not.toContain("\"requestedAt\" AT TIME ZONE 'UTC'");
+    // Production stores UTC values in a timestamp without time zone column.
+    expect(sql).toContain("(\"requestedAt\" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul'");
+    expect(sql).not.toContain("to_char(\"requestedAt\" AT TIME ZONE 'Asia/Seoul'");
     expect(sql).not.toContain("timezone('Asia/Seoul', \"requestedAt\")");
     expect(trend.items).toEqual([
       expect.objectContaining({ date: "2026-07-04", total: 0, bySource: {} }),
@@ -480,8 +481,9 @@ describe("DeliveryAttemptRepository worker writes", () => {
 
     expect(queryRaw).toHaveBeenCalledTimes(1);
     expect(findMany).not.toHaveBeenCalled();
-    expect(sql).toContain("\"attemptedAt\" AT TIME ZONE 'Asia/Seoul'");
-    expect(sql).not.toContain("\"attemptedAt\" AT TIME ZONE 'UTC'");
+    // Production stores UTC values in a timestamp without time zone column.
+    expect(sql).toContain("(\"attemptedAt\" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul'");
+    expect(sql).not.toContain("to_char(\"attemptedAt\" AT TIME ZONE 'Asia/Seoul'");
     expect(sql).not.toContain("timezone('Asia/Seoul', \"attemptedAt\")");
     expect(summary).toEqual({
       timezone: "Asia/Seoul",

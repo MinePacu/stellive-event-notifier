@@ -192,9 +192,10 @@ export class ExternalApiCallLogRepository {
     const dateKeys = buildKstDateKeys(days, now);
     const bucketByDate = new Map(dateKeys.map((date) => [date, createEmptyPoint(date)]));
     const startAt = kstMidnightUtcFromKey(dateKeys[0] ?? formatKstDateKey(now));
+    // Prisma stores these UTC values in a PostgreSQL timestamp without time zone column.
     const rows = await this.prisma.$queryRaw<ExternalApiDailyAggregateRow[]>`
       SELECT
-        to_char("requestedAt" AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') AS date,
+        to_char(("requestedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD') AS date,
         source,
         count(*) AS total,
         count(*) FILTER (WHERE "resultStatus" IN ('ok', 'not_modified')) AS ok,
