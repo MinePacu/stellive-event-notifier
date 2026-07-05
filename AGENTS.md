@@ -51,5 +51,9 @@ Archived or historical documents are not active instructions. Do not read `docs/
 - Prefer targeted searches and focused file reads over full-file or full-repository dumps.
 - Use `CODEMAP.md` only as a routing aid when needed. Do not read every area codemap or all docs by default.
 - Prefix shell command segments with `rtk` when available. Detailed script conventions live in `scripts/AGENTS.md`.
-- Use Serena tools only when available and materially useful for symbol-level understanding or targeted edits.
+- Use Serena tools when available for semantic code navigation, symbol lookup, reference checks, and focused edits.
+- Prefer Serena symbol overviews and targeted symbol reads before full-file reads for TypeScript, Kotlin, and Swift files.
+- Use broad shell search or full-file reads only after targeted Serena/file searches fail or when files are small and already known.
+- Keep Serena usage scope-reducing: do not use it to justify reading unrelated backend, Android, iOS, docs, or archive areas.
+- For non-code files such as Markdown, JSON, YAML, shell scripts, and repository metadata, use the smallest direct read or search instead of forced Serena usage.
 - Internal server, Docker, rsync, remote-log, and commit-message procedures live in `scripts/AGENTS.md`; do not load them for unrelated work.
