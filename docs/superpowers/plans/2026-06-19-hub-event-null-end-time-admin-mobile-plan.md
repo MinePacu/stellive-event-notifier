@@ -87,13 +87,13 @@ Modify:
 - `backend/stellive-hub-api/src/hub-events/hubEventService.ts`
 - `shared/schemas/domain.ts`
 - `shared/openapi/openapi.yaml`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarWidgetTextFormatter.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarView.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/hubevents/HubEventDetailFormatting.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarWidgetTextFormatter.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarView.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/hubevents/HubEventDetailFormatting.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Models/HubModels.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarView.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift`
@@ -107,9 +107,9 @@ Test:
 - `backend/stellive-hub-api/test/repositories.test.ts`
 - `backend/stellive-hub-api/test/hubEventCalendar.test.ts`
 - `backend/stellive-hub-api/test/hubEventReadRoutes.test.ts`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarWidgetTextFormatterTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsCalendarViewModelTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarWidgetTextFormatterTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsCalendarViewModelTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift`
 - Add an iOS formatting/policy test file if no existing XCTest covers Hub Event detail/date formatting.
 
@@ -277,7 +277,7 @@ Run:
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest --tests dev.stellive.hub.CalendarWidgetTextFormatterTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest --tests dev.minepacu.stelliveeventnotifier.CalendarWidgetTextFormatterTest
 ```
 
 Expected before implementation: formatting tests fail if current UI assumes an end time.

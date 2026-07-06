@@ -3,7 +3,7 @@ import XCTest
 
 final class HubCalendarWidgetStoreTests: XCTestCase {
     func testAppGroupIdentifierIsStable() {
-        XCTAssertEqual(HubCalendarWidgetStore.appGroupIdentifier, "group.dev.stellive.hub")
+        XCTAssertEqual(HubCalendarWidgetStore.appGroupIdentifier, "group.dev.minepacu.stelliveeventnotifier")
     }
 
     func testSavesAndLoadsSnapshot() throws {

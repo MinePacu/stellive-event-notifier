@@ -54,7 +54,7 @@ backend/stellive-hub-api/src/
     bootstrapService.ts
     mobileError.ts
 
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/
   core/network/
     HubApi.kt
     HubApiClient.kt
@@ -358,7 +358,7 @@ Modify `backend/stellive-hub-api/src/routes/routes.ts`:
 
 ### Network DTOs
 
-**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt`
+**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt`
 
 Define Moshi DTOs matching `shared/schemas/mobileApi.ts`. Use serial names where JSON keys differ from Kotlin names.
 
@@ -445,7 +445,7 @@ Mapping rules:
 
 ### Retrofit API
 
-**Modify:** `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt`
+**Modify:** `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt`
 
 Replace the placeholder interface with Retrofit definitions:
 
@@ -474,7 +474,7 @@ interface HubApi {
 }
 ```
 
-**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiClient.kt`
+**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiClient.kt`
 
 Responsibilities:
 
@@ -483,7 +483,7 @@ Responsibilities:
 - Convert exceptions into `HubNetworkResult`.
 - Do not log request bodies for token routes.
 
-**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubNetworkResult.kt`
+**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubNetworkResult.kt`
 
 ```kotlin
 sealed interface HubNetworkResult<out T> {
@@ -494,7 +494,7 @@ sealed interface HubNetworkResult<out T> {
 
 ### Device Registration
 
-**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/device/DeviceIdStore.kt`
+**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/device/DeviceIdStore.kt`
 
 Use DataStore if already configured; otherwise use private `SharedPreferences` for MVP.
 
@@ -507,7 +507,7 @@ class DeviceIdStore(private val context: Context) {
 }
 ```
 
-**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/device/PushTokenSyncer.kt`
+**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/device/PushTokenSyncer.kt`
 
 Responsibilities:
 
@@ -516,13 +516,13 @@ Responsibilities:
 - Retry boundedly when network fails.
 - Never print token in logs.
 
-Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/notification/StelliveFirebaseMessagingService.kt`:
+Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/notification/StelliveFirebaseMessagingService.kt`:
 
 - Replace the current placeholder comment with delegation to `PushTokenSyncer`.
 
 ### Repository Adapter
 
-**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/HubRepository.kt`
+**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/HubRepository.kt`
 
 ```kotlin
 interface HubRepository {
@@ -532,7 +532,7 @@ interface HubRepository {
 }
 ```
 
-**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
+**Create:** `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
 
 Responsibilities:
 
@@ -542,12 +542,12 @@ Responsibilities:
 - Persist cache on success.
 - Return fallback from cache or `MockHubRepository`.
 
-Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`:
+Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`:
 
 - Keep deterministic fallback data.
 - Do not remain the default runtime repository once `ServerHubRepository` is wired.
 
-Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`:
+Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`:
 
 - Depend on `HubRepository`.
 - Show server data when available.
@@ -645,10 +645,10 @@ Backend tests:
 
 Android tests:
 
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubApiClientTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/DeviceRegistrationTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/PushTokenSyncerTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubApiClientTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/DeviceRegistrationTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/PushTokenSyncerTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`
 - Existing CHZZK backend boundary tests stay green.
 
 iOS tests:
@@ -867,14 +867,14 @@ rtk git commit -m "docs(api): document mobile API route status"
 
 Create:
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiClient.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubNetworkResult.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubApiClientTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiClient.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubNetworkResult.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubApiClientTest.kt`
 
 Modify:
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt`
 - `android/StelliveHubAndroid/app/build.gradle.kts` only if Moshi adapters or test dependencies are missing
 
 Steps:
@@ -882,7 +882,7 @@ Steps:
 - [ ] Write failing `HubApiClientTest` with a fake `HubApi` proving `bootstrap()` returns `HubNetworkResult.Success`.
 - [ ] Add failing test proving HTTP/network exceptions become `HubNetworkResult.Failure`.
 - [ ] Add failing test proving token update failures do not include token text in failure messages.
-- [ ] Run `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubApiClientTest` from `android/StelliveHubAndroid`.
+- [ ] Run `rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubApiClientTest` from `android/StelliveHubAndroid`.
 - [ ] Expected: FAIL because DTO/client files do not exist.
 - [ ] Implement `HubApiModels.kt`, Retrofit `HubApi.kt`, `HubNetworkResult.kt`, and `HubApiClient.kt`.
 - [ ] Use existing Retrofit/Moshi/OkHttp dependencies.
@@ -891,7 +891,7 @@ Steps:
 - [ ] Commit:
 
 ```bash
-rtk git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiClient.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubNetworkResult.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubApiClientTest.kt android/StelliveHubAndroid/app/build.gradle.kts
+rtk git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiClient.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubNetworkResult.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubApiClientTest.kt android/StelliveHubAndroid/app/build.gradle.kts
 rtk git commit -m "feat(android): add hub API client"
 ```
 
@@ -901,15 +901,15 @@ rtk git commit -m "feat(android): add hub API client"
 
 Create:
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/device/DeviceIdStore.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/device/PushTokenSyncer.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/DeviceRegistrationTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/PushTokenSyncerTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/device/DeviceIdStore.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/device/PushTokenSyncer.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/DeviceRegistrationTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/PushTokenSyncerTest.kt`
 
 Modify:
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/notification/StelliveFirebaseMessagingService.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/StelliveHubApplication.kt` only if startup sync is needed
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/notification/StelliveFirebaseMessagingService.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/StelliveHubApplication.kt` only if startup sync is needed
 
 Steps:
 
@@ -926,7 +926,7 @@ Steps:
 - [ ] Commit:
 
 ```bash
-rtk git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/device/DeviceIdStore.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/device/PushTokenSyncer.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/notification/StelliveFirebaseMessagingService.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/StelliveHubApplication.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/DeviceRegistrationTest.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/PushTokenSyncerTest.kt
+rtk git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/device/DeviceIdStore.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/device/PushTokenSyncer.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/notification/StelliveFirebaseMessagingService.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/StelliveHubApplication.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/DeviceRegistrationTest.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/PushTokenSyncerTest.kt
 rtk git commit -m "feat(android): add device registration sync"
 ```
 
@@ -936,14 +936,14 @@ rtk git commit -m "feat(android): add device registration sync"
 
 Create:
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/HubRepository.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/HubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`
 
 Modify:
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 
 Steps:
 
@@ -962,7 +962,7 @@ Steps:
 - [ ] Commit:
 
 ```bash
-rtk git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/HubRepository.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt
+rtk git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/HubRepository.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt
 rtk git commit -m "feat(android): use server-backed hub repository"
 ```
 

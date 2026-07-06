@@ -25,11 +25,11 @@ iOS thumbnail intermittency comes from that fallback: `HubCalendarEntry` has no 
 
 Modify:
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/ServerHubStore.swift`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift`
@@ -56,7 +56,7 @@ Do not modify:
 - [ ] Run:
 
 ```bash
-rtk rg -n "renderServerGoodsEvents|calendarDaysForFilter|hubEventCard|selectedMonthCalendarDays|ForEach\\(day.entries|cachedHubEvent|HubCalendarRow|HubEventRow" android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift
+rtk rg -n "renderServerGoodsEvents|calendarDaysForFilter|hubEventCard|selectedMonthCalendarDays|ForEach\\(day.entries|cachedHubEvent|HubCalendarRow|HubEventRow" android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift
 ```
 
 - [ ] Expected finding:
@@ -95,7 +95,7 @@ fun feedEntriesForMonthDeduplicatesByEventIdAndKeepsFirstVisibleDate() {
 - [ ] Run and expect RED:
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
 ```
 
 Expected: compile failure because `feedEntriesForMonth` does not exist.
@@ -165,7 +165,7 @@ for (row in feedEntries) {
 - [ ] Run and expect RED if the current implementation still sends `generationId = "goods"`:
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ServerHubRepositoryTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest
 ```
 
 ## Step 6: Fix Android Filter Query
@@ -189,7 +189,7 @@ generationId = filterId.takeUnless { it in builtInHubEventFilters }
 - [ ] Run:
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest --tests dev.stellive.hub.ServerHubRepositoryTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest
 ```
 
 Expected: PASS.
@@ -333,7 +333,7 @@ Expected: `/v1/hub-events` unique; `/calendar` still date-expanded. No backend c
 rtk ./gradlew :app:assembleDebug
 rtk adb devices
 rtk adb -s <device-id> install -r android/StelliveHubAndroid/app/build/outputs/apk/debug/app-debug.apk
-rtk adb -s <device-id> shell am start -n dev.stellive.hub/.MainActivity
+rtk adb -s <device-id> shell am start -n dev.minepacu.stelliveeventnotifier/.MainActivity
 ```
 
 - [ ] iOS:
@@ -370,6 +370,6 @@ Expected: only existing policy/model/test references; no whitespace errors.
 - [ ] Commit only relevant source/test/docs files. Exclude generated paths and unrelated dirty files.
 
 ```bash
-rtk git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift ios/StelliveHubiOS/StelliveHubiOS/Services/ServerHubStore.swift ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift ios/StelliveHubiOS/StelliveHubiOSTests/HubAPIClientTests.swift docs/AI_HANDOFF.md docs/superpowers/plans/2026-06-21-calendar-feed-canonical-event-dedupe-code-design.md
+rtk git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift ios/StelliveHubiOS/StelliveHubiOS/Services/ServerHubStore.swift ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift ios/StelliveHubiOS/StelliveHubiOSTests/HubAPIClientTests.swift docs/AI_HANDOFF.md docs/superpowers/plans/2026-06-21-calendar-feed-canonical-event-dedupe-code-design.md
 rtk sh -lc "printf '%s\n' 'fix: render hub event feed from canonical events' '- Dedupe Goods/Events feed rows by canonical eventId' '- Use canonical HubEvent cards for feed thumbnails instead of image-less calendar fallbacks' '- Stop sending built-in UI filters as backend generationId values' > /private/tmp/commit_msg && rtk git commit -F /private/tmp/commit_msg"
 ```

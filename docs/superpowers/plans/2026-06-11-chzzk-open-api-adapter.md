@@ -43,7 +43,7 @@ Create:
 - `backend/stellive-hub-api/test/chzzkAuthRoutes.test.ts`
 - `backend/stellive-hub-api/test/chzzkApiClient.test.ts`
 - `backend/stellive-hub-api/test/chzzkOpenApiAdapter.test.ts`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ChzzkBackendBoundaryTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ChzzkBackendBoundaryTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/ChzzkBackendBoundaryTests.swift`
 
 Modify:
@@ -59,10 +59,10 @@ Modify:
 - `backend/stellive-hub-api/src/events/eventGuards.ts`
 - `backend/stellive-hub-api/src/types.ts`
 - `shared/schemas/domain.ts`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/MockHubStore.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/LiveView.swift`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/PreferenceStateTests.swift`
@@ -320,28 +320,28 @@ Expected: PASS.
 
 ## Phase 7: Android App Boundary And UI Consumption
 
-- [ ] Add `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ChzzkBackendBoundaryTest.kt` proving Android has no CHZZK client id, client secret, access token, refresh token, or direct CHZZK host constant in app code.
+- [ ] Add `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ChzzkBackendBoundaryTest.kt` proving Android has no CHZZK client id, client secret, access token, refresh token, or direct CHZZK host constant in app code.
 
 Run:
 
 ```bash
 cd android/StelliveHubAndroid
-./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ChzzkBackendBoundaryTest
+./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ChzzkBackendBoundaryTest
 ```
 
 Expected: FAIL until the test helper scans the intended source paths and app code satisfies the boundary.
 
-- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt` only if its live-status DTO does not include backend fields needed by the UI. Add `startedAt`, `platformUrl`, and `sourceVerificationState` parsing if missing.
+- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt` only if its live-status DTO does not include backend fields needed by the UI. Add `startedAt`, `platformUrl`, and `sourceVerificationState` parsing if missing.
 
-- [ ] Keep `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt` as local fallback data only. Do not add CHZZK secrets or direct Open API calls.
+- [ ] Keep `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt` as local fallback data only. Do not add CHZZK secrets or direct Open API calls.
 
-- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt` and `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt` only if CHZZK live status display needs new states such as `verify_required`, stale data, or rate-limit degraded status.
+- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt` and `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt` only if CHZZK live status display needs new states such as `verify_required`, stale data, or rate-limit degraded status.
 
 - [ ] Run Android focused tests.
 
 ```bash
 cd android/StelliveHubAndroid
-./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ChzzkBackendBoundaryTest --tests dev.stellive.hub.MainUiPolicyTest
+./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ChzzkBackendBoundaryTest --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest
 ```
 
 Expected: PASS.

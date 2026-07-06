@@ -20,7 +20,10 @@ if ! "$ADB_BIN" devices >"$LOG_FILE" 2>&1; then
   exit 1
 fi
 
-mapfile -t DEVICES < <(awk 'NR > 1 && $2 == "device" { print $1 }' "$LOG_FILE")
+DEVICES=()
+while IFS= read -r device; do
+  DEVICES+=("$device")
+done < <(awk 'NR > 1 && $2 == "device" { print $1 }' "$LOG_FILE")
 
 if [[ "${#DEVICES[@]}" -eq 0 ]]; then
   echo "error: no connected Android device found." >&2

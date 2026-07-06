@@ -13,9 +13,9 @@
 ## Current Findings
 
 - Android song UI currently calls `GET /v1/songs` and `GET /v1/songs/facets` through:
-  - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt`
-  - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiClient.kt`
-  - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
+  - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt`
+  - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiClient.kt`
+  - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
 - iOS song UI currently calls `GET /v1/songs` and `GET /v1/songs/facets` through:
   - `ios/StelliveHubiOS/StelliveHubiOS/Services/HubAPIClient.swift`
   - `ios/StelliveHubiOS/StelliveHubiOS/Services/ServerHubStore.swift`
@@ -136,7 +136,7 @@ Backend defaults already hide excluded, instrumental, and graduated rows unless 
 - Android minimum set:
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubApiClientTest --tests dev.stellive.hub.ServerHubRepositoryTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubApiClientTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 - iOS minimum set:
@@ -156,10 +156,10 @@ rtk xcodebuild test -project ios/StelliveHubiOS/StelliveHubiOS.xcodeproj -scheme
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiClient.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubApiClientTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiClient.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubApiClientTest.kt`
 
 - [ ] **Step 1: Add failing Android client path test**
 
@@ -185,7 +185,7 @@ fun musicListUsesOfficialMusicEndpoint() = runTest {
 - [ ] **Step 2: Run focused Android client test and verify RED**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubApiClientTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubApiClientTest
 ```
 
 Expected before implementation: failure because `music(...)` or `/v1/music` route is missing.
@@ -274,7 +274,7 @@ suspend fun memberMusic(
 - [ ] **Step 5: Run focused Android client test and verify GREEN**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubApiClientTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubApiClientTest
 ```
 
 Expected: `HubApiClientTest` passes.
@@ -283,11 +283,11 @@ Expected: `HubApiClientTest` passes.
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/HubRepository.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/HubRepository.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`
 
 - [ ] **Step 1: Add failing Android repository mapping test**
 
@@ -336,7 +336,7 @@ fun songsMapCollaborationMembersFromOfficialMusicApi() = runTest {
 - [ ] **Step 2: Run focused Android repository test and verify RED**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ServerHubRepositoryTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest
 ```
 
 Expected before implementation: failure because repository still maps legacy single-member song DTO.
@@ -431,7 +431,7 @@ SongCatalogItem(
 - [ ] **Step 6: Run focused Android repository test and verify GREEN**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ServerHubRepositoryTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest
 ```
 
 Expected: `ServerHubRepositoryTest` passes.
@@ -440,9 +440,9 @@ Expected: `ServerHubRepositoryTest` passes.
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
 
 - [ ] **Step 1: Add failing Android UI policy test for member display**
 
@@ -474,7 +474,7 @@ assertEquals("스텔라이브", SongUiPolicy.memberDisplayText(song.copy(members
 - [ ] **Step 2: Run focused Android UI policy test and verify RED**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 Expected before implementation: failure because UI still depends on `memberName` or helper is missing.
@@ -518,7 +518,7 @@ private fun SongCatalogItem.matchesSongQuery(query: String): Boolean {
 - [ ] **Step 5: Run focused Android UI policy test and verify GREEN**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 Expected: `SongUiPolicyTest` passes.
@@ -791,7 +791,7 @@ Expected: `SongUiPolicyTests` passes.
 - [ ] **Step 1: Run Android changed-code tests only**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubApiClientTest --tests dev.stellive.hub.ServerHubRepositoryTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubApiClientTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 Expected: all selected Android tests pass.

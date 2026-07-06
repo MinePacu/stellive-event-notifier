@@ -8,8 +8,8 @@ Implementation Plan
 **Tech Stack:** Fastify TypeScript backend, Android Kotlin Retrofit/Moshi, iOS Swift URLSession/Codable.
 
 **Files:**
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
 - Modify: `ios/StelliveHubiOS/StelliveHubiOS/Services/HubAPIClient.swift`
 - Modify: `ios/StelliveHubiOS/StelliveHubiOS/Services/ServerHubStore.swift`
 - Test: Android install/debug device, iPhone 17 simulator

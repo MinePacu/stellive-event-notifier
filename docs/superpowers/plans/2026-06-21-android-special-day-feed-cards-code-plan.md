@@ -32,9 +32,9 @@ Special-day entries use IDs such as `birthday:sakihane-huya`; those IDs are not 
 
 Modify:
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt`
 - `docs/AI_HANDOFF.md`
 
 Do not modify:
@@ -53,7 +53,7 @@ Do not modify:
 - [ ] Prefer one focused Android test command before any broad build:
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
 ```
 
 - [ ] If a broader Android build is needed, run it only after the focused test is green:
@@ -73,7 +73,7 @@ Run only the checks that match the changed surface.
 
 Required:
 
-- [ ] `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest`
+- [ ] `rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest`
   - Covers the new render projection behavior.
   - Compiles the touched Android app sources, including `MainActivity.kt` and `CalendarUiPolicy.kt`.
 - [ ] `rtk git diff --check`
@@ -101,13 +101,13 @@ Do not run for this task unless scope expands:
 
 **Files:**
 
-- Read only: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Read only: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt`
+- Read only: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Read only: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt`
 
 - [ ] **Step 1: Locate the feed renderer**
 
 ```bash
-rtk rg -n "renderServerGoodsEvents|eventsById|feedEntriesForMonth|localCalendarEntryRow" android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt
+rtk rg -n "renderServerGoodsEvents|eventsById|feedEntriesForMonth|localCalendarEntryRow" android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt
 ```
 
 Expected: `MainActivity.renderServerGoodsEvents()` resolves every feed row through `eventsById[row.entry.eventId]`; `localCalendarEntryRow(entry)` exists but is not used in that loop.
@@ -115,8 +115,8 @@ Expected: `MainActivity.renderServerGoodsEvents()` resolves every feed row throu
 - [ ] **Step 2: Read only the relevant ranges**
 
 ```bash
-rtk sh -lc 'sed -n "548,606p" android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt'
-rtk sh -lc 'sed -n "386,410p" android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt'
+rtk sh -lc 'sed -n "548,606p" android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt'
+rtk sh -lc 'sed -n "386,410p" android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt'
 ```
 
 Expected: no backend or schema read is needed for implementation.
@@ -125,8 +125,8 @@ Expected: no backend or schema read is needed for implementation.
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt`
-- Modify later: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt`
+- Modify later: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt`
 
 - [ ] **Step 1: Add the failing test**
 
@@ -185,12 +185,12 @@ private fun hubEvent(
     )
 ```
 
-If the file lacks imports for model types used above, add exact imports from `dev.stellive.hub.core.model`.
+If the file lacks imports for model types used above, add exact imports from `dev.minepacu.stelliveeventnotifier.core.model`.
 
 - [ ] **Step 3: Run the focused test and verify RED**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
 ```
 
 Expected: compile failure because `CalendarUiPolicy.feedRenderRowsForMonth` and `canonicalEvent` do not exist yet.
@@ -199,7 +199,7 @@ Expected: compile failure because `CalendarUiPolicy.feedRenderRowsForMonth` and 
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt`
 
 - [ ] **Step 1: Add the render row model**
 
@@ -216,7 +216,7 @@ data class CalendarFeedRenderRow(
 Add `HubEvent` import if needed:
 
 ```kotlin
-import dev.stellive.hub.core.model.HubEvent
+import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
 ```
 
 - [ ] **Step 2: Add the projection helper**
@@ -249,13 +249,13 @@ fun feedRenderRowsForMonth(
 Add `HubCalendarEntryKind` import if needed:
 
 ```kotlin
-import dev.stellive.hub.core.model.HubCalendarEntryKind
+import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarEntryKind
 ```
 
 - [ ] **Step 3: Run the focused test and verify GREEN**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
 ```
 
 Expected: PASS.
@@ -264,7 +264,7 @@ Expected: PASS.
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 
 - [ ] **Step 1: Replace local `eventsById` rendering**
 
@@ -316,7 +316,7 @@ Do not change `HubCalendarDeepLinkPolicy` or `renderHubEventDetail()` in this ta
 - [ ] **Step 3: Run the focused test again**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
 ```
 
 Expected: PASS.
@@ -348,7 +348,7 @@ Skip this step if the internal server is unavailable; the backend unit contract 
 - [ ] **Step 1: Run the required focused unit test**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
 ```
 
 Expected: PASS. This is the only required Gradle test for this task because it verifies the new projection and compiles the touched Android sources.
@@ -379,7 +379,7 @@ Skip this when the focused unit test and patch checks are enough for handoff.
 ```bash
 rtk adb devices
 rtk adb -s <device-id> install -r android/StelliveHubAndroid/app/build/outputs/apk/debug/app-debug.apk
-rtk adb -s <device-id> shell am start -n dev.stellive.hub/.MainActivity
+rtk adb -s <device-id> shell am start -n dev.minepacu.stelliveeventnotifier/.MainActivity
 ```
 
 Expected: app launches; 굿즈/행사 July 2026 feed shows a `사키하네 후야 생일` compact card under `2026-07-07`.
@@ -391,7 +391,7 @@ Expected: app launches; 굿즈/행사 July 2026 feed shows a `사키하네 후�
 - [ ] **Step 1: Check prohibited policy regressions**
 
 ```bash
-rtk rg -n "Former|youtube_live_scheduled|youtube_live_started|youtube_live_ended|profileImageUrl|posterUrl|logoUrl|rawPayload|providerResponse|NID_AUT|NID_SES|login-cookie|cookie scraping" android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub docs/superpowers/plans/2026-06-21-android-special-day-feed-cards-code-plan.md
+rtk rg -n "Former|youtube_live_scheduled|youtube_live_started|youtube_live_ended|profileImageUrl|posterUrl|logoUrl|rawPayload|providerResponse|NID_AUT|NID_SES|login-cookie|cookie scraping" android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier docs/superpowers/plans/2026-06-21-android-special-day-feed-cards-code-plan.md
 ```
 
 Expected: no new prohibited implementation paths.
@@ -419,7 +419,7 @@ Append a short note:
 ```markdown
 ## Android Special-Day Feed Cards
 
-Root cause: Android Goods/Events feed resolved every calendar row through canonical `/v1/hub-events` IDs, so `member_birthday` and `generation_anniversary` rows such as `birthday:sakihane-huya` were dropped. Fix: `CalendarUiPolicy.feedRenderRowsForMonth()` keeps special-day rows without canonical `HubEvent` and `MainActivity.renderServerGoodsEvents()` renders them with `localCalendarEntryRow()`. Verification: `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest` passed; `rtk ./gradlew :app:assembleDebug` passed if performed.
+Root cause: Android Goods/Events feed resolved every calendar row through canonical `/v1/hub-events` IDs, so `member_birthday` and `generation_anniversary` rows such as `birthday:sakihane-huya` were dropped. Fix: `CalendarUiPolicy.feedRenderRowsForMonth()` keeps special-day rows without canonical `HubEvent` and `MainActivity.renderServerGoodsEvents()` renders them with `localCalendarEntryRow()`. Verification: `rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest` passed; `rtk ./gradlew :app:assembleDebug` passed if performed.
 ```
 
 Keep this update factual. Do not paste full diffs, backend JSON, screenshots, or device logs.
@@ -433,7 +433,7 @@ Keep this update factual. Do not paste full diffs, backend JSON, screenshots, or
 - [ ] **Step 1: Stage scoped files**
 
 ```bash
-rtk git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt docs/AI_HANDOFF.md docs/superpowers/plans/2026-06-21-android-special-day-feed-cards-code-plan.md
+rtk git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt docs/AI_HANDOFF.md docs/superpowers/plans/2026-06-21-android-special-day-feed-cards-code-plan.md
 ```
 
 - [ ] **Step 2: Commit with consecutive body bullets**

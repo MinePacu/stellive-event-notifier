@@ -24,13 +24,13 @@ Implement only mobile song page behavior/UI alignment.
 
 - Read only these files unless a compiler error identifies another file:
   - Android:
-    - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-    - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-    - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-    - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
-    - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`
-    - `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
-    - `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`
+    - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+    - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+    - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+    - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
+    - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`
+    - `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
+    - `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`
   - iOS:
     - `ios/StelliveHubiOS/StelliveHubiOS/Views/SongsView.swift`
     - `ios/StelliveHubiOS/StelliveHubiOS/Models/HubModels.swift`
@@ -50,7 +50,7 @@ Run only tests for changed mobile code.
 Android:
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest --tests dev.stellive.hub.ServerHubRepositoryTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest
 ```
 
 iOS:
@@ -69,8 +69,8 @@ Run broader tests only if:
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
 
 - [ ] **Step 1: Add failing tests**
 
@@ -117,7 +117,7 @@ fun songMatchesSelectedGenerationByMemberIds() {
 - [ ] **Step 2: Run RED**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 Expected: fail because `songMatchesGeneration` or row policy helper is missing.
@@ -146,7 +146,7 @@ fun songMatchesQuery(song: SongCatalogItem, query: String): Boolean {
 - [ ] **Step 4: Run GREEN**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 Expected: pass.
@@ -155,8 +155,8 @@ Expected: pass.
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
 
 - [ ] **Step 1: Keep UI order identical to iPhone**
 
@@ -220,7 +220,7 @@ If Android currently has no song search state, add the minimal state needed for 
 - [ ] **Step 5: Run Android focused tests**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest --tests dev.stellive.hub.ServerHubRepositoryTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest
 ```
 
 Expected: pass.
@@ -339,7 +339,7 @@ Expected: pass.
 - [ ] **Step 1: Android focused verification**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest --tests dev.stellive.hub.ServerHubRepositoryTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest
 ```
 
 - [ ] **Step 2: iOS focused verification**

@@ -24,9 +24,9 @@ Implementation Plan
 - `backend/stellive-hub-api/src/routes/hubEventReadRoutes.ts`는 목록, 상세, 캘린더, 위젯 스냅샷 공개 경로를 등록한다.
 - `backend/stellive-hub-api/src/hub-events/hubEventRepository.ts`는 `publicationState = "published"`와 `deletedAt = null` 공개 조회를 제공한다.
 - `backend/stellive-hub-api/src/config/env.ts`의 `HUB_EVENTS_STORAGE_MODE` 기본값은 `memory`다. 어드민 DB 데이터 노출에는 `prisma` 모드가 필요하다.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt`는 bootstrap/preferences/device API만 있고 공개 HubEvent 목록/상세/캘린더 호출이 없다.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/HubRepository.kt`는 `bootstrap()` 중심이라 HubEvent read contract가 부족하다.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`는 굿즈/행사 목록과 상세를 repository의 목업 `hubEvents`/`calendarDaysForFilter`에 의존한다.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt`는 bootstrap/preferences/device API만 있고 공개 HubEvent 목록/상세/캘린더 호출이 없다.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/HubRepository.kt`는 `bootstrap()` 중심이라 HubEvent read contract가 부족하다.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`는 굿즈/행사 목록과 상세를 repository의 목업 `hubEvents`/`calendarDaysForFilter`에 의존한다.
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/HubAPIClient.swift`는 `hubEventsCalendar(from:to:timezone:)`를 이미 가진다.
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/ServerHubStore.swift`는 bootstrap만 적용하고 calendar/list/detail 공개 API 결과를 store state로 연결하지 않는다.
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift`와 `HubEventDetailView.swift`는 서버 상세 로딩 container가 필요하다.
@@ -48,14 +48,14 @@ Modify:
 - `backend/stellive-hub-api/test/hubEventReadRoutes.test.ts`
 - `backend/stellive-hub-api/test/hubEventAdminRoutes.test.ts`
 - `shared/openapi/openapi.yaml`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/HubRepository.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarView.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/HubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarView.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/HubAPIClient.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/ServerHubStore.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/MockHubStore.swift`
@@ -68,9 +68,9 @@ Test:
 
 - `backend/stellive-hub-api/test/hubEventReadRoutes.test.ts`
 - `backend/stellive-hub-api/test/hubEventAdminRoutes.test.ts`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubApiClientTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsCalendarViewModelTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubCalendarDeepLinkPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubApiClientTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsCalendarViewModelTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubCalendarDeepLinkPolicyTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubAPIClientTests.swift`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/ServerHubStoreTests.swift`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift`
@@ -202,7 +202,7 @@ Required mapper behavior:
 - [ ] Run focused Android API tests:
 
 ```bash
-rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.stellive.hub.HubApiClientTest
+rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubApiClientTest
 ```
 
 Expected: API URL and DTO mapping tests pass.
@@ -234,7 +234,7 @@ network failure returns fallback data only when there is no last-success cache
 - [ ] Run focused Android repository/view-model tests:
 
 ```bash
-rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.stellive.hub.HubEventsCalendarViewModelTest --tests dev.stellive.hub.HubCalendarDeepLinkPolicyTest
+rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventsCalendarViewModelTest --tests dev.minepacu.stelliveeventnotifier.HubCalendarDeepLinkPolicyTest
 ```
 
 Expected: repository-driven calendar/detail behavior passes.
@@ -472,7 +472,7 @@ rtk git commit -m "feat(api): expose published hub events to mobile"
 Commit 2:
 
 ```bash
-rtk git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub
+rtk git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier
 rtk git commit -m "feat(android): load hub events from server"
 ```
 

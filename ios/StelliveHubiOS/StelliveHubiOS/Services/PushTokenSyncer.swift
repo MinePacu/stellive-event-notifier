@@ -16,7 +16,7 @@ final class PushTokenSyncer {
         deviceIDStore: DeviceIDStore,
         api: PushTokenAPI,
         defaults: UserDefaults = .standard,
-        pendingTokenKey: String = "dev.stellive.hub.pendingPushToken"
+        pendingTokenKey: String = "dev.minepacu.stelliveeventnotifier.pendingPushToken"
     ) {
         self.deviceIDStore = deviceIDStore
         self.api = api

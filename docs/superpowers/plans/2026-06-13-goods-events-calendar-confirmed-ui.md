@@ -30,9 +30,9 @@ Implementation Plan
 
 Create:
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarView.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarViewModel.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsCalendarViewModelTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarView.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarViewModel.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsCalendarViewModelTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarView.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarViewModel.swift`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift`
@@ -40,14 +40,14 @@ Create:
 Modify:
 
 - `mockups/issue-30-16-goods-events-calendar-menu-mockup.html`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
 - `android/StelliveHubAndroid/app/src/main/res/layout/activity_main.xml`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Models/HubModels.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/HubAPIClient.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/MockHubStore.swift`
@@ -157,7 +157,7 @@ enum HubCalendarScopeMode: String, CaseIterable, Identifiable {
 
 ## Step 3: Android Policy Tests
 
-- [ ] Extend `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt`.
+- [ ] Extend `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt`.
 - [ ] Test that day scope returns entries only for the selected date.
 - [ ] Test that range scope returns entries from start through end inclusive.
 - [ ] Test that reversed range selection normalizes to earliest date first.
@@ -168,7 +168,7 @@ enum HubCalendarScopeMode: String, CaseIterable, Identifiable {
 - [ ] Run:
 
 ```bash
-rtk proxy bash -lc 'cd android/StelliveHubAndroid && ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest'
+rtk proxy bash -lc 'cd android/StelliveHubAndroid && ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest'
 ```
 
 Expected: tests fail before implementation and pass after policy implementation.

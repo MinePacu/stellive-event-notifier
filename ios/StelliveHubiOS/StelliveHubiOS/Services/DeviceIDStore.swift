@@ -4,7 +4,7 @@ final class DeviceIDStore {
     private let defaults: UserDefaults
     private let key: String
 
-    init(defaults: UserDefaults = .standard, key: String = "dev.stellive.hub.deviceID") {
+    init(defaults: UserDefaults = .standard, key: String = "dev.minepacu.stelliveeventnotifier.deviceID") {
         self.defaults = defaults
         self.key = key
     }

@@ -83,13 +83,13 @@ Android/iOS 노래 페이지에서 노래 카드의 YouTube 이동, 멤버별 �
 
 ### Android
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
   - 노래 페이지 렌더링, 멤버 선택 페이지 렌더링, 노래 카드 클릭 처리, 빠른 해제 액션, 16:9 thumbnail view 구성.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainNavigationHistory.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainNavigationHistory.kt`
   - 필요한 경우 `SONG_MEMBER_FILTER` screen id 추가.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
   - 노래 URL validation, 멤버 필터 옵션, member matching, member filter label, quick clear 가능 여부, 16:9 thumbnail size/aspect policy helper.
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
   - URL validation, member filter option exclusion, selected member matching, member label/clear policy, thumbnail aspect policy 테스트.
 
 ### iOS

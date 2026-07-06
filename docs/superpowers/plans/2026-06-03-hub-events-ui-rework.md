@@ -22,19 +22,19 @@
   - Adds/moves concise policy and preference explanation sections.
 - Modify: `ios/StelliveHubiOS/StelliveHubiOSTests/PreferenceStateTests.swift`
   - Covers home preview selectors and status-first ordering.
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
   - Changes Home role copy and adds policy helpers for status dashboard labels.
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`
   - Adds home preview selectors and ensures hub event ordering uses stable id fallback.
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainNavigationHistory.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainNavigationHistory.kt`
   - Adds a non-bottom-tab hub event detail screen for Android.
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
   - Reworks Home, Goods/Events, Settings, and adds Android hub event detail rendering.
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
   - Updates Home role expectations away from catalog/policy summary.
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt`
   - Adds home preview and stable ordering coverage.
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainNavigationHistoryTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainNavigationHistoryTest.kt`
   - Covers hub event detail navigation when added.
 
 ## Task 1: Shared Home Preview Selectors
@@ -42,10 +42,10 @@
 **Files:**
 - Modify: `ios/StelliveHubiOS/StelliveHubiOS/Services/MockHubStore.swift`
 - Modify: `ios/StelliveHubiOS/StelliveHubiOSTests/PreferenceStateTests.swift`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt`
 
 - [ ] **Step 1: Add failing iOS selector tests**
 
@@ -168,7 +168,7 @@ Run:
 
 ```bash
 cd /Users/nohyunsoo/Desktop/projects/StelLiveNoti/android/StelliveHubAndroid
-./gradlew testDebugUnitTest --tests dev.stellive.hub.MainUiPolicyTest --tests dev.stellive.hub.HubEventsPolicyTest
+./gradlew testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest --tests dev.minepacu.stelliveeventnotifier.HubEventsPolicyTest
 ```
 
 Expected: FAIL because `homeStatusSummary` still takes no arguments and repository preview selectors do not exist.
@@ -257,7 +257,7 @@ Run:
 
 ```bash
 cd /Users/nohyunsoo/Desktop/projects/StelLiveNoti/android/StelliveHubAndroid
-./gradlew testDebugUnitTest --tests dev.stellive.hub.MainUiPolicyTest --tests dev.stellive.hub.HubEventsPolicyTest
+./gradlew testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest --tests dev.minepacu.stelliveeventnotifier.HubEventsPolicyTest
 ```
 
 Expected: PASS.
@@ -269,7 +269,7 @@ Expected: PASS.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add ios/StelliveHubiOS/StelliveHubiOS/Services/MockHubStore.swift ios/StelliveHubiOS/StelliveHubiOSTests/PreferenceStateTests.swift android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt
+git add ios/StelliveHubiOS/StelliveHubiOS/Services/MockHubStore.swift ios/StelliveHubiOS/StelliveHubiOSTests/PreferenceStateTests.swift android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt
 git commit -m "feat: add status dashboard selectors"
 ```
 
@@ -438,9 +438,9 @@ git commit -m "feat: rework iOS home dashboard"
 ## Task 3: Android Home and Settings Rework
 
 **Files:**
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt`
 
 - [ ] **Step 1: Update `renderHome`**
 
@@ -512,7 +512,7 @@ private fun sectionLabel(text: String): TextView = TextView(this).apply {
 Add this helper near `compactEventCard`:
 
 ```kotlin
-private fun hubEventCard(event: dev.stellive.hub.core.model.HubEvent): MaterialCardView =
+private fun hubEventCard(event: dev.minepacu.stelliveeventnotifier.core.model.HubEvent): MaterialCardView =
     compactEventCard(
         title = event.title,
         body = listOfNotNull(event.status.displayName, event.sourceLabel, event.venueName).joinToString(" · "),
@@ -566,7 +566,7 @@ Run:
 
 ```bash
 cd /Users/nohyunsoo/Desktop/projects/StelLiveNoti/android/StelliveHubAndroid
-./gradlew testDebugUnitTest --tests dev.stellive.hub.MainUiPolicyTest --tests dev.stellive.hub.HubEventsPolicyTest
+./gradlew testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest --tests dev.minepacu.stelliveeventnotifier.HubEventsPolicyTest
 ```
 
 Expected: PASS.
@@ -574,16 +574,16 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt
+git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt
 git commit -m "feat: rework Android home dashboard"
 ```
 
 ## Task 4: Android Goods/Event Detail and Status-First List
 
 **Files:**
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainNavigationHistory.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainNavigationHistoryTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainNavigationHistory.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainNavigationHistoryTest.kt`
 
 - [ ] **Step 1: Add failing navigation test**
 
@@ -609,7 +609,7 @@ Run:
 
 ```bash
 cd /Users/nohyunsoo/Desktop/projects/StelLiveNoti/android/StelliveHubAndroid
-./gradlew testDebugUnitTest --tests dev.stellive.hub.MainNavigationHistoryTest
+./gradlew testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.MainNavigationHistoryTest
 ```
 
 Expected: FAIL because `GOODS_EVENT_DETAIL` is not defined.
@@ -741,7 +741,7 @@ Run:
 
 ```bash
 cd /Users/nohyunsoo/Desktop/projects/StelLiveNoti/android/StelliveHubAndroid
-./gradlew testDebugUnitTest --tests dev.stellive.hub.MainNavigationHistoryTest --tests dev.stellive.hub.HubEventsPolicyTest
+./gradlew testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.MainNavigationHistoryTest --tests dev.minepacu.stelliveeventnotifier.HubEventsPolicyTest
 ```
 
 Expected: PASS.
@@ -749,7 +749,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainNavigationHistory.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainNavigationHistoryTest.kt
+git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainNavigationHistory.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainNavigationHistoryTest.kt
 git commit -m "feat: add Android hub event detail"
 ```
 
@@ -812,7 +812,7 @@ Expected:
 If a defect is found, make the smallest fix, rerun the failing command, and commit with the exact files changed. For example, if the Android home rework introduced the defect:
 
 ```bash
-git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt
+git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt
 git commit -m "fix: polish hub events UI rework"
 ```
 

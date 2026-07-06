@@ -37,15 +37,15 @@ ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarView.swift
 ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarViewModel.swift
 ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift
 ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/HubRepository.kt
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarView.kt
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarViewModel.kt
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt
-android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt
-android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsCalendarViewModelTest.kt
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/HubRepository.kt
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarView.kt
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarViewModel.kt
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt
+android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt
+android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsCalendarViewModelTest.kt
 ```
 
 Do not modify:
@@ -63,7 +63,7 @@ notification, preference, push, adapter, Docker, or CI files
 - [ ] Run:
 
 ```bash
-rtk rg -n "refreshHubEvents|refreshCalendar|calendarDays\\(for|hubEvents\\(for|HubEventsCalendarView\\(|selectedMonthCalendarDays|renderServerGoodsEvents|goodsEventsSelectedMonth|hubCalendarDays|hubEvents\\(" ios/StelliveHubiOS/StelliveHubiOS android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub
+rtk rg -n "refreshHubEvents|refreshCalendar|calendarDays\\(for|hubEvents\\(for|HubEventsCalendarView\\(|selectedMonthCalendarDays|renderServerGoodsEvents|goodsEventsSelectedMonth|hubCalendarDays|hubEvents\\(" ios/StelliveHubiOS/StelliveHubiOS android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier
 ```
 
 - [ ] Read short windows around:
@@ -72,16 +72,16 @@ rtk rg -n "refreshHubEvents|refreshCalendar|calendarDays\\(for|hubEvents\\(for|H
 rtk proxy sed -n '45,120p' ios/StelliveHubiOS/StelliveHubiOS/Services/ServerHubStore.swift
 rtk proxy sed -n '250,282p' ios/StelliveHubiOS/StelliveHubiOS/Services/HubAPIClient.swift
 rtk proxy sed -n '55,135p' ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift
-rtk proxy sed -n '48,90p' android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt
-rtk proxy sed -n '19,32p' android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/HubRepository.kt
-rtk proxy sed -n '532,575p' android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt
+rtk proxy sed -n '48,90p' android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt
+rtk proxy sed -n '19,32p' android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/HubRepository.kt
+rtk proxy sed -n '532,575p' android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt
 ```
 
 Expected: Confirm mobile clients call calendar with `from/to`, but event list without matching `from/to`.
 
 ## Step 2: Add Android Repository Range Test
 
-- [ ] Modify `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`.
+- [ ] Modify `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`.
 - [ ] Add a focused test proving `ServerHubRepository.hubEvents(...)` forwards `from` and `to` when provided.
 - [ ] Expected assertion: the fake `RemoteDataSource.hubEvents(...)` receives ISO dates matching the calendar range.
 - [ ] Keep the existing default `hubEvents(filterId)` call valid for other screens.
@@ -89,7 +89,7 @@ Expected: Confirm mobile clients call calendar with `from/to`, but event list wi
 Run:
 
 ```bash
-cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ServerHubRepositoryTest
+cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest
 ```
 
 Expected: FAIL before implementation because the repository interface does not expose range parameters.
@@ -105,7 +105,7 @@ Expected: FAIL before implementation because the repository interface does not e
 Run:
 
 ```bash
-cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ServerHubRepositoryTest
+cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest
 ```
 
 Expected: PASS.
@@ -147,8 +147,8 @@ selected day/range local entry list
 Run:
 
 ```bash
-cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubEventsCalendarViewModelTest
-cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ListDateNavigationViewModelTest
+cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventsCalendarViewModelTest
+cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ListDateNavigationViewModelTest
 ```
 
 Expected: PASS.
@@ -204,9 +204,9 @@ serverStore.refreshCalendar(from: from, to: to, timezone: Asia/Seoul)
 - [ ] Run Android focused repository and calendar tests:
 
 ```bash
-cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ServerHubRepositoryTest
-cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubEventsCalendarViewModelTest
-cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ListDateNavigationViewModelTest
+cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest
+cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventsCalendarViewModelTest
+cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ListDateNavigationViewModelTest
 ```
 
 - [ ] Run iOS focused tests:

@@ -13,9 +13,9 @@
 ## Token-Minimized Work Rules
 
 - 먼저 아래 파일만 읽는다.
-  - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-  - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-  - `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+  - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+  - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+  - `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
   - `ios/StelliveHubiOS/StelliveHubiOS/Views/SongsView.swift`
   - `ios/StelliveHubiOS/StelliveHubiOS/Models/HubModels.swift`
   - `ios/StelliveHubiOS/StelliveHubiOSTests/SongUiPolicyTests.swift`
@@ -32,7 +32,7 @@
 Android:
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 iOS:
@@ -47,8 +47,8 @@ Run broader tests only if focused tests fail because shared mobile model compila
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
 
 - [ ] **Step 1: Write failing tests**
 
@@ -79,7 +79,7 @@ fun songPaginationCalculatesPagesAndSlicesItems() {
 - [ ] **Step 2: Run RED**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 Expected: fail because pagination helpers are missing.
@@ -114,7 +114,7 @@ fun songPageItems(
 - [ ] **Step 4: Run GREEN**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 Expected: pass.
@@ -123,8 +123,8 @@ Expected: pass.
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
 
 - [ ] **Step 1: Add state**
 
@@ -218,7 +218,7 @@ The control must show previous, `selectedSongPage / pageCount`, next. Previous i
 - [ ] **Step 6: Run Android focused test**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 Expected: pass and compile `MainActivity.kt`.
@@ -418,7 +418,7 @@ Expected: pass and compile `SongsView.swift`.
 - [ ] **Step 1: Android focused verification**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 - [ ] **Step 2: iOS focused verification**

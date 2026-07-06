@@ -14,7 +14,7 @@
 
 **Files:**
 - Modify: `ios/StelliveHubiOS/StelliveHubiOSTests/PreferenceStateTests.swift`
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
 
 - [x] Add iOS tests asserting Settings hub rows are summarized and child-page groups preserve policy-sensitive defaults.
 - [x] Add Android tests asserting Settings hub rows are summarized and child-page groups preserve policy-sensitive defaults.
@@ -24,7 +24,7 @@
 
 **Files:**
 - Modify: `ios/StelliveHubiOS/StelliveHubiOS/Views/SettingsView.swift`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
 
 - [x] Add iOS route, row, and section helper types with summary count logic.
 - [x] Add Android route, row, and section helper types with summary count logic.
@@ -43,7 +43,7 @@
 ### Task 4: Rework Android Settings UI
 
 **Files:**
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 
 - [x] Replace the long settings render with a Settings hub.
 - [x] Add child screens for delivery, targets, platforms, event types, goods/events, and advanced combination settings.

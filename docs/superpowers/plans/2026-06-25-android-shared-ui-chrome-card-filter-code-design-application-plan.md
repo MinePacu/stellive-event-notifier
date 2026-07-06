@@ -46,12 +46,12 @@
 ```bash
 cd android/StelliveHubAndroid
 rtk ./gradlew :app:testDebugUnitTest \
-  --tests dev.stellive.hub.MainScreenChromePolicyTest \
-  --tests dev.stellive.hub.TopBarTextPolicyTest \
-  --tests dev.stellive.hub.MainUiPolicyTest \
-  --tests dev.stellive.hub.SongUiPolicyTest \
-  --tests dev.stellive.hub.HubEventsPolicyTest \
-  --tests dev.stellive.hub.AndroidColorTokenPolicyTest
+  --tests dev.minepacu.stelliveeventnotifier.MainScreenChromePolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.TopBarTextPolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.HubEventsPolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.AndroidColorTokenPolicyTest
 ```
 
 - `MainActivity.kt` 또는 XML 컴파일 검증이 필요할 때만 `rtk ./gradlew :app:assembleDebug`를 추가한다.
@@ -62,26 +62,26 @@ rtk ./gradlew :app:testDebugUnitTest \
 
 ### Create
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/ui/chrome/MainScreenChromePolicy.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/chrome/MainScreenChromePolicy.kt`
   - 화면별 본문 헤더, 상단 제목, 액션 표시 정책.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/ui/components/HubCardFactory.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/components/HubCardFactory.kt`
   - 공용 카드 스타일과 MaterialCardView 생성.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/ui/components/TopFilterStripView.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/components/TopFilterStripView.kt`
   - 균등 배치/가로 스크롤 필터 UI.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/ui/components/SectionHeaderView.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/components/SectionHeaderView.kt`
   - 카드 외부 섹션 제목.
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainScreenChromePolicyTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/TopFilterStripPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainScreenChromePolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/TopFilterStripPolicyTest.kt`
 
 ### Modify
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
   - 공용 chrome/card/filter 연결.
   - 루트 화면 본문 헤더 제거.
   - 노래 검색 화면 및 상단 검색 액션.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainNavigationHistory.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainNavigationHistory.kt`
   - `SONG_SEARCH` 화면 추가.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
   - 화면별 필터 spec과 검색/상단 액션 정책.
 - `android/StelliveHubAndroid/app/src/main/res/layout/activity_main.xml`
   - 상단 검색 버튼과 고정 필터 컨테이너.
@@ -90,11 +90,11 @@ rtk ./gradlew :app:testDebugUnitTest \
   - 카드 표면과 필터 선택/스크롤 표시 색상.
 - `android/StelliveHubAndroid/app/src/main/res/values/strings.xml`
   - 검색 및 필터 접근성 문자열.
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/TopBarTextPolicyTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/AndroidColorTokenPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/TopBarTextPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/AndroidColorTokenPolicyTest.kt`
 - `CODEMAP.md`
 - `docs/AI_HANDOFF.md`
 
@@ -102,9 +102,9 @@ rtk ./gradlew :app:testDebugUnitTest \
 
 **Files:**
 
-- Create: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/ui/chrome/MainScreenChromePolicy.kt`
-- Create: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainScreenChromePolicyTest.kt`
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/TopBarTextPolicyTest.kt`
+- Create: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/chrome/MainScreenChromePolicy.kt`
+- Create: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainScreenChromePolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/TopBarTextPolicyTest.kt`
 
 - [ ] **Step 1: Add failing root/detail chrome tests**
 
@@ -130,7 +130,7 @@ fun detailAndSearchScreensKeepTitleVisible() {
 - [ ] **Step 2: Run the new tests and confirm RED**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.MainScreenChromePolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.MainScreenChromePolicyTest
 ```
 
 Expected: unresolved `MainScreenChromePolicy`.
@@ -164,8 +164,8 @@ object MainScreenChromePolicy {
 
 ```bash
 rtk ./gradlew :app:testDebugUnitTest \
-  --tests dev.stellive.hub.MainScreenChromePolicyTest \
-  --tests dev.stellive.hub.TopBarTextPolicyTest
+  --tests dev.minepacu.stelliveeventnotifier.MainScreenChromePolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.TopBarTextPolicyTest
 ```
 
 ## Task 2: Top Bar And Fixed Filter Container
@@ -174,7 +174,7 @@ rtk ./gradlew :app:testDebugUnitTest \
 
 - Modify: `android/StelliveHubAndroid/app/src/main/res/layout/activity_main.xml`
 - Modify: `android/StelliveHubAndroid/app/src/main/res/values/strings.xml`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 
 - [ ] **Step 1: Add XML search action and filter container**
 
@@ -243,8 +243,8 @@ Expected: build succeeds; no backend/iOS commands.
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainScreenChromePolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainScreenChromePolicyTest.kt`
 
 - [ ] **Step 1: Change `startScreen` to accept chrome policy**
 
@@ -267,19 +267,19 @@ Verify `goods_event_detail`, settings, history, member filter, and song search s
 
 ```bash
 rtk ./gradlew :app:testDebugUnitTest \
-  --tests dev.stellive.hub.MainScreenChromePolicyTest \
-  --tests dev.stellive.hub.TopBarTextPolicyTest
+  --tests dev.minepacu.stelliveeventnotifier.MainScreenChromePolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.TopBarTextPolicyTest
 ```
 
 ## Task 4: Shared Card Factory And Color Tokens
 
 **Files:**
 
-- Create: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/ui/components/HubCardFactory.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- Create: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/components/HubCardFactory.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 - Modify: `android/StelliveHubAndroid/app/src/main/res/values/colors.xml`
 - Modify: `android/StelliveHubAndroid/app/src/main/res/values-night/colors.xml`
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/AndroidColorTokenPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/AndroidColorTokenPolicyTest.kt`
 
 - [ ] **Step 1: Add failing color token assertions**
 
@@ -328,16 +328,16 @@ Convert only card builders touched by this feature: status strip, live row, song
 
 ```bash
 rtk ./gradlew :app:testDebugUnitTest \
-  --tests dev.stellive.hub.AndroidColorTokenPolicyTest \
-  --tests dev.stellive.hub.MainUiPolicyTest
+  --tests dev.minepacu.stelliveeventnotifier.AndroidColorTokenPolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest
 ```
 
 ## Task 5: External Section Header
 
 **Files:**
 
-- Create: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/ui/components/SectionHeaderView.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- Create: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/components/SectionHeaderView.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 
 - [ ] **Step 1: Implement a reusable header**
 
@@ -370,9 +370,9 @@ rtk ./gradlew :app:assembleDebug
 
 **Files:**
 
-- Create: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/ui/components/TopFilterStripView.kt`
-- Create: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/TopFilterStripPolicyTest.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
+- Create: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/components/TopFilterStripView.kt`
+- Create: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/TopFilterStripPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
 
 - [ ] **Step 1: Add failing layout policy tests**
 
@@ -419,17 +419,17 @@ For scrolling groups:
 - [ ] **Step 4: Run filter policy tests**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.TopFilterStripPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.TopFilterStripPolicyTest
 ```
 
 ## Task 7: Live And Goods/Events Filter Migration
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt`
 
 - [ ] **Step 1: Define screen filter groups**
 
@@ -461,18 +461,18 @@ Remove `liveStatusChips()` and `staticChips(...)` from content body. Bind the sh
 
 ```bash
 rtk ./gradlew :app:testDebugUnitTest \
-  --tests dev.stellive.hub.MainUiPolicyTest \
-  --tests dev.stellive.hub.HubEventsPolicyTest
+  --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.HubEventsPolicyTest
 ```
 
 ## Task 8: Song Filters And Search Navigation
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainNavigationHistory.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainNavigationHistory.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
 
 - [ ] **Step 1: Add failing search navigation tests**
 
@@ -540,16 +540,16 @@ binding.topBarSongSearch.setOnClickListener {
 
 ```bash
 rtk ./gradlew :app:testDebugUnitTest \
-  --tests dev.stellive.hub.SongUiPolicyTest \
-  --tests dev.stellive.hub.MainScreenChromePolicyTest
+  --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.MainScreenChromePolicyTest
 ```
 
 ## Task 9: Remove Goods/Events Summary Rectangles
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt`
 
 - [ ] **Step 1: Add a policy assertion**
 
@@ -575,7 +575,7 @@ Do not delete summary data from models because it may still be used by home/stat
 - [ ] **Step 4: Run focused event tests**
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubEventsPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventsPolicyTest
 ```
 
 ## Task 10: Final Focused Verification And Documentation
@@ -589,13 +589,13 @@ rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubEventsPolicyTes
 
 ```bash
 rtk ./gradlew :app:testDebugUnitTest \
-  --tests dev.stellive.hub.MainScreenChromePolicyTest \
-  --tests dev.stellive.hub.TopFilterStripPolicyTest \
-  --tests dev.stellive.hub.TopBarTextPolicyTest \
-  --tests dev.stellive.hub.MainUiPolicyTest \
-  --tests dev.stellive.hub.SongUiPolicyTest \
-  --tests dev.stellive.hub.HubEventsPolicyTest \
-  --tests dev.stellive.hub.AndroidColorTokenPolicyTest
+  --tests dev.minepacu.stelliveeventnotifier.MainScreenChromePolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.TopFilterStripPolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.TopBarTextPolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.HubEventsPolicyTest \
+  --tests dev.minepacu.stelliveeventnotifier.AndroidColorTokenPolicyTest
 ```
 
 - [ ] **Step 2: Run Android compile verification**

@@ -26,11 +26,11 @@ Backend:
 - `backend/stellive-hub-api/test/hubEventReadRoutes.test.ts`: read API contract 테스트
 
 Android:
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`: 캘린더 DTO enum/data class
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt`: 캘린더 정렬/라벨 정책
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarWidgetTextFormatter.kt`: 위젯 문구
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`: mock calendar projection
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/*Calendar*Test.kt`: 캘린더/위젯 테스트
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`: 캘린더 DTO enum/data class
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt`: 캘린더 정렬/라벨 정책
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarWidgetTextFormatter.kt`: 위젯 문구
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`: mock calendar projection
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/*Calendar*Test.kt`: 캘린더/위젯 테스트
 
 iOS:
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/HubCalendarWidgetStore.swift`: 위젯 snapshot 저장
@@ -349,8 +349,8 @@ Android:
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew testDebugUnitTest --tests dev.stellive.hub.CalendarWidgetTextFormatterTest
-rtk ./gradlew testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+rtk ./gradlew testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarWidgetTextFormatterTest
+rtk ./gradlew testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
 rtk ./gradlew testDebugUnitTest
 ```
 

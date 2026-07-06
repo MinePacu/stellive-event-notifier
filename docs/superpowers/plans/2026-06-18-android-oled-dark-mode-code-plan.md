@@ -31,7 +31,7 @@ rtk rg "hub_background|hub_surface|hub_card|hub_top_bar|statusBarColor|navigatio
 ```text
 android/StelliveHubAndroid/app/src/main/res/values/colors.xml
 android/StelliveHubAndroid/app/src/main/res/values-night/colors.xml
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt
 ```
 
 - Use `rtk grep`/`rtk rg` for resource names and only open full files after a match identifies a concrete edit target.
@@ -66,8 +66,8 @@ Expected primary change:
 ## Expected Files
 
 - `android/StelliveHubAndroid/app/src/main/res/values-night/colors.xml`
-- Optional only if needed: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Optional only if existing tests assert exact dark colors: Android unit test files under `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/`
+- Optional only if needed: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Optional only if existing tests assert exact dark colors: Android unit test files under `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/`
 
 ## Non-Goals
 
@@ -82,7 +82,7 @@ Expected primary change:
 - [ ] Confirm diff scope:
 
 ```bash
-rtk git diff -- android/StelliveHubAndroid/app/src/main/res/values-night/colors.xml android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt
+rtk git diff -- android/StelliveHubAndroid/app/src/main/res/values-night/colors.xml android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt
 ```
 
 - [ ] Check whitespace and XML sanity:

@@ -57,9 +57,9 @@ Modify:
 - `backend/stellive-hub-api/src/routes/hubEventReadRoutes.ts`: return image metadata in list/detail responses only when stored policy permits it.
 - `backend/stellive-hub-api/src/admin/adminConsoleHtml.ts`: add metadata-only image URL policy controls if admin editing is in scope for this task; do not add uploads.
 - `backend/stellive-hub-api/prisma/schema.prisma`: add nullable metadata fields if Prisma storage is active for HubEvent.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`: add image metadata model and policy enum.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt`: add DTO parsing for image metadata.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/hub/MainActivity.kt`: render text-first HubEvent cards/details and optional allowed image display.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`: add image metadata model and policy enum.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt`: add DTO parsing for image metadata.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/hub/MainActivity.kt`: render text-first HubEvent cards/details and optional allowed image display.
 - `ios/StelliveHubiOS/StelliveHubiOS/Models/HubModels.swift`: add image metadata model and policy enum.
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/HubAPIClient.swift`: decode optional image metadata.
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift`: render image-free rows as normal layout and optional allowed image display.

@@ -24,8 +24,8 @@ Firebase는 backend push provider 구현에만 존재해야 한다. 이벤트 �
 | Mobile token API | `backend/stellive-hub-api/src/routes/appRoutes.ts` | `fcm`/`apns_via_fcm` provider token update만 허용 |
 | Internal drain API | `backend/stellive-hub-api/src/routes/internalRoutes.ts` | caller payload/device/preference override 금지 |
 | Shared mobile contract | `shared/schemas/mobileApi.ts` | token provider enum과 mobile DTO 정의 |
-| Android FCM service | `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/notification/StelliveFirebaseMessagingService.kt` | token refresh 및 notification display |
-| Android token sync | `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/device/PushTokenSyncer.kt` | backend token registration only |
+| Android FCM service | `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/notification/StelliveFirebaseMessagingService.kt` | token refresh 및 notification display |
+| Android token sync | `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/device/PushTokenSyncer.kt` | backend token registration only |
 | iOS API client tests | `ios/StelliveHubiOS/StelliveHubiOSTests/HubAPIClientTests.swift` | `apns_via_fcm` contract 검증 |
 
 ## 모듈 구조
@@ -54,7 +54,7 @@ shared/schemas/
   mobileApi.ts
   domain.ts
 
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/
   notification/StelliveFirebaseMessagingService.kt
   device/PushTokenSyncer.kt
 ```

@@ -10,11 +10,11 @@ Implementation Plan
 ## Scope
 
 Modify:
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarView.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/hubevents/HubEventDetailFormatting.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventDetailFormattingTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarView.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/hubevents/HubEventDetailFormatting.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventDetailFormattingTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarViewModel.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarView.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventDetailView.swift`
@@ -162,7 +162,7 @@ Expected:
 
 - [ ] Add Android failing tests for range-bar layout.
 
-File: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt`
+File: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt`
 
 Add tests:
 - `durationBarSegmentsClipAtVisibleGridBoundaries()`
@@ -178,7 +178,7 @@ Run:
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
 ```
 
 Expected:
@@ -186,7 +186,7 @@ Expected:
 
 - [ ] Implement Android policy segment helpers.
 
-File: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt`
+File: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt`
 
 Add:
 - `CalendarDurationBarSegment`
@@ -205,7 +205,7 @@ Run:
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
 ```
 
 Expected:
@@ -213,7 +213,7 @@ Expected:
 
 - [ ] Render Android week-row duration bars.
 
-File: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarView.kt`
+File: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarView.kt`
 
 Change:
 - Replace the current date-cell-only duration indication with month-level duration-bar layout.
@@ -229,7 +229,7 @@ Run:
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
 ```
 
 Expected:
@@ -306,7 +306,7 @@ Expected:
 
 - [ ] Add Android detail formatting failing test for no-end-date events.
 
-File: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventDetailFormattingTest.kt`
+File: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventDetailFormattingTest.kt`
 
 Add test:
 - `periodTextForStartOnlyEventDoesNotShowUnknownEnd()`
@@ -319,7 +319,7 @@ Run:
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubEventDetailFormattingTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventDetailFormattingTest
 ```
 
 Expected:
@@ -327,7 +327,7 @@ Expected:
 
 - [ ] Implement Android detail formatting for no-end-date events.
 
-File: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/hubevents/HubEventDetailFormatting.kt`
+File: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/hubevents/HubEventDetailFormatting.kt`
 
 Change:
 - When `startsAt != null` and `endsAt == null`, return start-only text without `종료 미정`.
@@ -338,7 +338,7 @@ Run:
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubEventDetailFormattingTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventDetailFormattingTest
 ```
 
 Expected:
@@ -457,8 +457,8 @@ Android:
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.HubEventDetailFormattingTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventDetailFormattingTest
 ```
 
 iOS:
@@ -575,7 +575,7 @@ Expected:
 Suggested commits:
 
 ```bash
-rtk git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarView.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/hubevents/HubEventDetailFormatting.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventDetailFormattingTest.kt
+rtk git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarView.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/hubevents/HubEventDetailFormatting.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventDetailFormattingTest.kt
 rtk git commit -m "feat(android): render stacked calendar duration bars"
 ```
 

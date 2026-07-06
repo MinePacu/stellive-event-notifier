@@ -15,7 +15,7 @@ Implementation Plan
 Modify:
 
 - `android/StelliveHubAndroid/app/src/main/res/layout/activity_main.xml`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 - `android/StelliveHubAndroid/app/src/main/res/values/colors.xml`
 
 Create if needed:
@@ -24,7 +24,7 @@ Create if needed:
 
 Test:
 
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt` if a new pure UI policy helper is introduced.
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt` if a new pure UI policy helper is introduced.
 - Existing Android unit tests and debug build.
 
 ## Step 1: Capture Current Baseline
