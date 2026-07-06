@@ -108,6 +108,12 @@ function isLiveStatus(status: string | undefined): boolean {
   return status === "OPEN" || status === "LIVE";
 }
 
+function hasLiveEvidence(item: z.infer<typeof liveItemSchema>): boolean {
+  const title = item.liveTitle ?? item.title;
+  const openDate = item.openDate ?? item.liveStartDate;
+  return Boolean(title?.trim() || openDate?.trim() || item.liveId !== undefined);
+}
+
 function parseViewerCount(value: number | string | undefined): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -158,7 +164,7 @@ function normalizeLiveStatus(
 
   return {
     channelId,
-    isLive: status ? isLiveStatus(status) : true,
+    isLive: status ? isLiveStatus(status) : hasLiveEvidence(item),
     title: item.liveTitle ?? item.title,
     channelImageUrl: item.channelImageUrl ?? undefined,
     openDate: item.openDate ?? item.liveStartDate,

@@ -79,6 +79,17 @@ function tokenStatus(value: string | undefined): DeviceTokenStatus | undefined {
   return undefined;
 }
 
+function toMobileDisplayLiveStatus(status: LiveStatus): LiveStatus {
+  if (status.sourceVerificationState === "verified") return status;
+  return {
+    ...status,
+    isLive: false,
+    title: undefined,
+    viewerCount: undefined,
+    startedAt: undefined,
+  };
+}
+
 export default class BootstrapService {
   private readonly clock: () => Date;
   private readonly catalogCache: ShortTtlAsyncCache<HydratedCatalog>;
@@ -154,7 +165,7 @@ export default class BootstrapService {
         members: catalog.members,
       },
       preferences,
-      liveStatus,
+      liveStatus: liveStatus.map(toMobileDisplayLiveStatus),
       hubEventsSummary,
       serverTime: this.clock().toISOString(),
     };
