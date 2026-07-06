@@ -76,12 +76,13 @@ final class MockHubStore: ObservableObject {
             }
 
             var updatedMember = member
-            updatedMember.isLive = status.isLive
-            updatedMember.liveStartedAt = status.startedAt.flatMap(Self.parseInstant)
-            updatedMember.liveTitle = status.title
-            updatedMember.liveViewerCount = status.viewerCount
+            let displayLive = status.isLive && status.sourceVerificationState == "verified"
+            updatedMember.isLive = displayLive
+            updatedMember.liveStartedAt = displayLive ? status.startedAt.flatMap(Self.parseInstant) : nil
+            updatedMember.liveTitle = displayLive ? status.title : nil
+            updatedMember.liveViewerCount = displayLive ? status.viewerCount : nil
             updatedMember.channelImageURL = status.channelImageUrl.flatMap(URL.init(string:))
-            updatedMember.livePlatformURL = status.platformUrl.flatMap(URL.init(string:))
+            updatedMember.livePlatformURL = displayLive ? status.platformUrl.flatMap(URL.init(string:)) : nil
             updatedMember.liveLastCheckedAt = Self.parseInstant(status.lastCheckedAt)
             return updatedMember
         }

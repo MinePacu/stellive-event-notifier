@@ -84,14 +84,20 @@ describe("ChzzkOpenApiAdapter", () => {
   });
 
 
-  it("preserves a previous live state when the latest status is unverified", async () => {
+  it("stores an unverified observation as non-live without recording an ended transition", async () => {
     const events: PlatformEvent[] = [];
     const writes: Array<Record<string, unknown>> = [];
     const adapter = createAdapter({
       previous: { isLive: true },
       events,
       writes,
-      statuses: [liveStatus({ isLive: false, sourceVerificationState: "verify_required" })]
+      statuses: [liveStatus({
+        isLive: true,
+        title: "Unverified title",
+        viewerCount: 123,
+        openDate: "2026-06-11T03:00:00.000Z",
+        sourceVerificationState: "verify_required"
+      })]
     });
 
     await expect(adapter.pollLiveStatuses()).resolves.toMatchObject({
@@ -101,11 +107,27 @@ describe("ChzzkOpenApiAdapter", () => {
 
     expect(events).toHaveLength(0);
     expect(writes[0]).toMatchObject({
-      isLive: true,
+      isLive: false,
       sourceVerificationState: "verify_required",
-      startedAt: new Date("2026-06-11T02:00:00.000Z"),
       lastTransitionAt: new Date("2026-06-11T02:00:00.000Z")
     });
+    expect(writes[0]).toMatchObject({
+      title: undefined,
+      viewerCount: undefined,
+      startedAt: undefined
+    });
+  });
+
+  it("uses the first verified observation after an unverified row as a baseline", async () => {
+    const events: PlatformEvent[] = [];
+    const adapter = createAdapter({
+      previous: { isLive: false, sourceVerificationState: "verify_required" },
+      events,
+      statuses: [liveStatus({ isLive: true, title: "Verified live" })]
+    });
+
+    await expect(adapter.pollLiveStatuses()).resolves.toMatchObject({ eventsCreated: 0 });
+    expect(events).toHaveLength(0);
   });
 
   it("never emits chzzk_chat", async () => {
@@ -124,7 +146,7 @@ describe("ChzzkOpenApiAdapter", () => {
 
 function createAdapter(options: {
   members?: Member[];
-  previous?: { isLive: boolean };
+  previous?: { isLive: boolean; sourceVerificationState?: string };
   events?: PlatformEvent[];
   writes?: unknown[];
   statuses?: ChzzkNormalizedLiveStatus[];
@@ -148,7 +170,7 @@ function createAdapter(options: {
       ))
     },
     liveStatusRepository: {
-      getByMemberId: vi.fn(async () => previousRecord(options.previous?.isLive)),
+      getByMemberId: vi.fn(async () => previousRecord(options.previous)),
       upsertLiveStatus: vi.fn(async (input) => {
         writes.push(input);
         return input as never;
@@ -171,8 +193,9 @@ function liveStatus(overrides: Partial<ChzzkNormalizedLiveStatus>): ChzzkNormali
   };
 }
 
-function previousRecord(isLive: boolean | undefined) {
-  if (isLive === undefined) return null;
+function previousRecord(previous: { isLive: boolean; sourceVerificationState?: string } | undefined) {
+  if (previous === undefined) return null;
+  const { isLive } = previous;
   const previousTransition = isLive ? new Date("2026-06-11T02:00:00.000Z") : null;
   return {
     memberId: "ayatsuno-yuni",
@@ -184,7 +207,7 @@ function previousRecord(isLive: boolean | undefined) {
     startedAt: previousTransition,
     platformUrl: null,
     lastCheckedAt: new Date("2026-06-11T03:00:00.000Z"),
-    sourceVerificationState: "verified",
+    sourceVerificationState: previous.sourceVerificationState ?? "verified",
     lastTransitionAt: previousTransition
   };
 }

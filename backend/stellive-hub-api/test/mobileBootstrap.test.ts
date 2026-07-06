@@ -400,6 +400,29 @@ describe("BootstrapService", () => {
             lastCheckedAt: "2026-06-11T00:01:00.000Z",
             sourceVerificationState: "verified",
           },
+          {
+            memberId: "sakihane-huya",
+            generationId: "gen1",
+            platform: "chzzk",
+            isLive: true,
+            title: undefined,
+            viewerCount: 50,
+            startedAt: "2026-06-11T00:30:00.000Z",
+            platformUrl: "https://chzzk.naver.com/live/unverified-channel",
+            lastCheckedAt: "2026-06-11T00:31:00.000Z",
+            sourceVerificationState: "verify_required",
+          },
+          {
+            memberId: "shirayuki-hina",
+            generationId: "gen2",
+            platform: "chzzk",
+            isLive: false,
+            title: undefined,
+            viewerCount: undefined,
+            startedAt: undefined,
+            lastCheckedAt: "2026-06-11T00:32:00.000Z",
+            sourceVerificationState: "verified",
+          },
         ],
       },
       hubEvents: {
@@ -432,7 +455,7 @@ describe("BootstrapService", () => {
       "ayatsuno-yuni",
     ]);
     expect(bootstrap.preferences).toHaveLength(1);
-    expect(bootstrap.liveStatus).toHaveLength(1);
+    expect(bootstrap.liveStatus).toHaveLength(3);
     expect(bootstrap.liveStatus[0]).toMatchObject({
       memberId: "ayatsuno-yuni",
       generationId: "gen1",
@@ -443,6 +466,23 @@ describe("BootstrapService", () => {
       startedAt: "2026-06-11T00:00:00.000Z",
       platformUrl: "https://chzzk.naver.com/live/channel",
       lastCheckedAt: "2026-06-11T00:01:00.000Z",
+    });
+    expect(bootstrap.liveStatus[1]).toEqual({
+      memberId: "sakihane-huya",
+      generationId: "gen1",
+      platform: "chzzk",
+      isLive: false,
+      title: undefined,
+      viewerCount: undefined,
+      startedAt: undefined,
+      platformUrl: "https://chzzk.naver.com/live/unverified-channel",
+      lastCheckedAt: "2026-06-11T00:31:00.000Z",
+      sourceVerificationState: "verify_required",
+    });
+    expect(bootstrap.liveStatus[2]).toMatchObject({
+      memberId: "shirayuki-hina",
+      isLive: false,
+      sourceVerificationState: "verified",
     });
     expect(bootstrap.hubEventsSummary.openCount).toBe(1);
     expect(bootstrap.serverTime).toBe("2026-06-11T03:00:00.000Z");

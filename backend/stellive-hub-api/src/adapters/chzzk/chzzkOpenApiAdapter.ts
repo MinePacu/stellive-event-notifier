@@ -70,23 +70,28 @@ function toLiveStatusInput(
         isLive: boolean;
         startedAt?: Date | null;
         lastTransitionAt?: Date | null;
+        sourceVerificationState: string;
       }
     | null
 ): LiveStatusWriteInput {
   const providerStartedAt = startedAtFrom(status);
-  const transitioned = previous !== null && previous.isLive !== status.isLive;
+  const isVerified = status.sourceVerificationState === "verified";
+  const isLive = isVerified && status.isLive;
+  const transitioned = isVerified
+    && previous?.sourceVerificationState === "verified"
+    && previous.isLive !== isLive;
   const lastTransitionAt = transitioned ? now : (previous?.lastTransitionAt ?? undefined);
-  const startedAt = status.isLive
+  const startedAt = isLive
     ? (providerStartedAt ?? previous?.startedAt ?? lastTransitionAt ?? now)
     : undefined;
 
   return {
     memberId: member.id,
     generationId: member.generationId,
-    isLive: status.isLive,
-    title: status.title,
+    isLive,
+    title: isVerified ? status.title : undefined,
     thumbnailUrl: normalizeRuntimeImageUrl(status.channelImageUrl),
-    viewerCount: status.viewerCount,
+    viewerCount: isVerified ? status.viewerCount : undefined,
     startedAt,
     platformUrl: status.platformUrl,
     sourceVerificationState: status.sourceVerificationState,
@@ -175,17 +180,14 @@ export class ChzzkOpenApiAdapter {
         platformUrl: `https://chzzk.naver.com/live/${channelId}`,
         sourceVerificationState: "verify_required" as const
       };
-      const effectiveStatus = status.sourceVerificationState === "verify_required" && previous
-        ? { ...status, isLive: previous.isLive }
-        : status;
-
       counts.checked += 1;
       if (status.sourceVerificationState === "verify_required") counts.verifyRequired += 1;
 
-      await this.options.liveStatusRepository.upsertLiveStatus(toLiveStatusInput(member, effectiveStatus, now, previous));
+      await this.options.liveStatusRepository.upsertLiveStatus(toLiveStatusInput(member, status, now, previous));
       counts.updated += 1;
 
       const eventType = status.sourceVerificationState !== "verified"
+        || previous?.sourceVerificationState !== "verified"
         ? undefined
         : previous?.isLive === false && status.isLive
           ? "chzzk_live_started"
