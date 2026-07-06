@@ -72,11 +72,11 @@ const isLive = isVerified && status.isLive;
 ### Task 4: Android fail-closed mapping
 
 **Files:**
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
 
 - [ ] Add an unverified live DTO to the repository fixture and assert its member is offline with null start time, title, viewer count, and platform URL. Keep the verified live assertions.
-- [ ] Run `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ServerHubRepositoryTest`; confirm the new assertions fail.
+- [ ] Run `rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest`; confirm the new assertions fail.
 - [ ] Compute `val displayLive = status.isLive && status.sourceVerificationState == "verified"` and populate live-only domain fields only when `displayLive` is true. Preserve `lastCheckedAt` and channel image metadata as diagnostics/profile data.
 - [ ] Re-run the focused Android test and confirm it passes.
 
