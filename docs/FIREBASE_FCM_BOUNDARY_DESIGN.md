@@ -24,7 +24,7 @@ Stellive Notification Hub는 서버 중재형 알림 허브다. 백엔드는 플
 
 - Firebase를 application backend, primary data store, event store, preference store, job queue로 사용하지 않는다.
 - Firestore, Realtime Database, Firebase Auth, Cloud Functions, Cloud Scheduler, Remote Config, Analytics, Crashlytics, Storage를 MVP 알림 백엔드 기능 구성 요소로 도입하지 않는다.
-- Firebase topic subscription, condition messaging, direct client fan-out으로 사용자 preference resolution을 우회하지 않는다.
+- 일반 이벤트에 Firebase topic/condition fan-out을 사용하거나 사용자 preference resolution을 우회하지 않는다. 예외는 서버 allowlist로 고정된 service-wide announcement topic뿐이다.
 - 클라이언트가 CHZZK, YouTube, X, Naver 등 보호된 플랫폼 API를 직접 호출하게 하지 않는다.
 
 ## 기능 경계
@@ -74,6 +74,14 @@ FCM은 9번 단계의 provider adapter일 뿐이며, 1-8번과 10번의 정책/�
 - Remote Config로 알림 정책, preference, feature flag의 authoritative source를 대체.
 - Analytics/Crashlytics/Storage 등 FCM 외 Firebase SDK를 MVP 알림 기능 요구로 추가.
 - FCM topics/conditions로 세대, 멤버, 플랫폼, 이벤트 타입별 fan-out을 직접 처리.
+- allowlist 밖 topic 또는 caller가 직접 지정한 topic 문자열 전송.
+
+## Service-wide announcement exception
+
+- 일반 이벤트는 backend가 device token 직접 fan-out하며 device별 preference, quiet hours, keyword block, rate limit을 계속 적용한다.
+- 내부 인증 route는 `service_all`, `service_incident`, `service_maintenance`, `service_version_update`만 topic으로 전송할 수 있다.
+- topic 공지는 device-level `DeliveryAttempt`와 혼합하지 않는다. provider-level audit persistence는 별도 DB 설계가 필요한 후속 TODO다.
+- 모바일 topic subscription과 전체 공지 opt-out 정책은 후속 작업이며, 멤버·세대·플랫폼·이벤트 타입 topic은 계속 금지한다.
 - provider payload에 raw platform response, secrets, production device token, image binary, official logo, fan art, screenshot, copied media URL metadata를 포함.
 
 ## 백엔드 구성

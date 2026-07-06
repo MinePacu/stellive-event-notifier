@@ -46,6 +46,7 @@ interface NotificationWorkerDependencies {
   preferenceResolution: Pick<PreferenceResolutionService, "resolve">;
   pushSender: PushSender;
   now?: () => Date;
+  random?: () => number;
 }
 
 interface MutableDrainTotals extends NotificationWorkerDrainResult {}
@@ -54,6 +55,7 @@ interface DeviceProcessResult {
   sent?: boolean;
   skipped?: boolean;
   transientFailure?: boolean;
+  retryAfterMs?: number;
 }
 
 const retryDelaysMs = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
@@ -75,8 +77,15 @@ function emptyDrainResult(claimed: number): MutableDrainTotals {
   };
 }
 
-function retryAt(attempts: number, now: Date): Date | undefined {
+export function calculateRetryDelayMs(attempts: number, retryAfterMs?: number, random = () => 0.5): number | undefined {
+  if (retryAfterMs !== undefined) return Math.max(0, retryAfterMs);
   const delay = retryDelaysMs[attempts];
+  if (delay === undefined) return undefined;
+  return Math.round(delay * (0.9 + Math.min(Math.max(random(), 0), 1) * 0.2));
+}
+
+function retryAt(attempts: number, now: Date, retryAfterMs?: number, random?: () => number): Date | undefined {
+  const delay = calculateRetryDelayMs(attempts, retryAfterMs, random);
   return delay === undefined ? undefined : new Date(now.getTime() + delay);
 }
 
@@ -134,16 +143,77 @@ export class NotificationWorker {
       devices.map((device) => device.deviceId)
     );
     let hadTransientFailure = false;
+    let providerRetryAfterMs: number | undefined;
 
-    for (const device of devices) {
-      const result = await this.processDevice({ event, device, preferences, job, now });
-      if (result.sent) totals.sent += 1;
-      if (result.skipped) totals.skipped += 1;
-      if (result.transientFailure) hadTransientFailure = true;
+    if (this.dependencies.pushSender.sendToDevices) {
+      const groups = new Map<string, Array<{
+        device: PushTargetDevice;
+        resolution: ResolvedNotificationPreference;
+        deliveryLevel: NotificationDeliveryLevel;
+        payload: ReturnType<typeof buildPushPayload>;
+      }>>();
+
+      for (const device of devices) {
+        const resolution = this.dependencies.preferenceResolution.resolve(event, device.deviceId, preferences);
+        const delivery = resolveNotificationDelivery(event, resolution);
+        if (!resolution.shouldNotify || !delivery.shouldEnqueuePush) {
+          await this.recordAttempt({
+            event,
+            device,
+            resolution,
+            deliveryLevel: delivery.deliveryLevel,
+            status: "skipped",
+            reason: resolution.shouldNotify ? "push_not_enqueued" : resolution.reason,
+            now
+          });
+          totals.skipped += 1;
+          continue;
+        }
+        const payload = buildPushPayload({ event, resolution, deliveryLevel: delivery.deliveryLevel });
+        const key = JSON.stringify(payload);
+        const group = groups.get(key) ?? [];
+        group.push({ device, resolution, deliveryLevel: delivery.deliveryLevel, payload });
+        groups.set(key, group);
+      }
+
+      for (const group of groups.values()) {
+        const results = await this.dependencies.pushSender.sendToDevices({
+          devices: group.map((item) => item.device),
+          payload: group[0].payload
+        });
+        for (let index = 0; index < group.length; index += 1) {
+          const item = group[index];
+          const result = await this.handleSendResult({
+            event,
+            device: item.device,
+            resolution: item.resolution,
+            deliveryLevel: item.deliveryLevel,
+            sendResult: results[index] ?? { status: "transient_failure", reason: "fcm_batch_result_missing" },
+            now
+          });
+          if (result.sent) totals.sent += 1;
+          if (result.skipped) totals.skipped += 1;
+          if (result.transientFailure) hadTransientFailure = true;
+          if (result.retryAfterMs !== undefined) {
+            providerRetryAfterMs = Math.max(providerRetryAfterMs ?? 0, result.retryAfterMs);
+          }
+        }
+      }
+    } else {
+
+      for (const device of devices) {
+        const result = await this.processDevice({ event, device, preferences, job, now });
+        if (result.sent) totals.sent += 1;
+        if (result.skipped) totals.skipped += 1;
+        if (result.transientFailure) hadTransientFailure = true;
+        if (result.retryAfterMs !== undefined) {
+          providerRetryAfterMs = Math.max(providerRetryAfterMs ?? 0, result.retryAfterMs);
+        }
+      }
     }
 
     if (hadTransientFailure) {
-      await this.retryOrFailJob(job, "transient_push_failure", now);
+      await this.retryOrFailJob(job, "transient_push_failure", now, providerRetryAfterMs);
       totals.queued += 1;
       return;
     }
@@ -239,7 +309,9 @@ export class NotificationWorker {
       providerErrorCode: input.sendResult.providerErrorCode
     });
 
-    return input.sendResult.status === "transient_failure" ? { transientFailure: true } : { skipped: true };
+    return input.sendResult.status === "transient_failure"
+      ? { transientFailure: true, retryAfterMs: input.sendResult.retryAfterMs }
+      : { skipped: true };
   }
 
   private async recordAttempt(input: {
@@ -276,8 +348,8 @@ export class NotificationWorker {
     });
   }
 
-  private async retryOrFailJob(job: ClaimedNotificationJob, reason: string, now: Date): Promise<void> {
-    const nextRun = retryAt(job.attempts, now);
+  private async retryOrFailJob(job: ClaimedNotificationJob, reason: string, now: Date, retryAfterMs?: number): Promise<void> {
+    const nextRun = retryAt(job.attempts, now, retryAfterMs, this.dependencies.random);
     const input: FailNotificationJobInput = {
       jobId: job.id,
       attempts: job.attempts,

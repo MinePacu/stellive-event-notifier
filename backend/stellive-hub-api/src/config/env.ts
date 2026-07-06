@@ -72,6 +72,10 @@ const envSchema = z
     FCM_PROJECT_ID: optionalString(),
     FCM_CLIENT_EMAIL: optionalString(),
     FCM_PRIVATE_KEY: optionalString(),
+    FCM_RATE_LIMIT_ENABLED: booleanFlag(true),
+    FCM_SEND_MAX_PER_SECOND: boundedInteger(500, 1, 100_000),
+    FCM_SEND_MAX_PER_MINUTE: boundedInteger(30_000, 1, 1_000_000),
+    FCM_SEND_BURST: boundedInteger(1_000, 1, 100_000),
 
     YOUTUBE_API_KEY: optionalString(),
     YOUTUBE_API_BASE_URL: z.string().url().default("https://www.googleapis.com/youtube/v3"),

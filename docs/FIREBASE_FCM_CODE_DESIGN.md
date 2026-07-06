@@ -336,7 +336,21 @@ FCM env:
 FCM_PROJECT_ID=
 FCM_CLIENT_EMAIL=
 FCM_PRIVATE_KEY=
+FCM_RATE_LIMIT_ENABLED=true
+FCM_SEND_MAX_PER_SECOND=500
+FCM_SEND_MAX_PER_MINUTE=30000
+FCM_SEND_BURST=1000
 ```
+
+## Traffic control and hybrid fan-out
+
+- 일반 이벤트는 preference resolution과 load reduction 이후 device token 직접 발송을 유지하며 topic/condition을 금지한다.
+- provider 전송 전 in-memory token bucket으로 초·분당 전송량과 burst를 제한한다.
+- quota/server unavailable 응답의 `retryAfterMs`가 있으면 worker 기본 1분·5분·15분·60분 backoff보다 우선하며, 기본 backoff에는 주입 가능한 jitter를 적용한다.
+- 동일 payload는 `sendEachForMulticast`로 최대 500 token씩 전송하고 결과를 device별 `PushSendResult`와 `DeliveryAttempt`로 다시 분리한다. 검증된 push image URL도 동일 visual field에 유지한다.
+- service-wide topic은 `service_all`, `service_incident`, `service_maintenance`, `service_version_update`만 허용한다. caller-supplied topic과 사용자별 fan-out topic은 금지한다.
+- topic 공지는 provider-level audit persistence가 필요하지만 DB migration은 후속 TODO다. 모바일 구독과 공지 opt-out 정책도 후속 작업이다.
+- load reduction context는 `recentPushCandidatesInWindow`, `recentPushCount`, `rateLimiterSaturated` 확장점을 제공하며 이번 변경에서 summary 정책을 바꾸지 않는다.
 
 규칙:
 

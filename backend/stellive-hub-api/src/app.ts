@@ -22,8 +22,10 @@ import NotificationJobRepository from "./jobs/notificationJobRepository.js";
 import NotificationWorker from "./jobs/notificationWorker.js";
 import BootstrapService from "./mobile/bootstrapService.js";
 import { PreferenceResolutionService } from "./preferences/preferenceResolution.js";
-import { createFcmClient } from "./push/fcmClient.js";
+import { createFcmClient, type FcmClient } from "./push/fcmClient.js";
+import { FcmRateLimiter } from "./push/fcmRateLimiter.js";
 import { FcmPushSender } from "./push/pushSender.js";
+import { ServiceAnnouncementSender } from "./push/serviceAnnouncement.js";
 import { DeliveryAttemptRepository } from "./repositories/deliveryAttemptRepository.js";
 import DeviceRepository from "./repositories/deviceRepository.js";
 import { ExternalApiCallLogRepository } from "./repositories/externalApiCallLogRepository.js";
@@ -114,13 +116,21 @@ export function createMusicMemberAliasInputs(catalog = new CatalogService()) {
     }));
 }
 
-function createDefaultNotificationWorker(env: AppEnv): NotificationWorker {
-  const fcmClient = createFcmClient({
+function createDefaultFcmClient(env: AppEnv): FcmClient {
+  return createFcmClient({
     projectId: env.FCM_PROJECT_ID,
     clientEmail: env.FCM_CLIENT_EMAIL,
-    privateKey: env.FCM_PRIVATE_KEY
+    privateKey: env.FCM_PRIVATE_KEY,
+    rateLimiter: new FcmRateLimiter({
+      enabled: env.FCM_RATE_LIMIT_ENABLED,
+      maxPerSecond: env.FCM_SEND_MAX_PER_SECOND,
+      maxPerMinute: env.FCM_SEND_MAX_PER_MINUTE,
+      burst: env.FCM_SEND_BURST
+    })
   });
+}
 
+function createDefaultNotificationWorker(env: AppEnv, fcmClient = createDefaultFcmClient(env)): NotificationWorker {
   return new NotificationWorker({
     notificationJobs: new NotificationJobRepository(),
     platformEvents: new PlatformEventRepository(),
@@ -128,8 +138,13 @@ function createDefaultNotificationWorker(env: AppEnv): NotificationWorker {
     preferences: new PreferenceRepository(),
     deliveryAttempts: new DeliveryAttemptRepository(),
     preferenceResolution: new PreferenceResolutionService(),
-    pushSender: new FcmPushSender(fcmClient)
+    pushSender: new FcmPushSender(fcmClient),
+    random: Math.random
   });
+}
+
+function createDefaultServiceAnnouncementSender(env: AppEnv, fcmClient = createDefaultFcmClient(env)): ServiceAnnouncementSender {
+  return new ServiceAnnouncementSender(fcmClient);
 }
 
 function createDefaultChzzkLiveAdapter(
@@ -531,6 +546,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     env,
     ...options.chzzkAuthRoutes?.dependencies
   });
+  const defaultFcmClient = options.internalRoutes?.dependencies ? undefined : createDefaultFcmClient(env);
   const internalRouteDependencies: Partial<InternalRouteDependencies> = options.internalRoutes?.dependencies
     ? {
       ...createDefaultChzzkLiveAdapter(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
@@ -540,7 +556,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ...options.internalRoutes.dependencies
     }
     : {
-      notificationWorker: createDefaultNotificationWorker(env),
+      notificationWorker: createDefaultNotificationWorker(env, defaultFcmClient!),
+      serviceAnnouncements: createDefaultServiceAnnouncementSender(env, defaultFcmClient!),
       ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch),
       ...createDefaultYoutubeSubscriptionScheduler(env, undefined, options.chzzkLiveApiFetch),
       ...createDefaultYoutubeSongBackfillScheduler(env, undefined, options.chzzkLiveApiFetch),

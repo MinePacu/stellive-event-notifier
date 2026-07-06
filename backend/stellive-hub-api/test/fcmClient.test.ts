@@ -13,6 +13,7 @@ function event(): PlatformEvent {
     generationId: "official",
     title: "공식 굿즈 취소",
     body: "일정이 취소됐습니다.",
+    thumbnailUrl: "https://example.com/event.jpg",
     platformUrl: "https://example.com/source",
     appDeepLink: "stellivehub://hub-events/event-1",
     occurredAt: "2026-06-12T00:00:00.000Z",
@@ -92,6 +93,121 @@ describe("createFcmClient", () => {
     expect(sentMessages).toHaveLength(1);
     expect(JSON.stringify(sentMessages[0])).toContain("production-token-must-not-appear-in-result");
     expect(JSON.stringify(result)).not.toContain("production-token-must-not-appear-in-result");
+  });
+
+  it("normalizes transient retry metadata without exposing the token", async () => {
+    const client = createFcmClient({
+      projectId: "test-project",
+      clientEmail: "firebase-adminsdk@example.iam.gserviceaccount.com",
+      privateKey: "test-private-key",
+      sender: {
+        async send() {
+          throw Object.assign(new Error("quota"), { code: "messaging/quota-exceeded", retryAfterMs: 45_000 });
+        }
+      }
+    });
+
+    const result = await client.send({
+      token: "sensitive-device-token",
+      payload: buildPushPayload({ event: event(), resolution: resolution(), deliveryLevel: "immediate_push" })
+    });
+
+    expect(result).toEqual({
+      status: "transient_failure",
+      providerErrorCode: "messaging/quota-exceeded",
+      reason: "messaging/quota-exceeded",
+      retryAfterMs: 45_000
+    });
+    expect(JSON.stringify(result)).not.toContain("sensitive-device-token");
+  });
+
+  it("normalizes permanent invalid token failures", async () => {
+    const client = createFcmClient({
+      projectId: "test-project",
+      clientEmail: "firebase-adminsdk@example.iam.gserviceaccount.com",
+      privateKey: "test-private-key",
+      sender: { async send() { throw Object.assign(new Error("invalid"), { code: "messaging/invalid-registration-token" }); } }
+    });
+
+    await expect(client.send({
+      token: "redacted",
+      payload: buildPushPayload({ event: event(), resolution: resolution(), deliveryLevel: "immediate_push" })
+    })).resolves.toMatchObject({ status: "permanent_token_failure" });
+  });
+
+  it("maps multicast responses per token and preserves provider image fields", async () => {
+    const messages: unknown[] = [];
+    const client = createFcmClient({
+      projectId: "test-project",
+      clientEmail: "firebase-adminsdk@example.iam.gserviceaccount.com",
+      privateKey: "test-private-key",
+      sender: {
+        async send() { return "unused"; },
+        async sendEachForMulticast(message) {
+          messages.push(message);
+          return {
+            successCount: 1,
+            failureCount: 1,
+            responses: [
+              { success: true, messageId: "message-1" },
+              { success: false, error: Object.assign(new Error("invalid"), { code: "messaging/registration-token-not-registered" }) }
+            ]
+          };
+        }
+      }
+    });
+    const payload = buildPushPayload({ event: event(), resolution: resolution(), deliveryLevel: "immediate_push" });
+
+    const results = await client.sendEach({ tokens: ["token-1", "token-2"], payload });
+
+    expect(results.map((result) => result.status)).toEqual(["sent", "permanent_token_failure"]);
+    expect(messages[0]).toMatchObject({ notification: { imageUrl: "https://example.com/event.jpg" } });
+  });
+
+  it("chunks multicast sends at 500 tokens", async () => {
+    const chunkSizes: number[] = [];
+    const client = createFcmClient({
+      projectId: "test-project",
+      clientEmail: "firebase-adminsdk@example.iam.gserviceaccount.com",
+      privateKey: "test-private-key",
+      sender: {
+        async send() { return "unused"; },
+        async sendEachForMulticast(message) {
+          chunkSizes.push(message.tokens.length);
+          return {
+            successCount: message.tokens.length,
+            failureCount: 0,
+            responses: message.tokens.map((_, index) => ({ success: true, messageId: `message-${index}` }))
+          };
+        }
+      }
+    });
+    const payload = buildPushPayload({ event: event(), resolution: resolution(), deliveryLevel: "immediate_push" });
+
+    expect(await client.sendEach({ tokens: Array.from({ length: 501 }, (_, index) => `token-${index}`), payload })).toHaveLength(501);
+    expect(chunkSizes).toEqual([500, 1]);
+  });
+
+  it("sends service announcements to the mapped topic without token data", async () => {
+    const messages: unknown[] = [];
+    const client = createFcmClient({
+      projectId: "test-project",
+      clientEmail: "firebase-adminsdk@example.iam.gserviceaccount.com",
+      privateKey: "test-private-key",
+      sender: { async send(message) { messages.push(message); return "topic-message-1"; } }
+    });
+
+    await expect(client.sendToTopic({
+      topic: "service_maintenance",
+      title: "공지",
+      body: "점검 안내",
+      appDeepLink: "stellivehub://announcements/1",
+      platformUrl: ""
+    })).resolves.toEqual({ status: "sent", providerMessageId: "topic-message-1" });
+    expect(messages).toEqual([
+      expect.objectContaining({ topic: "service_maintenance", notification: { title: "공지", body: "점검 안내" } })
+    ]);
+    expect(JSON.stringify(messages)).not.toContain("token");
   });
 });
 

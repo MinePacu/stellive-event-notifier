@@ -1,9 +1,10 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import type { App } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
-import type { Message } from "firebase-admin/messaging";
+import type { Message, MulticastMessage } from "firebase-admin/messaging";
 
 import type { MinimalPushPayload } from "./pushPayloadFactory.js";
+import type { FcmRateLimiter } from "./fcmRateLimiter.js";
 
 export type PushSendStatus =
   | "sent"
@@ -16,10 +17,16 @@ export interface PushSendResult {
   providerMessageId?: string;
   providerErrorCode?: string;
   reason?: string;
+  retryAfterMs?: number;
 }
 
 export interface FirebaseMessageSender {
   send(message: Message): Promise<string>;
+  sendEachForMulticast?(message: MulticastMessage): Promise<{
+    responses: Array<{ success: boolean; messageId?: string; error?: unknown }>;
+    successCount: number;
+    failureCount: number;
+  }>;
 }
 
 export interface FcmClientConfig {
@@ -28,6 +35,7 @@ export interface FcmClientConfig {
   privateKey?: string;
   appName?: string;
   sender?: FirebaseMessageSender;
+  rateLimiter?: FcmRateLimiter;
 }
 
 export interface FcmSendInput {
@@ -38,6 +46,8 @@ export interface FcmSendInput {
 export interface FcmClient {
   enabled: boolean;
   send(input: FcmSendInput): Promise<PushSendResult>;
+  sendEach(input: { tokens: string[]; payload: MinimalPushPayload }): Promise<PushSendResult[]>;
+  sendToTopic(input: { topic: string; title: string; body: string; appDeepLink: string; platformUrl: string }): Promise<PushSendResult>;
 }
 
 function isConfiguredSecret(value: string | undefined): boolean {
@@ -109,12 +119,22 @@ function providerErrorCode(error: unknown): string {
   return "fcm_unknown_error";
 }
 
+function providerRetryAfterMs(error: unknown): number | undefined {
+  if (typeof error !== "object" || error === null || !("retryAfterMs" in error)) return undefined;
+  const value = (error as { retryAfterMs?: unknown }).retryAfterMs;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
 function normalizeProviderError(error: unknown): PushSendResult {
   const code = providerErrorCode(error);
   if (code === "messaging/registration-token-not-registered" || code === "messaging/invalid-registration-token") {
     return { status: "permanent_token_failure", providerErrorCode: code, reason: code };
   }
-  return { status: "transient_failure", providerErrorCode: code, reason: code };
+  return { status: "transient_failure", providerErrorCode: code, reason: code, retryAfterMs: providerRetryAfterMs(error) };
+}
+
+function rateLimited(retryAfterMs: number | undefined): PushSendResult {
+  return { status: "transient_failure", providerErrorCode: "fcm_rate_limited", reason: "fcm_rate_limited", retryAfterMs };
 }
 
 export function createFcmClient(config: FcmClientConfig): FcmClient {
@@ -122,6 +142,12 @@ export function createFcmClient(config: FcmClientConfig): FcmClient {
     return {
       enabled: false,
       async send() {
+        return { status: "disabled", reason: "fcm_not_configured" };
+      },
+      async sendEach(input) {
+        return input.tokens.map(() => ({ status: "disabled", reason: "fcm_not_configured" }));
+      },
+      async sendToTopic() {
         return { status: "disabled", reason: "fcm_not_configured" };
       }
     };
@@ -132,9 +158,69 @@ export function createFcmClient(config: FcmClientConfig): FcmClient {
   return {
     enabled: true,
     async send(input) {
+      const decision = config.rateLimiter?.tryAcquire();
+      if (decision && !decision.allowed) return rateLimited(decision.retryAfterMs);
       try {
         sender ??= createDefaultSender(config);
         const providerMessageId = await sender.send(toFirebaseMessage(input));
+        return { status: "sent", providerMessageId };
+      } catch (error) {
+        return normalizeProviderError(error);
+      }
+    },
+    async sendEach(input) {
+      const results: PushSendResult[] = [];
+      for (let offset = 0; offset < input.tokens.length; offset += 500) {
+        const tokens = input.tokens.slice(offset, offset + 500);
+        const decision = config.rateLimiter?.tryAcquire(tokens.length);
+        if (decision && !decision.allowed) {
+          results.push(...tokens.map(() => rateLimited(decision.retryAfterMs)));
+          continue;
+        }
+        try {
+          sender ??= createDefaultSender(config);
+          if (!sender.sendEachForMulticast) {
+            for (const token of tokens) {
+              try {
+                const providerMessageId = await sender.send(toFirebaseMessage({ token, payload: input.payload }));
+                results.push({ status: "sent", providerMessageId });
+              } catch (error) {
+                results.push(normalizeProviderError(error));
+              }
+            }
+            continue;
+          }
+          const response = await sender.sendEachForMulticast({
+            tokens,
+            notification: input.payload.notification,
+            data: input.payload.data,
+            android: {
+              priority: input.payload.android.priority,
+              ...(input.payload.android.notification ? { notification: input.payload.android.notification } : {})
+            },
+            apns: input.payload.apns
+          });
+          results.push(...response.responses.map((item): PushSendResult =>
+            item.success
+              ? { status: "sent", providerMessageId: item.messageId }
+              : normalizeProviderError(item.error)
+          ));
+        } catch (error) {
+          results.push(...tokens.map(() => normalizeProviderError(error)));
+        }
+      }
+      return results;
+    },
+    async sendToTopic(input) {
+      const decision = config.rateLimiter?.tryAcquire();
+      if (decision && !decision.allowed) return rateLimited(decision.retryAfterMs);
+      try {
+        sender ??= createDefaultSender(config);
+        const providerMessageId = await sender.send({
+          topic: input.topic,
+          notification: { title: input.title, body: input.body },
+          data: { appDeepLink: input.appDeepLink, platformUrl: input.platformUrl, tapAction: "open_app" }
+        });
         return { status: "sent", providerMessageId };
       } catch (error) {
         return normalizeProviderError(error);
