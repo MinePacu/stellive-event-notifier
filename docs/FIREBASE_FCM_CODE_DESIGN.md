@@ -61,6 +61,8 @@ android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/
 
 `firebase-admin` import는 `push/fcmClient.ts`에만 허용한다. 다른 backend 파일이 Firebase SDK 타입을 직접 import해야 한다면 설계가 잘못된 것이다. 그 경우 `PushSender`, `PushSendResult`, `MinimalPushPayload` 같은 내부 타입으로 추상화해야 한다.
 
+FCM credential은 server-only secret이다. `FCM_SERVICE_ACCOUNT_FILE`이 설정되면 해당 JSON key 파일을 우선 사용하고, 설정되지 않은 경우에만 기존 `FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, `FCM_PRIVATE_KEY` 조합을 backward-compatible fallback으로 사용한다. 파일이 잘못되었거나 필수 필드가 없으면 split env로 조용히 fallback하지 않고 `fcm_invalid_service_account_file` safe failure로 비활성화한다. Firebase 공식 환경에서는 `GOOGLE_APPLICATION_CREDENTIALS`도 권장 방식으로 참고할 수 있지만, 이 프로젝트가 명시적으로 지원하는 파일 경로 env는 `FCM_SERVICE_ACCOUNT_FILE`이다. JSON key 파일과 그 실제 경로·값은 Git에 커밋하지 않는다.
+
 ## Backend 타입 설계
 
 ### `FcmClient`
@@ -333,6 +335,7 @@ Request contract:
 FCM env:
 
 ```env
+FCM_SERVICE_ACCOUNT_FILE=
 FCM_PROJECT_ID=
 FCM_CLIENT_EMAIL=
 FCM_PRIVATE_KEY=

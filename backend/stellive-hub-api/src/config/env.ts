@@ -69,6 +69,7 @@ const envSchema = z
     ADMIN_OVERVIEW_CACHE_TTL_SECONDS: boundedInteger(15, 0, 60),
     EXTERNAL_API_LOG_RETENTION_DAYS: boundedInteger(31, 14, 365),
 
+    FCM_SERVICE_ACCOUNT_FILE: optionalString(),
     FCM_PROJECT_ID: optionalString(),
     FCM_CLIENT_EMAIL: optionalString(),
     FCM_PRIVATE_KEY: optionalString(),

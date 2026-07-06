@@ -40,6 +40,94 @@ function resolution(): ResolvedNotificationPreference {
 }
 
 describe("createFcmClient", () => {
+  it("prefers a service account file and normalizes its private key", async () => {
+    const credentials: unknown[] = [];
+    const sentMessages: unknown[] = [];
+    const client = createFcmClient({
+      serviceAccountFile: "/server-only/firebase-admin.json",
+      serviceAccountFileReader: () => JSON.stringify({
+        project_id: "file-project",
+        client_email: "file-account@example.invalid",
+        private_key: "line-one\\nline-two\nline-three"
+      }),
+      projectId: "split-project",
+      clientEmail: "split-account@example.invalid",
+      privateKey: "split-private-key",
+      senderFactory(resolved) {
+        credentials.push(resolved);
+        return { async send(message) { sentMessages.push(message); return "file-message-1"; } };
+      }
+    });
+
+    const result = await client.send({
+      token: "test-device-token",
+      payload: buildPushPayload({ event: event(), resolution: resolution(), deliveryLevel: "immediate_push" })
+    });
+
+    expect(client.enabled).toBe(true);
+    expect(result).toEqual({ status: "sent", providerMessageId: "file-message-1" });
+    expect(sentMessages).toHaveLength(1);
+    expect(credentials).toEqual([{
+      projectId: "file-project",
+      clientEmail: "file-account@example.invalid",
+      privateKey: "line-one\nline-two\nline-three"
+    }]);
+  });
+
+  it("returns a safe disabled client when the service account file is invalid", async () => {
+    const client = createFcmClient({
+      serviceAccountFile: "/secret/path/firebase-admin.json",
+      serviceAccountFileReader: () => "not-json",
+      projectId: "split-project",
+      clientEmail: "split-account@example.invalid",
+      privateKey: "split-private-key"
+    });
+
+    const result = await client.send({
+      token: "test-device-token",
+      payload: buildPushPayload({ event: event(), resolution: resolution(), deliveryLevel: "immediate_push" })
+    });
+
+    expect(client.enabled).toBe(false);
+    expect(result).toEqual({ status: "disabled", reason: "fcm_invalid_service_account_file" });
+    expect(JSON.stringify(result)).not.toContain("/secret/path");
+    expect(JSON.stringify(result)).not.toContain("split-private-key");
+  });
+
+  it("returns a safe disabled client when the service account file is missing required fields", () => {
+    const client = createFcmClient({
+      serviceAccountFile: "/server-only/firebase-admin.json",
+      serviceAccountFileReader: () => JSON.stringify({ project_id: "file-project" })
+    });
+
+    expect(client.enabled).toBe(false);
+  });
+
+  it("uses split env credentials when the service account file is empty", async () => {
+    const credentials: unknown[] = [];
+    const client = createFcmClient({
+      serviceAccountFile: "  ",
+      projectId: "split-project",
+      clientEmail: "split-account@example.invalid",
+      privateKey: "split-key\\nwith-newline",
+      senderFactory(resolved) {
+        credentials.push(resolved);
+        return { async send() { return "split-message-1"; } };
+      }
+    });
+
+    await client.send({
+      token: "test-device-token",
+      payload: buildPushPayload({ event: event(), resolution: resolution(), deliveryLevel: "immediate_push" })
+    });
+
+    expect(credentials).toEqual([{
+      projectId: "split-project",
+      clientEmail: "split-account@example.invalid",
+      privateKey: "split-key\nwith-newline"
+    }]);
+  });
+
   it("returns disabled client when Firebase config is missing", async () => {
     const client = createFcmClient({});
     const result = await client.send({

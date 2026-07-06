@@ -58,6 +58,7 @@ FCM은 9번 단계의 provider adapter일 뿐이며, 1-8번과 10번의 정책/�
 ## 허용되는 Firebase 사용
 
 - `firebase-admin/messaging`을 통한 서버 측 FCM message send.
+- `FCM_SERVICE_ACCOUNT_FILE` JSON 로딩과 split env fallback은 Firebase provider boundary 내부에만 둔다. JSON key 파일은 server-only secret이며 Git에 커밋하지 않는다.
 - Android FCM registration token 수신 및 백엔드 등록.
 - iOS APNs-via-FCM token/provider 사용. 단, iOS payload도 백엔드 정책 결과로만 생성한다.
 - FCM provider error normalization:
@@ -116,6 +117,7 @@ Android/iOS 앱은 푸시 provider token lifecycle과 사용자 표시를 담당
 FCM provider는 다음 backend-only env를 사용한다.
 
 ```env
+FCM_SERVICE_ACCOUNT_FILE=
 FCM_PROJECT_ID=
 FCM_CLIENT_EMAIL=
 FCM_PRIVATE_KEY=

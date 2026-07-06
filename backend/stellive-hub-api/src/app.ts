@@ -119,6 +119,7 @@ export function createMusicMemberAliasInputs(catalog = new CatalogService()) {
 
 function createDefaultFcmClient(env: AppEnv): FcmClient {
   return createFcmClient({
+    serviceAccountFile: env.FCM_SERVICE_ACCOUNT_FILE,
     projectId: env.FCM_PROJECT_ID,
     clientEmail: env.FCM_CLIENT_EMAIL,
     privateKey: env.FCM_PRIVATE_KEY,

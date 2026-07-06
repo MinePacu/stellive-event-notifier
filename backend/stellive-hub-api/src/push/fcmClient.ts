@@ -2,6 +2,7 @@ import { cert, getApps, initializeApp } from "firebase-admin/app";
 import type { App } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import type { Message, MulticastMessage } from "firebase-admin/messaging";
+import { readFileSync } from "node:fs";
 
 import type { MinimalPushPayload } from "./pushPayloadFactory.js";
 import type { FcmRateLimiter } from "./fcmRateLimiter.js";
@@ -32,12 +33,21 @@ export interface FirebaseMessageSender {
 }
 
 export interface FcmClientConfig {
+  serviceAccountFile?: string;
+  serviceAccountFileReader?: (path: string) => string | Promise<string>;
   projectId?: string;
   clientEmail?: string;
   privateKey?: string;
   appName?: string;
   sender?: FirebaseMessageSender;
+  senderFactory?: (credentials: FirebaseCredentialConfig) => FirebaseMessageSender;
   rateLimiter?: FcmRateLimiter;
+}
+
+export interface FirebaseCredentialConfig {
+  projectId: string;
+  clientEmail: string;
+  privateKey: string;
 }
 
 export interface FcmSendInput {
@@ -74,7 +84,7 @@ function normalizePrivateKey(privateKey: string): string {
   return privateKey.replace(/\\n/g, "\n");
 }
 
-function findOrInitializeApp(config: Required<Pick<FcmClientConfig, "projectId" | "clientEmail" | "privateKey">> & {
+function findOrInitializeApp(config: FirebaseCredentialConfig & {
   appName?: string;
 }): App {
   const appName = config.appName ?? `stellive-hub-api-${config.projectId}`;
@@ -94,7 +104,7 @@ function findOrInitializeApp(config: Required<Pick<FcmClientConfig, "projectId" 
   );
 }
 
-function createDefaultSender(config: FcmClientConfig): FirebaseMessageSender {
+function createDefaultSender(config: FirebaseCredentialConfig & Pick<FcmClientConfig, "appName">): FirebaseMessageSender {
   const app = findOrInitializeApp({
     projectId: config.projectId ?? "",
     clientEmail: config.clientEmail ?? "",
@@ -102,6 +112,54 @@ function createDefaultSender(config: FcmClientConfig): FirebaseMessageSender {
     appName: config.appName
   });
   return getMessaging(app);
+}
+
+type CredentialResolution =
+  | { credentials: FirebaseCredentialConfig }
+  | { reason: "fcm_not_configured" | "fcm_invalid_service_account_file" };
+
+function resolveCredentials(config: FcmClientConfig): CredentialResolution {
+  if (isConfiguredSecret(config.serviceAccountFile)) {
+    try {
+      const reader = config.serviceAccountFileReader ?? ((path: string) => readFileSync(path, "utf8"));
+      const contents = reader(config.serviceAccountFile!);
+      if (typeof contents !== "string") return { reason: "fcm_invalid_service_account_file" };
+      const parsed = JSON.parse(contents) as Record<string, unknown>;
+      const projectId = typeof parsed.project_id === "string" ? parsed.project_id : undefined;
+      const clientEmail = typeof parsed.client_email === "string" ? parsed.client_email : undefined;
+      const privateKey = typeof parsed.private_key === "string" ? parsed.private_key : undefined;
+      if (!isConfiguredSecret(projectId) || !isConfiguredSecret(clientEmail) || !isConfiguredSecret(privateKey)) {
+        return { reason: "fcm_invalid_service_account_file" };
+      }
+      return {
+        credentials: {
+          projectId: projectId!,
+          clientEmail: clientEmail!,
+          privateKey: normalizePrivateKey(privateKey!)
+        }
+      };
+    } catch {
+      return { reason: "fcm_invalid_service_account_file" };
+    }
+  }
+  if (!hasFirebaseConfig(config)) return { reason: "fcm_not_configured" };
+  return {
+    credentials: {
+      projectId: config.projectId!,
+      clientEmail: config.clientEmail!,
+      privateKey: normalizePrivateKey(config.privateKey!)
+    }
+  };
+}
+
+function disabledClient(reason: "fcm_not_configured" | "fcm_invalid_service_account_file"): FcmClient {
+  return {
+    enabled: false,
+    async send() { return { status: "disabled", reason }; },
+    async sendEach(input) { return input.tokens.map(() => ({ status: "disabled", reason })); },
+    async sendToTopic() { return { status: "disabled", reason }; },
+    async setTopicSubscriptions() { return { status: "disabled" }; }
+  };
 }
 
 function toFirebaseMessage(input: FcmSendInput): Message {
@@ -144,25 +202,12 @@ function rateLimited(retryAfterMs: number | undefined): PushSendResult {
 }
 
 export function createFcmClient(config: FcmClientConfig): FcmClient {
-  if (!hasFirebaseConfig(config)) {
-    return {
-      enabled: false,
-      async send() {
-        return { status: "disabled", reason: "fcm_not_configured" };
-      },
-      async sendEach(input) {
-        return input.tokens.map(() => ({ status: "disabled", reason: "fcm_not_configured" }));
-      },
-      async sendToTopic() {
-        return { status: "disabled", reason: "fcm_not_configured" };
-      },
-      async setTopicSubscriptions() {
-        return { status: "disabled" };
-      }
-    };
-  }
+  const resolution = resolveCredentials(config);
+  if ("reason" in resolution) return disabledClient(resolution.reason);
+  const resolvedConfig = { ...resolution.credentials, appName: config.appName };
 
   let sender = config.sender;
+  const getSender = () => sender ??= config.senderFactory?.(resolution.credentials) ?? createDefaultSender(resolvedConfig);
 
   return {
     enabled: true,
@@ -170,7 +215,7 @@ export function createFcmClient(config: FcmClientConfig): FcmClient {
       const decision = config.rateLimiter?.tryAcquire();
       if (decision && !decision.allowed) return rateLimited(decision.retryAfterMs);
       try {
-        sender ??= createDefaultSender(config);
+        sender = getSender();
         const providerMessageId = await sender.send(toFirebaseMessage(input));
         return { status: "sent", providerMessageId };
       } catch (error) {
@@ -187,7 +232,7 @@ export function createFcmClient(config: FcmClientConfig): FcmClient {
           continue;
         }
         try {
-          sender ??= createDefaultSender(config);
+          sender = getSender();
           if (!sender.sendEachForMulticast) {
             for (const token of tokens) {
               try {
@@ -224,7 +269,7 @@ export function createFcmClient(config: FcmClientConfig): FcmClient {
       const decision = config.rateLimiter?.tryAcquire();
       if (decision && !decision.allowed) return rateLimited(decision.retryAfterMs);
       try {
-        sender ??= createDefaultSender(config);
+        sender = getSender();
         const providerMessageId = await sender.send({
           topic: input.topic,
           notification: { title: input.title, body: input.body },
@@ -236,7 +281,7 @@ export function createFcmClient(config: FcmClientConfig): FcmClient {
       }
     },
     async setTopicSubscriptions(input) {
-      sender ??= createDefaultSender(config);
+      sender = getSender();
       const operation = input.enabled ? sender.subscribeToTopic : sender.unsubscribeFromTopic;
       if (!operation) return { status: "transient_failure", failedTopics: [...input.topics] };
       const failedTopics: string[] = [];
