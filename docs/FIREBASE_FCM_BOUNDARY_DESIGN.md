@@ -81,7 +81,7 @@ FCM은 9번 단계의 provider adapter일 뿐이며, 1-8번과 10번의 정책/�
 - 일반 이벤트는 backend가 device token 직접 fan-out하며 device별 preference, quiet hours, keyword block, rate limit을 계속 적용한다.
 - 내부 인증 route는 `service_all`, `service_incident`, `service_maintenance`, `service_version_update`만 topic으로 전송할 수 있다.
 - topic 공지는 device-level `DeliveryAttempt`와 혼합하지 않는다. provider-level audit persistence는 별도 DB 설계가 필요한 후속 TODO다.
-- 모바일 topic subscription과 전체 공지 opt-out 정책은 후속 작업이며, 멤버·세대·플랫폼·이벤트 타입 topic은 계속 금지한다.
+- 서비스 공지는 기본 ON이며 global OFF 또는 `serviceAnnouncementsEnabled=false`이면 backend가 네 topic에서 token을 해제한다. 모바일은 임의 topic을 직접 구독하지 않으며 멤버·세대·플랫폼·이벤트 타입 topic은 계속 금지한다.
 - provider payload에 raw platform response, secrets, production device token, image binary, official logo, fan art, screenshot, copied media URL metadata를 포함.
 
 ## 백엔드 구성

@@ -209,6 +209,30 @@ describe("createFcmClient", () => {
     ]);
     expect(JSON.stringify(messages)).not.toContain("token");
   });
+
+  it("subscribes and unsubscribes only the supplied service topic allowlist", async () => {
+    const calls: unknown[] = [];
+    const client = createFcmClient({
+      projectId: "test-project",
+      clientEmail: "firebase-adminsdk@example.iam.gserviceaccount.com",
+      privateKey: "test-private-key",
+      sender: {
+        async send() { return "unused"; },
+        async subscribeToTopic(_token, topic) { calls.push({ action: "subscribe", topic }); return {}; },
+        async unsubscribeFromTopic(_token, topic) { calls.push({ action: "unsubscribe", topic }); return {}; }
+      }
+    });
+
+    await client.setTopicSubscriptions({ token: "private-token", topics: ["service_all", "service_incident"], enabled: true });
+    const result = await client.setTopicSubscriptions({ token: "private-token", topics: ["service_all"], enabled: false });
+
+    expect(calls).toEqual([
+      { action: "subscribe", topic: "service_all" },
+      { action: "subscribe", topic: "service_incident" },
+      { action: "unsubscribe", topic: "service_all" }
+    ]);
+    expect(JSON.stringify(result)).not.toContain("private-token");
+  });
 });
 
 describe("FcmPushSender", () => {

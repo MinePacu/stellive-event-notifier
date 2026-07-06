@@ -320,6 +320,33 @@ final class ServerHubStoreTests: XCTestCase {
         super.tearDown()
     }
 
+    func testUpdatePreferencesPreservesScopedRulesAndReplacesGlobalRule() async throws {
+        var requests: [URLRequest] = []
+        let store = makeStore { request in
+            requests.append(request)
+            if request.httpMethod == "GET" {
+                return jsonResponse(statusCode: 200, body: """
+                    {"deviceId":"device-1","preferences":[{"deviceId":"device-1","scope":"member","enabled":true,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","serviceAnnouncementsEnabled":null,"updatedAt":"2026-07-06T00:00:00Z"}],"updatedAt":"2026-07-06T00:00:00Z","conflict":null}
+                    """)
+            }
+            return jsonResponse(statusCode: 200, body: """
+                {"deviceId":"device-1","preferences":[],"updatedAt":"2026-07-06T00:00:00Z","conflict":null}
+                """)
+        }
+
+        var settings = NotificationSettingsState()
+        settings.globalEnabled = false
+        settings.serviceAnnouncementsEnabled = false
+        await store.updatePreferences(settings)
+
+        XCTAssertEqual(requests.map { $0.httpMethod }, ["GET", "PUT"])
+        let body = try XCTUnwrap(requests.last?.httpBody)
+        let request = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: body)
+        XCTAssertEqual(request.preferences.map(\.scope), ["member", "global"])
+        XCTAssertEqual(request.preferences.last?.enabled, false)
+        XCTAssertEqual(request.preferences.last?.serviceAnnouncementsEnabled, false)
+    }
+
     func testRefreshHubEventsCachesListAndDetailEntries() async {
         let store = makeStore { request in
             XCTAssertEqual(request.url?.path, "/v1/hub-events")
@@ -671,9 +698,11 @@ final class ServerHubStoreTests: XCTestCase {
             session: URLSession(configuration: configuration)
         )
         let defaults = UserDefaults(suiteName: "ServerHubStoreTests-\(UUID().uuidString)")!
+        let deviceIDStore = DeviceIDStore(defaults: defaults)
+        deviceIDStore.saveDeviceID("device-1")
         return ServerHubStore(
             api: client,
-            deviceIDStore: DeviceIDStore(defaults: defaults),
+            deviceIDStore: deviceIDStore,
             fallback: MockHubStore()
         )
     }

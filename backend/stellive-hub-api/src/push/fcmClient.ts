@@ -27,6 +27,8 @@ export interface FirebaseMessageSender {
     successCount: number;
     failureCount: number;
   }>;
+  subscribeToTopic?(registrationTokens: string | string[], topic: string): Promise<unknown>;
+  unsubscribeFromTopic?(registrationTokens: string | string[], topic: string): Promise<unknown>;
 }
 
 export interface FcmClientConfig {
@@ -48,6 +50,10 @@ export interface FcmClient {
   send(input: FcmSendInput): Promise<PushSendResult>;
   sendEach(input: { tokens: string[]; payload: MinimalPushPayload }): Promise<PushSendResult[]>;
   sendToTopic(input: { topic: string; title: string; body: string; appDeepLink: string; platformUrl: string }): Promise<PushSendResult>;
+  setTopicSubscriptions(input: { token: string; topics: readonly string[]; enabled: boolean }): Promise<{
+    status: "synced" | "disabled" | "transient_failure";
+    failedTopics?: string[];
+  }>;
 }
 
 function isConfiguredSecret(value: string | undefined): boolean {
@@ -149,6 +155,9 @@ export function createFcmClient(config: FcmClientConfig): FcmClient {
       },
       async sendToTopic() {
         return { status: "disabled", reason: "fcm_not_configured" };
+      },
+      async setTopicSubscriptions() {
+        return { status: "disabled" };
       }
     };
   }
@@ -225,6 +234,20 @@ export function createFcmClient(config: FcmClientConfig): FcmClient {
       } catch (error) {
         return normalizeProviderError(error);
       }
+    },
+    async setTopicSubscriptions(input) {
+      sender ??= createDefaultSender(config);
+      const operation = input.enabled ? sender.subscribeToTopic : sender.unsubscribeFromTopic;
+      if (!operation) return { status: "transient_failure", failedTopics: [...input.topics] };
+      const failedTopics: string[] = [];
+      for (const topic of input.topics) {
+        try {
+          await operation.call(sender, input.token, topic);
+        } catch {
+          failedTopics.push(topic);
+        }
+      }
+      return failedTopics.length > 0 ? { status: "transient_failure", failedTopics } : { status: "synced" };
     }
   };
 }

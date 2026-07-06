@@ -116,6 +116,31 @@ const routeEnv = {
 };
 
 describe("mobile device routes", () => {
+  it("syncs service topics after a token update", async () => {
+    const synced: unknown[] = [];
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: { dependencies: {
+        devices: { updateToken: async () => ({ updated: true, tokenStatus: "active" }) },
+        preferences: { listForDevice: async () => [] },
+        serviceTopicSubscriptions: { async syncToken(input) { synced.push(input); return { status: "synced" }; } }
+      } }
+    });
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/devices/token",
+      headers: { "content-type": "application/json" },
+      payload: JSON.stringify({ deviceId: "device-1", platform: "android", provider: "fcm", token: "runtime-token" })
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(synced).toEqual([{ token: "runtime-token", preferences: [] }]);
+    expect(JSON.stringify(response.json())).not.toContain("runtime-token");
+  });
+
   it("registers devices through the durable mobile app route", async () => {
     const app = await buildApp({
       env: routeEnv,

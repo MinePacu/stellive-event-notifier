@@ -1527,7 +1527,19 @@ private fun songFilterRow(
             settingsPanel(
                 title = "전체 알림",
                 rows = listOf(
-                    SettingRow("마스터 알림", "OFF이면 모든 푸시와 기록 생성 대상 알림을 차단합니다.", settings.globalEnabled),
+                    SettingRow(
+                        "마스터 알림",
+                        "OFF이면 모든 푸시와 기록 생성 대상 알림을 차단합니다.",
+                        settings.globalEnabled,
+                        onCheckedChange = { enabled -> persistSettings(settings.copy(globalEnabled = enabled)) },
+                    ),
+                    SettingRow(
+                        "서비스 공지",
+                        "전체/장애/점검/버전 공지를 받습니다. 마스터 알림 OFF가 우선합니다.",
+                        settings.serviceAnnouncementsEnabled,
+                        enabled = settings.globalEnabled,
+                        onCheckedChange = { enabled -> persistSettings(settings.copy(serviceAnnouncementsEnabled = enabled)) },
+                    ),
                     SettingRow("터치 동작", "알림을 눌렀을 때 열 위치입니다.", null, settings.tapAction.name)
                 )
             )
@@ -3003,9 +3015,20 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
         if (row.checked != null) {
             addView(SwitchMaterial(context).apply {
                 isChecked = row.checked
+                isEnabled = row.enabled
+                row.onCheckedChange?.let { onCheckedChange ->
+                    setOnCheckedChangeListener { _, checked -> onCheckedChange(checked) }
+                }
             })
         } else if (row.badge != null) {
             addView(pill(row.badge, true))
+        }
+    }
+
+    private fun persistSettings(settings: dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState) {
+        CoroutineScope(Dispatchers.Main).launch {
+            serverRepository.updatePreferences(settings)
+            renderSettings()
         }
     }
 
@@ -3140,7 +3163,9 @@ private data class SettingRow(
     val title: String,
     val body: String?,
     val checked: Boolean? = null,
-    val badge: String? = null
+    val badge: String? = null,
+    val enabled: Boolean = true,
+    val onCheckedChange: ((Boolean) -> Unit)? = null,
 )
 
 private data class HistoryFilterSelectorRow(

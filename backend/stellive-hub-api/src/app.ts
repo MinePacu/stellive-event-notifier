@@ -26,6 +26,7 @@ import { createFcmClient, type FcmClient } from "./push/fcmClient.js";
 import { FcmRateLimiter } from "./push/fcmRateLimiter.js";
 import { FcmPushSender } from "./push/pushSender.js";
 import { ServiceAnnouncementSender } from "./push/serviceAnnouncement.js";
+import { ServiceTopicSubscriptionService } from "./push/serviceTopicSubscription.js";
 import { DeliveryAttemptRepository } from "./repositories/deliveryAttemptRepository.js";
 import DeviceRepository from "./repositories/deviceRepository.js";
 import { ExternalApiCallLogRepository } from "./repositories/externalApiCallLogRepository.js";
@@ -144,7 +145,7 @@ function createDefaultNotificationWorker(env: AppEnv, fcmClient = createDefaultF
 }
 
 function createDefaultServiceAnnouncementSender(env: AppEnv, fcmClient = createDefaultFcmClient(env)): ServiceAnnouncementSender {
-  return new ServiceAnnouncementSender(fcmClient);
+  return new ServiceAnnouncementSender(fcmClient, new ExternalApiCallLogRepository());
 }
 
 function createDefaultChzzkLiveAdapter(
@@ -485,6 +486,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     }
   });
   await app.register(swaggerUi, { routePrefix: "/docs" });
+  const sharedFcmClient = createDefaultFcmClient(env);
   const appRouteDependencies: AppRouteDependencies = {
     ...createDefaultMemberProfileImageHydrator(
       env,
@@ -535,6 +537,17 @@ export async function buildApp(options: BuildAppOptions = {}) {
       }
     });
   }
+  if (env.HUB_EVENTS_STORAGE_MODE === "prisma" && !appRouteDependencies.serviceTopicSubscriptions) {
+    const devices = new DeviceRepository();
+    const preferences = new PreferenceRepository();
+    appRouteDependencies.devices ??= devices;
+    appRouteDependencies.preferences ??= preferences;
+    appRouteDependencies.serviceTopicSubscriptions = new ServiceTopicSubscriptionService({
+      fcmClient: sharedFcmClient,
+      devices,
+      preferences
+    });
+  }
 
   await registerRoutes(app, { dependencies: appRouteDependencies });
   await registerWebhookRoutes(app, {
@@ -546,7 +559,6 @@ export async function buildApp(options: BuildAppOptions = {}) {
     env,
     ...options.chzzkAuthRoutes?.dependencies
   });
-  const defaultFcmClient = options.internalRoutes?.dependencies ? undefined : createDefaultFcmClient(env);
   const internalRouteDependencies: Partial<InternalRouteDependencies> = options.internalRoutes?.dependencies
     ? {
       ...createDefaultChzzkLiveAdapter(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
@@ -556,8 +568,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ...options.internalRoutes.dependencies
     }
     : {
-      notificationWorker: createDefaultNotificationWorker(env, defaultFcmClient!),
-      serviceAnnouncements: createDefaultServiceAnnouncementSender(env, defaultFcmClient!),
+      notificationWorker: createDefaultNotificationWorker(env, sharedFcmClient),
+      serviceAnnouncements: createDefaultServiceAnnouncementSender(env, sharedFcmClient),
       ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch),
       ...createDefaultYoutubeSubscriptionScheduler(env, undefined, options.chzzkLiveApiFetch),
       ...createDefaultYoutubeSongBackfillScheduler(env, undefined, options.chzzkLiveApiFetch),

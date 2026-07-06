@@ -195,12 +195,15 @@ struct SettingsView: View {
 
 struct SettingsContentView: View {
     @EnvironmentObject private var store: MockHubStore
+    @EnvironmentObject private var serverStore: ServerHubStore
     @State private var debugModeEnabled = false
 
     var body: some View {
         Form {
             Section("전체") {
-                Toggle("전체 알림", isOn: $store.settings.globalEnabled)
+                Toggle("전체 알림", isOn: persistedToggle(\.globalEnabled))
+                Toggle("서비스 공지", isOn: persistedToggle(\.serviceAnnouncementsEnabled))
+                    .disabled(!store.settings.globalEnabled)
                 Picker("터치 동작", selection: $store.settings.tapAction) {
                     Text("앱에서 열기").tag(TapAction.openApp)
                     Text("원 플랫폼에서 열기").tag(TapAction.openPlatform)
@@ -268,6 +271,17 @@ struct SettingsContentView: View {
         .navigationDestination(for: SettingsRoute.self) { route in
             settingsDestination(route)
         }
+    }
+
+    private func persistedToggle(_ keyPath: WritableKeyPath<NotificationSettingsState, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { store.settings[keyPath: keyPath] },
+            set: { value in
+                store.settings[keyPath: keyPath] = value
+                let settings = store.settings
+                Task { await serverStore.updatePreferences(settings) }
+            }
+        )
     }
 
     private var appearanceModePicker: some View {

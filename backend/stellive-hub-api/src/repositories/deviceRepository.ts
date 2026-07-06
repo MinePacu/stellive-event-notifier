@@ -141,6 +141,12 @@ export class DeviceRepository {
     return { deviceId: record.id, tokenStatus: record.tokenStatus };
   }
 
+  async findPushTarget(deviceId: string): Promise<PushTargetDevice | undefined> {
+    if (!this.prisma.device.findUnique) throw new Error("device_lookup_unavailable");
+    const record = await this.prisma.device.findUnique({ where: { id: deviceId } }) as PushTargetRecord | null;
+    return record ? toPushTarget(record) : undefined;
+  }
+
   async listPushTargets(): Promise<PushTargetDevice[]> {
     if (!this.prisma.device.findMany) throw new Error("device_push_target_listing_unavailable");
     const records = await this.prisma.device.findMany({

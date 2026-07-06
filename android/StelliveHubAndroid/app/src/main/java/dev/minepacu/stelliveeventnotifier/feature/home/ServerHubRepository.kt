@@ -32,8 +32,12 @@ import dev.minepacu.stelliveeventnotifier.core.network.LiveStatusDto
 import dev.minepacu.stelliveeventnotifier.core.network.MemberDto
 import dev.minepacu.stelliveeventnotifier.core.network.MusicCatalogItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.MusicListResponseDto
+import dev.minepacu.stelliveeventnotifier.core.network.PreferenceDto
+import dev.minepacu.stelliveeventnotifier.core.network.PreferencesResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.RegisterDeviceRequestDto
 import dev.minepacu.stelliveeventnotifier.core.network.RegisterDeviceResponseDto
+import dev.minepacu.stelliveeventnotifier.core.network.UpdatePreferencesRequestDto
+import dev.minepacu.stelliveeventnotifier.core.network.UpdatePreferencesResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.SongCatalogItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.SongFacetsResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.SongFilterCountDto
@@ -76,8 +80,33 @@ class ServerHubRepository(
         return fallback.bootstrap().copy(liveStatusSourceLabel = "서버 연결 실패 · 앱 내 목업")
     }
 
-    override suspend fun updatePreferences(settings: NotificationSettingState): HubDataState =
-        fallback.updatePreferences(settings)
+    override suspend fun updatePreferences(settings: NotificationSettingState): HubDataState {
+        val deviceId = deviceIdStore.getDeviceId()
+        if (deviceId != null) {
+            val current = remoteDataSource.preferences(deviceId)
+            if (current is HubNetworkResult.Success) {
+                val updatedAt = Instant.now().toString()
+                val preserved = current.value.preferences.filterNot { it.scope == "global" }
+                remoteDataSource.updatePreferences(
+                    UpdatePreferencesRequestDto(
+                        deviceId = deviceId,
+                        preferences = preserved + PreferenceDto(
+                            deviceId = deviceId,
+                            scope = "global",
+                            enabled = settings.globalEnabled,
+                            explicitOverride = true,
+                            tapAction = settings.tapAction.name.lowercase(Locale.US),
+                            deliveryMode = settings.deliveryMode.name.lowercase(Locale.US),
+                            serviceAnnouncementsEnabled = settings.serviceAnnouncementsEnabled,
+                            updatedAt = updatedAt,
+                        ),
+                        clientUpdatedAt = updatedAt,
+                    ),
+                )
+            }
+        }
+        return fallback.updatePreferences(settings)
+    }
 
     override suspend fun hubEvents(filterId: String, from: LocalDate?, to: LocalDate?): List<HubEvent> {
         val response = remoteDataSource.hubEvents(
@@ -425,6 +454,8 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
     interface RemoteDataSource {
         suspend fun bootstrap(deviceId: String?): HubNetworkResult<BootstrapResponseDto>
         suspend fun registerDevice(request: RegisterDeviceRequestDto): HubNetworkResult<RegisterDeviceResponseDto>
+        suspend fun preferences(deviceId: String): HubNetworkResult<PreferencesResponseDto>
+        suspend fun updatePreferences(request: UpdatePreferencesRequestDto): HubNetworkResult<UpdatePreferencesResponseDto>
         suspend fun hubEvents(
             generationId: String? = null,
             from: String? = null,
@@ -474,6 +505,13 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
         override suspend fun registerDevice(
             request: RegisterDeviceRequestDto,
         ): HubNetworkResult<RegisterDeviceResponseDto> = client.registerDevice(request)
+
+        override suspend fun preferences(deviceId: String): HubNetworkResult<PreferencesResponseDto> =
+            client.preferences(deviceId)
+
+        override suspend fun updatePreferences(
+            request: UpdatePreferencesRequestDto,
+        ): HubNetworkResult<UpdatePreferencesResponseDto> = client.updatePreferences(request)
 
     override suspend fun hubEvents(
         generationId: String?,

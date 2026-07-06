@@ -317,6 +317,7 @@ data class HistoryFilterOption(
 
 data class NotificationSettingState(
     val globalEnabled: Boolean = true,
+    val serviceAnnouncementsEnabled: Boolean = true,
     val deliveryMode: DeliveryMode = DeliveryMode.STANDARD,
     val tapAction: TapAction = TapAction.OPEN_APP,
     val appearanceMode: AppearanceMode = AppearanceMode.SYSTEM,

@@ -13,8 +13,13 @@ import dev.minepacu.stelliveeventnotifier.core.network.MusicCatalogItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.MusicListResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.MusicMemberSummaryDto
 import dev.minepacu.stelliveeventnotifier.core.network.MobileConfigDto
+import dev.minepacu.stelliveeventnotifier.core.network.PreferenceDto
+import dev.minepacu.stelliveeventnotifier.core.network.PreferencesResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.RegisterDeviceRequestDto
 import dev.minepacu.stelliveeventnotifier.core.network.RegisterDeviceResponseDto
+import dev.minepacu.stelliveeventnotifier.core.network.UpdatePreferencesRequestDto
+import dev.minepacu.stelliveeventnotifier.core.network.UpdatePreferencesResponseDto
+import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
 import dev.minepacu.stelliveeventnotifier.core.network.SongCatalogItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.SongFacetSummaryDto
 import dev.minepacu.stelliveeventnotifier.core.network.SongFacetsResponseDto
@@ -33,6 +38,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ServerHubRepositoryTest {
+    @Test
+    fun updatePreferencesPreservesScopedRulesAndReplacesGlobalRule() = runTest {
+        val remote = RecordingRemoteDataSource()
+        val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()).apply {
+            saveDeviceId("device-1")
+        }
+        val repository = ServerHubRepository(remote, deviceIdStore, MockHubRepository())
+
+        repository.updatePreferences(
+            NotificationSettingState(globalEnabled = false, serviceAnnouncementsEnabled = false),
+        )
+
+        val sent = remote.lastUpdatePreferencesRequest!!
+        assertEquals("device-1", sent.deviceId)
+        assertEquals(listOf("member", "global"), sent.preferences.map { it.scope })
+        assertFalse(sent.preferences.last().enabled)
+        assertEquals(false, sent.preferences.last().serviceAnnouncementsEnabled)
+    }
+
     @Test
     fun bootstrapCallsServerBeforeUsingFallbackData() = runTest {
         val remote = RecordingRemoteDataSource()
@@ -303,6 +327,40 @@ class ServerHubRepositoryTest {
         var musicResponses = ArrayDeque<MusicListResponseDto>()
         var lastMemberMusicMemberId: String? = null
         var lastMemberMusicType: String? = null
+        var lastUpdatePreferencesRequest: UpdatePreferencesRequestDto? = null
+
+        override suspend fun preferences(deviceId: String): HubNetworkResult<PreferencesResponseDto> =
+            HubNetworkResult.Success(
+                PreferencesResponseDto(
+                    deviceId = deviceId,
+                    preferences = listOf(
+                        PreferenceDto(
+                            deviceId = deviceId,
+                            scope = "member",
+                            memberId = "akane-lize",
+                            enabled = true,
+                            explicitOverride = true,
+                            tapAction = "open_app",
+                            deliveryMode = "standard",
+                            updatedAt = "2026-07-06T00:00:00Z",
+                        ),
+                    ),
+                    updatedAt = "2026-07-06T00:00:00Z",
+                ),
+            )
+
+        override suspend fun updatePreferences(
+            request: UpdatePreferencesRequestDto,
+        ): HubNetworkResult<UpdatePreferencesResponseDto> {
+            lastUpdatePreferencesRequest = request
+            return HubNetworkResult.Success(
+                UpdatePreferencesResponseDto(
+                    deviceId = request.deviceId,
+                    preferences = request.preferences,
+                    updatedAt = request.clientUpdatedAt,
+                ),
+            )
+        }
 
         override suspend fun bootstrap(deviceId: String?): HubNetworkResult<BootstrapResponseDto> {
             bootstrapCalls += 1
