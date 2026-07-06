@@ -111,9 +111,9 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       timezone?: string;
       appVersion?: string;
     };
-    const register = options.dependencies?.devices?.register;
-    const result = register
-      ? await register({
+    const devices = options.dependencies?.devices;
+    const result = devices?.register
+      ? await devices.register({
           deviceId: body.deviceId,
           platform: parsePlatform(body.platform),
           locale: body.locale,
@@ -148,9 +148,9 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       return reply.code(error.statusCode).send(error.payload);
     }
 
-    const updateToken = options.dependencies?.devices?.updateToken;
-    const result = updateToken
-      ? await updateToken({
+    const devices = options.dependencies?.devices;
+    const result = devices?.updateToken
+      ? await devices.updateToken({
           deviceId: body.deviceId,
           platform: parsePlatform(body.platform),
           provider,
@@ -178,9 +178,9 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       return reply.code(error.statusCode).send(error.payload);
     }
 
-    const listForDevice = options.dependencies?.preferences?.listForDevice;
-    const rules = listForDevice
-      ? await listForDevice(deviceId)
+    const preferences = options.dependencies?.preferences;
+    const rules = preferences?.listForDevice
+      ? await preferences.listForDevice(deviceId)
       : fallbackPreferences.get(deviceId) ?? [];
     return {
       deviceId,
@@ -200,9 +200,9 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       return reply.code(error.statusCode).send(error.payload);
     }
 
-    const replaceForDevice = options.dependencies?.preferences?.replaceForDevice;
-    if (replaceForDevice) {
-      const result = await replaceForDevice({
+    const preferences = options.dependencies?.preferences;
+    if (preferences?.replaceForDevice) {
+      const result = await preferences.replaceForDevice({
         deviceId: body.deviceId,
         preferences: body.preferences ?? [],
         clientUpdatedAt: body.clientUpdatedAt ?? new Date().toISOString(),

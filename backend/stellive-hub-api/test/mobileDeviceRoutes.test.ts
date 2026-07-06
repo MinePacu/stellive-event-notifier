@@ -115,7 +115,59 @@ const routeEnv = {
   DATABASE_URL: "postgresql://stellive:stellive@localhost:5432/stellive_hub",
 };
 
+class ThisBoundDeviceDependency {
+  calls: unknown[] = [];
+
+  async register(input: unknown) {
+    this.calls.push(input);
+    return { deviceId: "device-bound", registered: true as const };
+  }
+
+  async updateToken(input: unknown) {
+    this.calls.push(input);
+    return { updated: true as const, tokenStatus: "active" as const };
+  }
+}
+
 describe("mobile device routes", () => {
+  it("preserves the device dependency this binding when registering", async () => {
+    const devices = new ThisBoundDeviceDependency();
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: { dependencies: { devices } },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/devices/register",
+      payload: { platform: "android" },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(devices.calls).toHaveLength(1);
+  });
+
+  it("preserves the device dependency this binding when updating a token", async () => {
+    const devices = new ThisBoundDeviceDependency();
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: { dependencies: { devices } },
+    });
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/devices/token",
+      payload: { deviceId: "device-1", platform: "android", provider: "fcm", token: "runtime-token" },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(devices.calls).toHaveLength(1);
+  });
+
   it("syncs service topics after a token update", async () => {
     const synced: unknown[] = [];
     const app = await buildApp({
