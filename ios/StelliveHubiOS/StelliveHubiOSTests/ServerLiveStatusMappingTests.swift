@@ -1,4 +1,5 @@
 import XCTest
+@testable import StelliveHubiOS
 
 @MainActor
 final class ServerLiveStatusMappingTests: XCTestCase {
@@ -66,6 +67,19 @@ final class ServerLiveStatusMappingTests: XCTestCase {
                       "platformUrl": "https://chzzk.naver.com/live/chzzk-channel-id",
                           "lastCheckedAt": "2026-06-11T03:01:00.000Z",
                           "sourceVerificationState": "verified"
+                        },
+                        {
+                          "memberId": "sakihane-huya",
+                          "generationId": "gen1",
+                          "platform": "chzzk",
+                          "isLive": true,
+                          "title": null,
+                          "viewerCount": 456,
+                          "startedAt": "2026-06-11T03:00:00.000Z",
+                          "channelImageUrl": "https://img.example/huya.jpg",
+                          "platformUrl": "https://chzzk.naver.com/live/unverified-channel",
+                          "lastCheckedAt": "2026-06-11T03:02:00.000Z",
+                          "sourceVerificationState": "verify_required"
                         }
                       ],
                       "hubEventsSummary": {
@@ -100,10 +114,10 @@ final class ServerLiveStatusMappingTests: XCTestCase {
         XCTAssertNil(huya.liveStartedAt)
         XCTAssertNil(huya.liveTitle)
         XCTAssertNil(huya.liveViewerCount)
-        XCTAssertNil(huya.channelImageURL)
+        XCTAssertEqual(huya.channelImageURL, URL(string: "https://img.example/huya.jpg"))
         XCTAssertEqual(huya.profileImageURL, URL(string: "https://yt.example/huya.jpg"))
         XCTAssertNil(huya.livePlatformURL)
-        XCTAssertNil(huya.liveLastCheckedAt)
+        XCTAssertEqual(huya.liveLastCheckedAt, ISO8601DateFormatter.withFractionalSeconds.date(from: "2026-06-11T03:02:00.000Z"))
     }
 
     func testLiveStatusFormattersMatchMockup() {
