@@ -131,7 +131,9 @@ Never include:
 
 - Raw provider payloads.
 - OAuth tokens, API keys, Firebase service accounts, or production device tokens.
-- Image URLs, logos, profile images, posters, screenshots, fan art, copied media, or private platform responses.
+- Image URLs in data payload keys.
+- Image binaries, logos, profile images, posters, screenshots, fan art, copied media, or private platform responses.
+- Unverified image URLs. A single verified HTTPS image URL may be included only in provider visual notification fields when it comes from normalized `PlatformEvent.thumbnailUrl` and passes policy validation.
 
 ### Retry Policy
 
@@ -249,7 +251,7 @@ Expected: repository tests pass without network access.
 - [ ] Assert payload data includes only `eventId`, `source`, `eventType`, `generationId`, `memberId`, `tapAction`, `appDeepLink`, and `platformUrl`.
 - [ ] Assert Android priority is `high` only for allowed realtime/immediate user-visible pushes.
 - [ ] Assert iOS APNs priority is `10` only for allowed realtime/immediate user-visible pushes.
-- [ ] Assert payload factory does not forward `rawPayload`, provider responses, tokens, image URLs, logos, posters, or profile image fields.
+- [ ] Assert payload factory does not forward `rawPayload`, provider responses, tokens, image URL data keys, logos, posters, or profile image fields. A verified HTTPS `PlatformEvent.thumbnailUrl` may appear only in provider visual notification fields.
 - [ ] Implement title/body generation from normalized `PlatformEvent`.
 - [ ] Run `rtk npm test -- pushPayloadFactory`.
 

@@ -3,6 +3,7 @@ import type {
   PlatformEvent,
   ResolvedNotificationPreference
 } from "../types.js";
+import { normalizeSafeImageUrl } from "../notification/imageUrlPolicy.js";
 
 type ApnsPriority = "5" | "10";
 type FcmPriority = "normal" | "high";
@@ -74,20 +75,10 @@ function highPriority(input: PushPayloadInput): boolean {
   );
 }
 
-function safeThumbnailUrl(url: string | undefined): string | undefined {
-  if (!url) return undefined;
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:" ? parsed.toString() : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 export function buildPushPayload(input: PushPayloadInput): MinimalPushPayload {
   const priority = highPriority(input) ? "high" : "normal";
   const apnsPriority = highPriority(input) ? "10" : "5";
-  const imageUrl = safeThumbnailUrl(input.event.thumbnailUrl);
+  const imageUrl = normalizeSafeImageUrl(input.event.thumbnailUrl);
 
   return {
     notification: {
