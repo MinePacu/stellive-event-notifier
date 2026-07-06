@@ -54,6 +54,7 @@ class ServerHubRepository(
     private val remoteDataSource: RemoteDataSource,
     private val deviceIdStore: DeviceIdStore,
     private val fallback: MockHubRepository,
+    private val flushPendingPushToken: suspend () -> Unit = {},
 ) : HubRepository {
     private companion object {
         const val MUSIC_PAGE_LIMIT = 100
@@ -242,6 +243,7 @@ class ServerHubRepository(
         )
         if (response is HubNetworkResult.Success) {
             deviceIdStore.saveDeviceId(response.value.deviceId)
+            runCatching { flushPendingPushToken() }
         }
     }
 

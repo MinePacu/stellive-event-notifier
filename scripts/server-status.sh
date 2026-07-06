@@ -25,7 +25,14 @@ fi
 
 REMOTE_COMMAND="cd $SERVER_PROJECT_DIR && docker ps --format 'table {{.Names}}\t{{.Status}}' | sed -n '1p;/stellive-hub-api/p'"
 if (( SERVER_LOG_TAIL > 0 )); then
-  REMOTE_COMMAND+=" && docker compose -f $SERVER_COMPOSE_FILE logs --no-color --tail=$SERVER_LOG_TAIL api"
+  REMOTE_COMMAND+=" && if docker compose version >/dev/null 2>&1; then COMPOSE='docker compose'; COMPOSE_NAME='docker compose'; \
+elif command -v docker-compose >/dev/null 2>&1; then COMPOSE='docker-compose'; COMPOSE_NAME='docker-compose'; \
+else echo 'error: neither docker compose nor docker-compose is available' >&2; exit 1; fi && \
+echo \"Compose command selected: \$COMPOSE_NAME\" && \
+LOGS_HELP=\$(\$COMPOSE logs --help 2>/dev/null || true) && \
+COLOR_OPTIONS='' && \
+case \"\$LOGS_HELP\" in *--no-color*) COLOR_OPTIONS='--no-color';; esac && \
+\$COMPOSE -f $SERVER_COMPOSE_FILE logs \$COLOR_OPTIONS --tail=$SERVER_LOG_TAIL api"
 fi
 
 run_logged "$LOG_FILE" ssh "$SERVER_SSH_TARGET" "$REMOTE_COMMAND"

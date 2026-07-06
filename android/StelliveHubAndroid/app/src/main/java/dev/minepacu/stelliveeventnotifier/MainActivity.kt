@@ -18,6 +18,7 @@ import android.os.SystemClock
 import android.provider.CalendarContract
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.DragEvent
 import android.view.Gravity
 import android.view.View
@@ -45,8 +46,10 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.AndroidEntryPoint
 import dev.minepacu.stelliveeventnotifier.core.device.DeviceIdStore
+import dev.minepacu.stelliveeventnotifier.core.device.PushTokenSyncer
 import dev.minepacu.stelliveeventnotifier.core.datastore.PreferenceKeys
 import dev.minepacu.stelliveeventnotifier.core.model.AppearanceMode
 import dev.minepacu.stelliveeventnotifier.core.model.CatalogRole
@@ -109,6 +112,7 @@ private data class LiveDragPayload(
 private lateinit var binding: ActivityMainBinding
     private val repository = MockHubRepository()
     private lateinit var serverRepository: HubRepository
+    private lateinit var pushTokenSyncer: PushTokenSyncer
     private val liveClockHandler = Handler(Looper.getMainLooper())
     private val liveClockTextViews = mutableListOf<LiveClockTextView>()
     private val liveClockTicker = object : Runnable {
@@ -164,6 +168,7 @@ private var notificationPermissionRequested = false
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         serverRepository = createServerRepository()
+        syncCurrentPushToken()
         configureTopBarGlass()
         setupTopBarScrollBehavior()
         setupBackNavigation()
@@ -206,12 +211,29 @@ private var notificationPermissionRequested = false
         }
     }
 
-    private fun createServerRepository(): HubRepository =
-        ServerHubRepository(
-            remoteDataSource = ServerHubRepository.HubApiRemoteDataSource(HubApiClient.create(BuildConfig.HUB_BASE_URL)),
+    private fun createServerRepository(): HubRepository {
+        val apiClient = HubApiClient.create(BuildConfig.HUB_BASE_URL)
+        pushTokenSyncer = PushTokenSyncer(context = this, apiClient = apiClient)
+        return ServerHubRepository(
+            remoteDataSource = ServerHubRepository.HubApiRemoteDataSource(apiClient),
             deviceIdStore = DeviceIdStore(this),
             fallback = repository,
+            flushPendingPushToken = { pushTokenSyncer.flushPendingToken() },
         )
+    }
+
+    private fun syncCurrentPushToken() {
+        FirebaseMessaging.getInstance().token
+            .addOnSuccessListener { token ->
+                if (token.isBlank()) return@addOnSuccessListener
+                CoroutineScope(Dispatchers.IO).launch {
+                    pushTokenSyncer.syncToken(token)
+                }
+            }
+            .addOnFailureListener { error ->
+                Log.d("MainActivity", "FCM token sync unavailable: ${error.javaClass.simpleName}")
+            }
+    }
 
  private fun setupPullToRefresh() {
  binding.contentRefresh.isEnabled = false

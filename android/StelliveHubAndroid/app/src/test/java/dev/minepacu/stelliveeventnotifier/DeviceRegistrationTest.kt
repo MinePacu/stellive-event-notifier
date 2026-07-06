@@ -45,13 +45,89 @@ class DeviceRegistrationTest {
         assertEquals("fcm", api.lastRequest?.provider)
     }
 
-    private class RecordingTokenApi : PushTokenSyncer.TokenApi {
+    @Test
+    fun pushTokenSyncerSendsTokenWhenDeviceIdExists() = runTest {
+        val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()).apply {
+            saveDeviceId("device-1")
+        }
+        val api = RecordingTokenApi()
+        val syncer = PushTokenSyncer(
+            deviceIdStore = deviceIdStore,
+            pendingTokenStore = PushTokenSyncer.InMemoryPendingTokenStore(),
+            tokenApi = api,
+        )
+
+        syncer.syncToken("current-fcm-token")
+
+        assertEquals("device-1", api.lastRequest?.deviceId)
+        assertEquals("current-fcm-token", api.lastRequest?.token)
+    }
+
+    @Test
+    fun pushTokenSyncerKeepsFailedTokenPendingForRetry() = runTest {
+        val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()).apply {
+            saveDeviceId("device-1")
+        }
+        val pendingStore = PushTokenSyncer.InMemoryPendingTokenStore()
+        val syncer = PushTokenSyncer(
+            deviceIdStore = deviceIdStore,
+            pendingTokenStore = pendingStore,
+            tokenApi = RecordingTokenApi(succeeds = false),
+        )
+
+        syncer.syncToken("retry-fcm-token")
+
+        assertEquals("retry-fcm-token", pendingStore.loadPendingToken())
+    }
+
+    @Test
+    fun pushTokenSyncerClearsMatchingPendingTokenAfterSuccessfulSend() = runTest {
+        val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()).apply {
+            saveDeviceId("device-1")
+        }
+        val pendingStore = PushTokenSyncer.InMemoryPendingTokenStore().apply {
+            savePendingToken("current-fcm-token")
+        }
+        val syncer = PushTokenSyncer(
+            deviceIdStore = deviceIdStore,
+            pendingTokenStore = pendingStore,
+            tokenApi = RecordingTokenApi(),
+        )
+
+        syncer.syncToken("current-fcm-token")
+
+        assertNull(pendingStore.loadPendingToken())
+    }
+
+    @Test
+    fun flushPendingTokenKeepsTokenWhenApiUpdateFails() = runTest {
+        val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()).apply {
+            saveDeviceId("device-1")
+        }
+        val pendingStore = PushTokenSyncer.InMemoryPendingTokenStore().apply {
+            savePendingToken("retry-fcm-token")
+        }
+        val syncer = PushTokenSyncer(
+            deviceIdStore = deviceIdStore,
+            pendingTokenStore = pendingStore,
+            tokenApi = RecordingTokenApi(succeeds = false),
+        )
+
+        syncer.flushPendingToken()
+
+        assertEquals("retry-fcm-token", pendingStore.loadPendingToken())
+    }
+
+    private class RecordingTokenApi(
+        private val succeeds: Boolean = true,
+    ) : PushTokenSyncer.TokenApi {
         var lastRequest: UpdateDeviceTokenRequestDto? = null
 
         override suspend fun updateDeviceToken(
             request: UpdateDeviceTokenRequestDto,
         ): HubNetworkResult<UpdateDeviceTokenResponseDto> {
             lastRequest = request
+            if (!succeeds) return HubNetworkResult.Failure(code = "network_error")
             return HubNetworkResult.Success(
                 UpdateDeviceTokenResponseDto(
                     updated = true,

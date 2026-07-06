@@ -129,16 +129,19 @@ class ServerHubRepositoryTest {
     fun bootstrapRegistersDeviceWhenServerSnapshotHasNoDevice() = runTest {
         val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage())
         val remote = RecordingRemoteDataSource()
+        var flushCalls = 0
         val repository = ServerHubRepository(
             remoteDataSource = remote,
             deviceIdStore = deviceIdStore,
             fallback = MockHubRepository(),
+            flushPendingPushToken = { flushCalls += 1 },
         )
 
         repository.bootstrap()
 
         assertEquals(1, remote.registerCalls)
         assertEquals("device-created", deviceIdStore.getDeviceId())
+        assertEquals(1, flushCalls)
     }
 
     @Test
