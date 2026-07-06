@@ -416,9 +416,9 @@ Implementation Plan
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-- Create: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt`
-- Create: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+- Create: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt`
+- Create: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt`
 
 - [ ] Add Kotlin DTOs matching backend shape.
 
@@ -480,7 +480,7 @@ Implementation Plan
 
   ```bash
   cd android/StelliveHubAndroid
-  ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+  ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
   ```
 
   Expected: PASS.
@@ -489,10 +489,10 @@ Implementation Plan
 
 **Files:**
 
-- Create: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarViewModel.kt`
-- Create: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarView.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- Create: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarViewModel.kt`
+- Create: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarView.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 
 - [ ] Add `CalendarViewModel`.
 
@@ -544,9 +544,9 @@ Implementation Plan
 
 - Modify: `android/StelliveHubAndroid/app/build.gradle.kts`
 - Modify: `android/StelliveHubAndroid/app/src/main/AndroidManifest.xml`
-- Create: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/widget/HubCalendarWidgetRepository.kt`
-- Create: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/widget/HubCalendarWidget.kt`
-- Create: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/widget/HubCalendarWidgetReceiver.kt`
+- Create: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/widget/HubCalendarWidgetRepository.kt`
+- Create: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/widget/HubCalendarWidget.kt`
+- Create: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/widget/HubCalendarWidgetReceiver.kt`
 
 - [ ] Add Glance dependency.
 
@@ -741,7 +741,7 @@ Implementation Plan
   Capability:
 
   ```txt
-  App Group: group.dev.stellive.hub
+  App Group: group.dev.minepacu.stelliveeventnotifier
   ```
 
 - [ ] Add shared widget store.

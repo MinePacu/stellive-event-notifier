@@ -40,10 +40,10 @@ Backend:
 - Modify `backend/stellive-hub-api/src/routes/routes.ts`, `backend/stellive-hub-api/src/routes/internalRoutes.ts`, `backend/stellive-hub-api/src/config/env.ts`, and `backend/stellive-hub-api/.env.example`.
 
 Android:
-- Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt` and `HubApiModels.kt` for song endpoints and DTOs.
-- Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt` for song models.
-- Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt` and `MockHubRepository.kt` for server mapping and fallback.
-- Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt` and `MainActivity.kt` for tab policy, settings history entry, and song screen rendering.
+- Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt` and `HubApiModels.kt` for song endpoints and DTOs.
+- Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt` for song models.
+- Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt` and `MockHubRepository.kt` for server mapping and fallback.
+- Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt` and `MainActivity.kt` for tab policy, settings history entry, and song screen rendering.
 
 iOS:
 - Modify `ios/StelliveHubiOS/StelliveHubiOS/Services/HubAPIClient.swift` for song request/response structs and methods.
@@ -174,14 +174,14 @@ Docs:
 ## Task 4: Android API Integration And UI Wiring
 
 **Files:**
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/SongUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt`
 
 - [ ] **Step 1: Write Android policy tests**
 
@@ -189,7 +189,7 @@ Docs:
 
 - [ ] **Step 2: Run RED test**
 
-  Run from `android/StelliveHubAndroid`: `rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.SongUiPolicyTest`.
+  Run from `android/StelliveHubAndroid`: `rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest`.
 
   Expected: FAIL until policy and DTO mapping exist.
 

@@ -27,13 +27,13 @@ Create:
 - `docs/superpowers/plans/2026-06-10-goods-events-calendar-widgets.md`
 - `backend/stellive-hub-api/src/hub-events/hubEventCalendar.ts`
 - `backend/stellive-hub-api/test/hubEventCalendar.test.ts`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarView.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarViewModel.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/widget/HubCalendarWidget.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/widget/HubCalendarWidgetReceiver.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/widget/HubCalendarWidgetRepository.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarView.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarViewModel.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/widget/HubCalendarWidget.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/widget/HubCalendarWidgetReceiver.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/widget/HubCalendarWidgetRepository.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubCalendarView.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/ViewModels/HubCalendarViewModel.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/HubCalendarWidgetStore.swift`
@@ -54,9 +54,9 @@ Modify:
 - `docs/AI_HANDOFF.md`
 - `android/StelliveHubAndroid/app/build.gradle.kts`
 - `android/StelliveHubAndroid/app/src/main/AndroidManifest.xml`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS.xcodeproj/project.pbxproj`
 - `ios/StelliveHubiOS/StelliveHubiOS/Models/HubModels.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/MockHubStore.swift`
@@ -285,7 +285,7 @@ Modify:
 
 - [ ] Add Android model types.
 
-  Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt` with Kotlin equivalents of:
+  Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt` with Kotlin equivalents of:
 
   ```kotlin
   data class HubCalendarEntry(...)
@@ -297,7 +297,7 @@ Modify:
 
 - [ ] Add Android calendar UI policy tests.
 
-  Create `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt`:
+  Create `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt`:
 
   ```kotlin
   @Test
@@ -317,7 +317,7 @@ Modify:
 
 - [ ] Implement Android calendar UI policy.
 
-  Create `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt` with:
+  Create `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt` with:
 
   - `entryComparator()`
   - `statusLabel(status: HubEventStatus): String`
@@ -339,7 +339,7 @@ Modify:
 
 - [ ] Wire Android navigation.
 
-  Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt` to add a `굿즈/행사` calendar destination or tab. If the current app has no router abstraction, add a local enum destination and keep the change scoped.
+  Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt` to add a `굿즈/행사` calendar destination or tab. If the current app has no router abstraction, add a local enum destination and keep the change scoped.
 
 - [ ] Seed mock calendar data.
 
@@ -349,7 +349,7 @@ Modify:
 
   ```bash
   cd android/StelliveHubAndroid
-  ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+  ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
   ```
 
   Expected: PASS.
@@ -481,7 +481,7 @@ Modify:
   Required capabilities:
 
   - WidgetKit extension.
-  - App Group shared container, for example `group.dev.stellive.hub`.
+  - App Group shared container, for example `group.dev.minepacu.stelliveeventnotifier`.
 
 - [ ] Add shared widget store.
 

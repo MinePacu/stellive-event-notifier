@@ -25,8 +25,8 @@
 - Always prefix shell commands with `rtk`.
 - Read only these files first unless a compiler/test failure points elsewhere:
   - `mockups/goods-events-detail-mobile-mockup.html`
-  - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-  - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
+  - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+  - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
   - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventDetailView.swift`
   - `ios/StelliveHubiOS/StelliveHubiOS/Models.swift`
 - Prefer targeted search:
@@ -39,16 +39,16 @@
 ## Files
 
 Modify:
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventDetailView.swift`
 
 Likely test additions or updates:
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsPolicyTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift`
 
 Optional if formatting helpers are extracted:
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/hubevents/HubEventDetailFormatting.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventDetailFormattingTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/hubevents/HubEventDetailFormatting.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventDetailFormattingTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventDetailFormatting.swift`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubEventDetailFormattingTests.swift`
 

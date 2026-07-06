@@ -30,9 +30,9 @@ Modify:
 - `backend/stellive-hub-api/src/hub-events/hubEventAdminService.ts`
 - `backend/stellive-hub-api/src/hub-events/hubEventRepository.ts`
 - `backend/stellive-hub-api/src/push/pushPayloadFactory.ts`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/hubevents/HubEventImagePolicy.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/HubEventsCalendarView.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/hubevents/HubEventImagePolicy.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarView.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Models/Models.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsView.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventDetailView.swift`
@@ -43,7 +43,7 @@ Test:
 - `backend/stellive-hub-api/test/hubEvents.test.ts`
 - `backend/stellive-hub-api/test/hubEventReadRoutes.test.ts`
 - `backend/stellive-hub-api/test/pushPayloadFactory.test.ts`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventImagePolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventImagePolicyTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift`
 
 ## Step 1: Baseline

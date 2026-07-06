@@ -15,7 +15,7 @@ Implementation Plan
 Allowed production files:
 
 - `android/StelliveHubAndroid/app/src/main/res/layout/activity_main.xml`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
 - `android/StelliveHubAndroid/app/src/main/res/values/colors.xml`
 - `android/StelliveHubAndroid/app/src/main/res/drawable/bg_top_bar_glass.xml`
 
@@ -73,7 +73,7 @@ rtk grep "LinearLayout\\|FrameLayout\\|topBar\\|topBarDivider\\|contentRefresh\\
 - [ ] Run:
 
 ```bash
-rtk grep "configureTopBarGlass\\|updateTopBarGlass\\|contentScroll\\|contentList\\|WindowInsets" android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt
+rtk grep "configureTopBarGlass\\|updateTopBarGlass\\|contentScroll\\|contentList\\|WindowInsets" android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt
 ```
 
 ## Step 3: Convert Root Layout To Overlay Structure
@@ -157,7 +157,7 @@ rtk adb -s adb-R3CN80F8E4N-xdQWoe._adb-tls-connect._tcp install -r android/Stell
 - [ ] Launch and capture:
 
 ```bash
-rtk adb -s adb-R3CN80F8E4N-xdQWoe._adb-tls-connect._tcp shell am start -n dev.stellive.hub/.MainActivity
+rtk adb -s adb-R3CN80F8E4N-xdQWoe._adb-tls-connect._tcp shell am start -n dev.minepacu.stelliveeventnotifier/.MainActivity
 rtk adb -s adb-R3CN80F8E4N-xdQWoe._adb-tls-connect._tcp exec-out screencap -p > /private/tmp/stellive-android-live-topbar-overlay.png
 ```
 

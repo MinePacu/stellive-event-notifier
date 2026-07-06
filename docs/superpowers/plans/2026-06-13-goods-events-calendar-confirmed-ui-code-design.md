@@ -51,7 +51,7 @@ backend/stellive-hub-api/test/
 Android:
 
 ```text
-android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/
+android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/
   core/model/Models.kt
   core/network/HubApi.kt
   core/network/HubApiModels.kt
@@ -62,7 +62,7 @@ android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/
   feature/home/MockHubRepository.kt
   feature/home/ServerHubRepository.kt
   feature/home/MainUiPolicy.kt
-android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/
+android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/
   CalendarUiPolicyTest.kt
   HubEventsCalendarViewModelTest.kt
   MainUiPolicyTest.kt
@@ -582,7 +582,7 @@ Expected: focused backend calendar tests pass.
 - [ ] Run:
 
 ```bash
-rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
 ```
 
 Expected: Android policy tests pass.
@@ -597,7 +597,7 @@ Expected: Android policy tests pass.
 - [ ] Run:
 
 ```bash
-rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.stellive.hub.HubEventsCalendarViewModelTest
+rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubEventsCalendarViewModelTest
 ```
 
 Expected: Android view model tests pass without network calls.
@@ -613,7 +613,7 @@ Expected: Android view model tests pass without network calls.
 - [ ] Run:
 
 ```bash
-rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.stellive.hub.HubApiClientTest --tests dev.stellive.hub.ServerHubRepositoryTest
+rtk android/StelliveHubAndroid/gradlew -p android/StelliveHubAndroid :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.HubApiClientTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest
 ```
 
 Expected: Android API/repository tests pass or only existing missing-test classes are skipped by the runner.
@@ -746,7 +746,7 @@ rtk git commit -m "feat(api): verify hub event calendar projection"
 ```
 
 ```bash
-rtk git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub
+rtk git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier
 rtk git commit -m "feat(android): add hub event calendar UI"
 ```
 

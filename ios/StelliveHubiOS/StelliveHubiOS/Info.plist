@@ -22,7 +22,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>dev.stellive.hub</string>
+			<string>dev.minepacu.stelliveeventnotifier</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>stellivehub</string>

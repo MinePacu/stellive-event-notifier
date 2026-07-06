@@ -22,10 +22,10 @@ Backend mobile bootstrap has a gap:
 - Remote probe on 2026-06-15 found `GET /v1/live-status` returns 11 rows, but `GET /v1/bootstrap?deviceId=diagnostic-device&platform=android` did not include a `liveStatus` key.
 
 Android has partial consumption:
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt` defines `LiveStatusDto` with title/viewer/platform fields.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt` merges only `isLive` and `startedAt` into `HubMember`.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt` loads server bootstrap once at app start and renders live page from cached member state.
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt` has no `GET v1/live-status` method.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt` defines `LiveStatusDto` with title/viewer/platform fields.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt` merges only `isLive` and `startedAt` into `HubMember`.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt` loads server bootstrap once at app start and renders live page from cached member state.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt` has no `GET v1/live-status` method.
 
 iOS has partial consumption:
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/HubAPIClient.swift` defines `LiveStatusResponse` with title/viewer/platform fields.
@@ -43,13 +43,13 @@ Conclusion:
 Modify:
 - `backend/stellive-hub-api/src/routes/routes.ts`
 - `backend/stellive-hub-api/test/mobileBootstrap.test.ts`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiClient.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/HubRepository.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiClient.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/HubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Models/HubModels.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/HubAPIClient.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/MockHubStore.swift`
@@ -60,7 +60,7 @@ Modify:
 Test:
 - `backend/stellive-hub-api/test/mobileBootstrap.test.ts`
 - `backend/stellive-hub-api/test/liveStatus.test.ts`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/ServerLiveStatusMappingTests.swift`
 
 ## Step 1: Add Backend Failing Test For Fallback Bootstrap Live Status
@@ -137,7 +137,7 @@ Expected:
 
 ## Step 5: Add Android Live Status Domain Fields
 
-- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`.
+- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`.
 - [ ] Add nullable live metadata fields to `HubMember`:
 
 ```kotlin
@@ -152,7 +152,7 @@ val liveLastCheckedAt: Instant? = null
 
 ## Step 6: Add Android Network Method For Live Status Refresh
 
-- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApi.kt`.
+- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApi.kt`.
 - [ ] Add:
 
 ```kotlin
@@ -160,7 +160,7 @@ val liveLastCheckedAt: Instant? = null
 suspend fun liveStatus(): List<LiveStatusDto>
 ```
 
-- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiClient.kt`.
+- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiClient.kt`.
 - [ ] Add:
 
 ```kotlin
@@ -170,7 +170,7 @@ suspend fun liveStatus(): HubNetworkResult<List<LiveStatusDto>> =
 
 ## Step 7: Preserve Android Live Metadata In Repository
 
-- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`.
+- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`.
 - [ ] Update `mergeLiveStatus` to copy all live DTO fields into `HubMember`.
 - [ ] For members omitted from server `liveStatus`, keep `isLive=false` and clear live metadata.
 - [ ] Add a `refreshLiveStatus(current: HubDataState): HubDataState` method that calls `remoteDataSource.liveStatus()` and merges returned rows into current state.
@@ -191,7 +191,7 @@ member.copy(
 
 ## Step 8: Add Android Tests
 
-- [ ] Update `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`.
+- [ ] Update `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`.
 - [ ] Extend existing bootstrap test to assert:
   - `yuni.liveTitle == "Live title"`
   - `yuni.liveViewerCount == 1234`
@@ -202,7 +202,7 @@ member.copy(
 
 ## Step 9: Render Android Live Metadata
 
-- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`.
+- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`.
 - [ ] In `renderLive`, trigger a server live-status refresh when the live tab is opened.
 - [ ] Keep refresh backend-only: call app backend `GET /v1/live-status`, never CHZZK hostnames.
 - [ ] In `memberTextBlock`, show:

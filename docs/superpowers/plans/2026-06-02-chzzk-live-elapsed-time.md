@@ -54,11 +54,11 @@ Expected: PASS.
 ### Task 2: Android elapsed-time display
 
 **Files:**
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/model/Models.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MockHubRepository.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/MainUiPolicy.kt`
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- Test: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/MainUiPolicyTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/model/Models.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MockHubRepository.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainUiPolicy.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- Test: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/MainUiPolicyTest.kt`
 
 - [ ] **Step 1: Write failing test**
 
@@ -76,7 +76,7 @@ fun liveStatusTextShowsElapsedTimeWhenStartedAtExists() {
 
 - [ ] **Step 2: Run red test**
 
-Run: `./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.MainUiPolicyTest`
+Run: `./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest`
 Expected: FAIL because `MainUiPolicy.liveStatusText` does not exist.
 
 - [ ] **Step 3: Implement minimal Android change**
@@ -85,7 +85,7 @@ Add `liveStartedAt: Instant?` to `HubMember`, seed the live mock member, add `Ma
 
 - [ ] **Step 4: Run green test**
 
-Run: `./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.MainUiPolicyTest`
+Run: `./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.MainUiPolicyTest`
 Expected: PASS.
 
 ### Task 3: iOS elapsed-time display

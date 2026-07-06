@@ -18,9 +18,9 @@ Do not fix this by changing server calendar expansion. Calendar cells and durati
 
 Modify:
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsCalendarViewModelTest.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsCalendarViewModelTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarViewModel.swift`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift`
 - `docs/AI_HANDOFF.md`
@@ -36,13 +36,13 @@ Do not modify:
 - [ ] Confirm current relevant code only:
 
 ```bash
-rtk rg -n "entriesForRange|entriesForDay|entryComparator|visibleEntries|selectedMonthEntries|entries\\(in range" android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar ios/StelliveHubiOS/StelliveHubiOS/Views
+rtk rg -n "entriesForRange|entriesForDay|entryComparator|visibleEntries|selectedMonthEntries|entries\\(in range" android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar ios/StelliveHubiOS/StelliveHubiOS/Views
 ```
 
 - [ ] Read only exact function ranges found by `rg`:
 
 ```bash
-rtk sed -n '360,390p' android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt
+rtk sed -n '360,390p' android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt
 rtk sed -n '248,282p' ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarViewModel.swift
 rtk sed -n '572,586p' ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarViewModel.swift
 ```
@@ -57,7 +57,7 @@ Avoid broad `git diff` and broad test output until the focused tests are green. 
 - [ ] Keep RED/GREEN verification focused:
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest --tests dev.stellive.hub.HubEventsCalendarViewModelTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest --tests dev.minepacu.stelliveeventnotifier.HubEventsCalendarViewModelTest
 rtk xcodebuild test -project ios/StelliveHubiOS/StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination "platform=iOS Simulator,name=iPhone 17 Pro" -only-testing:StelliveHubiOSTests/HubEventsCalendarViewModelTests
 ```
 
@@ -102,7 +102,7 @@ fun entriesForRangeDeduplicatesMultiDayCalendarEntriesByEventId() {
 - [ ] Run and expect RED:
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest
 ```
 
 Expected failure: duplicate `goods-range` entries are returned.
@@ -139,7 +139,7 @@ Keep `entriesForDay()` unchanged so same-day admin duplicates, if intentionally 
 - [ ] Run focused Android tests:
 
 ```bash
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.CalendarUiPolicyTest --tests dev.stellive.hub.HubEventsCalendarViewModelTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.CalendarUiPolicyTest --tests dev.minepacu.stelliveeventnotifier.HubEventsCalendarViewModelTest
 ```
 
 Expected: PASS.
@@ -255,7 +255,7 @@ Expected: PASS. If sandbox blocks CoreSimulator, run the available XcodeBuildMCP
 rtk ./gradlew :app:assembleDebug
 rtk adb devices
 rtk adb -s <device-id> install -r android/StelliveHubAndroid/app/build/outputs/apk/debug/app-debug.apk
-rtk adb -s <device-id> shell am start -n dev.stellive.hub/.MainActivity
+rtk adb -s <device-id> shell am start -n dev.minepacu.stelliveeventnotifier/.MainActivity
 ```
 
 - [ ] Open Goods/Events.
@@ -293,6 +293,6 @@ Expected: no output.
 - [ ] Commit only relevant code, tests, and handoff docs. Do not include generated folders such as `android/StelliveHubAndroid/.kotlin/`.
 
 ```bash
-rtk git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/calendar/CalendarUiPolicy.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/CalendarUiPolicyTest.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/HubEventsCalendarViewModelTest.kt ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarViewModel.swift ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift docs/AI_HANDOFF.md
+rtk git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/CalendarUiPolicy.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/CalendarUiPolicyTest.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/HubEventsCalendarViewModelTest.kt ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventsCalendarViewModel.swift ios/StelliveHubiOS/StelliveHubiOSTests/HubEventsCalendarViewModelTests.swift docs/AI_HANDOFF.md
 rtk sh -lc "printf '%s\n' 'fix: dedupe hub event calendar cards' '- Dedupe range and month event card lists by canonical eventId' '- Preserve date-expanded calendar entries for markers and duration bars' '- Cover Android and iOS calendar list duplicate regressions' > /private/tmp/commit_msg && rtk git commit -F /private/tmp/commit_msg"
 ```

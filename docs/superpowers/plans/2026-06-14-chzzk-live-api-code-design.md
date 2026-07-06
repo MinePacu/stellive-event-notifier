@@ -49,7 +49,7 @@ Create:
 
 - `backend/stellive-hub-api/src/events/chzzkEventIngestor.ts`
 - `backend/stellive-hub-api/test/chzzkLiveApiWiring.test.ts`
-- `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerLiveStatusMappingTest.kt`
+- `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerLiveStatusMappingTest.kt`
 - `ios/StelliveHubiOS/StelliveHubiOSTests/ServerLiveStatusMappingTests.swift`
 
 Modify:
@@ -61,9 +61,9 @@ Modify:
 - `backend/stellive-hub-api/src/repositories/liveStatusRepository.ts`
 - `backend/stellive-hub-api/test/adminInternalRoutes.test.ts`
 - `backend/stellive-hub-api/test/mobileBootstrap.test.ts`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/HubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/HubRepository.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/HubAPIClient.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/ServerHubStore.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/MockHubStore.swift`
@@ -216,7 +216,7 @@ rtk git commit -m "feat(api): expose live status in mobile bootstrap"
 
 ## Phase 3: Android Live Status Mapping
 
-- [ ] Add failing tests in `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerLiveStatusMappingTest.kt`.
+- [ ] Add failing tests in `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerLiveStatusMappingTest.kt`.
 
 Test cases:
 
@@ -229,12 +229,12 @@ Test cases:
 Run:
 
 ```bash
-rtk :app:testDebugUnitTest --tests dev.stellive.hub.ServerLiveStatusMappingTest
+rtk :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerLiveStatusMappingTest
 ```
 
 Expected: FAIL because `ServerHubRepository.bootstrap()` currently returns fallback after a successful bootstrap response.
 
-- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt` only if any `LiveStatusDto` fields are missing.
+- [ ] Modify `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt` only if any `LiveStatusDto` fields are missing.
 
 Required fields:
 
@@ -248,7 +248,7 @@ Required fields:
 - `lastCheckedAt: String?`
 - `sourceVerificationState: String`
 
-- [ ] Add mapper functions in `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`.
+- [ ] Add mapper functions in `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`.
 
 Implementation guidance:
 
@@ -262,7 +262,7 @@ Implementation guidance:
 - [ ] Run focused Android test.
 
 ```bash
-rtk :app:testDebugUnitTest --tests dev.stellive.hub.ServerLiveStatusMappingTest
+rtk :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerLiveStatusMappingTest
 ```
 
 Expected: PASS.
@@ -278,7 +278,7 @@ Expected: PASS.
 - [ ] Commit Android mapping.
 
 ```bash
-rtk git add android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/core/network/HubApiModels.kt android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerLiveStatusMappingTest.kt
+rtk git add android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/core/network/HubApiModels.kt android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerLiveStatusMappingTest.kt
 rtk git commit -m "feat(android): map server live status into live page"
 ```
 

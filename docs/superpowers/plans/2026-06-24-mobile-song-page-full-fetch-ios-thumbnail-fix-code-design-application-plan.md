@@ -15,8 +15,8 @@
 - Read only these files first:
   - `backend/stellive-hub-api/src/repositories/musicRepository.ts`
   - `backend/stellive-hub-api/test/musicRepository.test.ts`
-  - `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
-  - `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`
+  - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
+  - `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`
   - `ios/StelliveHubiOS/StelliveHubiOS/Services/ServerHubStore.swift`
   - `ios/StelliveHubiOS/StelliveHubiOS/Views/SongsView.swift`
   - `ios/StelliveHubiOS/StelliveHubiOSTests/HubAPIClientTests.swift`
@@ -32,7 +32,7 @@ Run only tests connected to changed code:
 
 ```bash
 rtk npm test -- musicRepository
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ServerHubRepositoryTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 rtk xcodebuild test -project ios/StelliveHubiOS/StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination "id=89B0B46A-8515-47E7-A122-681498F16C66" -only-testing:StelliveHubiOSTests/HubAPIClientTests -only-testing:StelliveHubiOSTests/SongUiPolicyTests
 ```
 
@@ -193,8 +193,8 @@ Expected: repository cursor tests pass.
 
 **Files:**
 
-- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/ServerHubRepository.kt`
-- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/stellive/hub/ServerHubRepositoryTest.kt`
+- Modify: `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt`
+- Modify: `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt`
 
 - [ ] **Step 1: Add failing Android test**
 
@@ -229,7 +229,7 @@ assertEquals(listOf(100, 100), fakeMusicLimits)
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ServerHubRepositoryTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest
 ```
 
 Expected: only one page is fetched with limit 30.
@@ -290,7 +290,7 @@ Keep the method signature unchanged. Ignore incoming `cursor` for UI refresh pat
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ServerHubRepositoryTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 Expected: Android focused tests pass.
@@ -529,7 +529,7 @@ rtk npm test -- musicRepository
 
 ```bash
 cd android/StelliveHubAndroid
-rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.ServerHubRepositoryTest --tests dev.stellive.hub.SongUiPolicyTest
+rtk ./gradlew :app:testDebugUnitTest --tests dev.minepacu.stelliveeventnotifier.ServerHubRepositoryTest --tests dev.minepacu.stelliveeventnotifier.SongUiPolicyTest
 ```
 
 - [ ] **Step 3: iOS focused tests**

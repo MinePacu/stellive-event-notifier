@@ -18,8 +18,8 @@ Implementation Plan
 
 Modify:
 
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/MainActivity.kt`
-- `android/StelliveHubAndroid/app/src/main/java/dev/stellive/hub/feature/home/LiveMemberOrderingPolicy.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/MainActivity.kt`
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/LiveMemberOrderingPolicy.kt`
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/LiveView.swift`
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/MockHubStore.swift`
 
