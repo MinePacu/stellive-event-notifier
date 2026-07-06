@@ -55,4 +55,11 @@ Notification noise and push-volume reduction policies are defined in [Notificati
 ## Tap Action
 
 `open_app` opens an app deep link. `open_platform` opens the original platform URL. Both values are included in push payloads and user-visible local history.
+
+## Push Notification Images
+
+A single verified HTTPS image URL may be included only in provider visual notification fields when it comes from normalized `PlatformEvent.thumbnailUrl` and passes policy validation. Image URLs must not be included in data payload keys.
+
+Raw provider payloads, private platform responses, image binaries, logos, profile images, posters, screenshots, fan art, copied media, production device tokens, OAuth tokens, API keys, Firebase service accounts, and unverified image URLs must never be included.
+
 MVP update: X-side notification ingestion and delivery are intentionally disabled for the current `굿즈/행사` calendar/widget scope. The calendar and widget surfaces are read-only schedule projections and do not send push notifications or bypass global, platform, event-type, generation, member, quiet-hours, keyword, or rate-limit preference resolution.
