@@ -61,8 +61,8 @@ class ServerHubRepositoryTest {
         assertNull(huya.liveTitle)
         assertNull(huya.liveViewerCount)
         assertNull(huya.livePlatformUrl)
-        assertNull(huya.liveLastCheckedAt)
-        assertNull(huya.channelImageUrl)
+        assertEquals("2026-06-11T03:02:00Z", huya.liveLastCheckedAt.toString())
+        assertEquals("https://img.example/huya.jpg", huya.channelImageUrl)
         assertEquals("https://yt.example/huya.jpg", huya.profileImageUrl)
     }
 
@@ -360,6 +360,19 @@ class ServerHubRepositoryTest {
                     platformUrl = "https://chzzk.naver.com/live/chzzk-channel-id",
                         lastCheckedAt = "2026-06-11T03:01:00.000Z",
                         sourceVerificationState = "verified",
+                    ),
+                    LiveStatusDto(
+                        memberId = "sakihane-huya",
+                        generationId = "gen1",
+                        platform = "chzzk",
+                        isLive = true,
+                        title = null,
+                        viewerCount = 456,
+                        startedAt = "2026-06-11T03:00:00.000Z",
+                        channelImageUrl = "https://img.example/huya.jpg",
+                        platformUrl = "https://chzzk.naver.com/live/unverified-channel",
+                        lastCheckedAt = "2026-06-11T03:02:00.000Z",
+                        sourceVerificationState = "verify_required",
                     ),
                 ),
                 serverTime = "2026-06-11T03:00:00.000Z",

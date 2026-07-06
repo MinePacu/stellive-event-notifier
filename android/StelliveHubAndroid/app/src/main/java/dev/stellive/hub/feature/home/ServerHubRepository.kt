@@ -231,12 +231,13 @@ class ServerHubRepository(
                         liveLastCheckedAt = null,
                         channelImageUrl = null,
                     )
+                val displayLive = status.isLive && status.sourceVerificationState == "verified"
                 member.copy(
-                    isLive = status.isLive,
-                liveStartedAt = status.startedAt?.let(::parseInstantOrNull),
-                liveTitle = status.title,
-                    liveViewerCount = status.viewerCount,
-                    livePlatformUrl = status.platformUrl,
+                    isLive = displayLive,
+                    liveStartedAt = status.startedAt?.let(::parseInstantOrNull)?.takeIf { displayLive },
+                    liveTitle = status.title?.takeIf { displayLive },
+                    liveViewerCount = status.viewerCount?.takeIf { displayLive },
+                    livePlatformUrl = status.platformUrl?.takeIf { displayLive },
                     liveLastCheckedAt = parseInstantOrNull(status.lastCheckedAt),
                     channelImageUrl = status.channelImageUrl,
                 )

@@ -94,6 +94,29 @@ describe("ChzzkApiClient client-auth live list", () => {
     });
   });
 
+  it("does not treat a channel-only matching entry as live", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 200,
+          content: {
+            data: [{ channelId: "chzzk-channel-id" }]
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ code: 200, content: { data: [] } })
+      );
+
+    await expect(client(fetchMock).getLiveStatus("chzzk-channel-id")).resolves.toMatchObject({
+      channelId: "chzzk-channel-id",
+      isLive: false,
+      title: undefined,
+      openDate: undefined,
+      sourceVerificationState: "verified"
+    });
+  });
+
   it("returns offline status with channel metadata image fallback", async () => {
     const fetchMock = vi
       .fn()
