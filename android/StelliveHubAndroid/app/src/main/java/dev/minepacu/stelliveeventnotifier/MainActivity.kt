@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.BitmapFactory
@@ -11,6 +12,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -61,6 +63,8 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubMember
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationEventType
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationHistoryItem
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationPlatform
+import dev.minepacu.stelliveeventnotifier.core.notification.NotificationPermissionPromptMoment
+import dev.minepacu.stelliveeventnotifier.core.notification.NotificationPermissionPromptPolicy
 import dev.minepacu.stelliveeventnotifier.core.model.SongCatalogItem
 import dev.minepacu.stelliveeventnotifier.databinding.ActivityMainBinding
 import dev.minepacu.stelliveeventnotifier.feature.calendar.HubCalendarDeepLinkPolicy
@@ -1553,7 +1557,12 @@ private fun songFilterRow(
                         "마스터 알림",
                         "OFF이면 모든 푸시와 기록 생성 대상 알림을 차단합니다.",
                         settings.globalEnabled,
-                        onCheckedChange = { enabled -> persistSettings(settings.copy(globalEnabled = enabled)) },
+                        onCheckedChange = { enabled ->
+                            if (enabled) {
+                                requestNotificationPermissionIfNeeded(NotificationPermissionPromptMoment.GLOBAL_NOTIFICATION_TOGGLE)
+                            }
+                            persistSettings(settings.copy(globalEnabled = enabled))
+                        },
                     ),
                     SettingRow(
                         "서비스 공지",
@@ -1606,7 +1615,12 @@ private fun songFilterRow(
                 )
             )
         )
-        if (!notificationPermissionRequested) {
+    }
+
+    private fun requestNotificationPermissionIfNeeded(moment: NotificationPermissionPromptMoment) {
+        val granted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (NotificationPermissionPromptPolicy.shouldRequest(moment, granted, notificationPermissionRequested)) {
             notificationPermissionRequested = true
             requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }

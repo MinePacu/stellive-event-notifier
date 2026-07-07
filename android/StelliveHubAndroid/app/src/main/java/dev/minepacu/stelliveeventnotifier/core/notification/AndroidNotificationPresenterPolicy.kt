@@ -6,6 +6,12 @@ object AndroidNotificationPresenterPolicy {
     fun shouldShowSystemNotification(payload: NotificationPayload): Boolean =
         payload.deliveryLevel != NotificationDeliveryLevel.IN_APP_HISTORY_ONLY
 
+    fun channelIdFor(payload: NotificationPayload?): String =
+        payload?.eventType
+            ?.let(NotificationChannels::channelFor)
+            ?.id
+            ?: NotificationChannels.HUB_EVENTS
+
     fun notificationId(topicKey: String): Int = abs(topicKey.hashCode())
 
     fun updatedBody(recentPayloads: List<NotificationPayload>): String =

@@ -44,6 +44,45 @@ final class NotificationLoadReductionPolicyTests: XCTestCase {
         XCTAssertNil(NotificationPayload.from(data: ["eventId": "event-1"]))
     }
 
+    func testPayloadParsesServerPushDataShape() {
+        let parsed = NotificationPayload.from(data: [
+            "eventId": "hub_event:event-1:event_sales_open:2026-06-12T00:00:00.000Z",
+            "memberId": "stellive-official",
+            "generationId": "official",
+            "source": "hub_event",
+            "eventType": "event_sales_open",
+            "title": "굿즈/행사 신청이 시작됐어요",
+            "body": "공식 굿즈 판매",
+            "appDeepLink": "stellivehub://hub-events/event-1",
+            "platformUrl": "https://example.com/source",
+            "deliveryLevel": "summary_push",
+            "summaryGroupId": "official-upload-window",
+            "supersedesEventIds": "event-old,event-older"
+        ])
+
+        XCTAssertEqual(parsed?.deliveryLevel, .summaryPush)
+        XCTAssertEqual(parsed?.title, "굿즈/행사 신청이 시작됐어요")
+        XCTAssertEqual(parsed?.summaryGroupId, "official-upload-window")
+        XCTAssertEqual(parsed?.supersedesEventIds, ["event-old", "event-older"])
+    }
+
+    func testPushRegistrationCoordinatorSyncsFcmToken() async {
+        let api = CapturingPushTokenAPI()
+        let defaults = UserDefaults.standard
+        let deviceIDKey = "test.deviceID.\(UUID().uuidString)"
+        let pendingTokenKey = "test.pendingPushToken.\(UUID().uuidString)"
+        let store = DeviceIDStore(defaults: defaults, key: deviceIDKey)
+        store.saveDeviceID("device-1")
+        let syncer = PushTokenSyncer(deviceIDStore: store, api: api, defaults: defaults, pendingTokenKey: pendingTokenKey)
+        let coordinator = PushRegistrationCoordinator(syncToken: syncer.syncToken)
+
+        await coordinator.didReceiveFcmRegistrationToken("fcm-token-1")
+
+        XCTAssertEqual(api.lastRequest?.deviceId, "device-1")
+        XCTAssertEqual(api.lastRequest?.provider, "apns_via_fcm")
+        XCTAssertEqual(api.lastRequest?.token, "fcm-token-1")
+    }
+
     func testThreadIdentifierGroupsSameTopic() {
         let first = payload(eventId: "event-1")
         let second = payload(eventId: "event-2")
@@ -101,4 +140,13 @@ final class NotificationLoadReductionPolicyTests: XCTestCase {
 private final class FakeDeliveredNotificationCenter: DeliveredNotificationCenter {
     func deliveredNotifications() async -> [DeliveredNotificationRecord] { [] }
     func removeDeliveredNotifications(withIdentifiers identifiers: [String]) {}
+}
+
+private final class CapturingPushTokenAPI: PushTokenAPI {
+    var lastRequest: UpdateDeviceTokenRequest?
+
+    func updateDeviceToken(_ request: UpdateDeviceTokenRequest) async throws -> UpdateDeviceTokenResponse {
+        lastRequest = request
+        return UpdateDeviceTokenResponse(updated: true, tokenStatus: "active", serverTime: "2026-07-07T00:00:00.000Z")
+    }
 }
