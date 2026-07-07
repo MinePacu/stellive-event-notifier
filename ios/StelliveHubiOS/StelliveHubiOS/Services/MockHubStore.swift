@@ -34,7 +34,7 @@ final class MockHubStore: ObservableObject {
     ]
 
     private(set) var members: [HubMember] = [
-        .init(id: "ayatsuno-yuni", koreanName: "아야츠노 유니", englishName: "Ayatsuno Yuni", generationId: "gen1", generationName: "1기생", unitName: "Everys", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: "45e71a76e949e16a34764deb962f9d9f", youtubeHandle: "@ayatsunoyuni", xHandle: "AyatsunoYuni", isLive: true, notificationEnabled: true, realtimeEnabled: true, liveStartedAt: Date(timeIntervalSince1970: 1_780_390_800)),
+        .init(id: "ayatsuno-yuni", koreanName: "아야츠노 유니", englishName: "Ayatsuno Yuni", generationId: "gen1", generationName: "1기생", unitName: "Everys", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: "45e71a76e949e16a34764deb962f9d9f", youtubeHandle: "@ayatsunoyuni", xHandle: "AyatsunoYuni", isLive: true, notificationEnabled: true, realtimeEnabled: true, liveStartedAt: Date(timeIntervalSince1970: 1_780_390_800), liveCategory: "Just Chatting"),
         .init(id: "sakihane-huya", koreanName: "사키하네 후야", englishName: "Sakihane Huya", generationId: "gen1", generationName: "1기생", unitName: "Everys", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: "36ddb9bb4f17593b60f1b63cec86611d", youtubeHandle: "@Sakihanechannel", xHandle: "verify_required", isLive: false, notificationEnabled: true, realtimeEnabled: false),
         .init(id: "shirayuki-hina", koreanName: "시라유키 히나", englishName: "Shirayuki Hina", generationId: "gen2", generationName: "2기생", unitName: "Universe", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: "b044e3a3b9259246bc92e863e7d3f3b8", youtubeHandle: "verify_required", xHandle: "verify_required", isLive: false, notificationEnabled: true, realtimeEnabled: false),
         .init(id: "neneko-mashiro", koreanName: "네네코 마시로", englishName: "Neneko Mashiro", generationId: "gen2", generationName: "2기생", unitName: "Universe", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: "4515b179f86b67b4981e16190817c580", youtubeHandle: "verify_required", xHandle: "verify_required", isLive: false, notificationEnabled: true, realtimeEnabled: false),
@@ -68,6 +68,7 @@ final class MockHubStore: ObservableObject {
                 offlineMember.isLive = false
                 offlineMember.liveStartedAt = nil
                 offlineMember.liveTitle = nil
+                offlineMember.liveCategory = nil
                 offlineMember.liveViewerCount = nil
                 offlineMember.channelImageURL = nil
                 offlineMember.livePlatformURL = nil
@@ -80,6 +81,7 @@ final class MockHubStore: ObservableObject {
             updatedMember.isLive = displayLive
             updatedMember.liveStartedAt = displayLive ? status.startedAt.flatMap(Self.parseInstant) : nil
             updatedMember.liveTitle = displayLive ? status.title : nil
+            updatedMember.liveCategory = displayLive ? LiveStatusFormatter.liveCategoryText(status.liveCategory) : nil
             updatedMember.liveViewerCount = displayLive ? status.viewerCount : nil
             updatedMember.channelImageURL = status.channelImageUrl.flatMap(URL.init(string:))
             updatedMember.livePlatformURL = displayLive ? status.platformUrl.flatMap(URL.init(string:)) : nil

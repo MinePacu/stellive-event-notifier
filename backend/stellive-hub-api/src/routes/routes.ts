@@ -90,6 +90,7 @@ export interface AppRouteDependencies {
         generationId: string;
           isLive: boolean;
           title?: string;
+          liveCategory?: string;
           viewerCount?: number;
           startedAt?: string;
           channelImageUrl?: string;
@@ -212,6 +213,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
         platform: "chzzk",
         isLive: status.isLive,
         title: status.title,
+        liveCategory: status.liveCategory,
         viewerCount: status.viewerCount,
         startedAt: status.startedAt,
         channelImageUrl: status.channelImageUrl,
@@ -230,6 +232,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
         platform: "chzzk",
         isLive: index === 0,
         title: index === 0 ? "Mock live status" : undefined,
+        liveCategory: index === 0 ? "Just Chatting" : undefined,
         viewerCount: index === 0 ? 1234 : undefined,
         startedAt: index === 0 ? "2026-06-02T09:00:00.000Z" : undefined,
         platformUrl: index === 0 ? "https://chzzk.naver.com/live/45e71a76e949e16a34764deb962f9d9f" : undefined,

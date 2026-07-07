@@ -48,6 +48,7 @@ describe("ChzzkApiClient client-auth live list", () => {
             {
               channelId: "chzzk-channel-id",
               liveTitle: "Live title",
+              liveCategoryValue: "Just Chatting",
               channelImageUrl: "https://img.example/yuni.jpg",
               status: "OPEN",
               openDate: "2026-06-11T03:00:00.000Z",
@@ -62,10 +63,38 @@ describe("ChzzkApiClient client-auth live list", () => {
       channelId: "chzzk-channel-id",
       isLive: true,
       title: "Live title",
+      liveCategory: "Just Chatting",
       channelImageUrl: "https://img.example/yuni.jpg",
       openDate: "2026-06-11T03:00:00.000Z",
       viewerCount: 1234,
       platformUrl: "https://chzzk.naver.com/live/chzzk-channel-id",
+      sourceVerificationState: "verified"
+    });
+  });
+
+  it("falls back to liveCategory when liveCategoryValue is missing", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        code: 200,
+        content: {
+          data: [
+            {
+              channelId: "chzzk-channel-id",
+              liveTitle: "Fallback category live",
+              liveCategory: "Talk",
+              channelImageUrl: "https://img.example/fallback-category.jpg",
+              status: "OPEN"
+            }
+          ]
+        }
+      })
+    );
+
+    await expect(client(fetchMock).getLiveStatus("chzzk-channel-id")).resolves.toMatchObject({
+      channelId: "chzzk-channel-id",
+      isLive: true,
+      title: "Fallback category live",
+      liveCategory: "Talk",
       sourceVerificationState: "verified"
     });
   });

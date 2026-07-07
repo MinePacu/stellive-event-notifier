@@ -163,6 +163,7 @@ data class HubMember(
     val realtimeEnabled: Boolean = false,
     val liveStartedAt: Instant? = null,
     val liveTitle: String? = null,
+    val liveCategory: String? = null,
     val liveViewerCount: Int? = null,
     val livePlatformUrl: String? = null,
     val liveLastCheckedAt: Instant? = null,

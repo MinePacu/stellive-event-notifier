@@ -110,6 +110,7 @@ struct LiveStatusResponse: Codable, Equatable {
     let platform: String?
     let isLive: Bool
     let title: String?
+    let liveCategory: String?
     let viewerCount: Int?
     let startedAt: String?
     let channelImageUrl: String?

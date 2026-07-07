@@ -807,4 +807,7 @@ object MainUiPolicy {
 
     fun liveTitleText(title: String?): String =
         title?.trim()?.takeIf { it.isNotEmpty() } ?: "방송 제목 확인 중"
+
+    fun liveCategoryText(category: String?): String? =
+        category?.trim()?.takeIf { it.isNotEmpty() }
 }

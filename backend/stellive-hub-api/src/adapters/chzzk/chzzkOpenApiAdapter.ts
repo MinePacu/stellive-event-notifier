@@ -90,6 +90,7 @@ function toLiveStatusInput(
     generationId: member.generationId,
     isLive,
     title: isVerified ? status.title : undefined,
+    liveCategory: isVerified ? status.liveCategory : undefined,
     thumbnailUrl: normalizeRuntimeImageUrl(status.channelImageUrl),
     viewerCount: isVerified ? status.viewerCount : undefined,
     startedAt,

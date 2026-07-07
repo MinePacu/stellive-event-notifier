@@ -2523,6 +2523,19 @@ private fun liveMemberRow(member: HubMember, showOrderControls: Boolean = false)
             setLineSpacing(0f, 1.1f)
         })
         if (member.isLive) {
+            MainUiPolicy.liveCategoryText(member.liveCategory)?.let { category ->
+                addView(Chip(context).apply {
+                    text = category
+                    isCheckable = false
+                    chipMinHeight = dp(24).toFloat()
+                    textSize = 11f
+                    typeface = Typeface.DEFAULT_BOLD
+                    chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_success_soft)
+                    setTextColor(color(R.color.hub_text_muted))
+                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    topMargin = dp(4)
+                })
+            }
             member.livePlatformUrl?.takeIf { it.startsWith("https://") }?.let { url ->
                 addView(Chip(context).apply {
                     text = "CHZZK 열기"

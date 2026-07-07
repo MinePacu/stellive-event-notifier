@@ -186,6 +186,8 @@ class MainUiPolicyTest {
         assertNull(MainUiPolicy.viewerCountText(null))
         assertEquals("방송 제목 확인 중", MainUiPolicy.liveTitleText(" "))
         assertEquals("유니랑 밤 산책 게임하고 노래 조금", MainUiPolicy.liveTitleText("유니랑 밤 산책 게임하고 노래 조금"))
+        assertEquals("Just Chatting", MainUiPolicy.liveCategoryText("  Just Chatting  "))
+        assertNull(MainUiPolicy.liveCategoryText(" "))
     }
 
     @Test

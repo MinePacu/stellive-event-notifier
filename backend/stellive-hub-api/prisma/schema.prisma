@@ -94,6 +94,7 @@ model LiveStatus {
   generationId        String
   isLive              Boolean
   title               String?
+  liveCategory        String?
   thumbnailUrl        String?
   viewerCount         Int?
   startedAt           DateTime?

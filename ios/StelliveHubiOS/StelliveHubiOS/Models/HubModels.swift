@@ -1123,6 +1123,7 @@ struct HubMember: Identifiable, Hashable {
     var realtimeEnabled: Bool
     var liveStartedAt: Date? = nil
     var liveTitle: String? = nil
+    var liveCategory: String? = nil
     var liveViewerCount: Int? = nil
     var channelImageURL: URL? = nil
     var profileImageURL: URL? = nil
@@ -1148,6 +1149,7 @@ struct HubMember: Identifiable, Hashable {
         realtimeEnabled: Bool,
         liveStartedAt: Date? = nil,
         liveTitle: String? = nil,
+        liveCategory: String? = nil,
         liveViewerCount: Int? = nil,
         channelImageURL: URL? = nil,
         profileImageURL: URL? = nil,
@@ -1172,6 +1174,7 @@ struct HubMember: Identifiable, Hashable {
         self.realtimeEnabled = realtimeEnabled
         self.liveStartedAt = liveStartedAt
         self.liveTitle = liveTitle
+        self.liveCategory = liveCategory
         self.liveViewerCount = liveViewerCount
         self.channelImageURL = channelImageURL
         self.profileImageURL = profileImageURL
@@ -1216,6 +1219,11 @@ enum LiveStatusFormatter {
     static func liveTitleText(_ title: String?) -> String {
         let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? "방송 제목 확인 중" : trimmed
+    }
+
+    static func liveCategoryText(_ category: String?) -> String? {
+        let trimmed = category?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 

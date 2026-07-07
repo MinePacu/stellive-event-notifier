@@ -34,7 +34,7 @@ describe("ChzzkOpenApiAdapter", () => {
     const adapter = createAdapter({
       previous: { isLive: false },
       writes,
-      statuses: [liveStatus({ isLive: true, openDate: "2026-06-11T03:00:00.000Z" })]
+      statuses: [liveStatus({ isLive: true, liveCategory: "Just Chatting", openDate: "2026-06-11T03:00:00.000Z" })]
     });
 
     await adapter.pollLiveStatuses();
@@ -43,6 +43,7 @@ describe("ChzzkOpenApiAdapter", () => {
       memberId: "ayatsuno-yuni",
       generationId: "gen1",
       isLive: true,
+      liveCategory: "Just Chatting",
       startedAt: new Date("2026-06-11T03:00:00.000Z"),
       sourceVerificationState: "verified"
     });
@@ -94,6 +95,7 @@ describe("ChzzkOpenApiAdapter", () => {
       statuses: [liveStatus({
         isLive: true,
         title: "Unverified title",
+        liveCategory: "Talk",
         viewerCount: 123,
         openDate: "2026-06-11T03:00:00.000Z",
         sourceVerificationState: "verify_required"
@@ -113,6 +115,7 @@ describe("ChzzkOpenApiAdapter", () => {
     });
     expect(writes[0]).toMatchObject({
       title: undefined,
+      liveCategory: undefined,
       viewerCount: undefined,
       startedAt: undefined
     });
@@ -202,6 +205,7 @@ function previousRecord(previous: { isLive: boolean; sourceVerificationState?: s
     generationId: "gen1",
     isLive,
     title: null,
+    liveCategory: null,
     thumbnailUrl: null,
     viewerCount: null,
     startedAt: previousTransition,

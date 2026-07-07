@@ -61,6 +61,7 @@ final class ServerLiveStatusMappingTests: XCTestCase {
                           "platform": "chzzk",
                           "isLive": true,
                           "title": "Live title",
+                          "liveCategory": "Just Chatting",
                       "viewerCount": 123,
                       "startedAt": "2026-06-11T03:00:00.000Z",
                       "channelImageUrl": "https://img.example/yuni.jpg",
@@ -74,6 +75,7 @@ final class ServerLiveStatusMappingTests: XCTestCase {
                           "platform": "chzzk",
                           "isLive": true,
                           "title": null,
+                          "liveCategory": "Talk",
                           "viewerCount": 456,
                           "startedAt": "2026-06-11T03:00:00.000Z",
                           "channelImageUrl": "https://img.example/huya.jpg",
@@ -103,6 +105,7 @@ final class ServerLiveStatusMappingTests: XCTestCase {
         XCTAssertTrue(yuni.isLive)
         XCTAssertEqual(yuni.liveStartedAt, ISO8601DateFormatter.withFractionalSeconds.date(from: "2026-06-11T03:00:00.000Z"))
         XCTAssertEqual(yuni.liveTitle, "Live title")
+        XCTAssertEqual(yuni.liveCategory, "Just Chatting")
         XCTAssertEqual(yuni.liveViewerCount, 123)
         XCTAssertEqual(yuni.channelImageURL, URL(string: "https://img.example/yuni.jpg"))
         XCTAssertEqual(yuni.profileImageURL, URL(string: "https://yt.example/yuni.jpg"))
@@ -113,6 +116,7 @@ final class ServerLiveStatusMappingTests: XCTestCase {
         XCTAssertFalse(huya.isLive)
         XCTAssertNil(huya.liveStartedAt)
         XCTAssertNil(huya.liveTitle)
+        XCTAssertNil(huya.liveCategory)
         XCTAssertNil(huya.liveViewerCount)
         XCTAssertEqual(huya.channelImageURL, URL(string: "https://img.example/huya.jpg"))
         XCTAssertEqual(huya.profileImageURL, URL(string: "https://yt.example/huya.jpg"))
@@ -142,6 +146,8 @@ final class ServerLiveStatusMappingTests: XCTestCase {
         XCTAssertNil(LiveStatusFormatter.viewerCountText(nil))
         XCTAssertEqual(LiveStatusFormatter.liveTitleText(" "), "방송 제목 확인 중")
         XCTAssertEqual(LiveStatusFormatter.liveTitleText("유니랑 밤 산책 게임하고 노래 조금"), "유니랑 밤 산책 게임하고 노래 조금")
+        XCTAssertEqual(LiveStatusFormatter.liveCategoryText("  Just Chatting  "), "Just Chatting")
+        XCTAssertNil(LiveStatusFormatter.liveCategoryText(" "))
     }
 
     func testOrderedLiveMembersUsesPriorityThenCatalogOrder() {

@@ -17,6 +17,8 @@ const liveItemSchema = z
     channelId: z.string().optional(),
     liveId: z.union([z.string(), z.number()]).optional(),
     liveTitle: z.string().optional(),
+    liveCategoryValue: z.string().nullable().optional(),
+    liveCategory: z.string().nullable().optional(),
     title: z.string().optional(),
     status: z.string().optional(),
     liveStatus: z.string().optional(),
@@ -70,6 +72,7 @@ export interface ChzzkNormalizedLiveStatus {
   channelId: string;
   isLive: boolean;
   title?: string;
+  liveCategory?: string;
   channelImageUrl?: string;
   openDate?: string;
   viewerCount?: number;
@@ -127,6 +130,11 @@ function parseViewerCount(value: number | string | undefined): number | undefine
   return undefined;
 }
 
+function normalizedCategory(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim() ?? "";
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function buildPlatformUrl(channelId: string): string {
   return `${channelUrl}/${encodeURIComponent(channelId)}`;
 }
@@ -166,6 +174,7 @@ function normalizeLiveStatus(
     channelId,
     isLive: status ? isLiveStatus(status) : hasLiveEvidence(item),
     title: item.liveTitle ?? item.title,
+    liveCategory: normalizedCategory(item.liveCategoryValue) ?? normalizedCategory(item.liveCategory),
     channelImageUrl: item.channelImageUrl ?? undefined,
     openDate: item.openDate ?? item.liveStartDate,
     viewerCount: parseViewerCount(item.concurrentUserCount ?? item.viewerCount),

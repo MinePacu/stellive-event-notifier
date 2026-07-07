@@ -88,6 +88,18 @@ private struct LiveMemberRow: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
+                if member.isLive, let category = LiveStatusFormatter.liveCategoryText(member.liveCategory) {
+                    Text(category)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+                        )
+                }
+
                 if member.isLive, let livePlatformURL = member.livePlatformURL {
                     Link("CHZZK에서 보기", destination: livePlatformURL)
                         .font(.caption.weight(.semibold))

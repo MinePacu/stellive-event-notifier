@@ -46,7 +46,7 @@ class MockHubRepository : HubRepository {
     )
 
     val members = listOf(
-        HubMember("ayatsuno-yuni", "아야츠노 유니", "Ayatsuno Yuni", "gen1", "1기생", "Everys", CatalogRole.MEMBER, chzzkChannelId = "45e71a76e949e16a34764deb962f9d9f", youtubeHandle = "@ayatsunoyuni", xHandle = "AyatsunoYuni", isPerson = true, isLive = true, realtimeEnabled = true, liveStartedAt = Instant.parse("2026-06-02T09:00:00Z")),
+        HubMember("ayatsuno-yuni", "아야츠노 유니", "Ayatsuno Yuni", "gen1", "1기생", "Everys", CatalogRole.MEMBER, chzzkChannelId = "45e71a76e949e16a34764deb962f9d9f", youtubeHandle = "@ayatsunoyuni", xHandle = "AyatsunoYuni", isPerson = true, isLive = true, realtimeEnabled = true, liveStartedAt = Instant.parse("2026-06-02T09:00:00Z"), liveCategory = "Just Chatting"),
         HubMember("sakihane-huya", "사키하네 후야", "Sakihane Huya", "gen1", "1기생", "Everys", CatalogRole.MEMBER, chzzkChannelId = "36ddb9bb4f17593b60f1b63cec86611d", youtubeHandle = "@Sakihanechannel", xHandle = "verify_required", isPerson = true),
         HubMember("shirayuki-hina", "시라유키 히나", "Shirayuki Hina", "gen2", "2기생", "Universe", CatalogRole.MEMBER, chzzkChannelId = "b044e3a3b9259246bc92e863e7d3f3b8", isPerson = true),
         HubMember("neneko-mashiro", "네네코 마시로", "Neneko Mashiro", "gen2", "2기생", "Universe", CatalogRole.MEMBER, chzzkChannelId = "4515b179f86b67b4981e16190817c580", isPerson = true),

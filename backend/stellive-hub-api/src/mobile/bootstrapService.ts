@@ -85,6 +85,7 @@ function toMobileDisplayLiveStatus(status: LiveStatus): LiveStatus {
     ...status,
     isLive: false,
     title: undefined,
+    liveCategory: undefined,
     viewerCount: undefined,
     startedAt: undefined,
   };

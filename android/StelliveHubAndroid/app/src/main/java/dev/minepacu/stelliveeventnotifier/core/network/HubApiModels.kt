@@ -68,6 +68,7 @@ data class LiveStatusDto(
     val platform: String? = null,
     val isLive: Boolean,
     val title: String? = null,
+    val liveCategory: String? = null,
     val viewerCount: Int? = null,
     val startedAt: String? = null,
     val channelImageUrl: String? = null,

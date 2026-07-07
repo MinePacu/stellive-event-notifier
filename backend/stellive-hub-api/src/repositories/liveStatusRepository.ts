@@ -6,6 +6,7 @@ interface LiveStatusRecord {
   generationId: string;
   isLive: boolean;
   title: string | null;
+  liveCategory: string | null;
   thumbnailUrl: string | null;
   viewerCount: number | null;
   startedAt: Date | null;
@@ -20,6 +21,7 @@ interface LiveStatusDiagnosticSelect {
   generationId: true;
   isLive: true;
   title: true;
+  liveCategory: true;
   thumbnailUrl: true;
   viewerCount: true;
   startedAt: true;
@@ -37,6 +39,7 @@ interface LiveStatusWriteData {
   generationId: string;
   isLive: boolean;
   title: string | null;
+  liveCategory: string | null;
   thumbnailUrl: string | null;
   viewerCount: number | null;
   startedAt: Date | null;
@@ -70,6 +73,7 @@ export interface LiveStatusWriteInput {
   generationId: string;
   isLive: boolean;
   title?: string;
+  liveCategory?: string;
   thumbnailUrl?: string;
   viewerCount?: number;
   startedAt?: Date;
@@ -84,6 +88,7 @@ const liveStatusDiagnosticSelect: LiveStatusDiagnosticSelect = {
   generationId: true,
   isLive: true,
   title: true,
+  liveCategory: true,
   thumbnailUrl: true,
   viewerCount: true,
   startedAt: true,
@@ -108,6 +113,7 @@ function toDiagnostic(record: LiveStatusRecord): LiveStatusDiagnostic {
     generationId: record.generationId,
     isLive: record.isLive,
     title: record.title ?? undefined,
+    liveCategory: record.liveCategory ?? undefined,
     channelImageUrl: record.thumbnailUrl ?? undefined,
     viewerCount: record.viewerCount ?? undefined,
     startedAt: record.startedAt?.toISOString(),
@@ -123,6 +129,7 @@ function toWriteData(input: LiveStatusWriteInput): LiveStatusWriteData {
     generationId: input.generationId,
     isLive: input.isLive,
     title: input.title ?? null,
+    liveCategory: input.liveCategory ?? null,
     thumbnailUrl: input.thumbnailUrl ?? null,
     viewerCount: input.viewerCount ?? null,
     startedAt: input.startedAt ?? null,
@@ -150,6 +157,7 @@ export class LiveStatusRepository {
         generationId: data.generationId,
         isLive: data.isLive,
         title: data.title,
+        liveCategory: data.liveCategory,
         viewerCount: data.viewerCount,
         startedAt: data.startedAt,
         platformUrl: data.platformUrl,

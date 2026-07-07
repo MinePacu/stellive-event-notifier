@@ -1907,6 +1907,10 @@ components:
           type:
             - string
             - "null"
+        liveCategory:
+          type:
+            - string
+            - "null"
         channelImageUrl:
           type:
             - string

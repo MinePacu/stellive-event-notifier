@@ -74,6 +74,7 @@ class ServerHubRepositoryTest {
         assertTrue(yuni.isLive)
         assertEquals("2026-06-11T03:00:00Z", yuni.liveStartedAt.toString())
         assertEquals("유니랑 밤 산책 게임하고 노래 조금", yuni.liveTitle)
+        assertEquals("Just Chatting", yuni.liveCategory)
         assertEquals(1234, yuni.liveViewerCount)
         assertEquals("https://chzzk.naver.com/live/chzzk-channel-id", yuni.livePlatformUrl)
         assertEquals("https://img.example/yuni.jpg", yuni.channelImageUrl)
@@ -83,6 +84,7 @@ class ServerHubRepositoryTest {
         assertFalse(huya.isLive)
         assertNull(huya.liveStartedAt)
         assertNull(huya.liveTitle)
+        assertNull(huya.liveCategory)
         assertNull(huya.liveViewerCount)
         assertNull(huya.livePlatformUrl)
         assertEquals("2026-06-11T03:02:00Z", huya.liveLastCheckedAt.toString())
@@ -415,6 +417,7 @@ class ServerHubRepositoryTest {
                     platform = "chzzk",
                     isLive = true,
                     title = "유니랑 밤 산책 게임하고 노래 조금",
+                    liveCategory = "Just Chatting",
                     viewerCount = 1234,
                     startedAt = "2026-06-11T03:00:00.000Z",
                     channelImageUrl = "https://img.example/yuni.jpg",
@@ -428,6 +431,7 @@ class ServerHubRepositoryTest {
                         platform = "chzzk",
                         isLive = true,
                         title = null,
+                        liveCategory = "Talk",
                         viewerCount = 456,
                         startedAt = "2026-06-11T03:00:00.000Z",
                         channelImageUrl = "https://img.example/huya.jpg",
