@@ -12,10 +12,13 @@
 - Firebase 서비스 계정 파일 기반 FCM 설정, 발송 rate limiter, 서비스 공지 topic 구독/해제 흐름을 추가했습니다.
 - Android와 iOS 앱의 push 등록, foreground 알림 표시, 알림 payload 필드 처리를 보강했습니다.
 - Backend와 모바일 push 경로의 FCM client, device registration, preferences, load reduction 정책 테스트를 보강했습니다.
+- 검증된 CHZZK 라이브 상태의 방송 카테고리를 서버 수집·모바일 bootstrap 응답·Android/iOS 라이브 카드에 표시하도록 추가했습니다.
 
 #### Changed
 - 알림 worker와 payload 생성 경로가 사용자 선호, load reduction 정책, best-effort 모바일 전달 조건을 더 일관되게 반영하도록 개선했습니다.
 - 모바일 앱과 서버 API 간 push 관련 모델을 맞추고 서버-mediated preference enforcement 흐름을 정리했습니다.
+- Android 라이브 탭 카드를 홈 라이브 카드와 맞춰 정리하고, 보이는 순서 변경 핸들 대신 카드 길게 누르기 기반 순서 변경과 접근성 이동 액션을 유지했습니다.
+- Android 라이브 카드의 방송 카테고리와 CHZZK 열기 Chip을 같은 보조 row에 배치하고 정보 태그와 액션 버튼의 시각 위계를 구분했습니다.
 
 #### Fixed
 - 모바일 route dependency binding과 FCM 배포 및 token sync 경로에서 발생할 수 있는 불안정한 동작을 수정했습니다.
