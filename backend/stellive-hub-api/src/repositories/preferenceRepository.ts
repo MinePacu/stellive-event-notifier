@@ -8,6 +8,7 @@ type PreferenceData = Pick<
   | "keywordsAllowlist"
   | "keywordsBlocklist"
   | "maxNotificationsPerMinute"
+  | "serviceAnnouncementsEnabled"
 >;
 
 interface PreferenceRecord {
@@ -53,6 +54,9 @@ function definedPreferenceData(
   if (preference.maxNotificationsPerMinute !== undefined) {
     data.maxNotificationsPerMinute = preference.maxNotificationsPerMinute;
   }
+  if (preference.serviceAnnouncementsEnabled !== undefined) {
+    data.serviceAnnouncementsEnabled = preference.serviceAnnouncementsEnabled;
+  }
 
   return Object.keys(data).length > 0 ? data : null;
 }
@@ -83,6 +87,7 @@ function toPreference(record: PreferenceRecord): UserNotificationPreference {
     keywordsAllowlist: data.keywordsAllowlist,
     keywordsBlocklist: data.keywordsBlocklist,
     maxNotificationsPerMinute: data.maxNotificationsPerMinute,
+    serviceAnnouncementsEnabled: data.serviceAnnouncementsEnabled,
     updatedAt: toIsoString(record.updatedAt),
   } as UserNotificationPreference;
 }

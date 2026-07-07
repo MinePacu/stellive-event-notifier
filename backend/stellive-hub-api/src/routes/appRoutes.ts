@@ -43,6 +43,10 @@ export interface MobileAppRouteDependencies {
       clientUpdatedAt: string;
     }): Promise<{ preferences: UserNotificationPreference[]; updatedAt: string }>;
   };
+  serviceTopicSubscriptions?: {
+    syncToken?(input: { token: string; preferences: UserNotificationPreference[] }): Promise<unknown>;
+    syncDevice?(input: { deviceId: string; preferences: UserNotificationPreference[] }): Promise<unknown>;
+  };
 }
 
 export interface RegisterAppRouteOptions {
@@ -107,9 +111,9 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       timezone?: string;
       appVersion?: string;
     };
-    const register = options.dependencies?.devices?.register;
-    const result = register
-      ? await register({
+    const devices = options.dependencies?.devices;
+    const result = devices?.register
+      ? await devices.register({
           deviceId: body.deviceId,
           platform: parsePlatform(body.platform),
           locale: body.locale,
@@ -144,9 +148,9 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       return reply.code(error.statusCode).send(error.payload);
     }
 
-    const updateToken = options.dependencies?.devices?.updateToken;
-    const result = updateToken
-      ? await updateToken({
+    const devices = options.dependencies?.devices;
+    const result = devices?.updateToken
+      ? await devices.updateToken({
           deviceId: body.deviceId,
           platform: parsePlatform(body.platform),
           provider,
@@ -156,6 +160,14 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
           appVersion: body.appVersion,
         })
       : { updated: true as const, tokenStatus: "active" as const };
+    if (options.dependencies?.serviceTopicSubscriptions?.syncToken) {
+      try {
+        const preferences = await options.dependencies.preferences?.listForDevice?.(body.deviceId) ?? [];
+        await options.dependencies.serviceTopicSubscriptions.syncToken({ token: body.token, preferences });
+      } catch (error) {
+        request.log.warn({ error }, "service topic subscription sync failed after token update");
+      }
+    }
     return { ...result, serverTime: new Date().toISOString() };
   });
 
@@ -166,9 +178,9 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       return reply.code(error.statusCode).send(error.payload);
     }
 
-    const listForDevice = options.dependencies?.preferences?.listForDevice;
-    const rules = listForDevice
-      ? await listForDevice(deviceId)
+    const preferences = options.dependencies?.preferences;
+    const rules = preferences?.listForDevice
+      ? await preferences.listForDevice(deviceId)
       : fallbackPreferences.get(deviceId) ?? [];
     return {
       deviceId,
@@ -188,18 +200,32 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       return reply.code(error.statusCode).send(error.payload);
     }
 
-    const replaceForDevice = options.dependencies?.preferences?.replaceForDevice;
-    if (replaceForDevice) {
-      const result = await replaceForDevice({
+    const preferences = options.dependencies?.preferences;
+    if (preferences?.replaceForDevice) {
+      const result = await preferences.replaceForDevice({
         deviceId: body.deviceId,
         preferences: body.preferences ?? [],
         clientUpdatedAt: body.clientUpdatedAt ?? new Date().toISOString(),
       });
+      if (options.dependencies?.serviceTopicSubscriptions?.syncDevice) {
+        try {
+          await options.dependencies.serviceTopicSubscriptions.syncDevice({ deviceId: body.deviceId, preferences: result.preferences });
+        } catch (error) {
+          request.log.warn({ error }, "service topic subscription sync failed after preference update");
+        }
+      }
       return { deviceId: body.deviceId, ...result };
     }
 
     const rules = body.preferences ?? [];
     fallbackPreferences.set(body.deviceId, rules);
+    if (options.dependencies?.serviceTopicSubscriptions?.syncDevice) {
+      try {
+        await options.dependencies.serviceTopicSubscriptions.syncDevice({ deviceId: body.deviceId, preferences: rules });
+      } catch (error) {
+        request.log.warn({ error }, "service topic subscription sync failed after preference update");
+      }
+    }
     return { deviceId: body.deviceId, preferences: rules, updatedAt: new Date().toISOString() };
   });
 }

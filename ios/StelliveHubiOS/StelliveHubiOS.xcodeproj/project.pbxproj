@@ -21,6 +21,7 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (ko, en, Base);
 			mainGroup = 555555555555555555555555;
+			packageReferences = (E30000000000000000000005);
 			productRefGroup = 666666666666666666666666;
 			projectDirPath = "";
 			projectRoot = "";
@@ -39,7 +40,7 @@
 		};
 		111000000000000000000001 = {
 			isa = PBXGroup;
-			children = (111000000000000000000002, 111000000000000000000003, 111000000000000000000005, B00000000000000000000000, 111000000000000000000006);
+			children = (111000000000000000000002, 111000000000000000000003, 111000000000000000000005, B00000000000000000000000, B30000000000000000000001, 111000000000000000000006);
 			name = App;
 			sourceTree = "<group>";
 		};
@@ -52,7 +53,7 @@
 		};
 		111000000000000000000003 = {
 			isa = PBXGroup;
-			children = (B00000000000000000000002, B00000000000000000000003, B00000000000000000000004, B0000000000000000000000D, B0000000000000000000000E, B0000000000000000000000F, B00000000000000000000010, B00000000000000000000011, B00000000000000000000012, B00000000000000000000013, B00000000000000000000014, B00000000000000000000015, B00000000000000000000016);
+			children = (B00000000000000000000002, B00000000000000000000003, B00000000000000000000004, B0000000000000000000000D, B0000000000000000000000E, B0000000000000000000000F, B00000000000000000000010, B00000000000000000000011, B00000000000000000000012, B00000000000000000000013, B00000000000000000000014, B00000000000000000000015, B30000000000000000000002, B00000000000000000000016);
 			name = Services;
 			path = Services;
 			sourceTree = "<group>";
@@ -84,6 +85,7 @@
 			sourceTree = "<group>";
 		};
 		B00000000000000000000000 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
+		B30000000000000000000001 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		B00000000000000000000001 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubModels.swift; sourceTree = "<group>"; };
 		B00000000000000000000002 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockHubStore.swift; sourceTree = "<group>"; };
 		B00000000000000000000003 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeStreamClient.swift; sourceTree = "<group>"; };
@@ -97,6 +99,7 @@ B00000000000000000000012 = { isa = PBXFileReference; lastKnownFileType = sourcec
 		B00000000000000000000013 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubAPIClient.swift; sourceTree = "<group>"; };
 		B00000000000000000000014 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceIDStore.swift; sourceTree = "<group>"; };
 		B00000000000000000000015 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushTokenSyncer.swift; sourceTree = "<group>"; };
+		B30000000000000000000002 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistrationCoordinator.swift; sourceTree = "<group>"; };
 		B00000000000000000000016 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerHubStore.swift; sourceTree = "<group>"; };
 		C00000000000000000000010 = { isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Default.xcconfig; sourceTree = SOURCE_ROOT; };
 		111000000000000000000006 = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -121,6 +124,7 @@ B00000000000000000000012 = { isa = PBXFileReference; lastKnownFileType = sourcec
 		999999999999999999999999 = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StelliveHubiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AAAAAAAAAAAAAAAAAAAAAAAA = { isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StelliveHubiOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D00000000000000000000000 = { isa = PBXBuildFile; fileRef = B00000000000000000000000; };
+		D30000000000000000000001 = { isa = PBXBuildFile; fileRef = B30000000000000000000001; };
 		D00000000000000000000001 = { isa = PBXBuildFile; fileRef = B00000000000000000000001; };
 		D00000000000000000000002 = { isa = PBXBuildFile; fileRef = B00000000000000000000002; };
 		D00000000000000000000003 = { isa = PBXBuildFile; fileRef = B00000000000000000000003; };
@@ -147,7 +151,10 @@ D10000000000000000000007 = { isa = PBXBuildFile; fileRef = B00000000000000000000
 		D20000000000000000000003 = { isa = PBXBuildFile; fileRef = C00000000000000000000004; };
 		D20000000000000000000004 = { isa = PBXBuildFile; fileRef = B00000000000000000000013; };
 		D20000000000000000000007 = { isa = PBXBuildFile; fileRef = B00000000000000000000014; };
+		D30000000000000000000005 = { isa = PBXBuildFile; fileRef = B00000000000000000000015; };
 		D20000000000000000000006 = { isa = PBXBuildFile; fileRef = B00000000000000000000016; };
+		D30000000000000000000002 = { isa = PBXBuildFile; fileRef = B30000000000000000000002; };
+		D30000000000000000000004 = { isa = PBXBuildFile; productRef = E30000000000000000000007; };
 		D20000000000000000000005 = { isa = PBXBuildFile; fileRef = B00000000000000000000018; };
 		D20000000000000000000008 = { isa = PBXBuildFile; fileRef = B00000000000000000000019; };
 		D20000000000000000000009 = { isa = PBXBuildFile; fileRef = C00000000000000000000005; };
@@ -161,6 +168,7 @@ D10000000000000000000007 = { isa = PBXBuildFile; fileRef = B00000000000000000000
 			buildRules = ();
 			dependencies = (900000000000000000000013);
 			name = StelliveHubiOS;
+			packageProductDependencies = (E30000000000000000000007);
 			productName = StelliveHubiOS;
 			productReference = 999999999999999999999999;
 			productType = "com.apple.product-type.application";
@@ -176,8 +184,8 @@ D10000000000000000000007 = { isa = PBXBuildFile; fileRef = B00000000000000000000
 			productReference = AAAAAAAAAAAAAAAAAAAAAAAA;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		F00000000000000000000000 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D00000000000000000000000, D00000000000000000000001, D00000000000000000000002, D00000000000000000000003, D00000000000000000000004, D10000000000000000000001, D10000000000000000000002, D10000000000000000000003, D10000000000000000000004, D10000000000000000000005, D10000000000000000000007, D20000000000000000000004, D20000000000000000000007, D20000000000000000000006, D20000000000000000000001, D20000000000000000000005, D20000000000000000000008, D00000000000000000000005, D00000000000000000000006, D00000000000000000000007, D00000000000000000000008, D00000000000000000000009, D0000000000000000000000A, D0000000000000000000000E, D0000000000000000000000F); runOnlyForDeploymentPostprocessing = 0; };
-		F00000000000000000000001 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		F00000000000000000000000 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D00000000000000000000000, D30000000000000000000001, D00000000000000000000001, D00000000000000000000002, D00000000000000000000003, D00000000000000000000004, D10000000000000000000001, D10000000000000000000002, D10000000000000000000003, D10000000000000000000004, D10000000000000000000005, D10000000000000000000007, D20000000000000000000004, D20000000000000000000007, D30000000000000000000005, D30000000000000000000002, D20000000000000000000006, D20000000000000000000001, D20000000000000000000005, D20000000000000000000008, D00000000000000000000005, D00000000000000000000006, D00000000000000000000007, D00000000000000000000008, D00000000000000000000009, D0000000000000000000000A, D0000000000000000000000E, D0000000000000000000000F); runOnlyForDeploymentPostprocessing = 0; };
+		F00000000000000000000001 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (D30000000000000000000004); runOnlyForDeploymentPostprocessing = 0; };
 		F00000000000000000000002 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		F00000000000000000000003 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D0000000000000000000000B, D10000000000000000000006, D10000000000000000000008, D20000000000000000000002, D20000000000000000000003, D20000000000000000000009, D2000000000000000000000A); runOnlyForDeploymentPostprocessing = 0; };
 		F00000000000000000000004 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
@@ -206,10 +214,12 @@ D10000000000000000000007 = { isa = PBXBuildFile; fileRef = B00000000000000000000
 		E00000000000000000000001 = { isa = XCConfigurationList; buildConfigurations = (E00000000000000000000006, E00000000000000000000007); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		E00000000000000000000002 = { isa = XCBuildConfiguration; name = Debug; buildSettings = { SDKROOT = iphoneos; SWIFT_VERSION = 5.9; }; };
 		E00000000000000000000003 = { isa = XCBuildConfiguration; name = Release; buildSettings = { SDKROOT = iphoneos; SWIFT_VERSION = 5.9; }; };
-		E00000000000000000000004 = { isa = XCBuildConfiguration; name = Debug; baseConfigurationReference = C00000000000000000000010; buildSettings = { CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEFINES_MODULE = YES; DEVELOPMENT_TEAM = ""; ENABLE_PREVIEWS = YES; ENABLE_TESTABILITY = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = StelliveHubiOS/Info.plist; INFOPLIST_KEY_CFBundleDisplayName = "스텔라이브 알림 허브"; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news"; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; IPHONEOS_DEPLOYMENT_TARGET = 16.0; MARKETING_VERSION = 0.1.0; CODE_SIGN_ENTITLEMENTS = StelliveHubiOS/StelliveHubiOS.entitlements; PRODUCT_BUNDLE_IDENTIFIER = dev.minepacu.stelliveeventnotifier; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.9; }; };
-		E00000000000000000000005 = { isa = XCBuildConfiguration; name = Release; baseConfigurationReference = C00000000000000000000010; buildSettings = { CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = StelliveHubiOS/Info.plist; INFOPLIST_KEY_CFBundleDisplayName = "스텔라이브 알림 허브"; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news"; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; IPHONEOS_DEPLOYMENT_TARGET = 16.0; MARKETING_VERSION = 0.1.0; CODE_SIGN_ENTITLEMENTS = StelliveHubiOS/StelliveHubiOS.entitlements; PRODUCT_BUNDLE_IDENTIFIER = dev.minepacu.stelliveeventnotifier; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.9; }; };
+		E00000000000000000000004 = { isa = XCBuildConfiguration; name = Debug; baseConfigurationReference = C00000000000000000000010; buildSettings = { APS_ENVIRONMENT = development; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEFINES_MODULE = YES; DEVELOPMENT_TEAM = ""; ENABLE_PREVIEWS = YES; ENABLE_TESTABILITY = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = StelliveHubiOS/Info.plist; INFOPLIST_KEY_CFBundleDisplayName = "스텔라이브 알림 허브"; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news"; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; IPHONEOS_DEPLOYMENT_TARGET = 16.0; MARKETING_VERSION = 0.1.0; CODE_SIGN_ENTITLEMENTS = StelliveHubiOS/StelliveHubiOS.entitlements; PRODUCT_BUNDLE_IDENTIFIER = dev.minepacu.stelliveeventnotifier; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.9; }; };
+		E00000000000000000000005 = { isa = XCBuildConfiguration; name = Release; baseConfigurationReference = C00000000000000000000010; buildSettings = { APS_ENVIRONMENT = production; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = StelliveHubiOS/Info.plist; INFOPLIST_KEY_CFBundleDisplayName = "스텔라이브 알림 허브"; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news"; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; IPHONEOS_DEPLOYMENT_TARGET = 16.0; MARKETING_VERSION = 0.1.0; CODE_SIGN_ENTITLEMENTS = StelliveHubiOS/StelliveHubiOS.entitlements; PRODUCT_BUNDLE_IDENTIFIER = dev.minepacu.stelliveeventnotifier; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.9; }; };
 		E00000000000000000000006 = { isa = XCBuildConfiguration; name = Debug; buildSettings = { BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = dev.minepacu.stelliveeventnotifier.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.9; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StelliveHubiOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/StelliveHubiOS"; }; };
 		E00000000000000000000007 = { isa = XCBuildConfiguration; name = Release; buildSettings = { BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = dev.minepacu.stelliveeventnotifier.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.9; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StelliveHubiOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/StelliveHubiOS"; }; };
+		E30000000000000000000005 = { isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git"; requirement = { kind = upToNextMajorVersion; minimumVersion = 10.29.0; }; };
+		E30000000000000000000007 = { isa = XCSwiftPackageProductDependency; package = E30000000000000000000005; productName = FirebaseMessaging; };
 	};
 	rootObject = 111111111111111111111111;
 }

@@ -61,6 +61,8 @@ android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/
 
 `firebase-admin` import는 `push/fcmClient.ts`에만 허용한다. 다른 backend 파일이 Firebase SDK 타입을 직접 import해야 한다면 설계가 잘못된 것이다. 그 경우 `PushSender`, `PushSendResult`, `MinimalPushPayload` 같은 내부 타입으로 추상화해야 한다.
 
+FCM credential은 server-only secret이다. `FCM_SERVICE_ACCOUNT_FILE`이 설정되면 해당 JSON key 파일을 우선 사용하고, 설정되지 않은 경우에만 기존 `FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, `FCM_PRIVATE_KEY` 조합을 backward-compatible fallback으로 사용한다. 파일이 잘못되었거나 필수 필드가 없으면 split env로 조용히 fallback하지 않고 `fcm_invalid_service_account_file` safe failure로 비활성화한다. Firebase 공식 환경에서는 `GOOGLE_APPLICATION_CREDENTIALS`도 권장 방식으로 참고할 수 있지만, 이 프로젝트가 명시적으로 지원하는 파일 경로 env는 `FCM_SERVICE_ACCOUNT_FILE`이다. JSON key 파일과 그 실제 경로·값은 Git에 커밋하지 않는다.
+
 ## Backend 타입 설계
 
 ### `FcmClient`
@@ -333,10 +335,26 @@ Request contract:
 FCM env:
 
 ```env
+FCM_SERVICE_ACCOUNT_FILE=
 FCM_PROJECT_ID=
 FCM_CLIENT_EMAIL=
 FCM_PRIVATE_KEY=
+FCM_RATE_LIMIT_ENABLED=true
+FCM_SEND_MAX_PER_SECOND=500
+FCM_SEND_MAX_PER_MINUTE=30000
+FCM_SEND_BURST=1000
 ```
+
+## Traffic control and hybrid fan-out
+
+- 일반 이벤트는 preference resolution과 load reduction 이후 device token 직접 발송을 유지하며 topic/condition을 금지한다.
+- provider 전송 전 in-memory token bucket으로 초·분당 전송량과 burst를 제한한다.
+- quota/server unavailable 응답의 `retryAfterMs`가 있으면 worker 기본 1분·5분·15분·60분 backoff보다 우선하며, 기본 backoff에는 주입 가능한 jitter를 적용한다.
+- 동일 payload는 `sendEachForMulticast`로 최대 500 token씩 전송하고 결과를 device별 `PushSendResult`와 `DeliveryAttempt`로 다시 분리한다. 검증된 push image URL도 동일 visual field에 유지한다.
+- service-wide topic은 `service_all`, `service_incident`, `service_maintenance`, `service_version_update`만 허용한다. caller-supplied topic과 사용자별 fan-out topic은 금지한다.
+- topic 공지는 기존 external API log에 scope와 정규화된 provider 결과만 기록하며 payload와 token은 저장하지 않는다. 서비스 공지는 기본 ON이며 global OFF 또는 `serviceAnnouncementsEnabled=false`가 네 allowlisted topic을 모두 해제한다.
+- backend는 token 갱신과 preference 저장 후 topic membership을 동기화한다. 모바일은 설정 값을 왕복하지만 Firebase topic API를 직접 호출하지 않는다.
+- load reduction context는 `recentPushCandidatesInWindow`, `recentPushCount`, `rateLimiterSaturated` 확장점을 제공하며 이번 변경에서 summary 정책을 바꾸지 않는다.
 
 규칙:
 

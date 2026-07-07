@@ -14,6 +14,7 @@ export interface PushTargetDevice {
 
 export interface PushSender {
   sendToDevice(input: { device: PushTargetDevice; payload: MinimalPushPayload }): Promise<PushSendResult>;
+  sendToDevices?(input: { devices: PushTargetDevice[]; payload: MinimalPushPayload }): Promise<PushSendResult[]>;
 }
 
 export class FcmPushSender implements PushSender {
@@ -22,6 +23,13 @@ export class FcmPushSender implements PushSender {
   async sendToDevice(input: { device: PushTargetDevice; payload: MinimalPushPayload }): Promise<PushSendResult> {
     return this.fcmClient.send({
       token: input.device.pushToken,
+      payload: input.payload
+    });
+  }
+
+  async sendToDevices(input: { devices: PushTargetDevice[]; payload: MinimalPushPayload }): Promise<PushSendResult[]> {
+    return this.fcmClient.sendEach({
+      tokens: input.devices.map((device) => device.pushToken),
       payload: input.payload
     });
   }

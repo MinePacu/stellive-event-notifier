@@ -28,6 +28,8 @@ services:
       REDIS_URL: redis://redis:6379
     ports:
       - "4000:4000"
+    volumes:
+      - ${HOME}/secrets:/run/secrets:ro
     depends_on:
       - postgres
       - redis

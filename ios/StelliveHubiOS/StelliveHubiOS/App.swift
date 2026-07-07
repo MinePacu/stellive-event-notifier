@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct StelliveHubApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store: MockHubStore
     @StateObject private var serverStore: ServerHubStore
 
@@ -30,7 +31,7 @@ struct StelliveHubApp: App {
     }
 }
 
-private extension Bundle {
+extension Bundle {
     var hubBaseURL: URL? {
         guard
             let value = object(forInfoDictionaryKey: "HubBaseURL") as? String,

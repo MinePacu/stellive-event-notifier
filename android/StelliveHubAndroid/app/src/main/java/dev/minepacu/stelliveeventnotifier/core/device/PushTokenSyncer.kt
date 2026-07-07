@@ -30,7 +30,13 @@ class PushTokenSyncer(
             pendingTokenStore.savePendingToken(token)
             return
         }
-        sendToken(deviceId, token)
+        if (sendToken(deviceId, token)) {
+            if (pendingTokenStore.loadPendingToken() == token) {
+                pendingTokenStore.clearPendingToken()
+            }
+        } else {
+            pendingTokenStore.savePendingToken(token)
+        }
     }
 
     suspend fun flushPendingToken() {

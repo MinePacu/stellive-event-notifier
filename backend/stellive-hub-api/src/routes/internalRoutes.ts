@@ -19,6 +19,8 @@ import type {
 import type { ChzzkLiveAdapterCounts } from "../adapters/chzzk/chzzkOpenApiAdapter.js";
 import type { NotificationWorkerDrainInput, NotificationWorkerDrainResult } from "../jobs/notificationWorker.js";
 import type { AppEnv } from "../config/env.js";
+import { isServiceAnnouncementScope, type ServiceAnnouncementInput } from "../push/serviceAnnouncement.js";
+import type { PushSendResult } from "../push/fcmClient.js";
 import { productionHubCalendarSpecialDays } from "../hub-events/hubCalendarSpecialDayCatalog.js";
 import { buildSpecialDayOccurrences } from "../hub-events/hubCalendarSpecialDayMaterializer.js";
 import {
@@ -81,6 +83,9 @@ export interface InternalRouteDependencies {
   };
   notificationWorker?: {
     drain(input: NotificationWorkerDrainInput): MaybePromise<NotificationWorkerDrainResult>;
+  };
+  serviceAnnouncements?: {
+    send(input: ServiceAnnouncementInput): MaybePromise<PushSendResult>;
   };
   youtubeSubscriptionScheduler?: {
     renewSubscriptions(): MaybePromise<{
@@ -329,6 +334,34 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
       status: "disabled",
       reason: "notification_worker_not_configured"
     };
+  });
+
+  app.post("/v1/internal/notifications/service-announcements", async (request, reply) => {
+    const body = request.body as Record<string, unknown> | undefined;
+    const allowedKeys = ["scope", "title", "body", "appDeepLink", "platformUrl"];
+    if (
+      !body ||
+      Array.isArray(body) ||
+      Object.keys(body).some((key) => !allowedKeys.includes(key)) ||
+      !isServiceAnnouncementScope(body.scope) ||
+      typeof body.title !== "string" || body.title.trim().length === 0 ||
+      typeof body.body !== "string" || body.body.trim().length === 0 ||
+      typeof body.appDeepLink !== "string" ||
+      typeof body.platformUrl !== "string"
+    ) {
+      return reply.code(400).send({ error: "service_announcement_body_invalid" });
+    }
+    if (!dependencies.serviceAnnouncements) {
+      return reply.code(503).send({ error: "service_announcement_sender_not_configured" });
+    }
+    const result = await dependencies.serviceAnnouncements.send({
+      scope: body.scope,
+      title: body.title,
+      body: body.body,
+      appDeepLink: body.appDeepLink,
+      platformUrl: body.platformUrl
+    });
+    return { status: result.status, providerMessageId: result.providerMessageId, providerErrorCode: result.providerErrorCode, retryAfterMs: result.retryAfterMs };
   });
 
   app.post("/v1/internal/schedulers/youtube/renew-subscriptions", async () => {

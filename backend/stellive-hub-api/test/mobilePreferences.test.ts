@@ -74,6 +74,7 @@ describe("PreferenceRepository", () => {
         realtimePreference: "best_effort",
         keywordsBlocklist: ["spoiler"],
         maxNotificationsPerMinute: 3,
+        serviceAnnouncementsEnabled: false,
       },
       updatedAt: new Date("2026-06-11T01:00:00.000Z"),
     });
@@ -92,6 +93,7 @@ describe("PreferenceRepository", () => {
         realtimePreference: "best_effort",
         keywordsBlocklist: ["spoiler"],
         maxNotificationsPerMinute: 3,
+        serviceAnnouncementsEnabled: false,
         updatedAt: "2026-06-11T01:00:00.000Z",
       },
     ]);
@@ -106,7 +108,7 @@ describe("PreferenceRepository", () => {
       deviceId: "device-1",
       clientUpdatedAt: "2026-06-11T01:59:00.000Z",
       preferences: [
-        preference({ scope: "global", enabled: true }),
+        preference({ scope: "global", enabled: true, serviceAnnouncementsEnabled: false }),
         preference({ scope: "generation", generationId: "official", enabled: false }),
         preference({ scope: "event_type", eventType: "chzzk_chat", enabled: false }),
       ],
@@ -124,6 +126,9 @@ describe("PreferenceRepository", () => {
       enabled: false,
       explicitOverride: true,
     });
+    expect(records.find((record) => record.scope === "global")?.data).toMatchObject({
+      serviceAnnouncementsEnabled: false,
+    });
   });
 });
 
@@ -132,6 +137,25 @@ const routeEnv = {
 };
 
 describe("mobile preference routes", () => {
+  it("syncs service topics after preferences are replaced", async () => {
+    const synced: unknown[] = [];
+    const rules = [preference({ scope: "global", enabled: true, serviceAnnouncementsEnabled: false })];
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: { dependencies: {
+        preferences: { replaceForDevice: async () => ({ preferences: rules, updatedAt: "2026-07-06T00:00:00.000Z" }) },
+        serviceTopicSubscriptions: { async syncDevice(input) { synced.push(input); return { status: "synced" }; } }
+      } }
+    });
+
+    const response = await app.inject({ method: "PUT", url: "/v1/preferences", payload: { deviceId: "device-1", preferences: rules } });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(synced).toEqual([{ deviceId: "device-1", preferences: rules }]);
+  });
+
   it("returns preferences from the injected repository", async () => {
     const app = await buildApp({
       env: routeEnv,
