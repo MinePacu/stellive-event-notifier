@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NotificationWorker } from "../src/jobs/notificationWorker.js";
+import { calculateRetryDelayMs, NotificationWorker } from "../src/jobs/notificationWorker.js";
 import type { ClaimedNotificationJob } from "../src/jobs/notificationJobRepository.js";
 import type { PushSendResult } from "../src/push/fcmClient.js";
 import type { MinimalPushPayload } from "../src/push/pushPayloadFactory.js";
@@ -22,6 +22,7 @@ function event(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
     generationId: overrides.generationId ?? "official",
     title: overrides.title ?? "공식 굿즈 취소",
     body: overrides.body ?? "일정이 취소됐습니다.",
+    thumbnailUrl: overrides.thumbnailUrl,
     platformUrl: overrides.platformUrl ?? "https://example.com/source",
     appDeepLink: overrides.appDeepLink ?? "stellivehub://hub-events/event-1",
     occurredAt: overrides.occurredAt ?? "2026-06-12T00:00:00.000Z",
@@ -80,12 +81,14 @@ function createWorker(options: {
   devices?: PushTargetDevice[];
   resolve?: (input: { event: PlatformEvent; deviceId: string }) => ResolvedNotificationPreference;
   send?: (input: { device: PushTargetDevice; payload: MinimalPushPayload }) => Promise<PushSendResult>;
+  sendBatch?: (input: { devices: PushTargetDevice[]; payload: MinimalPushPayload }) => Promise<PushSendResult[]>;
 }) {
   const calls = {
     completed: [] as string[],
     failed: [] as unknown[],
     attempts: [] as unknown[],
     sent: [] as Array<{ device: PushTargetDevice; payload: MinimalPushPayload }>,
+    batches: [] as Array<{ devices: PushTargetDevice[]; payload: MinimalPushPayload }>,
     invalidated: [] as unknown[]
   };
   const worker = new NotificationWorker({
@@ -132,7 +135,15 @@ function createWorker(options: {
       async sendToDevice(input: { device: PushTargetDevice; payload: MinimalPushPayload }) {
         calls.sent.push(input);
         return options.send?.(input) ?? { status: "sent", providerMessageId: "message-1" };
-      }
+      },
+      ...(options.sendBatch
+        ? {
+            async sendToDevices(input: { devices: PushTargetDevice[]; payload: MinimalPushPayload }) {
+              calls.batches.push(input);
+              return options.sendBatch?.(input) ?? [];
+            }
+          }
+        : {})
     },
     now: () => now
   });
@@ -140,6 +151,10 @@ function createWorker(options: {
 }
 
 describe("NotificationWorker", () => {
+  it("calculates injectable retry jitter deterministically", () => {
+    expect(calculateRetryDelayMs(0, undefined, () => 0)).toBe(54_000);
+    expect(calculateRetryDelayMs(0, undefined, () => 1)).toBe(66_000);
+  });
   it("sends allowed HubEvent pushes and skips blocked devices with delivery attempts", async () => {
     const allowedDevice = device({ deviceId: "allowed-device" });
     const blockedDevice = device({ deviceId: "blocked-device", pushToken: "blocked-token" });
@@ -230,6 +245,50 @@ describe("NotificationWorker", () => {
         terminal: false,
         retryAt: new Date("2026-06-12T00:01:00.000Z")
       })
+    ]);
+  });
+
+  it("prefers provider retryAfterMs over the default retry delay", async () => {
+    const { worker, calls } = createWorker({
+      send: async () => ({ status: "transient_failure", retryAfterMs: 125_000, reason: "quota_exceeded" })
+    });
+
+    await worker.drain({ now });
+
+    expect(calls.failed).toEqual([
+      expect.objectContaining({ retryAt: new Date("2026-06-12T00:02:05.000Z"), terminal: false })
+    ]);
+  });
+
+  it("records multicast partial success and invalid tokens per device while preserving image payloads", async () => {
+    const devices = [
+      device({ deviceId: "device-1", pushToken: "token-1" }),
+      device({ deviceId: "device-2", pushToken: "token-2" }),
+      device({ deviceId: "device-3", pushToken: "token-3" })
+    ];
+    const { worker, calls } = createWorker({
+      event: event({ thumbnailUrl: "https://example.com/event.jpg" }),
+      devices,
+      sendBatch: async ({ devices: batch }) =>
+        batch.map((target, index) =>
+          index === 0
+            ? { status: "sent", providerMessageId: `message-${target.deviceId}` }
+            : index === 1
+              ? { status: "permanent_token_failure", providerErrorCode: "messaging/invalid-registration-token" }
+              : { status: "transient_failure", retryAfterMs: 90_000, reason: "quota_exceeded" }
+        )
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(calls.batches).toHaveLength(1);
+    expect(calls.batches[0].payload.notification.imageUrl).toBe("https://example.com/event.jpg");
+    expect(result).toMatchObject({ sent: 1, skipped: 1, queued: 1, status: "partial" });
+    expect(calls.invalidated).toEqual([
+      { deviceId: "device-2", reason: "messaging/invalid-registration-token" }
+    ]);
+    expect(calls.failed).toEqual([
+      expect.objectContaining({ retryAt: new Date("2026-06-12T00:01:30.000Z") })
     ]);
   });
 

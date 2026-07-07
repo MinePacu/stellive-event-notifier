@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.BitmapFactory
@@ -11,6 +12,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -18,6 +20,7 @@ import android.os.SystemClock
 import android.provider.CalendarContract
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.DragEvent
 import android.view.Gravity
 import android.view.View
@@ -45,8 +48,10 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.AndroidEntryPoint
 import dev.minepacu.stelliveeventnotifier.core.device.DeviceIdStore
+import dev.minepacu.stelliveeventnotifier.core.device.PushTokenSyncer
 import dev.minepacu.stelliveeventnotifier.core.datastore.PreferenceKeys
 import dev.minepacu.stelliveeventnotifier.core.model.AppearanceMode
 import dev.minepacu.stelliveeventnotifier.core.model.CatalogRole
@@ -58,6 +63,8 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubMember
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationEventType
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationHistoryItem
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationPlatform
+import dev.minepacu.stelliveeventnotifier.core.notification.NotificationPermissionPromptMoment
+import dev.minepacu.stelliveeventnotifier.core.notification.NotificationPermissionPromptPolicy
 import dev.minepacu.stelliveeventnotifier.core.model.SongCatalogItem
 import dev.minepacu.stelliveeventnotifier.databinding.ActivityMainBinding
 import dev.minepacu.stelliveeventnotifier.feature.calendar.HubCalendarDeepLinkPolicy
@@ -109,6 +116,7 @@ private data class LiveDragPayload(
 private lateinit var binding: ActivityMainBinding
     private val repository = MockHubRepository()
     private lateinit var serverRepository: HubRepository
+    private lateinit var pushTokenSyncer: PushTokenSyncer
     private val liveClockHandler = Handler(Looper.getMainLooper())
     private val liveClockTextViews = mutableListOf<LiveClockTextView>()
     private val liveClockTicker = object : Runnable {
@@ -164,6 +172,7 @@ private var notificationPermissionRequested = false
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         serverRepository = createServerRepository()
+        syncCurrentPushToken()
         configureTopBarGlass()
         setupTopBarScrollBehavior()
         setupBackNavigation()
@@ -206,12 +215,29 @@ private var notificationPermissionRequested = false
         }
     }
 
-    private fun createServerRepository(): HubRepository =
-        ServerHubRepository(
-            remoteDataSource = ServerHubRepository.HubApiRemoteDataSource(HubApiClient.create(BuildConfig.HUB_BASE_URL)),
+    private fun createServerRepository(): HubRepository {
+        val apiClient = HubApiClient.create(BuildConfig.HUB_BASE_URL)
+        pushTokenSyncer = PushTokenSyncer(context = this, apiClient = apiClient)
+        return ServerHubRepository(
+            remoteDataSource = ServerHubRepository.HubApiRemoteDataSource(apiClient),
             deviceIdStore = DeviceIdStore(this),
             fallback = repository,
+            flushPendingPushToken = { pushTokenSyncer.flushPendingToken() },
         )
+    }
+
+    private fun syncCurrentPushToken() {
+        FirebaseMessaging.getInstance().token
+            .addOnSuccessListener { token ->
+                if (token.isBlank()) return@addOnSuccessListener
+                CoroutineScope(Dispatchers.IO).launch {
+                    pushTokenSyncer.syncToken(token)
+                }
+            }
+            .addOnFailureListener { error ->
+                Log.d("MainActivity", "FCM token sync unavailable: ${error.javaClass.simpleName}")
+            }
+    }
 
  private fun setupPullToRefresh() {
  binding.contentRefresh.isEnabled = false
@@ -1527,7 +1553,24 @@ private fun songFilterRow(
             settingsPanel(
                 title = "전체 알림",
                 rows = listOf(
-                    SettingRow("마스터 알림", "OFF이면 모든 푸시와 기록 생성 대상 알림을 차단합니다.", settings.globalEnabled),
+                    SettingRow(
+                        "마스터 알림",
+                        "OFF이면 모든 푸시와 기록 생성 대상 알림을 차단합니다.",
+                        settings.globalEnabled,
+                        onCheckedChange = { enabled ->
+                            if (enabled) {
+                                requestNotificationPermissionIfNeeded(NotificationPermissionPromptMoment.GLOBAL_NOTIFICATION_TOGGLE)
+                            }
+                            persistSettings(settings.copy(globalEnabled = enabled))
+                        },
+                    ),
+                    SettingRow(
+                        "서비스 공지",
+                        "전체/장애/점검/버전 공지를 받습니다. 마스터 알림 OFF가 우선합니다.",
+                        settings.serviceAnnouncementsEnabled,
+                        enabled = settings.globalEnabled,
+                        onCheckedChange = { enabled -> persistSettings(settings.copy(serviceAnnouncementsEnabled = enabled)) },
+                    ),
                     SettingRow("터치 동작", "알림을 눌렀을 때 열 위치입니다.", null, settings.tapAction.name)
                 )
             )
@@ -1572,7 +1615,12 @@ private fun songFilterRow(
                 )
             )
         )
-        if (!notificationPermissionRequested) {
+    }
+
+    private fun requestNotificationPermissionIfNeeded(moment: NotificationPermissionPromptMoment) {
+        val granted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (NotificationPermissionPromptPolicy.shouldRequest(moment, granted, notificationPermissionRequested)) {
             notificationPermissionRequested = true
             requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -3003,9 +3051,20 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
         if (row.checked != null) {
             addView(SwitchMaterial(context).apply {
                 isChecked = row.checked
+                isEnabled = row.enabled
+                row.onCheckedChange?.let { onCheckedChange ->
+                    setOnCheckedChangeListener { _, checked -> onCheckedChange(checked) }
+                }
             })
         } else if (row.badge != null) {
             addView(pill(row.badge, true))
+        }
+    }
+
+    private fun persistSettings(settings: dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState) {
+        CoroutineScope(Dispatchers.Main).launch {
+            serverRepository.updatePreferences(settings)
+            renderSettings()
         }
     }
 
@@ -3140,7 +3199,9 @@ private data class SettingRow(
     val title: String,
     val body: String?,
     val checked: Boolean? = null,
-    val badge: String? = null
+    val badge: String? = null,
+    val enabled: Boolean = true,
+    val onCheckedChange: ((Boolean) -> Unit)? = null,
 )
 
 private data class HistoryFilterSelectorRow(

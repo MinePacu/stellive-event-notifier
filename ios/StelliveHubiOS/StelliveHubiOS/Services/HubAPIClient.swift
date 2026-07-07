@@ -100,6 +100,7 @@ struct PreferenceResponse: Codable, Equatable {
     let explicitOverride: Bool
     let tapAction: String
     let deliveryMode: String
+    let serviceAnnouncementsEnabled: Bool?
     let updatedAt: String
 }
 

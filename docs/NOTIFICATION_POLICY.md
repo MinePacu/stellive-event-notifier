@@ -39,6 +39,8 @@ Hub event worker delivery treats `event_sales_open`, `event_deadline_soon`, and 
 
 Global off blocks all notifications. Member explicit overrides can override generation/category settings. Platform and event-type settings apply to the event. More specific member/generation platform and event-type rules can override broader platform/event-type rules. Quiet hours, keyword block, and rate limit always apply last.
 
+Service-wide announcements are enabled by default and use only the allowlisted `service_all`, `service_incident`, `service_maintenance`, and `service_version_update` topics. `global=false` or `serviceAnnouncementsEnabled=false` unsubscribes the device from all four topics. The backend synchronizes membership after token and preference updates; mobile clients must not subscribe to arbitrary topics directly.
+
 ## Load Reduction
 
 Notification noise and push-volume reduction policies are defined in [Notification Load Reduction Policy](NOTIFICATION_LOAD_REDUCTION_POLICY.md). These policies may downgrade delivery to summary push or app-history-only delivery, but they must not bypass user preferences, quiet hours, keyword rules, rate limits, or unsupported official YouTube live exclusions.

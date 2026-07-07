@@ -75,13 +75,16 @@ describe("buildPushPayload", () => {
     expect(payload.notification.body).toBe("공식 굿즈 판매");
     expect(Object.keys(payload.data).sort()).toEqual([
       "appDeepLink",
+      "body",
+      "deliveryLevel",
       "eventId",
       "eventType",
       "generationId",
       "memberId",
       "platformUrl",
       "source",
-      "tapAction"
+      "tapAction",
+      "title"
     ]);
     expect(payload.data).toEqual({
       eventId: "hub_event:event-1:event_sales_open:2026-06-12T00:00:00.000Z",
@@ -91,8 +94,12 @@ describe("buildPushPayload", () => {
       memberId: "stellive-official",
       tapAction: "open_app",
       appDeepLink: "stellivehub://hub-events/event-1",
-      platformUrl: "https://example.com/source"
+      platformUrl: "https://example.com/source",
+      title: expectedTitle,
+      body: "공식 굿즈 판매",
+      deliveryLevel: "summary_push"
     });
+    expect(payload.android.notification?.channelId).toBe("stellive_hub_events");
     expect(JSON.stringify(payload)).not.toContain("forbidden-image");
     expect(JSON.stringify(payload)).not.toContain("forbidden-logo");
     expect(JSON.stringify(payload)).not.toContain("providerResponse");
@@ -176,7 +183,7 @@ describe("buildPushPayload", () => {
       });
 
       expect(payload.notification).not.toHaveProperty("imageUrl");
-      expect(payload.android).not.toHaveProperty("notification");
+      expect(payload.android.notification).toEqual({ channelId: "stellive_hub_events" });
       expect(payload.apns).not.toHaveProperty("fcmOptions");
       expect(payload.data).not.toHaveProperty("thumbnailUrl");
   });
@@ -191,7 +198,7 @@ describe("buildPushPayload", () => {
       });
 
       expect(payload.notification).not.toHaveProperty("imageUrl");
-      expect(payload.android).not.toHaveProperty("notification");
+      expect(payload.android.notification).toEqual({ channelId: "stellive_hub_events" });
       expect(payload.apns).not.toHaveProperty("fcmOptions");
     }
   );

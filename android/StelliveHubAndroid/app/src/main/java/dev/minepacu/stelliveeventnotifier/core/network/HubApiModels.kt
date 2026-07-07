@@ -58,6 +58,7 @@ data class PreferenceDto(
     val tapAction: String,
     val deliveryMode: String,
     val realtimePreference: String? = null,
+    val serviceAnnouncementsEnabled: Boolean? = null,
     val updatedAt: String,
 )
 

@@ -1277,6 +1277,7 @@ struct NotificationSettingsState: Equatable {
     ]
 
     var globalEnabled = true
+    var serviceAnnouncementsEnabled = true
     var realtimeEnabled = false
     var tapAction: TapAction = .openApp
     var appearanceMode: AppearanceMode = .system

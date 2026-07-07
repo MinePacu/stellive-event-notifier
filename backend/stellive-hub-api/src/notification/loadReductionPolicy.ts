@@ -1,7 +1,10 @@
 import type { NotificationDeliveryLevel, PlatformEvent, ResolvedNotificationPreference } from "../types.js";
 import { applySpikeDowngrade, type SpikeDowngradeConfig, type SpikeDowngradeContext } from "./spikeDowngrade.js";
 
-export interface NotificationLoadReductionContext extends SpikeDowngradeContext {}
+export interface NotificationLoadReductionContext extends SpikeDowngradeContext {
+  recentPushCount?: number;
+  rateLimiterSaturated?: boolean;
+}
 
 export interface NotificationLoadReductionConfig {
   spikeDowngrade?: SpikeDowngradeConfig;

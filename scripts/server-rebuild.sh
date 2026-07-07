@@ -23,11 +23,18 @@ if [[ -z "$SERVER_SSH_TARGET" ]]; then
 fi
 
 REMOTE_COMMAND="cd $SERVER_PROJECT_DIR && \
-UP_HELP=\$(docker compose up --help 2>/dev/null || true) && \
+if docker compose version >/dev/null 2>&1; then COMPOSE='docker compose'; COMPOSE_NAME='docker compose'; \
+elif command -v docker-compose >/dev/null 2>&1; then COMPOSE='docker-compose'; COMPOSE_NAME='docker-compose'; \
+else echo 'error: neither docker compose nor docker-compose is available' >&2; exit 1; fi && \
+echo \"Compose command selected: \$COMPOSE_NAME\" && \
+COMPOSE_HELP=\$(\$COMPOSE --help 2>/dev/null || true) && \
+COLOR_OPTIONS='' && \
+case \"\$COMPOSE_HELP\" in *--no-color*) COLOR_OPTIONS='--no-color';; esac && \
+UP_HELP=\$(\$COMPOSE up --help 2>/dev/null || true) && \
 QUIET_OPTIONS='' && \
 case \"\$UP_HELP\" in *--quiet-build*) QUIET_OPTIONS=\"\$QUIET_OPTIONS --quiet-build\";; esac && \
 case \"\$UP_HELP\" in *--quiet-pull*) QUIET_OPTIONS=\"\$QUIET_OPTIONS --quiet-pull\";; esac && \
-docker compose --no-color -f $SERVER_COMPOSE_FILE up -d --build --remove-orphans\$QUIET_OPTIONS"
+\$COMPOSE \$COLOR_OPTIONS -f $SERVER_COMPOSE_FILE up -d --build --remove-orphans\$QUIET_OPTIONS"
 
 if [[ "$SERVER_FORCE_RECREATE" == "1" ]]; then
   REMOTE_COMMAND+=" --force-recreate"

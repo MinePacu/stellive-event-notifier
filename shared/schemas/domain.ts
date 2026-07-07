@@ -217,6 +217,7 @@ export interface UserNotificationPreference {
   keywordsAllowlist?: string[];
   keywordsBlocklist?: string[];
   maxNotificationsPerMinute?: number;
+  serviceAnnouncementsEnabled?: boolean;
   updatedAt: string;
 }
 

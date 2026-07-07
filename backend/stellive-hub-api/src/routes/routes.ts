@@ -79,6 +79,10 @@ export interface AppRouteDependencies {
       clientUpdatedAt: string;
     }): Promise<{ preferences: UserNotificationPreference[]; updatedAt: string }>;
   };
+  serviceTopicSubscriptions?: {
+    syncToken?(input: { token: string; preferences: UserNotificationPreference[] }): Promise<unknown>;
+    syncDevice?(input: { deviceId: string; preferences: UserNotificationPreference[] }): Promise<unknown>;
+  };
   liveStatus?: {
     listDiagnostics(limit: number): Promise<
       Array<{

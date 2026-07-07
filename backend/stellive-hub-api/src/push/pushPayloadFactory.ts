@@ -26,6 +26,11 @@ export interface MinimalPushPayload {
     eventType: string;
     generationId: string;
     memberId: string;
+    title: string;
+    body: string;
+    deliveryLevel: NotificationDeliveryLevel;
+    summaryGroupId?: string;
+    supersedesEventIds?: string;
     tapAction: string;
     appDeepLink: string;
     platformUrl: string;
@@ -33,7 +38,8 @@ export interface MinimalPushPayload {
   android: {
     priority: FcmPriority;
     notification?: {
-      imageUrl: string;
+      channelId?: string;
+      imageUrl?: string;
     };
   };
   apns: {
@@ -59,6 +65,23 @@ const titleByType: Partial<Record<PlatformEvent["type"], string>> = {
   event_cancelled: "굿즈/행사 일정이 취소됐어요"
 };
 
+const androidChannelByType: Partial<Record<PlatformEvent["type"], string>> = {
+  chzzk_live_started: "stellive_chzzk_live",
+  chzzk_live_ended: "stellive_chzzk_live",
+  x_post: "stellive_x_posts",
+  youtube_upload: "stellive_youtube",
+  official_x_post: "stellive_official_x",
+  official_youtube_upload: "stellive_official_youtube",
+  event_announced: "stellive_hub_events",
+  event_sales_open: "stellive_hub_events",
+  event_deadline_soon: "stellive_hub_events",
+  event_updated: "stellive_hub_events",
+  event_cancelled: "stellive_hub_events",
+  chzzk_chat: "stellive_chzzk_chat",
+  chzzk_subscription: "stellive_chzzk_subscription",
+  cafe_post: "stellive_cafe_posts"
+};
+
 function pushTitle(event: PlatformEvent): string {
   return titleByType[event.type] ?? "스텔라이브 알림";
 }
@@ -66,6 +89,10 @@ function pushTitle(event: PlatformEvent): string {
 function pushBody(event: PlatformEvent): string {
   const title = event.title.trim();
   return title.length > 0 ? title : "굿즈/행사 알림";
+}
+
+function androidChannelId(event: PlatformEvent): string {
+  return androidChannelByType[event.type] ?? "stellive_hub_events";
 }
 
 function highPriority(input: PushPayloadInput): boolean {
@@ -79,11 +106,14 @@ export function buildPushPayload(input: PushPayloadInput): MinimalPushPayload {
   const priority = highPriority(input) ? "high" : "normal";
   const apnsPriority = highPriority(input) ? "10" : "5";
   const imageUrl = normalizeSafeImageUrl(input.event.thumbnailUrl);
+  const title = pushTitle(input.event);
+  const body = pushBody(input.event);
+  const channelId = androidChannelId(input.event);
 
   return {
     notification: {
-      title: pushTitle(input.event),
-      body: pushBody(input.event),
+      title,
+      body,
       ...(imageUrl ? { imageUrl } : {})
     },
     data: {
@@ -92,13 +122,19 @@ export function buildPushPayload(input: PushPayloadInput): MinimalPushPayload {
       eventType: input.event.type,
       generationId: input.event.generationId,
       memberId: input.event.memberId,
+      title,
+      body,
+      deliveryLevel: input.deliveryLevel,
       tapAction: input.resolution.tapAction,
       appDeepLink: input.event.appDeepLink ?? "",
       platformUrl: input.event.platformUrl ?? ""
     },
     android: {
       priority,
-      ...(imageUrl ? { notification: { imageUrl } } : {})
+      notification: {
+        channelId,
+        ...(imageUrl ? { imageUrl } : {})
+      }
     },
     apns: {
       headers: {

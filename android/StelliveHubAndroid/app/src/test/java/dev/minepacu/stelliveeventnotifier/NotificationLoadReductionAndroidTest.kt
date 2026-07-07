@@ -88,6 +88,37 @@ class NotificationLoadReductionAndroidTest {
     }
 
     @Test
+    fun payloadMapperReadsServerPushDataShape() {
+        val parsed = NotificationPayload.fromData(
+            mapOf(
+                "eventId" to "hub_event:event-1:event_sales_open:2026-06-12T00:00:00.000Z",
+                "memberId" to "stellive-official",
+                "generationId" to "official",
+                "source" to "hub_event",
+                "eventType" to "event_sales_open",
+                "title" to "굿즈/행사 신청이 시작됐어요",
+                "body" to "공식 굿즈 판매",
+                "appDeepLink" to "stellivehub://hub-events/event-1",
+                "platformUrl" to "https://example.com/source",
+                "deliveryLevel" to "summary_push",
+                "summaryGroupId" to "official-upload-window",
+            ),
+        )
+
+        assertEquals(NotificationDeliveryLevel.SUMMARY_PUSH, parsed?.deliveryLevel)
+        assertEquals("굿즈/행사 신청이 시작됐어요", parsed?.title)
+        assertEquals("official-upload-window", parsed?.summaryGroupId)
+    }
+
+    @Test
+    fun presenterFallsBackToHubEventChannelWhenEventTypeHasNoChannel() {
+        assertEquals(
+            NotificationChannels.HUB_EVENTS,
+            AndroidNotificationPresenterPolicy.channelIdFor(null),
+        )
+    }
+
+    @Test
     fun presenterUpdatesExistingNotificationWithLatestTwoContents() {
         val body = AndroidNotificationPresenterPolicy.updatedBody(
             listOf(
