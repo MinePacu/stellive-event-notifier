@@ -6,6 +6,26 @@
 
 ## [Unreleased]
 
+### 2026-07-07
+
+#### Added
+- Firebase 서비스 계정 파일 기반 FCM 설정, 발송 rate limiter, 서비스 공지 topic 구독/해제 흐름을 추가했습니다.
+- Android와 iOS 앱의 push 등록, foreground 알림 표시, 알림 payload 필드 처리를 보강했습니다.
+- Backend와 모바일 push 경로의 FCM client, device registration, preferences, load reduction 정책 테스트를 보강했습니다.
+
+#### Changed
+- 알림 worker와 payload 생성 경로가 사용자 선호, load reduction 정책, best-effort 모바일 전달 조건을 더 일관되게 반영하도록 개선했습니다.
+- 모바일 앱과 서버 API 간 push 관련 모델을 맞추고 서버-mediated preference enforcement 흐름을 정리했습니다.
+
+#### Fixed
+- 모바일 route dependency binding과 FCM 배포 및 token sync 경로에서 발생할 수 있는 불안정한 동작을 수정했습니다.
+
+#### Documentation
+- FCM boundary/code design과 notification policy 문서를 최신 push 전달 정책에 맞게 갱신했습니다.
+
+#### Operations
+- 서버 재빌드와 상태 확인 스크립트, local compose 설정을 FCM 운영 설정에 맞게 갱신했습니다.
+
 ### 2026-07-05
 
 #### Changed
