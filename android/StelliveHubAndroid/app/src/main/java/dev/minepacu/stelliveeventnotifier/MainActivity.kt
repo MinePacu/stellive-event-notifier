@@ -19,6 +19,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.CalendarContract
 import android.text.Editable
+import android.text.TextUtils
 import android.text.TextWatcher
 import android.util.Log
 import android.view.DragEvent
@@ -835,7 +836,7 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
             binding.contentList.addView(compactEventCard("조건에 맞는 멤버 없음", "다른 라이브 상태 필터를 선택해 확인할 수 있습니다.", listOf("필터")))
         } else {
             members.forEach { member ->
-                binding.contentList.addView(liveMemberRow(member, showOrderControls = true))
+                binding.contentList.addView(liveMemberRow(member, reorderable = true))
             }
         }
     }
@@ -2378,7 +2379,7 @@ private fun statusBadge(text: String, positive: Boolean): TextView = TextView(th
         setPadding(dp(8), dp(5), dp(8), dp(5))
     }
 
-private fun liveMemberRow(member: HubMember, showOrderControls: Boolean = false): MaterialCardView =
+private fun liveMemberRow(member: HubMember, reorderable: Boolean = false): MaterialCardView =
         baseCard(HubCardStyle.INTERACTIVE).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
@@ -2394,110 +2395,89 @@ private fun liveMemberRow(member: HubMember, showOrderControls: Boolean = false)
                 marginEnd = dp(10)
             })
             row.addView(liveMemberStatusBlock(member))
-            if (showOrderControls) {
-                row.addView(liveOrderControl(member), LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    marginStart = dp(8)
-                })
-            }
             addView(row)
-        }
-
-    private fun liveOrderControl(member: HubMember): LinearLayout =
-        LinearLayout(this).apply {
-            val orderedMembers = liveStatusFilteredMembersForUi()
-            val currentIndex = orderedMembers.indexOfFirst { it.id == member.id }
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            contentDescription = "${member.koreanName}, ${currentIndex + 1}번째, 길게 눌러 순서 변경"
-
-            addView(
-                TextView(context).apply {
-                    text = "≡"
-                    setTextColor(color(R.color.hub_text_muted))
-                    textSize = 18f
-                    typeface = Typeface.DEFAULT_BOLD
-                    gravity = Gravity.CENTER
-                    includeFontPadding = false
-                    setPadding(dp(8), dp(6), dp(8), dp(6))
-                    background = rounded(
-                        fill = color(R.color.hub_success_soft),
-                        radius = dp(10),
-                    )
-                    layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                    )
-                },
-            )
-            setOnLongClickListener {
-                if (currentIndex == -1) return@setOnLongClickListener false
-                draggingLiveMemberId = member.id
-                val payload = ClipData.newPlainText("live-member-id", member.id)
-                val shadow = View.DragShadowBuilder(this)
-                startDragAndDrop(payload, shadow, LiveDragPayload(member.id, currentIndex), 0)
-                performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                true
-            }
-            setOnDragListener { _, event ->
-                when (event.action) {
-                    DragEvent.ACTION_DRAG_STARTED -> event.localState is LiveDragPayload
-                    DragEvent.ACTION_DRAG_ENTERED -> {
-                        alpha = 0.72f
-                        true
-                    }
-                    DragEvent.ACTION_DRAG_EXITED -> {
-                        alpha = 1f
-                        true
-                    }
-                    DragEvent.ACTION_DROP -> {
-                        val payload = event.localState as? LiveDragPayload ?: return@setOnDragListener false
-                        if (payload.memberId != member.id && currentIndex != -1) {
-                            moveLiveMember(payload.fromIndex, currentIndex)
-                        }
-                        true
-                    }
-                    DragEvent.ACTION_DRAG_ENDED -> {
-                        alpha = 1f
-                        draggingLiveMemberId = null
-                        true
-                    }
-                    else -> true
-                }
-            }
-            accessibilityDelegate = object : View.AccessibilityDelegate() {
-                override fun onInitializeAccessibilityNodeInfo(
-                    host: View,
-                    info: android.view.accessibility.AccessibilityNodeInfo,
-                ) {
-                    super.onInitializeAccessibilityNodeInfo(host, info)
-                    info.addAction(
-                        android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
-                            android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,
-                            "위로 이동",
-                        ),
-                    )
-                    info.addAction(
-                        android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
-                            android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,
-                            "아래로 이동",
-                        ),
-                    )
-                }
-
-                override fun performAccessibilityAction(host: View, action: Int, args: Bundle?): Boolean =
-                    when (action) {
-                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> {
-                            moveLiveMember(member, -1)
-                            true
-                        }
-                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> {
-                            moveLiveMember(member, 1)
-                            true
-                        }
-                        else -> super.performAccessibilityAction(host, action, args)
-                    }
+            if (reorderable) {
+                attachLiveReorderHandlers(this, member)
             }
         }
+
+    private fun attachLiveReorderHandlers(card: MaterialCardView, member: HubMember) {
+        val orderedMembers = liveStatusFilteredMembersForUi()
+        val currentIndex = orderedMembers.indexOfFirst { it.id == member.id }
+        card.contentDescription = "${member.koreanName}, ${currentIndex + 1}번째, 길게 눌러 순서 변경"
+        card.setOnLongClickListener {
+            if (currentIndex == -1) return@setOnLongClickListener false
+            draggingLiveMemberId = member.id
+            card.alpha = 0.84f
+            val payload = ClipData.newPlainText("live-member-id", member.id)
+            val shadow = View.DragShadowBuilder(card)
+            card.startDragAndDrop(payload, shadow, LiveDragPayload(member.id, currentIndex), 0)
+            card.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            true
+        }
+        card.setOnDragListener { _, event ->
+            when (event.action) {
+                DragEvent.ACTION_DRAG_STARTED -> event.localState is LiveDragPayload
+                DragEvent.ACTION_DRAG_ENTERED -> {
+                    val payload = event.localState as? LiveDragPayload ?: return@setOnDragListener false
+                    if (payload.memberId != member.id) {
+                        card.alpha = 0.72f
+                    }
+                    true
+                }
+                DragEvent.ACTION_DRAG_EXITED -> {
+                    card.alpha = if (draggingLiveMemberId == member.id) 0.84f else 1f
+                    true
+                }
+                DragEvent.ACTION_DROP -> {
+                    val payload = event.localState as? LiveDragPayload ?: return@setOnDragListener false
+                    if (payload.memberId != member.id && currentIndex != -1) {
+                        moveLiveMember(payload.fromIndex, currentIndex)
+                    }
+                    true
+                }
+                DragEvent.ACTION_DRAG_ENDED -> {
+                    card.alpha = 1f
+                    draggingLiveMemberId = null
+                    true
+                }
+                else -> true
+            }
+        }
+        card.accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(
+                host: View,
+                info: android.view.accessibility.AccessibilityNodeInfo,
+            ) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.addAction(
+                    android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,
+                        "위로 이동",
+                    ),
+                )
+                info.addAction(
+                    android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,
+                        "아래로 이동",
+                    ),
+                )
+            }
+
+            override fun performAccessibilityAction(host: View, action: Int, args: Bundle?): Boolean =
+                when (action) {
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> {
+                        moveLiveMember(member, -1)
+                        true
+                    }
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> {
+                        moveLiveMember(member, 1)
+                        true
+                    }
+                    else -> super.performAccessibilityAction(host, action, args)
+                }
+        }
+    }
 
     private fun liveMemberTextBlock(member: HubMember): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -2519,41 +2499,73 @@ private fun liveMemberRow(member: HubMember, showOrderControls: Boolean = false)
             setTextColor(if (member.isLive) color(R.color.hub_text) else color(R.color.hub_text_muted))
             textSize = if (member.isLive) 13f else 12f
             typeface = if (member.isLive) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
             setPadding(0, dp(6), 0, 0)
             setLineSpacing(0f, 1.1f)
         })
         if (member.isLive) {
-            MainUiPolicy.liveCategoryText(member.liveCategory)?.let { category ->
-                addView(Chip(context).apply {
-                    text = category
-                    isCheckable = false
-                    chipMinHeight = dp(24).toFloat()
-                    textSize = 11f
-                    typeface = Typeface.DEFAULT_BOLD
-                    chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_success_soft)
-                    setTextColor(color(R.color.hub_text_muted))
-                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = dp(4)
-                })
-            }
-            member.livePlatformUrl?.takeIf { it.startsWith("https://") }?.let { url ->
-                addView(Chip(context).apply {
-                    text = "CHZZK 열기"
-                    isCheckable = false
-                    chipMinHeight = dp(28).toFloat()
-                    textSize = 12f
-                    typeface = Typeface.DEFAULT_BOLD
-                    chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_success_soft)
-                    setTextColor(color(R.color.hub_primary))
-                    setOnClickListener {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    }
-                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = dp(4)
+            liveSupplementaryChipGroup(member)?.let { group ->
+                addView(group, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    topMargin = dp(6)
                 })
             }
         }
     }
+
+    private fun liveSupplementaryChipGroup(member: HubMember): ChipGroup? {
+        val chips = buildList {
+            MainUiPolicy.liveCategoryText(member.liveCategory)?.let { category ->
+                add(liveCategoryChip(category))
+            }
+            member.livePlatformUrl?.takeIf { it.startsWith("https://") }?.let { url ->
+                add(liveOpenLinkChip(url))
+            }
+        }
+        if (chips.isEmpty()) return null
+        return ChipGroup(this).apply {
+            isSingleLine = false
+            chipSpacingHorizontal = dp(6)
+            chipSpacingVertical = dp(4)
+            chips.forEach(::addView)
+        }
+    }
+
+    private fun liveCategoryChip(category: String): Chip =
+        Chip(this).apply {
+            text = category
+            isCheckable = false
+            isClickable = false
+            isFocusable = false
+            setEnsureMinTouchTargetSize(false)
+            chipMinHeight = dp(22).toFloat()
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_card_surface_compact)
+            setTextColor(color(R.color.hub_text_muted))
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            maxWidth = dp(140)
+        }
+
+    private fun liveOpenLinkChip(url: String): Chip =
+        Chip(this).apply {
+            text = "CHZZK 열기"
+            isCheckable = false
+            setEnsureMinTouchTargetSize(false)
+            chipMinHeight = dp(24).toFloat()
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_success_soft)
+            setTextColor(color(R.color.hub_primary))
+            setOnClickListener {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }
+        }
 
     private fun liveIndicator(size: Int): View = View(this).apply {
         background = rounded(
