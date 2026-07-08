@@ -1,6 +1,7 @@
 package dev.minepacu.stelliveeventnotifier
 
 import dev.minepacu.stelliveeventnotifier.ui.chrome.MainScreenChromePolicy
+import dev.minepacu.stelliveeventnotifier.ui.adaptive.HubAdaptivePolicy
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -81,5 +82,25 @@ class MainScreenChromePolicyTest {
 
         assertTrue(spec.showSongSearchAction)
         assertFalse(MainScreenChromePolicy.spec("song_search", canGoBack = true).showSongSearchAction)
+    }
+
+    @Test
+    fun compactNavigationChromeKeepsBottomTabs() {
+        val spec = MainScreenChromePolicy.navigationSpec(HubAdaptivePolicy.spec(widthDp = 599))
+
+        assertTrue(spec.showBottomNavigation)
+        assertFalse(spec.showNavigationRail)
+        assertFalse(spec.constrainContentWidth)
+    }
+
+    @Test
+    fun mediumAndExpandedNavigationChromeUseRail() {
+        listOf(600, 840).forEach { widthDp ->
+            val spec = MainScreenChromePolicy.navigationSpec(HubAdaptivePolicy.spec(widthDp))
+
+            assertFalse(spec.showBottomNavigation)
+            assertTrue(spec.showNavigationRail)
+            assertTrue(spec.constrainContentWidth)
+        }
     }
 }

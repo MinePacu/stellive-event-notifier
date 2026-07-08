@@ -112,6 +112,8 @@ import dev.minepacu.stelliveeventnotifier.ui.components.TopFilterGroup
 import dev.minepacu.stelliveeventnotifier.ui.components.TopFilterOption
 
 private const val EXIT_BACK_PRESS_INTERVAL_MS = 2_000L
+private const val NAVIGATION_RAIL_WIDTH_DP = 80
+private const val LARGE_SCREEN_CONTENT_MAX_WIDTH_DP = 760
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -123,6 +125,11 @@ private data class LiveClockTextView(
 private data class LiveDragPayload(
     val memberId: String,
     val fromIndex: Int,
+)
+
+private data class RootNavigationItem(
+    val screen: HubScreen,
+    val view: View,
 )
 
 private lateinit var binding: ActivityMainBinding
@@ -366,9 +373,9 @@ private var notificationPermissionRequested = false
     }
 
     private fun setupBottomNavigation() {
-        bottomNavigationItems().forEach { item ->
-            item.setOnClickListener {
-                navigateToRoot(screenForItem(item.id))
+        rootNavigationItems().forEach { item ->
+            item.view.setOnClickListener {
+                navigateToRoot(item.screen)
             }
         }
     }
@@ -478,17 +485,21 @@ HubScreen.GOODS_EVENTS -> renderGoodsEvents()
     }
 
     private fun updateSelectedBottomNavigation(screen: HubScreen) {
-        val selectedItem = itemForScreen(screen) ?: return
-        bottomNavigationItems().forEach { item ->
-            setSelectedState(item, item.id == selectedItem)
+        val selectedScreen = itemForScreen(screen)?.let(::screenForItem) ?: return
+        rootNavigationItems().forEach { item ->
+            setSelectedState(item.view, item.screen == selectedScreen)
         }
     }
 
-    private fun bottomNavigationItems(): List<View> = listOf(
-        binding.tabHome,
-        binding.tabLive,
-        binding.tabSongs,
-        binding.tabGoodsEvents
+    private fun rootNavigationItems(): List<RootNavigationItem> = listOf(
+        RootNavigationItem(HubScreen.HOME, binding.tabHome),
+        RootNavigationItem(HubScreen.LIVE, binding.tabLive),
+        RootNavigationItem(HubScreen.SONGS, binding.tabSongs),
+        RootNavigationItem(HubScreen.GOODS_EVENTS, binding.tabGoodsEvents),
+        RootNavigationItem(HubScreen.HOME, binding.railTabHome),
+        RootNavigationItem(HubScreen.LIVE, binding.railTabLive),
+        RootNavigationItem(HubScreen.SONGS, binding.railTabSongs),
+        RootNavigationItem(HubScreen.GOODS_EVENTS, binding.railTabGoodsEvents),
     )
 
     private fun setSelectedState(view: View, selected: Boolean) {
@@ -503,6 +514,7 @@ HubScreen.GOODS_EVENTS -> renderGoodsEvents()
 private fun updateNavigationChrome() {
         val canGoBack = navigationHistory.canGoBack
         val spec = MainScreenChromePolicy.spec(navigationHistory.currentScreen.id, canGoBack)
+        val navigationSpec = MainScreenChromePolicy.navigationSpec(currentAdaptiveSpec)
         binding.topBarBack.isVisible = canGoBack
         binding.topBarTitleGroup.setPaddingRelative(
             dp(MainUiPolicy.topBarTitleStartInsetDp(canGoBack)),
@@ -513,11 +525,19 @@ private fun updateNavigationChrome() {
         binding.topBarTitleGroup.isVisible = spec.showTopBarTitleAtRest
         binding.topBarSettings.isVisible = spec.showSettingsAction
         binding.topBarSongSearch.isVisible = spec.showSongSearchAction
+        binding.bottomNavigation.isVisible = navigationSpec.showBottomNavigation
+        binding.navigationRail.isVisible = navigationSpec.showNavigationRail
+        binding.navigationRailDivider.isVisible = navigationSpec.showNavigationRail
+        updateTopGlassOverlayStartMargin(navigationSpec.showNavigationRail)
+        updateContentWidthConstraint(navigationSpec.constrainContentWidth)
     }
 
     private fun screenForItem(itemId: Int): HubScreen = when (itemId) {
+        R.id.rail_tab_live,
         R.id.tab_live -> HubScreen.LIVE
+        R.id.rail_tab_songs,
         R.id.tab_songs -> HubScreen.SONGS
+        R.id.rail_tab_goods_events,
         R.id.tab_goods_events -> HubScreen.GOODS_EVENTS
         else -> HubScreen.HOME
     }
@@ -563,6 +583,35 @@ private fun startScreen(screenId: String, title: String, role: String) {
         val topPadding = if (underTopBar) 0 else overlayHeight
         val horizontalPadding = if (underTopBar) 0 else dp(18)
         binding.contentList.setPadding(horizontalPadding, topPadding, horizontalPadding, dp(20))
+    }
+
+    private fun updateTopGlassOverlayStartMargin(showNavigationRail: Boolean) {
+        val marginStart = if (showNavigationRail) dp(NAVIGATION_RAIL_WIDTH_DP) + dp(1) else 0
+        val params = binding.topGlassOverlay.layoutParams as? FrameLayout.LayoutParams ?: return
+        if (params.marginStart == marginStart) return
+        params.marginStart = marginStart
+        binding.topGlassOverlay.layoutParams = params
+    }
+
+    private fun updateContentWidthConstraint(constrainContentWidth: Boolean) {
+        val params = binding.contentList.layoutParams
+        val nextWidth = if (constrainContentWidth) {
+            val availableWidth = binding.contentScroll.width.takeIf { it > 0 } ?: dp(LARGE_SCREEN_CONTENT_MAX_WIDTH_DP)
+            minOf(dp(LARGE_SCREEN_CONTENT_MAX_WIDTH_DP), availableWidth)
+        } else {
+            ViewGroup.LayoutParams.MATCH_PARENT
+        }
+        if (params.width != nextWidth) {
+            params.width = nextWidth
+            binding.contentList.layoutParams = params
+        }
+        (binding.contentList.layoutParams as? FrameLayout.LayoutParams)?.let { frameParams ->
+            val nextGravity = if (constrainContentWidth) Gravity.TOP or Gravity.CENTER_HORIZONTAL else Gravity.NO_GRAVITY
+            if (frameParams.gravity != nextGravity) {
+                frameParams.gravity = nextGravity
+                binding.contentList.layoutParams = frameParams
+            }
+        }
     }
 
     private fun clearTopFilters() {
@@ -2136,6 +2185,7 @@ private fun updateTopBarScrolled(scrolled: Boolean) {
             systemTopInsetPx = bars.top
             binding.topGlassOverlay.setPadding(0, bars.top, 0, 0)
             binding.mainContent.setPadding(0, 0, 0, bars.bottom)
+            binding.navigationRail.setPadding(0, bars.top + dp(8), 0, bars.bottom + dp(8))
             applyContentTopPadding(underTopBar = navigationHistory.currentScreen == HubScreen.GOODS_EVENT_DETAIL)
             insets
         }
