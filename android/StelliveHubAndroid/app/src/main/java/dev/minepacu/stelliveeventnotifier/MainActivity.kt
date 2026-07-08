@@ -45,6 +45,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isVisible
+import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -142,6 +143,11 @@ private data class SongRenderState(
     val catalogMembers: List<HubMember>,
     val visibleSongs: List<SongCatalogItem>,
     val pagedSongs: List<SongCatalogItem>,
+)
+
+private data class ScrollablePane(
+    val scrollView: NestedScrollView,
+    val content: LinearLayout,
 )
 
 private lateinit var binding: ActivityMainBinding
@@ -500,7 +506,18 @@ HubScreen.GOODS_EVENTS -> renderGoodsEvents()
             HubScreen.SETTINGS_HUB_EVENTS -> renderSettingsHubEvents()
             HubScreen.SETTINGS_ADVANCED -> renderSettingsAdvanced()
         }
-        binding.contentRefresh.isEnabled = screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS || screen == HubScreen.SONGS
+        updateTwoPaneScrollChrome(screen)
+    }
+
+    private fun updateTwoPaneScrollChrome(screen: HubScreen = navigationHistory.currentScreen) {
+        val isTwoPaneScreen =
+            screen == HubScreen.GOODS_EVENTS && shouldUseGoodsEventsTwoPane() ||
+                screen == HubScreen.SONGS && shouldUseSongsTwoPane()
+        binding.contentRefresh.isEnabled =
+            !isTwoPaneScreen && (screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS || screen == HubScreen.SONGS)
+        if (isTwoPaneScreen) {
+            binding.contentRefresh.isRefreshing = false
+        }
     }
 
     private fun updateSelectedBottomNavigation(screen: HubScreen) {
@@ -639,6 +656,33 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 binding.contentList.layoutParams = frameParams
             }
         }
+    }
+
+    private fun scrollablePane(): ScrollablePane {
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val scrollView = NestedScrollView(this).apply {
+            isFillViewport = true
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            addView(
+                content,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
+        return ScrollablePane(scrollView, content)
+    }
+
+    private fun twoPaneViewportHeight(): Int {
+        val viewport = binding.contentScroll.height
+        val verticalPadding = binding.contentList.paddingTop + binding.contentList.paddingBottom
+        val fallback = resources.displayMetrics.heightPixels - systemTopInsetPx
+        return (viewport.takeIf { it > 0 } ?: fallback)
+            .minus(verticalPadding)
+            .coerceAtLeast(dp(360))
     }
 
     private fun clearTopFilters() {
@@ -872,16 +916,13 @@ private fun startScreen(screenId: String, title: String, role: String) {
             isBaselineAligned = false
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+                twoPaneViewportHeight(),
             )
         }
-        val listPane = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        val detailPane = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = rounded(color(R.color.hub_surface), dp(16), color(R.color.hub_line))
-            setPadding(dp(10), dp(10), dp(10), dp(10))
+        val listPane = scrollablePane()
+        val detailPane = scrollablePane().apply {
+            scrollView.background = rounded(color(R.color.hub_surface), dp(16), color(R.color.hub_line))
+            content.setPadding(dp(10), dp(10), dp(10), dp(10))
         }
         val paneWeights = if (shouldUseGoodsEventsFoldAwarePane()) {
             1f to 1f
@@ -889,23 +930,23 @@ private fun startScreen(screenId: String, title: String, role: String) {
             1f to 1f
         }
         paneRow.addView(
-            listPane,
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, paneWeights.first).apply {
+            listPane.scrollView,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, paneWeights.first).apply {
                 marginEnd = dp(8)
             },
         )
         paneRow.addView(
-            detailPane,
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, paneWeights.second).apply {
+            detailPane.scrollView,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, paneWeights.second).apply {
                 marginStart = dp(8)
             },
         )
         binding.contentList.addView(paneRow)
-        renderGoodsEventsListInto(listPane, filteredDays, filteredEvents, monthDays)
-        binding.contentList.addView(
+        renderGoodsEventsListInto(listPane.content, filteredDays, filteredEvents, monthDays)
+        listPane.content.addView(
             noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
         )
-        renderGoodsEventDetailPane(detailPane)
+        renderGoodsEventDetailPane(detailPane.content)
     }
 
     private fun renderGoodsEventsListInto(
@@ -1273,34 +1314,30 @@ private fun renderSongs() {
             isBaselineAligned = false
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+                twoPaneViewportHeight(),
             )
         }
-        val filterPane = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        val listPane = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
+        val filterPane = scrollablePane()
+        val listPane = scrollablePane()
         val paneWeights = if (shouldUseSongsFoldAwarePane()) {
             0.9f to 1.1f
         } else {
             0.9f to 1.1f
         }
         paneRow.addView(
-            filterPane,
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, paneWeights.first).apply {
+            filterPane.scrollView,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, paneWeights.first).apply {
                 marginEnd = dp(8)
             },
         )
         paneRow.addView(
-            listPane,
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, paneWeights.second).apply {
+            listPane.scrollView,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, paneWeights.second).apply {
                 marginStart = dp(8)
             },
         )
         binding.contentList.addView(paneRow)
-        return filterPane to listPane
+        return filterPane.content to listPane.content
     }
 
     private fun renderSongListInto(container: LinearLayout, state: SongRenderState, includeServerStatus: Boolean) {
