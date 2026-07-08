@@ -45,6 +45,13 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isVisible
+import androidx.core.widget.NestedScrollView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.window.layout.FoldingFeature
+import androidx.window.layout.WindowInfoTracker
+import androidx.window.layout.WindowMetricsCalculator
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
@@ -83,6 +90,10 @@ import dev.minepacu.stelliveeventnotifier.feature.home.ServerHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailFormatting
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventHeroTagTone
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventImagePolicy
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.GoodsEventSelectionMode
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventsPanePolicy
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongMemberSelectionMode
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongsPanePolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -94,6 +105,11 @@ import kotlin.concurrent.thread
 import dev.minepacu.stelliveeventnotifier.feature.home.SettingsHubRow
 import dev.minepacu.stelliveeventnotifier.feature.home.StatusSummaryItem
 import dev.minepacu.stelliveeventnotifier.ui.chrome.MainScreenChromePolicy
+import dev.minepacu.stelliveeventnotifier.ui.adaptive.HubAdaptivePolicy
+import dev.minepacu.stelliveeventnotifier.ui.adaptive.HubAdaptiveSpec
+import dev.minepacu.stelliveeventnotifier.ui.adaptive.HubFoldFeature
+import dev.minepacu.stelliveeventnotifier.ui.adaptive.HubFoldOrientation
+import dev.minepacu.stelliveeventnotifier.ui.adaptive.HubFoldState
 import dev.minepacu.stelliveeventnotifier.ui.components.HubCardFactory
 import dev.minepacu.stelliveeventnotifier.ui.components.HubCardStyle
 import dev.minepacu.stelliveeventnotifier.ui.components.SectionHeaderView
@@ -101,6 +117,10 @@ import dev.minepacu.stelliveeventnotifier.ui.components.TopFilterGroup
 import dev.minepacu.stelliveeventnotifier.ui.components.TopFilterOption
 
 private const val EXIT_BACK_PRESS_INTERVAL_MS = 2_000L
+private const val NAVIGATION_RAIL_WIDTH_DP = 80
+private const val LARGE_SCREEN_CONTENT_MAX_WIDTH_DP = 760
+private const val GOODS_EVENTS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1120
+private const val SONGS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1080
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -112,6 +132,22 @@ private data class LiveClockTextView(
 private data class LiveDragPayload(
     val memberId: String,
     val fromIndex: Int,
+)
+
+private data class RootNavigationItem(
+    val screen: HubScreen,
+    val view: View,
+)
+
+private data class SongRenderState(
+    val catalogMembers: List<HubMember>,
+    val visibleSongs: List<SongCatalogItem>,
+    val pagedSongs: List<SongCatalogItem>,
+)
+
+private data class ScrollablePane(
+    val scrollView: NestedScrollView,
+    val content: LinearLayout,
 )
 
 private lateinit var binding: ActivityMainBinding
@@ -130,6 +166,8 @@ private lateinit var binding: ActivityMainBinding
     private var liveStatusSourceLabel = "앱 내 목업"
     private var debugModeEnabled = false
     private var systemTopInsetPx = 0
+    private var currentFoldFeature: HubFoldFeature? = null
+    private var currentAdaptiveSpec: HubAdaptiveSpec = HubAdaptivePolicy.spec(widthDp = 0)
     private val serverConnectionDebugLogs = mutableListOf("bootstrap: 대기 중")
     private val navigationHistory = MainNavigationHistory()
     private var lastRootBackPressedAt = 0L
@@ -175,6 +213,7 @@ private var notificationPermissionRequested = false
         serverRepository = createServerRepository()
         syncCurrentPushToken()
         configureTopBarGlass()
+        startAdaptiveWindowTracking()
         setupTopBarScrollBehavior()
         setupBackNavigation()
         setupTopBarActions()
@@ -226,6 +265,64 @@ private var notificationPermissionRequested = false
             flushPendingPushToken = { pushTokenSyncer.flushPendingToken() },
         )
     }
+
+    private fun startAdaptiveWindowTracking() {
+        updateAdaptiveSpec(foldFeature = currentFoldFeature, renderIfChanged = false)
+        binding.root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            updateAdaptiveSpec(foldFeature = currentFoldFeature, renderIfChanged = true)
+            updateNavigationChrome()
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                WindowInfoTracker.getOrCreate(this@MainActivity)
+                    .windowLayoutInfo(this@MainActivity)
+                    .collect { layoutInfo ->
+                        currentFoldFeature = layoutInfo.displayFeatures
+                            .filterIsInstance<FoldingFeature>()
+                            .firstOrNull()
+                            ?.toHubFoldFeature()
+                        updateAdaptiveSpec(foldFeature = currentFoldFeature, renderIfChanged = true)
+                    }
+            }
+        }
+    }
+
+    private fun updateAdaptiveSpec(foldFeature: HubFoldFeature?, renderIfChanged: Boolean) {
+        val previousSpec = currentAdaptiveSpec
+        val nextSpec = HubAdaptivePolicy.spec(
+            widthDp = currentWindowWidthDp(),
+            foldFeature = foldFeature,
+        )
+        if (nextSpec == currentAdaptiveSpec) return
+        currentAdaptiveSpec = nextSpec
+        updateNavigationChrome()
+        if (renderIfChanged && nextSpec.widthClass != previousSpec.widthClass) {
+            renderScreen(navigationHistory.currentScreen)
+        }
+    }
+
+    private fun currentWindowWidthDp(): Int {
+        val bounds = WindowMetricsCalculator.getOrCreate()
+            .computeCurrentWindowMetrics(this)
+            .bounds
+        return (bounds.width() / resources.displayMetrics.density).toInt()
+    }
+
+    private fun FoldingFeature.toHubFoldFeature(): HubFoldFeature =
+        HubFoldFeature(
+            state = when (state) {
+                FoldingFeature.State.FLAT -> HubFoldState.FLAT
+                FoldingFeature.State.HALF_OPENED -> HubFoldState.HALF_OPENED
+                else -> HubFoldState.UNKNOWN
+            },
+            orientation = when (orientation) {
+                FoldingFeature.Orientation.VERTICAL -> HubFoldOrientation.VERTICAL
+                FoldingFeature.Orientation.HORIZONTAL -> HubFoldOrientation.HORIZONTAL
+                else -> null
+            },
+            isSeparating = isSeparating,
+            bounds = bounds,
+        )
 
     private fun syncCurrentPushToken() {
         FirebaseMessaging.getInstance().token
@@ -282,8 +379,15 @@ private var notificationPermissionRequested = false
     private fun handleAppDeepLink(intent: Intent?): Boolean {
         val eventId = HubCalendarDeepLinkPolicy.eventIdFromAppDeepLink(intent?.dataString) ?: return false
         selectedHubEventId = eventId
+        serverHubEventDetailLoadedId = null
         navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
-        navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
+        if (shouldUseGoodsEventsTwoPane()) {
+            renderGoodsEvents()
+            updateSelectedBottomNavigation(HubScreen.GOODS_EVENTS)
+            updateNavigationChrome()
+        } else {
+            navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
+        }
         return true
     }
 
@@ -294,9 +398,9 @@ private var notificationPermissionRequested = false
     }
 
     private fun setupBottomNavigation() {
-        bottomNavigationItems().forEach { item ->
-            item.setOnClickListener {
-                navigateToRoot(screenForItem(item.id))
+        rootNavigationItems().forEach { item ->
+            item.view.setOnClickListener {
+                navigateToRoot(item.screen)
             }
         }
     }
@@ -402,21 +506,36 @@ HubScreen.GOODS_EVENTS -> renderGoodsEvents()
             HubScreen.SETTINGS_HUB_EVENTS -> renderSettingsHubEvents()
             HubScreen.SETTINGS_ADVANCED -> renderSettingsAdvanced()
         }
-        binding.contentRefresh.isEnabled = screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS || screen == HubScreen.SONGS
+        updateTwoPaneScrollChrome(screen)
     }
 
-    private fun updateSelectedBottomNavigation(screen: HubScreen) {
-        val selectedItem = itemForScreen(screen) ?: return
-        bottomNavigationItems().forEach { item ->
-            setSelectedState(item, item.id == selectedItem)
+    private fun updateTwoPaneScrollChrome(screen: HubScreen = navigationHistory.currentScreen) {
+        val isTwoPaneScreen =
+            screen == HubScreen.GOODS_EVENTS && shouldUseGoodsEventsTwoPane() ||
+                screen == HubScreen.SONGS && shouldUseSongsTwoPane()
+        binding.contentRefresh.isEnabled =
+            !isTwoPaneScreen && (screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS || screen == HubScreen.SONGS)
+        if (isTwoPaneScreen) {
+            binding.contentRefresh.isRefreshing = false
         }
     }
 
-    private fun bottomNavigationItems(): List<View> = listOf(
-        binding.tabHome,
-        binding.tabLive,
-        binding.tabSongs,
-        binding.tabGoodsEvents
+    private fun updateSelectedBottomNavigation(screen: HubScreen) {
+        val selectedScreen = itemForScreen(screen)?.let(::screenForItem) ?: return
+        rootNavigationItems().forEach { item ->
+            setSelectedState(item.view, item.screen == selectedScreen)
+        }
+    }
+
+    private fun rootNavigationItems(): List<RootNavigationItem> = listOf(
+        RootNavigationItem(HubScreen.HOME, binding.tabHome),
+        RootNavigationItem(HubScreen.LIVE, binding.tabLive),
+        RootNavigationItem(HubScreen.SONGS, binding.tabSongs),
+        RootNavigationItem(HubScreen.GOODS_EVENTS, binding.tabGoodsEvents),
+        RootNavigationItem(HubScreen.HOME, binding.railTabHome),
+        RootNavigationItem(HubScreen.LIVE, binding.railTabLive),
+        RootNavigationItem(HubScreen.SONGS, binding.railTabSongs),
+        RootNavigationItem(HubScreen.GOODS_EVENTS, binding.railTabGoodsEvents),
     )
 
     private fun setSelectedState(view: View, selected: Boolean) {
@@ -431,6 +550,7 @@ HubScreen.GOODS_EVENTS -> renderGoodsEvents()
 private fun updateNavigationChrome() {
         val canGoBack = navigationHistory.canGoBack
         val spec = MainScreenChromePolicy.spec(navigationHistory.currentScreen.id, canGoBack)
+        val navigationSpec = MainScreenChromePolicy.navigationSpec(currentAdaptiveSpec)
         binding.topBarBack.isVisible = canGoBack
         binding.topBarTitleGroup.setPaddingRelative(
             dp(MainUiPolicy.topBarTitleStartInsetDp(canGoBack)),
@@ -440,12 +560,21 @@ private fun updateNavigationChrome() {
         )
         binding.topBarTitleGroup.isVisible = spec.showTopBarTitleAtRest
         binding.topBarSettings.isVisible = spec.showSettingsAction
-        binding.topBarSongSearch.isVisible = spec.showSongSearchAction
+        binding.topBarSongSearch.isVisible = spec.showSongSearchAction &&
+            SongsPanePolicy.shouldShowTopBarSearchAction(currentAdaptiveSpec)
+        binding.bottomNavigation.isVisible = navigationSpec.showBottomNavigation
+        binding.navigationRail.isVisible = navigationSpec.showNavigationRail
+        binding.navigationRailDivider.isVisible = navigationSpec.showNavigationRail
+        updateTopGlassOverlayStartMargin(navigationSpec.showNavigationRail)
+        updateContentWidthConstraint(navigationSpec.constrainContentWidth)
     }
 
     private fun screenForItem(itemId: Int): HubScreen = when (itemId) {
+        R.id.rail_tab_live,
         R.id.tab_live -> HubScreen.LIVE
+        R.id.rail_tab_songs,
         R.id.tab_songs -> HubScreen.SONGS
+        R.id.rail_tab_goods_events,
         R.id.tab_goods_events -> HubScreen.GOODS_EVENTS
         else -> HubScreen.HOME
     }
@@ -491,6 +620,69 @@ private fun startScreen(screenId: String, title: String, role: String) {
         val topPadding = if (underTopBar) 0 else overlayHeight
         val horizontalPadding = if (underTopBar) 0 else dp(18)
         binding.contentList.setPadding(horizontalPadding, topPadding, horizontalPadding, dp(20))
+    }
+
+    private fun updateTopGlassOverlayStartMargin(showNavigationRail: Boolean) {
+        val marginStart = if (showNavigationRail) dp(NAVIGATION_RAIL_WIDTH_DP) + dp(1) else 0
+        val params = binding.topGlassOverlay.layoutParams as? FrameLayout.LayoutParams ?: return
+        if (params.marginStart == marginStart) return
+        params.marginStart = marginStart
+        binding.topGlassOverlay.layoutParams = params
+    }
+
+    private fun updateContentWidthConstraint(constrainContentWidth: Boolean) {
+        val params = binding.contentList.layoutParams
+        val nextWidth = if (constrainContentWidth) {
+            val maxWidthDp = when {
+                navigationHistory.currentScreen == HubScreen.GOODS_EVENTS && shouldUseGoodsEventsTwoPane() ->
+                    GOODS_EVENTS_TWO_PANE_CONTENT_MAX_WIDTH_DP
+                navigationHistory.currentScreen == HubScreen.SONGS && shouldUseSongsTwoPane() ->
+                    SONGS_TWO_PANE_CONTENT_MAX_WIDTH_DP
+                else -> LARGE_SCREEN_CONTENT_MAX_WIDTH_DP
+            }
+            val availableWidth = binding.contentScroll.width.takeIf { it > 0 } ?: dp(maxWidthDp)
+            minOf(dp(maxWidthDp), availableWidth)
+        } else {
+            ViewGroup.LayoutParams.MATCH_PARENT
+        }
+        if (params.width != nextWidth) {
+            params.width = nextWidth
+            binding.contentList.layoutParams = params
+        }
+        (binding.contentList.layoutParams as? FrameLayout.LayoutParams)?.let { frameParams ->
+            val nextGravity = if (constrainContentWidth) Gravity.TOP or Gravity.CENTER_HORIZONTAL else Gravity.NO_GRAVITY
+            if (frameParams.gravity != nextGravity) {
+                frameParams.gravity = nextGravity
+                binding.contentList.layoutParams = frameParams
+            }
+        }
+    }
+
+    private fun scrollablePane(): ScrollablePane {
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val scrollView = NestedScrollView(this).apply {
+            isFillViewport = true
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            addView(
+                content,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
+        return ScrollablePane(scrollView, content)
+    }
+
+    private fun twoPaneViewportHeight(): Int {
+        val viewport = binding.contentScroll.height
+        val verticalPadding = binding.contentList.paddingTop + binding.contentList.paddingBottom
+        val fallback = resources.displayMetrics.heightPixels - systemTopInsetPx
+        return (viewport.takeIf { it > 0 } ?: fallback)
+            .minus(verticalPadding)
+            .coerceAtLeast(dp(360))
     }
 
     private fun clearTopFilters() {
@@ -674,7 +866,22 @@ private fun startScreen(screenId: String, title: String, role: String) {
     private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<HubEvent>) {
         goodsEventsDays = days
         goodsEvents = events
-        val filteredDays = days.mapNotNull { day ->
+        val filteredDays = filteredGoodsEventDays(days)
+        val filteredEvents = filteredGoodsEvents(events)
+        val monthDays = monthDaysForGoodsEvents(filteredDays)
+        binding.contentList.removeAllViews()
+        if (shouldUseGoodsEventsTwoPane()) {
+            renderServerGoodsEventsTwoPane(filteredDays, filteredEvents, monthDays)
+            return
+        }
+        renderGoodsEventsListInto(binding.contentList, filteredDays, filteredEvents, monthDays)
+        binding.contentList.addView(
+            noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
+        )
+    }
+
+    private fun filteredGoodsEventDays(days: List<HubCalendarDay>): List<HubCalendarDay> =
+        days.mapNotNull { day ->
             val entries = day.entries.filter { entry ->
                 MainUiPolicy.goodsEventMatchesFilter(
                     selectedFilter,
@@ -685,7 +892,9 @@ private fun startScreen(screenId: String, title: String, role: String) {
             }
             day.copy(entries = entries).takeIf { entries.isNotEmpty() }
         }
-        val filteredEvents = events.filter { event ->
+
+    private fun filteredGoodsEvents(events: List<HubEvent>): List<HubEvent> =
+        events.filter { event ->
             MainUiPolicy.goodsEventMatchesFilter(
                 selectedFilter,
                 event.category,
@@ -693,14 +902,65 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 event.participationMode,
             )
         }
-        val monthDays = filteredDays.filter { it.date.take(7) == goodsEventsSelectedMonth.toString() }
-        binding.contentList.removeAllViews()
-        binding.contentList.addView(filterPanel(MainUiPolicy.goodsEventsTopFilterGroups(selectedFilter)) { _, optionId ->
+
+    private fun monthDaysForGoodsEvents(days: List<HubCalendarDay>): List<HubCalendarDay> =
+        days.filter { it.date.take(7) == goodsEventsSelectedMonth.toString() }
+
+    private fun renderServerGoodsEventsTwoPane(
+        filteredDays: List<HubCalendarDay>,
+        filteredEvents: List<HubEvent>,
+        monthDays: List<HubCalendarDay>,
+    ) {
+        val paneRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            isBaselineAligned = false
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                twoPaneViewportHeight(),
+            )
+        }
+        val listPane = scrollablePane()
+        val detailPane = scrollablePane().apply {
+            scrollView.background = rounded(color(R.color.hub_surface), dp(16), color(R.color.hub_line))
+            content.setPadding(dp(10), dp(10), dp(10), dp(10))
+        }
+        val paneWeights = if (shouldUseGoodsEventsFoldAwarePane()) {
+            1f to 1f
+        } else {
+            1f to 1f
+        }
+        paneRow.addView(
+            listPane.scrollView,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, paneWeights.first).apply {
+                marginEnd = dp(8)
+            },
+        )
+        paneRow.addView(
+            detailPane.scrollView,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, paneWeights.second).apply {
+                marginStart = dp(8)
+            },
+        )
+        binding.contentList.addView(paneRow)
+        renderGoodsEventsListInto(listPane.content, filteredDays, filteredEvents, monthDays)
+        listPane.content.addView(
+            noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
+        )
+        renderGoodsEventDetailPane(detailPane.content)
+    }
+
+    private fun renderGoodsEventsListInto(
+        container: LinearLayout,
+        filteredDays: List<HubCalendarDay>,
+        filteredEvents: List<HubEvent>,
+        monthDays: List<HubCalendarDay>,
+    ) {
+        container.addView(filterPanel(MainUiPolicy.goodsEventsTopFilterGroups(selectedFilter)) { _, optionId ->
             selectedFilter = optionId
             renderServerGoodsEvents(goodsEventsDays, goodsEvents)
         })
-        binding.contentList.addView(serverStatusStrip())
-        binding.contentList.addView(
+        container.addView(serverStatusStrip())
+        container.addView(
             HubEventsCalendarView(
                 context = this,
                 days = filteredDays,
@@ -712,10 +972,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
                         renderServerGoodsEvents(goodsEventsDays, goodsEvents)
                     }
                 },
-            ) { eventId ->
-                selectedHubEventId = eventId
-                navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
-            }
+            ) { eventId -> onGoodsEventSelected(eventId) }
         )
         val feedRows = CalendarUiPolicy.feedRenderRowsForMonth(
             days = monthDays,
@@ -726,15 +983,63 @@ private fun startScreen(screenId: String, title: String, role: String) {
         feedRows.forEach { row ->
             val header = CalendarUiPolicy.feedRowHeaderText(row)
             if (header != previousHeader) {
-                binding.contentList.addView(calendarDayHeader(header))
+                container.addView(calendarDayHeader(header))
                 previousHeader = header
             }
             row.canonicalEvent?.let { event ->
-                binding.contentList.addView(hubEventCard(event))
-            } ?: binding.contentList.addView(localCalendarEntryRow(row.entry))
+                container.addView(hubEventCard(event))
+            } ?: container.addView(localCalendarEntryRow(row.entry))
         }
-        binding.contentList.addView(
-            noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
+    }
+
+    private fun onGoodsEventSelected(eventId: String) {
+        selectedHubEventId = eventId
+        serverHubEventDetailLoadedId = null
+
+        when (HubEventsPanePolicy.selectionMode(currentAdaptiveSpec)) {
+            GoodsEventSelectionMode.UPDATE_INLINE_DETAIL -> renderServerGoodsEvents(goodsEventsDays, goodsEvents)
+            GoodsEventSelectionMode.NAVIGATE_TO_DETAIL -> navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
+        }
+    }
+
+    private fun shouldUseGoodsEventsTwoPane(): Boolean =
+        HubEventsPanePolicy.shouldUseTwoPane(currentAdaptiveSpec)
+
+    private fun shouldUseGoodsEventsFoldAwarePane(): Boolean =
+        HubEventsPanePolicy.shouldUseFoldAwarePane(currentAdaptiveSpec)
+
+    private fun renderGoodsEventDetailPane(container: LinearLayout) {
+        val eventId = selectedHubEventId
+        if (eventId == null) {
+            renderGoodsEventEmptyDetailPane(container)
+            return
+        }
+        if (serverHubEventDetailLoadedId != eventId) {
+            container.addView(loadingCard(MainUiPolicy.hubEventDetailLoadingPresentation()))
+            CoroutineScope(Dispatchers.Main).launch {
+                serverHubEventDetail = serverRepository.hubEventDetail(eventId)
+                serverHubEventDetailLoadedId = eventId
+                if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS && selectedHubEventId == eventId) {
+                    renderServerGoodsEvents(goodsEventsDays, goodsEvents)
+                }
+            }
+            return
+        }
+        val event = currentSelectedHubEvent()
+        if (event == null) {
+            container.addView(compactEventCard("항목 없음", "목록에서 다시 선택해 주세요.", listOf("굿즈/행사")))
+            return
+        }
+        renderHubEventDetailInto(container, event, fullScreen = false)
+    }
+
+    private fun renderGoodsEventEmptyDetailPane(container: LinearLayout) {
+        container.addView(
+            compactEventCard(
+                title = "굿즈/행사를 선택해 상세 정보를 확인하세요.",
+                body = "왼쪽 목록이나 캘린더에서 항목을 선택하면 이 영역에 상세 정보가 표시됩니다.",
+                pills = listOf("상세")
+            )
         )
     }
 
@@ -778,8 +1083,7 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
             }
             return
         }
-        val event = serverHubEventDetail?.takeIf { it.id == selectedHubEventId }
-            ?: repository.hubEvents.firstOrNull { it.id == selectedHubEventId }
+        val event = currentSelectedHubEvent()
         if (event == null) {
             startScreen(
                 screenId = "goods_event_detail",
@@ -799,25 +1103,43 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
         binding.collapsedRole.text = ""
         binding.contentList.removeAllViews()
         applyContentTopPadding(underTopBar = true)
-        binding.contentList.addView(hubEventDetailHero(event))
-        binding.contentList.addView(hubEventDetailActions(event))
-        binding.contentList.addView(sectionLabel(HubEventDetailFormatting.SummaryLabel).withDetailHorizontalMargins())
-        binding.contentList.addView(
+        renderHubEventDetailInto(binding.contentList, event, fullScreen = true)
+    }
+
+    private fun currentSelectedHubEvent(): HubEvent? =
+        serverHubEventDetail?.takeIf { it.id == selectedHubEventId }
+            ?: goodsEvents.firstOrNull { it.id == selectedHubEventId }
+            ?: repository.hubEvents.firstOrNull { it.id == selectedHubEventId }
+
+    private fun renderHubEventDetailInto(container: LinearLayout, event: HubEvent, fullScreen: Boolean) {
+        container.addView(hubEventDetailHero(event).apply {
+            if (!fullScreen) {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(220),
+                ).apply {
+                    bottomMargin = dp(8)
+                }
+            }
+        })
+        container.addView(hubEventDetailActions(event))
+        container.addView(sectionLabel(HubEventDetailFormatting.SummaryLabel).let { if (fullScreen) it.withDetailHorizontalMargins() else it })
+        container.addView(
             compactEventCard(
                 title = "",
                 body = event.summary ?: "공식 출처 기반 굿즈/행사 정보입니다.",
                 pills = emptyList()
-            ).withDetailHorizontalMargins()
+            ).let { if (fullScreen) it.withDetailHorizontalMargins() else it }
         )
-        binding.contentList.addView(sectionLabel("행사 정보").withDetailHorizontalMargins())
-        binding.contentList.addView(
+        container.addView(sectionLabel("행사 정보").let { if (fullScreen) it.withDetailHorizontalMargins() else it })
+        container.addView(
             settingsPanel(
                 rows = HubEventDetailFormatting.rows(event).map { row ->
                     SettingRow(row.label, row.value, null, null)
                 }
-            ).withDetailHorizontalMargins()
+            ).let { if (fullScreen) it.withDetailHorizontalMargins() else it }
         )
-        binding.contentList.addView(noticeCard(HubEventDetailFormatting.NoticeText).withDetailHorizontalMargins())
+        container.addView(noticeCard(HubEventDetailFormatting.NoticeText).let { if (fullScreen) it.withDetailHorizontalMargins() else it })
     }
 
     private fun renderLive() {
@@ -917,32 +1239,16 @@ private fun renderSongs() {
             role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
         )
         clearTopFilters()
-        binding.contentList.addView(songFilterPanel())
-        binding.contentList.addView(serverStatusStrip())
-        binding.contentList.addView(loadingCard(MainUiPolicy.songsLoadingPresentation()))
+        if (shouldUseSongsTwoPane()) {
+            renderSongsTwoPaneLoading()
+        } else {
+            binding.contentList.addView(songFilterPanel())
+            binding.contentList.addView(serverStatusStrip())
+            binding.contentList.addView(loadingCard(MainUiPolicy.songsLoadingPresentation()))
+        }
 
         CoroutineScope(Dispatchers.Main).launch {
-            val songItems = if (cachedSongType == selectedSongType && cachedSongItems.isNotEmpty()) {
-                cachedSongItems
-            } else {
-                serverRepository.songs(generationId = "all", type = selectedSongType).items.also {
-                    cachedSongItems = it
-                    cachedSongType = selectedSongType
-                }
-            }
-            val songCatalogMembers = serverMembers ?: repository.members
-            val memberGenerationById = songCatalogMembers.associate { it.id to it.generationId }
-            val visibleSongs = MainUiPolicy.sortSongs(
-                songItems.filter { song ->
-                    MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
-                        MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
-                        MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers)
-                },
-                selectedSongSortId,
-            )
-            val safePage = MainUiPolicy.coerceSongPage(selectedSongPage, visibleSongs.size)
-            selectedSongPage = safePage
-            val pagedSongs = MainUiPolicy.songPageItems(visibleSongs, safePage)
+            val state = songRenderState(loadSongItemsForCurrentType())
             if (navigationHistory.currentScreen != HubScreen.SONGS) return@launch
             startScreen(
                 screenId = "songs",
@@ -950,20 +1256,117 @@ private fun renderSongs() {
                 role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
             )
             clearTopFilters()
-            binding.contentList.addView(songFilterPanel())
-            binding.contentList.addView(serverStatusStrip())
-            if (visibleSongs.isEmpty()) {
-                binding.contentList.addView(noticeCard("표시할 노래가 없습니다. 필터를 바꾸거나 나중에 다시 확인해 주세요."))
+            if (shouldUseSongsTwoPane()) {
+                renderSongsTwoPane(state)
             } else {
-                pagedSongs.forEach { song ->
-                    binding.contentList.addView(songCard(song, songCatalogMembers))
-                }
-                if (MainUiPolicy.songPageCount(visibleSongs.size) > 1) {
-                    binding.contentList.addView(songPageControl(visibleSongs.size))
-                }
+                binding.contentList.addView(songFilterPanel())
+                renderSongListInto(binding.contentList, state, includeServerStatus = true)
             }
         }
     }
+
+    private suspend fun loadSongItemsForCurrentType(): List<SongCatalogItem> =
+        if (cachedSongType == selectedSongType && cachedSongItems.isNotEmpty()) {
+            cachedSongItems
+        } else {
+            serverRepository.songs(generationId = "all", type = selectedSongType).items.also {
+                cachedSongItems = it
+                cachedSongType = selectedSongType
+            }
+        }
+
+    private fun songRenderState(songItems: List<SongCatalogItem>): SongRenderState {
+        val songCatalogMembers = serverMembers ?: repository.members
+        val memberGenerationById = songCatalogMembers.associate { it.id to it.generationId }
+        val visibleSongs = MainUiPolicy.sortSongs(
+            songItems.filter { song ->
+                MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
+                    MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
+                    MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers)
+            },
+            selectedSongSortId,
+        )
+        val safePage = MainUiPolicy.coerceSongPage(selectedSongPage, visibleSongs.size)
+        selectedSongPage = safePage
+        return SongRenderState(
+            catalogMembers = songCatalogMembers,
+            visibleSongs = visibleSongs,
+            pagedSongs = MainUiPolicy.songPageItems(visibleSongs, safePage),
+        )
+    }
+
+    private fun renderSongsTwoPaneLoading() {
+        val panes = songsTwoPaneContainer()
+        renderSongFilterPaneInto(panes.first)
+        panes.second.addView(loadingCard(MainUiPolicy.songsLoadingPresentation()))
+    }
+
+    private fun renderSongsTwoPane(state: SongRenderState) {
+        val panes = songsTwoPaneContainer()
+        renderSongFilterPaneInto(panes.first, state.visibleSongs.size)
+        renderSongListInto(panes.second, state, includeServerStatus = true)
+    }
+
+    private fun songsTwoPaneContainer(): Pair<LinearLayout, LinearLayout> {
+        binding.contentList.removeAllViews()
+        val paneRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            isBaselineAligned = false
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                twoPaneViewportHeight(),
+            )
+        }
+        val filterPane = scrollablePane()
+        val listPane = scrollablePane()
+        val paneWeights = if (shouldUseSongsFoldAwarePane()) {
+            0.9f to 1.1f
+        } else {
+            0.9f to 1.1f
+        }
+        paneRow.addView(
+            filterPane.scrollView,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, paneWeights.first).apply {
+                marginEnd = dp(8)
+            },
+        )
+        paneRow.addView(
+            listPane.scrollView,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, paneWeights.second).apply {
+                marginStart = dp(8)
+            },
+        )
+        binding.contentList.addView(paneRow)
+        return filterPane.content to listPane.content
+    }
+
+    private fun renderSongListInto(container: LinearLayout, state: SongRenderState, includeServerStatus: Boolean) {
+        if (includeServerStatus) {
+            container.addView(serverStatusStrip())
+        }
+        if (state.visibleSongs.isEmpty()) {
+            container.addView(noticeCard("표시할 노래가 없습니다. 필터를 바꾸거나 나중에 다시 확인해 주세요."))
+            return
+        }
+        state.pagedSongs.forEach { song ->
+            container.addView(songCard(song, state.catalogMembers))
+        }
+        if (MainUiPolicy.songPageCount(state.visibleSongs.size) > 1) {
+            container.addView(songPageControl(state.visibleSongs.size))
+        }
+    }
+
+    private fun renderSongFilterPaneInto(container: LinearLayout, visibleCount: Int = 0) {
+        container.addView(songSearchCard())
+        container.addView(songFilterPanel())
+        container.addView(songInlineMemberFilterPanel(visibleCount))
+    }
+
+    private fun shouldUseSongsTwoPane(): Boolean =
+        SongsPanePolicy.shouldUseTwoPane(currentAdaptiveSpec)
+
+    private fun shouldUseSongsFoldAwarePane(): Boolean =
+        SongsPanePolicy.shouldUseFoldAwarePane(currentAdaptiveSpec)
 
     private fun renderSongSearch() {
         binding.topBarSongSearch.isEnabled = true
@@ -1108,10 +1511,54 @@ private fun songFilterPanel(): MaterialCardView =
             addView(songSelectorRow("정렬", MainUiPolicy.songSortLabel(selectedSongSortId), accentValue = true) {
                 showSongSortDialog()
             })
-            addView(divider())
-            addView(songSelectorRow("멤버", MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberId), accentValue = false) {
-                navigateTo(HubScreen.SONG_MEMBER_FILTER, addToBackStack = true)
+            if (SongsPanePolicy.memberSelectionMode(currentAdaptiveSpec) == SongMemberSelectionMode.NAVIGATE_TO_MEMBER_FILTER) {
+                addView(divider())
+                addView(songSelectorRow("멤버", MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberId), accentValue = false) {
+                    navigateTo(HubScreen.SONG_MEMBER_FILTER, addToBackStack = true)
+                })
+            }
+        })
+    }
+
+private fun songInlineMemberFilterPanel(visibleCount: Int): MaterialCardView =
+    baseCard(HubCardStyle.COMPACT).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            bottomMargin = dp(12)
+        }
+        val members = serverMembers ?: repository.members
+        val memberById = members.associateBy { it.id }
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(10))
+            addView(TextView(context).apply {
+                text = "멤버"
+                setTextColor(color(R.color.hub_text))
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
             })
+            addView(TextView(context).apply {
+                text = MainUiPolicy.songMemberFilterSummary(members, selectedSongMemberId, visibleCount)
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 12f
+                setPadding(0, dp(4), 0, dp(8))
+            })
+            MainUiPolicy.songMemberFilters(members).forEach { option ->
+                addView(
+                    songMemberFilterOptionCard(
+                        option = option,
+                        member = memberById[option.id],
+                        selected = option.id == selectedSongMemberId,
+                    ).apply {
+                        setOnClickListener {
+                            setSelectedSongMember(option.id)
+                            renderSongs()
+                        }
+                    }
+                )
+            }
         })
     }
 
@@ -1230,12 +1677,12 @@ private fun songSearchCard(): MaterialCardView =
                 textSize = 14f
                 setPadding(dp(13), dp(8), dp(13), dp(8))
                 setOnEditorActionListener { view, _, _ ->
-                    scheduleSongSearchRender(view.text?.toString().orEmpty())
+                    applySongSearchText(view.text?.toString().orEmpty())
                     true
                 }
                 setOnFocusChangeListener { view, hasFocus ->
                     if (!hasFocus) {
-                        scheduleSongSearchRender((view as EditText).text?.toString().orEmpty())
+                        applySongSearchText((view as EditText).text?.toString().orEmpty())
                     }
                 }
                 addTextChangedListener(object : TextWatcher {
@@ -1250,6 +1697,16 @@ private fun songSearchCard(): MaterialCardView =
             }
             addView(input)
         }
+
+private fun applySongSearchText(rawQuery: String) {
+    if (shouldUseSongsTwoPane()) {
+        selectedSongQuery = MainUiPolicy.normalizedSongQuery(rawQuery)
+        selectedSongPage = 1
+        renderSongs()
+    } else {
+        scheduleSongSearchRender(rawQuery)
+    }
+}
 
 private fun scheduleSongSearchRender(rawQuery: String) {
     val normalized = MainUiPolicy.normalizedSongQuery(rawQuery)
@@ -2064,6 +2521,7 @@ private fun updateTopBarScrolled(scrolled: Boolean) {
             systemTopInsetPx = bars.top
             binding.topGlassOverlay.setPadding(0, bars.top, 0, 0)
             binding.mainContent.setPadding(0, 0, 0, bars.bottom)
+            binding.navigationRail.setPadding(0, bars.top + dp(8), 0, bars.bottom + dp(8))
             applyContentTopPadding(underTopBar = navigationHistory.currentScreen == HubScreen.GOODS_EVENT_DETAIL)
             insets
         }
@@ -2520,6 +2978,9 @@ private fun liveMemberRow(member: HubMember, reorderable: Boolean = false): Mate
             }
             member.livePlatformUrl?.takeIf { it.startsWith("https://") }?.let { url ->
                 add(liveOpenLinkChip(url))
+                if (currentAdaptiveSpec.showAdjacentLiveAction) {
+                    add(liveOpenAdjacentChip(url))
+                }
             }
         }
         if (chips.isEmpty()) return null
@@ -2552,7 +3013,7 @@ private fun liveMemberRow(member: HubMember, reorderable: Boolean = false): Mate
 
     private fun liveOpenLinkChip(url: String): Chip =
         Chip(this).apply {
-            text = "CHZZK 열기"
+            text = getString(R.string.live_open_chzzk)
             isCheckable = false
             setEnsureMinTouchTargetSize(false)
             chipMinHeight = dp(24).toFloat()
@@ -2566,6 +3027,37 @@ private fun liveMemberRow(member: HubMember, reorderable: Boolean = false): Mate
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             }
         }
+
+    private fun liveOpenAdjacentChip(url: String): Chip =
+        Chip(this).apply {
+            text = getString(R.string.live_open_split)
+            isCheckable = false
+            setEnsureMinTouchTargetSize(false)
+            chipMinHeight = dp(24).toFloat()
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_card_surface_compact)
+            setTextColor(color(R.color.hub_text))
+            setOnClickListener {
+                openLiveUrlAdjacentOrFallback(url)
+            }
+        }
+
+    private fun openLiveUrlAdjacentOrFallback(url: String) {
+        val uri = Uri.parse(url)
+        val adjacentIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
+        }
+
+        runCatching {
+            startActivity(adjacentIntent)
+        }.onFailure {
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+        }
+    }
 
     private fun liveIndicator(size: Int): View = View(this).apply {
         background = rounded(
@@ -2900,8 +3392,7 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
             isClickable = true
             isFocusable = true
             setOnClickListener {
-                selectedHubEventId = event.id
-                navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
+                onGoodsEventSelected(event.id)
             }
         }
 
