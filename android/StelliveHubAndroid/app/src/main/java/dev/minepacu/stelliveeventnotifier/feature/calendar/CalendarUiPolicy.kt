@@ -132,6 +132,11 @@ object CalendarUiPolicy {
         return "${periodDateFormatter.format(startDate)}~${periodDateFormatter.format(endDate)}"
     }
 
+    fun feedRowHeaderText(row: CalendarFeedRenderRow): String =
+        entryPeriodDateText(row.entry)
+            .takeIf { it != row.entry.displayDate }
+            ?: row.day.date
+
     fun isWidgetSnapshotStale(snapshot: HubCalendarWidgetSnapshot, now: Instant): Boolean =
         !snapshot.staleAfter.isAfter(now)
 
@@ -404,9 +409,29 @@ object CalendarUiPolicy {
             .asSequence()
             .filter { YearMonth.from(LocalDate.parse(it.date)) == month }
             .flatMap { day -> day.entries.asSequence().map { entry -> CalendarFeedEntry(day, entry) } }
+            .sortedWith(
+                compareBy<CalendarFeedEntry>(
+                    { feedPrimaryDate(it) },
+                    { feedEndDate(it) },
+                    { it.entry.title },
+                    { it.entry.eventId },
+                )
+            )
             .filter { row -> seen.add(row.entry.eventId) }
             .toList()
     }
+
+    private fun feedPrimaryDate(row: CalendarFeedEntry): LocalDate =
+        (row.entry.startsAt ?: row.entry.endsAt)
+            ?.atZone(feedSortZoneId)
+            ?.toLocalDate()
+            ?: LocalDate.parse(row.day.date)
+
+    private fun feedEndDate(row: CalendarFeedEntry): LocalDate =
+        row.entry.endsAt
+            ?.atZone(feedSortZoneId)
+            ?.toLocalDate()
+            ?: feedPrimaryDate(row)
 
     fun feedRenderRowsForMonth(
         days: List<HubCalendarDay>,
@@ -428,6 +453,8 @@ object CalendarUiPolicy {
                 }
             }
     }
+
+    private val feedSortZoneId: ZoneId = ZoneId.of("Asia/Seoul")
 
     private fun List<HubCalendarEntry>.distinctByEventIdInDisplayOrder(): List<HubCalendarEntry> {
         val seen = linkedSetOf<String>()

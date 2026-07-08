@@ -7,6 +7,8 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
 import dev.minepacu.stelliveeventnotifier.feature.calendar.CalendarDateMarker
+import dev.minepacu.stelliveeventnotifier.feature.calendar.CalendarFeedRenderRow
+import dev.minepacu.stelliveeventnotifier.feature.calendar.CalendarUiPolicy
 import dev.minepacu.stelliveeventnotifier.feature.calendar.HubCalendarScopeMode
 import dev.minepacu.stelliveeventnotifier.feature.calendar.HubEventsCalendarUiState
 import dev.minepacu.stelliveeventnotifier.feature.calendar.HubEventsCalendarViewModel
@@ -143,6 +145,58 @@ class HubEventsCalendarViewModelTest {
         assertEquals(YearMonth.of(2026, 7), viewModel.uiState.selectedMonth)
         assertEquals(LocalDate.of(2026, 7, 11), viewModel.uiState.selectedDay)
         assertEquals(listOf("admin-event"), viewModel.uiState.visibleEntries.map { it.eventId })
+    }
+
+    @Test
+    fun feedRowHeaderUsesEachEntryPeriodWhenMultipleRangesShareDisplayDate() {
+        val first = entry("event-a", HubEventStatus.OPEN, HubEventCategory.ONLINE_GOODS).copy(
+            startsAt = Instant.parse("2026-06-19T00:00:00Z"),
+            endsAt = Instant.parse("2026-07-02T00:00:00Z"),
+            displayDate = "2026-07-02",
+        )
+        val second = entry("event-b", HubEventStatus.OPEN, HubEventCategory.ONLINE_GOODS).copy(
+            startsAt = Instant.parse("2026-07-02T00:00:00Z"),
+            endsAt = Instant.parse("2026-07-10T00:00:00Z"),
+            displayDate = "2026-07-02",
+        )
+        val day = HubCalendarDay("2026-07-02", listOf(first, second))
+
+        val firstHeader = CalendarUiPolicy.feedRowHeaderText(CalendarFeedRenderRow(day, first, null))
+        val secondHeader = CalendarUiPolicy.feedRowHeaderText(CalendarFeedRenderRow(day, second, null))
+
+        assertEquals("2026-06-19~2026-07-02", firstHeader)
+        assertEquals("2026-07-02~2026-07-10", secondHeader)
+    }
+
+    @Test
+    fun feedEntriesForMonthSortsRowsByActualEventDatesBeforeDeduping() {
+        val first = entry("event-a", HubEventStatus.OPEN, HubEventCategory.ONLINE_GOODS).copy(
+            startsAt = Instant.parse("2026-06-19T00:00:00Z"),
+            endsAt = Instant.parse("2026-07-02T00:00:00Z"),
+            displayDate = "2026-07-02",
+            title = "A",
+        )
+        val second = entry("event-b", HubEventStatus.OPEN, HubEventCategory.ONLINE_GOODS).copy(
+            startsAt = Instant.parse("2026-07-02T00:00:00Z"),
+            endsAt = Instant.parse("2026-07-10T00:00:00Z"),
+            displayDate = "2026-07-02",
+            title = "B",
+        )
+        val third = entry("event-c", HubEventStatus.OPEN, HubEventCategory.ONLINE_GOODS).copy(
+            startsAt = Instant.parse("2026-07-01T00:00:00Z"),
+            endsAt = Instant.parse("2026-07-03T00:00:00Z"),
+            displayDate = "2026-07-01",
+            title = "C",
+        )
+        val rows = CalendarUiPolicy.feedEntriesForMonth(
+            days = listOf(
+                HubCalendarDay("2026-07-02", listOf(second, first)),
+                HubCalendarDay("2026-07-01", listOf(third)),
+            ),
+            month = YearMonth.of(2026, 7),
+        )
+
+        assertEquals(listOf("event-a", "event-c", "event-b"), rows.map { it.entry.eventId })
     }
 
     private fun sampleDays(): List<HubCalendarDay> = listOf(

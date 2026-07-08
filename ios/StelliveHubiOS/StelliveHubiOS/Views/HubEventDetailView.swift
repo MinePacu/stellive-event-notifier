@@ -131,6 +131,7 @@ struct HubEventDetailView: View {
                 .foregroundStyle(HubEventDetailColors.muted)
                 .lineSpacing(3)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(17)
         .background(HubEventDetailColors.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }

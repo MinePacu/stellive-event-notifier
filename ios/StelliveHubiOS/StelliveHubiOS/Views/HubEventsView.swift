@@ -250,10 +250,56 @@ enum HubEventsFeedPolicy {
             .flatMap { day in
                 day.entries.map { entry in HubEventsFeedRow(day: day, entry: entry) }
             }
+            .sorted { lhs, rhs in
+                orderedBefore(lhs, rhs)
+            }
             .filter { row in
                 seenEventIDs.insert(row.entry.eventId).inserted
             }
     }
+
+    private static func orderedBefore(_ lhs: HubEventsFeedRow, _ rhs: HubEventsFeedRow) -> Bool {
+        let left = feedSortKey(lhs)
+        let right = feedSortKey(rhs)
+        if left.primaryDate != right.primaryDate {
+            return left.primaryDate < right.primaryDate
+        }
+        if left.endDate != right.endDate {
+            return left.endDate < right.endDate
+        }
+        if left.title != right.title {
+            return left.title < right.title
+        }
+        return left.eventId < right.eventId
+    }
+
+    private static func feedSortKey(_ row: HubEventsFeedRow) -> FeedSortKey {
+        let primaryDate = (row.entry.startsAt ?? row.entry.endsAt).map {
+            feedSortCalendar.startOfDay(for: $0)
+        } ?? HubEventsView.calendarDayFormatter.date(from: row.day.date) ?? .distantFuture
+        let endDate = row.entry.endsAt.map {
+            feedSortCalendar.startOfDay(for: $0)
+        } ?? primaryDate
+        return FeedSortKey(
+            primaryDate: primaryDate,
+            endDate: endDate,
+            title: row.entry.title,
+            eventId: row.entry.eventId
+        )
+    }
+
+    private struct FeedSortKey {
+        let primaryDate: Date
+        let endDate: Date
+        let title: String
+        let eventId: String
+    }
+
+    private static let feedSortCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+        return calendar
+    }()
 }
 
 struct HubEventDetailContainerView: View {

@@ -724,7 +724,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
         )
         var previousHeader: String? = null
         feedRows.forEach { row ->
-            val header = calendarDayHeaderText(row.day)
+            val header = CalendarUiPolicy.feedRowHeaderText(row)
             if (header != previousHeader) {
                 binding.contentList.addView(calendarDayHeader(header))
                 previousHeader = header
