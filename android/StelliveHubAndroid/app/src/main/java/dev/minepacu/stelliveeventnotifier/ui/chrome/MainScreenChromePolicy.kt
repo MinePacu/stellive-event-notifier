@@ -1,11 +1,19 @@
 package dev.minepacu.stelliveeventnotifier.ui.chrome
 
+import dev.minepacu.stelliveeventnotifier.ui.adaptive.HubAdaptiveSpec
+
 data class MainScreenChromeSpec(
     val showExpandedBodyHeader: Boolean,
     val showTopBarTitleAtRest: Boolean,
     val keepTopBarTitleWhenScrolled: Boolean,
     val showSettingsAction: Boolean,
     val showSongSearchAction: Boolean,
+)
+
+data class MainNavigationChromeSpec(
+    val showBottomNavigation: Boolean,
+    val showNavigationRail: Boolean,
+    val constrainContentWidth: Boolean,
 )
 
 object MainScreenChromePolicy {
@@ -21,6 +29,15 @@ object MainScreenChromePolicy {
             keepTopBarTitleWhenScrolled = screenId in titleStickyWhileScrollingScreens,
             showSettingsAction = screenId != "settings" && !screenId.startsWith("settings_"),
             showSongSearchAction = screenId == "songs" && !canGoBack,
+        )
+    }
+
+    fun navigationSpec(adaptiveSpec: HubAdaptiveSpec): MainNavigationChromeSpec {
+        val useRail = adaptiveSpec.useLargeScreenLayout
+        return MainNavigationChromeSpec(
+            showBottomNavigation = !useRail,
+            showNavigationRail = useRail,
+            constrainContentWidth = useRail,
         )
     }
 }
