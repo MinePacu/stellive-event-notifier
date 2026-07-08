@@ -45,6 +45,12 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.window.layout.FoldingFeature
+import androidx.window.layout.WindowInfoTracker
+import androidx.window.layout.WindowMetricsCalculator
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
@@ -94,6 +100,11 @@ import kotlin.concurrent.thread
 import dev.minepacu.stelliveeventnotifier.feature.home.SettingsHubRow
 import dev.minepacu.stelliveeventnotifier.feature.home.StatusSummaryItem
 import dev.minepacu.stelliveeventnotifier.ui.chrome.MainScreenChromePolicy
+import dev.minepacu.stelliveeventnotifier.ui.adaptive.HubAdaptivePolicy
+import dev.minepacu.stelliveeventnotifier.ui.adaptive.HubAdaptiveSpec
+import dev.minepacu.stelliveeventnotifier.ui.adaptive.HubFoldFeature
+import dev.minepacu.stelliveeventnotifier.ui.adaptive.HubFoldOrientation
+import dev.minepacu.stelliveeventnotifier.ui.adaptive.HubFoldState
 import dev.minepacu.stelliveeventnotifier.ui.components.HubCardFactory
 import dev.minepacu.stelliveeventnotifier.ui.components.HubCardStyle
 import dev.minepacu.stelliveeventnotifier.ui.components.SectionHeaderView
@@ -130,6 +141,8 @@ private lateinit var binding: ActivityMainBinding
     private var liveStatusSourceLabel = "앱 내 목업"
     private var debugModeEnabled = false
     private var systemTopInsetPx = 0
+    private var currentFoldFeature: HubFoldFeature? = null
+    private var currentAdaptiveSpec: HubAdaptiveSpec = HubAdaptivePolicy.spec(widthDp = 0)
     private val serverConnectionDebugLogs = mutableListOf("bootstrap: 대기 중")
     private val navigationHistory = MainNavigationHistory()
     private var lastRootBackPressedAt = 0L
@@ -175,6 +188,7 @@ private var notificationPermissionRequested = false
         serverRepository = createServerRepository()
         syncCurrentPushToken()
         configureTopBarGlass()
+        startAdaptiveWindowTracking()
         setupTopBarScrollBehavior()
         setupBackNavigation()
         setupTopBarActions()
@@ -226,6 +240,64 @@ private var notificationPermissionRequested = false
             flushPendingPushToken = { pushTokenSyncer.flushPendingToken() },
         )
     }
+
+    private fun startAdaptiveWindowTracking() {
+        updateAdaptiveSpec(foldFeature = currentFoldFeature, renderIfChanged = false)
+        binding.root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            updateAdaptiveSpec(foldFeature = currentFoldFeature, renderIfChanged = true)
+            updateNavigationChrome()
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                WindowInfoTracker.getOrCreate(this@MainActivity)
+                    .windowLayoutInfo(this@MainActivity)
+                    .collect { layoutInfo ->
+                        currentFoldFeature = layoutInfo.displayFeatures
+                            .filterIsInstance<FoldingFeature>()
+                            .firstOrNull()
+                            ?.toHubFoldFeature()
+                        updateAdaptiveSpec(foldFeature = currentFoldFeature, renderIfChanged = true)
+                    }
+            }
+        }
+    }
+
+    private fun updateAdaptiveSpec(foldFeature: HubFoldFeature?, renderIfChanged: Boolean) {
+        val previousSpec = currentAdaptiveSpec
+        val nextSpec = HubAdaptivePolicy.spec(
+            widthDp = currentWindowWidthDp(),
+            foldFeature = foldFeature,
+        )
+        if (nextSpec == currentAdaptiveSpec) return
+        currentAdaptiveSpec = nextSpec
+        updateNavigationChrome()
+        if (renderIfChanged && nextSpec.widthClass != previousSpec.widthClass) {
+            renderScreen(navigationHistory.currentScreen)
+        }
+    }
+
+    private fun currentWindowWidthDp(): Int {
+        val bounds = WindowMetricsCalculator.getOrCreate()
+            .computeCurrentWindowMetrics(this)
+            .bounds
+        return (bounds.width() / resources.displayMetrics.density).toInt()
+    }
+
+    private fun FoldingFeature.toHubFoldFeature(): HubFoldFeature =
+        HubFoldFeature(
+            state = when (state) {
+                FoldingFeature.State.FLAT -> HubFoldState.FLAT
+                FoldingFeature.State.HALF_OPENED -> HubFoldState.HALF_OPENED
+                else -> HubFoldState.UNKNOWN
+            },
+            orientation = when (orientation) {
+                FoldingFeature.Orientation.VERTICAL -> HubFoldOrientation.VERTICAL
+                FoldingFeature.Orientation.HORIZONTAL -> HubFoldOrientation.HORIZONTAL
+                else -> null
+            },
+            isSeparating = isSeparating,
+            bounds = bounds,
+        )
 
     private fun syncCurrentPushToken() {
         FirebaseMessaging.getInstance().token
@@ -2520,6 +2592,9 @@ private fun liveMemberRow(member: HubMember, reorderable: Boolean = false): Mate
             }
             member.livePlatformUrl?.takeIf { it.startsWith("https://") }?.let { url ->
                 add(liveOpenLinkChip(url))
+                if (currentAdaptiveSpec.showAdjacentLiveAction) {
+                    add(liveOpenAdjacentChip(url))
+                }
             }
         }
         if (chips.isEmpty()) return null
@@ -2552,7 +2627,7 @@ private fun liveMemberRow(member: HubMember, reorderable: Boolean = false): Mate
 
     private fun liveOpenLinkChip(url: String): Chip =
         Chip(this).apply {
-            text = "CHZZK 열기"
+            text = getString(R.string.live_open_chzzk)
             isCheckable = false
             setEnsureMinTouchTargetSize(false)
             chipMinHeight = dp(24).toFloat()
@@ -2566,6 +2641,37 @@ private fun liveMemberRow(member: HubMember, reorderable: Boolean = false): Mate
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             }
         }
+
+    private fun liveOpenAdjacentChip(url: String): Chip =
+        Chip(this).apply {
+            text = getString(R.string.live_open_split)
+            isCheckable = false
+            setEnsureMinTouchTargetSize(false)
+            chipMinHeight = dp(24).toFloat()
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_card_surface_compact)
+            setTextColor(color(R.color.hub_text))
+            setOnClickListener {
+                openLiveUrlAdjacentOrFallback(url)
+            }
+        }
+
+    private fun openLiveUrlAdjacentOrFallback(url: String) {
+        val uri = Uri.parse(url)
+        val adjacentIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
+        }
+
+        runCatching {
+            startActivity(adjacentIntent)
+        }.onFailure {
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+        }
+    }
 
     private fun liveIndicator(size: Int): View = View(this).apply {
         background = rounded(
