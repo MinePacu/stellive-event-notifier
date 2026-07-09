@@ -6,16 +6,62 @@ on:
       - main
     types: [closed]
   workflow_dispatch:
+    inputs:
+      target:
+        description: "CI target to run"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - backend
+          - android
+          - ios
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
-  backend:
+  changes:
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      android: ${{ steps.filter.outputs.android }}
+      ios: ${{ steps.filter.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - backend/stellive-hub-api/**
+              - shared/**
+              - .github/workflows/ci.yml
+            android:
+              - android/StelliveHubAndroid/**
+              - shared/**
+              - .github/workflows/ci.yml
+            ios:
+              - ios/StelliveHubiOS/**
+              - shared/**
+              - .github/workflows/ci.yml
+
+  backend:
+    needs: changes
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.target == 'all' || inputs.target == 'backend')) || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && needs.changes.outputs.backend == 'true') }}
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend/stellive-hub-api
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -26,26 +72,33 @@ jobs:
       - run: npm test
 
   android:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    needs: changes
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.target == 'all' || inputs.target == 'android')) || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && needs.changes.outputs.android == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: current
+      - name: Make Gradle wrapper executable
+        working-directory: android/StelliveHubAndroid
+        run: chmod +x ./gradlew
       - name: Android debug build
         working-directory: android/StelliveHubAndroid
-        run: gradle assembleDebug
+        run: ./gradlew --no-daemon assembleDebug
 
   ios-example:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    needs: changes
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.target == 'all' || inputs.target == 'ios')) || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && needs.changes.outputs.ios == 'true') }}
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
       - name: iOS build example
         working-directory: ios/StelliveHubiOS
         run: xcodebuild -project StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination 'platform=iOS Simulator,name=iPhone 16' build

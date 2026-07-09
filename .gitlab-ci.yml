@@ -6,6 +6,7 @@ stages:
   - build
 
 variables:
+  CI_TARGET: "all"
   ANDROID_PROJECT_DIR: "android/StelliveHubAndroid"
   BACKEND_PROJECT_DIR: "backend/stellive-hub-api"
   GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
@@ -39,9 +40,10 @@ cache:
     - chmod +x ./gradlew
     - ./gradlew --version
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api"'
+    - if: '($CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api") && ($CI_TARGET == "all" || $CI_TARGET == "android")'
       when: on_success
-    - changes:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
         - android/StelliveHubAndroid/**/*
         - shared/**/*
         - .gitlab-ci.yml
@@ -62,9 +64,10 @@ cache:
     - cd "$BACKEND_PROJECT_DIR"
     - npm ci --cache .npm --prefer-offline
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api"'
+    - if: '($CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api") && ($CI_TARGET == "all" || $CI_TARGET == "backend")'
       when: on_success
-    - changes:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
         - backend/stellive-hub-api/**/*
         - shared/**/*
         - .gitlab-ci.yml
