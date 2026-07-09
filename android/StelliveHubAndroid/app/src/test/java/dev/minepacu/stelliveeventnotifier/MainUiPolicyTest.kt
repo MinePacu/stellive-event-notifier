@@ -131,10 +131,11 @@ class MainUiPolicyTest {
             deadlineSoonEnabled = true
         )
 
-        assertEquals(listOf("delivery", "targets", "platforms", "event_types", "hub_events", "history", "advanced"), rows.map { it.screenId })
+        assertEquals(listOf("delivery", "targets", "platforms", "event_types", "hub_events", "history", "advanced", "about"), rows.map { it.screenId })
         assertEquals("표준", rows.first { it.screenId == "delivery" }.value)
         assertEquals("4/5", rows.first { it.screenId == "platforms" }.value)
         assertEquals("켜짐 · 마감 임박 ON", rows.first { it.screenId == "hub_events" }.value)
+        assertEquals("보기", rows.first { it.screenId == "about" }.value)
         assertFalse(rows.any { it.title == "CHZZK 채팅" })
     }
 

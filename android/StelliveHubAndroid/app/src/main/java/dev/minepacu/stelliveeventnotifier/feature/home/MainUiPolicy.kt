@@ -126,6 +126,7 @@ object MainUiPolicy {
         "settings_event_types" -> "이벤트 타입"
         "settings_hub_events" -> "굿즈/행사"
         "settings_advanced" -> "고급 설정"
+        "settings_about" -> "앱 정보"
         "goods_events" -> "굿즈/행사"
         "goods_event_detail" -> ""
         else -> "홈"
@@ -144,6 +145,7 @@ object MainUiPolicy {
         "settings_event_types" -> "이벤트 종류별 허용 여부"
         "settings_hub_events" -> "공식 출처 굿즈와 행사"
         "settings_advanced" -> "조합 예외 규칙"
+        "settings_about" -> "프로젝트 소개와 버전"
         "goods_events" -> "공식 출처의 기간성 굿즈와 행사"
         "goods_event_detail" -> ""
         else -> "라이브 현황과 최근 알림"
@@ -698,6 +700,12 @@ object MainUiPolicy {
             title = "고급 조합 설정",
             body = "카테고리/개별 항목별 예외 규칙",
             value = "예외 규칙"
+        ),
+        SettingsHubRow(
+            screenId = "about",
+            title = "앱 정보",
+            body = "프로젝트 소개, 버전, 오픈소스",
+            value = "보기"
         )
     )
 

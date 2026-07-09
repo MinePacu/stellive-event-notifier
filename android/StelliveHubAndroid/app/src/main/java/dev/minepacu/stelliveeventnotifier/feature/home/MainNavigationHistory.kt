@@ -15,7 +15,8 @@ enum class HubScreen(val id: String) {
     SETTINGS_PLATFORMS("settings_platforms"),
     SETTINGS_EVENT_TYPES("settings_event_types"),
     SETTINGS_HUB_EVENTS("settings_hub_events"),
-    SETTINGS_ADVANCED("settings_advanced");
+    SETTINGS_ADVANCED("settings_advanced"),
+    SETTINGS_ABOUT("settings_about");
 }
 
 class MainNavigationHistory(initialScreen: HubScreen = HubScreen.HOME) {

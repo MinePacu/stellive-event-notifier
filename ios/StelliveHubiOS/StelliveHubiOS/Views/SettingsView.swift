@@ -8,6 +8,7 @@ enum SettingsRoute: String, CaseIterable, Hashable {
     case eventTypes
     case hubEvents
     case advanced
+    case about
 }
 
 enum SettingsNavigationRowVerticalAlignment: Equatable {
@@ -93,6 +94,12 @@ enum SettingsNavigationPolicy {
                 title: "고급 조합 설정",
                 note: "카테고리/개별 항목별 예외 규칙",
                 summary: "예외 규칙"
+            ),
+            SettingsHubRow(
+                route: .about,
+                title: "앱 정보",
+                note: "프로젝트 소개, 버전, 오픈소스",
+                summary: "보기"
             )
         ]
     }
@@ -315,6 +322,8 @@ struct SettingsContentView: View {
             hubEventSettings
         case .advanced:
             advancedSettings
+        case .about:
+            aboutSettings
         }
     }
 
@@ -466,6 +475,49 @@ struct SettingsContentView: View {
             }
         }
         .navigationTitle("고급 조합 설정")
+    }
+
+    private var aboutSettings: some View {
+        Form {
+            Section("앱") {
+                HStack(alignment: .top, spacing: 12) {
+                    Text("앱")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.tint)
+                        .frame(width: 44, height: 44)
+                        .background(.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("스텔라이브 이벤트 알리미")
+                            .font(.body.weight(.semibold))
+                        Text("굿즈/행사 일정, 멤버 기념일, 플랫폼 이벤트 알림을 한곳에서 확인하는 비공식 오픈소스 앱입니다.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                LabeledContent("버전", value: appVersionText)
+                LabeledContent("라이선스", value: "Apache-2.0")
+            }
+
+            Section("오픈소스") {
+                Link("GitHub 저장소 열기", destination: URL(string: "https://github.com/MinePacu/stellive-event-notifier")!)
+            }
+
+            Section("고지") {
+                LabeledContent("비공식 프로젝트") {
+                    Text("Stellive, CHZZK, YouTube, X, Naver, Samsung, Apple과 공식 관계가 없습니다.")
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+        }
+        .navigationTitle("앱 정보")
+    }
+
+    private var appVersionText: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "-"
+        let build = info?["CFBundleVersion"] as? String ?? "-"
+        return "\(version) (\(build))"
     }
 
     private func generationBinding(_ id: String, defaultValue: Bool) -> Binding<Bool> {

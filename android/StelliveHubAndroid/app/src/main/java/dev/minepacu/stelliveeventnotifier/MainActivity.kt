@@ -507,6 +507,7 @@ HubScreen.GOODS_EVENTS -> renderGoodsEvents()
             HubScreen.SETTINGS_EVENT_TYPES -> renderSettingsEventTypes()
             HubScreen.SETTINGS_HUB_EVENTS -> renderSettingsHubEvents()
             HubScreen.SETTINGS_ADVANCED -> renderSettingsAdvanced()
+            HubScreen.SETTINGS_ABOUT -> renderSettingsAbout()
         }
         updateTwoPaneScrollChrome(screen)
     }
@@ -598,6 +599,7 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
         HubScreen.SETTINGS_EVENT_TYPES -> null
         HubScreen.SETTINGS_HUB_EVENTS -> null
         HubScreen.SETTINGS_ADVANCED -> null
+        HubScreen.SETTINGS_ABOUT -> null
     }
 
 private fun startScreen(screenId: String, title: String, role: String) {
@@ -2337,6 +2339,49 @@ private fun songFilterRow(
         )
     }
 
+    private fun renderSettingsAbout() {
+        startScreen(
+            screenId = "settings_about",
+            title = "앱 정보",
+            role = "프로젝트 소개와 버전"
+        )
+        renderSettingsAboutInto(binding.contentList)
+    }
+
+    private fun renderSettingsAboutInto(container: LinearLayout) {
+        container.addView(sectionLabel("앱"))
+        container.addView(aboutAppCard())
+        container.addView(
+            settingsPanel(
+                rows = listOf(
+                    SettingRow("버전", null, null, "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"),
+                    SettingRow("라이선스", null, null, "Apache-2.0")
+                )
+            )
+        )
+
+        container.addView(sectionLabel("오픈소스"))
+        container.addView(
+            linkCard(
+                title = "GitHub 저장소",
+                body = "GitHub 저장소 열기",
+                url = "https://github.com/MinePacu/stellive-event-notifier"
+            )
+        )
+
+        container.addView(sectionLabel("고지"))
+        container.addView(
+            settingsPanel(
+                rows = listOf(
+                    SettingRow(
+                        "비공식 프로젝트",
+                        "Stellive, CHZZK, YouTube, X, Naver, Samsung, Apple과 공식 관계가 없습니다."
+                    )
+                )
+            )
+        )
+    }
+
     private fun httpsLinkRow(title: String, url: String?): SettingRow? {
         val value = url ?: return null
         return if (value.startsWith("https://")) SettingRow(title, value, null, "열기") else null
@@ -2351,7 +2396,8 @@ private fun songFilterRow(
             screen == HubScreen.SETTINGS_PLATFORMS ||
             screen == HubScreen.SETTINGS_EVENT_TYPES ||
             screen == HubScreen.SETTINGS_HUB_EVENTS ||
-            screen == HubScreen.SETTINGS_ADVANCED
+            screen == HubScreen.SETTINGS_ADVANCED ||
+            screen == HubScreen.SETTINGS_ABOUT
 
     private fun renderSelectedSettingsDetailInto(container: LinearLayout) {
         when (selectedSettingsDetailScreen) {
@@ -2361,6 +2407,7 @@ private fun songFilterRow(
             HubScreen.SETTINGS_EVENT_TYPES -> renderSettingsEventTypesInto(container)
             HubScreen.SETTINGS_HUB_EVENTS -> renderSettingsHubEventsInto(container)
             HubScreen.SETTINGS_ADVANCED -> renderSettingsAdvancedInto(container)
+            HubScreen.SETTINGS_ABOUT -> renderSettingsAboutInto(container)
             else -> renderSettingsDetailEmptyPane(container)
         }
     }
@@ -2393,6 +2440,7 @@ private fun songFilterRow(
         "hub_events" -> HubScreen.SETTINGS_HUB_EVENTS
         "history" -> HubScreen.HISTORY
         "advanced" -> HubScreen.SETTINGS_ADVANCED
+        "about" -> HubScreen.SETTINGS_ABOUT
         else -> HubScreen.SETTINGS
     }
 
@@ -2437,6 +2485,84 @@ private fun songFilterRow(
             setOnClickListener {
                 onSettingsRowSelected(row)
             }
+        }
+
+    private fun aboutAppCard(): MaterialCardView =
+        baseCard().apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(10)
+            }
+            val content = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(15), dp(15), dp(15), dp(15))
+            }
+            content.addView(TextView(context).apply {
+                text = "앱"
+                gravity = Gravity.CENTER
+                setTextColor(color(R.color.hub_primary))
+                textSize = 13f
+                typeface = Typeface.DEFAULT_BOLD
+                background = rounded(color(R.color.hub_accent_soft), dp(14), color(R.color.hub_line))
+            }, LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+                marginEnd = dp(13)
+            })
+            content.addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(context).apply {
+                    text = "스텔라이브 이벤트 알리미"
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                })
+                addView(TextView(context).apply {
+                    text = "굿즈/행사 일정, 멤버 기념일, 플랫폼 이벤트 알림을 한곳에서 확인하는 비공식 오픈소스 앱입니다."
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 12f
+                    setPadding(0, dp(6), 0, 0)
+                    setLineSpacing(0f, 1.1f)
+                })
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(content)
+        }
+
+    private fun linkCard(title: String, body: String, url: String): MaterialCardView =
+        baseCard(HubCardStyle.INTERACTIVE).apply {
+            isClickable = true
+            isFocusable = true
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(10)
+            }
+            val content = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(15), dp(15), dp(15), dp(15))
+            }
+            content.addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(context).apply {
+                    text = title
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                })
+                addView(TextView(context).apply {
+                    text = body
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 12f
+                    setPadding(0, dp(6), 0, 0)
+                })
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = dp(12)
+            })
+            content.addView(TextView(context).apply {
+                text = "열기 ›"
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 13f
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            addView(content)
+            setOnClickListener { openExternalUrl(url) }
         }
 
     private fun appearanceModePanel(): MaterialCardView =

@@ -54,10 +54,11 @@ final class PreferenceStateTests: XCTestCase {
         let store = MockHubStore()
         let rows = SettingsNavigationPolicy.hubRows(settings: store.settings, members: store.members)
 
-        XCTAssertEqual(rows.map(\.route), [.history, .delivery, .targets, .platforms, .eventTypes, .hubEvents, .advanced])
+        XCTAssertEqual(rows.map(\.route), [.history, .delivery, .targets, .platforms, .eventTypes, .hubEvents, .advanced, .about])
         XCTAssertEqual(rows.first { $0.route == .delivery }?.summary, "표준")
         XCTAssertEqual(rows.first { $0.route == .platforms }?.summary, "4/5")
         XCTAssertEqual(rows.first { $0.route == .hubEvents }?.summary, "켜짐 · 마감 임박 ON")
+        XCTAssertEqual(rows.first { $0.route == .about }?.summary, "보기")
         XCTAssertFalse(rows.contains { $0.title == "CHZZK 채팅" })
     }
 
