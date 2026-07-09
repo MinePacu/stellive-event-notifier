@@ -169,6 +169,7 @@ private lateinit var binding: ActivityMainBinding
     private var systemTopInsetPx = 0
     private var currentFoldFeature: HubFoldFeature? = null
     private var currentAdaptiveSpec: HubAdaptiveSpec = HubAdaptivePolicy.spec(widthDp = 0)
+    private val topBarScrollSourceOffsets = mutableMapOf<View, Int>()
     private var selectedSettingsDetailScreen: HubScreen? = null
     private val serverConnectionDebugLogs = mutableListOf("bootstrap: 대기 중")
     private val navigationHistory = MainNavigationHistory()
@@ -394,9 +395,24 @@ private var notificationPermissionRequested = false
     }
 
     private fun setupTopBarScrollBehavior() {
-        binding.contentScroll.setOnScrollChangeListener { _, _, scrollY, _, _ ->
-            updateTopBarScrolled(scrollY > dp(24))
+        registerTopBarScrollSource(binding.contentScroll)
+    }
+
+    private fun registerTopBarScrollSource(source: View) {
+        topBarScrollSourceOffsets[source] = source.scrollY
+        source.setOnScrollChangeListener { view, _, scrollY, _, _ ->
+            topBarScrollSourceOffsets[view] = scrollY
+            updateTopBarScrolledFromSources()
         }
+    }
+
+    private fun resetTopBarScrollSources() {
+        topBarScrollSourceOffsets.clear()
+        topBarScrollSourceOffsets[binding.contentScroll] = binding.contentScroll.scrollY
+    }
+
+    private fun updateTopBarScrolledFromSources() {
+        updateTopBarScrolled(topBarScrollSourceOffsets.values.any { it > dp(24) })
     }
 
     private fun setupBottomNavigation() {
@@ -608,6 +624,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
         binding.collapsedTitle.text = MainUiPolicy.topBarTitle(screenId)
         binding.collapsedRole.text = MainUiPolicy.topBarRole(screenId)
         binding.contentList.removeAllViews()
+        resetTopBarScrollSources()
         clearTopFilters()
         applyContentTopPadding(underTopBar = false)
         if (MainScreenChromePolicy.spec(screenId, navigationHistory.canGoBack).showExpandedBodyHeader) {
@@ -665,7 +682,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
         }
     }
 
-    private fun scrollablePane(): ScrollablePane {
+    private fun scrollablePane(trackTopBarScroll: Boolean = true): ScrollablePane {
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
@@ -679,6 +696,9 @@ private fun startScreen(screenId: String, title: String, role: String) {
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                 ),
             )
+        }
+        if (trackTopBarScroll) {
+            registerTopBarScrollSource(scrollView)
         }
         return ScrollablePane(scrollView, content)
     }
@@ -877,6 +897,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
         val filteredEvents = filteredGoodsEvents(events)
         val monthDays = monthDaysForGoodsEvents(filteredDays)
         binding.contentList.removeAllViews()
+        resetTopBarScrollSources()
         if (shouldUseGoodsEventsTwoPane()) {
             renderServerGoodsEventsTwoPane(filteredDays, filteredEvents, monthDays)
             return
@@ -1109,6 +1130,7 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
         binding.collapsedTitle.text = ""
         binding.collapsedRole.text = ""
         binding.contentList.removeAllViews()
+        resetTopBarScrollSources()
         applyContentTopPadding(underTopBar = true)
         renderHubEventDetailInto(binding.contentList, event, fullScreen = true)
     }
@@ -1316,6 +1338,7 @@ private fun renderSongs() {
 
     private fun songsTwoPaneContainer(): Pair<LinearLayout, LinearLayout> {
         binding.contentList.removeAllViews()
+        resetTopBarScrollSources()
         val paneRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             isBaselineAligned = false

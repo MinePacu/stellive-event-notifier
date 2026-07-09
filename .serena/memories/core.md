@@ -1,0 +1,12 @@
+# Core
+
+- Unofficial open-source Stellive notification hub; preserve server-mediated/API-first architecture. Backend owns protected platform API access, normalization, dedupe, preference enforcement, push fan-out. Mobile apps own settings UI, local cache/history, deep links, foreground display.
+- Repository map: `backend/stellive-hub-api` Fastify control plane; `android/StelliveHubAndroid` native Android app; `ios/StelliveHubiOS` SwiftUI app/widget; `shared/schemas` shared TS contracts; `shared/member-catalog` seeds; `shared/openapi` OpenAPI; `docs` authoritative policy/design docs; `mockups` static UI mockups.
+- Before feature work read project policy docs: `docs/PROJECT_RULES.md`, `docs/NOTIFICATION_POLICY.md`, `docs/REALTIME_DELIVERY.md`, `docs/AI_HANDOFF.md`; also `docs/API_IMPLEMENTATION_PLAN.md` before backend/API/ingestion/jobs/push work.
+- Use `CODEMAP.md` with `rg`/`fd` to avoid unnecessary traversal. All shell commands should be prefixed with `rtk` per AGENTS.md.
+- Non-negotiables: no Former members in MVP catalog/targets/filters/seeds/UI/tests; catalog statuses only `active`/`upcoming`; Gangzi only `gamja` representative with role label `스텔라이브 대표`; `official` displays as `기타` and is an official-channel category.
+- Official Stellive YouTube supports upload notifications only. Never create/store/deliver official YouTube live scheduled/started/ended notifications.
+- No secrets, OAuth tokens, Firebase service accounts, production device tokens, raw private platform responses, profile image binaries, official logos, fan art, captured images, copied media assets.
+- Prefer official APIs and platform terms. No unauthorized crawling, login-cookie scraping, private cafe collection, private endpoint bypass, or mobile-held protected platform credentials.
+- User preferences are authoritative. `global=false` blocks all notifications. `realtime_best_effort` only changes delivery strategy for already-allowed events and cannot bypass opt-outs, quiet hours, keyword rules, rate limits, OS/push/platform policies.
+- Read module details before focused work: backend/API in `mem:backend/core`; Android in `mem:android/core`; iOS in `mem:ios/core`; shared contracts/seeds in `mem:shared/core`; build/runtime pins in `mem:tech_stack`; project commands in `mem:suggested_commands`; style/policy conventions in `mem:conventions`; completion checks in `mem:task_completion`.

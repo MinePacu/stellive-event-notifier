@@ -1,0 +1,2076 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stellive Hub Admin Split Page Mockup</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #f3f6fb;
+      --surface: #ffffff;
+      --surface-soft: #f8fafc;
+      --line: #e5eaf2;
+      --line-strong: #d8dfeb;
+      --text: #182035;
+      --muted: #667085;
+      --quiet: #98a2b3;
+      --primary: #283986;
+      --primary-2: #4158d0;
+      --primary-soft: #eef2ff;
+      --mint: #70d6be;
+      --mint-strong: #18a989;
+      --mint-soft: #e7fbf6;
+      --warn: #e4a93b;
+      --warn-soft: #fff5d9;
+      --bad: #e66f64;
+      --bad-soft: #fff0ee;
+      --shadow: 0 24px 70px rgba(34, 48, 78, .12);
+      --shadow-soft: 0 12px 28px rgba(34, 48, 78, .08);
+      --radius-lg: 24px;
+      --radius: 18px;
+      --radius-sm: 12px;
+      font-family: Inter, ui-sans-serif, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 14% 12%, rgba(112, 214, 190, .22), transparent 30%),
+        radial-gradient(circle at 82% 4%, rgba(40, 57, 134, .12), transparent 27%),
+        linear-gradient(135deg, #f8fbff, var(--canvas));
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      min-height: 38px;
+      border: 0;
+      border-radius: 13px;
+      background: var(--primary);
+      color: #fff;
+      padding: 0 15px;
+      font-weight: 750;
+      cursor: default;
+      box-shadow: 0 12px 24px rgba(40, 57, 134, .16);
+    }
+
+    button.secondary {
+      background: #fff;
+      color: var(--primary);
+      border: 1px solid var(--line);
+      box-shadow: none;
+    }
+
+    button.ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid transparent;
+      box-shadow: none;
+    }
+
+    button.danger {
+      background: var(--bad-soft);
+      color: #b63b32;
+      box-shadow: none;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #fff;
+      color: var(--text);
+      padding: 10px 12px;
+      outline: none;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+    }
+
+    textarea {
+      min-height: 96px;
+      resize: vertical;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus,
+    button:focus-visible {
+      border-color: rgba(40, 57, 134, .42);
+      outline: 3px solid rgba(112, 214, 190, .28);
+      outline-offset: 1px;
+    }
+
+    .shell {
+      width: min(100% - 28px, 1480px);
+      min-height: calc(100vh - 28px);
+      margin: 14px auto;
+      display: grid;
+      grid-template-columns: 244px minmax(0, 1fr);
+      border-radius: 28px;
+      background: rgba(255,255,255,.72);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(24px);
+    }
+
+    .sidebar {
+      background: rgba(255,255,255,.84);
+      border-right: 1px solid var(--line);
+      padding: 26px 18px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 8px;
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      border-radius: 11px 15px 11px 15px;
+      background: linear-gradient(145deg, var(--primary), var(--primary-2));
+      transform: rotate(-12deg);
+      box-shadow: 0 12px 24px rgba(40,57,134,.22);
+    }
+
+    .brand-title {
+      font-size: 17px;
+      font-weight: 900;
+      letter-spacing: -.02em;
+      color: var(--primary);
+    }
+
+    .nav {
+      display: grid;
+      gap: 7px;
+    }
+
+    .nav button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 42px;
+      padding: 0 12px;
+      border-radius: 15px;
+      background: transparent;
+      color: #424b62;
+      text-align: left;
+      box-shadow: none;
+    }
+
+    .nav button[aria-current="page"] {
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    .nav .dot {
+      margin-left: auto;
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--primary);
+      opacity: 0;
+    }
+
+    .nav button[aria-current="page"] .dot {
+      opacity: 1;
+    }
+
+    .sidebar-card {
+      align-self: end;
+      padding: 18px;
+      border-radius: 22px;
+      background:
+        radial-gradient(circle at 95% 85%, rgba(112,214,190,.45), transparent 38%),
+        linear-gradient(160deg, #f3f8ff, #ffffff);
+      overflow: hidden;
+    }
+
+    .sidebar-card strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1.15;
+      color: #3b4459;
+    }
+
+    .sidebar-card span {
+      display: block;
+      margin-top: 6px;
+      color: var(--quiet);
+      font-size: 12px;
+    }
+
+    .logout {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #424b62;
+      font-weight: 740;
+      padding: 0 8px;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 26px 24px 30px;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      overflow-x: auto;
+      padding: 3px 0;
+    }
+
+    .tabs button {
+      flex: 0 0 auto;
+      min-height: 34px;
+      padding: 8px 2px;
+      border-radius: 0;
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      color: var(--quiet);
+      box-shadow: none;
+      font-size: 12px;
+      font-weight: 780;
+    }
+
+    .tabs button[aria-current="page"] {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .icon-button {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      min-height: 38px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      color: var(--primary);
+      box-shadow: none;
+    }
+
+    .profile {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 180px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: #fff;
+    }
+
+    .avatar {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 13px;
+      background: linear-gradient(145deg, #ffd9c8, #f2a58f);
+      color: #7e3020;
+      font-weight: 900;
+    }
+
+    .profile small {
+      display: block;
+      color: var(--quiet);
+      font-size: 10px;
+      line-height: 1.1;
+    }
+
+    .profile strong {
+      display: block;
+      font-size: 12px;
+    }
+
+    .page {
+      display: none;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    .page-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: 24px;
+      line-height: 1.1;
+      letter-spacing: -.03em;
+    }
+
+    h2 {
+      font-size: 16px;
+      line-height: 1.2;
+    }
+
+    h3 {
+      font-size: 14px;
+      line-height: 1.2;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      min-height: 92px;
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.92);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .metric-value {
+      margin-top: 5px;
+      font-size: 25px;
+      font-weight: 900;
+      letter-spacing: -.03em;
+    }
+
+    .metric-hint {
+      float: right;
+      color: var(--primary);
+      font-size: 17px;
+    }
+
+    .grid-main {
+      display: grid;
+      grid-template-columns: minmax(0, 1.18fr) minmax(320px, .82fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .grid-equal {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+
+    .card {
+      border-radius: 20px;
+      background: rgba(255,255,255,.93);
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 18px 8px;
+    }
+
+    .card-body {
+      padding: 14px 18px 18px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    label {
+      color: #3c465d;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .form-grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .form-grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .wide {
+      grid-column: 1 / -1;
+    }
+
+    .pill, .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 790;
+      background: var(--primary-soft);
+      color: var(--primary);
+      white-space: nowrap;
+    }
+
+    .pill.good {
+      background: var(--mint-soft);
+      color: #168266;
+    }
+
+    .pill.warn {
+      background: var(--warn-soft);
+      color: #9a6c03;
+    }
+
+    .pill.bad {
+      background: var(--bad-soft);
+      color: #b63b32;
+    }
+
+    .adapter-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .adapter-card {
+      min-height: 112px;
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+    }
+
+    .adapter-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .adapter-title {
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .adapter-meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+
+    .summary-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .summary-row {
+      min-height: 74px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: linear-gradient(180deg, #ffffff, #f8fbff);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9);
+    }
+
+    .summary-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .summary-value {
+      margin-top: 5px;
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: -.02em;
+    }
+
+    .summary-note {
+      margin-top: 2px;
+      color: var(--quiet);
+      font-size: 12px;
+    }
+
+    .status-table {
+      width: 100%;
+      border-spacing: 0;
+      border-collapse: separate;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: #fff;
+    }
+
+    .status-table td {
+      padding: 12px 13px;
+      border-top: 1px solid var(--line);
+      vertical-align: middle;
+      font-size: 13px;
+    }
+
+    .status-table tr:first-child td {
+      border-top: 0;
+    }
+
+    .status-table td:first-child {
+      width: 124px;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .status-table td:last-child {
+      width: 92px;
+      text-align: right;
+    }
+
+    .status-table strong {
+      color: var(--text);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 11px 8px;
+      border-top: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    tbody tr:first-child td {
+      border-top: 0;
+    }
+
+    .activity-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .activity {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+
+    .activity:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .feed-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 13px;
+      background: linear-gradient(145deg, #ffd6ce, #b9f2e6);
+    }
+
+    .activity-text {
+      min-width: 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .activity-text strong {
+      color: var(--text);
+    }
+
+    .feed-dot {
+      width: 7px;
+      height: 7px;
+      margin-top: 8px;
+      border-radius: 999px;
+      background: var(--mint);
+    }
+
+    .events-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.18fr) minmax(340px, .82fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .event-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .event-row {
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+    }
+
+    .event-row.active {
+      border-color: rgba(40, 57, 134, .26);
+      background: #fbfcff;
+    }
+
+    .thumb {
+      width: 64px;
+      height: 54px;
+      border-radius: 15px;
+      background: linear-gradient(135deg, #dde7ff, #cff7ef);
+    }
+
+    .thumb.alt {
+      background: linear-gradient(135deg, #ffe4d6, #e6ecff);
+    }
+
+    .event-title {
+      font-weight: 850;
+    }
+
+    .event-meta {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .policy-list {
+      display: grid;
+      gap: 9px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .page-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+
+    .settings-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .settings-stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .settings-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      padding: 14px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .settings-row:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .settings-title {
+      font-weight: 900;
+      color: var(--text);
+    }
+
+    .settings-description {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .token-input-card {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(180deg, #ffffff, #f8fbff);
+    }
+
+    .token-input-wrap {
+      position: relative;
+    }
+
+    .token-input-wrap input {
+      padding-left: 40px;
+      padding-right: 96px;
+    }
+
+    .token-icon {
+      position: absolute;
+      left: 13px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--quiet);
+      font-size: 15px;
+      pointer-events: none;
+    }
+
+    .token-badge {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 9px;
+      border-radius: 999px;
+      background: var(--mint-soft);
+      color: var(--mint-strong);
+      font-size: 11px;
+      font-weight: 850;
+      pointer-events: none;
+    }
+
+    .security-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .security-item {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: #fff;
+    }
+
+    .security-icon {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 13px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 900;
+    }
+
+    .security-item strong {
+      display: block;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .security-item span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .mobile-actions {
+      display: none;
+    }
+
+    @media (max-width: 1160px) {
+      .grid-main,
+      .grid-equal,
+      .events-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 980px) {
+      .shell {
+        width: 100%;
+        min-height: 100vh;
+        margin: 0;
+        border-radius: 0;
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        grid-template-rows: none;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        overflow-x: auto;
+      }
+
+      .brand,
+      .nav,
+      .logout {
+        flex: 0 0 auto;
+      }
+
+      .nav {
+        display: flex;
+      }
+
+      .sidebar-card,
+      .logout {
+        display: none;
+      }
+
+      .metric-row,
+      .adapter-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .main {
+        padding: 14px;
+      }
+
+      .topbar,
+      .metric-row,
+      .adapter-grid,
+      .form-grid.two,
+      .form-grid.three {
+        grid-template-columns: 1fr;
+      }
+
+      .top-actions,
+      .toolbar {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+      }
+
+      .page-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .event-row {
+        grid-template-columns: 54px minmax(0, 1fr);
+      }
+
+      .event-row > .pill {
+        grid-column: 2;
+        justify-self: start;
+      }
+
+    .settings-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .settings-stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .settings-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      padding: 14px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .settings-row:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .settings-title {
+      font-weight: 900;
+      color: var(--text);
+    }
+
+    .settings-description {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .token-input-card {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(180deg, #ffffff, #f8fbff);
+    }
+
+    .token-input-wrap {
+      position: relative;
+    }
+
+    .token-input-wrap input {
+      padding-left: 40px;
+      padding-right: 96px;
+    }
+
+    .token-icon {
+      position: absolute;
+      left: 13px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--quiet);
+      font-size: 15px;
+      pointer-events: none;
+    }
+
+    .token-badge {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 9px;
+      border-radius: 999px;
+      background: var(--mint-soft);
+      color: var(--mint-strong);
+      font-size: 11px;
+      font-weight: 850;
+      pointer-events: none;
+    }
+
+    .security-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .security-item {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: #fff;
+    }
+
+    .security-icon {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 13px;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 900;
+    }
+
+    .security-item strong {
+      display: block;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .security-item span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .mobile-actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 8;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+        margin: 14px -18px -18px;
+        padding: 10px 18px;
+        background: rgba(255,255,255,.9);
+        border-top: 1px solid var(--line);
+        backdrop-filter: blur(16px);
+      }
+    }
+
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --canvas: #0f172a;
+      --surface: #141f33;
+      --surface-soft: #1a2740;
+      --line: #2b3a56;
+      --line-strong: #3a4d70;
+      --text: #f5f7ff;
+      --muted: #b6c0d6;
+      --quiet: #8591ab;
+      --primary: #aab8ff;
+      --primary-2: #70d6be;
+      --primary-soft: #1f2b52;
+      --mint: #70d6be;
+      --mint-strong: #8ce6d4;
+      --mint-soft: #143b3a;
+      --warn: #f2c36b;
+      --warn-soft: #342712;
+      --bad: #ff9a91;
+      --bad-soft: #381b20;
+      --shadow: 0 28px 78px rgba(2, 6, 23, .52);
+      --shadow-soft: 0 16px 34px rgba(2, 6, 23, .34);
+    }
+
+    html[data-theme="dark"] body {
+      background:
+        radial-gradient(circle at 14% 12%, rgba(112, 214, 190, .16), transparent 30%),
+        radial-gradient(circle at 82% 4%, rgba(170, 184, 255, .18), transparent 27%),
+        linear-gradient(135deg, #101827, var(--canvas));
+      color: var(--text);
+    }
+
+    html[data-theme="dark"] .shell {
+      background: rgba(17, 25, 42, .78);
+      border: 1px solid rgba(170, 184, 255, .10);
+      box-shadow: 0 32px 88px rgba(2, 6, 23, .48);
+    }
+
+    html[data-theme="dark"] .sidebar {
+      background: rgba(20, 31, 51, .86);
+      border-right-color: var(--line);
+    }
+
+    html[data-theme="dark"] .main {
+      background:
+        radial-gradient(circle at 78% 10%, rgba(112, 214, 190, .08), transparent 28%),
+        transparent;
+    }
+
+    html[data-theme="dark"] .card,
+    html[data-theme="dark"] .metric,
+    html[data-theme="dark"] .adapter-card,
+    html[data-theme="dark"] .event-row,
+    html[data-theme="dark"] .summary-row,
+    html[data-theme="dark"] .token-input-card,
+    html[data-theme="dark"] .status-table,
+    html[data-theme="dark"] .security-item,
+    html[data-theme="dark"] .profile {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(24, 36, 58, .96), rgba(18, 28, 46, .96));
+      color: var(--text);
+      box-shadow: var(--shadow-soft);
+    }
+
+    html[data-theme="dark"] .icon-button,
+    html[data-theme="dark"] input,
+    html[data-theme="dark"] select,
+    html[data-theme="dark"] textarea {
+      border: 1px solid var(--line-strong);
+      background: rgba(15, 23, 42, .92);
+      color: var(--text);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .045);
+    }
+
+    html[data-theme="dark"] input::placeholder,
+    html[data-theme="dark"] textarea::placeholder {
+      color: #7f8aa3;
+    }
+
+    html[data-theme="dark"] .sidebar-card {
+      background:
+        radial-gradient(circle at 95% 85%, rgba(112, 214, 190, .24), transparent 38%),
+        linear-gradient(160deg, #1d2a45, #141f33);
+      border: 1px solid var(--line);
+    }
+
+    html[data-theme="dark"] .sidebar-card strong,
+    html[data-theme="dark"] .brand-title,
+    html[data-theme="dark"] .metric-hint,
+    html[data-theme="dark"] .icon-button,
+    html[data-theme="dark"] .logout,
+    html[data-theme="dark"] .settings-title,
+    html[data-theme="dark"] .activity-text strong,
+    html[data-theme="dark"] .security-item strong,
+    html[data-theme="dark"] .status-table strong,
+    html[data-theme="dark"] label {
+      color: var(--text);
+    }
+
+    html[data-theme="dark"] .nav button,
+    html[data-theme="dark"] .tabs button {
+      background: transparent;
+      border-color: transparent;
+      box-shadow: none;
+      color: var(--muted);
+    }
+
+    html[data-theme="dark"] .nav button:hover,
+    html[data-theme="dark"] .tabs button:hover {
+      background: rgba(255, 255, 255, .035);
+      color: var(--text);
+    }
+
+    html[data-theme="dark"] .nav button[aria-current="page"] {
+      background: transparent;
+      color: var(--primary);
+      box-shadow: inset 0 0 0 1px rgba(170, 184, 255, .10);
+    }
+
+    html[data-theme="dark"] .tabs button[aria-current="page"] {
+      background: transparent;
+      border-bottom-color: var(--primary);
+      color: var(--primary);
+      box-shadow: none;
+    }
+
+    html[data-theme="dark"] .tabs button {
+      color: var(--quiet);
+    }
+
+    html[data-theme="dark"] button {
+      background: linear-gradient(180deg, #7082e8, #4c5fc4);
+      color: #ffffff;
+      box-shadow: 0 14px 28px rgba(28, 42, 101, .34);
+    }
+
+    html[data-theme="dark"] button.secondary,
+    html[data-theme="dark"] button.ghost,
+    html[data-theme="dark"] .icon-button {
+      background: rgba(24, 36, 58, .88);
+      border: 1px solid var(--line);
+      color: var(--text);
+      box-shadow: none;
+    }
+
+    html[data-theme="dark"] button.danger {
+      background: rgba(255, 154, 145, .14);
+      color: #ffc5bf;
+      box-shadow: none;
+    }
+
+    html[data-theme="dark"] .pill,
+    html[data-theme="dark"] .chip {
+      background: rgba(170, 184, 255, .14);
+      color: var(--primary);
+    }
+
+    html[data-theme="dark"] .pill.good {
+      background: rgba(112, 214, 190, .14);
+      color: var(--mint-strong);
+    }
+
+    html[data-theme="dark"] .pill.warn {
+      background: rgba(242, 195, 107, .16);
+      color: #ffd98f;
+    }
+
+    html[data-theme="dark"] .pill.bad {
+      background: rgba(255, 154, 145, .15);
+      color: #ffc0ba;
+    }
+
+    html[data-theme="dark"] .brand-mark {
+      background: linear-gradient(145deg, #7082e8, #70d6be);
+      box-shadow: 0 14px 28px rgba(112, 130, 232, .24);
+    }
+
+    html[data-theme="dark"] .avatar {
+      background: linear-gradient(145deg, #ffd9c8, #aab8ff);
+      color: #331f4f;
+    }
+
+    html[data-theme="dark"] .feed-avatar {
+      background: linear-gradient(145deg, #2a3a5d, #285e58);
+    }
+
+    html[data-theme="dark"] .feed-dot {
+      background: var(--mint);
+    }
+
+    html[data-theme="dark"] .thumb {
+      background: linear-gradient(135deg, #253d68, #1d655c);
+    }
+
+    html[data-theme="dark"] .thumb.alt {
+      background: linear-gradient(135deg, #5a3c48, #27395f);
+    }
+
+    html[data-theme="dark"] th,
+    html[data-theme="dark"] td {
+      border-top-color: var(--line);
+    }
+
+    html[data-theme="dark"] .summary-note,
+    html[data-theme="dark"] .settings-description,
+    html[data-theme="dark"] .activity-text,
+    html[data-theme="dark"] .policy-list,
+    html[data-theme="dark"] .security-item span,
+    html[data-theme="dark"] .subtle {
+      color: var(--muted);
+    }
+
+    .theme-segment {
+      display: inline-flex;
+      gap: 6px;
+      padding: 5px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .64);
+    }
+
+    html[data-theme="dark"] .theme-segment {
+      background: rgba(16, 27, 16, .66);
+    }
+
+    .theme-segment button {
+      min-height: 32px;
+      padding: 0 12px;
+      border-radius: 12px;
+      box-shadow: none;
+    }
+
+    .theme-segment button[aria-pressed="true"] {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    html[data-theme="dark"] .theme-segment button[aria-pressed="true"] {
+      background: linear-gradient(180deg, #3f7548, #2a5732);
+      color: #f4fff3;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div class="brand-title">Stellive</div>
+      </div>
+
+      <nav class="nav" aria-label="Admin pages">
+        <button type="button" data-page-target="dashboard" aria-current="page">▦ Dashboard <span class="dot"></span></button>
+        <button type="button" data-page-target="hub-events">◉ Hub events <span class="dot"></span></button>
+        <button type="button" data-page-target="operations">⚙ Operations <span class="dot"></span></button>
+        <button type="button" data-page-target="audit">☷ Audit <span class="dot"></span></button>
+        <button type="button" data-page-target="settings">⚙ Settings <span class="dot"></span></button>
+      </nav>
+
+      <div></div>
+
+      <div class="sidebar-card">
+        <strong>Split pages</strong>
+        <span>Dashboard는 읽기 중심, Hub events는 작성·관리 중심으로 분리합니다.</span>
+      </div>
+
+      <div class="logout">
+        <span>Logout</span>
+        <span>↪</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <nav class="tabs" aria-label="Quick page tabs">
+          <button type="button" data-page-target="dashboard" aria-current="page">Dashboard</button>
+          <button type="button" data-page-target="hub-events">Hub events</button>
+          <button type="button" data-page-target="operations">Operations</button>
+          <button type="button" data-page-target="audit">Audit</button>
+          <button type="button" data-page-target="settings">Settings</button>
+        </nav>
+
+        <div class="top-actions">
+          <button class="icon-button" aria-label="Refresh">↻</button>
+          <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle dark mode">☾</button>
+          <button class="icon-button" aria-label="Notifications">♡</button>
+          <div class="profile">
+            <div class="avatar">A</div>
+            <div>
+              <small>Welcome back,</small>
+              <strong>Admin</strong>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section class="page active" id="page-dashboard">
+        <div class="page-head">
+          <div>
+            <h1>Dashboard</h1>
+            <p class="subtle">Overview와 Adapter 상태만 빠르게 확인하는 읽기 중심 페이지입니다.</p>
+          </div>
+          <div class="toolbar">
+            <button class="secondary">Refresh overview</button>
+            <button class="secondary">Auto refresh off</button>
+          </div>
+        </div>
+
+        <div class="metric-row" aria-label="Overview metrics">
+          <article class="metric">
+            <span class="metric-hint">✓</span>
+            <div class="metric-label">Database</div>
+            <div class="metric-value">OK</div>
+          </article>
+          <article class="metric">
+            <span class="metric-hint">⏱</span>
+            <div class="metric-label">Uptime</div>
+            <div class="metric-value">3d 4h</div>
+          </article>
+          <article class="metric">
+            <span class="metric-hint">⟳</span>
+            <div class="metric-label">Queue</div>
+            <div class="metric-value">12</div>
+          </article>
+          <article class="metric">
+            <span class="metric-hint">✉</span>
+            <div class="metric-label">Recent delivery</div>
+            <div class="metric-value">94</div>
+          </article>
+          <article class="metric">
+            <span class="metric-hint">◌</span>
+            <div class="metric-label">Adapters OK</div>
+            <div class="metric-value">2/4</div>
+          </article>
+        </div>
+
+        <div class="grid-main">
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <h2>Service overview</h2>
+                <p class="subtle">Queue, delivery, service readiness</p>
+              </div>
+              <span class="pill good">current</span>
+            </div>
+            <div class="card-body">
+              <div class="summary-list" aria-label="Service summary">
+                <div class="summary-row">
+                  <div class="summary-label">Service</div>
+                  <div class="summary-value">stellive-hub-api</div>
+                  <div class="summary-note">API process is responding normally.</div>
+                </div>
+                <div class="summary-row">
+                  <div class="summary-label">Uptime</div>
+                  <div class="summary-value">3 days 4 hours</div>
+                  <div class="summary-note">Started at 2026-06-27 09:12 KST.</div>
+                </div>
+                <div class="summary-row">
+                  <div class="summary-label">Environment</div>
+                  <div class="summary-value">Admin enabled</div>
+                  <div class="summary-note">Console routes are protected by admin session.</div>
+                </div>
+                <div class="summary-row">
+                  <div class="summary-label">Queue state</div>
+                  <div class="summary-value">12 queued</div>
+                  <div class="summary-note">1 locked · 2 failed jobs need review.</div>
+                </div>
+                <div class="summary-row">
+                  <div class="summary-label">Delivery state</div>
+                  <div class="summary-value">94 sent</div>
+                  <div class="summary-note">31 skipped · 2 failed in recent delivery.</div>
+                </div>
+              </div>
+              <table class="status-table">
+                <tbody>
+                  <tr>
+                    <td>Database</td>
+                    <td><strong>PostgreSQL reachable</strong></td>
+                    <td><span class="pill good">ok</span></td>
+                  </tr>
+                  <tr>
+                    <td>Uptime</td>
+                    <td><strong>3 days 4 hours</strong> since the latest service start</td>
+                    <td><span class="pill good">stable</span></td>
+                  </tr>
+                  <tr>
+                    <td>Secrets</td>
+                    <td>ADMIN_CONSOLE_TOKEN and INTERNAL_API_TOKEN configured</td>
+                    <td><span class="pill good">ready</span></td>
+                  </tr>
+                  <tr>
+                    <td>Push</td>
+                    <td>FCM key missing in this sample environment</td>
+                    <td><span class="pill warn">limited</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <h2>Adapter status</h2>
+                <p class="subtle">외부 연동 상태 요약</p>
+              </div>
+              <span class="pill">4 sources</span>
+            </div>
+            <div class="card-body adapter-grid">
+              <article class="adapter-card">
+                <div class="adapter-top">
+                  <div class="adapter-title">YouTube</div>
+                  <span class="pill good">enabled</span>
+                </div>
+                <div class="adapter-meta">WebSub configured · checked 14:07 KST</div>
+              </article>
+              <article class="adapter-card">
+                <div class="adapter-top">
+                  <div class="adapter-title">CHZZK</div>
+                  <span class="pill good">enabled</span>
+                </div>
+                <div class="adapter-meta">Client-auth live-list verified · checked 14:06 KST</div>
+              </article>
+              <article class="adapter-card">
+                <div class="adapter-top">
+                  <div class="adapter-title">X</div>
+                  <span class="pill">disabled</span>
+                </div>
+                <div class="adapter-meta">x_no_free_official_api</div>
+              </article>
+              <article class="adapter-card">
+                <div class="adapter-top">
+                  <div class="adapter-title">Naver Cafe</div>
+                  <span class="pill">disabled</span>
+                </div>
+                <div class="adapter-meta">deferred_for_mvp</div>
+              </article>
+            </div>
+          </article>
+        </div>
+
+        <div class="grid-equal" style="margin-top: 16px;">
+          <article class="card">
+            <div class="card-head">
+              <h2>Secrets readiness</h2>
+              <span class="pill warn">1 missing</span>
+            </div>
+            <div class="card-body">
+              <table>
+                <tbody>
+                  <tr><td>ADMIN_CONSOLE_TOKEN</td><td><span class="pill good">configured</span></td></tr>
+                  <tr><td>INTERNAL_API_TOKEN</td><td><span class="pill good">configured</span></td></tr>
+                  <tr><td>FCM_PRIVATE_KEY</td><td><span class="pill warn">missing</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <h2>Recent activity</h2>
+              <span class="pill">latest</span>
+            </div>
+            <div class="card-body activity-list">
+              <div class="activity">
+                <div class="feed-avatar"></div>
+                <div class="activity-text"><strong>Overview</strong> refreshed by admin.<br>2 mins ago</div>
+                <div class="feed-dot"></div>
+              </div>
+              <div class="activity">
+                <div class="feed-avatar"></div>
+                <div class="activity-text"><strong>YouTube</strong> WebSub renewal completed.<br>31 mins ago</div>
+                <div class="feed-dot"></div>
+              </div>
+              <div class="activity">
+                <div class="feed-avatar"></div>
+                <div class="activity-text"><strong>Queue</strong> 94 sent, 31 skipped, 2 failed.<br>1h ago</div>
+                <div class="feed-dot"></div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="page" id="page-hub-events">
+        <div class="page-head">
+          <div>
+            <h1>Hub events</h1>
+            <p class="subtle">이벤트 추가, 수정, 검증, 게시를 처리하는 작업 중심 페이지입니다.</p>
+          </div>
+          <div class="toolbar">
+            <button class="secondary">Refresh events</button>
+            <button class="secondary">Validate</button>
+            <button>Save draft</button>
+            <button class="secondary">Publish</button>
+            <button class="danger">Delete</button>
+          </div>
+        </div>
+
+        <div class="events-layout">
+          <article class="card">
+            <div class="card-head">
+              <h2>Event editor</h2>
+              <span class="pill warn">draft</span>
+            </div>
+            <div class="card-body form-grid">
+              <div class="field wide">
+                <label for="title">Title</label>
+                <input id="title" value="Official goods reservation window">
+              </div>
+              <div class="field wide">
+                <label for="summary">Summary</label>
+                <textarea id="summary">Reservation opens after the official announcement window. Calendar and widgets stay text-first.</textarea>
+              </div>
+
+              <div class="form-grid three wide">
+                <div class="field">
+                  <label for="category">Category</label>
+                  <select id="category">
+                    <option>online_goods</option>
+                    <option>ticketing</option>
+                    <option>offline_popup</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="mode">Mode</label>
+                  <select id="mode">
+                    <option>online</option>
+                    <option>offline</option>
+                    <option>hybrid</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="status">Status</label>
+                  <select id="status">
+                    <option>announced</option>
+                    <option>upcoming</option>
+                    <option>open</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-grid two wide">
+                <div class="field">
+                  <label for="generation">Generation</label>
+                  <input id="generation" value="official">
+                </div>
+                <div class="field">
+                  <label for="member">Member</label>
+                  <input id="member" placeholder="Blank for official or generation-wide event">
+                </div>
+              </div>
+
+              <div class="form-grid two wide">
+                <div class="field">
+                  <label for="source-type">Source type</label>
+                  <select id="source-type">
+                    <option>official</option>
+                    <option>member</option>
+                    <option>official_collab</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="image-policy">Image policy</label>
+                  <select id="image-policy">
+                    <option>none</option>
+                    <option>official_runtime_url</option>
+                    <option>third_party_allowed</option>
+                    <option>verify_required</option>
+                    <option>blocked</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="field wide">
+                <label for="source-url">Source URL</label>
+                <input id="source-url" value="https://example.invalid/official-notice">
+              </div>
+              <div class="field wide">
+                <label for="source-label">Source label</label>
+                <input id="source-label" value="Official notice">
+              </div>
+
+              <div class="form-grid three wide">
+                <div class="field">
+                  <label for="announced">Announced at</label>
+                  <input id="announced" type="datetime-local">
+                </div>
+                <div class="field">
+                  <label for="starts">Starts at</label>
+                  <input id="starts" type="datetime-local">
+                </div>
+                <div class="field">
+                  <label for="ends">Ends at</label>
+                  <input id="ends" type="datetime-local">
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <div class="form-grid">
+            <article class="card">
+              <div class="card-head">
+                <h2>Image policy tip</h2>
+                <span class="pill good">safe</span>
+              </div>
+              <div class="card-body">
+                <div class="chip-row">
+                  <span class="chip">HTTPS only</span>
+                  <span class="chip">No upload</span>
+                  <span class="chip">No base64</span>
+                  <span class="chip">No copied assets</span>
+                </div>
+                <div class="policy-list">
+                  <div><strong>none</strong>: 이미지 URL/source label/source URL을 비워야 합니다.</div>
+                  <div><strong>official_runtime_url / third_party_allowed</strong>: 표시 가능한 HTTPS 이미지 메타데이터가 필요합니다.</div>
+                  <div><strong>verify_required / blocked</strong>: 저장은 가능하지만 표시 준비 완료 상태가 아닙니다.</div>
+                </div>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <h2>Validation</h2>
+                <span class="pill good">ok</span>
+              </div>
+              <div class="card-body activity-list">
+                <div class="activity">
+                  <div class="feed-avatar"></div>
+                  <div class="activity-text"><strong>OK</strong> Official category is 기타 and member is blank.</div>
+                  <div class="feed-dot"></div>
+                </div>
+                <div class="activity">
+                  <div class="feed-avatar"></div>
+                  <div class="activity-text"><strong>OK</strong> No upload or copied asset field.</div>
+                  <div class="feed-dot"></div>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="grid-main" style="margin-top: 16px;">
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <h2>Event list</h2>
+                <p class="subtle">검색/필터 후 cursor pagination으로 넘겨 봅니다.</p>
+              </div>
+              <span class="pill">Page 1</span>
+            </div>
+            <div class="card-body">
+              <div class="form-grid three">
+                <div class="field">
+                  <label for="pub">Publication</label>
+                  <select id="pub">
+                    <option>All</option>
+                    <option>Published</option>
+                    <option>Draft</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="public-status">Status</label>
+                  <select id="public-status">
+                    <option>All</option>
+                    <option>Open</option>
+                    <option>Upcoming</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="search">Search</label>
+                  <input id="search" value="goods">
+                </div>
+              </div>
+
+              <div class="event-list" style="margin-top: 14px;">
+                <article class="event-row active">
+                  <div class="thumb"></div>
+                  <div>
+                    <div class="event-title">Official goods reservation window</div>
+                    <div class="event-meta">online_goods / official / open</div>
+                  </div>
+                  <span class="pill good">published</span>
+                </article>
+                <article class="event-row">
+                  <div class="thumb alt"></div>
+                  <div>
+                    <div class="event-title">Pulsar collaboration energy mouse</div>
+                    <div class="event-meta">online_goods / official / open</div>
+                  </div>
+                  <span class="pill good">published</span>
+                </article>
+                <article class="event-row">
+                  <div class="thumb"></div>
+                  <div>
+                    <div class="event-title">OVT. first solo concert</div>
+                    <div class="event-meta">offline_concert / gen2 / upcoming</div>
+                  </div>
+                  <span class="pill warn">draft</span>
+                </article>
+              </div>
+
+              <div class="page-controls">
+                <button class="secondary">Previous</button>
+                <span class="subtle">Cursor pagination</span>
+                <button class="secondary">Next</button>
+              </div>
+
+              <div class="mobile-actions">
+                <button class="secondary">Validate</button>
+                <button>Save</button>
+                <button class="danger">Delete</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <h2>Audit log</h2>
+              <span class="pill">selected event</span>
+            </div>
+            <div class="card-body activity-list">
+              <div class="activity">
+                <div class="feed-avatar"></div>
+                <div class="activity-text"><strong>draft saved</strong><br>2026-06-26 13:58 KST / admin</div>
+                <div class="feed-dot"></div>
+              </div>
+              <div class="activity">
+                <div class="feed-avatar"></div>
+                <div class="activity-text"><strong>validation passed</strong><br>2026-06-26 13:43 KST / admin</div>
+                <div class="feed-dot"></div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="page" id="page-operations">
+        <div class="page-head">
+          <div>
+            <h1>Operations</h1>
+            <p class="subtle">작업 실행 버튼을 Hub events와 분리한 운영 페이지입니다.</p>
+          </div>
+        </div>
+        <div class="grid-equal">
+          <article class="card">
+            <div class="card-head"><h2>Schedulers and jobs</h2></div>
+            <div class="card-body activity-list">
+              <div class="activity"><div class="feed-avatar"></div><div class="activity-text"><strong>Drain notification jobs</strong><br>/v1/internal/jobs/notifications/drain</div><button>Run</button></div>
+              <div class="activity"><div class="feed-avatar"></div><div class="activity-text"><strong>Renew YouTube subscriptions</strong><br>WebSub lease renewal only</div><button>Run</button></div>
+              <div class="activity"><div class="feed-avatar"></div><div class="activity-text"><strong>Poll CHZZK live status</strong><br>Backend-only live-list check</div><button>Run</button></div>
+            </div>
+          </article>
+          <article class="card">
+            <div class="card-head"><h2>Run state</h2><span class="pill good">ready</span></div>
+            <div class="card-body">
+              <p class="subtle">Actions use the active admin session and do not expose stored server secrets.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="page" id="page-audit">
+        <div class="page-head">
+          <div>
+            <h1>Audit</h1>
+            <p class="subtle">전체 변경 이력과 운영 이벤트를 확인하는 페이지입니다.</p>
+          </div>
+        </div>
+        <article class="card">
+          <div class="card-head"><h2>Recent audit log</h2><span class="pill">latest</span></div>
+          <div class="card-body activity-list">
+            <div class="activity"><div class="feed-avatar"></div><div class="activity-text"><strong>Hub event</strong> draft saved by admin.<br>2 mins ago</div><div class="feed-dot"></div></div>
+            <div class="activity"><div class="feed-avatar"></div><div class="activity-text"><strong>Validation</strong> passed with HTTPS image policy.<br>9 mins ago</div><div class="feed-dot"></div></div>
+            <div class="activity"><div class="feed-avatar"></div><div class="activity-text"><strong>CHZZK</strong> live status polling completed.<br>18 mins ago</div><div class="feed-dot"></div></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="page" id="page-settings">
+        <div class="page-head">
+          <div>
+            <h1>Settings</h1>
+            <p class="subtle">Internal API token, theme, auto refresh 같은 콘솔 사용 환경을 모아두는 페이지입니다.</p>
+          </div>
+          <div class="toolbar">
+            <button class="secondary">Reset session token</button>
+            <button>Save settings</button>
+          </div>
+        </div>
+
+        <div class="settings-layout">
+          <div class="settings-stack">
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <h2>Connection credentials</h2>
+                  <p class="subtle">Dashboard와 Operations에서 사용하는 내부 API 요청 설정입니다.</p>
+                </div>
+                <span class="pill good">session only</span>
+              </div>
+              <div class="card-body">
+                <div class="token-input-card">
+                  <div class="field">
+                    <label for="internal-token">Internal API bearer token</label>
+                    <div class="token-input-wrap">
+                      <span class="token-icon" aria-hidden="true">🔐</span>
+                      <input id="internal-token" type="password" autocomplete="off" spellcheck="false" placeholder="Required for /v1/internal/* requests">
+                      <span class="token-badge">private</span>
+                    </div>
+                    <p class="subtle">이 값은 서버에 저장하지 않고 브라우저 sessionStorage에만 보관하는 것을 권장합니다.</p>
+                  </div>
+
+                  <div class="toolbar" style="margin-top: 12px;">
+                    <button>Use token</button>
+                    <button class="secondary">Test connection</button>
+                    <button class="secondary">Clear</button>
+                  </div>
+                </div>
+
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-title">Admin session</div>
+                    <div class="settings-description">Hub events 관리 API는 admin session 기반 요청으로 처리합니다.</div>
+                  </div>
+                  <span class="pill good">signed in</span>
+                </div>
+
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-title">Internal API scope</div>
+                    <div class="settings-description">Overview, adapter status, operations action에만 bearer token을 사용합니다.</div>
+                  </div>
+                  <span class="pill">/v1/internal/*</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <h2>Console preferences</h2>
+                <span class="pill">local</span>
+              </div>
+              <div class="card-body">
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-title">Theme</div>
+                    <div class="settings-description">라이트 테마의 네이비·민트 포인트를 유지하고, 네비게이션은 투명한 배경으로 정리한 다크 모드로 전환합니다. 실제 구현에서는 localStorage에 저장하면 됩니다.</div>
+                  </div>
+                  <div class="theme-segment" aria-label="Theme selection">
+                    <button type="button" data-theme-choice="light" aria-pressed="true">Light</button>
+                    <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+                  </div>
+                </div>
+
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-title">Auto refresh</div>
+                    <div class="settings-description">Dashboard의 Overview와 adapter 상태를 주기적으로 갱신합니다.</div>
+                  </div>
+                  <select style="max-width: 180px;">
+                    <option>Off</option>
+                    <option>Every 5s</option>
+                    <option>Every 30s</option>
+                  </select>
+                </div>
+
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-title">Hub event page size</div>
+                    <div class="settings-description">이벤트 목록에서 한 번에 불러올 항목 수입니다.</div>
+                  </div>
+                  <select style="max-width: 180px;">
+                    <option>10 events</option>
+                    <option>15 events</option>
+                    <option>25 events</option>
+                  </select>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <aside class="settings-stack">
+            <article class="card">
+              <div class="card-head">
+                <h2>Security notes</h2>
+                <span class="pill warn">important</span>
+              </div>
+              <div class="card-body">
+                <div class="security-list">
+                  <div class="security-item">
+                    <div class="security-icon">1</div>
+                    <div>
+                      <strong>토큰은 표시하지 않기</strong>
+                      <span>입력값은 password field로 유지하고, HTML/test/log에 실제 값을 넣지 않습니다.</span>
+                    </div>
+                  </div>
+                  <div class="security-item">
+                    <div class="security-icon">2</div>
+                    <div>
+                      <strong>세션 저장만 사용</strong>
+                      <span>운영자가 브라우저를 닫으면 사라지는 sessionStorage 저장을 우선합니다.</span>
+                    </div>
+                  </div>
+                  <div class="security-item">
+                    <div class="security-icon">3</div>
+                    <div>
+                      <strong>Hub events와 분리</strong>
+                      <span>이벤트 추가/수정은 admin session 기준으로 두고, internal token은 운영 조회/액션에만 연결합니다.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <h2>Recommended routing</h2>
+              </div>
+              <div class="card-body">
+                <table class="status-table">
+                  <tbody>
+                    <tr>
+                      <td>Dashboard</td>
+                      <td>Overview, adapters</td>
+                      <td><span class="pill">read</span></td>
+                    </tr>
+                    <tr>
+                      <td>Hub events</td>
+                      <td>Add, edit, validate, publish</td>
+                      <td><span class="pill good">work</span></td>
+                    </tr>
+                    <tr>
+                      <td>Settings</td>
+                      <td>Token, theme, local preferences</td>
+                      <td><span class="pill warn">config</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+          </aside>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    const pageButtons = Array.from(document.querySelectorAll("[data-page-target]"));
+    const pages = Array.from(document.querySelectorAll(".page"));
+
+    function setPage(pageName) {
+      pages.forEach((page) => {
+        page.classList.toggle("active", page.id === "page-" + pageName);
+      });
+      pageButtons.forEach((button) => {
+        button.setAttribute("aria-current", button.dataset.pageTarget === pageName ? "page" : "false");
+      });
+    }
+
+    pageButtons.forEach((button) => {
+      button.addEventListener("click", () => setPage(button.dataset.pageTarget));
+    });
+
+    const themeButtons = Array.from(document.querySelectorAll("[data-theme-choice]"));
+    const themeToggle = document.getElementById("theme-toggle");
+
+    function setTheme(theme) {
+      const nextTheme = theme === "dark" ? "dark" : "light";
+      document.documentElement.dataset.theme = nextTheme;
+      themeButtons.forEach((button) => {
+        button.setAttribute("aria-pressed", button.dataset.themeChoice === nextTheme ? "true" : "false");
+      });
+      if (themeToggle) {
+        themeToggle.textContent = nextTheme === "dark" ? "☀" : "☾";
+        themeToggle.setAttribute("aria-label", nextTheme === "dark" ? "Switch to light mode" : "Switch to dark mode");
+      }
+    }
+
+    themeButtons.forEach((button) => {
+      button.addEventListener("click", () => setTheme(button.dataset.themeChoice));
+    });
+
+    if (themeToggle) {
+      themeToggle.addEventListener("click", () => {
+        setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+      });
+    }
+
+    setTheme("light");
+  </script>
+</body>
+</html>

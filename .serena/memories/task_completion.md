@@ -1,0 +1,9 @@
+# Task Completion
+
+- Always run the narrowest meaningful focused tests for changed code first, then broaden based on blast radius. Report any skipped/blocked verification with reason.
+- Backend change completion, typical: `cd backend/stellive-hub-api && rtk npm run build`; focused `rtk npm test -- <pattern>`; broad `rtk npm test` for shared route/service/schema/policy changes. Run `rtk npm run prisma:generate` after Prisma schema changes.
+- Android change completion, typical: `cd android/StelliveHubAndroid && rtk ./gradlew :app:testDebugUnitTest --tests dev.stellive.hub.<FocusedTest>`; run `rtk ./gradlew :app:testDebugUnitTest` or `rtk ./gradlew assembleDebug` when UI/navigation/shared models changed.
+- iOS change completion, typical: `cd ios/StelliveHubiOS && rtk xcodebuild test -project StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:StelliveHubiOSTests/<FocusedTest>`; run broader scheme test/build when shared models/navigation/widget behavior changed.
+- Shared contract/seed changes: verify affected backend tests, mobile mapping tests, OpenAPI/schema consistency, and policy greps for Former members, forbidden official YouTube live events, raw payload leaks, protected credential names, prohibited image fields/assets.
+- Before finalizing code edits: `rtk git diff --check`; inspect `rtk git diff` for unintended secrets/assets/generated churn; ensure docs/tests are updated when behavior changes.
+- For backend/admin changes requiring deployed/manual validation, use internal server flow from AGENTS.md only when needed and never transfer `.env`, secrets, production tokens, profile images, logos, fan art, captured images, copied media, `node_modules`, `dist`, or build folders.
