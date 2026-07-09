@@ -121,6 +121,7 @@ private const val NAVIGATION_RAIL_WIDTH_DP = 80
 private const val LARGE_SCREEN_CONTENT_MAX_WIDTH_DP = 760
 private const val GOODS_EVENTS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1120
 private const val SONGS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1080
+private const val SETTINGS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1080
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -168,6 +169,7 @@ private lateinit var binding: ActivityMainBinding
     private var systemTopInsetPx = 0
     private var currentFoldFeature: HubFoldFeature? = null
     private var currentAdaptiveSpec: HubAdaptiveSpec = HubAdaptivePolicy.spec(widthDp = 0)
+    private var selectedSettingsDetailScreen: HubScreen? = null
     private val serverConnectionDebugLogs = mutableListOf("bootstrap: 대기 중")
     private val navigationHistory = MainNavigationHistory()
     private var lastRootBackPressedAt = 0L
@@ -512,7 +514,8 @@ HubScreen.GOODS_EVENTS -> renderGoodsEvents()
     private fun updateTwoPaneScrollChrome(screen: HubScreen = navigationHistory.currentScreen) {
         val isTwoPaneScreen =
             screen == HubScreen.GOODS_EVENTS && shouldUseGoodsEventsTwoPane() ||
-                screen == HubScreen.SONGS && shouldUseSongsTwoPane()
+                screen == HubScreen.SONGS && shouldUseSongsTwoPane() ||
+                screen == HubScreen.SETTINGS && shouldUseSettingsTwoPane()
         binding.contentRefresh.isEnabled =
             !isTwoPaneScreen && (screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS || screen == HubScreen.SONGS)
         if (isTwoPaneScreen) {
@@ -638,6 +641,8 @@ private fun startScreen(screenId: String, title: String, role: String) {
                     GOODS_EVENTS_TWO_PANE_CONTENT_MAX_WIDTH_DP
                 navigationHistory.currentScreen == HubScreen.SONGS && shouldUseSongsTwoPane() ->
                     SONGS_TWO_PANE_CONTENT_MAX_WIDTH_DP
+                navigationHistory.currentScreen == HubScreen.SETTINGS && shouldUseSettingsTwoPane() ->
+                    SETTINGS_TWO_PANE_CONTENT_MAX_WIDTH_DP
                 else -> LARGE_SCREEN_CONTENT_MAX_WIDTH_DP
             }
             val availableWidth = binding.contentScroll.width.takeIf { it > 0 } ?: dp(maxWidthDp)
@@ -2001,13 +2006,52 @@ private fun songFilterRow(
         }
 
     private fun renderSettings() {
-        val settings = repository.settings
         startScreen(
             screenId = "settings",
             title = getString(R.string.settings_title),
             role = "핵심 상태만 보고, 세부 설정은 항목별 화면에서 변경합니다."
         )
-        binding.contentList.addView(
+        if (shouldUseSettingsTwoPane()) {
+            renderSettingsTwoPane()
+            return
+        }
+        renderSettingsHubInto(binding.contentList)
+    }
+
+    private fun renderSettingsTwoPane() {
+        val paneRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            isBaselineAligned = false
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                twoPaneViewportHeight(),
+            )
+        }
+        val hubPane = scrollablePane()
+        val detailPane = scrollablePane().apply {
+            scrollView.background = rounded(color(R.color.hub_surface), dp(16), color(R.color.hub_line))
+            content.setPadding(dp(10), dp(10), dp(10), dp(10))
+        }
+        paneRow.addView(
+            hubPane.scrollView,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 0.9f).apply {
+                marginEnd = dp(8)
+            },
+        )
+        paneRow.addView(
+            detailPane.scrollView,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.1f).apply {
+                marginStart = dp(8)
+            },
+        )
+        binding.contentList.addView(paneRow)
+        renderSettingsHubInto(hubPane.content)
+        renderSelectedSettingsDetailInto(detailPane.content)
+    }
+
+    private fun renderSettingsHubInto(container: LinearLayout) {
+        val settings = repository.settings
+        container.addView(
             settingsPanel(
                 title = "전체 알림",
                 rows = listOf(
@@ -2033,10 +2077,10 @@ private fun songFilterRow(
                 )
             )
         )
-        binding.contentList.addView(appearanceModePanel())
-        binding.contentList.addView(debugModePanel())
+        container.addView(appearanceModePanel())
+        container.addView(debugModePanel())
         visibleServerConnectionDebugLogs().takeIf { it.isNotEmpty() }?.let { logs ->
-            binding.contentList.addView(
+            container.addView(
                 compactEventCard(
                     title = "서버 연결 로그",
                     body = logs.joinToString("\n"),
@@ -2059,11 +2103,12 @@ private fun songFilterRow(
             hubEventsEnabled = settings.platformEnabled[NotificationPlatform.HUB_EVENT] == true,
             deadlineSoonEnabled = settings.eventTypeEnabled[NotificationEventType.EVENT_DEADLINE_SOON] == true
         )
-        binding.contentList.addView(sectionLabel("설정 항목"))
+        container.addView(sectionLabel("설정 항목"))
         hubRows.forEach { row ->
-            binding.contentList.addView(settingsNavigationCard(row))
+            val screen = settingsScreenForRow(row.screenId)
+            container.addView(settingsNavigationCard(row, selected = selectedSettingsDetailScreen == screen))
         }
-        binding.contentList.addView(
+        container.addView(
             settingsPanel(
                 title = "표시 정책",
                 rows = listOf(
@@ -2085,14 +2130,18 @@ private fun songFilterRow(
     }
 
     private fun renderSettingsDelivery() {
-        val settings = repository.settings
         startScreen(
             screenId = "settings_delivery",
             title = "전달 방식",
             role = "실시간 우선은 OS와 플랫폼 정책을 우회하지 않습니다."
         )
-        binding.contentList.addView(sectionLabel("전달 방식"))
-        binding.contentList.addView(
+        renderSettingsDeliveryInto(binding.contentList)
+    }
+
+    private fun renderSettingsDeliveryInto(container: LinearLayout) {
+        val settings = repository.settings
+        container.addView(sectionLabel("전달 방식"))
+        container.addView(
             settingsPanel(
                 rows = listOf(
                     SettingRow("전달 방식", "표준 또는 realtime_best_effort. 비활성 알림을 다시 켜지는 않습니다.", null, settings.deliveryMode.name),
@@ -2100,8 +2149,8 @@ private fun songFilterRow(
                 )
             )
         )
-        binding.contentList.addView(sectionLabel("조용한 시간, 키워드, rate limit"))
-        binding.contentList.addView(
+        container.addView(sectionLabel("조용한 시간, 키워드, rate limit"))
+        container.addView(
             settingsPanel(
                 rows = listOf(
                     SettingRow("조용한 시간", "${settings.quietHours.start}-${settings.quietHours.end} ${settings.quietHours.timezone}", settings.quietHours.enabled),
@@ -2114,14 +2163,18 @@ private fun songFilterRow(
     }
 
     private fun renderSettingsTargets() {
-        val settings = repository.settings
         startScreen(
             screenId = "settings_targets",
             title = "대상별 알림",
             role = "기수/카테고리와 개별 항목을 분리해서 제어합니다."
         )
-        binding.contentList.addView(sectionLabel("카테고리"))
-        binding.contentList.addView(
+        renderSettingsTargetsInto(binding.contentList)
+    }
+
+    private fun renderSettingsTargetsInto(container: LinearLayout) {
+        val settings = repository.settings
+        container.addView(sectionLabel("카테고리"))
+        container.addView(
             settingsPanel(
                 rows = listOf(
                     SettingRow("1기생, 2기생, 3기생", "활성 멤버만 표시합니다. Former 멤버는 MVP에서 제외합니다.", settings.generationEnabled["gen1"] == true && settings.generationEnabled["gen2"] == true && settings.generationEnabled["gen3"] == true),
@@ -2131,9 +2184,9 @@ private fun songFilterRow(
                 )
             )
         )
-        binding.contentList.addView(sectionLabel("개별 항목"))
+        container.addView(sectionLabel("개별 항목"))
         repository.members.filter { it.catalogRole != CatalogRole.PLACEHOLDER }.forEach { member ->
-            binding.contentList.addView(
+            container.addView(
                 targetToggleCard(
                     title = member.koreanName,
                     body = when (member.catalogRole) {
@@ -2153,14 +2206,18 @@ private fun songFilterRow(
     }
 
     private fun renderSettingsPlatforms() {
-        val settings = repository.settings
         startScreen(
             screenId = "settings_platforms",
             title = "플랫폼별 알림",
             role = "플랫폼별 허용 여부"
         )
-        binding.contentList.addView(sectionLabel("플랫폼별 알림"))
-        binding.contentList.addView(
+        renderSettingsPlatformsInto(binding.contentList)
+    }
+
+    private fun renderSettingsPlatformsInto(container: LinearLayout) {
+        val settings = repository.settings
+        container.addView(sectionLabel("플랫폼별 알림"))
+        container.addView(
             settingsPanel(
                 rows = NotificationPlatform.entries.map { platform ->
                     SettingRow(
@@ -2171,7 +2228,7 @@ private fun songFilterRow(
                 }
             )
         )
-        binding.contentList.addView(
+        container.addView(
             compactEventCard(
                 title = "공통 안내",
                 body = MainUiPolicy.settingsPlatformCommonNotice(),
@@ -2181,14 +2238,18 @@ private fun songFilterRow(
     }
 
     private fun renderSettingsEventTypes() {
-        val settings = repository.settings
         startScreen(
             screenId = "settings_event_types",
             title = "이벤트 타입별 알림",
             role = "이벤트 종류별 허용 여부"
         )
-        binding.contentList.addView(sectionLabel("이벤트 타입별 알림"))
-        binding.contentList.addView(
+        renderSettingsEventTypesInto(binding.contentList)
+    }
+
+    private fun renderSettingsEventTypesInto(container: LinearLayout) {
+        val settings = repository.settings
+        container.addView(sectionLabel("이벤트 타입별 알림"))
+        container.addView(
             settingsPanel(
                 rows = MainUiPolicy.settingsEventTypeRows(settings).map { row ->
                     SettingRow(
@@ -2199,15 +2260,15 @@ private fun songFilterRow(
                 }
             )
         )
-        binding.contentList.addView(
+        container.addView(
             compactEventCard(
                 title = "공통 안내",
                 body = MainUiPolicy.settingsEventTypeCommonNotices().first(),
                 pills = listOf("조용한 시간", "차단 키워드", "rate limit")
             )
         )
-        binding.contentList.addView(sectionLabel("채팅 알림"))
-        binding.contentList.addView(
+        container.addView(sectionLabel("채팅 알림"))
+        container.addView(
             settingsPanel(
                 rows = listOf(
                     SettingRow("치지직 채팅 알림", "기본 OFF입니다. 키워드 또는 역할 필터를 설정한 경우에만 제한적으로 사용합니다.", settings.chatEnabled),
@@ -2215,7 +2276,7 @@ private fun songFilterRow(
                 )
             )
         )
-        binding.contentList.addView(
+        container.addView(
             compactEventCard(
                 title = "공식 채널 제한",
                 body = MainUiPolicy.settingsEventTypeCommonNotices().last(),
@@ -2225,14 +2286,18 @@ private fun songFilterRow(
     }
 
     private fun renderSettingsHubEvents() {
-        val settings = repository.settings
         startScreen(
             screenId = "settings_hub_events",
             title = "굿즈/행사",
             role = "온라인 한정 굿즈와 오프라인 공식 행사를 중심으로 봅니다."
         )
-        binding.contentList.addView(sectionLabel("굿즈/행사"))
-        binding.contentList.addView(
+        renderSettingsHubEventsInto(binding.contentList)
+    }
+
+    private fun renderSettingsHubEventsInto(container: LinearLayout) {
+        val settings = repository.settings
+        container.addView(sectionLabel("굿즈/행사"))
+        container.addView(
             settingsPanel(
                 rows = MainUiPolicy.settingsHubEventRows(
                     hubEventsEnabled = settings.platformEnabled[NotificationPlatform.HUB_EVENT] == true,
@@ -2240,19 +2305,23 @@ private fun songFilterRow(
                 ).map { row -> SettingRow(row.title, row.body, row.checked) }
             )
         )
-        binding.contentList.addView(noticeCard(MainUiPolicy.hubEventPolicyNotice()))
-        binding.contentList.addView(noticeCard("공식 이미지, 로고, 포스터는 앱에 저장하거나 재사용하지 않습니다."))
+        container.addView(noticeCard(MainUiPolicy.hubEventPolicyNotice()))
+        container.addView(noticeCard("공식 이미지, 로고, 포스터는 앱에 저장하거나 재사용하지 않습니다."))
     }
 
     private fun renderSettingsAdvanced() {
-        val settings = repository.settings
         startScreen(
             screenId = "settings_advanced",
             title = "고급 조합 설정",
             role = "복잡한 예외 규칙은 필요할 때만 조정합니다."
         )
-        binding.contentList.addView(sectionLabel("조합 설정"))
-        binding.contentList.addView(
+        renderSettingsAdvancedInto(binding.contentList)
+    }
+
+    private fun renderSettingsAdvancedInto(container: LinearLayout) {
+        val settings = repository.settings
+        container.addView(sectionLabel("조합 설정"))
+        container.addView(
             settingsPanel(
                 rows = settings.combinationPreferences.map { preference ->
                     SettingRow(
@@ -2263,7 +2332,7 @@ private fun songFilterRow(
                 }
             )
         )
-        binding.contentList.addView(
+        container.addView(
             noticeCard("개별 명시 설정은 카테고리 설정을 덮어쓸 수 있습니다. 플랫폼, 이벤트 타입, 조용한 시간, 키워드, rate limit은 이후에도 계속 적용됩니다.")
         )
     }
@@ -2271,6 +2340,49 @@ private fun songFilterRow(
     private fun httpsLinkRow(title: String, url: String?): SettingRow? {
         val value = url ?: return null
         return if (value.startsWith("https://")) SettingRow(title, value, null, "열기") else null
+    }
+
+    private fun shouldUseSettingsTwoPane(): Boolean =
+        currentAdaptiveSpec.useLargeScreenLayout
+
+    private fun isSettingsDetailPaneScreen(screen: HubScreen): Boolean =
+        screen == HubScreen.SETTINGS_DELIVERY ||
+            screen == HubScreen.SETTINGS_TARGETS ||
+            screen == HubScreen.SETTINGS_PLATFORMS ||
+            screen == HubScreen.SETTINGS_EVENT_TYPES ||
+            screen == HubScreen.SETTINGS_HUB_EVENTS ||
+            screen == HubScreen.SETTINGS_ADVANCED
+
+    private fun renderSelectedSettingsDetailInto(container: LinearLayout) {
+        when (selectedSettingsDetailScreen) {
+            HubScreen.SETTINGS_DELIVERY -> renderSettingsDeliveryInto(container)
+            HubScreen.SETTINGS_TARGETS -> renderSettingsTargetsInto(container)
+            HubScreen.SETTINGS_PLATFORMS -> renderSettingsPlatformsInto(container)
+            HubScreen.SETTINGS_EVENT_TYPES -> renderSettingsEventTypesInto(container)
+            HubScreen.SETTINGS_HUB_EVENTS -> renderSettingsHubEventsInto(container)
+            HubScreen.SETTINGS_ADVANCED -> renderSettingsAdvancedInto(container)
+            else -> renderSettingsDetailEmptyPane(container)
+        }
+    }
+
+    private fun renderSettingsDetailEmptyPane(container: LinearLayout) {
+        container.addView(
+            compactEventCard(
+                title = "설정 항목을 선택하세요",
+                body = "왼쪽 목록에서 세부 설정을 선택하면 이 영역에 표시됩니다.",
+                pills = listOf("설정")
+            )
+        )
+    }
+
+    private fun onSettingsRowSelected(row: SettingsHubRow) {
+        val screen = settingsScreenForRow(row.screenId)
+        if (shouldUseSettingsTwoPane() && isSettingsDetailPaneScreen(screen)) {
+            selectedSettingsDetailScreen = screen
+            renderSettings()
+        } else {
+            navigateTo(screen, addToBackStack = true)
+        }
     }
 
     private fun settingsScreenForRow(screenId: String): HubScreen = when (screenId) {
@@ -2284,10 +2396,11 @@ private fun songFilterRow(
         else -> HubScreen.SETTINGS
     }
 
-    private fun settingsNavigationCard(row: SettingsHubRow): MaterialCardView =
+    private fun settingsNavigationCard(row: SettingsHubRow, selected: Boolean = false): MaterialCardView =
         baseCard().apply {
             isClickable = true
             isFocusable = true
+            isSelected = selected
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
             }
@@ -2315,14 +2428,14 @@ private fun songFilterRow(
                 marginEnd = dp(12)
             })
             content.addView(TextView(context).apply {
-                text = "${row.value} ›"
+                text = if (selected) "${row.value} · 선택됨 ›" else "${row.value} ›"
                 setTextColor(color(R.color.hub_text_muted))
                 textSize = 13f
                 typeface = Typeface.DEFAULT_BOLD
             })
             addView(content)
             setOnClickListener {
-                navigateTo(settingsScreenForRow(row.screenId), addToBackStack = true)
+                onSettingsRowSelected(row)
             }
         }
 
