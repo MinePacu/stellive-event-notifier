@@ -3,28 +3,48 @@ import SwiftUI
 struct HubEventsCalendarView: View {
     private let days: [HubCalendarDay]
     @Binding private var selectedMonth: Date
+    @Binding private var isExpanded: Bool
     @StateObject private var viewModel: HubEventsCalendarViewModel
     @State private var presentedPicker: CalendarPickerPresentation?
 
-    init(days: [HubCalendarDay], selectedMonth: Binding<Date>) {
+    init(days: [HubCalendarDay], selectedMonth: Binding<Date>, isExpanded: Binding<Bool>) {
         self.days = days
         _selectedMonth = selectedMonth
+        _isExpanded = isExpanded
         _viewModel = StateObject(wrappedValue: HubEventsCalendarViewModel(viewMode: .calendar, days: days))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("굿즈/행사 캘린더")
-                    .font(.headline.weight(.semibold))
-                Text("서버에서 동기화된 일정만 표시합니다.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("굿즈/행사 캘린더")
+                        .font(.headline.weight(.semibold))
+                    Text("서버에서 동기화된 일정만 표시합니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
+
+                Button {
+                    isExpanded.toggle()
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(minWidth: 48, minHeight: 48)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .fixedSize(horizontal: true, vertical: false)
+                .accessibilityLabel(isExpanded ? "굿즈/행사 캘린더 접기" : "굿즈/행사 캘린더 펼치기")
             }
 
-            monthControl
-            weekdayHeader
-            monthGrid
+            if isExpanded {
+                monthControl
+                weekdayHeader
+                monthGrid
+            }
 
         }
         .padding(.vertical, 6)

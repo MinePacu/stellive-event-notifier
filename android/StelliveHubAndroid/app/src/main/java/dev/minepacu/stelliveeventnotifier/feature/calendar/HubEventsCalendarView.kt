@@ -26,9 +26,13 @@ class HubEventsCalendarView(
     initialMonth: YearMonth? = null,
     private val showModeControls: Boolean = true,
     private val onMonthChanged: (YearMonth) -> Unit = {},
+    private val showCollapseControl: Boolean = false,
+    initiallyExpanded: Boolean = true,
+    private val onExpandedChanged: (Boolean) -> Unit = {},
     private val onEntryClick: (String) -> Unit = {},
 ) : MaterialCardView(context) {
     private val viewModel = HubEventsCalendarViewModel(days, clock, initialMonth)
+    private var isExpanded = initiallyExpanded
     private val content = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(14), dp(14), dp(14), dp(14))
@@ -50,6 +54,8 @@ class HubEventsCalendarView(
     private fun render() {
         content.removeAllViews()
         content.addView(titleBlock())
+        if (showCollapseControl && !isExpanded) return
+
         if (showModeControls) {
             content.addView(modeSwitch())
             content.addView(scopeSwitch())
@@ -66,19 +72,51 @@ class HubEventsCalendarView(
     }
 
     private fun titleBlock(): View = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        addView(TextView(context).apply {
-            text = "굿즈/행사 캘린더"
-            setTextColor(color(R.color.hub_text))
-            textSize = 17f
-            typeface = Typeface.DEFAULT_BOLD
-        })
-        addView(TextView(context).apply {
-            text = "서버에서 동기화된 일정만 표시합니다."
-            setTextColor(color(R.color.hub_text_muted))
-            textSize = 12f
-            setPadding(0, dp(3), 0, dp(10))
-        })
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(context).apply {
+                text = "굿즈/행사 캘린더"
+                setTextColor(color(R.color.hub_text))
+                textSize = 17f
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            addView(TextView(context).apply {
+                text = "서버에서 동기화된 일정만 표시합니다."
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 12f
+                setPadding(0, dp(3), 0, dp(10))
+            })
+        }, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        if (showCollapseControl) {
+            addView(TextView(context).apply {
+                text = if (isExpanded) "⌃" else "⌄"
+                contentDescription = if (isExpanded) {
+                    "굿즈/행사 캘린더 접기"
+                } else {
+                    "굿즈/행사 캘린더 펼치기"
+                }
+                gravity = Gravity.CENTER
+                textSize = 22f
+                typeface = Typeface.DEFAULT_BOLD
+                includeFontPadding = false
+                setTextColor(color(R.color.hub_text))
+                background = rounded(color(R.color.hub_surface), dp(14), color(R.color.hub_line))
+                minimumWidth = dp(48)
+                minimumHeight = dp(48)
+                setPadding(0, 0, 0, 0)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    isExpanded = !isExpanded
+                    render()
+                    onExpandedChanged(isExpanded)
+                }
+            }, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, dp(48)).apply {
+                marginStart = dp(12)
+            })
+        }
     }
 
     private fun modeSwitch(): View = segmentedRow(

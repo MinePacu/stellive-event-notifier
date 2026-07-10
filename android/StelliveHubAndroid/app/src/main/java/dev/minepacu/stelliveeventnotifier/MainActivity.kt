@@ -122,6 +122,7 @@ private const val LARGE_SCREEN_CONTENT_MAX_WIDTH_DP = 760
 private const val GOODS_EVENTS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1120
 private const val SONGS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1080
 private const val SETTINGS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1080
+private const val GOODS_EVENTS_CALENDAR_EXPANDED_STATE = "goods_events_calendar_expanded"
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -198,6 +199,7 @@ private var selectedHubEventId: String? = null
     private var goodsEventsDays: List<HubCalendarDay> = emptyList()
     private var goodsEvents: List<HubEvent> = emptyList()
     private var goodsEventsSelectedMonth: YearMonth = YearMonth.now()
+    private var goodsEventsCalendarExpanded = true
     private var serverHubEventDetailLoadedId: String? = null
     private var serverHubEventDetail: HubEvent? = null
     private var selectedAppearanceMode = AppearanceMode.SYSTEM
@@ -211,6 +213,10 @@ private var notificationPermissionRequested = false
         liveMemberPriorityIds = readLiveMemberPriorityIds()
         AppCompatDelegate.setDefaultNightMode(selectedAppearanceMode.toNightMode())
         super.onCreate(savedInstanceState)
+        goodsEventsCalendarExpanded = savedInstanceState?.getBoolean(
+            GOODS_EVENTS_CALENDAR_EXPANDED_STATE,
+            true,
+        ) ?: true
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         serverRepository = createServerRepository()
@@ -238,6 +244,11 @@ private var notificationPermissionRequested = false
     override fun onPause() {
         liveClockHandler.removeCallbacks(liveClockTicker)
         super.onPause()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(GOODS_EVENTS_CALENDAR_EXPANDED_STATE, goodsEventsCalendarExpanded)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onDestroy() {
@@ -994,6 +1005,9 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 days = filteredDays,
                 initialMonth = goodsEventsSelectedMonth,
                 showModeControls = false,
+                showCollapseControl = true,
+                initiallyExpanded = goodsEventsCalendarExpanded,
+                onExpandedChanged = { expanded -> goodsEventsCalendarExpanded = expanded },
                 onMonthChanged = { month ->
                     goodsEventsSelectedMonth = month
                     if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS) {

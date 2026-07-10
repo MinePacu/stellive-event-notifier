@@ -5,6 +5,7 @@ struct HubEventsView: View {
     @EnvironmentObject private var serverStore: ServerHubStore
     @State private var selectedFilter = "all"
     @State private var selectedCalendarMonth = Date()
+    @SceneStorage("hubEvents.calendarExpanded") private var isCalendarExpanded = true
 
     private let filters: [(id: String, title: String)] = [
         ("all", "전체"),
@@ -63,7 +64,8 @@ struct HubEventsView: View {
             Section("캘린더") {
                 HubEventsCalendarView(
                     days: serverStore.calendarDays(for: selectedFilter),
-                    selectedMonth: $selectedCalendarMonth
+                    selectedMonth: $selectedCalendarMonth,
+                    isExpanded: $isCalendarExpanded
                 )
             }
 
