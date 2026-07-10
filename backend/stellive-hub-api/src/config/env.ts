@@ -99,6 +99,7 @@ const envSchema = z
     MUSIC_CHANNEL_DISCOVERY_RECENT_PAGES: z.coerce.number().int().positive().default(1),
     MUSIC_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
     MUSIC_CACHE_STALE_SECONDS: z.coerce.number().int().positive().default(600),
+    MUSIC_CACHE_MAX_ENTRIES: boundedInteger(256, 16, 5_000),
     MUSIC_SYNC_LOCK_SECONDS: z.coerce.number().int().positive().default(30),
   LIGHT_SYNC_INTERVAL_MINUTES: z.coerce.number().int().positive().default(10),
   FULL_SYNC_INTERVAL_MINUTES: z.coerce.number().int().positive().default(60),

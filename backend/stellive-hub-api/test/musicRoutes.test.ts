@@ -28,7 +28,7 @@ const item: MusicCatalogItem = {
   },
 };
 
-async function buildRouteApp() {
+async function buildRouteApp(cachePolicy = { ttlMs: 300_000, staleMs: 600_000 }) {
   const repository = {
     listMusicItems: vi.fn(async () => ({ items: [item], nextCursor: "next" })),
     getMusicItem: vi.fn(async (id: string) => (id === "music-1" ? item : null)),
@@ -40,7 +40,7 @@ async function buildRouteApp() {
   await registerMusicRoutes(app, {
     repository,
     cache: new ResponseCache(),
-    cachePolicy: { ttlMs: 300_000, staleMs: 600_000 },
+    cachePolicy,
     registerMembersListRoute: true,
   });
   return { app, repository };
@@ -83,6 +83,15 @@ describe("music routes", () => {
       includeInstrumental: true,
       includeExcluded: true,
     });
+  });
+
+  it("uses the injected cache policy for cache-control headers", async () => {
+    const { app } = await buildRouteApp({ ttlMs: 12_900, staleMs: 34_800 });
+
+    const response = await app.inject({ method: "GET", url: "/v1/music" });
+    await app.close();
+
+    expect(response.headers["cache-control"]).toBe("private, max-age=12, stale-while-revalidate=34");
   });
 
   it("rejects invalid list query values", async () => {

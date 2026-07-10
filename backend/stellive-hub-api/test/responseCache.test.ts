@@ -59,4 +59,78 @@ describe("ResponseCache", () => {
     await cache.waitForRefreshes();
     await expect(cache.getOrLoad("music", { ttlMs: 100, staleMs: 1_000 }, async () => "new")).resolves.toBe("old");
   });
+
+  it("evicts least recently accessed entries when maxEntries is exceeded", async () => {
+    let nowMs = 0;
+    const cache = new ResponseCache({ now: () => nowMs, maxEntries: 2 });
+    const loaders = {
+      a: vi.fn(async () => "a"),
+      b: vi.fn(async () => "b"),
+      c: vi.fn(async () => "c"),
+    };
+    const policy = { ttlMs: 1_000, staleMs: 1_000 };
+
+    await cache.getOrLoad("a", policy, loaders.a);
+    await cache.getOrLoad("b", policy, loaders.b);
+    await cache.getOrLoad("a", policy, loaders.a);
+    await cache.getOrLoad("c", policy, loaders.c);
+
+    await cache.getOrLoad("a", policy, loaders.a);
+    await cache.getOrLoad("c", policy, loaders.c);
+    await cache.getOrLoad("b", policy, loaders.b);
+    expect(loaders.a).toHaveBeenCalledTimes(1);
+    expect(loaders.b).toHaveBeenCalledTimes(2);
+    expect(loaders.c).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes expired entries before evicting fresh entries", async () => {
+    let nowMs = 0;
+    const cache = new ResponseCache({ now: () => nowMs, maxEntries: 2 });
+    const freshLoader = vi.fn(async () => "fresh");
+    const expiredLoader = vi.fn(async () => "expired");
+
+    await cache.getOrLoad("fresh", { ttlMs: 1_000, staleMs: 1_000 }, freshLoader);
+    nowMs = 10;
+    await cache.getOrLoad("expired", { ttlMs: 5, staleMs: 5 }, expiredLoader);
+    nowMs = 30;
+    await cache.getOrLoad("new", { ttlMs: 1_000, staleMs: 1_000 }, async () => "new");
+
+    await cache.getOrLoad("fresh", { ttlMs: 1_000, staleMs: 1_000 }, freshLoader);
+    await cache.getOrLoad("expired", { ttlMs: 5, staleMs: 5 }, expiredLoader);
+    expect(freshLoader).toHaveBeenCalledTimes(1);
+    expect(expiredLoader).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps concurrent load de-duplication when maxEntries is small", async () => {
+    const cache = new ResponseCache({ maxEntries: 1 });
+    const loader = vi.fn(async () => "loaded");
+
+    await expect(Promise.all([
+      cache.getOrLoad("same", { ttlMs: 1_000, staleMs: 1_000 }, loader),
+      cache.getOrLoad("same", { ttlMs: 1_000, staleMs: 1_000 }, loader),
+      cache.getOrLoad("same", { ttlMs: 1_000, staleMs: 1_000 }, loader),
+    ])).resolves.toEqual(["loaded", "loaded", "loaded"]);
+    expect(loader).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start duplicate refreshes after touch and eviction changes", async () => {
+    let nowMs = 0;
+    let finishRefresh: ((value: string) => void) | undefined;
+    const cache = new ResponseCache({ now: () => nowMs, maxEntries: 1 });
+    await cache.getOrLoad("music", { ttlMs: 100, staleMs: 1_000 }, async () => "old");
+    nowMs = 200;
+    const refresh = vi.fn(() => new Promise<string>((resolve) => {
+      finishRefresh = resolve;
+    }));
+
+    await expect(Promise.all([
+      cache.getOrLoad("music", { ttlMs: 100, staleMs: 1_000 }, refresh),
+      cache.getOrLoad("music", { ttlMs: 100, staleMs: 1_000 }, refresh),
+      cache.getOrLoad("music", { ttlMs: 100, staleMs: 1_000 }, refresh),
+    ])).resolves.toEqual(["old", "old", "old"]);
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    finishRefresh?.("new");
+    await cache.waitForRefreshes();
+  });
 });

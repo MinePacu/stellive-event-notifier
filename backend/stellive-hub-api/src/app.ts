@@ -553,7 +553,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     });
   }
 
-  await registerRoutes(app, { dependencies: appRouteDependencies });
+  await registerRoutes(app, { dependencies: appRouteDependencies, env });
   await registerWebhookRoutes(app, {
     env,
     subscriptions: new WebhookSubscriptionRepository(),

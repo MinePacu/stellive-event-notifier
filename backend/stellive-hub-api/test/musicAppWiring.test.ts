@@ -43,6 +43,7 @@ describe("music app wiring", () => {
     expect(env.MUSIC_SYNC_ENABLED).toBe(false);
     expect(env.MUSIC_CACHE_TTL_SECONDS).toBe(600);
     expect(env.MUSIC_CACHE_STALE_SECONDS).toBe(600);
+    expect(env.MUSIC_CACHE_MAX_ENTRIES).toBe(256);
     expect(env.MUSIC_SYNC_LOCK_SECONDS).toBe(30);
     expect(env.LIGHT_SYNC_INTERVAL_MINUTES).toBe(10);
     expect(env.FULL_SYNC_INTERVAL_MINUTES).toBe(60);

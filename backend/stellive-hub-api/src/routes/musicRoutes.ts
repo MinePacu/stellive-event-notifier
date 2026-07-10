@@ -39,7 +39,7 @@ export default async function registerMusicRoutes(app: FastifyInstance, options:
   app.get("/v1/music", async (request, reply) => {
     const parsed = parseMusicListQuery(request.query as Record<string, unknown>);
     if (!parsed.ok) return reply.code(400).send({ error: "invalid_music_query" });
-    setMusicCacheHeader(reply);
+    setMusicCacheHeader(reply, cachePolicy);
     const key = normalizedCacheKey("/v1/music", parsed.filters);
     return cache.getOrLoad(key, cachePolicy, async () => {
       const result = await repository.listMusicItems(parsed.filters);
@@ -54,13 +54,13 @@ export default async function registerMusicRoutes(app: FastifyInstance, options:
     const { id } = request.params as { id: string };
     const found = await repository.getMusicItem?.(id);
     if (!found) return reply.code(404).send({ error: "music_not_found" });
-    setMusicCacheHeader(reply);
+    setMusicCacheHeader(reply, cachePolicy);
     return toMusicCatalogDto(found);
   });
 
   if (options.registerMembersListRoute !== false) {
     app.get("/v1/members", async (_request, reply) => {
-      setMusicCacheHeader(reply);
+      setMusicCacheHeader(reply, cachePolicy);
       return { items: await repository.listMusicMembers?.() ?? [] };
     });
   }
@@ -69,7 +69,7 @@ export default async function registerMusicRoutes(app: FastifyInstance, options:
     const { id } = request.params as { id: string };
     const parsed = parseMusicListQuery(request.query as Record<string, unknown>, id);
     if (!parsed.ok) return reply.code(400).send({ error: "invalid_music_query" });
-    setMusicCacheHeader(reply);
+    setMusicCacheHeader(reply, cachePolicy);
     const key = normalizedCacheKey(`/v1/members/${id}/music`, parsed.filters);
     return cache.getOrLoad(key, cachePolicy, async () => {
       const result = await repository.listMusicItems(parsed.filters);
@@ -131,6 +131,11 @@ function removeUndefined<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 }
 
-function setMusicCacheHeader(reply: { header(name: string, value: string): unknown }) {
-  reply.header("cache-control", "private, max-age=300, stale-while-revalidate=600");
+function setMusicCacheHeader(
+  reply: { header(name: string, value: string): unknown },
+  policy: ResponseCachePolicy,
+) {
+  const maxAgeSeconds = Math.max(0, Math.floor(policy.ttlMs / 1_000));
+  const staleSeconds = Math.max(0, Math.floor(policy.staleMs / 1_000));
+  reply.header("cache-control", `private, max-age=${maxAgeSeconds}, stale-while-revalidate=${staleSeconds}`);
 }

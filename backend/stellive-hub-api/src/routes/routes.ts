@@ -18,6 +18,8 @@ import type { BootstrapResponse, MobilePlatform } from "../../../../shared/schem
 import type { SongRepository } from "../repositories/songRepository.js";
 import type { Member } from "../types.js";
 import { ShortTtlAsyncCache } from "../utils/shortTtlAsyncCache.js";
+import { ResponseCache } from "../cache/responseCache.js";
+import type { AppEnv } from "../config/env.js";
 
 const catalog = new CatalogService();
 const defaultHubEvents = new HubEventService(catalog);
@@ -104,6 +106,7 @@ export interface AppRouteDependencies {
 
 export interface AppRouteOptions {
   dependencies?: AppRouteDependencies;
+  env?: Pick<AppEnv, "MUSIC_CACHE_TTL_SECONDS" | "MUSIC_CACHE_STALE_SECONDS" | "MUSIC_CACHE_MAX_ENTRIES">;
 }
 
 function sampleEvent(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
@@ -252,6 +255,11 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
   });
   await registerMusicRoutes(app, {
     registerMembersListRoute: false,
+    cache: new ResponseCache({ maxEntries: options.env?.MUSIC_CACHE_MAX_ENTRIES }),
+    cachePolicy: {
+      ttlMs: (options.env?.MUSIC_CACHE_TTL_SECONDS ?? 300) * 1_000,
+      staleMs: (options.env?.MUSIC_CACHE_STALE_SECONDS ?? 600) * 1_000,
+    },
   });
 
   app.get("/v1/realtime/status", async () => realtime.status());
