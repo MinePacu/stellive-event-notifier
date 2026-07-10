@@ -6,7 +6,7 @@
 > 이 README의 안내문은 GitHub Alerts 문법을 사용합니다. `NOTE`와 `WARNING`은 GitHub와 GitLab에서 모두 렌더링되는 공통 유형이라 두 플랫폼에서 같은 의미로 읽을 수 있습니다.
 
 > [!WARNING]
-> 이 프로젝트는 스텔라이브, CHZZK, YouTube, X, Naver, Samsung, Apple과 공식 관계가 없습니다. Apache License 2.0은 원본 코드와 문서에만 적용되며, 각 권리자가 보유한 이름·초상·상표·플랫폼 데이터·API 응답·제3자 콘텐츠에 대한 권리를 부여하지 않습니다.
+> 이 프로젝트는 스텔라이브, CHZZK, YouTube, Naver와 공식 관계가 없습니다. Apache License 2.0은 원본 코드와 문서에만 적용되며, 각 권리자가 보유한 이름·초상·상표·플랫폼 데이터·API 응답·제3자 콘텐츠에 대한 권리를 부여하지 않습니다.
 
 ## 한눈에 보기
 
@@ -30,7 +30,7 @@
 
 - 멤버 카탈로그와 MVP 대상에는 `active`·`upcoming` 멤버만 포함합니다. Former 멤버는 포함하지 않습니다.
 - Gangzi는 세대 멤버가 아닌 `gamja` 카테고리의 `representative`이며, 표시 라벨은 `스텔라이브 대표`입니다.
-- `official`은 앱에서 `기타`로 표시하며 공식 YouTube/X 대상을 포함합니다. 공식 YouTube는 업로드 알림만 지원합니다.
+- `official`은 앱에서 `기타`로 표시하며 공식 YouTube 대상을 포함합니다. 공식 YouTube는 업로드 알림만 지원합니다.
 - 사용자 설정이 항상 우선합니다. `global=false`는 모든 푸시 알림을 차단합니다.
 - `realtime_best_effort`는 전달 전략일 뿐이며 opt-out, quiet hours, OS·플랫폼·rate-limit 정책을 우회하지 않습니다.
 - 외부 플랫폼에는 공식 API와 약관을 우선 적용합니다. 로그인 쿠키 스크래핑, private cafe 수집, 접근 우회는 구현하지 않습니다.
