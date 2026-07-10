@@ -7,7 +7,6 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
-import android.widget.GridLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.google.android.material.card.MaterialCardView
@@ -223,21 +222,17 @@ class HubEventsCalendarView(
         })
     }
 
-    private fun weekdayHeader(): View = GridLayout(context).apply {
-        columnCount = 7
-        listOf("일", "월", "화", "수", "목", "금", "토").forEachIndexed { column, label ->
+    private fun weekdayHeader(): View = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        setPadding(dp(1), 0, dp(1), 0)
+        layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        listOf("일", "월", "화", "수", "목", "금", "토").forEach { label ->
             addView(TextView(context).apply {
                 text = label
                 gravity = Gravity.CENTER
                 setTextColor(color(R.color.hub_text_muted))
                 textSize = 11f
-                layoutParams = GridLayout.LayoutParams().apply {
-                    width = 0
-                    height = dp(24)
-                    rowSpec = GridLayout.spec(0)
-                    columnSpec = GridLayout.spec(column, 1, GridLayout.FILL, 1f)
-                }
-            })
+            }, LinearLayout.LayoutParams(0, dp(24), 1f))
         }
     }
 
@@ -252,11 +247,19 @@ class HubEventsCalendarView(
 
         repeat(totalCells / 7) { weekIndex ->
             val weekStart = visibleStart.plusDays((weekIndex * 7).toLong())
-            addView(GridLayout(context).apply {
-                columnCount = 7
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(dp(1), 0, dp(1), 0)
+                layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
                 repeat(7) { column ->
                     val date = weekStart.plusDays(column.toLong())
-                    addView(dateCell(date, YearMonth.from(date) == month, column))
+                    addView(
+                        dateCell(date, YearMonth.from(date) == month),
+                        LinearLayout.LayoutParams(0, dp(58), 1f).apply {
+                            topMargin = dp(2)
+                            bottomMargin = dp(2)
+                        },
+                    )
                 }
             })
             val laneCount = durationLayout.laneCountsByWeek[weekIndex] ?: 0
@@ -301,7 +304,7 @@ class HubEventsCalendarView(
         })
     }
 
-    private fun dateCell(date: LocalDate, inSelectedMonth: Boolean, column: Int): View {
+    private fun dateCell(date: LocalDate, inSelectedMonth: Boolean): View {
         val marker = viewModel.markerForDate(date)
         val entries = viewModel.uiState.days
             .firstOrNull { it.date == date.toString() }
@@ -329,13 +332,6 @@ class HubEventsCalendarView(
                 } else {
                     updateState { viewModel.selectRangeBoundary(date) }
                 }
-            }
-            layoutParams = GridLayout.LayoutParams().apply {
-                width = 0
-                height = dp(58)
-                setMargins(dp(1), dp(2), dp(1), dp(2))
-                rowSpec = GridLayout.spec(0)
-                columnSpec = GridLayout.spec(column, 1, GridLayout.FILL, 1f)
             }
         }
 
