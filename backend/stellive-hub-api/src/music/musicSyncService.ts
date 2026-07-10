@@ -36,6 +36,13 @@ export interface MusicVideoDetailForSync {
 }
 
 export interface MusicYoutubeSyncPort {
+  fetchPlaylistItemsPage?(input: {
+    playlistId: string;
+    pageToken?: string;
+  }): Promise<
+    | { status: "ok"; items: MusicPlaylistItemForSync[]; nextPageToken?: string; pagesFetched: number; quotaUnits: number }
+    | { status: "quota_exceeded" | "error"; items: MusicPlaylistItemForSync[]; nextPageToken?: undefined; pagesFetched: number; quotaUnits: number }
+  >;
   fetchPlaylistItems(
     playlistId: string,
     options?: { maxPages?: number },
@@ -71,7 +78,12 @@ export interface MusicSyncRepositoryPort {
     sourcePlaylistId: string;
     seenYoutubeVideoIds: string[];
     missingCheckedAt: Date;
-  }): Promise<number>;
+  }): Promise<number | { missingCount: number }>;
+  markMissingFromSourceByLastSeen?(input: {
+    sourcePlaylistId: string;
+    seenAtOrAfter: Date;
+    missingCheckedAt: Date;
+  }): Promise<number | { missingCount: number }>;
 }
 
 export interface MusicSyncRunPort {
@@ -121,70 +133,113 @@ export class MusicSyncService {
     const release = await this.options.locks.acquire(`music-source:${source.id}`, this.lockTtlMs);
     if (!release) return emptyResult("lock_not_acquired");
 
-    const run = await this.options.syncRuns.startRun({ syncType: mode, source: source.id, startedAt: this.now() });
+    const syncStartedAt = this.now();
+    const run = await this.options.syncRuns.startRun({ syncType: mode, source: source.id, startedAt: syncStartedAt });
     let quotaUnits = 0;
+    let fetchedCount = 0;
+    let upserted = 0;
+    const seenYoutubeVideoIds = mode === "full" && !this.options.repository.markMissingFromSourceByLastSeen
+      ? [] as string[]
+      : undefined;
     try {
-      const playlistResult = await this.options.youtube.fetchPlaylistItems(
-        source.youtubePlaylistId,
-        mode === "light" ? { maxPages: this.lightMaxPages } : {},
-      );
-      quotaUnits += playlistResult.quotaUnits;
-      if (playlistResult.status !== "ok") {
+      const processPage = async (items: MusicPlaylistItemForSync[]) => {
+        const videoIds = items.map((item) => item.videoId);
+        if (seenYoutubeVideoIds) seenYoutubeVideoIds.push(...videoIds);
+        const details = videoIds.length > 0 ? await this.options.youtube.fetchVideos(videoIds) : [];
+        const detailsById = new Map(details.map((detail) => [detail.videoId, detail]));
+        const musicType = classifyMusicSource(source);
+
+        for (const item of items) {
+          const detail = detailsById.get(item.videoId);
+          const saved = await this.options.repository.upsertMusicItem({
+            youtubeVideoId: item.videoId,
+            title: detail?.title ?? item.title,
+            description: detail?.description ?? null,
+            type: musicType,
+            sourcePlaylistId: source.id,
+            publishedAt: detail?.publishedAt ?? item.publishedAt,
+            thumbnailUrl: detail?.thumbnailUrl ?? null,
+            thumbnailWidth: detail?.thumbnailWidth ?? null,
+            thumbnailHeight: detail?.thumbnailHeight ?? null,
+            duration: detail?.duration ?? null,
+            channelId: detail?.channelId ?? null,
+            channelTitle: detail?.channelTitle ?? null,
+            isPublic: detail?.privacyStatus !== "private",
+            lastSeenAt: syncStartedAt,
+            playlistPosition: item.position ?? null,
+            rawCategoryHint: source.rawCategoryHint,
+          });
+          upserted += 1;
+          const match = matchMusicMembers({
+            sourceMemberId: source.memberId,
+            title: detail?.title ?? item.title,
+            description: detail?.description ?? "",
+            members: this.options.members,
+          });
+          await this.options.repository.replaceMusicItemMembers(saved.id, match.links);
+        }
+        fetchedCount += items.length;
+      };
+
+      const failForPlaylistStatus = async (status: "quota_exceeded" | "error") => {
         await this.options.syncRuns.failRun(run.id, {
           finishedAt: this.now(),
-          errorMessage: playlistResult.status,
+          errorMessage: status,
           quotaUnits,
         });
-        return { ...emptyResult("failed"), quotaUnits };
+        return {
+          status: "failed" as const,
+          fetchedCount,
+          insertedOrUpdatedCount: upserted,
+          missingCount: 0,
+          quotaUnits,
+        };
+      };
+
+      if (this.options.youtube.fetchPlaylistItemsPage) {
+        let pageToken: string | undefined;
+        let pagesFetched = 0;
+        do {
+          const page = await this.options.youtube.fetchPlaylistItemsPage({
+            playlistId: source.youtubePlaylistId,
+            pageToken,
+          });
+          quotaUnits += page.quotaUnits;
+          if (page.status !== "ok") return failForPlaylistStatus(page.status);
+          await processPage(page.items);
+          pagesFetched += page.pagesFetched;
+          pageToken = page.nextPageToken;
+          if (mode === "light" && pagesFetched >= this.lightMaxPages) break;
+        } while (pageToken);
+      } else {
+        const playlistResult = await this.options.youtube.fetchPlaylistItems(
+          source.youtubePlaylistId,
+          mode === "light" ? { maxPages: this.lightMaxPages } : {},
+        );
+        quotaUnits += playlistResult.quotaUnits;
+        if (playlistResult.status !== "ok") return failForPlaylistStatus(playlistResult.status);
+        await processPage(playlistResult.items);
       }
 
-      const videoIds = playlistResult.items.map((item) => item.videoId);
-      const details = videoIds.length > 0 ? await this.options.youtube.fetchVideos(videoIds) : [];
-      const detailsById = new Map(details.map((detail) => [detail.videoId, detail]));
-      const musicType = classifyMusicSource(source);
-      let upserted = 0;
-
-      for (const item of playlistResult.items) {
-        const detail = detailsById.get(item.videoId);
-        const saved = await this.options.repository.upsertMusicItem({
-          youtubeVideoId: item.videoId,
-          title: detail?.title ?? item.title,
-          description: detail?.description ?? null,
-          type: musicType,
-          sourcePlaylistId: source.id,
-          publishedAt: detail?.publishedAt ?? item.publishedAt,
-          thumbnailUrl: detail?.thumbnailUrl ?? null,
-          thumbnailWidth: detail?.thumbnailWidth ?? null,
-          thumbnailHeight: detail?.thumbnailHeight ?? null,
-          duration: detail?.duration ?? null,
-          channelId: detail?.channelId ?? null,
-          channelTitle: detail?.channelTitle ?? null,
-          isPublic: detail?.privacyStatus !== "private",
-          lastSeenAt: this.now(),
-          playlistPosition: item.position ?? null,
-          rawCategoryHint: source.rawCategoryHint,
-        });
-        upserted += 1;
-        const match = matchMusicMembers({
-          sourceMemberId: source.memberId,
-          title: detail?.title ?? item.title,
-          description: detail?.description ?? "",
-          members: this.options.members,
-        });
-        await this.options.repository.replaceMusicItemMembers(saved.id, match.links);
+      let missingCount = 0;
+      if (mode === "full") {
+        const missingResult = this.options.repository.markMissingFromSourceByLastSeen
+          ? await this.options.repository.markMissingFromSourceByLastSeen({
+            sourcePlaylistId: source.id,
+            seenAtOrAfter: syncStartedAt,
+            missingCheckedAt: this.now(),
+          })
+          : await this.options.repository.markMissingFromSource({
+            sourcePlaylistId: source.id,
+            seenYoutubeVideoIds: seenYoutubeVideoIds ?? [],
+            missingCheckedAt: this.now(),
+          });
+        missingCount = normalizeMissingCount(missingResult);
       }
-
-      const missingCount = mode === "full"
-        ? await this.options.repository.markMissingFromSource({
-          sourcePlaylistId: source.id,
-          seenYoutubeVideoIds: videoIds,
-          missingCheckedAt: this.now(),
-        })
-        : 0;
 
       await this.options.syncRuns.finishRun(run.id, {
         finishedAt: this.now(),
-        fetchedCount: playlistResult.items.length,
+        fetchedCount,
         insertedCount: upserted,
         updatedCount: 0,
         missingCount,
@@ -192,7 +247,7 @@ export class MusicSyncService {
       });
       return {
         status: "ok",
-        fetchedCount: playlistResult.items.length,
+        fetchedCount,
         insertedOrUpdatedCount: upserted,
         missingCount,
         quotaUnits,
@@ -230,6 +285,10 @@ export class MusicSyncService {
       quotaUnits,
     };
   }
+}
+
+function normalizeMissingCount(result: number | { missingCount: number }): number {
+  return typeof result === "number" ? result : result.missingCount;
 }
 
 function emptyResult(status: MusicSourceSyncResult["status"]): MusicSourceSyncResult {

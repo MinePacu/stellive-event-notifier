@@ -10,6 +10,30 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 }
 
 describe("YoutubeDataApiClient music playlist methods", () => {
+  it("fetchPlaylistItemsPage returns a single page and nextPageToken", async () => {
+    const fetchImpl = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => jsonResponse({
+      nextPageToken: "page-2",
+      items: [{
+        id: "playlist-item-1",
+        snippet: { title: "cover one", resourceId: { videoId: "video-1" } },
+        contentDetails: { videoId: "video-1" },
+      }],
+    }));
+    const client = new YoutubeDataApiClient({ apiKey: "test-key", fetch: fetchImpl });
+
+    await expect(client.fetchPlaylistItemsPage({ playlistId: "PLmusic" })).resolves.toMatchObject({
+      status: "ok",
+      items: [{ videoId: "video-1", title: "cover one" }],
+      nextPageToken: "page-2",
+      pagesFetched: 1,
+      quotaUnits: 1,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const url = new URL(fetchImpl.mock.calls[0][0] as string);
+    expect(url.searchParams.get("part")).toBe("snippet,contentDetails,status");
+    expect(url.searchParams.get("maxResults")).toBe("50");
+  });
+
   it("fetches playlist items with status metadata across nextPageToken pages", async () => {
     const fetchImpl = vi
       .fn(async (_input: string | URL | Request, _init?: RequestInit): Promise<Response> => jsonResponse({}))
@@ -42,6 +66,7 @@ describe("YoutubeDataApiClient music playlist methods", () => {
       }));
 
     const client = new YoutubeDataApiClient({ apiKey: "test-key", fetch: fetchImpl });
+    const fetchPage = vi.spyOn(client, "fetchPlaylistItemsPage");
 
     await expect(client.fetchPlaylistItems("PLmusic")).resolves.toEqual({
       status: "ok",
@@ -70,6 +95,7 @@ describe("YoutubeDataApiClient music playlist methods", () => {
       pagesFetched: 2,
       quotaUnits: 2,
     });
+    expect(fetchPage).toHaveBeenCalledTimes(2);
     const firstUrl = new URL(fetchImpl.mock.calls[0][0] as string);
     expect(firstUrl.searchParams.get("part")).toBe("snippet,contentDetails,status");
   });
@@ -189,5 +215,18 @@ describe("YoutubeDataApiClient music playlist methods", () => {
       rateLimited: false,
       errorCode: "http_403"
     }));
+  });
+
+  it("fetchPlaylistItemsPage returns quota_exceeded on 403", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ error: { code: 403 } }, { status: 403 }));
+    const client = new YoutubeDataApiClient({ apiKey: "test-key", fetch: fetchImpl });
+
+    await expect(client.fetchPlaylistItemsPage({ playlistId: "PLmusic" })).resolves.toEqual({
+      status: "quota_exceeded",
+      items: [],
+      pagesFetched: 0,
+      quotaUnits: 1,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

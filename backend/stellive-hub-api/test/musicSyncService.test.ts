@@ -23,6 +23,7 @@ function createService(overrides: Partial<ConstructorParameters<typeof MusicSync
     upsertMusicItem: vi.fn(async () => ({ id: "music-1" })),
     replaceMusicItemMembers: vi.fn(async () => undefined),
     markMissingFromSource: vi.fn(async () => 0),
+    markMissingFromSourceByLastSeen: vi.fn(async () => ({ missingCount: 0 })),
   };
   const syncRuns = {
     startRun: vi.fn(async () => ({ id: "run-1" })),
@@ -30,13 +31,20 @@ function createService(overrides: Partial<ConstructorParameters<typeof MusicSync
     failRun: vi.fn(async () => undefined),
   };
   const youtube = {
+    fetchPlaylistItemsPage: vi.fn(async () => ({
+      status: "ok" as const,
+      items: [{ videoId: "video-1", title: "유니 cover", publishedAt: "2026-06-21T12:00:00.000Z", position: 0 }],
+      nextPageToken: undefined as string | undefined,
+      pagesFetched: 1,
+      quotaUnits: 1,
+    })),
     fetchPlaylistItems: vi.fn(async () => ({
       status: "ok" as const,
       items: [{ videoId: "video-1", title: "유니 cover", publishedAt: "2026-06-21T12:00:00.000Z", position: 0 }],
       pagesFetched: 1,
       quotaUnits: 1,
     })),
-    fetchVideos: vi.fn(async () => [{
+    fetchVideos: vi.fn(async (_videoIds: string[]) => [{
       videoId: "video-1",
       title: "유니 x 히나 cover",
       description: "with Hina",
@@ -63,17 +71,35 @@ function createService(overrides: Partial<ConstructorParameters<typeof MusicSync
 }
 
 describe("MusicSyncService", () => {
-  it("light sync fetches recent pages, upserts items, and links members", async () => {
+  it("light sync fetches recent pages with page API, upserts items, and links members", async () => {
     const { service, repository, syncRuns, youtube } = createService();
+    youtube.fetchPlaylistItemsPage
+      .mockResolvedValueOnce({
+        status: "ok",
+        items: [{ videoId: "video-1", title: "유니 cover", publishedAt: "2026-06-21T12:00:00.000Z", position: 0 }],
+        nextPageToken: "page-2",
+        pagesFetched: 1,
+        quotaUnits: 1,
+      })
+      .mockResolvedValueOnce({ status: "ok", items: [], nextPageToken: undefined, pagesFetched: 1, quotaUnits: 1 });
 
     await expect(service.syncSourcePlaylist(source, "light")).resolves.toMatchObject({
       status: "ok",
       fetchedCount: 1,
       insertedOrUpdatedCount: 1,
-      quotaUnits: 1,
+      quotaUnits: 2,
     });
 
-    expect(youtube.fetchPlaylistItems).toHaveBeenCalledWith("PLcover", { maxPages: 2 });
+    expect(youtube.fetchPlaylistItemsPage).toHaveBeenCalledTimes(2);
+    expect(youtube.fetchPlaylistItemsPage).toHaveBeenNthCalledWith(1, {
+      playlistId: "PLcover",
+      pageToken: undefined,
+    });
+    expect(youtube.fetchPlaylistItemsPage).toHaveBeenNthCalledWith(2, {
+      playlistId: "PLcover",
+      pageToken: "page-2",
+    });
+    expect(youtube.fetchPlaylistItems).not.toHaveBeenCalled();
     expect(repository.upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
       youtubeVideoId: "video-1",
       type: "cover",
@@ -88,21 +114,44 @@ describe("MusicSyncService", () => {
     expect(syncRuns.finishRun).toHaveBeenCalledWith("run-1", expect.objectContaining({ fetchedCount: 1 }));
   });
 
-  it("full sync fetches all pages and marks unseen existing rows missing without hard delete", async () => {
+  it("full sync processes multiple pages without accumulating all seen video ids", async () => {
     const { service, repository, youtube } = createService();
+    repository.markMissingFromSourceByLastSeen.mockResolvedValueOnce({ missingCount: 2 });
+    youtube.fetchPlaylistItemsPage
+      .mockResolvedValueOnce({
+        status: "ok",
+        items: [{ videoId: "video-1", title: "one", publishedAt: "2026-06-21T12:00:00.000Z", position: 0 }],
+        nextPageToken: "page-2",
+        pagesFetched: 1,
+        quotaUnits: 1,
+      })
+      .mockResolvedValueOnce({
+        status: "ok",
+        items: [{ videoId: "video-2", title: "two", publishedAt: "2026-06-20T12:00:00.000Z", position: 1 }],
+        nextPageToken: undefined,
+        pagesFetched: 1,
+        quotaUnits: 1,
+      });
+    await expect(service.syncSourcePlaylist(source, "full")).resolves.toMatchObject({
+      fetchedCount: 2,
+      insertedOrUpdatedCount: 2,
+      missingCount: 2,
+      quotaUnits: 2,
+    });
 
-    await service.syncSourcePlaylist(source, "full");
-
-    expect(youtube.fetchPlaylistItems).toHaveBeenCalledWith("PLcover", {});
-    expect(repository.markMissingFromSource).toHaveBeenCalledWith({
+    expect(youtube.fetchVideos).toHaveBeenNthCalledWith(1, ["video-1"]);
+    expect(youtube.fetchVideos).toHaveBeenNthCalledWith(2, ["video-2"]);
+    expect(repository.markMissingFromSourceByLastSeen).toHaveBeenCalledWith({
       sourcePlaylistId: "source-1",
-      seenYoutubeVideoIds: ["video-1"],
+      seenAtOrAfter: new Date("2026-06-22T00:00:00.000Z"),
       missingCheckedAt: new Date("2026-06-22T00:00:00.000Z"),
     });
+    expect(repository.markMissingFromSource).not.toHaveBeenCalled();
   });
 
-  it("records quota failures and does not retry immediately", async () => {
+  it("records quota failures from playlist page API and does not fetch videos", async () => {
     const youtube = {
+      fetchPlaylistItemsPage: vi.fn(async () => ({ status: "quota_exceeded" as const, items: [], pagesFetched: 0, quotaUnits: 1 })),
       fetchPlaylistItems: vi.fn(async () => ({ status: "quota_exceeded" as const, items: [], pagesFetched: 0, quotaUnits: 1 })),
       fetchVideos: vi.fn(async () => []),
     };
@@ -110,7 +159,8 @@ describe("MusicSyncService", () => {
 
     await expect(service.syncSourcePlaylist(source, "light")).resolves.toMatchObject({ status: "failed", quotaUnits: 1 });
 
-    expect(youtube.fetchPlaylistItems).toHaveBeenCalledTimes(1);
+    expect(youtube.fetchPlaylistItemsPage).toHaveBeenCalledTimes(1);
+    expect(youtube.fetchPlaylistItems).not.toHaveBeenCalled();
     expect(youtube.fetchVideos).not.toHaveBeenCalled();
     expect(syncRuns.failRun).toHaveBeenCalledWith("run-1", expect.objectContaining({ errorMessage: "quota_exceeded" }));
   });
@@ -127,7 +177,7 @@ describe("MusicSyncService", () => {
       missingCount: 0,
       quotaUnits: 0,
     });
-    expect(youtube.fetchPlaylistItems).not.toHaveBeenCalled();
+    expect(youtube.fetchPlaylistItemsPage).not.toHaveBeenCalled();
     release?.();
   });
 
@@ -138,7 +188,7 @@ describe("MusicSyncService", () => {
 
     await expect(service.syncSourcePlaylist(source, "light")).resolves.toMatchObject({ status: "ok" });
 
-    expect(youtube.fetchPlaylistItems).toHaveBeenCalledTimes(1);
+    expect(youtube.fetchPlaylistItemsPage).toHaveBeenCalledTimes(1);
     expect(release).toHaveBeenCalledTimes(1);
   });
 
@@ -146,14 +196,33 @@ describe("MusicSyncService", () => {
     const source2 = { ...source, id: "source-2", youtubePlaylistId: "PLoriginal", type: "original" as const };
     const { service, repository, youtube } = createService();
     repository.listActiveSourcePlaylists.mockResolvedValueOnce([source, source2]);
-    youtube.fetchPlaylistItems
+    youtube.fetchPlaylistItemsPage
       .mockRejectedValueOnce(new Error("network"))
-      .mockResolvedValueOnce({ status: "ok", items: [], pagesFetched: 1, quotaUnits: 1 });
+      .mockResolvedValueOnce({ status: "ok", items: [], nextPageToken: undefined, pagesFetched: 1, quotaUnits: 1 });
 
     await expect(service.syncAllMusic("light")).resolves.toMatchObject({
       status: "partial",
       sourceCount: 2,
       failedCount: 1,
     });
+  });
+
+  it("falls back to legacy fetchPlaylistItems when page API is unavailable", async () => {
+    const youtube = {
+      fetchPlaylistItems: vi.fn(async () => ({
+        status: "ok" as const,
+        items: [{ videoId: "legacy-video", title: "legacy", publishedAt: "2026-06-21T12:00:00.000Z" }],
+        pagesFetched: 1,
+        quotaUnits: 1,
+      })),
+      fetchVideos: vi.fn(async () => []),
+    };
+    const { service } = createService({ youtube });
+
+    await expect(service.syncSourcePlaylist(source, "light")).resolves.toMatchObject({
+      status: "ok",
+      fetchedCount: 1,
+    });
+    expect(youtube.fetchPlaylistItems).toHaveBeenCalledWith("PLcover", { maxPages: 2 });
   });
 });

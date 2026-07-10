@@ -153,6 +153,12 @@ export interface MarkMissingFromSourceInput {
   missingCheckedAt: Date;
 }
 
+export interface MarkMissingFromSourceByLastSeenInput {
+  sourcePlaylistId: string;
+  seenAtOrAfter: Date;
+  missingCheckedAt: Date;
+}
+
 export interface MusicSourcePlaylistRecord {
   id: string;
   youtubePlaylistId: string;
@@ -646,6 +652,24 @@ export class PrismaMusicRepository {
       where: {
         sourcePlaylistId: input.sourcePlaylistId,
         youtubeVideoId: { notIn: input.seenYoutubeVideoIds },
+      },
+      data: {
+        isPublic: false,
+        isAvailable: false,
+        privacyStatus: "UNKNOWN_OR_REMOVED",
+        missingCount: { increment: 1 },
+      },
+    });
+    return { missingCount: result.count };
+  }
+
+  async markMissingFromSourceByLastSeen(
+    input: MarkMissingFromSourceByLastSeenInput,
+  ): Promise<{ missingCount: number }> {
+    const result = await this.prisma.musicItem!.updateMany!({
+      where: {
+        sourcePlaylistId: input.sourcePlaylistId,
+        lastSeenAt: { lt: input.seenAtOrAfter },
       },
       data: {
         isPublic: false,

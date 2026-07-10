@@ -312,6 +312,28 @@ it("uses playlist position, published date, and id cursor conditions for playlis
     });
   });
 
+  it("marks missing source items by last seen time without a video id list", async () => {
+    const prisma = { musicItem: { updateMany: vi.fn(async () => ({ count: 2 })) } };
+    const repository = new PrismaMusicRepository(prisma);
+    const syncStartedAt = new Date("2026-06-22T00:00:00.000Z");
+
+    await expect(repository.markMissingFromSourceByLastSeen({
+      sourcePlaylistId: "source-1",
+      seenAtOrAfter: syncStartedAt,
+      missingCheckedAt: new Date("2026-06-22T00:10:00.000Z"),
+    })).resolves.toEqual({ missingCount: 2 });
+
+    expect(prisma.musicItem.updateMany).toHaveBeenCalledWith({
+      where: { sourcePlaylistId: "source-1", lastSeenAt: { lt: syncStartedAt } },
+      data: {
+        isPublic: false,
+        isAvailable: false,
+        privacyStatus: "UNKNOWN_OR_REMOVED",
+        missingCount: { increment: 1 },
+      },
+    });
+  });
+
   it("lists active source playlists for sync wiring", async () => {
     const prisma = {
       sourcePlaylist: {

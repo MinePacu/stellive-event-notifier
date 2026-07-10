@@ -48,6 +48,22 @@ export type YoutubeFetchPlaylistItemsResult =
       quotaUnits: number;
     };
 
+export type YoutubeFetchPlaylistItemsPageResult =
+  | {
+      status: "ok";
+      items: YoutubeMusicPlaylistItem[];
+      nextPageToken?: string;
+      pagesFetched: 1;
+      quotaUnits: number;
+    }
+  | {
+      status: "quota_exceeded" | "error";
+      items: [];
+      nextPageToken?: undefined;
+      pagesFetched: 0;
+      quotaUnits: number;
+    };
+
 export interface YoutubeChannelProfile {
   channelId: string;
   title?: string;
@@ -313,32 +329,55 @@ export class YoutubeDataApiClient {
     const maxPages = options.maxPages ? Math.max(1, Math.trunc(options.maxPages)) : Number.POSITIVE_INFINITY;
 
     while (pagesFetched < maxPages) {
-      const url = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
-      url.searchParams.set("part", "snippet,contentDetails,status");
-      url.searchParams.set("playlistId", playlistId);
-      url.searchParams.set("maxResults", "50");
-      url.searchParams.set("key", this.options.apiKey);
-      if (pageToken) url.searchParams.set("pageToken", pageToken);
-
-      quotaUnits += 1;
-      const response = await this.fetchAndRecord(url, "youtube.playlistItems.list", 1);
-      const body = await response.json() as YoutubeListWrapper<YoutubePlaylistItem>;
-      if (!response.ok) {
+      const page = await this.fetchPlaylistItemsPage({ playlistId, pageToken });
+      quotaUnits += page.quotaUnits;
+      if (page.status !== "ok") {
         return {
-          status: response.status === 403 ? "quota_exceeded" : "error",
+          status: page.status,
           items: [],
           pagesFetched,
           quotaUnits,
         };
       }
 
-      pagesFetched += 1;
-      items.push(...(body.items ?? []).flatMap((item) => this.toMusicPlaylistItem(item)));
-      pageToken = body.nextPageToken;
+      pagesFetched += page.pagesFetched;
+      items.push(...page.items);
+      pageToken = page.nextPageToken;
       if (!pageToken) break;
     }
 
     return { status: "ok", items, pagesFetched, quotaUnits };
+  }
+
+  async fetchPlaylistItemsPage(input: {
+    playlistId: string;
+    pageToken?: string;
+  }): Promise<YoutubeFetchPlaylistItemsPageResult> {
+    const url = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
+    url.searchParams.set("part", "snippet,contentDetails,status");
+    url.searchParams.set("playlistId", input.playlistId);
+    url.searchParams.set("maxResults", "50");
+    url.searchParams.set("key", this.options.apiKey);
+    if (input.pageToken) url.searchParams.set("pageToken", input.pageToken);
+
+    const response = await this.fetchAndRecord(url, "youtube.playlistItems.list", 1);
+    const body = await response.json() as YoutubeListWrapper<YoutubePlaylistItem>;
+    if (!response.ok) {
+      return {
+        status: response.status === 403 ? "quota_exceeded" : "error",
+        items: [],
+        pagesFetched: 0,
+        quotaUnits: 1,
+      };
+    }
+
+    return {
+      status: "ok",
+      items: (body.items ?? []).flatMap((item) => this.toMusicPlaylistItem(item)),
+      nextPageToken: body.nextPageToken,
+      pagesFetched: 1,
+      quotaUnits: 1,
+    };
   }
 
   async fetchVideos(videoIds: string[]): Promise<YoutubeVideoDetail[]> {
