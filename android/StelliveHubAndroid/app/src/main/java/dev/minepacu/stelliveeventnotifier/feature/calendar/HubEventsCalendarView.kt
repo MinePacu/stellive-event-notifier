@@ -225,7 +225,7 @@ class HubEventsCalendarView(
 
     private fun weekdayHeader(): View = GridLayout(context).apply {
         columnCount = 7
-        listOf("일", "월", "화", "수", "목", "금", "토").forEach { label ->
+        listOf("일", "월", "화", "수", "목", "금", "토").forEachIndexed { column, label ->
             addView(TextView(context).apply {
                 text = label
                 gravity = Gravity.CENTER
@@ -234,7 +234,8 @@ class HubEventsCalendarView(
                 layoutParams = GridLayout.LayoutParams().apply {
                     width = 0
                     height = dp(24)
-                    columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                    rowSpec = GridLayout.spec(0)
+                    columnSpec = GridLayout.spec(column, 1, GridLayout.FILL, 1f)
                 }
             })
         }
@@ -255,7 +256,7 @@ class HubEventsCalendarView(
                 columnCount = 7
                 repeat(7) { column ->
                     val date = weekStart.plusDays(column.toLong())
-                    addView(dateCell(date, YearMonth.from(date) == month))
+                    addView(dateCell(date, YearMonth.from(date) == month, column))
                 }
             })
             val laneCount = durationLayout.laneCountsByWeek[weekIndex] ?: 0
@@ -300,7 +301,7 @@ class HubEventsCalendarView(
         })
     }
 
-    private fun dateCell(date: LocalDate, inSelectedMonth: Boolean): View {
+    private fun dateCell(date: LocalDate, inSelectedMonth: Boolean, column: Int): View {
         val marker = viewModel.markerForDate(date)
         val entries = viewModel.uiState.days
             .firstOrNull { it.date == date.toString() }
@@ -333,7 +334,8 @@ class HubEventsCalendarView(
                 width = 0
                 height = dp(58)
                 setMargins(dp(1), dp(2), dp(1), dp(2))
-                columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                rowSpec = GridLayout.spec(0)
+                columnSpec = GridLayout.spec(column, 1, GridLayout.FILL, 1f)
             }
         }
 
