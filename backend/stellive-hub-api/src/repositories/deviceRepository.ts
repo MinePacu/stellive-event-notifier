@@ -148,12 +148,30 @@ export class DeviceRepository {
   }
 
   async listPushTargets(): Promise<PushTargetDevice[]> {
+    const items: PushTargetDevice[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await this.listPushTargetsPage({ cursor, limit: 500 });
+      items.push(...page.items);
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+    return items;
+  }
+
+  async listPushTargetsPage(input: { cursor?: string; limit: number }): Promise<{
+    items: PushTargetDevice[];
+    nextCursor: string | null;
+  }> {
     if (!this.prisma.device.findMany) throw new Error("device_push_target_listing_unavailable");
+    const limit = Math.max(1, Math.trunc(input.limit));
     const records = await this.prisma.device.findMany({
       where: {
         tokenStatus: "active",
-        deviceToken: { not: null }
+        deviceToken: { not: null },
+        ...(input.cursor ? { id: { gt: input.cursor } } : {})
       },
+      orderBy: { id: "asc" },
+      take: limit + 1,
       select: {
         id: true,
         platform: true,
@@ -164,10 +182,15 @@ export class DeviceRepository {
         appVersion: true
       }
     });
-    return records.flatMap((record) => {
+    const pageRecords = records.slice(0, limit);
+    const items = pageRecords.flatMap((record) => {
       const target = toPushTarget(record);
       return target ? [target] : [];
     });
+    return {
+      items,
+      nextCursor: records.length > limit ? pageRecords.at(-1)?.id ?? null : null
+    };
   }
 
   async markTokenInvalid(deviceId: string, _reason: string): Promise<void> {

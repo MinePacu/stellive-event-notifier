@@ -318,6 +318,8 @@ describe("DeviceRepository push targets", () => {
               tokenStatus: "active",
               deviceToken: { not: null }
             },
+            orderBy: { id: "asc" },
+            take: 501,
             select: {
               id: true,
               platform: true,

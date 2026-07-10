@@ -77,6 +77,9 @@ const envSchema = z
     FCM_SEND_MAX_PER_SECOND: boundedInteger(500, 1, 100_000),
     FCM_SEND_MAX_PER_MINUTE: boundedInteger(30_000, 1, 1_000_000),
     FCM_SEND_BURST: boundedInteger(1_000, 1, 100_000),
+    NOTIFICATION_DEVICE_BATCH_SIZE: boundedInteger(500, 50, 5_000),
+    NOTIFICATION_PREFERENCE_BATCH_SIZE: boundedInteger(500, 50, 5_000),
+    DELIVERY_ATTEMPT_BATCH_SIZE: boundedInteger(500, 50, 5_000),
 
     YOUTUBE_API_KEY: optionalString(),
     YOUTUBE_API_BASE_URL: z.string().url().default("https://www.googleapis.com/youtube/v3"),

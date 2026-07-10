@@ -28,10 +28,7 @@ interface PreferenceRecord {
 
 interface PreferenceDelegate {
   notificationPreference: {
-    findMany(args: {
-      where: { deviceId: string };
-      orderBy?: { updatedAt: "desc" };
-    }): Promise<PreferenceRecord[]>;
+    findMany(args: unknown): Promise<PreferenceRecord[]>;
     deleteMany(args: { where: { deviceId: string } }): Promise<unknown>;
     createMany(args: { data: PreferenceRecord[] }): Promise<unknown>;
   };
@@ -123,6 +120,15 @@ export default class PreferenceRepository {
     const records = await this.prisma.notificationPreference.findMany({
       where: { deviceId },
       orderBy: { updatedAt: "desc" },
+    });
+    return records.map(toPreference);
+  }
+
+  async listForDevices(deviceIds: string[]): Promise<UserNotificationPreference[]> {
+    if (deviceIds.length === 0) return [];
+    const records = await this.prisma.notificationPreference.findMany({
+      where: { deviceId: { in: deviceIds } },
+      orderBy: [{ deviceId: "asc" }, { updatedAt: "desc" }]
     });
     return records.map(toPreference);
   }

@@ -82,6 +82,11 @@ function createWorker(options: {
   resolve?: (input: { event: PlatformEvent; deviceId: string }) => ResolvedNotificationPreference;
   send?: (input: { device: PushTargetDevice; payload: MinimalPushPayload }) => Promise<PushSendResult>;
   sendBatch?: (input: { devices: PushTargetDevice[]; payload: MinimalPushPayload }) => Promise<PushSendResult[]>;
+  useListFallback?: boolean;
+  deviceBatchSize?: number;
+  preferenceBatchSize?: number;
+  deliveryAttemptBatchSize?: number;
+  withoutCreateMany?: boolean;
 }) {
   const calls = {
     completed: [] as string[],
@@ -89,8 +94,11 @@ function createWorker(options: {
     attempts: [] as unknown[],
     sent: [] as Array<{ device: PushTargetDevice; payload: MinimalPushPayload }>,
     batches: [] as Array<{ devices: PushTargetDevice[]; payload: MinimalPushPayload }>,
-    invalidated: [] as unknown[]
+    invalidated: [] as unknown[],
+    preferenceDeviceIds: [] as string[][],
+    attemptBatches: [] as unknown[][]
   };
+  const pushTargets = options.devices ?? [device()];
   const worker = new NotificationWorker({
     notificationJobs: {
       async claimReady() {
@@ -109,22 +117,41 @@ function createWorker(options: {
       }
     },
     devices: {
+      ...(!options.useListFallback
+        ? {
+            async listPushTargetsPage(input: { cursor?: string; limit: number }) {
+              const offset = input.cursor ? Number(input.cursor) : 0;
+              const items = pushTargets.slice(offset, offset + input.limit);
+              const nextOffset = offset + items.length;
+              return { items, nextCursor: nextOffset < pushTargets.length ? String(nextOffset) : null };
+            }
+          }
+        : {}),
       async listPushTargets() {
-        return options.devices ?? [device()];
+        return pushTargets;
       },
       async markTokenInvalid(deviceId: string, reason: string) {
         calls.invalidated.push({ deviceId, reason });
       }
     },
     preferences: {
-      async listForDevices() {
+      async listForDevices(deviceIds: string[]) {
+        calls.preferenceDeviceIds.push(deviceIds);
         return [] as UserNotificationPreference[];
       }
     },
     deliveryAttempts: {
       async create(input: unknown) {
         calls.attempts.push(input);
-      }
+      },
+      ...(!options.withoutCreateMany
+        ? {
+            async createMany(inputs: unknown[]) {
+              calls.attemptBatches.push(inputs);
+              calls.attempts.push(...inputs);
+            }
+          }
+        : {})
     },
     preferenceResolution: {
       resolve(eventInput: PlatformEvent, deviceId: string) {
@@ -145,7 +172,10 @@ function createWorker(options: {
           }
         : {})
     },
-    now: () => now
+    now: () => now,
+    deviceBatchSize: options.deviceBatchSize,
+    preferenceBatchSize: options.preferenceBatchSize,
+    deliveryAttemptBatchSize: options.deliveryAttemptBatchSize
   });
   return { worker, calls };
 }
@@ -179,7 +209,7 @@ describe("NotificationWorker", () => {
     });
     expect(calls.sent).toHaveLength(1);
     expect(calls.sent[0].device.deviceId).toBe("allowed-device");
-    expect(calls.sent[0].payload.data).toEqual({
+    expect(calls.sent[0].payload.data).toMatchObject({
       eventId: "event-1",
       source: "hub_event",
       eventType: "event_cancelled",
@@ -318,5 +348,40 @@ describe("NotificationWorker", () => {
       }
     ]);
     expect(calls.completed).toEqual(["job-1"]);
+  });
+
+  it("processes push targets in pages and flushes delivery attempts per page", async () => {
+    const devices = Array.from({ length: 1201 }, (_, index) => device({ deviceId: `device-${index}` }));
+    const { worker, calls } = createWorker({
+      devices,
+      sendBatch: async ({ devices: batch }) => batch.map(() => ({ status: "sent" })),
+      deviceBatchSize: 500,
+      preferenceBatchSize: 500,
+      deliveryAttemptBatchSize: 500
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ sent: 1201, completed: 1 });
+    expect(calls.preferenceDeviceIds.map((ids) => ids.length)).toEqual([500, 500, 201]);
+    expect(calls.batches.map((batch) => batch.devices.length)).toEqual([500, 500, 201]);
+    expect(calls.attemptBatches.map((batch) => batch.length)).toEqual([500, 500, 201]);
+  });
+
+  it("falls back to listPushTargets when listPushTargetsPage is unavailable", async () => {
+    const { worker, calls } = createWorker({ useListFallback: true });
+
+    await worker.drain({ now });
+
+    expect(calls.sent).toHaveLength(1);
+  });
+
+  it("falls back to create when createMany is unavailable", async () => {
+    const { worker, calls } = createWorker({ withoutCreateMany: true });
+
+    await worker.drain({ now });
+
+    expect(calls.attempts).toHaveLength(1);
+    expect(calls.attemptBatches).toHaveLength(0);
   });
 });

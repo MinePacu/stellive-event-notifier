@@ -53,6 +53,7 @@ interface DeliveryAttemptDelegate {
   $queryRaw?<T = unknown>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T>;
   deliveryAttempt: {
     create?(args: { data: Record<string, unknown> }): Promise<unknown>;
+    createMany?(args: { data: Record<string, unknown>[] }): Promise<unknown>;
     findMany?(args: unknown): Promise<Array<DeliveryAttemptRecord | DeliveryAttemptStatusRecord | DeliveryAttemptTrendRecord>>;
   };
 }
@@ -209,7 +210,21 @@ export class DeliveryAttemptRepository {
   async create(input: CreateDeliveryAttemptInput): Promise<void> {
     if (!this.prisma.deliveryAttempt.create) throw new Error("delivery_attempt_create_unavailable");
     await this.prisma.deliveryAttempt.create({
-      data: {
+      data: this.toRecord(input)
+    });
+  }
+
+  async createMany(inputs: CreateDeliveryAttemptInput[]): Promise<void> {
+    if (inputs.length === 0) return;
+    if (!this.prisma.deliveryAttempt.createMany) {
+      await Promise.all(inputs.map((input) => this.create(input)));
+      return;
+    }
+    await this.prisma.deliveryAttempt.createMany({ data: inputs.map((input) => this.toRecord(input)) });
+  }
+
+  private toRecord(input: CreateDeliveryAttemptInput): Record<string, unknown> {
+    return {
         eventId: input.eventId,
         deviceId: input.deviceId,
         attemptedAt: input.attemptedAt,
@@ -230,8 +245,7 @@ export class DeliveryAttemptRepository {
         providerErrorCode: input.providerErrorCode,
         retryCount: input.retryCount,
         expiresAt: input.expiresAt
-      }
-    });
+      };
   }
 
   async listRecent(limit = 25): Promise<DeliveryAttemptDiagnostic[]> {

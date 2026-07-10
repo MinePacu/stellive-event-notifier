@@ -141,7 +141,10 @@ function createDefaultNotificationWorker(env: AppEnv, fcmClient = createDefaultF
     deliveryAttempts: new DeliveryAttemptRepository(),
     preferenceResolution: new PreferenceResolutionService(),
     pushSender: new FcmPushSender(fcmClient),
-    random: Math.random
+    random: Math.random,
+    deviceBatchSize: env.NOTIFICATION_DEVICE_BATCH_SIZE,
+    preferenceBatchSize: env.NOTIFICATION_PREFERENCE_BATCH_SIZE,
+    deliveryAttemptBatchSize: env.DELIVERY_ATTEMPT_BATCH_SIZE
   });
 }
 
