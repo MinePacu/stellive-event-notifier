@@ -268,6 +268,7 @@ data class SongCatalogItem(
     val sourceUrl: String? = null,
     val thumbnail: SongThumbnail? = null,
     val publishedAt: Instant = Instant.EPOCH,
+    val catalogAddedAt: Instant? = null,
     val thumbnailUrl: String? = thumbnail?.url,
     val duration: String? = null,
     val durationSeconds: Int? = null,
@@ -303,6 +304,8 @@ data class SongFacets(
 data class SongListResult(
     val items: List<SongCatalogItem>,
     val nextCursor: String? = null,
+    val serverTime: Instant? = null,
+    val isAuthoritative: Boolean = false,
 )
 
 data class GenerationFilter(

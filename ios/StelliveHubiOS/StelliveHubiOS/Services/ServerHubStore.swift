@@ -3,16 +3,19 @@ import Foundation
 private let builtInHubEventFilters: Set<String> = ["all", "goods", "ticketing", "offline", "closing"]
 
 struct MusicPageCollector {
+    struct Result { let items: [SongCatalogItem]; let serverTime: String?; let complete: Bool }
     static let pageLimit = 100
     static let maxPages = 10
     static let maxItems = 1000
 
-    static func collect(fetch: (String?, Int) async throws -> MusicListResponse) async throws -> [SongCatalogItem] {
+    static func collect(fetch: (String?, Int) async throws -> MusicListResponse) async throws -> Result {
         var cursor: String?
         var output: [SongCatalogItem] = []
         var seen = Set<String>()
+        var serverTime: String?
         for _ in 0..<maxPages {
             let page = try await fetch(cursor, pageLimit)
+            if serverTime == nil { serverTime = page.serverTime }
             for item in page.items {
                 let key = item.youtubeVideoId.isEmpty ? item.id : item.youtubeVideoId
                 if seen.insert(key).inserted {
@@ -20,11 +23,15 @@ struct MusicPageCollector {
                 }
             }
             guard let next = page.nextCursor, !next.isEmpty, output.count < maxItems else {
-                return Array(output.prefix(maxItems))
+                return Result(
+                    items: Array(output.prefix(maxItems)),
+                    serverTime: serverTime,
+                    complete: page.nextCursor?.isEmpty != false
+                )
             }
             cursor = next
         }
-        return Array(output.prefix(maxItems))
+        return Result(items: Array(output.prefix(maxItems)), serverTime: serverTime, complete: false)
     }
 }
 
@@ -36,6 +43,8 @@ final class ServerHubStore: ObservableObject {
     @Published private(set) var serverHubEvents: [HubEvent] = []
     @Published private(set) var serverCalendarDays: [HubCalendarDay] = []
     @Published private(set) var serverSongs: [SongCatalogItem] = []
+    @Published private(set) var songCatalogServerTime: String?
+    @Published private(set) var hasAuthoritativeSongCatalog = false
     @Published private(set) var recentSongs: [SongCatalogItem] = []
     @Published private(set) var serverSongFacets: SongFacetsResponse?
     @Published private(set) var hubEventDetailCache: [String: HubEvent] = [:]
@@ -165,13 +174,15 @@ final class ServerHubStore: ObservableObject {
         defer { isRefreshingSongs = false }
         do {
             let normalizedType = type == "all" ? nil : type
-            let items = try await MusicPageCollector.collect { pageCursor, pageLimit in
+            let result = try await MusicPageCollector.collect { pageCursor, pageLimit in
                 if let memberId, !memberId.isEmpty, memberId != "all" {
                     return try await api.memberMusic(memberId: memberId, type: normalizedType, cursor: pageCursor, limit: pageLimit)
                 }
                 return try await api.music(type: normalizedType, cursor: pageCursor, limit: pageLimit)
             }
-            serverSongs = items
+            serverSongs = result.items
+            songCatalogServerTime = result.serverTime
+            hasAuthoritativeSongCatalog = result.complete
         } catch {
             if serverSongs.isEmpty {
                 serverSongs = fallback.songs(generationId: generationId, memberId: memberId, type: type, query: query).items
@@ -183,11 +194,13 @@ final class ServerHubStore: ObservableObject {
         isRefreshingRecentSongs = true
         defer { isRefreshingRecentSongs = false }
         do {
-            let items = try await MusicPageCollector.collect { pageCursor, pageLimit in
+            let result = try await MusicPageCollector.collect { pageCursor, pageLimit in
                 try await api.music(type: nil, cursor: pageCursor, limit: pageLimit, sort: "publishedAt_desc")
             }
-            serverSongs = items
-            recentSongs = IOSSongPagePolicy.recentSongs(items, limit: limit)
+            serverSongs = result.items
+            songCatalogServerTime = result.serverTime
+            hasAuthoritativeSongCatalog = result.complete
+            recentSongs = IOSSongPagePolicy.recentSongs(result.items, limit: limit)
         } catch {
             recentSongs = IOSSongPagePolicy.recentSongs(
                 serverSongs.isEmpty ? fallback.songs().items : serverSongs,

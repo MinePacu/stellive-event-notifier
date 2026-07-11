@@ -46,6 +46,7 @@ export default async function registerMusicRoutes(app: FastifyInstance, options:
       return {
         items: result.items.map(toMusicCatalogDto),
         nextCursor: result.nextCursor ?? null,
+        serverTime: new Date().toISOString(),
       };
     });
   });
@@ -76,6 +77,7 @@ export default async function registerMusicRoutes(app: FastifyInstance, options:
       return {
         items: result.items.map(toMusicCatalogDto),
         nextCursor: result.nextCursor ?? null,
+        serverTime: new Date().toISOString(),
       };
     });
   });

@@ -179,6 +179,7 @@ data class SongCatalogItemDto(
     val sourceUrl: String,
     val thumbnail: SongThumbnailDto? = null,
     val publishedAt: String,
+    val catalogAddedAt: String? = null,
     val premiere: YoutubePremiereMetadataDto? = null,
 )
 
@@ -200,6 +201,7 @@ data class MusicCatalogItemDto(
     val title: String,
     val type: String,
     val publishedAt: String? = null,
+    val catalogAddedAt: String? = null,
     val thumbnailUrl: String? = null,
     val duration: String? = null,
     val durationSeconds: Int? = null,
@@ -215,6 +217,7 @@ data class MusicCatalogItemDto(
 data class MusicListResponseDto(
     val items: List<MusicCatalogItemDto> = emptyList(),
     val nextCursor: String? = null,
+    val serverTime: String? = null,
 )
 
 data class SongFilterCountDto(

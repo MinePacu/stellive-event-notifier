@@ -11,6 +11,7 @@ const item: MusicCatalogItem = {
   title: "유니 cover",
   type: "cover",
   publishedAt: "2026-06-21T12:00:00.000Z",
+  catalogAddedAt: "2026-07-01T00:00:00.000Z",
   thumbnailUrl: "https://i.ytimg.com/vi/video-1/hqdefault.jpg",
   duration: "PT3M21S",
   durationSeconds: 201,
@@ -56,8 +57,8 @@ describe("music routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers["cache-control"]).toBe("private, max-age=300, stale-while-revalidate=600");
-    expect(response.json()).toEqual({ items: [item], nextCursor: "next" });
-    expect(cached.json()).toEqual({ items: [item], nextCursor: "next" });
+    expect(response.json()).toEqual({ items: [item], nextCursor: "next", serverTime: expect.any(String) });
+    expect(cached.json()).toEqual(response.json());
     expect(repository.listMusicItems).toHaveBeenCalledTimes(1);
     expect(repository.listMusicItems).toHaveBeenCalledWith({
       type: "cover",

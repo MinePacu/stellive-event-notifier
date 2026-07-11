@@ -15,10 +15,12 @@ struct SongsView: View {
     @EnvironmentObject private var store: MockHubStore
     @EnvironmentObject private var serverStore: ServerHubStore
     @EnvironmentObject private var favoritesStore: SongFavoritesStore
+    @EnvironmentObject private var discoveryStore: SongDiscoveryStore
     @State private var path = NavigationPath()
     @State private var selectedGenerationId = "all"
     @State private var selectedType = "all"
     @State private var selectedLibraryId = "all"
+    @State private var selectedStatusId = "all"
     @State private var selectedSortId = "publishedAt_desc"
     @State private var selectedMemberId = "all"
     @State private var query = ""
@@ -38,6 +40,7 @@ struct SongsView: View {
                 IOSSongPagePolicy.matchesMember($0, selectedMemberId: selectedMemberId) &&
                 IOSSongPagePolicy.matchesQuery($0, query: query, catalogMembers: store.members) &&
                 IOSSongPagePolicy.matchesLibrary($0, selectedLibraryId: selectedLibraryId, favorites: favoritesStore.identifiers)
+                && (selectedStatusId != "new" || discoveryStore.isNew($0))
         }
         return IOSSongPagePolicy.sortedSongs(filtered, sortId: selectedSortId)
     }
@@ -107,20 +110,6 @@ struct SongsView: View {
             }
             .pickerStyle(.segmented)
 
-            Picker("보관함", selection: $selectedLibraryId) {
-                ForEach(IOSSongPagePolicy.libraryFilters) { filter in
-                    Text(filter.label).tag(filter.id)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            Picker("정렬", selection: $selectedSortId) {
-                ForEach(IOSSongPagePolicy.sortOptions) { option in
-                    Text(option.label).tag(option.id)
-                }
-            }
-            .pickerStyle(.menu)
-
             NavigationLink {
                 SongMemberFilterView(
                     filters: IOSSongPagePolicy.memberFilters(from: store.members),
@@ -143,6 +132,28 @@ struct SongsView: View {
                     selectedPage = 1
                 }
             }
+
+            Picker("보관함", selection: $selectedLibraryId) {
+                ForEach(IOSSongPagePolicy.libraryFilters) { filter in
+                    Text(filter.label).tag(filter.id)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Picker("상태", selection: $selectedStatusId) {
+                ForEach(IOSSongPagePolicy.statusFilters) { filter in
+                    Text(filter.id == "new" ? "새 노래 (\(serverStore.serverSongs.filter(discoveryStore.isNew).count))" : filter.label).tag(filter.id)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Picker("정렬", selection: $selectedSortId) {
+                ForEach(IOSSongPagePolicy.sortOptions) { option in
+                    Text(option.label).tag(option.id)
+                }
+            }
+            .pickerStyle(.menu)
+
         }
 
                 Section("노래 목록") {
@@ -152,9 +163,7 @@ struct SongsView: View {
                             message: "서버 캐시에서 오리지널곡과 커버곡 목록을 가져오고 있습니다."
                         )
                     } else if songs.isEmpty {
-                        Text(selectedLibraryId == "favorites"
-                             ? IOSSongPagePolicy.favoriteEmptyMessage(hasStoredFavorites: !favoritesStore.identifiers.isEmpty)
-                             : "표시할 노래 없음")
+                        Text(emptyStateMessage)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
@@ -162,6 +171,12 @@ struct SongsView: View {
                         SongRow(song: song, catalogMembers: store.members)
                             .listRowInsets(IOSSongPagePolicy.songRowInsets)
                             .listRowSeparator(.hidden)
+                    }
+
+                    if selectedStatusId == "new" && pagedSongs.contains(where: discoveryStore.isNew) {
+                        Button("이 페이지 확인 완료") {
+                            discoveryStore.acknowledge(pagedSongs, catalog: serverStore.serverSongs)
+                        }
                     }
 
                     if IOSSongPagePolicy.pageCount(totalItems: songs.count) > 1 {
@@ -177,6 +192,7 @@ struct SongsView: View {
                 .onChange(of: selectedGenerationId) { _ in selectedPage = 1 }
                 .onChange(of: selectedType) { _ in selectedPage = 1 }
                 .onChange(of: selectedLibraryId) { _ in selectedPage = 1 }
+                .onChange(of: selectedStatusId) { _ in selectedPage = 1 }
                 .onChange(of: selectedSortId) { _ in selectedPage = 1 }
                 .onChange(of: selectedMemberId) { _ in selectedPage = 1 }
                 .onChange(of: query) { _ in selectedPage = 1 }
@@ -199,9 +215,25 @@ struct SongsView: View {
     private func refreshSongs() async {
         await serverStore.refreshSongs(
             generationId: "all",
-            type: selectedType,
+            type: "all",
             query: ""
         )
+        discoveryStore.initialize(
+            serverTime: serverStore.songCatalogServerTime,
+            catalog: serverStore.serverSongs,
+            authoritative: serverStore.hasAuthoritativeSongCatalog
+        )
+    }
+
+    private var emptyStateMessage: String {
+        if selectedStatusId == "new" {
+            if !discoveryStore.state.initialized { return "새 노래 상태를 확인하는 중입니다." }
+            if !serverStore.serverSongs.contains(where: discoveryStore.isNew) { return "새로 추가된 노래가 없습니다." }
+            return "현재 필터 조건에 맞는 새 노래가 없습니다."
+        }
+        return selectedLibraryId == "favorites"
+            ? IOSSongPagePolicy.favoriteEmptyMessage(hasStoredFavorites: !favoritesStore.identifiers.isEmpty)
+            : "표시할 노래 없음"
     }
 
     private var songPageControl: some View {
@@ -233,11 +265,17 @@ struct SongRow: View {
     let song: SongCatalogItem
     let catalogMembers: [HubMember]
     @EnvironmentObject private var favoritesStore: SongFavoritesStore
+    @EnvironmentObject private var discoveryStore: SongDiscoveryStore
+    @EnvironmentObject private var serverStore: ServerHubStore
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         let displayText = IOSSongPagePolicy.displayText(for: song, catalogMembers: catalogMembers)
         HStack(alignment: .top, spacing: 4) {
-            Link(destination: URL(string: song.youtubeUrl) ?? URL(string: "https://www.youtube.com")!) {
+            Button {
+                discoveryStore.acknowledge([song], catalog: serverStore.serverSongs)
+                openURL(URL(string: song.youtubeUrl) ?? URL(string: "https://www.youtube.com")!)
+            } label: {
                 HStack(alignment: .top, spacing: 12) {
                     SongThumbnailView(urls: IOSSongPagePolicy.thumbnailUrlCandidates(for: song))
 
@@ -283,6 +321,15 @@ struct SongRow: View {
                 }
 
                 Spacer(minLength: 8)
+                if discoveryStore.isNew(song) {
+                    Text("NEW")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule(style: .continuous).fill(Color(.tertiarySystemGroupedBackground)))
+                        .accessibilityLabel("새로 추가된 노래")
+                }
                 }
             }
             .buttonStyle(.plain)

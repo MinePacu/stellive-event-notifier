@@ -143,6 +143,7 @@ describe("PrismaMusicRepository", () => {
           title: "Song",
           type: "cover",
           publishedAt: new Date("2026-06-22T00:00:00.000Z"),
+          createdAt: new Date("2026-07-01T00:00:00.000Z"),
           thumbnailUrl: null,
           duration: null,
           durationSeconds: 201,
@@ -196,6 +197,7 @@ describe("PrismaMusicRepository", () => {
     youtubeVideoId: "video-1",
     durationSeconds: 201,
     isInstrumental: false,
+    catalogAddedAt: "2026-07-01T00:00:00.000Z",
     premiere: {
       classification: "assumed",
       state: "scheduled",
@@ -391,6 +393,7 @@ it("uses playlist position, published date, and id cursor conditions for playlis
     expect(args.create).toMatchObject({ youtubePresentationType: "regular", listingPriority: 2 });
     expect(args.update).not.toHaveProperty("youtubePresentationType");
     expect(args.update).not.toHaveProperty("youtubePremiereState");
+    expect(args.update).not.toHaveProperty("createdAt");
   });
 
   it("lists and repairs source-backed type mismatches", async () => {

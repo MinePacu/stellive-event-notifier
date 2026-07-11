@@ -197,6 +197,7 @@ interface MusicItemRecord {
   title: string;
   type: string;
   publishedAt?: Date | null;
+  createdAt?: Date | null;
   playlistPosition?: number | null;
   listingPriority?: number | null;
   youtubePresentationType?: string | null;
@@ -233,6 +234,7 @@ function toMusicCatalogItem(record: MusicItemRecord): MusicCatalogItem {
     title: record.title,
     type: record.type as MusicItemType,
     publishedAt: record.publishedAt?.toISOString() ?? null,
+    catalogAddedAt: record.createdAt?.toISOString() ?? null,
     thumbnailUrl: record.thumbnailUrl ?? null,
     duration: record.duration ?? null,
     durationSeconds: record.durationSeconds ?? null,

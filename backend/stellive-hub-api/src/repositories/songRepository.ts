@@ -78,6 +78,7 @@ interface SongRecord {
   youtubeActualEndAt?: Date | null;
   listingPriority?: number | null;
   publishedAt: Date;
+  createdAt?: Date | null;
 }
 
 interface SongCursorPayload {
@@ -168,6 +169,7 @@ function toSongCatalogItem(record: SongRecord): SongCatalogItem {
       height: record.thumbnailHeight,
     } : undefined,
     publishedAt: record.publishedAt.toISOString(),
+    catalogAddedAt: record.createdAt?.toISOString() ?? null,
     ...(record.youtubePresentationType === "premiere_assumed" && record.youtubePremiereState
       ? {
           premiere: {

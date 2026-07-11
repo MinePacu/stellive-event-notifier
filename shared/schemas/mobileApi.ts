@@ -72,7 +72,7 @@ export interface SongListResponse {
 export interface MusicListResponse {
   items: MusicCatalogItem[];
   nextCursor?: string | null;
-  serverTime: string;
+  serverTime?: string;
 }
 
 export interface MusicDetailResponse {

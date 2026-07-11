@@ -435,6 +435,7 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
     let sourceUrl: String?
     let thumbnail: SongThumbnail?
     let publishedAt: Date?
+    let catalogAddedAt: Date?
     let thumbnailUrl: String?
     let duration: String?
     let durationSeconds: Int?
@@ -452,6 +453,7 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
         title: String,
         type: SongType,
         publishedAt: Date? = nil,
+        catalogAddedAt: Date? = nil,
         thumbnailUrl: String? = nil,
         duration: String? = nil,
         durationSeconds: Int? = nil,
@@ -480,6 +482,7 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
         self.sourceUrl = sourceUrl
         self.thumbnail = thumbnail
         self.publishedAt = publishedAt
+        self.catalogAddedAt = catalogAddedAt
         self.thumbnailUrl = thumbnailUrl ?? thumbnail?.url
         self.duration = duration
         self.durationSeconds = durationSeconds
@@ -504,6 +507,7 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
         case sourceUrl
         case thumbnail
         case publishedAt
+        case catalogAddedAt
         case thumbnailUrl
         case duration
         case durationSeconds
@@ -527,6 +531,7 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
             title: try container.decode(String.self, forKey: .title),
             type: try container.decode(SongType.self, forKey: .type),
             publishedAt: try container.decodeIfPresent(Date.self, forKey: .publishedAt),
+            catalogAddedAt: try container.decodeIfPresent(Date.self, forKey: .catalogAddedAt),
             thumbnailUrl: try container.decodeIfPresent(String.self, forKey: .thumbnailUrl),
             duration: try container.decodeIfPresent(String.self, forKey: .duration),
             durationSeconds: try container.decodeIfPresent(Int.self, forKey: .durationSeconds),
@@ -550,6 +555,13 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
 struct SongListResponse: Codable, Equatable {
     let items: [SongCatalogItem]
     let nextCursor: String?
+    let serverTime: String?
+
+    init(items: [SongCatalogItem], nextCursor: String?, serverTime: String? = nil) {
+        self.items = items
+        self.nextCursor = nextCursor
+        self.serverTime = serverTime
+    }
 }
 
 typealias MusicListResponse = SongListResponse
@@ -579,6 +591,15 @@ struct SongFilterOption: Identifiable, Equatable {
     let label: String
 }
 
+enum SongIdentity {
+    static func identifier(for song: SongCatalogItem) -> String? {
+        let videoId = song.youtubeVideoId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !videoId.isEmpty { return "youtube:\(videoId)" }
+        let songId = song.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        return songId.isEmpty ? nil : "song:\(songId)"
+    }
+}
+
 enum IOSSongPagePolicy {
     static let pageSize = 20
 
@@ -601,11 +622,10 @@ enum IOSSongPagePolicy {
     ]
 
     static func favoriteIdentifier(for song: SongCatalogItem) -> String? {
-        let videoId = song.youtubeVideoId.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !videoId.isEmpty { return "youtube:\(videoId)" }
-        let songId = song.id.trimmingCharacters(in: .whitespacesAndNewlines)
-        return songId.isEmpty ? nil : "song:\(songId)"
+        SongIdentity.identifier(for: song)
     }
+
+    static let statusFilters: [SongFilterOption] = [.init(id: "all", label: "전체"), .init(id: "new", label: "새 노래")]
 
     static func matchesLibrary(_ song: SongCatalogItem, selectedLibraryId: String, favorites: Set<String>) -> Bool {
         selectedLibraryId != "favorites" || favoriteIdentifier(for: song).map(favorites.contains) == true

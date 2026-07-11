@@ -649,7 +649,7 @@ final class ServerHubStoreTests: XCTestCase {
 
     func testMusicPageCollectorFetchesAllPagesAndDedupes() async throws {
         var cursors: [String?] = []
-        let items = try await MusicPageCollector.collect { cursor, limit in
+        let result = try await MusicPageCollector.collect { cursor, limit in
             cursors.append(cursor)
             XCTAssertEqual(limit, 100)
             if cursor == nil {
@@ -665,7 +665,7 @@ final class ServerHubStoreTests: XCTestCase {
         }
 
         XCTAssertEqual(cursors, [nil, "cursor-2"])
-        XCTAssertEqual(items.map(\.youtubeVideoId), ["video-1", "video-2"])
+        XCTAssertEqual(result.items.map(\.youtubeVideoId), ["video-1", "video-2"])
     }
 
     private func song(_ videoId: String) -> SongCatalogItem {

@@ -7,6 +7,7 @@ export function toMusicCatalogDto(item: MusicCatalogItem): MusicCatalogItem {
     title: item.title,
     type: item.type,
     publishedAt: item.publishedAt,
+    catalogAddedAt: item.catalogAddedAt,
     thumbnailUrl: item.thumbnailUrl,
     duration: item.duration,
     durationSeconds: item.durationSeconds,

@@ -1189,6 +1189,11 @@ components:
         publishedAt:
           type: string
           format: date-time
+        catalogAddedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
         premiere:
           $ref: "#/components/schemas/YoutubePremiereMetadata"
     SongFacetSummary:
@@ -1348,6 +1353,11 @@ components:
             - string
             - "null"
           format: date-time
+        catalogAddedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
         thumbnailUrl:
           type:
             - string
@@ -1374,7 +1384,6 @@ components:
       type: object
       required:
         - items
-        - serverTime
       properties:
         items:
           type: array

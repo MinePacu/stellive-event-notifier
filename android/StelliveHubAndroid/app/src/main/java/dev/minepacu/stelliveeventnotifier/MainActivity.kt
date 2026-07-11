@@ -96,6 +96,10 @@ import dev.minepacu.stelliveeventnotifier.feature.songs.SongMemberSelectionMode
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongsPanePolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.DataStoreSongFavoritesRepository
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongFavoritesRepository
+import dev.minepacu.stelliveeventnotifier.feature.songs.DataStoreSongDiscoveryRepository
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongDiscoveryPolicy
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongDiscoveryRepository
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongDiscoveryStateV1
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -186,7 +190,10 @@ private var draggingLiveMemberId: String? = null
 private var selectedSongGenerationId = "all"
 private var selectedSongType = "all"
 private var selectedSongLibraryId = "all"
+private var selectedSongStatusId = "all"
 private var songFavoriteIds: Set<String> = emptySet()
+private var songDiscoveryState = SongDiscoveryStateV1()
+private lateinit var songDiscoveryRepository: SongDiscoveryRepository
 private lateinit var songFavoritesRepository: SongFavoritesRepository
 private var selectedSongSortId = "publishedAt_desc"
 private var selectedSongQuery = ""
@@ -226,6 +233,7 @@ private var notificationPermissionRequested = false
         setContentView(binding.root)
         serverRepository = createServerRepository()
         songFavoritesRepository = DataStoreSongFavoritesRepository(this)
+        songDiscoveryRepository = DataStoreSongDiscoveryRepository(this)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 songFavoritesRepository.favorites.collect { favorites ->
@@ -233,6 +241,14 @@ private var notificationPermissionRequested = false
                     if (navigationHistory.currentScreen == HubScreen.SONGS && cachedSongItems.isNotEmpty()) {
                         renderSongsFromCache()
                     }
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                songDiscoveryRepository.state.collect { state ->
+                    songDiscoveryState = state
+                    if (navigationHistory.currentScreen == HubScreen.SONGS && cachedSongItems.isNotEmpty()) renderSongsFromCache()
                 }
             }
         }
@@ -1325,12 +1341,15 @@ private fun renderSongs() {
     }
 
     private suspend fun loadSongItemsForCurrentType(): List<SongCatalogItem> =
-        if (cachedSongType == selectedSongType && cachedSongItems.isNotEmpty()) {
+        if (cachedSongType == "all" && cachedSongItems.isNotEmpty()) {
             cachedSongItems
         } else {
-            serverRepository.songs(generationId = "all", type = selectedSongType).items.also {
+            serverRepository.songs(generationId = "all", type = "all").let { result ->
+                songDiscoveryRepository.initialize(result.serverTime, result.items, result.isAuthoritative)
+                result.items.also {
                 cachedSongItems = it
-                cachedSongType = selectedSongType
+                cachedSongType = "all"
+                }
             }
         }
 
@@ -1340,9 +1359,11 @@ private fun renderSongs() {
         val visibleSongs = MainUiPolicy.sortSongs(
             songItems.filter { song ->
                 MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
+                    (selectedSongType == "all" || song.type.apiValue == selectedSongType) &&
                     MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
                     MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers) &&
-                    MainUiPolicy.songMatchesLibrary(song, selectedSongLibraryId, songFavoriteIds)
+                    MainUiPolicy.songMatchesLibrary(song, selectedSongLibraryId, songFavoriteIds) &&
+                    (selectedSongStatusId != "new" || SongDiscoveryPolicy.isNew(song, songDiscoveryState))
             },
             selectedSongSortId,
         )
@@ -1416,7 +1437,14 @@ private fun renderSongs() {
             container.addView(serverStatusStrip())
         }
         if (state.visibleSongs.isEmpty()) {
-            val message = if (selectedSongLibraryId == "favorites") {
+            val allNewCount = cachedSongItems.count { SongDiscoveryPolicy.isNew(it, songDiscoveryState) }
+            val message = if (selectedSongStatusId == "new") {
+                when {
+                    !songDiscoveryState.initialized -> "새 노래 상태를 확인하는 중입니다."
+                    allNewCount == 0 -> "새로 추가된 노래가 없습니다."
+                    else -> "현재 필터 조건에 맞는 새 노래가 없습니다."
+                }
+            } else if (selectedSongLibraryId == "favorites") {
                 MainUiPolicy.songFavoriteEmptyMessage(songFavoriteIds.isNotEmpty())
             } else "표시할 노래가 없습니다. 필터를 바꾸거나 나중에 다시 확인해 주세요."
             container.addView(noticeCard(message))
@@ -1424,6 +1452,22 @@ private fun renderSongs() {
         }
         state.pagedSongs.forEach { song ->
             container.addView(songCard(song, state.catalogMembers))
+        }
+        if (selectedSongStatusId == "new" && state.pagedSongs.any { SongDiscoveryPolicy.isNew(it, songDiscoveryState) }) {
+            container.addView(baseCard(HubCardStyle.INTERACTIVE).apply {
+                isClickable = true
+                isFocusable = true
+                contentDescription = "이 페이지의 새 노래 확인 완료"
+                setOnClickListener { lifecycleScope.launch { songDiscoveryRepository.acknowledge(state.pagedSongs, cachedSongItems) } }
+                addView(TextView(context).apply {
+                    text = "이 페이지 확인 완료"
+                    gravity = Gravity.CENTER
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 14f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setPadding(dp(14), dp(14), dp(14), dp(14))
+                })
+            })
         }
         if (MainUiPolicy.songPageCount(state.visibleSongs.size) > 1) {
             container.addView(songPageControl(state.visibleSongs.size))
@@ -1477,7 +1521,8 @@ private fun renderSongs() {
             val memberGenerationById = songCatalogMembers.associate { it.id to it.generationId }
             val visibleSongs = MainUiPolicy.sortSongs(
                 items.filter { song ->
-                        MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
+                    MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
+                        (selectedSongType == "all" || song.type.apiValue == selectedSongType) &&
                         MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
                         MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers) &&
                         MainUiPolicy.songMatchesLibrary(song, selectedSongLibraryId, songFavoriteIds)
@@ -1490,15 +1535,17 @@ private fun renderSongs() {
                 visibleSongs.forEach { container.addView(songCard(it, songCatalogMembers)) }
             }
         }
-        if (cachedSongType == selectedSongType && cachedSongItems.isNotEmpty()) {
+        if (cachedSongType == "all" && cachedSongItems.isNotEmpty()) {
             renderItems(cachedSongItems)
             return
         }
         container.addView(loadingCard(MainUiPolicy.songSearchLoadingPresentation()))
         CoroutineScope(Dispatchers.Main).launch {
-            val items = serverRepository.songs(generationId = "all", type = selectedSongType).items
+            val result = serverRepository.songs(generationId = "all", type = "all")
+            val items = result.items
+            songDiscoveryRepository.initialize(result.serverTime, items, result.isAuthoritative)
             cachedSongItems = items
-            cachedSongType = selectedSongType
+            cachedSongType = "all"
             if (navigationHistory.currentScreen != HubScreen.SONG_SEARCH) return@launch
             container.removeAllViews()
             renderItems(items)
@@ -1570,9 +1617,8 @@ private fun songFilterPanel(): MaterialCardView =
             addView(divider())
             addView(songSegmentedRow(MainUiPolicy.songTypeFilters(), selectedSongType) { optionId ->
                 selectedSongType = optionId
-                cachedSongType = null
                 selectedSongPage = 1
-                renderSongs()
+                renderSongsFromCache()
             }.apply {
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -1585,6 +1631,20 @@ private fun songFilterPanel(): MaterialCardView =
             addView(divider())
             addView(songSegmentedRow(MainUiPolicy.songLibraryFilters(), selectedSongLibraryId) { optionId ->
                 selectedSongLibraryId = optionId
+                selectedSongPage = 1
+                renderSongsFromCache()
+            }.apply {
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    topMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
+                    bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
+                }
+            })
+            addView(divider())
+            val statusFilters = MainUiPolicy.songStatusFilters().map {
+                if (it.id == "new") it.copy(label = "새 노래 (${cachedSongItems.count { song -> SongDiscoveryPolicy.isNew(song, songDiscoveryState) }})") else it
+            }
+            addView(songSegmentedRow(statusFilters, selectedSongStatusId) { optionId ->
+                selectedSongStatusId = optionId
                 selectedSongPage = 1
                 renderSongsFromCache()
             }.apply {
@@ -1972,7 +2032,12 @@ private fun songFilterRow(
             val externalUrl = MainUiPolicy.songExternalUrl(song.youtubeUrl)
             isClickable = externalUrl != null
             isFocusable = externalUrl != null
-            setOnClickListener { openExternalUrl(externalUrl) }
+            setOnClickListener {
+                lifecycleScope.launch {
+                    songDiscoveryRepository.acknowledge(listOf(song), cachedSongItems)
+                    openExternalUrl(externalUrl)
+                }
+            }
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
             }
@@ -2013,6 +2078,12 @@ private fun songFilterRow(
                     ).apply {
                         topMargin = dp(7)
                     }
+                })
+            }
+            if (SongDiscoveryPolicy.isNew(song, songDiscoveryState)) {
+                content.addView(rowChip("NEW").apply {
+                    contentDescription = "새로 추가된 노래"
+                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(7) }
                 })
             }
             row.addView(content)

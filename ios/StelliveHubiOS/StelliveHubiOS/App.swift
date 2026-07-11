@@ -6,6 +6,7 @@ struct StelliveHubApp: App {
     @StateObject private var store: MockHubStore
     @StateObject private var serverStore: ServerHubStore
     @StateObject private var songFavoritesStore: SongFavoritesStore
+    @StateObject private var songDiscoveryStore: SongDiscoveryStore
 
     init() {
         let fallback = MockHubStore()
@@ -17,6 +18,7 @@ struct StelliveHubApp: App {
             )
         )
         _songFavoritesStore = StateObject(wrappedValue: SongFavoritesStore())
+        _songDiscoveryStore = StateObject(wrappedValue: SongDiscoveryStore())
     }
 
     var body: some Scene {
@@ -25,6 +27,7 @@ struct StelliveHubApp: App {
                 .environmentObject(store)
                 .environmentObject(serverStore)
                 .environmentObject(songFavoritesStore)
+                .environmentObject(songDiscoveryStore)
                 .preferredColorScheme(store.settings.appearanceMode.preferredColorScheme)
                 .task {
                     _ = await serverStore.bootstrap()

@@ -186,6 +186,7 @@ class ServerHubRepository(
         val items = mutableListOf<SongCatalogItem>()
         val seen = linkedSetOf<String>()
         var nextCursor: String? = null
+        var serverTime: Instant? = null
         repeat(MUSIC_MAX_PAGES) {
             val response = if (!memberId.isNullOrBlank() && memberId != "all") {
                 remoteDataSource.memberMusic(
@@ -204,19 +205,24 @@ class ServerHubRepository(
                 )
             }
             if (response !is HubNetworkResult.Success) {
-                return if (items.isNotEmpty()) SongListResult(items = items.take(MUSIC_MAX_ITEMS)) else null
+                return null
             }
+            if (serverTime == null) serverTime = response.value.serverTime?.let(::parseInstantOrNull)
             val page = response.value.toSongListResult()
             page.items.forEach { song ->
                 val key = song.youtubeVideoId.ifBlank { song.id }
                 if (seen.add(key)) items += song
             }
             if (page.nextCursor.isNullOrBlank() || items.size >= MUSIC_MAX_ITEMS) {
-                return SongListResult(items = items.take(MUSIC_MAX_ITEMS))
+                return SongListResult(
+                    items = items.take(MUSIC_MAX_ITEMS),
+                    serverTime = serverTime,
+                    isAuthoritative = page.nextCursor.isNullOrBlank(),
+                )
             }
             nextCursor = page.nextCursor
         }
-        return SongListResult(items = items.take(MUSIC_MAX_ITEMS))
+        return SongListResult(items = items.take(MUSIC_MAX_ITEMS), serverTime = serverTime, isAuthoritative = false)
     }
 
     override suspend fun songFacets(
@@ -357,6 +363,7 @@ private fun MusicCatalogItemDto.toSongCatalogItemOrNull(): SongCatalogItem? {
         title = title,
         type = type,
         publishedAt = publishedAt,
+        catalogAddedAt = catalogAddedAt?.let(::parseInstantOrNull),
         thumbnailUrl = thumbnailUrl,
         duration = duration,
         durationSeconds = durationSeconds,
@@ -394,6 +401,7 @@ private fun SongCatalogItemDto.toSongCatalogItemOrNull(): SongCatalogItem? {
                 SongThumbnail(url = it.url, width = it.width, height = it.height)
             },
             publishedAt = publishedAt,
+            catalogAddedAt = catalogAddedAt?.let(::parseInstantOrNull),
             premiere = premiere.toYoutubePremiereMetadataOrNull(),
         )
     }

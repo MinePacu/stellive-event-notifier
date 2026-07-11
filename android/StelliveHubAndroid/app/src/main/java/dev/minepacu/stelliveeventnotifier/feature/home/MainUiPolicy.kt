@@ -10,6 +10,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
 import dev.minepacu.stelliveeventnotifier.core.model.SongCatalogItem
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongIdentity
 import dev.minepacu.stelliveeventnotifier.core.model.SongType
 import kotlin.math.roundToInt
 import dev.minepacu.stelliveeventnotifier.ui.components.TopFilterGroup
@@ -194,8 +195,11 @@ object MainUiPolicy {
     )
 
     fun songFavoriteIdentifier(song: SongCatalogItem): String? =
-        song.youtubeVideoId.trim().takeIf { it.isNotEmpty() }?.let { "youtube:$it" }
-            ?: song.id.trim().takeIf { it.isNotEmpty() }?.let { "song:$it" }
+        SongIdentity.identifier(song)
+
+    fun songStatusFilters(): List<SongFilterOption> = listOf(
+        SongFilterOption("all", "전체"), SongFilterOption("new", "새 노래"),
+    )
 
     fun songMatchesLibrary(song: SongCatalogItem, selectedLibraryId: String, favorites: Set<String>): Boolean =
         selectedLibraryId != "favorites" || songFavoriteIdentifier(song) in favorites

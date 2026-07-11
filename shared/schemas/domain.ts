@@ -119,6 +119,7 @@ export interface SongCatalogItem {
   sourceUrl: string;
   thumbnail?: SongThumbnail;
   publishedAt: string;
+  catalogAddedAt?: string | null;
   premiere?: YoutubePremiereMetadata;
 }
 
@@ -157,6 +158,7 @@ export interface MusicCatalogItem {
   title: string;
   type: MusicItemType;
   publishedAt: string | null;
+  catalogAddedAt?: string | null;
   thumbnailUrl: string | null;
   duration: string | null;
   durationSeconds?: number | null;
