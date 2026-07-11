@@ -16,29 +16,35 @@ struct HubEventsCalendarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("굿즈/행사 캘린더")
-                        .font(.headline.weight(.semibold))
-                    Text("서버에서 동기화된 일정만 표시합니다.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .layoutPriority(1)
+            Button {
+                isExpanded.toggle()
+            } label: {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("굿즈/행사 캘린더")
+                            .font(.headline.weight(.semibold))
+                        Text("서버에서 동기화된 일정만 표시합니다.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .layoutPriority(1)
 
-                Button {
-                    isExpanded.toggle()
-                } label: {
+                    Spacer(minLength: 8)
+
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 15, weight: .semibold))
-                        .frame(minWidth: 48, minHeight: 48)
+                        .frame(width: 24, height: 48)
+                        .fixedSize()
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .fixedSize(horizontal: true, vertical: false)
-                .accessibilityLabel(isExpanded ? "굿즈/행사 캘린더 접기" : "굿즈/행사 캘린더 펼치기")
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("굿즈/행사 캘린더")
+            .accessibilityValue(isExpanded ? "펼침" : "접힘")
+            .accessibilityHint(isExpanded ? "두 번 탭하여 접기" : "두 번 탭하여 펼치기")
 
             if isExpanded {
                 monthControl

@@ -2,13 +2,18 @@ package dev.minepacu.stelliveeventnotifier.feature.calendar
 
 import android.app.DatePickerDialog
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import com.google.android.material.card.MaterialCardView
 import dev.minepacu.stelliveeventnotifier.R
 import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarDay
@@ -74,6 +79,8 @@ class HubEventsCalendarView(
     private fun titleBlock(): View = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
+        minimumHeight = dp(48)
+        layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         addView(LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             addView(TextView(context).apply {
@@ -90,32 +97,39 @@ class HubEventsCalendarView(
             })
         }, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         if (showCollapseControl) {
-            addView(TextView(context).apply {
-                text = if (isExpanded) "⌃" else "⌄"
-                contentDescription = if (isExpanded) {
-                    "굿즈/행사 캘린더 접기"
-                } else {
-                    "굿즈/행사 캘린더 펼치기"
-                }
-                gravity = Gravity.CENTER
-                textSize = 22f
-                typeface = Typeface.DEFAULT_BOLD
-                includeFontPadding = false
-                setTextColor(color(R.color.hub_text))
-                background = rounded(color(R.color.hub_surface), dp(14), color(R.color.hub_line))
-                minimumWidth = dp(48)
-                minimumHeight = dp(48)
-                setPadding(0, 0, 0, 0)
-                isClickable = true
-                isFocusable = true
-                setOnClickListener {
-                    isExpanded = !isExpanded
-                    render()
-                    onExpandedChanged(isExpanded)
-                }
-            }, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, dp(48)).apply {
+            addView(ImageView(context).apply {
+                setImageResource(R.drawable.ic_chevron_down_24)
+                imageTintList = ColorStateList.valueOf(color(R.color.hub_text))
+                rotation = if (isExpanded) 180f else 0f
+                scaleType = ImageView.ScaleType.CENTER
+                isClickable = false
+                isFocusable = false
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(48), dp(48)).apply {
                 marginStart = dp(12)
             })
+
+            isClickable = true
+            isFocusable = true
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            descendantFocusability = FOCUS_BLOCK_DESCENDANTS
+            contentDescription = "굿즈/행사 캘린더"
+            ViewCompat.setStateDescription(this, if (isExpanded) "펼침" else "접힘")
+            ViewCompat.replaceAccessibilityAction(
+                this,
+                AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_CLICK,
+                if (isExpanded) "두 번 탭하여 접기" else "두 번 탭하여 펼치기",
+                null,
+            )
+            val selectableBackground = TypedValue()
+            if (context.theme.resolveAttribute(android.R.attr.selectableItemBackground, selectableBackground, true)) {
+                background = context.getDrawable(selectableBackground.resourceId)
+            }
+            setOnClickListener {
+                isExpanded = !isExpanded
+                render()
+                onExpandedChanged(isExpanded)
+            }
         }
     }
 
