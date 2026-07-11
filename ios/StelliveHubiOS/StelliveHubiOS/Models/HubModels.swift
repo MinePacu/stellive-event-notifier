@@ -595,6 +595,28 @@ enum IOSSongPagePolicy {
         .init(id: "cover", label: "커버")
     ]
 
+    static let libraryFilters: [SongFilterOption] = [
+        .init(id: "all", label: "전체"),
+        .init(id: "favorites", label: "즐겨찾기")
+    ]
+
+    static func favoriteIdentifier(for song: SongCatalogItem) -> String? {
+        let videoId = song.youtubeVideoId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !videoId.isEmpty { return "youtube:\(videoId)" }
+        let songId = song.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        return songId.isEmpty ? nil : "song:\(songId)"
+    }
+
+    static func matchesLibrary(_ song: SongCatalogItem, selectedLibraryId: String, favorites: Set<String>) -> Bool {
+        selectedLibraryId != "favorites" || favoriteIdentifier(for: song).map(favorites.contains) == true
+    }
+
+    static func favoriteEmptyMessage(hasStoredFavorites: Bool) -> String {
+        hasStoredFavorites
+            ? "현재 필터 조건에 맞는 즐겨찾기가 없습니다."
+            : "즐겨찾기한 노래가 없습니다. 노래 카드의 별 버튼으로 추가해 보세요."
+    }
+
     static let sortOptions: [SongFilterOption] = [
         .init(id: "publishedAt_desc", label: "최신순"),
         .init(id: "publishedAt_asc", label: "오래된순"),

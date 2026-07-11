@@ -188,6 +188,22 @@ object MainUiPolicy {
         SongFilterOption("cover", "커버")
     )
 
+    fun songLibraryFilters(): List<SongFilterOption> = listOf(
+        SongFilterOption("all", "전체"),
+        SongFilterOption("favorites", "즐겨찾기"),
+    )
+
+    fun songFavoriteIdentifier(song: SongCatalogItem): String? =
+        song.youtubeVideoId.trim().takeIf { it.isNotEmpty() }?.let { "youtube:$it" }
+            ?: song.id.trim().takeIf { it.isNotEmpty() }?.let { "song:$it" }
+
+    fun songMatchesLibrary(song: SongCatalogItem, selectedLibraryId: String, favorites: Set<String>): Boolean =
+        selectedLibraryId != "favorites" || songFavoriteIdentifier(song) in favorites
+
+    fun songFavoriteEmptyMessage(hasStoredFavorites: Boolean): String =
+        if (hasStoredFavorites) "현재 필터 조건에 맞는 즐겨찾기가 없습니다."
+        else "즐겨찾기한 노래가 없습니다. 노래 카드의 별 버튼으로 추가해 보세요."
+
     fun songSortOptions(): List<SongFilterOption> = listOf(
         SongFilterOption("publishedAt_desc", "최신순"),
         SongFilterOption("publishedAt_asc", "오래된순"),

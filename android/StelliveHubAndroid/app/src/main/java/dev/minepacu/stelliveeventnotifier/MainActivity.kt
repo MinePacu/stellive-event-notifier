@@ -94,6 +94,8 @@ import dev.minepacu.stelliveeventnotifier.feature.hubevents.GoodsEventSelectionM
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventsPanePolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongMemberSelectionMode
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongsPanePolicy
+import dev.minepacu.stelliveeventnotifier.feature.songs.DataStoreSongFavoritesRepository
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongFavoritesRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -183,6 +185,9 @@ private var draggingLiveMemberId: String? = null
     private var selectedHistoryMemberFilterId = "all"
 private var selectedSongGenerationId = "all"
 private var selectedSongType = "all"
+private var selectedSongLibraryId = "all"
+private var songFavoriteIds: Set<String> = emptySet()
+private lateinit var songFavoritesRepository: SongFavoritesRepository
 private var selectedSongSortId = "publishedAt_desc"
 private var selectedSongQuery = ""
 private var appliedSongQuery = ""
@@ -220,6 +225,17 @@ private var notificationPermissionRequested = false
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         serverRepository = createServerRepository()
+        songFavoritesRepository = DataStoreSongFavoritesRepository(this)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                songFavoritesRepository.favorites.collect { favorites ->
+                    songFavoriteIds = favorites
+                    if (navigationHistory.currentScreen == HubScreen.SONGS && cachedSongItems.isNotEmpty()) {
+                        renderSongsFromCache()
+                    }
+                }
+            }
+        }
         syncCurrentPushToken()
         configureTopBarGlass()
         startAdaptiveWindowTracking()
@@ -1325,7 +1341,8 @@ private fun renderSongs() {
             songItems.filter { song ->
                 MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
                     MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
-                    MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers)
+                    MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers) &&
+                    MainUiPolicy.songMatchesLibrary(song, selectedSongLibraryId, songFavoriteIds)
             },
             selectedSongSortId,
         )
@@ -1336,6 +1353,16 @@ private fun renderSongs() {
             visibleSongs = visibleSongs,
             pagedSongs = MainUiPolicy.songPageItems(visibleSongs, safePage),
         )
+    }
+
+    private fun renderSongsFromCache() {
+        val state = songRenderState(cachedSongItems)
+        startScreen("songs", getString(R.string.songs_title), "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다.")
+        clearTopFilters()
+        if (shouldUseSongsTwoPane()) renderSongsTwoPane(state) else {
+            binding.contentList.addView(songFilterPanel())
+            renderSongListInto(binding.contentList, state, includeServerStatus = true)
+        }
     }
 
     private fun renderSongsTwoPaneLoading() {
@@ -1389,7 +1416,10 @@ private fun renderSongs() {
             container.addView(serverStatusStrip())
         }
         if (state.visibleSongs.isEmpty()) {
-            container.addView(noticeCard("표시할 노래가 없습니다. 필터를 바꾸거나 나중에 다시 확인해 주세요."))
+            val message = if (selectedSongLibraryId == "favorites") {
+                MainUiPolicy.songFavoriteEmptyMessage(songFavoriteIds.isNotEmpty())
+            } else "표시할 노래가 없습니다. 필터를 바꾸거나 나중에 다시 확인해 주세요."
+            container.addView(noticeCard(message))
             return
         }
         state.pagedSongs.forEach { song ->
@@ -1447,9 +1477,10 @@ private fun renderSongs() {
             val memberGenerationById = songCatalogMembers.associate { it.id to it.generationId }
             val visibleSongs = MainUiPolicy.sortSongs(
                 items.filter { song ->
-                    MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
+                        MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
                         MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
-                        MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers)
+                        MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers) &&
+                        MainUiPolicy.songMatchesLibrary(song, selectedSongLibraryId, songFavoriteIds)
                 },
                 selectedSongSortId,
             )
@@ -1547,6 +1578,17 @@ private fun songFilterPanel(): MaterialCardView =
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                 ).apply {
+                    topMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
+                    bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
+                }
+            })
+            addView(divider())
+            addView(songSegmentedRow(MainUiPolicy.songLibraryFilters(), selectedSongLibraryId) { optionId ->
+                selectedSongLibraryId = optionId
+                selectedSongPage = 1
+                renderSongsFromCache()
+            }.apply {
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                     topMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
                     bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
                 }
@@ -1974,6 +2016,21 @@ private fun songFilterRow(
                 })
             }
             row.addView(content)
+            MainUiPolicy.songFavoriteIdentifier(song)?.let { identifier ->
+                row.addView(TextView(context).apply {
+                    text = if (identifier in songFavoriteIds) "★" else "☆"
+                    textSize = 24f
+                    gravity = Gravity.CENTER
+                    setTextColor(color(R.color.hub_text))
+                    contentDescription = if (identifier in songFavoriteIds) "즐겨찾기 해제" else "즐겨찾기 추가"
+                    isClickable = true
+                    isFocusable = true
+                    setPadding(dp(10), dp(8), dp(6), dp(8))
+                    setOnClickListener {
+                        lifecycleScope.launch { songFavoritesRepository.toggle(identifier) }
+                    }
+                })
+            }
             addView(row)
         }
 

@@ -14,9 +14,11 @@ extension IOSSongPagePolicy {
 struct SongsView: View {
     @EnvironmentObject private var store: MockHubStore
     @EnvironmentObject private var serverStore: ServerHubStore
+    @EnvironmentObject private var favoritesStore: SongFavoritesStore
     @State private var path = NavigationPath()
     @State private var selectedGenerationId = "all"
     @State private var selectedType = "all"
+    @State private var selectedLibraryId = "all"
     @State private var selectedSortId = "publishedAt_desc"
     @State private var selectedMemberId = "all"
     @State private var query = ""
@@ -34,7 +36,8 @@ struct SongsView: View {
         ).items.filter {
             IOSSongPagePolicy.matchesGeneration($0, selectedGenerationId: selectedGenerationId, memberGenerationById: memberGenerationById) &&
                 IOSSongPagePolicy.matchesMember($0, selectedMemberId: selectedMemberId) &&
-                IOSSongPagePolicy.matchesQuery($0, query: query, catalogMembers: store.members)
+                IOSSongPagePolicy.matchesQuery($0, query: query, catalogMembers: store.members) &&
+                IOSSongPagePolicy.matchesLibrary($0, selectedLibraryId: selectedLibraryId, favorites: favoritesStore.identifiers)
         }
         return IOSSongPagePolicy.sortedSongs(filtered, sortId: selectedSortId)
     }
@@ -104,6 +107,13 @@ struct SongsView: View {
             }
             .pickerStyle(.segmented)
 
+            Picker("보관함", selection: $selectedLibraryId) {
+                ForEach(IOSSongPagePolicy.libraryFilters) { filter in
+                    Text(filter.label).tag(filter.id)
+                }
+            }
+            .pickerStyle(.segmented)
+
             Picker("정렬", selection: $selectedSortId) {
                 ForEach(IOSSongPagePolicy.sortOptions) { option in
                     Text(option.label).tag(option.id)
@@ -142,7 +152,9 @@ struct SongsView: View {
                             message: "서버 캐시에서 오리지널곡과 커버곡 목록을 가져오고 있습니다."
                         )
                     } else if songs.isEmpty {
-                        Text("표시할 노래 없음")
+                        Text(selectedLibraryId == "favorites"
+                             ? IOSSongPagePolicy.favoriteEmptyMessage(hasStoredFavorites: !favoritesStore.identifiers.isEmpty)
+                             : "표시할 노래 없음")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
@@ -164,6 +176,7 @@ struct SongsView: View {
                 .settingsToolbar(path: $path)
                 .onChange(of: selectedGenerationId) { _ in selectedPage = 1 }
                 .onChange(of: selectedType) { _ in selectedPage = 1 }
+                .onChange(of: selectedLibraryId) { _ in selectedPage = 1 }
                 .onChange(of: selectedSortId) { _ in selectedPage = 1 }
                 .onChange(of: selectedMemberId) { _ in selectedPage = 1 }
                 .onChange(of: query) { _ in selectedPage = 1 }
@@ -219,11 +232,13 @@ struct SongsView: View {
 struct SongRow: View {
     let song: SongCatalogItem
     let catalogMembers: [HubMember]
+    @EnvironmentObject private var favoritesStore: SongFavoritesStore
 
     var body: some View {
         let displayText = IOSSongPagePolicy.displayText(for: song, catalogMembers: catalogMembers)
-        Link(destination: URL(string: song.youtubeUrl) ?? URL(string: "https://www.youtube.com")!) {
-            HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 4) {
+            Link(destination: URL(string: song.youtubeUrl) ?? URL(string: "https://www.youtube.com")!) {
+                HStack(alignment: .top, spacing: 12) {
                     SongThumbnailView(urls: IOSSongPagePolicy.thumbnailUrlCandidates(for: song))
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -268,15 +283,27 @@ struct SongRow: View {
                 }
 
                 Spacer(minLength: 8)
+                }
             }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(.secondarySystemGroupedBackground))
-            )
+            .buttonStyle(.plain)
+
+            if IOSSongPagePolicy.favoriteIdentifier(for: song) != nil {
+                Button {
+                    favoritesStore.toggle(song)
+                } label: {
+                    Image(systemName: favoritesStore.contains(song) ? "star.fill" : "star")
+                        .font(.title3)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(favoritesStore.contains(song) ? "즐겨찾기 해제" : "즐겨찾기 추가")
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+        )
     }
 }
 
