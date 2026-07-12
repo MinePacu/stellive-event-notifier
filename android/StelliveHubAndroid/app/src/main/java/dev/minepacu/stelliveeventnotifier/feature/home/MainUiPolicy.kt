@@ -28,6 +28,24 @@ data class StatusSummaryItem(
     val label: String
 )
 
+data class SongListQueryKey(
+    val generationId: String,
+    val type: String,
+    val memberId: String,
+    val libraryId: String,
+    val statusId: String,
+    val sortId: String,
+    val query: String,
+)
+
+data class SongScrollPosition(
+    val anchorSongId: String?,
+    val anchorOffset: Int,
+    val fallbackAbsoluteOffset: Int,
+    val visibleLimitAtCapture: Int,
+    val queryKey: SongListQueryKey,
+)
+
 data class HomeHubEventsAction(
     val title: String,
     val body: String,
@@ -630,24 +648,58 @@ object MainUiPolicy {
             display.subtitle.contains(query, ignoreCase = true)
     }
 
-    fun songPageCount(totalItems: Int, pageSize: Int = SONG_PAGE_SIZE): Int {
-        if (totalItems <= 0) return 1
-        return ((totalItems - 1) / pageSize) + 1
-    }
+    fun coerceSongVisibleLimit(visibleLimit: Int, totalItems: Int, batchSize: Int = SONG_PAGE_SIZE): Int =
+        if (totalItems <= 0) 0 else visibleLimit.coerceAtLeast(batchSize).coerceAtMost(totalItems)
 
-    fun coerceSongPage(page: Int, totalItems: Int, pageSize: Int = SONG_PAGE_SIZE): Int =
-        page.coerceIn(1, songPageCount(totalItems, pageSize))
-
-    fun songPageItems(
+    fun displayedSongItems(
         songs: List<SongCatalogItem>,
-        page: Int,
-        pageSize: Int = SONG_PAGE_SIZE,
-    ): List<SongCatalogItem> {
-        val safePage = coerceSongPage(page, songs.size, pageSize)
-        val fromIndex = (safePage - 1) * pageSize
-        val toIndex = minOf(fromIndex + pageSize, songs.size)
-        return songs.subList(fromIndex, toIndex)
+        visibleLimit: Int,
+        batchSize: Int = SONG_PAGE_SIZE,
+    ): List<SongCatalogItem> = songs.take(coerceSongVisibleLimit(visibleLimit, songs.size, batchSize))
+
+    fun displayedSongCount(visibleLimit: Int, totalItems: Int, batchSize: Int = SONG_PAGE_SIZE): Int =
+        coerceSongVisibleLimit(visibleLimit, totalItems, batchSize)
+
+    fun remainingSongCount(visibleLimit: Int, totalItems: Int, batchSize: Int = SONG_PAGE_SIZE): Int =
+        (totalItems - displayedSongCount(visibleLimit, totalItems, batchSize)).coerceAtLeast(0)
+
+    fun canLoadMoreSongs(visibleLimit: Int, totalItems: Int, batchSize: Int = SONG_PAGE_SIZE): Boolean =
+        remainingSongCount(visibleLimit, totalItems, batchSize) > 0
+
+    fun nextSongVisibleLimit(visibleLimit: Int, totalItems: Int, batchSize: Int = SONG_PAGE_SIZE): Int =
+        minOf(displayedSongCount(visibleLimit, totalItems, batchSize) + batchSize, totalItems)
+
+    fun songProgressText(displayedCount: Int, totalFilteredCount: Int, authoritative: Boolean): String {
+        val totalText = "%,d".format(totalFilteredCount)
+        return if (authoritative && displayedCount == totalFilteredCount) {
+            "$displayedCount / ${totalText}곡 모두 표시"
+        } else if (authoritative) {
+            "$displayedCount / ${totalText}곡 표시"
+        } else {
+            "$displayedCount / ${totalText}곡 이상 표시"
+        }
     }
+
+    fun songLoadMoreText(remainingCount: Int, batchSize: Int = SONG_PAGE_SIZE): String =
+        "${minOf(remainingCount, batchSize)}곡 더 보기"
+
+    fun canRestoreSongScroll(position: SongScrollPosition?, queryKey: SongListQueryKey): Boolean =
+        position?.queryKey == queryKey
+
+    fun restoredSongVisibleLimit(position: SongScrollPosition?, queryKey: SongListQueryKey, totalItems: Int): Int =
+        if (canRestoreSongScroll(position, queryKey)) {
+            coerceSongVisibleLimit(position?.visibleLimitAtCapture ?: SONG_PAGE_SIZE, totalItems)
+        } else {
+            coerceSongVisibleLimit(SONG_PAGE_SIZE, totalItems)
+        }
+
+    fun shouldShowSongScrollToTop(
+        absoluteOffset: Int,
+        isLoading: Boolean,
+        isEmpty: Boolean,
+        isRestoring: Boolean,
+        threshold: Int,
+    ): Boolean = !isLoading && !isEmpty && !isRestoring && absoluteOffset > threshold
 
     fun homeHubEventsListAction(closingSoonCount: Int): HomeHubEventsAction =
         if (closingSoonCount > 0) {

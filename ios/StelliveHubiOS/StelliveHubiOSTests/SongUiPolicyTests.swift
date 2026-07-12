@@ -108,7 +108,7 @@ final class SongUiPolicyTests: XCTestCase {
         XCTAssertFalse(IOSSongPagePolicy.matchesQuery(song, query: "마시로"))
     }
 
-    func testSongPaginationCalculatesPagesAndSlicesItems() {
+    func testSongProgressiveExposureCalculatesCountsAndSlicesItems() {
         let songs = (1...45).map { index in
             SongCatalogItem(
                 id: "video-\(index)",
@@ -119,12 +119,45 @@ final class SongUiPolicyTests: XCTestCase {
             )
         }
 
-        XCTAssertEqual(IOSSongPagePolicy.pageCount(totalItems: songs.count, pageSize: 20), 3)
-        XCTAssertEqual(IOSSongPagePolicy.pageItems(songs, page: 1, pageSize: 20).map(\.id), (1...20).map { "video-\($0)" })
-        XCTAssertEqual(IOSSongPagePolicy.pageItems(songs, page: 2, pageSize: 20).map(\.id), (21...40).map { "video-\($0)" })
-        XCTAssertEqual(IOSSongPagePolicy.pageItems(songs, page: 3, pageSize: 20).map(\.id), (41...45).map { "video-\($0)" })
-        XCTAssertEqual(IOSSongPagePolicy.clampedPage(99, totalItems: songs.count, pageSize: 20), 3)
-        XCTAssertEqual(IOSSongPagePolicy.clampedPage(0, totalItems: songs.count, pageSize: 20), 1)
+        [0, 1, 20, 21, 40, 45].forEach { total in
+            XCTAssertEqual(IOSSongPagePolicy.displayedCount(visibleLimit: 20, totalItems: total), min(20, total))
+        }
+        XCTAssertEqual(IOSSongPagePolicy.displayedItems(songs, visibleLimit: 20).map(\.id), (1...20).map { "video-\($0)" })
+        XCTAssertEqual(IOSSongPagePolicy.nextVisibleLimit(visibleLimit: 20, totalItems: 45), 40)
+        XCTAssertEqual(IOSSongPagePolicy.nextVisibleLimit(visibleLimit: 40, totalItems: 45), 45)
+        XCTAssertEqual(IOSSongPagePolicy.remainingCount(visibleLimit: 40, totalItems: 45), 5)
+        XCTAssertTrue(IOSSongPagePolicy.canLoadMore(visibleLimit: 40, totalItems: 45))
+        XCTAssertFalse(IOSSongPagePolicy.canLoadMore(visibleLimit: 45, totalItems: 45))
+        XCTAssertEqual(IOSSongPagePolicy.clampedVisibleLimit(40, totalItems: 21), 21)
+        XCTAssertEqual(IOSSongPagePolicy.progressText(displayedCount: 20, totalFilteredCount: 137, authoritative: true), "20 / 137곡 표시")
+        XCTAssertEqual(IOSSongPagePolicy.progressText(displayedCount: 137, totalFilteredCount: 137, authoritative: true), "137 / 137곡 모두 표시")
+        XCTAssertEqual(IOSSongPagePolicy.progressText(displayedCount: 20, totalFilteredCount: 1_000, authoritative: false), "20 / 1,000곡 이상 표시")
+        XCTAssertEqual(IOSSongPagePolicy.loadMoreText(remainingCount: 25), "20곡 더 보기")
+        XCTAssertEqual(IOSSongPagePolicy.loadMoreText(remainingCount: 7), "7곡 더 보기")
+    }
+
+    func testSongScrollSessionRestoresOnlyMatchingQueryAndControlsTopButton() {
+        let key = SongListQueryKey(
+            generationId: "all", type: "all", libraryId: "all", statusId: "all",
+            sortId: "publishedAt_desc", memberId: "all", query: ""
+        )
+        let changed = SongListQueryKey(
+            generationId: "all", type: "all", libraryId: "all", statusId: "all",
+            sortId: "publishedAt_desc", memberId: "all", query: "riko"
+        )
+        let position = SongScrollPosition(
+            anchorSongId: "youtube:63", anchorOffset: -12, fallbackAbsoluteOffset: 2_400,
+            visibleLimitAtCapture: 80, queryKey: key
+        )
+
+        XCTAssertTrue(IOSSongPagePolicy.canRestoreScroll(position, queryKey: key))
+        XCTAssertFalse(IOSSongPagePolicy.canRestoreScroll(position, queryKey: changed))
+        XCTAssertEqual(IOSSongPagePolicy.restoredVisibleLimit(position, queryKey: key, totalItems: 45), 45)
+        XCTAssertEqual(IOSSongPagePolicy.restoredVisibleLimit(position, queryKey: changed, totalItems: 45), 20)
+        XCTAssertTrue(IOSSongPagePolicy.shouldShowScrollToTop(absoluteOffset: 241, isLoading: false, isEmpty: false, isRestoring: false))
+        XCTAssertFalse(IOSSongPagePolicy.shouldShowScrollToTop(absoluteOffset: 241, isLoading: true, isEmpty: false, isRestoring: false))
+        XCTAssertFalse(IOSSongPagePolicy.shouldShowScrollToTop(absoluteOffset: 241, isLoading: false, isEmpty: true, isRestoring: false))
+        XCTAssertFalse(IOSSongPagePolicy.shouldShowScrollToTop(absoluteOffset: 241, isLoading: false, isEmpty: false, isRestoring: true))
     }
 
     func testSongSummaryCountsUseAllSongsRatherThanFilteredSongs() {

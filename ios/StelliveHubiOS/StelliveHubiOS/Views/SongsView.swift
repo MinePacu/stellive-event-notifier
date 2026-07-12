@@ -1,5 +1,18 @@
 import SwiftUI
 
+private extension SongCatalogItem {
+    var stableSongIdentifier: String {
+        SongIdentity.identifier(for: self) ?? "song:\(id)"
+    }
+}
+
+private struct SongRowOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: [String: CGFloat] = [:]
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })
+    }
+}
+
 extension IOSSongPagePolicy {
     static var songRowInsets: EdgeInsets {
         EdgeInsets(
@@ -16,6 +29,7 @@ struct SongsView: View {
     @EnvironmentObject private var serverStore: ServerHubStore
     @EnvironmentObject private var favoritesStore: SongFavoritesStore
     @EnvironmentObject private var discoveryStore: SongDiscoveryStore
+    @EnvironmentObject private var browseSession: SongBrowseSessionStore
     @State private var path = NavigationPath()
     @State private var selectedGenerationId = "all"
     @State private var selectedType = "all"
@@ -24,7 +38,12 @@ struct SongsView: View {
     @State private var selectedSortId = "publishedAt_desc"
     @State private var selectedMemberId = "all"
     @State private var query = ""
-    @State private var selectedPage = 1
+    @State private var visibleLimit = IOSSongPagePolicy.pageSize
+    @State private var isLoadingMore = false
+    @State private var isApplyingSession = false
+    @State private var isRestoringScrollPosition = false
+    @State private var didRestoreSession = false
+    @State private var listTopOffset: CGFloat = 0
 
     private var memberGenerationById: [String: String] {
         Dictionary(uniqueKeysWithValues: store.members.map { ($0.id, $0.generationId) })
@@ -45,12 +64,28 @@ struct SongsView: View {
         return IOSSongPagePolicy.sortedSongs(filtered, sortId: selectedSortId)
     }
 
-    private var currentPage: Int {
-        IOSSongPagePolicy.clampedPage(selectedPage, totalItems: songs.count)
+    private var queryKey: SongListQueryKey {
+        SongListQueryKey(
+            generationId: selectedGenerationId,
+            type: selectedType,
+            libraryId: selectedLibraryId,
+            statusId: selectedStatusId,
+            sortId: selectedSortId,
+            memberId: selectedMemberId,
+            query: query
+        )
     }
 
-    private var pagedSongs: [SongCatalogItem] {
-        IOSSongPagePolicy.pageItems(songs, page: currentPage)
+    private var displayedSongs: [SongCatalogItem] {
+        IOSSongPagePolicy.displayedItems(songs, visibleLimit: visibleLimit)
+    }
+
+    private var displayedCount: Int {
+        IOSSongPagePolicy.displayedCount(visibleLimit: visibleLimit, totalItems: songs.count)
+    }
+
+    private var remainingCount: Int {
+        IOSSongPagePolicy.remainingCount(visibleLimit: visibleLimit, totalItems: songs.count)
     }
 
     private var facets: SongFacetsResponse {
@@ -88,6 +123,7 @@ struct SongsView: View {
                 .listRowInsets(IOSGroupedScreenPolicy.headerRowInsets)
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
+                .id("songs-list-start")
 
                 Section("검색") {
                     TextField("노래 제목 또는 멤버 검색", text: $query)
@@ -115,7 +151,7 @@ struct SongsView: View {
                     filters: IOSSongPagePolicy.memberFilters(from: store.members),
                     members: store.members,
                     selectedMemberId: $selectedMemberId,
-                    selectedPage: $selectedPage
+                    visibleLimit: $visibleLimit
                 )
             } label: {
                 HStack {
@@ -129,7 +165,7 @@ struct SongsView: View {
             if IOSSongPagePolicy.canClearMemberFilter(selectedMemberId) {
                 Button("전체로 보기") {
                     selectedMemberId = "all"
-                    selectedPage = 1
+                    visibleLimit = IOSSongPagePolicy.pageSize
                 }
             }
 
@@ -167,49 +203,168 @@ struct SongsView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
-                    ForEach(pagedSongs) { song in
+                    ForEach(displayedSongs, id: \.stableSongIdentifier) { song in
                         SongRow(song: song, catalogMembers: store.members)
+                            .id(song.stableSongIdentifier)
+                            .background {
+                                GeometryReader { proxy in
+                                    Color.clear.preference(
+                                        key: SongRowOffsetPreferenceKey.self,
+                                        value: [song.stableSongIdentifier: proxy.frame(in: .named("song-list-scroll")).minY]
+                                    )
+                                }
+                            }
                             .listRowInsets(IOSSongPagePolicy.songRowInsets)
                             .listRowSeparator(.hidden)
                     }
 
-                    if selectedStatusId == "new" && pagedSongs.contains(where: discoveryStore.isNew) {
-                        Button("이 페이지 확인 완료") {
-                            discoveryStore.acknowledge(pagedSongs, catalog: serverStore.serverSongs)
+                    if selectedStatusId == "new" && displayedSongs.contains(where: discoveryStore.isNew) {
+                        Button("표시된 새 노래 확인 완료") {
+                            discoveryStore.acknowledge(displayedSongs, catalog: serverStore.serverSongs)
                         }
                     }
 
-                    if IOSSongPagePolicy.pageCount(totalItems: songs.count) > 1 {
-                        songPageControl
-                    }
+                    songLoadMoreControl
                     }
                 }
             }
                 .listStyle(.insetGrouped)
+                .coordinateSpace(name: "song-list-scroll")
                 .scrollContentBackground(.hidden)
                 .background(Color(uiColor: .systemGroupedBackground))
                 .settingsToolbar(path: $path)
-                .onChange(of: selectedGenerationId) { _ in selectedPage = 1 }
-                .onChange(of: selectedType) { _ in selectedPage = 1 }
-                .onChange(of: selectedLibraryId) { _ in selectedPage = 1 }
-                .onChange(of: selectedStatusId) { _ in selectedPage = 1 }
-                .onChange(of: selectedSortId) { _ in selectedPage = 1 }
-                .onChange(of: selectedMemberId) { _ in selectedPage = 1 }
-                .onChange(of: query) { _ in selectedPage = 1 }
-                .onChange(of: selectedPage) { _ in
-                    guard let firstSongId = pagedSongs.first?.id else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        songListProxy.scrollTo(firstSongId, anchor: .top)
-                    }
+                .onChange(of: queryKey) { _ in
+                    guard !isApplyingSession else { return }
+                    resetSongList()
+                    songListProxy.scrollTo("songs-list-start", anchor: .top)
+                }
+                .onChange(of: songs.count) { count in
+                    guard count > 0 else { return }
+                    visibleLimit = IOSSongPagePolicy.clampedVisibleLimit(visibleLimit, totalItems: count)
+                    browseSession.visibleLimit = visibleLimit
+                }
+                .onChange(of: visibleLimit) { value in
+                    browseSession.visibleLimit = value
+                }
+                .onPreferenceChange(SongRowOffsetPreferenceKey.self) { offsets in
+                    captureScrollPosition(offsets)
                 }
                 .refreshable {
                     await refreshSongs()
                 }
                 .task {
-                    await refreshSongs()
+                    if serverStore.serverSongs.isEmpty {
+                        await refreshSongs()
+                    }
+                }
+                .onAppear {
+                    restoreSessionIfNeeded(using: songListProxy)
+                }
+                .onDisappear(perform: saveBrowseState)
+                .overlay(alignment: .bottomTrailing) {
+                    if shouldShowScrollToTopButton {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                songListProxy.scrollTo("songs-list-start", anchor: .top)
+                            }
+                            listTopOffset = 0
+                            browseSession.scrollPosition = SongScrollPosition(
+                                anchorSongId: nil,
+                                anchorOffset: 0,
+                                fallbackAbsoluteOffset: 0,
+                                visibleLimitAtCapture: visibleLimit,
+                                queryKey: queryKey
+                            )
+                        } label: {
+                            Image(systemName: "arrow.up")
+                                .font(.headline.weight(.semibold))
+                                .frame(width: 44, height: 44)
+                                .background(.regularMaterial, in: Circle())
+                                .shadow(radius: 4, y: 2)
+                        }
+                        .accessibilityLabel("맨 위로 이동")
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 12)
+                    }
                 }
             }
         }
+    }
+
+    private func resetSongList() {
+        visibleLimit = IOSSongPagePolicy.pageSize
+        browseSession.resetForQueryChange()
+        listTopOffset = 0
+    }
+
+    private var shouldShowScrollToTopButton: Bool {
+        IOSSongPagePolicy.shouldShowScrollToTop(
+            absoluteOffset: listTopOffset,
+            isLoading: serverStore.isRefreshingSongs,
+            isEmpty: songs.isEmpty,
+            isRestoring: isRestoringScrollPosition
+        )
+    }
+
+    private func saveBrowseState() {
+        browseSession.selectedGenerationId = selectedGenerationId
+        browseSession.selectedType = selectedType
+        browseSession.selectedLibraryId = selectedLibraryId
+        browseSession.selectedStatusId = selectedStatusId
+        browseSession.selectedSortId = selectedSortId
+        browseSession.selectedMemberId = selectedMemberId
+        browseSession.query = query
+        browseSession.visibleLimit = visibleLimit
+    }
+
+    private func restoreSessionIfNeeded(using proxy: ScrollViewProxy) {
+        guard !didRestoreSession else { return }
+        didRestoreSession = true
+        isApplyingSession = true
+        selectedGenerationId = browseSession.selectedGenerationId
+        selectedType = browseSession.selectedType
+        selectedLibraryId = browseSession.selectedLibraryId
+        selectedStatusId = browseSession.selectedStatusId
+        selectedSortId = browseSession.selectedSortId
+        selectedMemberId = browseSession.selectedMemberId
+        query = browseSession.query
+        visibleLimit = browseSession.visibleLimit
+        isApplyingSession = false
+
+        guard let position = browseSession.scrollPosition, position.queryKey == browseSession.queryKey else { return }
+        visibleLimit = position.visibleLimitAtCapture
+        isRestoringScrollPosition = true
+        DispatchQueue.main.async {
+            if let anchor = position.anchorSongId,
+               displayedSongs.contains(where: { $0.stableSongIdentifier == anchor }) {
+                proxy.scrollTo(anchor, anchor: .top)
+            } else if position.fallbackAbsoluteOffset > 0,
+                      let fallback = displayedSongs.first?.stableSongIdentifier {
+                proxy.scrollTo(fallback, anchor: .top)
+            }
+            DispatchQueue.main.async {
+                isRestoringScrollPosition = false
+            }
+        }
+    }
+
+    private func captureScrollPosition(_ offsets: [String: CGFloat]) {
+        guard !isRestoringScrollPosition, !offsets.isEmpty else { return }
+        let anchor = offsets.min { abs($0.value) < abs($1.value) ? true : false }
+        if let firstId = displayedSongs.first?.stableSongIdentifier,
+           let firstOffset = offsets[firstId] {
+            listTopOffset = max(0, -firstOffset)
+        } else if anchor?.key != displayedSongs.first?.stableSongIdentifier {
+            listTopOffset = max(listTopOffset, 241)
+        }
+        browseSession.scrollPosition = SongScrollPosition(
+            anchorSongId: anchor?.key,
+            anchorOffset: anchor?.value ?? 0,
+            fallbackAbsoluteOffset: listTopOffset,
+            visibleLimitAtCapture: visibleLimit,
+            queryKey: queryKey
+        )
+        saveBrowseState()
     }
 
     private func refreshSongs() async {
@@ -236,27 +391,32 @@ struct SongsView: View {
             : "표시할 노래 없음"
     }
 
-    private var songPageControl: some View {
-        HStack {
-            Button("이전") {
-                selectedPage = max(1, currentPage - 1)
-            }
-            .buttonStyle(.borderless)
-            .disabled(currentPage == 1)
-
-            Spacer()
-
-            Text("\(currentPage) / \(IOSSongPagePolicy.pageCount(totalItems: songs.count))")
+    private var songLoadMoreControl: some View {
+        VStack(spacing: 8) {
+            Text(IOSSongPagePolicy.progressText(
+                displayedCount: displayedCount,
+                totalFilteredCount: songs.count,
+                authoritative: serverStore.hasAuthoritativeSongCatalog
+            ))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Spacer()
-
-            Button("다음") {
-                selectedPage = min(IOSSongPagePolicy.pageCount(totalItems: songs.count), currentPage + 1)
+            if IOSSongPagePolicy.canLoadMore(visibleLimit: visibleLimit, totalItems: songs.count) {
+                Button(IOSSongPagePolicy.loadMoreText(remainingCount: remainingCount)) {
+                    guard !isLoadingMore else { return }
+                    isLoadingMore = true
+                    visibleLimit = IOSSongPagePolicy.nextVisibleLimit(visibleLimit: visibleLimit, totalItems: songs.count)
+                    isLoadingMore = false
+                }
+                .buttonStyle(.borderless)
+                .disabled(isLoadingMore)
+                .accessibilityLabel(IOSSongPagePolicy.loadMoreText(remainingCount: remainingCount))
+                .accessibilityValue(IOSSongPagePolicy.progressText(
+                    displayedCount: displayedCount,
+                    totalFilteredCount: songs.count,
+                    authoritative: serverStore.hasAuthoritativeSongCatalog
+                ))
             }
-            .buttonStyle(.borderless)
-            .disabled(currentPage == IOSSongPagePolicy.pageCount(totalItems: songs.count))
         }
     }
 }
@@ -358,7 +518,7 @@ private struct SongMemberFilterView: View {
     let filters: [SongFilterOption]
     let members: [HubMember]
     @Binding var selectedMemberId: String
-    @Binding var selectedPage: Int
+    @Binding var visibleLimit: Int
     @Environment(\.dismiss) private var dismiss
 
     private var memberById: [String: HubMember] {
@@ -369,7 +529,7 @@ private struct SongMemberFilterView: View {
         List(filters) { filter in
             Button {
                 selectedMemberId = filter.id
-                selectedPage = 1
+                visibleLimit = IOSSongPagePolicy.pageSize
                 dismiss()
             } label: {
                 HStack(spacing: 12) {

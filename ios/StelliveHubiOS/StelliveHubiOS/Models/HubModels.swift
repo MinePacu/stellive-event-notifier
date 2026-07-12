@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 enum CatalogRole: String, Codable {
     case member
@@ -600,6 +601,54 @@ enum SongIdentity {
     }
 }
 
+struct SongListQueryKey: Equatable {
+    let generationId: String
+    let type: String
+    let libraryId: String
+    let statusId: String
+    let sortId: String
+    let memberId: String
+    let query: String
+}
+
+struct SongScrollPosition: Equatable {
+    let anchorSongId: String?
+    let anchorOffset: CGFloat
+    let fallbackAbsoluteOffset: CGFloat
+    let visibleLimitAtCapture: Int
+    let queryKey: SongListQueryKey
+}
+
+@MainActor
+final class SongBrowseSessionStore: ObservableObject {
+    @Published var selectedGenerationId = "all"
+    @Published var selectedType = "all"
+    @Published var selectedLibraryId = "all"
+    @Published var selectedStatusId = "all"
+    @Published var selectedSortId = "publishedAt_desc"
+    @Published var selectedMemberId = "all"
+    @Published var query = ""
+    @Published var visibleLimit = IOSSongPagePolicy.pageSize
+    @Published var scrollPosition: SongScrollPosition?
+
+    var queryKey: SongListQueryKey {
+        SongListQueryKey(
+            generationId: selectedGenerationId,
+            type: selectedType,
+            libraryId: selectedLibraryId,
+            statusId: selectedStatusId,
+            sortId: selectedSortId,
+            memberId: selectedMemberId,
+            query: query
+        )
+    }
+
+    func resetForQueryChange() {
+        visibleLimit = IOSSongPagePolicy.pageSize
+        scrollPosition = nil
+    }
+}
+
 enum IOSSongPagePolicy {
     static let pageSize = 20
 
@@ -980,20 +1029,61 @@ enum IOSSongPagePolicy {
             display.subtitle.localizedCaseInsensitiveContains(query)
     }
 
-    static func pageCount(totalItems: Int, pageSize: Int = Self.pageSize) -> Int {
-        guard totalItems > 0 else { return 1 }
-        return ((totalItems - 1) / pageSize) + 1
+    static func clampedVisibleLimit(_ visibleLimit: Int, totalItems: Int, batchSize: Int = Self.pageSize) -> Int {
+        guard totalItems > 0 else { return 0 }
+        return min(max(visibleLimit, batchSize), totalItems)
     }
 
-    static func clampedPage(_ page: Int, totalItems: Int, pageSize: Int = Self.pageSize) -> Int {
-        min(max(page, 1), pageCount(totalItems: totalItems, pageSize: pageSize))
+    static func displayedItems(_ songs: [SongCatalogItem], visibleLimit: Int, batchSize: Int = Self.pageSize) -> [SongCatalogItem] {
+        Array(songs.prefix(clampedVisibleLimit(visibleLimit, totalItems: songs.count, batchSize: batchSize)))
     }
 
-    static func pageItems(_ songs: [SongCatalogItem], page: Int, pageSize: Int = Self.pageSize) -> [SongCatalogItem] {
-        let safePage = clampedPage(page, totalItems: songs.count, pageSize: pageSize)
-        let start = (safePage - 1) * pageSize
-        let end = min(start + pageSize, songs.count)
-        return Array(songs[start..<end])
+    static func displayedCount(visibleLimit: Int, totalItems: Int, batchSize: Int = Self.pageSize) -> Int {
+        clampedVisibleLimit(visibleLimit, totalItems: totalItems, batchSize: batchSize)
+    }
+
+    static func remainingCount(visibleLimit: Int, totalItems: Int, batchSize: Int = Self.pageSize) -> Int {
+        max(totalItems - displayedCount(visibleLimit: visibleLimit, totalItems: totalItems, batchSize: batchSize), 0)
+    }
+
+    static func canLoadMore(visibleLimit: Int, totalItems: Int, batchSize: Int = Self.pageSize) -> Bool {
+        remainingCount(visibleLimit: visibleLimit, totalItems: totalItems, batchSize: batchSize) > 0
+    }
+
+    static func nextVisibleLimit(visibleLimit: Int, totalItems: Int, batchSize: Int = Self.pageSize) -> Int {
+        min(displayedCount(visibleLimit: visibleLimit, totalItems: totalItems, batchSize: batchSize) + batchSize, totalItems)
+    }
+
+    static func progressText(displayedCount: Int, totalFilteredCount: Int, authoritative: Bool) -> String {
+        let totalText = NumberFormatter.localizedString(from: NSNumber(value: totalFilteredCount), number: .decimal)
+        if authoritative && displayedCount == totalFilteredCount { return "\(displayedCount) / \(totalText)곡 모두 표시" }
+        if authoritative { return "\(displayedCount) / \(totalText)곡 표시" }
+        return "\(displayedCount) / \(totalText)곡 이상 표시"
+    }
+
+    static func loadMoreText(remainingCount: Int, batchSize: Int = Self.pageSize) -> String {
+        "\(min(remainingCount, batchSize))곡 더 보기"
+    }
+
+    static func canRestoreScroll(_ position: SongScrollPosition?, queryKey: SongListQueryKey) -> Bool {
+        position?.queryKey == queryKey
+    }
+
+    static func restoredVisibleLimit(_ position: SongScrollPosition?, queryKey: SongListQueryKey, totalItems: Int) -> Int {
+        let requested = canRestoreScroll(position, queryKey: queryKey)
+            ? position?.visibleLimitAtCapture ?? pageSize
+            : pageSize
+        return clampedVisibleLimit(requested, totalItems: totalItems)
+    }
+
+    static func shouldShowScrollToTop(
+        absoluteOffset: CGFloat,
+        isLoading: Bool,
+        isEmpty: Bool,
+        isRestoring: Bool,
+        threshold: CGFloat = 240
+    ) -> Bool {
+        !isLoading && !isEmpty && !isRestoring && absoluteOffset > threshold
     }
 
     static func summaryCounts(for allSongs: [SongCatalogItem], filteredSongs: [SongCatalogItem]) -> SongFacetSummary {

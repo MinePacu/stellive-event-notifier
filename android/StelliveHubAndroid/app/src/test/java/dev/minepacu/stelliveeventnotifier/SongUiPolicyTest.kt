@@ -8,6 +8,8 @@ import dev.minepacu.stelliveeventnotifier.core.model.SongMemberSummary
 import dev.minepacu.stelliveeventnotifier.core.model.SongType
 import dev.minepacu.stelliveeventnotifier.core.model.YoutubePremiereMetadata
 import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
+import dev.minepacu.stelliveeventnotifier.feature.home.SongListQueryKey
+import dev.minepacu.stelliveeventnotifier.feature.home.SongScrollPosition
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -149,7 +151,7 @@ class SongUiPolicyTest {
     }
 
     @Test
-    fun songPaginationCalculatesPagesAndSlicesItems() {
+    fun songProgressiveExposureCalculatesCountsAndSlicesItems() {
         val songs = (1..45).map { index ->
             SongCatalogItem(
                 id = "video-$index",
@@ -160,12 +162,37 @@ class SongUiPolicyTest {
             )
         }
 
-        assertEquals(3, MainUiPolicy.songPageCount(totalItems = songs.size, pageSize = 20))
-        assertEquals((1..20).map { "video-$it" }, MainUiPolicy.songPageItems(songs, page = 1, pageSize = 20).map { it.id })
-        assertEquals((21..40).map { "video-$it" }, MainUiPolicy.songPageItems(songs, page = 2, pageSize = 20).map { it.id })
-        assertEquals((41..45).map { "video-$it" }, MainUiPolicy.songPageItems(songs, page = 3, pageSize = 20).map { it.id })
-        assertEquals(3, MainUiPolicy.coerceSongPage(page = 99, totalItems = songs.size, pageSize = 20))
-        assertEquals(1, MainUiPolicy.coerceSongPage(page = 0, totalItems = songs.size, pageSize = 20))
+        listOf(0, 1, 20, 21, 40, 45).forEach { total ->
+            assertEquals(minOf(20, total), MainUiPolicy.displayedSongCount(20, total))
+        }
+        assertEquals((1..20).map { "video-$it" }, MainUiPolicy.displayedSongItems(songs, 20).map { it.id })
+        assertEquals(40, MainUiPolicy.nextSongVisibleLimit(20, 45))
+        assertEquals(45, MainUiPolicy.nextSongVisibleLimit(40, 45))
+        assertEquals(5, MainUiPolicy.remainingSongCount(40, 45))
+        assertTrue(MainUiPolicy.canLoadMoreSongs(40, 45))
+        assertFalse(MainUiPolicy.canLoadMoreSongs(45, 45))
+        assertEquals(21, MainUiPolicy.coerceSongVisibleLimit(40, 21))
+        assertEquals("20 / 137곡 표시", MainUiPolicy.songProgressText(20, 137, authoritative = true))
+        assertEquals("137 / 137곡 모두 표시", MainUiPolicy.songProgressText(137, 137, authoritative = true))
+        assertEquals("20 / 1,000곡 이상 표시", MainUiPolicy.songProgressText(20, 1_000, authoritative = false))
+        assertEquals("20곡 더 보기", MainUiPolicy.songLoadMoreText(25))
+        assertEquals("7곡 더 보기", MainUiPolicy.songLoadMoreText(7))
+    }
+
+    @Test
+    fun songScrollSessionRestoresOnlyMatchingQueryAndControlsTopButton() {
+        val key = SongListQueryKey("all", "all", "all", "all", "all", "publishedAt_desc", "")
+        val changed = key.copy(query = "riko")
+        val position = SongScrollPosition("youtube:63", -12, 2_400, 80, key)
+
+        assertTrue(MainUiPolicy.canRestoreSongScroll(position, key))
+        assertFalse(MainUiPolicy.canRestoreSongScroll(position, changed))
+        assertEquals(45, MainUiPolicy.restoredSongVisibleLimit(position, key, totalItems = 45))
+        assertEquals(20, MainUiPolicy.restoredSongVisibleLimit(position, changed, totalItems = 45))
+        assertTrue(MainUiPolicy.shouldShowSongScrollToTop(241, false, false, false, 240))
+        assertFalse(MainUiPolicy.shouldShowSongScrollToTop(241, true, false, false, 240))
+        assertFalse(MainUiPolicy.shouldShowSongScrollToTop(241, false, true, false, 240))
+        assertFalse(MainUiPolicy.shouldShowSongScrollToTop(241, false, false, true, 240))
     }
 
     @Test
