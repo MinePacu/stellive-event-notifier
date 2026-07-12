@@ -738,6 +738,37 @@ final class SongUiPolicyTests: XCTestCase {
         XCTAssertTrue(IOSSongPagePolicy.canClearMemberFilter("neneko-mashiro"))
     }
 
+    func testMultiMemberPolicySupportsAnyAllParticipationLegacyAndDeduplication() {
+        let song = SongCatalogItem(
+            id: "collab", youtubeVideoId: "collab", title: "Collab", type: .cover,
+            members: [
+                .init(id: "a", nameKo: "A", nameEn: nil, role: "MAIN"),
+                .init(id: "a", nameKo: "A", nameEn: nil, role: "COLLAB"),
+                .init(id: "b", nameKo: "B", nameEn: nil, role: "UNKNOWN")
+            ], youtubeUrl: "https://www.youtube.com/watch?v=collab"
+        )
+        XCTAssertTrue(IOSSongPagePolicy.matchesMember(song, state: .init(selectedMemberIds: ["a", "missing"], matchMode: .any)))
+        XCTAssertFalse(IOSSongPagePolicy.matchesMember(song, state: .init(selectedMemberIds: ["a", "missing"], matchMode: .all)))
+        XCTAssertTrue(IOSSongPagePolicy.matchesMember(song, state: .init(participation: .collaboration)))
+        XCTAssertFalse(IOSSongPagePolicy.matchesMember(song, state: .init(participation: .solo)))
+        XCTAssertEqual(IOSSongPagePolicy.participantIds(song), ["a", "b"])
+        let legacy = SongCatalogItem(id: "legacy", youtubeVideoId: "legacy", title: "Legacy", type: .cover,
+                                     youtubeUrl: "https://www.youtube.com/watch?v=legacy", memberId: " legacy ")
+        XCTAssertEqual(IOSSongPagePolicy.participantIds(legacy), ["legacy"])
+    }
+
+    func testMemberStateNormalizesContradictionsMigratesAndMakesStableQueryKey() {
+        XCTAssertEqual(SongMemberFilterState(selectedMemberIds: ["a"], matchMode: .all).normalized().matchMode, .any)
+        XCTAssertEqual(SongMemberFilterState(selectedMemberIds: ["a", "b"], matchMode: .all, participation: .solo).normalized().matchMode, .any)
+        XCTAssertEqual(SongMemberFilterState.migrate(selectedMemberId: "a", validMemberIds: ["a", "b"]).selectedMemberIds, ["a"])
+        XCTAssertEqual(SongMemberFilterState.migrate(selectedMemberId: "unknown", validMemberIds: ["a", "b"]).selectedMemberIds, [])
+        let one = SongListQueryKey(generationId: "all", type: "all", libraryId: "all", statusId: "all", sortId: "publishedAt_desc",
+                                   selectedMemberIds: ["a", "b"], memberMatchMode: .all, participation: .any, query: "")
+        let two = SongListQueryKey(generationId: "all", type: "all", libraryId: "all", statusId: "all", sortId: "publishedAt_desc",
+                                   selectedMemberIds: ["b", "a"], memberMatchMode: .all, participation: .any, query: "")
+        XCTAssertEqual(one, two)
+    }
+
     func testSongThumbnailUsesSixteenByNineAspectRatio() {
         XCTAssertEqual(IOSSongPagePolicy.thumbnailAspectRatio, 16.0 / 9.0, accuracy: 0.001)
         XCTAssertEqual(

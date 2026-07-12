@@ -31,12 +31,19 @@ data class StatusSummaryItem(
 data class SongListQueryKey(
     val generationId: String,
     val type: String,
-    val memberId: String,
+    val selectedMemberIds: List<String>,
+    val memberMatchMode: SongMemberMatchMode,
+    val participation: SongParticipation,
     val libraryId: String,
     val statusId: String,
     val sortId: String,
     val query: String,
-)
+) {
+    constructor(generationId: String, type: String, memberId: String, libraryId: String, statusId: String, sortId: String, query: String) : this(
+        generationId, type, if (memberId.isBlank() || memberId == "all") emptyList() else listOf(memberId),
+        SongMemberMatchMode.ANY, SongParticipation.ANY, libraryId, statusId, sortId, query,
+    )
+}
 
 data class SongScrollPosition(
     val anchorSongId: String?,
@@ -306,26 +313,29 @@ object MainUiPolicy {
             .filter { it.generationId in setOf("gen1", "gen2", "gen3") }
             .map { SongFilterOption(it.id, it.koreanName.ifBlank { it.englishName }) }
 
-    fun songMatchesMember(song: SongCatalogItem, selectedMemberId: String): Boolean {
-        if (selectedMemberId == "all") return true
-        return song.members.any { it.id == selectedMemberId }
-    }
+    fun songMatchesMember(song: SongCatalogItem, state: SongMemberFilterState): Boolean =
+        SongMemberFilterPolicy.matches(song, state)
+
+    fun songMatchesMember(song: SongCatalogItem, selectedMemberId: String): Boolean =
+        songMatchesMember(song, SongMemberFilterState.migrate(selectedMemberId, setOf(selectedMemberId)))
+
+    fun songMemberFilterLabel(members: List<HubMember>, state: SongMemberFilterState): String =
+        SongMemberFilterPolicy.summary(members, state)
 
     fun songMemberFilterLabel(members: List<HubMember>, selectedMemberId: String): String =
-        if (selectedMemberId == "all") {
-            "전체"
-        } else {
-            members.firstOrNull { it.id == selectedMemberId }?.koreanName?.takeIf { it.isNotBlank() }
-                ?: selectedMemberId
-        }
+        if (selectedMemberId == "all") "전체" else members.firstOrNull { it.id == selectedMemberId }?.koreanName?.ifBlank { selectedMemberId } ?: selectedMemberId
 
-    fun canClearSongMemberFilter(selectedMemberId: String): Boolean = selectedMemberId != "all"
+    fun canClearSongMemberFilter(state: SongMemberFilterState): Boolean = state.normalized() != SongMemberFilterState()
+    fun canClearSongMemberFilter(selectedMemberId: String): Boolean = selectedMemberId.isNotBlank() && selectedMemberId != "all"
 
     fun songMemberFilterSummary(
         members: List<HubMember>,
-        selectedMemberId: String,
+        state: SongMemberFilterState,
         visibleCount: Int,
-    ): String = "${songMemberFilterLabel(members, selectedMemberId)} · ${visibleCount}곡"
+    ): String = "${songMemberFilterLabel(members, state)} · ${visibleCount}곡"
+
+    fun songMemberFilterSummary(members: List<HubMember>, selectedMemberId: String, visibleCount: Int): String =
+        "${songMemberFilterLabel(members, selectedMemberId)} · ${visibleCount}곡"
 
     fun normalizedSongQuery(query: String): String = query.trim()
 

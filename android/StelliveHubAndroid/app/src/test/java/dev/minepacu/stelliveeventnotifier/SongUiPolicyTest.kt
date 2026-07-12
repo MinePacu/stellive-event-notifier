@@ -10,6 +10,10 @@ import dev.minepacu.stelliveeventnotifier.core.model.YoutubePremiereMetadata
 import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
 import dev.minepacu.stelliveeventnotifier.feature.home.SongListQueryKey
 import dev.minepacu.stelliveeventnotifier.feature.home.SongScrollPosition
+import dev.minepacu.stelliveeventnotifier.feature.home.SongMemberFilterPolicy
+import dev.minepacu.stelliveeventnotifier.feature.home.SongMemberFilterState
+import dev.minepacu.stelliveeventnotifier.feature.home.SongMemberMatchMode
+import dev.minepacu.stelliveeventnotifier.feature.home.SongParticipation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -604,6 +608,30 @@ class SongUiPolicyTest {
         assertEquals("네네코 마시로", MainUiPolicy.songMemberFilterLabel(members, "neneko-mashiro"))
         assertFalse(MainUiPolicy.canClearSongMemberFilter("all"))
         assertTrue(MainUiPolicy.canClearSongMemberFilter("neneko-mashiro"))
+    }
+
+    @Test
+    fun multiMemberPolicySupportsAnyAllParticipationLegacyAndDeduplication() {
+        val song = SongCatalogItem("collab", "collab", "Collab", SongType.COVER, members = listOf(
+            SongMemberSummary(id = "a", nameKo = "A"), SongMemberSummary(id = "a", nameKo = "A"), SongMemberSummary(id = "b", nameKo = "B"),
+        ))
+        assertTrue(SongMemberFilterPolicy.matches(song, SongMemberFilterState(setOf("a", "missing"), SongMemberMatchMode.ANY)))
+        assertFalse(SongMemberFilterPolicy.matches(song, SongMemberFilterState(setOf("a", "missing"), SongMemberMatchMode.ALL)))
+        assertTrue(SongMemberFilterPolicy.matches(song, SongMemberFilterState(participation = SongParticipation.COLLABORATION)))
+        assertFalse(SongMemberFilterPolicy.matches(song, SongMemberFilterState(participation = SongParticipation.SOLO)))
+        assertEquals(setOf("a", "b"), SongMemberFilterPolicy.participantIds(song))
+        assertEquals(setOf("legacy"), SongMemberFilterPolicy.participantIds(SongCatalogItem("legacy", "legacy", "Legacy", SongType.COVER, memberId = " legacy ")))
+    }
+
+    @Test
+    fun memberStateNormalizesContradictionsMigratesAndMakesStableQueryKey() {
+        assertEquals(SongMemberMatchMode.ANY, SongMemberFilterState(setOf("a"), SongMemberMatchMode.ALL).normalized().matchMode)
+        assertEquals(SongMemberMatchMode.ANY, SongMemberFilterState(setOf("a", "b"), SongMemberMatchMode.ALL, SongParticipation.SOLO).normalized().matchMode)
+        assertEquals(setOf("a"), SongMemberFilterState.migrate("a", setOf("a", "b")).selectedMemberIds)
+        assertEquals(emptySet<String>(), SongMemberFilterState.migrate("unknown", setOf("a", "b")).selectedMemberIds)
+        val one = SongListQueryKey("all", "all", listOf("a", "b"), SongMemberMatchMode.ALL, SongParticipation.ANY, "all", "all", "publishedAt_desc", "")
+        val two = one.copy(selectedMemberIds = setOf("b", "a").sorted())
+        assertEquals(one, two)
     }
 
     @Test

@@ -592,6 +592,28 @@ struct SongFilterOption: Identifiable, Equatable {
     let label: String
 }
 
+enum SongMemberMatchMode: String, Codable, Hashable { case any, all }
+enum SongParticipation: String, Codable, Hashable { case any, solo, collaboration }
+
+struct SongMemberFilterState: Codable, Equatable, Hashable {
+    var selectedMemberIds: Set<String> = []
+    var matchMode: SongMemberMatchMode = .any
+    var participation: SongParticipation = .any
+
+    func normalized(validMemberIds: Set<String>? = nil) -> Self {
+        var copy = self
+        let ids = Set(selectedMemberIds.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+        copy.selectedMemberIds = validMemberIds.map { ids.intersection($0) } ?? ids
+        if copy.selectedMemberIds.count < 2 || copy.participation == .solo { copy.matchMode = .any }
+        return copy
+    }
+
+    static func migrate(selectedMemberId: String?, validMemberIds: Set<String>) -> Self {
+        let id = selectedMemberId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return Self(selectedMemberIds: !id.isEmpty && id != "all" && validMemberIds.contains(id) ? [id] : [])
+    }
+}
+
 enum SongIdentity {
     static func identifier(for song: SongCatalogItem) -> String? {
         let videoId = song.youtubeVideoId.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -607,8 +629,20 @@ struct SongListQueryKey: Equatable {
     let libraryId: String
     let statusId: String
     let sortId: String
-    let memberId: String
+    let selectedMemberIds: [String]
+    let memberMatchMode: SongMemberMatchMode
+    let participation: SongParticipation
     let query: String
+
+    init(generationId: String, type: String, libraryId: String, statusId: String, sortId: String, selectedMemberIds: [String], memberMatchMode: SongMemberMatchMode, participation: SongParticipation, query: String) {
+        self.generationId = generationId; self.type = type; self.libraryId = libraryId; self.statusId = statusId; self.sortId = sortId
+        self.selectedMemberIds = selectedMemberIds.sorted(); self.memberMatchMode = memberMatchMode; self.participation = participation; self.query = query
+    }
+
+    init(generationId: String, type: String, libraryId: String, statusId: String, sortId: String, memberId: String, query: String) {
+        self.init(generationId: generationId, type: type, libraryId: libraryId, statusId: statusId, sortId: sortId,
+                  selectedMemberIds: memberId.isEmpty || memberId == "all" ? [] : [memberId], memberMatchMode: .any, participation: .any, query: query)
+    }
 }
 
 struct SongScrollPosition: Equatable {
@@ -626,7 +660,7 @@ final class SongBrowseSessionStore: ObservableObject {
     @Published var selectedLibraryId = "all"
     @Published var selectedStatusId = "all"
     @Published var selectedSortId = "publishedAt_desc"
-    @Published var selectedMemberId = "all"
+    @Published var memberFilter = SongMemberFilterState()
     @Published var query = ""
     @Published var visibleLimit = IOSSongPagePolicy.pageSize
     @Published var scrollPosition: SongScrollPosition?
@@ -638,7 +672,9 @@ final class SongBrowseSessionStore: ObservableObject {
             libraryId: selectedLibraryId,
             statusId: selectedStatusId,
             sortId: selectedSortId,
-            memberId: selectedMemberId,
+            selectedMemberIds: memberFilter.selectedMemberIds.sorted(),
+            memberMatchMode: memberFilter.normalized().matchMode,
+            participation: memberFilter.participation,
             query: query
         )
     }
@@ -708,13 +744,64 @@ enum IOSSongPagePolicy {
     }()
 
     static func memberFilters(from members: [HubMember]) -> [SongFilterOption] {
-        [SongFilterOption(id: "all", label: "전체")] + members
+        members
             .filter { $0.catalogRole == .member && ["gen1", "gen2", "gen3"].contains($0.generationId) }
             .map { SongFilterOption(id: $0.id, label: $0.koreanName.isEmpty ? $0.englishName : $0.koreanName) }
     }
 
+    static func participantIds(_ song: SongCatalogItem) -> Set<String> {
+        let linked = Set(song.members.map { $0.id.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+        if !linked.isEmpty { return linked }
+        let legacy = song.memberId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return legacy.isEmpty ? [] : [legacy]
+    }
+
+    static func matchesMember(_ song: SongCatalogItem, state rawState: SongMemberFilterState) -> Bool {
+        let state = rawState.normalized()
+        let participants = participantIds(song)
+        let memberMatches = state.selectedMemberIds.isEmpty || (state.matchMode == .any
+            ? !state.selectedMemberIds.isDisjoint(with: participants)
+            : state.selectedMemberIds.isSubset(of: participants))
+        let participationMatches: Bool
+        switch state.participation {
+        case .any: participationMatches = true
+        case .solo: participationMatches = participants.count == 1
+        case .collaboration: participationMatches = participants.count >= 2
+        }
+        return memberMatches && participationMatches
+    }
+
     static func matchesMember(_ song: SongCatalogItem, selectedMemberId: String) -> Bool {
-        selectedMemberId == "all" || song.members.contains { $0.id == selectedMemberId }
+        matchesMember(song, state: .migrate(selectedMemberId: selectedMemberId, validMemberIds: [selectedMemberId]))
+    }
+
+    static func generationMemberIds(_ members: [HubMember], generationId: String) -> Set<String> {
+        Set(memberFilters(from: members).compactMap { option in members.first(where: { $0.id == option.id && $0.generationId == generationId })?.id })
+    }
+
+    static func generationPreset(_ members: [HubMember], generationId: String) -> SongMemberFilterState {
+        SongMemberFilterState(selectedMemberIds: generationMemberIds(members, generationId: generationId), matchMode: .all).normalized()
+    }
+
+    static func generationPresetLabel(_ members: [HubMember], state: SongMemberFilterState) -> String? {
+        for (id, label) in [("gen1", "1기생"), ("gen2", "2기생"), ("gen3", "3기생")] {
+            let ids = generationMemberIds(members, generationId: id)
+            if !ids.isEmpty && ids == state.normalized().selectedMemberIds { return "\(label) 전원 참여" }
+        }
+        return nil
+    }
+
+    static func memberFilterLabel(from members: [HubMember], state rawState: SongMemberFilterState) -> String {
+        let state = rawState.normalized()
+        if let preset = generationPresetLabel(members, state: state) {
+            if state.participation == .any { return preset }
+            return preset + (state.participation == .solo ? " · 솔로" : " · 콜라보")
+        }
+        if state.selectedMemberIds.isEmpty && state.participation == .any { return "멤버 전체" }
+        var text = state.selectedMemberIds.isEmpty ? "멤버 전체" : "선택 \(state.selectedMemberIds.count)명"
+        if state.selectedMemberIds.count >= 2 { text += state.matchMode == .all ? " · 모두 참여" : " · 한 명 이상" }
+        if state.participation != .any { text += state.participation == .solo ? " · 솔로" : " · 콜라보" }
+        return text
     }
 
     static func memberFilterLabel(from members: [HubMember], selectedMemberId: String) -> String {
@@ -723,8 +810,20 @@ enum IOSSongPagePolicy {
         return name.isEmpty ? selectedMemberId : name
     }
 
-    static func canClearMemberFilter(_ selectedMemberId: String) -> Bool {
-        selectedMemberId != "all"
+    static func canClearMemberFilter(_ state: SongMemberFilterState) -> Bool {
+        state.normalized() != SongMemberFilterState()
+    }
+
+    static func canClearMemberFilter(_ selectedMemberId: String) -> Bool { !selectedMemberId.isEmpty && selectedMemberId != "all" }
+
+    static func memberFilterEmptyMessage(from members: [HubMember], state rawState: SongMemberFilterState) -> String {
+        let state = rawState.normalized()
+        if generationPresetLabel(members, state: state) != nil { return "선택한 기수 전원이 참여한 노래가 없습니다." }
+        if state.participation == .solo { return "조건에 맞는 솔로곡이 없습니다." }
+        if state.participation == .collaboration { return "조건에 맞는 콜라보곡이 없습니다." }
+        return state.matchMode == .all && state.selectedMemberIds.count >= 2
+            ? "선택한 멤버가 모두 참여한 노래가 없습니다."
+            : "선택한 멤버 중 한 명 이상 참여한 노래가 없습니다."
     }
 
     static func displayText(for song: SongCatalogItem, catalogMembers: [HubMember] = []) -> SongDisplayText {

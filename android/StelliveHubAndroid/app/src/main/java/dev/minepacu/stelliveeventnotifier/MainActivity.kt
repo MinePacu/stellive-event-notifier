@@ -27,6 +27,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
@@ -90,6 +91,11 @@ import dev.minepacu.stelliveeventnotifier.core.network.HubApiClient
 import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
 import dev.minepacu.stelliveeventnotifier.feature.home.SongListQueryKey
 import dev.minepacu.stelliveeventnotifier.feature.home.SongScrollPosition
+import dev.minepacu.stelliveeventnotifier.feature.home.SongFilterOption
+import dev.minepacu.stelliveeventnotifier.feature.home.SongMemberFilterPolicy
+import dev.minepacu.stelliveeventnotifier.feature.home.SongMemberFilterState
+import dev.minepacu.stelliveeventnotifier.feature.home.SongMemberMatchMode
+import dev.minepacu.stelliveeventnotifier.feature.home.SongParticipation
 import dev.minepacu.stelliveeventnotifier.feature.home.MainNavigationHistory
 import dev.minepacu.stelliveeventnotifier.feature.home.MockHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.home.ServerHubRepository
@@ -178,7 +184,7 @@ internal class SongBrowseSessionViewModel : ViewModel() {
     var libraryId = "all"
     var statusId = "all"
     var sortId = "publishedAt_desc"
-    var memberId = "all"
+    var memberFilter = SongMemberFilterState()
     var query = ""
     var visibleLimit = MainUiPolicy.SONG_PAGE_SIZE
     val positions: MutableMap<String, SongScrollPosition> = mutableMapOf()
@@ -246,9 +252,10 @@ private var activeSongListContainer: LinearLayout? = null
 private var activeSongScrollSlot: SongScrollSlot? = null
 private var isRestoringSongScrollPosition = false
 private lateinit var songScrollToTopButton: ImageButton
-private var selectedSongMemberId: String
-    get() = songBrowseSession.memberId
-    set(value) { songBrowseSession.memberId = value }
+private var selectedSongMemberFilter: SongMemberFilterState
+    get() = songBrowseSession.memberFilter
+    set(value) { songBrowseSession.memberFilter = value.normalized() }
+private var selectedSongMemberFilterDraft: SongMemberFilterState? = null
 private val songSearchHandler = Handler(Looper.getMainLooper())
 private var pendingSongSearchRender: Runnable? = null
 private var cachedSongItems: List<SongCatalogItem> = emptyList()
@@ -840,7 +847,9 @@ private fun startScreen(screenId: String, title: String, role: String) {
     private fun currentSongQueryKey(): SongListQueryKey = SongListQueryKey(
         generationId = selectedSongGenerationId,
         type = selectedSongType,
-        memberId = selectedSongMemberId,
+        selectedMemberIds = selectedSongMemberFilter.selectedMemberIds.sorted(),
+        memberMatchMode = selectedSongMemberFilter.matchMode,
+        participation = selectedSongMemberFilter.participation,
         libraryId = selectedSongLibraryId,
         statusId = selectedSongStatusId,
         sortId = selectedSongSortId,
@@ -1567,7 +1576,7 @@ private fun renderSongs() {
             songItems.filter { song ->
                 MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
                     (selectedSongType == "all" || song.type.apiValue == selectedSongType) &&
-                    MainUiPolicy.songMatchesMember(song, selectedSongMemberId) &&
+                    MainUiPolicy.songMatchesMember(song, selectedSongMemberFilter) &&
                     MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers) &&
                     MainUiPolicy.songMatchesLibrary(song, selectedSongLibraryId, songFavoriteIds) &&
                     (selectedSongStatusId != "new" || SongDiscoveryPolicy.isNew(song, songDiscoveryState))
@@ -1658,7 +1667,7 @@ private fun renderSongs() {
                 }
             } else if (selectedSongLibraryId == "favorites") {
                 MainUiPolicy.songFavoriteEmptyMessage(songFavoriteIds.isNotEmpty())
-            } else "표시할 노래가 없습니다. 필터를 바꾸거나 나중에 다시 확인해 주세요."
+            } else SongMemberFilterPolicy.emptyMessage(state.catalogMembers, selectedSongMemberFilter)
             container.addView(noticeCard(message))
             return
         }
@@ -1759,9 +1768,11 @@ private fun renderSongs() {
         }
     }
 
-private fun setSelectedSongMember(memberId: String) {
-selectedSongMemberId = memberId
-resetSongBrowseForQueryChange()
+private fun applySongMemberFilter(state: SongMemberFilterState) {
+    val normalized = state.normalized(SongMemberFilterPolicy.selectableMembers(serverMembers ?: repository.members).map { it.id }.toSet())
+    if (normalized == selectedSongMemberFilter) return
+    selectedSongMemberFilter = normalized
+    resetSongBrowseForQueryChange()
 }
 
 private fun resetSongBrowseForQueryChange() {
@@ -1874,7 +1885,7 @@ private fun songFilterPanel(): MaterialCardView =
             })
             if (SongsPanePolicy.memberSelectionMode(currentAdaptiveSpec) == SongMemberSelectionMode.NAVIGATE_TO_MEMBER_FILTER) {
                 addView(divider())
-                addView(songSelectorRow("멤버", MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberId), accentValue = false) {
+                addView(songSelectorRow("멤버", MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberFilter), accentValue = false) {
                     navigateTo(HubScreen.SONG_MEMBER_FILTER, addToBackStack = true)
                 })
             }
@@ -1901,25 +1912,19 @@ private fun songInlineMemberFilterPanel(visibleCount: Int): MaterialCardView =
                 typeface = Typeface.DEFAULT_BOLD
             })
             addView(TextView(context).apply {
-                text = MainUiPolicy.songMemberFilterSummary(members, selectedSongMemberId, visibleCount)
+                text = MainUiPolicy.songMemberFilterSummary(members, selectedSongMemberFilter, visibleCount)
                 setTextColor(color(R.color.hub_text_muted))
                 textSize = 12f
                 setPadding(0, dp(4), 0, dp(8))
             })
-            MainUiPolicy.songMemberFilters(members).forEach { option ->
-                addView(
-                    songMemberFilterOptionCard(
-                        option = option,
-                        member = memberById[option.id],
-                        selected = option.id == selectedSongMemberId,
-                    ).apply {
-                        setOnClickListener {
-                            setSelectedSongMember(option.id)
-                            renderSongs()
-                        }
-                    }
-                )
-            }
+            addView(TextView(context).apply {
+                text = "상세 조건 편집 ›"
+                setPadding(0, dp(10), 0, dp(10))
+                isClickable = true
+                isFocusable = true
+                contentDescription = "멤버 필터 상세 조건 편집"
+                setOnClickListener { navigateTo(HubScreen.SONG_MEMBER_FILTER, addToBackStack = true) }
+            })
         })
     }
 
@@ -2118,7 +2123,7 @@ private fun songMemberFilterCard(members: List<HubMember>, visibleCount: Int): M
                     typeface = Typeface.DEFAULT_BOLD
                 })
                 addView(TextView(context).apply {
-                    text = MainUiPolicy.songMemberFilterSummary(members, selectedSongMemberId, visibleCount)
+                    text = MainUiPolicy.songMemberFilterSummary(members, selectedSongMemberFilter, visibleCount)
                     setTextColor(color(R.color.hub_text_muted))
                     textSize = 12f
                     setPadding(0, dp(4), 0, 0)
@@ -2127,7 +2132,7 @@ private fun songMemberFilterCard(members: List<HubMember>, visibleCount: Int): M
                 marginEnd = dp(12)
             })
             addView(TextView(context).apply {
-                text = MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberId) + " ›"
+                text = MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberFilter) + " ›"
                 gravity = Gravity.CENTER
                 maxLines = 1
                 setTextColor(color(R.color.hub_text))
@@ -2145,30 +2150,46 @@ private fun songMemberFilterCard(members: List<HubMember>, visibleCount: Int): M
 
 private fun renderSongMemberFilter() {
     val members = serverMembers ?: repository.members
-    val memberById = members.associateBy { it.id }
+    val selectable = SongMemberFilterPolicy.selectableMembers(members)
+    var draft = selectedSongMemberFilterDraft ?: selectedSongMemberFilter.also { selectedSongMemberFilterDraft = it }
     startScreen(
         screenId = "song_member_filter",
         title = "노래 멤버 선택",
         role = "노래 목록을 멤버별로 좁혀 봅니다"
     )
-    MainUiPolicy.songMemberFilters(members).forEach { option ->
-        binding.contentList.addView(
-            songMemberFilterOptionCard(
-                option = option,
-                member = memberById[option.id],
-                selected = option.id == selectedSongMemberId,
-            ).apply {
-                isClickable = true
-                isFocusable = true
-                setOnClickListener {
-                    setSelectedSongMember(option.id)
-                    navigationHistory.goBack()
-                    renderScreen(navigationHistory.currentScreen)
-                    updateNavigationChrome()
-                }
-            }
-        )
+    fun rerender() = renderSongMemberFilter()
+    binding.contentList.addView(TextView(this).apply { text = SongMemberFilterPolicy.summary(members, draft); contentDescription = "현재 조건, $text" })
+    binding.contentList.addView(songSegmentedRow(listOf(SongFilterOption("ANY", "한 명 이상"), SongFilterOption("ALL", "모두 참여")), draft.matchMode.name) {
+        draft = draft.copy(matchMode = SongMemberMatchMode.valueOf(it)).normalized(); selectedSongMemberFilterDraft = draft; rerender()
+    }.apply { isEnabled = draft.selectedMemberIds.size >= 2 && draft.participation != SongParticipation.SOLO; contentDescription = if (isEnabled) "멤버 일치 방식" else "멤버 두 명 이상 선택 시 사용 가능" })
+    binding.contentList.addView(songSegmentedRow(listOf(SongFilterOption("ANY", "전체"), SongFilterOption("SOLO", "솔로"), SongFilterOption("COLLABORATION", "콜라보")), draft.participation.name) {
+        draft = draft.copy(participation = SongParticipation.valueOf(it)).normalized(); selectedSongMemberFilterDraft = draft; rerender()
+    })
+    binding.contentList.addView(TextView(this).apply {
+        text = "솔로·콜라보는 연결된 스텔라이브 멤버 수 기준이며 외부 가수는 계산에 포함되지 않습니다."
+        contentDescription = text
+    })
+    listOf("gen1" to "1기생 전원", "gen2" to "2기생 전원", "gen3" to "3기생 전원").forEach { (id, label) ->
+        binding.contentList.addView(Button(this).apply { text = label; setOnClickListener { selectedSongMemberFilterDraft = SongMemberFilterPolicy.generationPreset(members, id); rerender() } })
     }
+    selectable.groupBy { it.generationId }.forEach { (generationId, generationMembers) ->
+        binding.contentList.addView(TextView(this).apply { text = when (generationId) { "gen1" -> "1기생"; "gen2" -> "2기생"; else -> "3기생" }; typeface = Typeface.DEFAULT_BOLD })
+        generationMembers.forEach { member ->
+        binding.contentList.addView(Button(this).apply {
+            val checked = member.id in draft.selectedMemberIds
+            text = "${if (checked) "✓ " else ""}${member.koreanName.ifBlank { member.englishName }}"
+            contentDescription = "$text, ${if (checked) "선택됨" else "선택 안 됨"}"
+            setOnClickListener {
+                val ids = draft.selectedMemberIds.toMutableSet().apply { if (!add(member.id)) remove(member.id) }
+                selectedSongMemberFilterDraft = draft.copy(selectedMemberIds = ids).normalized(); rerender()
+            }
+        })
+    } }
+    binding.contentList.addView(Button(this).apply { text = "멤버 조건 초기화"; setOnClickListener { selectedSongMemberFilterDraft = SongMemberFilterState(); rerender() } })
+    binding.contentList.addView(Button(this).apply {
+        text = "적용"; contentDescription = "멤버 조건 적용"
+        setOnClickListener { applySongMemberFilter(draft); selectedSongMemberFilterDraft = null; navigationHistory.goBack(); renderScreen(navigationHistory.currentScreen); updateNavigationChrome() }
+    })
 }
 
 private fun songMemberFilterOptionCard(

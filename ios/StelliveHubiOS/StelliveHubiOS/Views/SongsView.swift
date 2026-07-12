@@ -36,7 +36,7 @@ struct SongsView: View {
     @State private var selectedLibraryId = "all"
     @State private var selectedStatusId = "all"
     @State private var selectedSortId = "publishedAt_desc"
-    @State private var selectedMemberId = "all"
+    @State private var memberFilter = SongMemberFilterState()
     @State private var query = ""
     @State private var visibleLimit = IOSSongPagePolicy.pageSize
     @State private var isLoadingMore = false
@@ -56,7 +56,7 @@ struct SongsView: View {
             query: ""
         ).items.filter {
             IOSSongPagePolicy.matchesGeneration($0, selectedGenerationId: selectedGenerationId, memberGenerationById: memberGenerationById) &&
-                IOSSongPagePolicy.matchesMember($0, selectedMemberId: selectedMemberId) &&
+                IOSSongPagePolicy.matchesMember($0, state: memberFilter) &&
                 IOSSongPagePolicy.matchesQuery($0, query: query, catalogMembers: store.members) &&
                 IOSSongPagePolicy.matchesLibrary($0, selectedLibraryId: selectedLibraryId, favorites: favoritesStore.identifiers)
                 && (selectedStatusId != "new" || discoveryStore.isNew($0))
@@ -71,7 +71,9 @@ struct SongsView: View {
             libraryId: selectedLibraryId,
             statusId: selectedStatusId,
             sortId: selectedSortId,
-            memberId: selectedMemberId,
+            selectedMemberIds: memberFilter.selectedMemberIds.sorted(),
+            memberMatchMode: memberFilter.normalized().matchMode,
+            participation: memberFilter.participation,
             query: query
         )
     }
@@ -148,24 +150,21 @@ struct SongsView: View {
 
             NavigationLink {
                 SongMemberFilterView(
-                    filters: IOSSongPagePolicy.memberFilters(from: store.members),
                     members: store.members,
-                    selectedMemberId: $selectedMemberId,
-                    visibleLimit: $visibleLimit
+                    appliedState: $memberFilter
                 )
             } label: {
                 HStack {
                     Text("멤버")
                     Spacer()
-                    Text(IOSSongPagePolicy.memberFilterLabel(from: store.members, selectedMemberId: selectedMemberId))
+                    Text(IOSSongPagePolicy.memberFilterLabel(from: store.members, state: memberFilter))
                         .foregroundStyle(.secondary)
                 }
             }
 
-            if IOSSongPagePolicy.canClearMemberFilter(selectedMemberId) {
-                Button("전체로 보기") {
-                    selectedMemberId = "all"
-                    visibleLimit = IOSSongPagePolicy.pageSize
+            if IOSSongPagePolicy.canClearMemberFilter(memberFilter) {
+                Button("멤버 조건 초기화") {
+                    memberFilter = SongMemberFilterState()
                 }
             }
 
@@ -312,7 +311,7 @@ struct SongsView: View {
         browseSession.selectedLibraryId = selectedLibraryId
         browseSession.selectedStatusId = selectedStatusId
         browseSession.selectedSortId = selectedSortId
-        browseSession.selectedMemberId = selectedMemberId
+        browseSession.memberFilter = memberFilter.normalized()
         browseSession.query = query
         browseSession.visibleLimit = visibleLimit
     }
@@ -326,7 +325,7 @@ struct SongsView: View {
         selectedLibraryId = browseSession.selectedLibraryId
         selectedStatusId = browseSession.selectedStatusId
         selectedSortId = browseSession.selectedSortId
-        selectedMemberId = browseSession.selectedMemberId
+        memberFilter = browseSession.memberFilter
         query = browseSession.query
         visibleLimit = browseSession.visibleLimit
         isApplyingSession = false
@@ -386,9 +385,8 @@ struct SongsView: View {
             if !serverStore.serverSongs.contains(where: discoveryStore.isNew) { return "새로 추가된 노래가 없습니다." }
             return "현재 필터 조건에 맞는 새 노래가 없습니다."
         }
-        return selectedLibraryId == "favorites"
-            ? IOSSongPagePolicy.favoriteEmptyMessage(hasStoredFavorites: !favoritesStore.identifiers.isEmpty)
-            : "표시할 노래 없음"
+        if selectedLibraryId == "favorites" { return IOSSongPagePolicy.favoriteEmptyMessage(hasStoredFavorites: !favoritesStore.identifiers.isEmpty) }
+        return IOSSongPagePolicy.memberFilterEmptyMessage(from: store.members, state: memberFilter)
     }
 
     private var songLoadMoreControl: some View {
@@ -515,55 +513,73 @@ struct SongRow: View {
 }
 
 private struct SongMemberFilterView: View {
-    let filters: [SongFilterOption]
     let members: [HubMember]
-    @Binding var selectedMemberId: String
-    @Binding var visibleLimit: Int
+    @Binding var appliedState: SongMemberFilterState
+    @State private var draft: SongMemberFilterState
     @Environment(\.dismiss) private var dismiss
 
-    private var memberById: [String: HubMember] {
-        Dictionary(uniqueKeysWithValues: members.map { ($0.id, $0) })
+    init(members: [HubMember], appliedState: Binding<SongMemberFilterState>) {
+        self.members = members
+        self._appliedState = appliedState
+        self._draft = State(initialValue: appliedState.wrappedValue)
     }
 
     var body: some View {
-        List(filters) { filter in
-            Button {
-                selectedMemberId = filter.id
-                visibleLimit = IOSSongPagePolicy.pageSize
-                dismiss()
-            } label: {
-                HStack(spacing: 12) {
-                    if let member = memberById[filter.id] {
-                        MemberAvatarView(member: member, size: 42, source: .youtubeProfile)
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(filter.label)
-                            .foregroundStyle(.primary)
-                        Text(selectedMemberId == filter.id ? "현재 적용 중" : "탭해서 선택")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    if selectedMemberId == filter.id {
-                        Text("선택됨")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule(style: .continuous)
-                                    .fill(Color(.tertiarySystemGroupedBackground))
-                            )
+        List {
+            Section("현재 조건") {
+                Text(IOSSongPagePolicy.memberFilterLabel(from: members, state: draft))
+                    .accessibilityLabel("현재 조건, \(IOSSongPagePolicy.memberFilterLabel(from: members, state: draft))")
+            }
+            Section("일치 방식") {
+                Picker("선택 멤버", selection: Binding(get: { draft.matchMode }, set: { draft.matchMode = $0; normalizeDraft() })) {
+                    Text("한 명 이상").tag(SongMemberMatchMode.any)
+                    Text("모두 참여").tag(SongMemberMatchMode.all)
+                }
+                .pickerStyle(.segmented)
+                .disabled(draft.selectedMemberIds.count < 2 || draft.participation == .solo)
+                .accessibilityHint(draft.participation == .solo ? "솔로에서는 모두 참여를 사용할 수 없습니다" : "멤버 두 명 이상 선택 시 사용할 수 있습니다")
+                Picker("참여 형태", selection: Binding(get: { draft.participation }, set: { draft.participation = $0; normalizeDraft() })) {
+                    Text("전체").tag(SongParticipation.any)
+                    Text("솔로").tag(SongParticipation.solo)
+                    Text("콜라보").tag(SongParticipation.collaboration)
+                }.pickerStyle(.segmented)
+                Text("솔로·콜라보는 연결된 스텔라이브 멤버 수 기준이며 외부 가수는 계산에 포함되지 않습니다.").font(.caption).foregroundStyle(.secondary)
+            }
+            Section("빠른 선택") {
+                ForEach([("gen1", "1기생 전원"), ("gen2", "2기생 전원"), ("gen3", "3기생 전원")], id: \.0) { id, label in
+                    Button(label) { draft = IOSSongPagePolicy.generationPreset(members, generationId: id) }
+                }
+            }
+            ForEach([("gen1", "1기생"), ("gen2", "2기생"), ("gen3", "3기생")], id: \.0) { generationId, title in
+                Section(title) {
+                    ForEach(IOSSongPagePolicy.memberFilters(from: members).filter { option in
+                        members.first(where: { $0.id == option.id })?.generationId == generationId
+                    }) { filter in
+                        Button {
+                            if !draft.selectedMemberIds.insert(filter.id).inserted { draft.selectedMemberIds.remove(filter.id) }
+                            normalizeDraft()
+                        } label: {
+                            HStack {
+                                Text(filter.label).foregroundStyle(.primary)
+                                Spacer()
+                                if draft.selectedMemberIds.contains(filter.id) { Image(systemName: "checkmark").accessibilityHidden(true) }
+                            }
+                        }
+                        .accessibilityLabel("\(filter.label), \(draft.selectedMemberIds.contains(filter.id) ? "선택됨" : "선택 안 됨")")
                     }
                 }
             }
-            .buttonStyle(.plain)
+            Section {
+                Button("멤버 조건 초기화") { draft = SongMemberFilterState() }
+                Button("적용") { appliedState = draft.normalized(); dismiss() }
+                    .fontWeight(.semibold)
+                    .accessibilityHint("편집한 멤버 조건을 노래 목록에 한 번 적용합니다")
+            }
         }
         .navigationTitle("노래 멤버 선택")
     }
+
+    private func normalizeDraft() { draft = draft.normalized() }
 }
 
 private struct SongThumbnailView: View {
