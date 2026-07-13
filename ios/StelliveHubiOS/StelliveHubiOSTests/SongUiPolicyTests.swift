@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import StelliveHubiOS
 
 @MainActor
@@ -874,6 +875,103 @@ final class SongUiPolicyTests: XCTestCase {
             IOSSongPagePolicy.recentSongs(songs, limit: 3).map(\.id),
             IOSSongPagePolicy.sortedSongs(songs, sortId: "publishedAt_desc").prefix(3).map(\.id)
         )
+    }
+
+    func testBrowseSessionSkipsEqualFiltersAndKeepsScrollNonObservable() {
+        let session = SongBrowseSessionStore()
+        var changeCount = 0
+        let cancellable = session.objectWillChange.sink { changeCount += 1 }
+
+        XCTAssertFalse(session.saveFilters(session.snapshot))
+        XCTAssertEqual(changeCount, 0)
+
+        var changed = session.snapshot
+        changed.query = "리코"
+        XCTAssertTrue(session.saveFilters(changed))
+        XCTAssertEqual(changeCount, 1)
+
+        let position = SongScrollPosition(
+            anchorSongId: "youtube:AbCdEf123_-",
+            anchorOffset: 0,
+            fallbackAbsoluteOffset: 241,
+            visibleLimitAtCapture: 20,
+            queryKey: changed.queryKey
+        )
+        XCTAssertTrue(session.saveScrollPosition(position))
+        XCTAssertFalse(session.saveScrollPosition(position))
+        XCTAssertEqual(changeCount, 1)
+        withExtendedLifetime(cancellable) {}
+    }
+
+    func testDerivedSongStateFiltersSortsAndReusesDisplayRows() {
+        let older = SongCatalogItem(
+            id: "older", youtubeVideoId: "AbCdEf123_-", title: "Older | Member A Cover", type: .cover,
+            publishedAt: Date(timeIntervalSince1970: 100),
+            catalogAddedAt: Date(timeIntervalSince1970: 200),
+            youtubeUrl: "https://www.youtube.com/watch?v=AbCdEf123_-"
+        )
+        let newer = SongCatalogItem(
+            id: "newer", youtubeVideoId: "ZyXwVu987_-", title: "Newer | Member B", type: .original,
+            publishedAt: Date(timeIntervalSince1970: 300),
+            catalogAddedAt: Date(timeIntervalSince1970: 120),
+            youtubeUrl: "https://www.youtube.com/watch?v=ZyXwVu987_-"
+        )
+        let discovery = SongDiscoveryStateV1(
+            initialized: true,
+            baselineAt: Date(timeIntervalSince1970: 150),
+            acknowledgedIds: []
+        )
+        let key = SongListQueryKey(
+            generationId: "all",
+            type: "cover",
+            libraryId: "favorites",
+            statusId: "new",
+            sortId: "publishedAt_desc",
+            selectedMemberIds: [],
+            memberMatchMode: .any,
+            participation: .any,
+            query: "older"
+        )
+        let state = SongsDerivedState.make(input: SongsDerivationInput(
+            songs: [newer, older],
+            catalogMembers: [],
+            queryKey: key,
+            favoriteIdentifiers: ["youtube:AbCdEf123_-"],
+            discoveryState: discovery,
+            visibleLimit: 20
+        ))
+
+        XCTAssertEqual(state.summary, SongFacetSummary(total: 2, original: 1, cover: 1))
+        XCTAssertEqual(state.filteredSongs.map(\.id), ["older"])
+        XCTAssertEqual(state.displayedCount, 1)
+        XCTAssertEqual(state.remainingCount, 0)
+        XCTAssertEqual(state.newSongCount, 1)
+        XCTAssertEqual(state.displayedRows[0].title, "Older")
+        XCTAssertEqual(state.displayedRows[0].tags.map(\.text), ["커버", "NEW"])
+        XCTAssertTrue(state.displayedRows[0].isFavorite)
+        XCTAssertEqual(state.displayedRows[0].videoURL?.absoluteString, "https://www.youtube.com/watch?v=AbCdEf123_-")
+    }
+
+    func testSongMetadataFlowLayoutWrapsUsingCachedMeasurements() {
+        let result = SongMetadataFlowLayout.layout(
+            sizes: [CGSize(width: 40, height: 20), CGSize(width: 50, height: 24), CGSize(width: 30, height: 18)],
+            width: 100,
+            spacing: 6
+        )
+
+        XCTAssertEqual(result.origins, [CGPoint(x: 0, y: 0), CGPoint(x: 46, y: 0), CGPoint(x: 0, y: 30)])
+        XCTAssertEqual(result.size, CGSize(width: 96, height: 48))
+    }
+
+    func testThumbnailCandidatesAdvanceOncePerFailure() {
+        var state = SongThumbnailCandidateState()
+        XCTAssertEqual(state.index, 0)
+        XCTAssertTrue(state.advance(urlCount: 3))
+        XCTAssertEqual(state.index, 1)
+        XCTAssertTrue(state.advance(urlCount: 3))
+        XCTAssertEqual(state.index, 2)
+        XCTAssertFalse(state.advance(urlCount: 3))
+        XCTAssertEqual(state.index, 2)
     }
 
     private func songMember(

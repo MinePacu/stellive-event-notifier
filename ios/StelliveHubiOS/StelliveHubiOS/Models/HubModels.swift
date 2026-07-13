@@ -678,7 +678,7 @@ enum SongIdentity {
     }
 }
 
-struct SongListQueryKey: Equatable {
+struct SongListQueryKey: Equatable, Hashable {
     let generationId: String
     let type: String
     let libraryId: String
@@ -700,7 +700,7 @@ struct SongListQueryKey: Equatable {
     }
 }
 
-struct SongScrollPosition: Equatable {
+struct SongScrollPosition: Equatable, Hashable {
     let anchorSongId: String?
     let anchorOffset: CGFloat
     let fallbackAbsoluteOffset: CGFloat
@@ -708,21 +708,19 @@ struct SongScrollPosition: Equatable {
     let queryKey: SongListQueryKey
 }
 
-@MainActor
-final class SongBrowseSessionStore: ObservableObject {
-    @Published var selectedGenerationId = "all"
-    @Published var selectedType = "all"
-    @Published var selectedLibraryId = "all"
-    @Published var selectedStatusId = "all"
-    @Published var selectedSortId = "publishedAt_desc"
-    @Published var memberFilter = SongMemberFilterState()
-    @Published var query = ""
-    @Published var visibleLimit = IOSSongPagePolicy.pageSize
-    @Published var scrollPosition: SongScrollPosition?
+struct SongBrowseSnapshot: Equatable, Hashable {
+    var selectedGenerationId = "all"
+    var selectedType = "all"
+    var selectedLibraryId = "all"
+    var selectedStatusId = "all"
+    var selectedSortId = "publishedAt_desc"
+    var memberFilter = SongMemberFilterState()
+    var query = ""
+    var visibleLimit = IOSSongPagePolicy.pageSize
 
     var queryKey: SongListQueryKey {
         SongListQueryKey(
-            generationId: "all",
+            generationId: selectedGenerationId,
             type: selectedType,
             libraryId: selectedLibraryId,
             statusId: selectedStatusId,
@@ -733,10 +731,36 @@ final class SongBrowseSessionStore: ObservableObject {
             query: query
         )
     }
+}
 
-    func resetForQueryChange() {
-        visibleLimit = IOSSongPagePolicy.pageSize
-        scrollPosition = nil
+@MainActor
+final class SongBrowseSessionStore: ObservableObject {
+    @Published private(set) var snapshot = SongBrowseSnapshot()
+    private(set) var scrollPosition: SongScrollPosition?
+
+    var queryKey: SongListQueryKey {
+        snapshot.queryKey
+    }
+
+    @discardableResult
+    func saveFilters(_ newSnapshot: SongBrowseSnapshot) -> Bool {
+        guard snapshot != newSnapshot else { return false }
+        snapshot = newSnapshot
+        return true
+    }
+
+    @discardableResult
+    func saveScrollPosition(_ position: SongScrollPosition?) -> Bool {
+        guard scrollPosition != position else { return false }
+        scrollPosition = position
+        return true
+    }
+
+    func resetForQueryChange(snapshot newSnapshot: SongBrowseSnapshot) {
+        var resetSnapshot = newSnapshot
+        resetSnapshot.visibleLimit = IOSSongPagePolicy.pageSize
+        saveFilters(resetSnapshot)
+        saveScrollPosition(nil)
     }
 }
 

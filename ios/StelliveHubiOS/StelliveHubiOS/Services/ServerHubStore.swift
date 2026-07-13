@@ -182,9 +182,9 @@ final class ServerHubStore: ObservableObject {
                 }
                 return try await api.music(type: normalizedType, cursor: pageCursor, limit: pageLimit)
             }
-            serverSongs = result.items
-            songCatalogServerTime = result.serverTime
-            hasAuthoritativeSongCatalog = result.complete
+            if serverSongs != result.items { serverSongs = result.items }
+            if songCatalogServerTime != result.serverTime { songCatalogServerTime = result.serverTime }
+            if hasAuthoritativeSongCatalog != result.complete { hasAuthoritativeSongCatalog = result.complete }
         } catch {
             if serverSongs.isEmpty {
                 serverSongs = fallback.songs(generationId: generationId, memberId: memberId, type: type, query: query).items
@@ -199,10 +199,11 @@ final class ServerHubStore: ObservableObject {
             let result = try await MusicPageCollector.collect { pageCursor, pageLimit in
                 try await api.music(type: nil, cursor: pageCursor, limit: pageLimit, sort: "publishedAt_desc")
             }
-            serverSongs = result.items
-            songCatalogServerTime = result.serverTime
-            hasAuthoritativeSongCatalog = result.complete
-            recentSongs = IOSSongPagePolicy.recentSongs(result.items, limit: limit)
+            if serverSongs != result.items { serverSongs = result.items }
+            if songCatalogServerTime != result.serverTime { songCatalogServerTime = result.serverTime }
+            if hasAuthoritativeSongCatalog != result.complete { hasAuthoritativeSongCatalog = result.complete }
+            let refreshedRecentSongs = IOSSongPagePolicy.recentSongs(result.items, limit: limit)
+            if recentSongs != refreshedRecentSongs { recentSongs = refreshedRecentSongs }
         } catch {
             recentSongs = IOSSongPagePolicy.recentSongs(
                 serverSongs.isEmpty ? fallback.songs().items : serverSongs,
@@ -297,6 +298,10 @@ final class ServerHubStore: ObservableObject {
             return generationMatches && memberMatches && typeMatches && queryMatches
         }
         return SongListResponse(items: filtered, nextCursor: nil)
+    }
+
+    var songCatalogItems: [SongCatalogItem] {
+        serverSongs.isEmpty ? fallback.songs().items : serverSongs
     }
 
     func songFacets(generationId: String? = nil, memberId: String? = nil, type: String? = nil, query: String? = nil) -> SongFacetsResponse {

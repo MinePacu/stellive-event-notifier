@@ -44,15 +44,15 @@ struct SongDetailSheet: View {
                     if let url = SongLinkPolicy.videoURL(for: song) {
                         ShareLink(item: url) {
                             Label("링크 공유", systemImage: "square.and.arrow.up")
-                                .frame(minHeight: 44)
                         }
+                        .songDetailActionRow()
                         Button {
                             UIPasteboard.general.url = url
                             UIAccessibility.post(notification: .announcement, argument: "링크를 복사했습니다")
                         } label: {
                             Label("링크 복사", systemImage: "doc.on.doc")
-                                .frame(minHeight: 44)
                         }
+                        .songDetailActionRow()
                     } else {
                         disabledAction("링크 공유", systemImage: "square.and.arrow.up")
                         disabledAction("링크 복사", systemImage: "doc.on.doc")
@@ -64,8 +64,8 @@ struct SongDetailSheet: View {
                             favoritesStore.contains(song) ? "즐겨찾기 해제" : "즐겨찾기 추가",
                             systemImage: favoritesStore.contains(song) ? "star.fill" : "star"
                         )
-                        .frame(minHeight: 44)
                     }
+                    .songDetailActionRow()
                 }
 
                 Section("관련 노래") {
@@ -74,20 +74,20 @@ struct SongDetailSheet: View {
                             onMemberFilter(member.id)
                             dismiss()
                         }
-                        .frame(minHeight: 44)
+                        .songDetailActionRow()
                     }
                     if song.members.count > 1 {
                         Button("참여 멤버 모두 포함") {
                             onAllMembersFilter(song)
                             dismiss()
                         }
-                        .frame(minHeight: 44)
+                        .songDetailActionRow()
                     }
                     Button("같은 종류 보기") {
                         onSameTypeFilter(song)
                         dismiss()
                     }
-                    .frame(minHeight: 44)
+                    .songDetailActionRow()
                 }
 
                 if !song.sourcePlaylists.isEmpty {
@@ -125,8 +125,9 @@ struct SongDetailSheet: View {
     private func actionButton(_ title: String, systemImage: String, action: @escaping (URL) -> Void) -> some View {
         if let url = SongLinkPolicy.videoURL(for: song) {
             Button { action(url) } label: {
-                Label(title, systemImage: systemImage).frame(minHeight: 44)
+                Label(title, systemImage: systemImage)
             }
+            .songDetailActionRow()
         } else {
             disabledAction(title, systemImage: systemImage)
         }
@@ -134,8 +135,16 @@ struct SongDetailSheet: View {
 
     private func disabledAction(_ title: String, systemImage: String) -> some View {
         Label(title, systemImage: systemImage)
-            .frame(minHeight: 44)
             .foregroundStyle(.secondary)
             .accessibilityLabel("\(title), \(SongLinkPolicy.unavailableReason)")
+            .songDetailActionRow()
+    }
+}
+
+private extension View {
+    func songDetailActionRow() -> some View {
+        frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+            .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
     }
 }

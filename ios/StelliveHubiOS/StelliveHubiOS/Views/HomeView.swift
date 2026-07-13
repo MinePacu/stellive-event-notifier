@@ -7,6 +7,8 @@ struct HomeView: View {
     @EnvironmentObject private var store: MockHubStore
     @EnvironmentObject private var serverStore: ServerHubStore
     @EnvironmentObject private var browseSession: SongBrowseSessionStore
+    @EnvironmentObject private var favoritesStore: SongFavoritesStore
+    @EnvironmentObject private var discoveryStore: SongDiscoveryStore
     @State private var path = NavigationPath()
     @State private var selectedSong: SongCatalogItem?
 
@@ -46,7 +48,16 @@ struct HomeView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(serverStore.recentSongs) { song in
-                            SongRow(song: song, catalogMembers: store.members) { selectedSong = $0 }
+                            SongRow(
+                                model: SongRowDisplayModel.make(
+                                    song: song,
+                                    catalogMembers: store.members,
+                                    favoriteIdentifiers: favoritesStore.identifiers,
+                                    discoveryState: discoveryStore.state
+                                ),
+                                onOpenDetail: { selectedSong = $0 },
+                                onToggleFavorite: { favoritesStore.toggle($0) }
+                            )
                                 .listRowInsets(IOSSongPagePolicy.songRowInsets)
                         }
                     }
@@ -122,10 +133,11 @@ struct HomeView: View {
     }
 
     private func applyRelatedFilter(member: SongMemberFilterState?, type: String?) {
-        browseSession.query = ""
-        if let member { browseSession.memberFilter = member.normalized() }
-        if let type { browseSession.selectedType = type }
-        browseSession.resetForQueryChange()
+        var snapshot = browseSession.snapshot
+        snapshot.query = ""
+        if let member { snapshot.memberFilter = member.normalized() }
+        if let type { snapshot.selectedType = type }
+        browseSession.resetForQueryChange(snapshot: snapshot)
         path.append(HomeRoute.songs)
         UIAccessibility.post(notification: .announcement, argument: "관련 노래 필터를 적용했습니다")
     }

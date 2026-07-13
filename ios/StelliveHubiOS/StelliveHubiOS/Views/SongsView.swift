@@ -1,16 +1,119 @@
 import SwiftUI
 import UIKit
+import ImageIO
 
-private extension SongCatalogItem {
-    var stableSongIdentifier: String {
-        SongIdentity.identifier(for: self) ?? "song:\(id)"
+private struct FirstSongOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat?
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        value = nextValue() ?? value
     }
 }
 
-private struct SongRowOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: [String: CGFloat] = [:]
-    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
-        value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })
+struct SongMetadataDisplayTag: Equatable, Hashable, Identifiable {
+    let text: String
+    let accessibilityText: String
+    var id: String { "\(text)|\(accessibilityText)" }
+}
+
+struct SongRowDisplayModel: Equatable, Hashable, Identifiable {
+    let id: String
+    let song: SongCatalogItem
+    let title: String
+    let subtitle: String
+    let tags: [SongMetadataDisplayTag]
+    let isFavorite: Bool
+    let isNew: Bool
+    let canFavorite: Bool
+    let videoURL: URL?
+    let thumbnailURLs: [URL]
+    let detailAccessibilityLabel: String
+    let quickActionAccessibilityLabel: String
+
+    static func make(song: SongCatalogItem, catalogMembers: [HubMember], favoriteIdentifiers: Set<String>, discoveryState: SongDiscoveryStateV1) -> Self {
+        let identifier = SongIdentity.identifier(for: song)
+        let display = IOSSongPagePolicy.displayText(for: song, catalogMembers: catalogMembers)
+        let isNew = SongDiscoveryPolicy.isNew(song, state: discoveryState)
+        var tags = [SongMetadataDisplayTag(text: song.type.displayName, accessibilityText: song.type.displayName)]
+        if isNew { tags.append(.init(text: "NEW", accessibilityText: "새로 추가된 노래")) }
+        if let premiere = IOSSongPagePolicy.premiereStatusLabel(for: song) {
+            tags.append(.init(text: premiere, accessibilityText: premiere))
+        }
+        return Self(
+            id: identifier ?? "song:\(song.id)", song: song, title: display.title, subtitle: display.subtitle, tags: tags,
+            isFavorite: identifier.map(favoriteIdentifiers.contains) ?? false, isNew: isNew, canFavorite: identifier != nil,
+            videoURL: SongLinkPolicy.videoURL(for: song), thumbnailURLs: IOSSongPagePolicy.thumbnailUrlCandidates(for: song),
+            detailAccessibilityLabel: "\(display.title), 곡 상세 보기", quickActionAccessibilityLabel: "\(display.title) 빠른 동작"
+        )
+    }
+}
+
+struct SongsDerivationInput: Equatable, Hashable {
+    let songs: [SongCatalogItem]
+    let catalogMembers: [HubMember]
+    let queryKey: SongListQueryKey
+    let favoriteIdentifiers: Set<String>
+    let discoveryState: SongDiscoveryStateV1
+    let visibleLimit: Int
+}
+
+struct SongsDerivedState: Equatable {
+    static let empty = SongsDerivedState(
+        summary: SongFacetSummary(total: 0, original: 0, cover: 0), filteredSongs: [], displayedRows: [],
+        displayedCount: 0, remainingCount: 0, newSongCount: 0
+    )
+    let summary: SongFacetSummary
+    let filteredSongs: [SongCatalogItem]
+    let displayedRows: [SongRowDisplayModel]
+    let displayedCount: Int
+    let remainingCount: Int
+    let newSongCount: Int
+
+    static func make(input: SongsDerivationInput) -> Self {
+        let rows = input.songs.map {
+            SongRowDisplayModel.make(song: $0, catalogMembers: input.catalogMembers, favoriteIdentifiers: input.favoriteIdentifiers, discoveryState: input.discoveryState)
+        }
+        let key = input.queryKey
+        let memberState = SongMemberFilterState(
+            selectedMemberIds: Set(key.selectedMemberIds), matchMode: key.memberMatchMode, participation: key.participation
+        )
+        let filtered = rows.filter { row in
+            (key.type == "all" || row.song.type.rawValue == key.type) &&
+                IOSSongPagePolicy.matchesMember(row.song, state: memberState) &&
+                (key.query.isEmpty || row.title.localizedCaseInsensitiveContains(key.query) || row.subtitle.localizedCaseInsensitiveContains(key.query)) &&
+                (key.libraryId != "favorites" || row.isFavorite) &&
+                (key.statusId != "new" || row.isNew)
+        }
+        let sorted = filtered.sorted { left, right in
+            switch key.sortId {
+            case "publishedAt_asc": return comparePublishedAt(left, right, newestFirst: false)
+            case "title_asc": return compareText(left.title, right.title, leftID: left.id, rightID: right.id)
+            case "member_asc":
+                let order = left.subtitle.localizedStandardCompare(right.subtitle)
+                return order == .orderedSame ? compareText(left.title, right.title, leftID: left.id, rightID: right.id) : order == .orderedAscending
+            default: return comparePublishedAt(left, right, newestFirst: true)
+            }
+        }
+        let count = IOSSongPagePolicy.displayedCount(visibleLimit: input.visibleLimit, totalItems: sorted.count)
+        let originalCount = input.songs.reduce(into: 0) { if $1.type == .original { $0 += 1 } }
+        return Self(
+            summary: SongFacetSummary(total: input.songs.count, original: originalCount, cover: input.songs.count - originalCount),
+            filteredSongs: sorted.map(\.song), displayedRows: Array(sorted.prefix(count)), displayedCount: count,
+            remainingCount: max(sorted.count - count, 0), newSongCount: rows.filter(\.isNew).count
+        )
+    }
+
+    private static func comparePublishedAt(_ left: SongRowDisplayModel, _ right: SongRowDisplayModel, newestFirst: Bool) -> Bool {
+        switch (left.song.publishedAt, right.song.publishedAt) {
+        case let (leftDate?, rightDate?) where leftDate != rightDate: return newestFirst ? leftDate > rightDate : leftDate < rightDate
+        case (nil, _?): return false
+        case (_?, nil): return true
+        default: return compareText(left.title, right.title, leftID: left.id, rightID: right.id)
+        }
+    }
+
+    private static func compareText(_ left: String, _ right: String, leftID: String, rightID: String) -> Bool {
+        let order = left.localizedStandardCompare(right)
+        return order == .orderedSame ? leftID < rightID : order == .orderedAscending
     }
 }
 
@@ -42,23 +145,13 @@ struct SongsView: View {
     @State private var isLoadingMore = false
     @State private var isApplyingSession = false
     @State private var isRestoringScrollPosition = false
-    @State private var didRestoreSession = false
-    @State private var listTopOffset: CGFloat = 0
+    @State private var didApplySession = false
+    @State private var didRestoreScrollPosition = false
+    @State private var hasScrolledPastTopThreshold = false
+    @State private var pendingScrollPosition: SongScrollPosition?
+    @State private var scrollSaveTask: Task<Void, Never>?
+    @State private var derivedState = SongsDerivedState.empty
     @State private var selectedSong: SongCatalogItem?
-
-    private var songs: [SongCatalogItem] {
-        let filtered = serverStore.songs(
-            generationId: "all",
-            type: selectedType,
-            query: ""
-        ).items.filter {
-            IOSSongPagePolicy.matchesMember($0, state: memberFilter) &&
-                IOSSongPagePolicy.matchesQuery($0, query: query, catalogMembers: store.members) &&
-                IOSSongPagePolicy.matchesLibrary($0, selectedLibraryId: selectedLibraryId, favorites: favoritesStore.identifiers)
-                && (selectedStatusId != "new" || discoveryStore.isNew($0))
-        }
-        return IOSSongPagePolicy.sortedSongs(filtered, sortId: selectedSortId)
-    }
 
     private var queryKey: SongListQueryKey {
         SongListQueryKey(
@@ -74,33 +167,14 @@ struct SongsView: View {
         )
     }
 
-    private var displayedSongs: [SongCatalogItem] {
-        IOSSongPagePolicy.displayedItems(songs, visibleLimit: visibleLimit)
-    }
-
-    private var displayedCount: Int {
-        IOSSongPagePolicy.displayedCount(visibleLimit: visibleLimit, totalItems: songs.count)
-    }
-
-    private var remainingCount: Int {
-        IOSSongPagePolicy.remainingCount(visibleLimit: visibleLimit, totalItems: songs.count)
-    }
-
-    private var facets: SongFacetsResponse {
-        let allSongs = serverStore.songs(
-            generationId: "all",
-            type: "all",
-            query: ""
-        ).items
-        return SongFacetsResponse(
-            summary: IOSSongPagePolicy.summaryCounts(for: allSongs, filteredSongs: songs),
-            generationFilters: IOSSongPagePolicy.generationFilters.map {
-                SongFilterCount(id: $0.id, label: $0.label, generationId: $0.id == "all" ? nil : $0.id, count: allSongs.count)
-            },
-            memberFilters: [],
-            typeFilters: IOSSongPagePolicy.typeFilters.map {
-                SongFilterCount(id: $0.id, label: $0.label, generationId: nil, count: allSongs.count)
-            }
+    private var derivationInput: SongsDerivationInput {
+        SongsDerivationInput(
+            songs: serverStore.songCatalogItems,
+            catalogMembers: store.members,
+            queryKey: queryKey,
+            favoriteIdentifiers: favoritesStore.identifiers,
+            discoveryState: discoveryStore.state,
+            visibleLimit: visibleLimit
         )
     }
 
@@ -113,9 +187,9 @@ struct SongsView: View {
                 title: "노래",
                 subtitle: "YouTube 기반 오리지널/커버 곡 목록",
                 metrics: [
-                    .init(value: "\(facets.summary.total)", label: "전체"),
-                    .init(value: "\(facets.summary.original)", label: "오리지널"),
-                    .init(value: "\(facets.summary.cover)", label: "커버")
+                    .init(value: "\(derivedState.summary.total)", label: "전체"),
+                    .init(value: "\(derivedState.summary.original)", label: "오리지널"),
+                    .init(value: "\(derivedState.summary.cover)", label: "커버")
                 ]
             )
                 .listRowInsets(IOSGroupedScreenPolicy.headerRowInsets)
@@ -166,7 +240,7 @@ struct SongsView: View {
 
             Picker("상태", selection: $selectedStatusId) {
                 ForEach(IOSSongPagePolicy.statusFilters) { filter in
-                    Text(filter.id == "new" ? "새 노래 (\(serverStore.serverSongs.filter(discoveryStore.isNew).count))" : filter.label).tag(filter.id)
+                    Text(filter.id == "new" ? "새 노래 (\(derivedState.newSongCount))" : filter.label).tag(filter.id)
                 }
             }
             .pickerStyle(.segmented)
@@ -186,29 +260,36 @@ struct SongsView: View {
                             title: "노래 목록 불러오는 중",
                             message: "서버 캐시에서 오리지널곡과 커버곡 목록을 가져오고 있습니다."
                         )
-                    } else if songs.isEmpty {
+                    } else if derivedState.filteredSongs.isEmpty {
                         Text(emptyStateMessage)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
-                    ForEach(displayedSongs, id: \.stableSongIdentifier) { song in
-                        SongRow(song: song, catalogMembers: store.members) { selectedSong = $0 }
-                            .id(song.stableSongIdentifier)
+                    ForEach(derivedState.displayedRows) { row in
+                        SongRow(
+                            model: row,
+                            onOpenDetail: { selectedSong = $0 },
+                            onToggleFavorite: { favoritesStore.toggle($0) }
+                        )
+                            .id(row.id)
                             .background {
-                                GeometryReader { proxy in
-                                    Color.clear.preference(
-                                        key: SongRowOffsetPreferenceKey.self,
-                                        value: [song.stableSongIdentifier: proxy.frame(in: .named("song-list-scroll")).minY]
-                                    )
+                                if row.id == derivedState.displayedRows.first?.id {
+                                    GeometryReader { proxy in
+                                        Color.clear.preference(
+                                            key: FirstSongOffsetPreferenceKey.self,
+                                            value: proxy.frame(in: .named("song-list-scroll")).minY
+                                        )
+                                    }
                                 }
                             }
+                            .onAppear { trackVisibleRow(row) }
                             .listRowInsets(IOSSongPagePolicy.songRowInsets)
                             .listRowSeparator(.hidden)
                     }
 
-                    if selectedStatusId == "new" && displayedSongs.contains(where: discoveryStore.isNew) {
+                    if selectedStatusId == "new" && derivedState.displayedRows.contains(where: \.isNew) {
                         Button("표시된 새 노래 확인 완료") {
-                            discoveryStore.acknowledge(displayedSongs, catalog: serverStore.serverSongs)
+                            discoveryStore.acknowledge(derivedState.displayedRows.map(\.song), catalog: serverStore.songCatalogItems)
                         }
                     }
 
@@ -224,18 +305,19 @@ struct SongsView: View {
                 .onChange(of: queryKey) { _ in
                     guard !isApplyingSession else { return }
                     resetSongList()
+                    saveBrowseState()
                     songListProxy.scrollTo("songs-list-start", anchor: .top)
                 }
-                .onChange(of: songs.count) { count in
+                .onChange(of: derivedState.filteredSongs.count) { count in
                     guard count > 0 else { return }
                     visibleLimit = IOSSongPagePolicy.clampedVisibleLimit(visibleLimit, totalItems: count)
-                    browseSession.visibleLimit = visibleLimit
                 }
-                .onChange(of: visibleLimit) { value in
-                    browseSession.visibleLimit = value
+                .onChange(of: visibleLimit) { _ in
+                    guard !isApplyingSession else { return }
+                    saveBrowseState()
                 }
-                .onPreferenceChange(SongRowOffsetPreferenceKey.self) { offsets in
-                    captureScrollPosition(offsets)
+                .onPreferenceChange(FirstSongOffsetPreferenceKey.self) { offset in
+                    updateTopThreshold(firstRowOffset: offset)
                 }
                 .refreshable {
                     await refreshSongs()
@@ -246,23 +328,27 @@ struct SongsView: View {
                     }
                 }
                 .onAppear {
-                    restoreSessionIfNeeded(using: songListProxy)
+                    applySessionIfNeeded()
                 }
-                .onDisappear(perform: saveBrowseState)
+                .task(id: derivationInput) {
+                    let updated = SongsDerivedState.make(input: derivationInput)
+                    if derivedState != updated { derivedState = updated }
+                    restoreScrollIfNeeded(using: songListProxy, state: updated)
+                }
+                .onDisappear {
+                    scrollSaveTask?.cancel()
+                    if let pendingScrollPosition { browseSession.saveScrollPosition(pendingScrollPosition) }
+                    saveBrowseState()
+                }
                 .overlay(alignment: .bottomTrailing) {
                     if shouldShowScrollToTopButton {
                         Button {
                             withAnimation(.easeInOut(duration: 0.25)) {
                                 songListProxy.scrollTo("songs-list-start", anchor: .top)
                             }
-                            listTopOffset = 0
-                            browseSession.scrollPosition = SongScrollPosition(
-                                anchorSongId: nil,
-                                anchorOffset: 0,
-                                fallbackAbsoluteOffset: 0,
-                                visibleLimitAtCapture: visibleLimit,
-                                queryKey: queryKey
-                            )
+                            hasScrolledPastTopThreshold = false
+                            pendingScrollPosition = nil
+                            browseSession.saveScrollPosition(nil)
                         } label: {
                             Image(systemName: "arrow.up")
                                 .font(.headline.weight(.semibold))
@@ -305,53 +391,67 @@ struct SongsView: View {
 
     private func resetSongList() {
         visibleLimit = IOSSongPagePolicy.pageSize
-        browseSession.resetForQueryChange()
-        listTopOffset = 0
+        pendingScrollPosition = nil
+        browseSession.saveScrollPosition(nil)
+        hasScrolledPastTopThreshold = false
     }
 
     private var shouldShowScrollToTopButton: Bool {
         IOSSongPagePolicy.shouldShowScrollToTop(
-            absoluteOffset: listTopOffset,
+            absoluteOffset: hasScrolledPastTopThreshold ? 241 : 0,
             isLoading: serverStore.isRefreshingSongs,
-            isEmpty: songs.isEmpty,
+            isEmpty: derivedState.filteredSongs.isEmpty,
             isRestoring: isRestoringScrollPosition
         )
     }
 
     private func saveBrowseState() {
-        browseSession.selectedGenerationId = "all"
-        browseSession.selectedType = selectedType
-        browseSession.selectedLibraryId = selectedLibraryId
-        browseSession.selectedStatusId = selectedStatusId
-        browseSession.selectedSortId = selectedSortId
-        browseSession.memberFilter = memberFilter.normalized()
-        browseSession.query = query
-        browseSession.visibleLimit = visibleLimit
+        browseSession.saveFilters(currentBrowseSnapshot)
     }
 
-    private func restoreSessionIfNeeded(using proxy: ScrollViewProxy) {
-        guard !didRestoreSession else { return }
-        didRestoreSession = true
-        isApplyingSession = true
-        browseSession.selectedGenerationId = "all"
-        selectedType = browseSession.selectedType
-        selectedLibraryId = browseSession.selectedLibraryId
-        selectedStatusId = browseSession.selectedStatusId
-        selectedSortId = browseSession.selectedSortId
-        memberFilter = browseSession.memberFilter
-        query = browseSession.query
-        visibleLimit = browseSession.visibleLimit
-        isApplyingSession = false
+    private var currentBrowseSnapshot: SongBrowseSnapshot {
+        SongBrowseSnapshot(
+            selectedGenerationId: "all",
+            selectedType: selectedType,
+            selectedLibraryId: selectedLibraryId,
+            selectedStatusId: selectedStatusId,
+            selectedSortId: selectedSortId,
+            memberFilter: memberFilter.normalized(),
+            query: query,
+            visibleLimit: visibleLimit
+        )
+    }
 
-        guard let position = browseSession.scrollPosition, position.queryKey == browseSession.queryKey else { return }
-        visibleLimit = position.visibleLimitAtCapture
+    private func applySessionIfNeeded() {
+        guard !didApplySession else { return }
+        didApplySession = true
+        isApplyingSession = true
+        let snapshot = browseSession.snapshot
+        selectedType = snapshot.selectedType
+        selectedLibraryId = snapshot.selectedLibraryId
+        selectedStatusId = snapshot.selectedStatusId
+        selectedSortId = snapshot.selectedSortId
+        memberFilter = snapshot.memberFilter
+        query = snapshot.query
+        visibleLimit = snapshot.visibleLimit
+        isApplyingSession = false
+    }
+
+    private func restoreScrollIfNeeded(using proxy: ScrollViewProxy, state: SongsDerivedState) {
+        guard didApplySession,
+              !didRestoreScrollPosition,
+              let position = browseSession.scrollPosition,
+              position.queryKey == queryKey,
+              !state.displayedRows.isEmpty
+        else { return }
+        didRestoreScrollPosition = true
         isRestoringScrollPosition = true
         DispatchQueue.main.async {
             if let anchor = position.anchorSongId,
-               displayedSongs.contains(where: { $0.stableSongIdentifier == anchor }) {
+               state.displayedRows.contains(where: { $0.id == anchor }) {
                 proxy.scrollTo(anchor, anchor: .top)
             } else if position.fallbackAbsoluteOffset > 0,
-                      let fallback = displayedSongs.first?.stableSongIdentifier {
+                      let fallback = state.displayedRows.first?.id {
                 proxy.scrollTo(fallback, anchor: .top)
             }
             DispatchQueue.main.async {
@@ -360,23 +460,29 @@ struct SongsView: View {
         }
     }
 
-    private func captureScrollPosition(_ offsets: [String: CGFloat]) {
-        guard !isRestoringScrollPosition, !offsets.isEmpty else { return }
-        let anchor = offsets.min { abs($0.value) < abs($1.value) ? true : false }
-        if let firstId = displayedSongs.first?.stableSongIdentifier,
-           let firstOffset = offsets[firstId] {
-            listTopOffset = max(0, -firstOffset)
-        } else if anchor?.key != displayedSongs.first?.stableSongIdentifier {
-            listTopOffset = max(listTopOffset, 241)
-        }
-        browseSession.scrollPosition = SongScrollPosition(
-            anchorSongId: anchor?.key,
-            anchorOffset: anchor?.value ?? 0,
-            fallbackAbsoluteOffset: listTopOffset,
+    private func updateTopThreshold(firstRowOffset: CGFloat?) {
+        guard !isRestoringScrollPosition, let firstRowOffset else { return }
+        let updated = -firstRowOffset > 240
+        if hasScrolledPastTopThreshold != updated { hasScrolledPastTopThreshold = updated }
+    }
+
+    private func trackVisibleRow(_ row: SongRowDisplayModel) {
+        guard !isRestoringScrollPosition else { return }
+        let position = SongScrollPosition(
+            anchorSongId: row.id,
+            anchorOffset: 0,
+            fallbackAbsoluteOffset: hasScrolledPastTopThreshold ? 241 : 0,
             visibleLimitAtCapture: visibleLimit,
             queryKey: queryKey
         )
-        saveBrowseState()
+        guard pendingScrollPosition != position else { return }
+        pendingScrollPosition = position
+        scrollSaveTask?.cancel()
+        scrollSaveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled, pendingScrollPosition == position else { return }
+            browseSession.saveScrollPosition(position)
+        }
     }
 
     private func refreshSongs() async {
@@ -387,7 +493,7 @@ struct SongsView: View {
         )
         discoveryStore.initialize(
             serverTime: serverStore.songCatalogServerTime,
-            catalog: serverStore.serverSongs,
+            catalog: serverStore.songCatalogItems,
             authoritative: serverStore.hasAuthoritativeSongCatalog
         )
     }
@@ -395,7 +501,7 @@ struct SongsView: View {
     private var emptyStateMessage: String {
         if selectedStatusId == "new" {
             if !discoveryStore.state.initialized { return "새 노래 상태를 확인하는 중입니다." }
-            if !serverStore.serverSongs.contains(where: discoveryStore.isNew) { return "새로 추가된 노래가 없습니다." }
+            if derivedState.newSongCount == 0 { return "새로 추가된 노래가 없습니다." }
             return "현재 필터 조건에 맞는 새 노래가 없습니다."
         }
         if selectedLibraryId == "favorites" { return IOSSongPagePolicy.favoriteEmptyMessage(hasStoredFavorites: !favoritesStore.identifiers.isEmpty) }
@@ -405,26 +511,26 @@ struct SongsView: View {
     private var songLoadMoreControl: some View {
         VStack(spacing: 8) {
             Text(IOSSongPagePolicy.progressText(
-                displayedCount: displayedCount,
-                totalFilteredCount: songs.count,
+                displayedCount: derivedState.displayedCount,
+                totalFilteredCount: derivedState.filteredSongs.count,
                 authoritative: serverStore.hasAuthoritativeSongCatalog
             ))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            if IOSSongPagePolicy.canLoadMore(visibleLimit: visibleLimit, totalItems: songs.count) {
-                Button(IOSSongPagePolicy.loadMoreText(remainingCount: remainingCount)) {
+            if derivedState.remainingCount > 0 {
+                Button(IOSSongPagePolicy.loadMoreText(remainingCount: derivedState.remainingCount)) {
                     guard !isLoadingMore else { return }
                     isLoadingMore = true
-                    visibleLimit = IOSSongPagePolicy.nextVisibleLimit(visibleLimit: visibleLimit, totalItems: songs.count)
+                    visibleLimit = IOSSongPagePolicy.nextVisibleLimit(visibleLimit: visibleLimit, totalItems: derivedState.filteredSongs.count)
                     isLoadingMore = false
                 }
                 .buttonStyle(.borderless)
                 .disabled(isLoadingMore)
-                .accessibilityLabel(IOSSongPagePolicy.loadMoreText(remainingCount: remainingCount))
+                .accessibilityLabel(IOSSongPagePolicy.loadMoreText(remainingCount: derivedState.remainingCount))
                 .accessibilityValue(IOSSongPagePolicy.progressText(
-                    displayedCount: displayedCount,
-                    totalFilteredCount: songs.count,
+                    displayedCount: derivedState.displayedCount,
+                    totalFilteredCount: derivedState.filteredSongs.count,
                     authoritative: serverStore.hasAuthoritativeSongCatalog
                 ))
             }
@@ -432,64 +538,89 @@ struct SongsView: View {
     }
 }
 
-private struct SongMetadataFlowLayout: Layout {
+struct SongMetadataFlowLayout: Layout {
+    struct Cache {
+        var sizes: [CGSize] = []
+        var width: CGFloat?
+        var result = FlowResult(size: .zero, origins: [])
+    }
+
+    struct FlowResult: Equatable {
+        let size: CGSize
+        let origins: [CGPoint]
+    }
+
     let spacing: CGFloat
 
     init(spacing: CGFloat = 6) {
         self.spacing = spacing
     }
 
+    func makeCache(subviews: Subviews) -> Cache {
+        Cache(sizes: subviews.map { $0.sizeThatFits(.unspecified) })
+    }
+
+    func updateCache(_ cache: inout Cache, subviews: Subviews) {
+        cache.sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        cache.width = nil
+    }
+
     func sizeThatFits(
         proposal: ProposedViewSize,
         subviews: Subviews,
-        cache: inout ()
+        cache: inout Cache
     ) -> CGSize {
         let availableWidth = proposal.width ?? .greatestFiniteMagnitude
-        var currentWidth: CGFloat = 0
-        var maximumWidth: CGFloat = 0
-        var totalHeight: CGFloat = 0
-        var rowHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            let itemWidth = currentWidth == 0 ? size.width : spacing + size.width
-            if currentWidth > 0, currentWidth + itemWidth > availableWidth {
-                maximumWidth = max(maximumWidth, currentWidth)
-                totalHeight += rowHeight + spacing
-                currentWidth = size.width
-                rowHeight = size.height
-            } else {
-                currentWidth += itemWidth
-                rowHeight = max(rowHeight, size.height)
-            }
+        if cache.width != availableWidth {
+            cache.width = availableWidth
+            cache.result = Self.layout(sizes: cache.sizes, width: availableWidth, spacing: spacing)
         }
-
-        maximumWidth = max(maximumWidth, currentWidth)
-        totalHeight += rowHeight
-        return CGSize(width: proposal.width ?? maximumWidth, height: totalHeight)
+        return CGSize(
+            width: proposal.width ?? cache.result.size.width,
+            height: cache.result.size.height
+        )
     }
 
     func placeSubviews(
         in bounds: CGRect,
         proposal: ProposedViewSize,
         subviews: Subviews,
-        cache: inout ()
+        cache: inout Cache
     ) {
-        var x = bounds.minX
-        var y = bounds.minY
-        var rowHeight: CGFloat = 0
+        if cache.width != bounds.width {
+            cache.width = bounds.width
+            cache.result = Self.layout(sizes: cache.sizes, width: bounds.width, spacing: spacing)
+        }
+        for (index, subview) in subviews.enumerated() where cache.result.origins.indices.contains(index) {
+            let origin = cache.result.origins[index]
+            subview.place(
+                at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
+                proposal: ProposedViewSize(cache.sizes[index])
+            )
+        }
+    }
 
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > bounds.minX, x + size.width > bounds.maxX {
-                x = bounds.minX
+    static func layout(sizes: [CGSize], width: CGFloat, spacing: CGFloat) -> FlowResult {
+        var origins: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var maximumWidth: CGFloat = 0
+        for size in sizes {
+            if x > 0, x + size.width > width {
+                x = 0
                 y += rowHeight + spacing
                 rowHeight = 0
             }
-            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            origins.append(CGPoint(x: x, y: y))
+            maximumWidth = max(maximumWidth, x + size.width)
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
         }
+        return FlowResult(
+            size: CGSize(width: min(maximumWidth, width), height: sizes.isEmpty ? 0 : y + rowHeight),
+            origins: origins
+        )
     }
 }
 
@@ -517,114 +648,107 @@ private struct SongMetadataTag: View {
 }
 
 struct SongRow: View {
-    let song: SongCatalogItem
-    let catalogMembers: [HubMember]
+    let model: SongRowDisplayModel
     let onOpenDetail: (SongCatalogItem) -> Void
-    @EnvironmentObject private var favoritesStore: SongFavoritesStore
-    @EnvironmentObject private var discoveryStore: SongDiscoveryStore
+    let onToggleFavorite: (SongCatalogItem) -> Void
     @Environment(\.openURL) private var openURL
 
     init(
-        song: SongCatalogItem,
-        catalogMembers: [HubMember],
-        onOpenDetail: @escaping (SongCatalogItem) -> Void = { _ in }
+        model: SongRowDisplayModel,
+        onOpenDetail: @escaping (SongCatalogItem) -> Void = { _ in },
+        onToggleFavorite: @escaping (SongCatalogItem) -> Void = { _ in }
     ) {
-        self.song = song
-        self.catalogMembers = catalogMembers
+        self.model = model
         self.onOpenDetail = onOpenDetail
+        self.onToggleFavorite = onToggleFavorite
     }
 
     var body: some View {
-        let displayText = IOSSongPagePolicy.displayText(for: song, catalogMembers: catalogMembers)
-        let isNew = discoveryStore.isNew(song)
-        HStack(alignment: .top, spacing: 12) {
+        ZStack(alignment: .bottomTrailing) {
             Button {
-                onOpenDetail(song)
+                onOpenDetail(model.song)
             } label: {
-                SongThumbnailView(urls: IOSSongPagePolicy.thumbnailUrlCandidates(for: song))
-            }
-            .buttonStyle(.plain)
-            .accessibilityHidden(true)
+                HStack(alignment: .top, spacing: 12) {
+                    SongThumbnailView(urls: model.thumbnailURLs)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Button {
-                    onOpenDetail(song)
-                } label: {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(displayText.title)
+                        Text(model.title)
                             .font(.headline)
                             .foregroundStyle(.primary)
                             .lineLimit(IOSSongPagePolicy.titleLineLimit)
-                            .fixedSize(horizontal: false, vertical: true)
 
-                        Text(displayText.subtitle)
+                        Text(model.subtitle)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .lineLimit(IOSSongPagePolicy.subtitleLineLimit)
-                            .fixedSize(horizontal: false, vertical: true)
 
                         SongMetadataFlowLayout {
-                            SongMetadataTag(song.type.displayName)
-                            if isNew {
-                                SongMetadataTag("NEW", accessibilityText: "새로 추가된 노래")
-                            }
-                            if let premiereLabel = IOSSongPagePolicy.premiereStatusLabel(for: song) {
-                                SongMetadataTag(premiereLabel)
+                            ForEach(model.tags) { tag in
+                                SongMetadataTag(tag.text, accessibilityText: tag.accessibilityText)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                        if let publishedAt = song.publishedAt {
+                        if let publishedAt = model.song.publishedAt {
                             Text(publishedAt, style: .date)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+
+                        Color.clear
+                            .frame(height: 44)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(displayText.title), 곡 상세 보기")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(model.detailAccessibilityLabel)
 
-                HStack(spacing: 4) {
-                    Spacer(minLength: 0)
-                    if IOSSongPagePolicy.favoriteIdentifier(for: song) != nil {
-                        Button {
-                            favoritesStore.toggle(song)
-                        } label: {
-                            Image(systemName: favoritesStore.contains(song) ? "star.fill" : "star")
-                                .font(.title3)
-                                .frame(width: 44, height: 44)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(favoritesStore.contains(song) ? "즐겨찾기 해제" : "즐겨찾기 추가")
-                    }
-                    Menu {
-                        if let url = SongLinkPolicy.videoURL(for: song) {
-                            Button("YouTube 열기", systemImage: "play.rectangle") { openURL(url) }
-                            ShareLink(item: url) { Label("링크 공유", systemImage: "square.and.arrow.up") }
-                            Button("링크 복사", systemImage: "doc.on.doc") {
-                                UIPasteboard.general.url = url
-                                UIAccessibility.post(notification: .announcement, argument: "링크를 복사했습니다")
-                            }
-                        } else {
-                            Button("YouTube 열기", systemImage: "play.rectangle") {}.disabled(true)
-                            Button("링크 공유", systemImage: "square.and.arrow.up") {}.disabled(true)
-                            Button("링크 복사", systemImage: "doc.on.doc") {}.disabled(true)
-                        }
+            HStack(spacing: 4) {
+                if model.canFavorite {
+                    Button {
+                        onToggleFavorite(model.song)
                     } label: {
-                        Image(systemName: "ellipsis")
+                        Image(systemName: model.isFavorite ? "star.fill" : "star")
+                            .font(.title3)
                             .frame(width: 44, height: 44)
                     }
-                    .accessibilityLabel("\(displayText.title) 빠른 동작")
-                    .accessibilityHint(SongLinkPolicy.videoURL(for: song) == nil ? SongLinkPolicy.unavailableReason : "열기, 공유 또는 복사")
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(model.isFavorite ? "즐겨찾기 해제" : "즐겨찾기 추가")
                 }
+                Menu {
+                    if let url = model.videoURL {
+                        Button("YouTube 열기", systemImage: "play.rectangle") { openURL(url) }
+                        ShareLink(item: url) { Label("링크 공유", systemImage: "square.and.arrow.up") }
+                        Button("링크 복사", systemImage: "doc.on.doc") {
+                            UIPasteboard.general.url = url
+                            UIAccessibility.post(notification: .announcement, argument: "링크를 복사했습니다")
+                        }
+                    } else {
+                        Button("YouTube 열기", systemImage: "play.rectangle") {}.disabled(true)
+                        Button("링크 공유", systemImage: "square.and.arrow.up") {}.disabled(true)
+                        Button("링크 복사", systemImage: "doc.on.doc") {}.disabled(true)
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel(model.quickActionAccessibilityLabel)
+                .accessibilityHint(model.videoURL == nil ? SongLinkPolicy.unavailableReason : "열기, 공유 또는 복사")
             }
+            .padding(14)
         }
-        .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(.secondarySystemGroupedBackground))
         )
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
+        }
     }
 }
 
@@ -759,25 +883,83 @@ private struct SongMemberFilterView: View {
     private func normalizeDraft() { draft = draft.normalized(validMemberIds: validMemberIds) }
 }
 
+struct SongThumbnailCandidateState: Equatable {
+    private(set) var index = 0
+
+    mutating func advance(urlCount: Int) -> Bool {
+        guard index + 1 < urlCount else { return false }
+        index += 1
+        return true
+    }
+}
+
+private actor SongThumbnailPipeline {
+    static let shared = SongThumbnailPipeline()
+    private let cache = NSCache<NSURL, UIImage>()
+    private var inFlight: [URL: Task<UIImage?, Never>] = [:]
+
+    func image(for url: URL) async -> UIImage? {
+        if let cached = cache.object(forKey: url as NSURL) { return cached }
+        if let existing = inFlight[url] { return await existing.value }
+        let task = Task<UIImage?, Never> {
+            do {
+                var request = URLRequest(url: url)
+                request.cachePolicy = .useProtocolCachePolicy
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard (response as? HTTPURLResponse).map({ 200..<300 ~= $0.statusCode }) != false else { return nil }
+                return Self.downsample(data: data, maxPixelSize: 192)
+            } catch {
+                return nil
+            }
+        }
+        inFlight[url] = task
+        let image = await task.value
+        inFlight[url] = nil
+        if let image { cache.setObject(image, forKey: url as NSURL) }
+        return image
+    }
+
+    private static func downsample(data: Data, maxPixelSize: CGFloat) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return UIImage(cgImage: image)
+    }
+}
+
+@MainActor
+private final class SongThumbnailLoader: ObservableObject {
+    @Published private(set) var image: UIImage?
+
+    func load(urls: [URL]) async {
+        image = nil
+        var candidates = SongThumbnailCandidateState()
+        while urls.indices.contains(candidates.index), !Task.isCancelled {
+            if let loaded = await SongThumbnailPipeline.shared.image(for: urls[candidates.index]) {
+                guard !Task.isCancelled else { return }
+                image = loaded
+                return
+            }
+            if !candidates.advance(urlCount: urls.count) { return }
+        }
+    }
+}
+
 private struct SongThumbnailView: View {
     let urls: [URL]
-    @State private var index = 0
+    @StateObject private var loader = SongThumbnailLoader()
 
     var body: some View {
         Group {
-            if urls.indices.contains(index) {
-                AsyncImage(url: urls[index]) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    case .failure:
-                        fallbackTrigger
-                    default:
-                        placeholder
-                    }
-                }
+            if let image = loader.image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
             } else {
                 placeholder
             }
@@ -785,14 +967,7 @@ private struct SongThumbnailView: View {
         .frame(width: IOSSongPagePolicy.thumbnailSize.width, height: IOSSongPagePolicy.thumbnailSize.height)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityHidden(true)
-    }
-
-    private var fallbackTrigger: some View {
-        placeholder.task {
-            if index + 1 < urls.count {
-                index += 1
-            }
-        }
+        .task(id: urls) { await loader.load(urls: urls) }
     }
 
     private var placeholder: some View {
