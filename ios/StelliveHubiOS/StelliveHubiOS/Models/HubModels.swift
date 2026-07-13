@@ -667,7 +667,7 @@ final class SongBrowseSessionStore: ObservableObject {
 
     var queryKey: SongListQueryKey {
         SongListQueryKey(
-            generationId: selectedGenerationId,
+            generationId: "all",
             type: selectedType,
             libraryId: selectedLibraryId,
             statusId: selectedStatusId,

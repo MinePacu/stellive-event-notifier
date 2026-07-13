@@ -727,7 +727,7 @@ final class SongUiPolicyTests: XCTestCase {
 
         let filters = IOSSongPagePolicy.memberFilters(from: members)
 
-        XCTAssertEqual(filters.first?.id, "all")
+        XCTAssertEqual(filters.map(\.id), ["yuzuha-riko", "neneko-mashiro"])
         XCTAssertFalse(filters.contains { $0.id == "gangzi" || $0.id == "stellive-official" })
         XCTAssertTrue(IOSSongPagePolicy.matchesMember(collabSong, selectedMemberId: "yuzuha-riko"))
         XCTAssertTrue(IOSSongPagePolicy.matchesMember(collabSong, selectedMemberId: "all"))

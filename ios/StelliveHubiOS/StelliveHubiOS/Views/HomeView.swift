@@ -423,14 +423,9 @@ struct MemberAvatarView: View {
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            if let imageURL {
-                AsyncImage(url: imageURL) { phase in
-                    if let image = phase.image {
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    }
-                }
+            if !imageURLs.isEmpty {
+                MemberAvatarRemoteImage(urls: imageURLs)
+                    .id(imageURLs.first)
             }
         }
             .frame(width: size, height: size)
@@ -465,6 +460,18 @@ struct MemberAvatarView: View {
         }
     }
 
+    private var imageURLs: [URL] {
+        guard let imageURL else { return [] }
+        guard case .youtubeProfile = source else { return [imageURL] }
+        let resized = imageURL.absoluteString.replacingOccurrences(
+            of: #"=s\d+-"#,
+            with: "=s176-",
+            options: .regularExpression
+        )
+        guard let resizedURL = URL(string: resized), resizedURL != imageURL else { return [imageURL] }
+        return [resizedURL, imageURL]
+    }
+
     private var backgroundColor: Color {
         switch member.catalogRole {
         case .officialChannel:
@@ -481,5 +488,33 @@ struct MemberAvatarView: View {
             cornerRadius: member.catalogRole == .officialChannel ? size * 0.22 : size / 2,
             style: .continuous
         )
+    }
+}
+
+private struct MemberAvatarRemoteImage: View {
+    let urls: [URL]
+    @State private var index = 0
+
+    var body: some View {
+        Group {
+            if urls.indices.contains(index) {
+                AsyncImage(url: urls[index]) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .failure:
+                        Color.clear.task {
+                            if index + 1 < urls.count { index += 1 }
+                        }
+                    default:
+                        Color.clear
+                    }
+                }
+            } else {
+                Color.clear
+            }
+        }
     }
 }

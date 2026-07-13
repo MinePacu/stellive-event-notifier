@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.BitmapFactory
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -22,12 +23,12 @@ import android.text.Editable
 import android.text.TextUtils
 import android.text.TextWatcher
 import android.util.Log
+import android.util.LruCache
 import android.view.DragEvent
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
-import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
@@ -209,6 +210,7 @@ private lateinit var binding: ActivityMainBinding
     private var currentFoldFeature: HubFoldFeature? = null
     private var currentAdaptiveSpec: HubAdaptiveSpec = HubAdaptivePolicy.spec(widthDp = 0)
     private val topBarScrollSourceOffsets = mutableMapOf<View, Int>()
+    private val avatarBitmapCache = LruCache<String, Bitmap>(64)
     private var selectedSettingsDetailScreen: HubScreen? = null
     private val serverConnectionDebugLogs = mutableListOf("bootstrap: 대기 중")
     private val navigationHistory = MainNavigationHistory()
@@ -220,9 +222,6 @@ private var draggingLiveMemberId: String? = null
     private var selectedHistoryEventTypeFilterId = "all"
     private var selectedHistoryMemberFilterId = "all"
 private val songBrowseSession: SongBrowseSessionViewModel by viewModels()
-private var selectedSongGenerationId: String
-    get() = songBrowseSession.generationId
-    set(value) { songBrowseSession.generationId = value }
 private var selectedSongType: String
     get() = songBrowseSession.type
     set(value) { songBrowseSession.type = value }
@@ -723,6 +722,8 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
     }
 
 private fun startScreen(screenId: String, title: String, role: String) {
+        binding.screenActionContainer.isVisible = false
+        if (screenId != "song_member_filter") selectedSongMemberFilterDraft = null
         if (screenId != "songs" && screenId != "song_search") {
             activeSongScrollView = null
             activeSongListContainer = null
@@ -845,7 +846,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
     }
 
     private fun currentSongQueryKey(): SongListQueryKey = SongListQueryKey(
-        generationId = selectedSongGenerationId,
+        generationId = "all",
         type = selectedSongType,
         selectedMemberIds = selectedSongMemberFilter.selectedMemberIds.sorted(),
         memberMatchMode = selectedSongMemberFilter.matchMode,
@@ -1571,11 +1572,9 @@ private fun renderSongs() {
 
     private fun songRenderState(songItems: List<SongCatalogItem>): SongRenderState {
         val songCatalogMembers = serverMembers ?: repository.members
-        val memberGenerationById = songCatalogMembers.associate { it.id to it.generationId }
         val visibleSongs = MainUiPolicy.sortSongs(
             songItems.filter { song ->
-                MainUiPolicy.songMatchesGeneration(song, selectedSongGenerationId, memberGenerationById) &&
-                    (selectedSongType == "all" || song.type.apiValue == selectedSongType) &&
+                (selectedSongType == "all" || song.type.apiValue == selectedSongType) &&
                     MainUiPolicy.songMatchesMember(song, selectedSongMemberFilter) &&
                     MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers) &&
                     MainUiPolicy.songMatchesLibrary(song, selectedSongLibraryId, songFavoriteIds) &&
@@ -1828,19 +1827,6 @@ private fun songFilterPanel(): MaterialCardView =
         addView(LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(10))
-            addView(songSegmentedRow(MainUiPolicy.songGenerationFilters(), selectedSongGenerationId) { optionId ->
-                selectedSongGenerationId = optionId
-                resetSongBrowseForQueryChange()
-                renderSongs()
-            }.apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply {
-                    bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
-                }
-            })
-            addView(divider())
             addView(songSegmentedRow(MainUiPolicy.songTypeFilters(), selectedSongType) { optionId ->
                 selectedSongType = optionId
                 resetSongBrowseForQueryChange()
@@ -1850,7 +1836,6 @@ private fun songFilterPanel(): MaterialCardView =
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                 ).apply {
-                    topMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
                     bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
                 }
             })
@@ -2094,7 +2079,6 @@ private fun scheduleSongSearchRender(rawQuery: String) {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(12)
             }
-            addView(songFilterRow(MainUiPolicy.songGenerationFilters(), selectedSongGenerationId) { selectedSongGenerationId = it })
             addView(songFilterRow(MainUiPolicy.songTypeFilters(), selectedSongType) { selectedSongType = it })
             addView(songFilterRow(MainUiPolicy.songSortOptions(), selectedSongSortId) { selectedSongSortId = it })
         }
@@ -2148,48 +2132,152 @@ private fun songMemberFilterCard(members: List<HubMember>, visibleCount: Int): M
         })
     }
 
-private fun renderSongMemberFilter() {
+private fun renderSongMemberFilter(restoreScrollY: Int? = null) {
     val members = serverMembers ?: repository.members
     val selectable = SongMemberFilterPolicy.selectableMembers(members)
-    var draft = selectedSongMemberFilterDraft ?: selectedSongMemberFilter.also { selectedSongMemberFilterDraft = it }
+    val draft = selectedSongMemberFilterDraft ?: selectedSongMemberFilter.also { selectedSongMemberFilterDraft = it }
     startScreen(
         screenId = "song_member_filter",
         title = "노래 멤버 선택",
         role = "노래 목록을 멤버별로 좁혀 봅니다"
     )
-    fun rerender() = renderSongMemberFilter()
-    binding.contentList.addView(TextView(this).apply { text = SongMemberFilterPolicy.summary(members, draft); contentDescription = "현재 조건, $text" })
-    binding.contentList.addView(songSegmentedRow(listOf(SongFilterOption("ANY", "한 명 이상"), SongFilterOption("ALL", "모두 참여")), draft.matchMode.name) {
-        draft = draft.copy(matchMode = SongMemberMatchMode.valueOf(it)).normalized(); selectedSongMemberFilterDraft = draft; rerender()
-    }.apply { isEnabled = draft.selectedMemberIds.size >= 2 && draft.participation != SongParticipation.SOLO; contentDescription = if (isEnabled) "멤버 일치 방식" else "멤버 두 명 이상 선택 시 사용 가능" })
-    binding.contentList.addView(songSegmentedRow(listOf(SongFilterOption("ANY", "전체"), SongFilterOption("SOLO", "솔로"), SongFilterOption("COLLABORATION", "콜라보")), draft.participation.name) {
-        draft = draft.copy(participation = SongParticipation.valueOf(it)).normalized(); selectedSongMemberFilterDraft = draft; rerender()
-    })
-    binding.contentList.addView(TextView(this).apply {
-        text = "솔로·콜라보는 연결된 스텔라이브 멤버 수 기준이며 외부 가수는 계산에 포함되지 않습니다."
-        contentDescription = text
-    })
-    listOf("gen1" to "1기생 전원", "gen2" to "2기생 전원", "gen3" to "3기생 전원").forEach { (id, label) ->
-        binding.contentList.addView(Button(this).apply { text = label; setOnClickListener { selectedSongMemberFilterDraft = SongMemberFilterPolicy.generationPreset(members, id); rerender() } })
+    fun updateDraft(next: SongMemberFilterState) {
+        val currentScrollY = binding.contentScroll.scrollY
+        selectedSongMemberFilterDraft = next.normalized(selectable.map { it.id }.toSet())
+        renderSongMemberFilter(restoreScrollY = currentScrollY)
     }
-    selectable.groupBy { it.generationId }.forEach { (generationId, generationMembers) ->
-        binding.contentList.addView(TextView(this).apply { text = when (generationId) { "gen1" -> "1기생"; "gen2" -> "2기생"; else -> "3기생" }; typeface = Typeface.DEFAULT_BOLD })
-        generationMembers.forEach { member ->
-        binding.contentList.addView(Button(this).apply {
-            val checked = member.id in draft.selectedMemberIds
-            text = "${if (checked) "✓ " else ""}${member.koreanName.ifBlank { member.englishName }}"
-            contentDescription = "$text, ${if (checked) "선택됨" else "선택 안 됨"}"
-            setOnClickListener {
-                val ids = draft.selectedMemberIds.toMutableSet().apply { if (!add(member.id)) remove(member.id) }
-                selectedSongMemberFilterDraft = draft.copy(selectedMemberIds = ids).normalized(); rerender()
+
+    binding.contentList.addView(baseCard(HubCardStyle.COMPACT).apply {
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(16)
+        }
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            addView(TextView(context).apply {
+                text = "현재 조건"
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            addView(TextView(context).apply {
+                text = SongMemberFilterPolicy.summary(members, draft)
+                setTextColor(color(R.color.hub_text))
+                textSize = 16f
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(0, dp(4), 0, dp(14))
+                contentDescription = "현재 조건, $text"
+            })
+            addView(TextView(context).apply {
+                text = "선택 멤버"
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(0, 0, 0, dp(7))
+            })
+            val matchModeEnabled = draft.selectedMemberIds.size >= 2 && draft.participation != SongParticipation.SOLO
+            addView(songSegmentedRow(listOf(SongFilterOption("ANY", "한 명 이상"), SongFilterOption("ALL", "모두 참여")), draft.matchMode.name) {
+                updateDraft(draft.copy(matchMode = SongMemberMatchMode.valueOf(it)))
+            }.apply {
+                alpha = if (matchModeEnabled) 1f else 0.48f
+                contentDescription = if (matchModeEnabled) "멤버 일치 방식" else "멤버 두 명 이상 선택 시 사용 가능"
+                childrenSequence().forEach { it.isEnabled = matchModeEnabled }
+            })
+            addView(TextView(context).apply {
+                text = "참여 형태"
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(0, dp(14), 0, dp(7))
+            })
+            addView(songSegmentedRow(listOf(SongFilterOption("ANY", "전체"), SongFilterOption("SOLO", "솔로"), SongFilterOption("COLLABORATION", "콜라보")), draft.participation.name) {
+                updateDraft(draft.copy(participation = SongParticipation.valueOf(it)))
+            })
+            addView(TextView(context).apply {
+                text = "솔로·콜라보는 연결된 스텔라이브 멤버 수 기준이며 외부 가수는 계산에 포함되지 않습니다."
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 12f
+                setPadding(0, dp(12), 0, 0)
+                contentDescription = text
+            })
+        })
+    })
+
+    binding.contentList.addView(sectionLabel("빠른 선택"))
+    binding.contentList.addView(HorizontalScrollView(this).apply {
+        isHorizontalScrollBarEnabled = false
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(14)
+        }
+        addView(ChipGroup(context).apply {
+            isSingleLine = true
+            chipSpacingHorizontal = dp(8)
+            listOf("gen1" to "1기생 전원", "gen2" to "2기생 전원", "gen3" to "3기생 전원").forEach { (id, label) ->
+                val preset = SongMemberFilterPolicy.generationPreset(members, id)
+                addView(centerChipText(Chip(context).apply {
+                    val selected = draft == preset
+                    text = label
+                    isCheckable = false
+                    isClickable = true
+                    setEnsureMinTouchTargetSize(true)
+                    chipMinHeight = dp(40).toFloat()
+                    shapeAppearanceModel = shapeAppearanceModel.toBuilder()
+                        .setAllCornerSizes(dp(20).toFloat())
+                        .build()
+                    chipStrokeWidth = dp(1).toFloat()
+                    chipStrokeColor = ColorStateList.valueOf(color(if (selected) R.color.hub_primary else R.color.hub_line))
+                    chipBackgroundColor = ColorStateList.valueOf(color(if (selected) R.color.hub_accent_soft else R.color.hub_card))
+                    setTextColor(color(if (selected) R.color.hub_primary else R.color.hub_text_muted))
+                    textSize = 13f
+                    typeface = Typeface.DEFAULT_BOLD
+                    textStartPadding = dp(12).toFloat()
+                    textEndPadding = dp(12).toFloat()
+                    contentDescription = "$label 빠른 선택${if (selected) ", 선택됨" else ""}"
+                    setOnClickListener { updateDraft(preset) }
+                }))
             }
         })
-    } }
-    binding.contentList.addView(Button(this).apply { text = "멤버 조건 초기화"; setOnClickListener { selectedSongMemberFilterDraft = SongMemberFilterState(); rerender() } })
-    binding.contentList.addView(Button(this).apply {
-        text = "적용"; contentDescription = "멤버 조건 적용"
-        setOnClickListener { applySongMemberFilter(draft); selectedSongMemberFilterDraft = null; navigationHistory.goBack(); renderScreen(navigationHistory.currentScreen); updateNavigationChrome() }
     })
+
+    selectable.groupBy { it.generationId }.forEach { (generationId, generationMembers) ->
+        binding.contentList.addView(sectionLabel(when (generationId) { "gen1" -> "1기생"; "gen2" -> "2기생"; else -> "3기생" }))
+        generationMembers.forEach { member ->
+            val checked = member.id in draft.selectedMemberIds
+            val option = SongFilterOption(member.id, member.koreanName.ifBlank { member.englishName })
+            binding.contentList.addView(songMemberFilterOptionCard(option, member, checked).apply {
+                setOnClickListener {
+                val ids = draft.selectedMemberIds.toMutableSet().apply { if (!add(member.id)) remove(member.id) }
+                    updateDraft(draft.copy(selectedMemberIds = ids))
+                }
+            })
+        }
+    }
+
+    val normalizedDraft = draft.normalized(selectable.map { it.id }.toSet())
+    val canReset = normalizedDraft != SongMemberFilterState()
+    val canApply = normalizedDraft != selectedSongMemberFilter.normalized(selectable.map { it.id }.toSet())
+    binding.screenActionContainer.isVisible = true
+    binding.screenActionReset.apply {
+        background = rounded(fill = color(R.color.hub_surface), radius = dp(14), stroke = color(R.color.hub_line))
+        alpha = if (canReset) 1f else 0.45f
+        isEnabled = canReset
+        contentDescription = if (canReset) "멤버 조건 초기화" else "멤버 조건 초기화, 이미 초기 상태"
+        setOnClickListener { updateDraft(SongMemberFilterState()) }
+    }
+    binding.screenActionApply.apply {
+        background = rounded(fill = color(R.color.hub_primary), radius = dp(14))
+        alpha = if (canApply) 1f else 0.45f
+        isEnabled = canApply
+        contentDescription = if (canApply) "멤버 조건 적용" else "멤버 조건 적용, 변경 사항 없음"
+        setOnClickListener {
+            applySongMemberFilter(normalizedDraft)
+            selectedSongMemberFilterDraft = null
+            navigateBack()
+        }
+    }
+    restoreScrollY?.let { scrollY ->
+        binding.contentScroll.post { binding.contentScroll.scrollTo(0, scrollY) }
+    }
 }
 
 private fun songMemberFilterOptionCard(
@@ -2201,6 +2289,10 @@ private fun songMemberFilterOptionCard(
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
             }
+            setCardBackgroundColor(color(if (selected) R.color.hub_card_surface_compact else R.color.hub_card_surface))
+            strokeColor = color(if (selected) R.color.hub_primary else R.color.hub_line)
+            isClickable = true
+            isFocusable = true
             val row = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -2221,7 +2313,7 @@ private fun songMemberFilterOptionCard(
                     maxLines = 1
                 })
                 addView(TextView(context).apply {
-                    text = if (selected) "현재 적용 중" else "탭해서 선택"
+                    text = if (selected) "선택됨" else "선택 안 됨"
                     setTextColor(color(R.color.hub_text_muted))
                     textSize = 12f
                     setPadding(0, dp(4), 0, 0)
@@ -2235,6 +2327,7 @@ private fun songMemberFilterOptionCard(
                     marginStart = dp(12)
                 })
             }
+            contentDescription = "${option.label}, ${if (selected) "선택됨" else "선택 안 됨"}"
             addView(row)
         }
 
@@ -3401,10 +3494,15 @@ private fun noticeCard(text: String): TextView = TextView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = rounded(fill = color(R.color.hub_primary), radius = size / 2)
             clipToOutline = true
+            avatarBitmapCache.get(imageUrl)?.let { bitmap ->
+                setImageBitmap(bitmap)
+                return@apply
+            }
             thread {
                 runCatching {
                     URL(imageUrl).openStream().use { BitmapFactory.decodeStream(it) }
                 }.getOrNull()?.let { bitmap ->
+                    avatarBitmapCache.put(imageUrl, bitmap)
                     runOnUiThread { setImageBitmap(bitmap) }
                 }
             }

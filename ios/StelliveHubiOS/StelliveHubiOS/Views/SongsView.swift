@@ -31,7 +31,6 @@ struct SongsView: View {
     @EnvironmentObject private var discoveryStore: SongDiscoveryStore
     @EnvironmentObject private var browseSession: SongBrowseSessionStore
     @State private var path = NavigationPath()
-    @State private var selectedGenerationId = "all"
     @State private var selectedType = "all"
     @State private var selectedLibraryId = "all"
     @State private var selectedStatusId = "all"
@@ -45,18 +44,13 @@ struct SongsView: View {
     @State private var didRestoreSession = false
     @State private var listTopOffset: CGFloat = 0
 
-    private var memberGenerationById: [String: String] {
-        Dictionary(uniqueKeysWithValues: store.members.map { ($0.id, $0.generationId) })
-    }
-
     private var songs: [SongCatalogItem] {
         let filtered = serverStore.songs(
             generationId: "all",
             type: selectedType,
             query: ""
         ).items.filter {
-            IOSSongPagePolicy.matchesGeneration($0, selectedGenerationId: selectedGenerationId, memberGenerationById: memberGenerationById) &&
-                IOSSongPagePolicy.matchesMember($0, state: memberFilter) &&
+            IOSSongPagePolicy.matchesMember($0, state: memberFilter) &&
                 IOSSongPagePolicy.matchesQuery($0, query: query, catalogMembers: store.members) &&
                 IOSSongPagePolicy.matchesLibrary($0, selectedLibraryId: selectedLibraryId, favorites: favoritesStore.identifiers)
                 && (selectedStatusId != "new" || discoveryStore.isNew($0))
@@ -66,7 +60,7 @@ struct SongsView: View {
 
     private var queryKey: SongListQueryKey {
         SongListQueryKey(
-            generationId: selectedGenerationId,
+            generationId: "all",
             type: selectedType,
             libraryId: selectedLibraryId,
             statusId: selectedStatusId,
@@ -134,13 +128,6 @@ struct SongsView: View {
                 }
 
                 Section("필터") {
-                    Picker("기수", selection: $selectedGenerationId) {
-                        ForEach(IOSSongPagePolicy.generationFilters) { filter in
-                            Text(filter.label).tag(filter.id)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
             Picker("분류", selection: $selectedType) {
                 ForEach(IOSSongPagePolicy.typeFilters) { filter in
                     Text(filter.label).tag(filter.id)
@@ -306,7 +293,7 @@ struct SongsView: View {
     }
 
     private func saveBrowseState() {
-        browseSession.selectedGenerationId = selectedGenerationId
+        browseSession.selectedGenerationId = "all"
         browseSession.selectedType = selectedType
         browseSession.selectedLibraryId = selectedLibraryId
         browseSession.selectedStatusId = selectedStatusId
@@ -320,7 +307,7 @@ struct SongsView: View {
         guard !didRestoreSession else { return }
         didRestoreSession = true
         isApplyingSession = true
-        selectedGenerationId = browseSession.selectedGenerationId
+        browseSession.selectedGenerationId = "all"
         selectedType = browseSession.selectedType
         selectedLibraryId = browseSession.selectedLibraryId
         selectedStatusId = browseSession.selectedStatusId
@@ -524,6 +511,17 @@ private struct SongMemberFilterView: View {
         self._draft = State(initialValue: appliedState.wrappedValue)
     }
 
+    private var validMemberIds: Set<String> {
+        Set(IOSSongPagePolicy.memberFilters(from: members).map(\.id))
+    }
+
+    private var normalizedDraft: SongMemberFilterState {
+        draft.normalized(validMemberIds: validMemberIds)
+    }
+
+    private var canReset: Bool { normalizedDraft != SongMemberFilterState() }
+    private var canApply: Bool { normalizedDraft != appliedState.normalized(validMemberIds: validMemberIds) }
+
     var body: some View {
         List {
             Section("현재 조건") {
@@ -546,40 +544,90 @@ private struct SongMemberFilterView: View {
                 Text("솔로·콜라보는 연결된 스텔라이브 멤버 수 기준이며 외부 가수는 계산에 포함되지 않습니다.").font(.caption).foregroundStyle(.secondary)
             }
             Section("빠른 선택") {
-                ForEach([("gen1", "1기생 전원"), ("gen2", "2기생 전원"), ("gen3", "3기생 전원")], id: \.0) { id, label in
-                    Button(label) { draft = IOSSongPagePolicy.generationPreset(members, generationId: id) }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach([("gen1", "1기생 전원"), ("gen2", "2기생 전원"), ("gen3", "3기생 전원")], id: \.0) { id, label in
+                            let preset = IOSSongPagePolicy.generationPreset(members, generationId: id)
+                            Button(label) { draft = preset }
+                                .buttonStyle(.bordered)
+                                .tint(draft == preset ? .accentColor : .secondary)
+                                .accessibilityLabel("\(label) 빠른 선택\(draft == preset ? ", 선택됨" : "")")
+                        }
+                    }
+                    .padding(.vertical, 2)
                 }
             }
             ForEach([("gen1", "1기생"), ("gen2", "2기생"), ("gen3", "3기생")], id: \.0) { generationId, title in
                 Section(title) {
-                    ForEach(IOSSongPagePolicy.memberFilters(from: members).filter { option in
-                        members.first(where: { $0.id == option.id })?.generationId == generationId
-                    }) { filter in
+                    ForEach(members.filter { member in
+                        validMemberIds.contains(member.id) && member.generationId == generationId
+                    }) { member in
                         Button {
-                            if !draft.selectedMemberIds.insert(filter.id).inserted { draft.selectedMemberIds.remove(filter.id) }
+                            if !draft.selectedMemberIds.insert(member.id).inserted { draft.selectedMemberIds.remove(member.id) }
                             normalizeDraft()
                         } label: {
-                            HStack {
-                                Text(filter.label).foregroundStyle(.primary)
+                            HStack(spacing: 12) {
+                                MemberAvatarView(member: member, size: 44, source: .youtubeProfile)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(member.koreanName.isEmpty ? member.englishName : member.koreanName)
+                                        .font(.body.weight(.semibold))
+                                        .foregroundStyle(.primary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text(draft.selectedMemberIds.contains(member.id) ? "선택됨" : "선택 안 됨")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                                 Spacer()
-                                if draft.selectedMemberIds.contains(filter.id) { Image(systemName: "checkmark").accessibilityHidden(true) }
+                                if draft.selectedMemberIds.contains(member.id) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(Color.accentColor)
+                                        .accessibilityHidden(true)
+                                }
                             }
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
                         }
-                        .accessibilityLabel("\(filter.label), \(draft.selectedMemberIds.contains(filter.id) ? "선택됨" : "선택 안 됨")")
+                        .buttonStyle(.plain)
+                        .listRowBackground(
+                            draft.selectedMemberIds.contains(member.id)
+                                ? Color.accentColor.opacity(0.10)
+                                : Color(.secondarySystemGroupedBackground)
+                        )
+                        .accessibilityLabel("\(member.koreanName.isEmpty ? member.englishName : member.koreanName), \(draft.selectedMemberIds.contains(member.id) ? "선택됨" : "선택 안 됨")")
                     }
                 }
             }
-            Section {
-                Button("멤버 조건 초기화") { draft = SongMemberFilterState() }
-                Button("적용") { appliedState = draft.normalized(); dismiss() }
-                    .fontWeight(.semibold)
-                    .accessibilityHint("편집한 멤버 조건을 노래 목록에 한 번 적용합니다")
-            }
         }
         .navigationTitle("노래 멤버 선택")
+        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                Divider()
+                HStack(spacing: 10) {
+                    Button("멤버 조건 초기화") { draft = SongMemberFilterState() }
+                        .buttonStyle(.bordered)
+                        .frame(maxWidth: .infinity)
+                        .disabled(!canReset)
+                        .accessibilityHint(canReset ? "편집 중인 멤버 조건을 초기 상태로 되돌립니다" : "이미 초기 상태입니다")
+                    Button("적용") {
+                        appliedState = normalizedDraft
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity)
+                    .disabled(!canApply)
+                    .accessibilityHint(canApply ? "편집한 멤버 조건을 노래 목록에 한 번 적용합니다" : "변경 사항이 없습니다")
+                }
+                .controlSize(.large)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .background(.bar)
+        }
     }
 
-    private func normalizeDraft() { draft = draft.normalized() }
+    private func normalizeDraft() { draft = draft.normalized(validMemberIds: validMemberIds) }
 }
 
 private struct SongThumbnailView: View {
