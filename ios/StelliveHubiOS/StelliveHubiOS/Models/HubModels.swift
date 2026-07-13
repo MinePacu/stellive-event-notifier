@@ -742,6 +742,8 @@ final class SongBrowseSessionStore: ObservableObject {
 
 enum IOSSongPagePolicy {
     static let pageSize = 20
+    static let titleLineLimit = 3
+    static let subtitleLineLimit = 2
 
     static let generationFilters: [SongFilterOption] = [
         .init(id: "all", label: "전체"),

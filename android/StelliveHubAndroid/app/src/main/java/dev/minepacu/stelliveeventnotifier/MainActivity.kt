@@ -2385,65 +2385,74 @@ private fun songFilterRow(
                 setTextColor(color(R.color.hub_text))
                 textSize = 15f
                 typeface = Typeface.DEFAULT_BOLD
-        })
-        content.addView(TextView(context).apply {
-            text = displayText.subtitle
-            setTextColor(color(R.color.hub_text_muted))
+                maxLines = MainUiPolicy.SONG_TITLE_MAX_LINES
+                ellipsize = TextUtils.TruncateAt.END
+                includeFontPadding = false
+            })
+            content.addView(TextView(context).apply {
+                text = displayText.subtitle
+                setTextColor(color(R.color.hub_text_muted))
                 textSize = 12f
                 setPadding(0, dp(5), 0, 0)
+                maxLines = MainUiPolicy.SONG_SUBTITLE_MAX_LINES
+                ellipsize = TextUtils.TruncateAt.END
+                includeFontPadding = false
             })
-            content.addView(rowChip(song.type.displayName).apply {
+            content.addView(ChipGroup(context).apply {
+                isSingleLine = false
+                isSelectionRequired = false
+                chipSpacingHorizontal = dp(6)
+                chipSpacingVertical = dp(4)
+                addView(rowChip(song.type.displayName))
+                MainUiPolicy.songPremiereStatusLabel(song)?.let { label ->
+                    addView(rowChip(label))
+                }
+                if (SongDiscoveryPolicy.isNew(song, songDiscoveryState)) {
+                    addView(rowChip("NEW").apply {
+                        contentDescription = "새로 추가된 노래"
+                    })
+                }
                 layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                 ).apply {
                     topMargin = dp(7)
                 }
             })
-            MainUiPolicy.songPremiereStatusLabel(song)?.let { label ->
-                content.addView(rowChip(label).apply {
-                    layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                    ).apply {
-                        topMargin = dp(7)
-                    }
-                })
-            }
-            if (SongDiscoveryPolicy.isNew(song, songDiscoveryState)) {
-                content.addView(rowChip("NEW").apply {
-                    contentDescription = "새로 추가된 노래"
-                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(7) }
-                })
-            }
-            row.addView(content)
-            MainUiPolicy.songFavoriteIdentifier(song)?.let { identifier ->
-                row.addView(TextView(context).apply {
-                    text = if (identifier in songFavoriteIds) "★" else "☆"
+            content.addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
+                MainUiPolicy.songFavoriteIdentifier(song)?.let { identifier ->
+                    addView(TextView(context).apply {
+                        text = if (identifier in songFavoriteIds) "★" else "☆"
+                        textSize = 24f
+                        gravity = Gravity.CENTER
+                        setTextColor(color(R.color.hub_text))
+                        contentDescription = if (identifier in songFavoriteIds) "즐겨찾기 해제" else "즐겨찾기 추가"
+                        isClickable = true
+                        isFocusable = true
+                        minWidth = dp(48)
+                        minHeight = dp(48)
+                        setOnClickListener {
+                            lifecycleScope.launch { songFavoritesRepository.toggle(identifier) }
+                        }
+                    })
+                }
+                addView(TextView(context).apply {
+                    text = "⋮"
                     textSize = 24f
                     gravity = Gravity.CENTER
-                    setTextColor(color(R.color.hub_text))
-                    contentDescription = if (identifier in songFavoriteIds) "즐겨찾기 해제" else "즐겨찾기 추가"
+                    minWidth = dp(48)
+                    minHeight = dp(48)
                     isClickable = true
                     isFocusable = true
-                    setPadding(dp(10), dp(8), dp(6), dp(8))
-                    setOnClickListener {
-                        lifecycleScope.launch { songFavoritesRepository.toggle(identifier) }
-                    }
+                    contentDescription = "${displayText.title} 빠른 동작" +
+                        if (SongLinkPolicy.videoUrl(song) == null) ", ${SongLinkPolicy.unavailableReason}" else ""
+                    setOnClickListener { anchor -> showSongQuickMenu(anchor, song) }
                 })
-            }
-            row.addView(TextView(context).apply {
-                text = "⋮"
-                textSize = 24f
-                gravity = Gravity.CENTER
-                minWidth = dp(48)
-                minHeight = dp(48)
-                isClickable = true
-                isFocusable = true
-                contentDescription = "${displayText.title} 빠른 동작" +
-                    if (SongLinkPolicy.videoUrl(song) == null) ", ${SongLinkPolicy.unavailableReason}" else ""
-                setOnClickListener { anchor -> showSongQuickMenu(anchor, song) }
             })
+            row.addView(content)
             addView(row)
         }
 
@@ -2513,8 +2522,9 @@ private fun songFilterRow(
 
     private fun songThumbnail(song: SongCatalogItem): View =
         FrameLayout(this).apply {
-            val width = dp(112)
-            val height = dp(MainUiPolicy.songThumbnailHeightDp(112))
+            val widthDp = MainUiPolicy.songThumbnailWidthDp(resources.configuration.screenWidthDp)
+            val width = dp(widthDp)
+            val height = dp(MainUiPolicy.songThumbnailHeightDp(widthDp))
             layoutParams = LinearLayout.LayoutParams(width, height).apply {
                 rightMargin = dp(12)
             }

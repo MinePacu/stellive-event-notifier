@@ -815,6 +815,8 @@ final class SongUiPolicyTests: XCTestCase {
             16.0 / 9.0,
             accuracy: 0.001
         )
+        XCTAssertEqual(IOSSongPagePolicy.titleLineLimit, 3)
+        XCTAssertEqual(IOSSongPagePolicy.subtitleLineLimit, 2)
     }
 
     func testHomeRecentCoverRowsUseSongPageInsets() {

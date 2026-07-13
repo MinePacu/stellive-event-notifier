@@ -432,13 +432,96 @@ struct SongsView: View {
     }
 }
 
+private struct SongMetadataFlowLayout: Layout {
+    let spacing: CGFloat
+
+    init(spacing: CGFloat = 6) {
+        self.spacing = spacing
+    }
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        let availableWidth = proposal.width ?? .greatestFiniteMagnitude
+        var currentWidth: CGFloat = 0
+        var maximumWidth: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            let itemWidth = currentWidth == 0 ? size.width : spacing + size.width
+            if currentWidth > 0, currentWidth + itemWidth > availableWidth {
+                maximumWidth = max(maximumWidth, currentWidth)
+                totalHeight += rowHeight + spacing
+                currentWidth = size.width
+                rowHeight = size.height
+            } else {
+                currentWidth += itemWidth
+                rowHeight = max(rowHeight, size.height)
+            }
+        }
+
+        maximumWidth = max(maximumWidth, currentWidth)
+        totalHeight += rowHeight
+        return CGSize(width: proposal.width ?? maximumWidth, height: totalHeight)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
+private struct SongMetadataTag: View {
+    let text: String
+    let accessibilityText: String
+
+    init(_ text: String, accessibilityText: String? = nil) {
+        self.text = text
+        self.accessibilityText = accessibilityText ?? text
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color(.tertiarySystemGroupedBackground))
+            )
+            .accessibilityLabel(accessibilityText)
+    }
+}
+
 struct SongRow: View {
     let song: SongCatalogItem
     let catalogMembers: [HubMember]
     let onOpenDetail: (SongCatalogItem) -> Void
     @EnvironmentObject private var favoritesStore: SongFavoritesStore
     @EnvironmentObject private var discoveryStore: SongDiscoveryStore
-    @EnvironmentObject private var serverStore: ServerHubStore
     @Environment(\.openURL) private var openURL
 
     init(
@@ -453,98 +536,89 @@ struct SongRow: View {
 
     var body: some View {
         let displayText = IOSSongPagePolicy.displayText(for: song, catalogMembers: catalogMembers)
-        HStack(alignment: .top, spacing: 4) {
+        let isNew = discoveryStore.isNew(song)
+        HStack(alignment: .top, spacing: 12) {
             Button {
                 onOpenDetail(song)
             } label: {
-                HStack(alignment: .top, spacing: 12) {
-                    SongThumbnailView(urls: IOSSongPagePolicy.thumbnailUrlCandidates(for: song))
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(displayText.title)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.86)
-
-                    Text(displayText.subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-
-                    Text(song.type.displayName)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(Color(.tertiarySystemGroupedBackground))
-                        )
-
-                    if let premiereLabel = IOSSongPagePolicy.premiereStatusLabel(for: song) {
-                        Text(premiereLabel)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule(style: .continuous)
-                                    .fill(Color(.tertiarySystemGroupedBackground))
-                            )
-                    }
-
-                    if let publishedAt = song.publishedAt {
-                        Text(publishedAt, style: .date)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer(minLength: 8)
-                if discoveryStore.isNew(song) {
-                    Text("NEW")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule(style: .continuous).fill(Color(.tertiarySystemGroupedBackground)))
-                        .accessibilityLabel("새로 추가된 노래")
-                }
-                }
+                SongThumbnailView(urls: IOSSongPagePolicy.thumbnailUrlCandidates(for: song))
             }
             .buttonStyle(.plain)
+            .accessibilityHidden(true)
 
-            if IOSSongPagePolicy.favoriteIdentifier(for: song) != nil {
+            VStack(alignment: .leading, spacing: 6) {
                 Button {
-                    favoritesStore.toggle(song)
+                    onOpenDetail(song)
                 } label: {
-                    Image(systemName: favoritesStore.contains(song) ? "star.fill" : "star")
-                        .font(.title3)
-                        .frame(width: 44, height: 44)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(displayText.title)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(IOSSongPagePolicy.titleLineLimit)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text(displayText.subtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(IOSSongPagePolicy.subtitleLineLimit)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        SongMetadataFlowLayout {
+                            SongMetadataTag(song.type.displayName)
+                            if isNew {
+                                SongMetadataTag("NEW", accessibilityText: "새로 추가된 노래")
+                            }
+                            if let premiereLabel = IOSSongPagePolicy.premiereStatusLabel(for: song) {
+                                SongMetadataTag(premiereLabel)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        if let publishedAt = song.publishedAt {
+                            Text(publishedAt, style: .date)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(favoritesStore.contains(song) ? "즐겨찾기 해제" : "즐겨찾기 추가")
-            }
-            Menu {
-                if let url = SongLinkPolicy.videoURL(for: song) {
-                    Button("YouTube 열기", systemImage: "play.rectangle") { openURL(url) }
-                    ShareLink(item: url) { Label("링크 공유", systemImage: "square.and.arrow.up") }
-                    Button("링크 복사", systemImage: "doc.on.doc") {
-                        UIPasteboard.general.url = url
-                        UIAccessibility.post(notification: .announcement, argument: "링크를 복사했습니다")
+                .accessibilityLabel("\(displayText.title), 곡 상세 보기")
+
+                HStack(spacing: 4) {
+                    Spacer(minLength: 0)
+                    if IOSSongPagePolicy.favoriteIdentifier(for: song) != nil {
+                        Button {
+                            favoritesStore.toggle(song)
+                        } label: {
+                            Image(systemName: favoritesStore.contains(song) ? "star.fill" : "star")
+                                .font(.title3)
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(favoritesStore.contains(song) ? "즐겨찾기 해제" : "즐겨찾기 추가")
                     }
-                } else {
-                    Button("YouTube 열기", systemImage: "play.rectangle") {}.disabled(true)
-                    Button("링크 공유", systemImage: "square.and.arrow.up") {}.disabled(true)
-                    Button("링크 복사", systemImage: "doc.on.doc") {}.disabled(true)
+                    Menu {
+                        if let url = SongLinkPolicy.videoURL(for: song) {
+                            Button("YouTube 열기", systemImage: "play.rectangle") { openURL(url) }
+                            ShareLink(item: url) { Label("링크 공유", systemImage: "square.and.arrow.up") }
+                            Button("링크 복사", systemImage: "doc.on.doc") {
+                                UIPasteboard.general.url = url
+                                UIAccessibility.post(notification: .announcement, argument: "링크를 복사했습니다")
+                            }
+                        } else {
+                            Button("YouTube 열기", systemImage: "play.rectangle") {}.disabled(true)
+                            Button("링크 공유", systemImage: "square.and.arrow.up") {}.disabled(true)
+                            Button("링크 복사", systemImage: "doc.on.doc") {}.disabled(true)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("\(displayText.title) 빠른 동작")
+                    .accessibilityHint(SongLinkPolicy.videoURL(for: song) == nil ? SongLinkPolicy.unavailableReason : "열기, 공유 또는 복사")
                 }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .frame(width: 44, height: 44)
             }
-            .accessibilityLabel("\(displayText.title) 빠른 동작")
-            .accessibilityHint(SongLinkPolicy.videoURL(for: song) == nil ? SongLinkPolicy.unavailableReason : "열기, 공유 또는 복사")
         }
         .padding(14)
         .background(
