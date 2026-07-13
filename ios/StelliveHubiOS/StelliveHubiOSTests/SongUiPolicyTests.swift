@@ -51,6 +51,45 @@ final class SongUiPolicyTests: XCTestCase {
         XCTAssertEqual(IOSSongPagePolicy.sortedSongs(songs, sortId: "member_asc").map(\.id), ["older", "newer", "undated"])
     }
 
+    func testSongLinkPolicyNormalizesVideoIDAndRejectsUnsafeFallbacks() {
+        let canonical = songCatalogItem(id: "AbCdEf123_-", title: "Song", memberName: "Member", publishedAt: nil)
+        XCTAssertEqual(SongLinkPolicy.videoURL(for: canonical)?.absoluteString, "https://www.youtube.com/watch?v=AbCdEf123_-")
+
+        let short = SongCatalogItem(
+            id: "song", youtubeVideoId: "bad", title: "Song", type: .cover,
+            youtubeUrl: "https://youtu.be/AbCdEf123_-"
+        )
+        XCTAssertEqual(SongLinkPolicy.videoURL(for: short)?.absoluteString, "https://youtu.be/AbCdEf123_-")
+        XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("http://www.youtube.com/watch?v=AbCdEf123_-"))
+        XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("https://example.com/watch?v=AbCdEf123_-"))
+        XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("not a url"))
+        XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("https://www.youtube.com"))
+        XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("https://www.youtube.com/watch?v=bad"))
+    }
+
+    func testSongDetailPolicyFormatsDurationAndBuildsRelatedFilters() {
+        let song = SongCatalogItem(
+            id: "song", youtubeVideoId: "AbCdEf123_-", title: "Song", type: .cover,
+            durationSeconds: 3661,
+            members: [
+                MusicMemberSummary(id: "a", nameKo: "A", nameEn: nil, role: "main"),
+                MusicMemberSummary(id: "b", nameKo: "B", nameEn: nil, role: "collaboration")
+            ],
+            youtubeUrl: "https://www.youtube.com/watch?v=AbCdEf123_-"
+        )
+        XCTAssertEqual(SongDetailPolicy.durationText(for: song), "1:01:01")
+        XCTAssertEqual(SongDetailPolicy.memberFilter(id: "a").selectedMemberIds, ["a"])
+        XCTAssertEqual(SongDetailPolicy.allMembersFilter(for: song).selectedMemberIds, ["a", "b"])
+        XCTAssertEqual(SongDetailPolicy.allMembersFilter(for: song).matchMode, .all)
+        XCTAssertFalse(SongDetailPolicy.rows(for: song).contains { $0.label == "반주곡" })
+    }
+
+    func testMalformedSpecialFlagDoesNotFailSongDecoding() throws {
+        let data = Data(#"{"id":"song","youtubeVideoId":"AbCdEf123_-","title":"Song","type":"cover","publishedAt":null,"youtubeUrl":"https://www.youtube.com/watch?v=AbCdEf123_-","specialFlags":["short_or_preview",42,null]}"#.utf8)
+        let song = try JSONDecoder().decode(SongCatalogItem.self, from: data)
+        XCTAssertEqual(song.specialFlags, ["short_or_preview"])
+    }
+
     func testSongMatchesSelectedGenerationByMemberIds() {
         let song = SongCatalogItem(
             id: "video-1",

@@ -12,6 +12,7 @@ import dev.minepacu.stelliveeventnotifier.core.network.MemberDto
 import dev.minepacu.stelliveeventnotifier.core.network.MusicCatalogItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.MusicListResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.MusicMemberSummaryDto
+import dev.minepacu.stelliveeventnotifier.core.network.MusicSourcePlaylistDto
 import dev.minepacu.stelliveeventnotifier.core.network.MobileConfigDto
 import dev.minepacu.stelliveeventnotifier.core.network.PreferenceDto
 import dev.minepacu.stelliveeventnotifier.core.network.PreferencesResponseDto
@@ -313,6 +314,22 @@ class ServerHubRepositoryTest {
         assertEquals(2, facets.summary.cover)
     }
 
+    @Test
+    fun songDetailEnhancesListFallbackWithSourcePlaylists() = runTest {
+        val remote = RecordingRemoteDataSource()
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+        val fallback = repository.songs().items.first()
+
+        val detail = repository.songDetail(fallback.id, fallback)
+
+        assertEquals("PL_PRIMARY_123", detail.sourcePlaylists.single().youtubePlaylistId)
+        assertTrue(detail.sourcePlaylists.single().isPrimary)
+    }
+
     private class RecordingRemoteDataSource : ServerHubRepository.RemoteDataSource {
         var bootstrapCalls = 0
         var registerCalls = 0
@@ -569,6 +586,22 @@ class ServerHubRepositoryTest {
             lastMemberMusicType = type
             return HubNetworkResult.Success(officialMusicResponse())
         }
+
+        override suspend fun musicDetail(id: String): HubNetworkResult<MusicCatalogItemDto> =
+            HubNetworkResult.Success(
+                officialMusicResponse().items.first().copy(
+                    id = id,
+                    sourcePlaylists = listOf(
+                        MusicSourcePlaylistDto(
+                            youtubePlaylistId = "PL_PRIMARY_123",
+                            title = "Primary",
+                            type = "cover",
+                            youtubeUrl = "https://www.youtube.com/playlist?list=PL_PRIMARY_123",
+                            isPrimary = true,
+                        ),
+                    ),
+                ),
+            )
 
         private fun officialMusicResponse(): MusicListResponseDto =
             MusicListResponseDto(

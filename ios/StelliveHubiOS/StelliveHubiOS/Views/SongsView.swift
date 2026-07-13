@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private extension SongCatalogItem {
     var stableSongIdentifier: String {
@@ -43,6 +44,7 @@ struct SongsView: View {
     @State private var isRestoringScrollPosition = false
     @State private var didRestoreSession = false
     @State private var listTopOffset: CGFloat = 0
+    @State private var selectedSong: SongCatalogItem?
 
     private var songs: [SongCatalogItem] {
         let filtered = serverStore.songs(
@@ -190,7 +192,7 @@ struct SongsView: View {
                             .foregroundStyle(.secondary)
                     } else {
                     ForEach(displayedSongs, id: \.stableSongIdentifier) { song in
-                        SongRow(song: song, catalogMembers: store.members)
+                        SongRow(song: song, catalogMembers: store.members) { selectedSong = $0 }
                             .id(song.stableSongIdentifier)
                             .background {
                                 GeometryReader { proxy in
@@ -273,8 +275,32 @@ struct SongsView: View {
                         .padding(.bottom, 12)
                     }
                 }
+                .sheet(item: $selectedSong) { song in
+                    SongDetailSheet(
+                        song: song,
+                        onMemberFilter: { applyRelatedMemberFilter(SongDetailPolicy.memberFilter(id: $0)) },
+                        onAllMembersFilter: { applyRelatedMemberFilter(SongDetailPolicy.allMembersFilter(for: $0)) },
+                        onSameTypeFilter: { applyRelatedTypeFilter($0.type.rawValue) }
+                    )
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                }
             }
         }
+    }
+
+    private func applyRelatedMemberFilter(_ filter: SongMemberFilterState) {
+        query = ""
+        memberFilter = filter.normalized()
+        resetSongList()
+        UIAccessibility.post(notification: .announcement, argument: "관련 멤버 필터를 적용했습니다")
+    }
+
+    private func applyRelatedTypeFilter(_ type: String) {
+        query = ""
+        selectedType = type
+        resetSongList()
+        UIAccessibility.post(notification: .announcement, argument: "같은 종류 필터를 적용했습니다")
     }
 
     private func resetSongList() {
@@ -409,17 +435,27 @@ struct SongsView: View {
 struct SongRow: View {
     let song: SongCatalogItem
     let catalogMembers: [HubMember]
+    let onOpenDetail: (SongCatalogItem) -> Void
     @EnvironmentObject private var favoritesStore: SongFavoritesStore
     @EnvironmentObject private var discoveryStore: SongDiscoveryStore
     @EnvironmentObject private var serverStore: ServerHubStore
     @Environment(\.openURL) private var openURL
 
+    init(
+        song: SongCatalogItem,
+        catalogMembers: [HubMember],
+        onOpenDetail: @escaping (SongCatalogItem) -> Void = { _ in }
+    ) {
+        self.song = song
+        self.catalogMembers = catalogMembers
+        self.onOpenDetail = onOpenDetail
+    }
+
     var body: some View {
         let displayText = IOSSongPagePolicy.displayText(for: song, catalogMembers: catalogMembers)
         HStack(alignment: .top, spacing: 4) {
             Button {
-                discoveryStore.acknowledge([song], catalog: serverStore.serverSongs)
-                openURL(URL(string: song.youtubeUrl) ?? URL(string: "https://www.youtube.com")!)
+                onOpenDetail(song)
             } label: {
                 HStack(alignment: .top, spacing: 12) {
                     SongThumbnailView(urls: IOSSongPagePolicy.thumbnailUrlCandidates(for: song))
@@ -490,6 +526,25 @@ struct SongRow: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(favoritesStore.contains(song) ? "즐겨찾기 해제" : "즐겨찾기 추가")
             }
+            Menu {
+                if let url = SongLinkPolicy.videoURL(for: song) {
+                    Button("YouTube 열기", systemImage: "play.rectangle") { openURL(url) }
+                    ShareLink(item: url) { Label("링크 공유", systemImage: "square.and.arrow.up") }
+                    Button("링크 복사", systemImage: "doc.on.doc") {
+                        UIPasteboard.general.url = url
+                        UIAccessibility.post(notification: .announcement, argument: "링크를 복사했습니다")
+                    }
+                } else {
+                    Button("YouTube 열기", systemImage: "play.rectangle") {}.disabled(true)
+                    Button("링크 공유", systemImage: "square.and.arrow.up") {}.disabled(true)
+                    Button("링크 복사", systemImage: "doc.on.doc") {}.disabled(true)
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("\(displayText.title) 빠른 동작")
+            .accessibilityHint(SongLinkPolicy.videoURL(for: song) == nil ? SongLinkPolicy.unavailableReason : "열기, 공유 또는 복사")
         }
         .padding(14)
         .background(

@@ -48,11 +48,13 @@ final class ServerHubStore: ObservableObject {
     @Published private(set) var recentSongs: [SongCatalogItem] = []
     @Published private(set) var serverSongFacets: SongFacetsResponse?
     @Published private(set) var hubEventDetailCache: [String: HubEvent] = [:]
+    @Published private(set) var songDetailCache: [String: SongCatalogItem] = [:]
     @Published private(set) var isRefreshingHubEvents = false
     @Published private(set) var isRefreshingCalendar = false
     @Published private(set) var isRefreshingSongs = false
     @Published private(set) var isRefreshingRecentSongs = false
     @Published private(set) var loadingHubEventDetailIds: Set<String> = []
+    @Published private(set) var loadingSongDetailIds: Set<String> = []
 
     init(
         api: HubAPIClient,
@@ -236,6 +238,26 @@ final class ServerHubStore: ObservableObject {
         } catch {
             return hubEventDetailCache[id]
         }
+    }
+
+    func loadSongDetail(id: String, fallback: SongCatalogItem) async -> SongCatalogItem {
+        loadingSongDetailIds.insert(id)
+        defer { loadingSongDetailIds.remove(id) }
+        do {
+            let detail = try await api.musicDetail(id: id)
+            songDetailCache[id] = detail
+            return detail
+        } catch {
+            return songDetailCache[id] ?? fallback
+        }
+    }
+
+    func cachedSongDetail(id: String) -> SongCatalogItem? {
+        songDetailCache[id]
+    }
+
+    func isLoadingSongDetail(id: String) -> Bool {
+        loadingSongDetailIds.contains(id)
     }
 
     func hubEvents(for filter: String) -> [HubEvent] {

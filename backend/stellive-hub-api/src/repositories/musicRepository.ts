@@ -1,4 +1,10 @@
-import type { MusicCatalogItem, MusicItemType, MusicMemberRole } from "../../../../shared/schemas/domain.js";
+import type {
+  MusicCatalogDetail,
+  MusicCatalogItem,
+  MusicItemType,
+  MusicMemberRole,
+  MusicSourcePlaylistSummary,
+} from "../../../../shared/schemas/domain.js";
 import { getPrismaClient } from "../storage/prisma.js";
 
 export type SourcePlaylistRawCategoryHint = "COVER" | "SINGLE" | "EP" | "ORIGINAL" | "OTHERS";
@@ -212,6 +218,13 @@ interface MusicItemRecord {
   specialFlags?: unknown;
   classificationStatus?: string | null;
   sourcePlaylistId?: string | null;
+  sourcePlaylist?: {
+    youtubePlaylistId?: string;
+    title?: string;
+    type: string;
+    rawCategoryHint?: string;
+  } | null;
+  sourcePlaylists?: Array<{ sourcePlaylist: MusicSourcePlaylistRecord }>;
   members?: Array<{
     role: string;
     member: {
@@ -221,6 +234,11 @@ interface MusicItemRecord {
       isGraduated?: boolean;
     };
   }>;
+}
+
+function normalizedSpecialFlags(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === "string");
 }
 
 function toNullableDate(value: string | null | undefined): Date | null {
@@ -239,7 +257,7 @@ function toMusicCatalogItem(record: MusicItemRecord): MusicCatalogItem {
     duration: record.duration ?? null,
     durationSeconds: record.durationSeconds ?? null,
     isInstrumental: record.isInstrumental ?? false,
-    specialFlags: Array.isArray(record.specialFlags) ? record.specialFlags : [],
+    specialFlags: normalizedSpecialFlags(record.specialFlags),
     classificationStatus: record.classificationStatus ?? undefined,
     members: (record.members ?? []).map((link) => ({
       id: link.member.id,
@@ -261,6 +279,27 @@ function toMusicCatalogItem(record: MusicItemRecord): MusicCatalogItem {
         }
       : {}),
   };
+}
+
+function toMusicSourcePlaylists(record: MusicItemRecord): MusicSourcePlaylistSummary[] {
+  const primaryId = record.sourcePlaylist?.youtubePlaylistId;
+  const candidates = [
+    ...(record.sourcePlaylist ? [record.sourcePlaylist] : []),
+    ...(record.sourcePlaylists ?? []).map((link) => link.sourcePlaylist),
+  ];
+  const seen = new Set<string>();
+  return candidates.flatMap((playlist) => {
+    if (!playlist.youtubePlaylistId || !playlist.title || seen.has(playlist.youtubePlaylistId)) return [];
+    if (playlist.type !== "cover" && playlist.type !== "original" && playlist.type !== "other") return [];
+    seen.add(playlist.youtubePlaylistId);
+    return [{
+      youtubePlaylistId: playlist.youtubePlaylistId,
+      title: playlist.title,
+      type: playlist.type,
+      youtubeUrl: `https://www.youtube.com/playlist?list=${playlist.youtubePlaylistId}`,
+      isPrimary: playlist.youtubePlaylistId === primaryId,
+    }];
+  });
 }
 
 interface MusicCursorPayload {
@@ -633,12 +672,16 @@ export class PrismaMusicRepository {
     return rows.map(toMusicCatalogItem);
   }
 
-  async getMusicItem(id: string): Promise<MusicCatalogItem | null> {
+  async getMusicItem(id: string): Promise<MusicCatalogDetail | null> {
     const record = await this.prisma.musicItem!.findUnique?.({
       where: { id },
-      include: { members: { include: { member: true } } },
+      include: {
+        members: { include: { member: true } },
+        sourcePlaylist: true,
+        sourcePlaylists: { include: { sourcePlaylist: true } },
+      },
     }) as MusicItemRecord | null | undefined;
-    return record ? toMusicCatalogItem(record) : null;
+    return record ? { ...toMusicCatalogItem(record), sourcePlaylists: toMusicSourcePlaylists(record) } : null;
   }
 
   async listMusicMembers(): Promise<Array<{ id: string; nameKo: string; nameEn: string }>> {

@@ -2,6 +2,7 @@ package dev.minepacu.stelliveeventnotifier
 
 import android.Manifest
 import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -35,6 +36,7 @@ import android.widget.ImageView
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import android.widget.ScrollView
@@ -101,6 +103,9 @@ import dev.minepacu.stelliveeventnotifier.feature.home.MainNavigationHistory
 import dev.minepacu.stelliveeventnotifier.feature.home.MockHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.home.ServerHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongIdentity
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongDetailBottomSheet
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongDetailPolicy
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailFormatting
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventHeroTagTone
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventImagePolicy
@@ -2359,15 +2364,10 @@ private fun songFilterRow(
         baseCard(HubCardStyle.INTERACTIVE).apply {
             tag = SongIdentity.identifier(song)
             val displayText = MainUiPolicy.songDisplayText(song, catalogMembers)
-            val externalUrl = MainUiPolicy.songExternalUrl(song.youtubeUrl)
-            isClickable = externalUrl != null
-            isFocusable = externalUrl != null
-            setOnClickListener {
-                lifecycleScope.launch {
-                    songDiscoveryRepository.acknowledge(listOf(song), cachedSongItems)
-                    openExternalUrl(externalUrl)
-                }
-            }
+            isClickable = true
+            isFocusable = true
+            contentDescription = "${displayText.title}, 곡 상세 보기"
+            setOnClickListener { showSongDetail(song) }
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
             }
@@ -2432,8 +2432,84 @@ private fun songFilterRow(
                     }
                 })
             }
+            row.addView(TextView(context).apply {
+                text = "⋮"
+                textSize = 24f
+                gravity = Gravity.CENTER
+                minWidth = dp(48)
+                minHeight = dp(48)
+                isClickable = true
+                isFocusable = true
+                contentDescription = "${displayText.title} 빠른 동작" +
+                    if (SongLinkPolicy.videoUrl(song) == null) ", ${SongLinkPolicy.unavailableReason}" else ""
+                setOnClickListener { anchor -> showSongQuickMenu(anchor, song) }
+            })
             addView(row)
         }
+
+    private fun showSongDetail(song: SongCatalogItem) {
+        val sheet = SongDetailBottomSheet(
+            context = this,
+            isFavorite = { target -> MainUiPolicy.songFavoriteIdentifier(target)?.let(songFavoriteIds::contains) == true },
+            onOpen = { openExternalUrl(it) },
+            onShare = ::shareSongUrl,
+            onCopy = ::copySongUrl,
+            onToggleFavorite = { target ->
+                MainUiPolicy.songFavoriteIdentifier(target)?.let { identifier ->
+                    lifecycleScope.launch { songFavoritesRepository.toggle(identifier) }
+                }
+            },
+            onMemberFilter = { memberId -> applyRelatedSongFilter(SongDetailPolicy.memberFilter(memberId), null) },
+            onAllMembersFilter = { target -> applyRelatedSongFilter(SongDetailPolicy.allMembersFilter(target), null) },
+            onSameTypeFilter = { target -> applyRelatedSongFilter(null, target.type.apiValue) },
+        )
+        sheet.show(song)
+        lifecycleScope.launch {
+            songDiscoveryRepository.acknowledge(listOf(song), cachedSongItems)
+            sheet.update(serverRepository.songDetail(song.id, song))
+        }
+    }
+
+    private fun showSongQuickMenu(anchor: View, song: SongCatalogItem) {
+        val url = SongLinkPolicy.videoUrl(song)
+        PopupMenu(this, anchor).apply {
+            val open = menu.add("YouTube 열기")
+            val share = menu.add("링크 공유")
+            val copy = menu.add("링크 복사")
+            listOf(open, share, copy).forEach { it.isEnabled = url != null }
+            setOnMenuItemClickListener { item ->
+                when (item) {
+                    open -> url?.let(::openExternalUrl)
+                    share -> url?.let(::shareSongUrl)
+                    copy -> url?.let(::copySongUrl)
+                }
+                true
+            }
+            show()
+        }
+    }
+
+    private fun shareSongUrl(url: String) {
+        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, url)
+        }, "노래 링크 공유"))
+    }
+
+    private fun copySongUrl(url: String) {
+        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+            .setPrimaryClip(ClipData.newPlainText("YouTube 링크", url))
+        Toast.makeText(this, "링크를 복사했습니다.", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun applyRelatedSongFilter(memberState: SongMemberFilterState?, type: String?) {
+        selectedSongQuery = ""
+        memberState?.let { selectedSongMemberFilter = it.normalized() }
+        type?.let { selectedSongType = it }
+        resetSongBrowseForQueryChange()
+        renderSongsFromCache()
+        Toast.makeText(this, "관련 노래 필터를 적용했습니다.", Toast.LENGTH_SHORT).show()
+    }
 
     private fun songThumbnail(song: SongCatalogItem): View =
         FrameLayout(this).apply {

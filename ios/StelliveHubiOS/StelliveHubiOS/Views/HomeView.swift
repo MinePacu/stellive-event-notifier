@@ -1,9 +1,14 @@
 import SwiftUI
+import UIKit
+
+private enum HomeRoute: Hashable { case songs }
 
 struct HomeView: View {
     @EnvironmentObject private var store: MockHubStore
     @EnvironmentObject private var serverStore: ServerHubStore
+    @EnvironmentObject private var browseSession: SongBrowseSessionStore
     @State private var path = NavigationPath()
+    @State private var selectedSong: SongCatalogItem?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -41,7 +46,7 @@ struct HomeView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(serverStore.recentSongs) { song in
-                            SongRow(song: song, catalogMembers: store.members)
+                            SongRow(song: song, catalogMembers: store.members) { selectedSong = $0 }
                                 .listRowInsets(IOSSongPagePolicy.songRowInsets)
                         }
                     }
@@ -97,10 +102,32 @@ struct HomeView: View {
             .navigationDestination(for: HubMember.self) { member in
                 MemberDetailView(member: member)
             }
+            .navigationDestination(for: HomeRoute.self) { route in
+                if route == .songs { SongsView() }
+            }
             .task {
                 await serverStore.refreshRecentSongs()
             }
+            .sheet(item: $selectedSong) { song in
+                SongDetailSheet(
+                    song: song,
+                    onMemberFilter: { applyRelatedFilter(member: SongDetailPolicy.memberFilter(id: $0), type: nil) },
+                    onAllMembersFilter: { applyRelatedFilter(member: SongDetailPolicy.allMembersFilter(for: $0), type: nil) },
+                    onSameTypeFilter: { applyRelatedFilter(member: nil, type: $0.type.rawValue) }
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
         }
+    }
+
+    private func applyRelatedFilter(member: SongMemberFilterState?, type: String?) {
+        browseSession.query = ""
+        if let member { browseSession.memberFilter = member.normalized() }
+        if let type { browseSession.selectedType = type }
+        browseSession.resetForQueryChange()
+        path.append(HomeRoute.songs)
+        UIAccessibility.post(notification: .announcement, argument: "관련 노래 필터를 적용했습니다")
     }
 }
 

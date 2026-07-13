@@ -1367,6 +1367,19 @@ components:
           type:
             - string
             - "null"
+        durationSeconds:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        isInstrumental:
+          type: boolean
+        specialFlags:
+          type: array
+          items:
+            type: string
+        classificationStatus:
+          type: string
         members:
           type: array
           items:
@@ -1397,16 +1410,32 @@ components:
           type: string
           format: date-time
     MusicDetailResponse:
+      allOf:
+        - $ref: "#/components/schemas/MusicCatalogItem"
+        - type: object
+          required:
+            - sourcePlaylists
+          properties:
+            sourcePlaylists:
+              type: array
+              items:
+                $ref: "#/components/schemas/MusicSourcePlaylistSummary"
+    MusicSourcePlaylistSummary:
       type: object
-      required:
-        - item
-        - serverTime
+      required: [youtubePlaylistId, title, type, youtubeUrl, isPrimary]
       properties:
-        item:
-          $ref: "#/components/schemas/MusicCatalogItem"
-        serverTime:
+        youtubePlaylistId:
           type: string
-          format: date-time
+        title:
+          type: string
+        type:
+          type: string
+          enum: [cover, original, other]
+        youtubeUrl:
+          type: string
+          format: uri
+        isPrimary:
+          type: boolean
     MusicMemberBase:
       type: object
       required:

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import type { MusicCatalogItem, MusicPublicTypeFilter } from "../../../../shared/schemas/domain.js";
+import type { MusicCatalogDetail, MusicCatalogItem, MusicPublicTypeFilter } from "../../../../shared/schemas/domain.js";
 import { ResponseCache, type ResponseCachePolicy } from "../cache/responseCache.js";
-import { toMusicCatalogDto } from "../music/musicDto.js";
+import { toMusicCatalogDetailDto, toMusicCatalogDto } from "../music/musicDto.js";
 import { PrismaMusicRepository } from "../repositories/musicRepository.js";
 
 type MusicSort = "publishedAt_desc" | "publishedAtDesc" | "playlistOrder";
@@ -17,7 +17,7 @@ export interface MusicRoutesRepository {
     includeInstrumental?: boolean;
     includeExcluded?: boolean;
   }): Promise<{ items: MusicCatalogItem[]; nextCursor?: string | null }>;
-  getMusicItem?(id: string): Promise<MusicCatalogItem | null>;
+  getMusicItem?(id: string): Promise<MusicCatalogDetail | null>;
   listMusicMembers?(): Promise<Array<{ id: string; nameKo: string; nameEn: string }>>;
 }
 
@@ -56,7 +56,7 @@ export default async function registerMusicRoutes(app: FastifyInstance, options:
     const found = await repository.getMusicItem?.(id);
     if (!found) return reply.code(404).send({ error: "music_not_found" });
     setMusicCacheHeader(reply, cachePolicy);
-    return toMusicCatalogDto(found);
+    return toMusicCatalogDetailDto(found);
   });
 
   if (options.registerMembersListRoute !== false) {

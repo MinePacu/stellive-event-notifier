@@ -115,6 +115,9 @@ class HubApiClient(
     ): HubNetworkResult<MusicListResponseDto> =
         runCatchingNetwork { api.music(type = type, cursor = cursor, limit = limit, sort = sort) }
 
+    suspend fun musicDetail(id: String): HubNetworkResult<MusicCatalogItemDto> =
+        runCatchingNetwork { api.musicDetail(id) }
+
     suspend fun memberMusic(
         memberId: String,
         type: String? = null,

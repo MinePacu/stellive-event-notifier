@@ -366,6 +366,64 @@ it("uses playlist position, published date, and id cursor conditions for playlis
     });
   });
 
+  it("returns primary-first deduplicated source playlists for music detail", async () => {
+    const primary = {
+      id: "source-1",
+      youtubePlaylistId: "PL_PRIMARY",
+      title: "Primary",
+      type: "cover" as const,
+      rawCategoryHint: "COVER" as const,
+      memberId: null,
+    };
+    const secondary = {
+      id: "source-2",
+      youtubePlaylistId: "PL_SECONDARY",
+      title: "Secondary",
+      type: "other" as const,
+      rawCategoryHint: "OTHERS" as const,
+      memberId: null,
+    };
+    const findUnique = vi.fn(async () => ({
+      id: "music-1",
+      youtubeVideoId: "video-1",
+      title: "Song",
+      type: "cover",
+      sourcePlaylistId: primary.id,
+      specialFlags: ["short_or_preview", 123, null],
+      sourcePlaylist: primary,
+      sourcePlaylists: [
+        { sourcePlaylist: secondary },
+        { sourcePlaylist: primary },
+      ],
+      members: [],
+    }));
+    const repository = new PrismaMusicRepository({ musicItem: { findUnique } });
+
+    await expect(repository.getMusicItem("music-1")).resolves.toMatchObject({
+      specialFlags: ["short_or_preview"],
+      sourcePlaylists: [
+        {
+          youtubePlaylistId: "PL_PRIMARY",
+          youtubeUrl: "https://www.youtube.com/playlist?list=PL_PRIMARY",
+          isPrimary: true,
+        },
+        {
+          youtubePlaylistId: "PL_SECONDARY",
+          youtubeUrl: "https://www.youtube.com/playlist?list=PL_SECONDARY",
+          isPrimary: false,
+        },
+      ],
+    });
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: "music-1" },
+      include: {
+        members: { include: { member: true } },
+        sourcePlaylist: true,
+        sourcePlaylists: { include: { sourcePlaylist: true } },
+      },
+    });
+  });
+
   it("bulk loads existing discovery metadata by YouTube video id", async () => {
     const rows = [{ id: "music-1", youtubeVideoId: "video-1", title: "Song", type: "cover" }];
     const prisma = { musicItem: { findMany: vi.fn(async () => rows) } };
