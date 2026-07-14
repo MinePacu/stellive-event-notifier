@@ -195,6 +195,14 @@ data class MusicMemberSummaryDto(
     val role: String? = null,
 )
 
+data class MusicSourcePlaylistDto(
+    val youtubePlaylistId: String,
+    val title: String,
+    val type: String,
+    val youtubeUrl: String,
+    val isPrimary: Boolean,
+)
+
 data class MusicCatalogItemDto(
     val id: String,
     val youtubeVideoId: String,
@@ -212,6 +220,7 @@ data class MusicCatalogItemDto(
     val youtubeUrl: String,
     val sourcePlaylistId: String? = null,
     val premiere: YoutubePremiereMetadataDto? = null,
+    val sourcePlaylists: List<MusicSourcePlaylistDto> = emptyList(),
 )
 
 data class MusicListResponseDto(

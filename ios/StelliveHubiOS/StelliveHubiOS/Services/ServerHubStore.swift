@@ -48,11 +48,13 @@ final class ServerHubStore: ObservableObject {
     @Published private(set) var recentSongs: [SongCatalogItem] = []
     @Published private(set) var serverSongFacets: SongFacetsResponse?
     @Published private(set) var hubEventDetailCache: [String: HubEvent] = [:]
+    @Published private(set) var songDetailCache: [String: SongCatalogItem] = [:]
     @Published private(set) var isRefreshingHubEvents = false
     @Published private(set) var isRefreshingCalendar = false
     @Published private(set) var isRefreshingSongs = false
     @Published private(set) var isRefreshingRecentSongs = false
     @Published private(set) var loadingHubEventDetailIds: Set<String> = []
+    @Published private(set) var loadingSongDetailIds: Set<String> = []
 
     init(
         api: HubAPIClient,
@@ -180,9 +182,9 @@ final class ServerHubStore: ObservableObject {
                 }
                 return try await api.music(type: normalizedType, cursor: pageCursor, limit: pageLimit)
             }
-            serverSongs = result.items
-            songCatalogServerTime = result.serverTime
-            hasAuthoritativeSongCatalog = result.complete
+            if serverSongs != result.items { serverSongs = result.items }
+            if songCatalogServerTime != result.serverTime { songCatalogServerTime = result.serverTime }
+            if hasAuthoritativeSongCatalog != result.complete { hasAuthoritativeSongCatalog = result.complete }
         } catch {
             if serverSongs.isEmpty {
                 serverSongs = fallback.songs(generationId: generationId, memberId: memberId, type: type, query: query).items
@@ -197,10 +199,11 @@ final class ServerHubStore: ObservableObject {
             let result = try await MusicPageCollector.collect { pageCursor, pageLimit in
                 try await api.music(type: nil, cursor: pageCursor, limit: pageLimit, sort: "publishedAt_desc")
             }
-            serverSongs = result.items
-            songCatalogServerTime = result.serverTime
-            hasAuthoritativeSongCatalog = result.complete
-            recentSongs = IOSSongPagePolicy.recentSongs(result.items, limit: limit)
+            if serverSongs != result.items { serverSongs = result.items }
+            if songCatalogServerTime != result.serverTime { songCatalogServerTime = result.serverTime }
+            if hasAuthoritativeSongCatalog != result.complete { hasAuthoritativeSongCatalog = result.complete }
+            let refreshedRecentSongs = IOSSongPagePolicy.recentSongs(result.items, limit: limit)
+            if recentSongs != refreshedRecentSongs { recentSongs = refreshedRecentSongs }
         } catch {
             recentSongs = IOSSongPagePolicy.recentSongs(
                 serverSongs.isEmpty ? fallback.songs().items : serverSongs,
@@ -236,6 +239,26 @@ final class ServerHubStore: ObservableObject {
         } catch {
             return hubEventDetailCache[id]
         }
+    }
+
+    func loadSongDetail(id: String, fallback: SongCatalogItem) async -> SongCatalogItem {
+        loadingSongDetailIds.insert(id)
+        defer { loadingSongDetailIds.remove(id) }
+        do {
+            let detail = try await api.musicDetail(id: id)
+            songDetailCache[id] = detail
+            return detail
+        } catch {
+            return songDetailCache[id] ?? fallback
+        }
+    }
+
+    func cachedSongDetail(id: String) -> SongCatalogItem? {
+        songDetailCache[id]
+    }
+
+    func isLoadingSongDetail(id: String) -> Bool {
+        loadingSongDetailIds.contains(id)
     }
 
     func hubEvents(for filter: String) -> [HubEvent] {
@@ -275,6 +298,10 @@ final class ServerHubStore: ObservableObject {
             return generationMatches && memberMatches && typeMatches && queryMatches
         }
         return SongListResponse(items: filtered, nextCursor: nil)
+    }
+
+    var songCatalogItems: [SongCatalogItem] {
+        serverSongs.isEmpty ? fallback.songs().items : serverSongs
     }
 
     func songFacets(generationId: String? = nil, memberId: String? = nil, type: String? = nil, query: String? = nil) -> SongFacetsResponse {

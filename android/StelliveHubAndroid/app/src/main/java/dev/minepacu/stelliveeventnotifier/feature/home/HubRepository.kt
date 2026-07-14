@@ -39,6 +39,7 @@ interface HubRepository {
     ): SongListResult
     suspend fun recentSongs(limit: Int = 5): List<SongCatalogItem> =
         songs().items.take(limit)
+    suspend fun songDetail(id: String, fallback: SongCatalogItem): SongCatalogItem = fallback
     suspend fun songFacets(
         generationId: String? = null,
         memberId: String? = null,

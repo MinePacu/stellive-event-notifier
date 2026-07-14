@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-struct SongDiscoveryStateV1: Codable, Equatable {
+struct SongDiscoveryStateV1: Codable, Equatable, Hashable {
     var initialized = false
     var baselineAt: Date?
     var acknowledgedIds: Set<String> = []

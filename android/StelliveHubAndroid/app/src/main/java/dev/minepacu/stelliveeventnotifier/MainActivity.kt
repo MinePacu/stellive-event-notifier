@@ -2,6 +2,7 @@ package dev.minepacu.stelliveeventnotifier
 
 import android.Manifest
 import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -35,6 +36,7 @@ import android.widget.ImageView
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import android.widget.ScrollView
@@ -101,6 +103,11 @@ import dev.minepacu.stelliveeventnotifier.feature.home.MainNavigationHistory
 import dev.minepacu.stelliveeventnotifier.feature.home.MockHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.home.ServerHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongIdentity
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongDetailBottomSheet
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongDetailPolicy
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongLinkPolicy
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenPreferenceStore
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenTarget
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailFormatting
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventHeroTagTone
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventImagePolicy
@@ -235,6 +242,7 @@ private var songFavoriteIds: Set<String> = emptySet()
 private var songDiscoveryState = SongDiscoveryStateV1()
 private lateinit var songDiscoveryRepository: SongDiscoveryRepository
 private lateinit var songFavoritesRepository: SongFavoritesRepository
+private val songOpenPreferenceStore by lazy { SongOpenPreferenceStore(this) }
 private var selectedSongSortId: String
     get() = songBrowseSession.sortId
     set(value) { songBrowseSession.sortId = value }
@@ -2359,15 +2367,10 @@ private fun songFilterRow(
         baseCard(HubCardStyle.INTERACTIVE).apply {
             tag = SongIdentity.identifier(song)
             val displayText = MainUiPolicy.songDisplayText(song, catalogMembers)
-            val externalUrl = MainUiPolicy.songExternalUrl(song.youtubeUrl)
-            isClickable = externalUrl != null
-            isFocusable = externalUrl != null
-            setOnClickListener {
-                lifecycleScope.launch {
-                    songDiscoveryRepository.acknowledge(listOf(song), cachedSongItems)
-                    openExternalUrl(externalUrl)
-                }
-            }
+            isClickable = true
+            isFocusable = true
+            contentDescription = "${displayText.title}, 곡 상세 보기"
+            setOnClickListener { showSongDetail(song) }
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
             }
@@ -2385,60 +2388,157 @@ private fun songFilterRow(
                 setTextColor(color(R.color.hub_text))
                 textSize = 15f
                 typeface = Typeface.DEFAULT_BOLD
-        })
-        content.addView(TextView(context).apply {
-            text = displayText.subtitle
-            setTextColor(color(R.color.hub_text_muted))
+                maxLines = MainUiPolicy.SONG_TITLE_MAX_LINES
+                ellipsize = TextUtils.TruncateAt.END
+                includeFontPadding = false
+            })
+            content.addView(TextView(context).apply {
+                text = displayText.subtitle
+                setTextColor(color(R.color.hub_text_muted))
                 textSize = 12f
                 setPadding(0, dp(5), 0, 0)
+                maxLines = MainUiPolicy.SONG_SUBTITLE_MAX_LINES
+                ellipsize = TextUtils.TruncateAt.END
+                includeFontPadding = false
             })
-            content.addView(rowChip(song.type.displayName).apply {
+            content.addView(ChipGroup(context).apply {
+                isSingleLine = false
+                isSelectionRequired = false
+                chipSpacingHorizontal = dp(6)
+                chipSpacingVertical = dp(4)
+                addView(rowChip(song.type.displayName))
+                MainUiPolicy.songPremiereStatusLabel(song)?.let { label ->
+                    addView(rowChip(label))
+                }
+                if (SongDiscoveryPolicy.isNew(song, songDiscoveryState)) {
+                    addView(rowChip("NEW").apply {
+                        contentDescription = "새로 추가된 노래"
+                    })
+                }
                 layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                 ).apply {
                     topMargin = dp(7)
                 }
             })
-            MainUiPolicy.songPremiereStatusLabel(song)?.let { label ->
-                content.addView(rowChip(label).apply {
-                    layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                    ).apply {
-                        topMargin = dp(7)
-                    }
-                })
-            }
-            if (SongDiscoveryPolicy.isNew(song, songDiscoveryState)) {
-                content.addView(rowChip("NEW").apply {
-                    contentDescription = "새로 추가된 노래"
-                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(7) }
-                })
-            }
-            row.addView(content)
-            MainUiPolicy.songFavoriteIdentifier(song)?.let { identifier ->
-                row.addView(TextView(context).apply {
-                    text = if (identifier in songFavoriteIds) "★" else "☆"
+            content.addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
+                MainUiPolicy.songFavoriteIdentifier(song)?.let { identifier ->
+                    addView(TextView(context).apply {
+                        text = if (identifier in songFavoriteIds) "★" else "☆"
+                        textSize = 24f
+                        gravity = Gravity.CENTER
+                        setTextColor(color(R.color.hub_text))
+                        contentDescription = if (identifier in songFavoriteIds) "즐겨찾기 해제" else "즐겨찾기 추가"
+                        isClickable = true
+                        isFocusable = true
+                        minWidth = dp(48)
+                        minHeight = dp(48)
+                        setOnClickListener {
+                            lifecycleScope.launch { songFavoritesRepository.toggle(identifier) }
+                        }
+                    })
+                }
+                addView(TextView(context).apply {
+                    text = "⋮"
                     textSize = 24f
                     gravity = Gravity.CENTER
-                    setTextColor(color(R.color.hub_text))
-                    contentDescription = if (identifier in songFavoriteIds) "즐겨찾기 해제" else "즐겨찾기 추가"
+                    minWidth = dp(48)
+                    minHeight = dp(48)
                     isClickable = true
                     isFocusable = true
-                    setPadding(dp(10), dp(8), dp(6), dp(8))
-                    setOnClickListener {
-                        lifecycleScope.launch { songFavoritesRepository.toggle(identifier) }
-                    }
+                    contentDescription = "${displayText.title} 빠른 동작" +
+                        if (SongLinkPolicy.videoUrl(song) == null) ", ${SongLinkPolicy.unavailableReason}" else ""
+                    setOnClickListener { anchor -> showSongQuickMenu(anchor, song) }
                 })
-            }
+            })
+            row.addView(content)
             addView(row)
         }
 
+    private fun showSongDetail(song: SongCatalogItem) {
+        val sheet = SongDetailBottomSheet(
+            context = this,
+            openTarget = songOpenPreferenceStore.read(),
+            isFavorite = { target -> MainUiPolicy.songFavoriteIdentifier(target)?.let(songFavoriteIds::contains) == true },
+            onOpen = { openExternalUrl(it) },
+            onShare = ::shareSongUrl,
+            onCopy = ::copySongUrl,
+            onToggleFavorite = { target ->
+                MainUiPolicy.songFavoriteIdentifier(target)?.let { identifier ->
+                    lifecycleScope.launch { songFavoritesRepository.toggle(identifier) }
+                }
+            },
+            onMemberFilter = { memberId -> applyRelatedSongFilter(SongDetailPolicy.memberFilter(memberId), null) },
+            onAllMembersFilter = { target -> applyRelatedSongFilter(SongDetailPolicy.allMembersFilter(target), null) },
+            onSameTypeFilter = { target -> applyRelatedSongFilter(null, target.type.apiValue) },
+        )
+        sheet.show(song)
+        lifecycleScope.launch {
+            songDiscoveryRepository.acknowledge(listOf(song), cachedSongItems)
+            sheet.update(serverRepository.songDetail(song.id, song))
+        }
+    }
+
+    private fun showSongQuickMenu(anchor: View, song: SongCatalogItem) {
+        val selectedTarget = songOpenPreferenceStore.read()
+        val youtubeUrl = SongLinkPolicy.videoUrl(song, SongOpenTarget.YOUTUBE)
+        val youtubeMusicUrl = SongLinkPolicy.videoUrl(song, SongOpenTarget.YOUTUBE_MUSIC)
+        PopupMenu(this, anchor).apply {
+            val youtube = menu.add(
+                "YouTube에서 열기" + if (selectedTarget == SongOpenTarget.YOUTUBE) " · 기본" else "",
+            )
+            val youtubeMusic = menu.add(
+                "YouTube Music에서 열기" + if (selectedTarget == SongOpenTarget.YOUTUBE_MUSIC) " · 기본" else "",
+            )
+            val share = menu.add("링크 공유")
+            val copy = menu.add("링크 복사")
+            youtube.isEnabled = youtubeUrl != null
+            youtubeMusic.isEnabled = youtubeMusicUrl != null
+            listOf(share, copy).forEach { it.isEnabled = youtubeUrl != null }
+            setOnMenuItemClickListener { item ->
+                when (item) {
+                    youtube -> youtubeUrl?.let(::openExternalUrl)
+                    youtubeMusic -> youtubeMusicUrl?.let(::openExternalUrl)
+                    share -> youtubeUrl?.let(::shareSongUrl)
+                    copy -> youtubeUrl?.let(::copySongUrl)
+                }
+                true
+            }
+            show()
+        }
+    }
+
+    private fun shareSongUrl(url: String) {
+        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, url)
+        }, "노래 링크 공유"))
+    }
+
+    private fun copySongUrl(url: String) {
+        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+            .setPrimaryClip(ClipData.newPlainText("YouTube 링크", url))
+        Toast.makeText(this, "링크를 복사했습니다.", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun applyRelatedSongFilter(memberState: SongMemberFilterState?, type: String?) {
+        selectedSongQuery = ""
+        memberState?.let { selectedSongMemberFilter = it.normalized() }
+        type?.let { selectedSongType = it }
+        resetSongBrowseForQueryChange()
+        renderSongsFromCache()
+        Toast.makeText(this, "관련 노래 필터를 적용했습니다.", Toast.LENGTH_SHORT).show()
+    }
+
     private fun songThumbnail(song: SongCatalogItem): View =
         FrameLayout(this).apply {
-            val width = dp(112)
-            val height = dp(MainUiPolicy.songThumbnailHeightDp(112))
+            val widthDp = MainUiPolicy.songThumbnailWidthDp(resources.configuration.screenWidthDp)
+            val width = dp(widthDp)
+            val height = dp(MainUiPolicy.songThumbnailHeightDp(widthDp))
             layoutParams = LinearLayout.LayoutParams(width, height).apply {
                 rightMargin = dp(12)
             }
@@ -2586,6 +2686,7 @@ private fun songFilterRow(
             )
         )
         container.addView(appearanceModePanel())
+        container.addView(songOpenPreferencePanel())
         container.addView(debugModePanel())
         visibleServerConnectionDebugLogs().takeIf { it.isNotEmpty() }?.let { logs ->
             container.addView(
@@ -3100,6 +3201,57 @@ private fun songFilterRow(
                 addView(appearanceModeChip(AppearanceMode.DARK, "다크"))
             })
             addView(content)
+        }
+
+    private fun songOpenPreferencePanel(): MaterialCardView =
+        baseCard().apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                bottomMargin = dp(12)
+            }
+            val selectedTarget = songOpenPreferenceStore.read()
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(15), dp(15), dp(15), dp(15))
+                addView(TextView(context).apply {
+                    text = "노래 재생"
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                })
+                addView(TextView(context).apply {
+                    text = "기본 열기 앱"
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 13f
+                    setPadding(0, dp(8), 0, dp(8))
+                })
+                addView(ChipGroup(context).apply {
+                    isSingleSelection = true
+                    isSelectionRequired = true
+                    SongOpenTarget.entries.forEach { target ->
+                        addView(Chip(context).apply {
+                            text = target.displayName
+                            isCheckable = true
+                            isChecked = selectedTarget == target
+                            minHeight = dp(48)
+                            setOnClickListener {
+                                if (songOpenPreferenceStore.read() != target) {
+                                    songOpenPreferenceStore.write(target)
+                                    renderSettings()
+                                }
+                            }
+                        })
+                    }
+                })
+                addView(TextView(context).apply {
+                    text = "노래 상세의 기본 열기 버튼에 적용됩니다. 공유와 링크 복사는 YouTube 주소를 사용합니다."
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 12f
+                    setPadding(0, dp(10), 0, 0)
+                })
+            })
         }
 
     private fun debugModePanel(): MaterialCardView =
@@ -4032,7 +4184,12 @@ private fun hubEventDetailHero(event: dev.minepacu.stelliveeventnotifier.core.mo
 
     private fun openExternalUrl(url: String?) {
         val target = url?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: return
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(target))
+        if (intent.resolveActivity(packageManager) == null) {
+            Toast.makeText(this, "링크를 열 수 있는 앱이 없습니다.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        startActivity(intent)
     }
 
 private fun compactEventCard(title: String, body: String, pills: List<String>, thumbnailUrl: String? = null): MaterialCardView =

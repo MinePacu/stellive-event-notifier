@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 
-import type { MusicCatalogItem } from "../../../shared/schemas/domain.js";
+import type { MusicCatalogDetail, MusicCatalogItem } from "../../../shared/schemas/domain.js";
 import { ResponseCache } from "../src/cache/responseCache.js";
 import registerMusicRoutes from "../src/routes/musicRoutes.js";
 
@@ -29,10 +29,21 @@ const item: MusicCatalogItem = {
   },
 };
 
+const detailItem: MusicCatalogDetail = {
+  ...item,
+  sourcePlaylists: [{
+    youtubePlaylistId: "PL_PRIMARY",
+    title: "COVER",
+    type: "cover",
+    youtubeUrl: "https://www.youtube.com/playlist?list=PL_PRIMARY",
+    isPrimary: true,
+  }],
+};
+
 async function buildRouteApp(cachePolicy = { ttlMs: 300_000, staleMs: 600_000 }) {
   const repository = {
     listMusicItems: vi.fn(async () => ({ items: [item], nextCursor: "next" })),
-    getMusicItem: vi.fn(async (id: string) => (id === "music-1" ? item : null)),
+    getMusicItem: vi.fn(async (id: string) => (id === "music-1" ? detailItem : null)),
     listMusicMembers: vi.fn(async () => [
       { id: "ayatsuno-yuni", nameKo: "아야츠노 유니", nameEn: "Ayatsuno Yuni" },
     ]),
@@ -111,7 +122,7 @@ describe("music routes", () => {
     await app.close();
 
     expect(detail.statusCode).toBe(200);
-    expect(detail.json()).toEqual(item);
+    expect(detail.json()).toEqual(detailItem);
     expect(missing.statusCode).toBe(404);
     expect(missing.json()).toEqual({ error: "music_not_found" });
   });

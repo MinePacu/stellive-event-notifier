@@ -256,6 +256,14 @@ data class YoutubePremiereMetadata(
     val actualEndAt: Instant? = null,
 )
 
+data class SongSourcePlaylist(
+    val youtubePlaylistId: String,
+    val title: String,
+    val type: String,
+    val youtubeUrl: String,
+    val isPrimary: Boolean,
+)
+
 data class SongCatalogItem(
     val id: String,
     val youtubeVideoId: String,
@@ -279,6 +287,7 @@ data class SongCatalogItem(
     val youtubeUrl: String = sourceUrl ?: "https://www.youtube.com/watch?v=$youtubeVideoId",
     val sourcePlaylistId: String? = null,
     val premiere: YoutubePremiereMetadata? = null,
+    val sourcePlaylists: List<SongSourcePlaylist> = emptyList(),
 )
 
 data class SongFilterCount(

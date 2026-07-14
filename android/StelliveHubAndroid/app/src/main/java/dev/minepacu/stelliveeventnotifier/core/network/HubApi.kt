@@ -77,6 +77,9 @@ interface HubApi {
         @Query("sort") sort: String? = null,
     ): MusicListResponseDto
 
+    @GET("v1/music/{id}")
+    suspend fun musicDetail(@Path("id") id: String): MusicCatalogItemDto
+
     @GET("v1/members/{id}/music")
     suspend fun memberMusic(
         @Path("id") memberId: String,

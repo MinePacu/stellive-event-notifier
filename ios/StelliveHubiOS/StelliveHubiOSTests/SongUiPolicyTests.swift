@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import StelliveHubiOS
 
 @MainActor
@@ -49,6 +50,69 @@ final class SongUiPolicyTests: XCTestCase {
         XCTAssertEqual(IOSSongPagePolicy.sortedSongs(songs, sortId: "publishedAt_asc").map(\.id), ["older", "newer", "undated"])
         XCTAssertEqual(IOSSongPagePolicy.sortedSongs(songs, sortId: "title_asc").map(\.id), ["newer", "older", "undated"])
         XCTAssertEqual(IOSSongPagePolicy.sortedSongs(songs, sortId: "member_asc").map(\.id), ["older", "newer", "undated"])
+    }
+
+    func testSongLinkPolicyNormalizesVideoIDAndRejectsUnsafeFallbacks() {
+        let canonical = songCatalogItem(id: "AbCdEf123_-", title: "Song", memberName: "Member", publishedAt: nil)
+        XCTAssertEqual(SongLinkPolicy.videoURL(for: canonical)?.absoluteString, "https://www.youtube.com/watch?v=AbCdEf123_-")
+        XCTAssertEqual(
+            SongLinkPolicy.videoURL(for: canonical, target: .youtubeMusic)?.absoluteString,
+            "https://music.youtube.com/watch?v=AbCdEf123_-"
+        )
+
+        let short = SongCatalogItem(
+            id: "song", youtubeVideoId: "bad", title: "Song", type: .cover,
+            youtubeUrl: "https://youtu.be/AbCdEf123_-"
+        )
+        XCTAssertEqual(SongLinkPolicy.videoURL(for: short)?.absoluteString, "https://www.youtube.com/watch?v=AbCdEf123_-")
+        XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("http://www.youtube.com/watch?v=AbCdEf123_-"))
+        XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("https://example.com/watch?v=AbCdEf123_-"))
+        XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("not a url"))
+        XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("https://www.youtube.com"))
+        XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("https://www.youtube.com/watch?v=bad"))
+    }
+
+    func testSongOpenPreferenceStoreDefaultsRestoresAndRecoversInvalidValues() {
+        let suiteName = "SongOpenPreferenceStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertEqual(SongOpenPreferenceStore(defaults: defaults).target, .youtube)
+
+        defaults.set("youtube_music", forKey: SongOpenPreferenceStore.preferenceKey)
+        let restored = SongOpenPreferenceStore(defaults: defaults)
+        XCTAssertEqual(restored.target, .youtubeMusic)
+        restored.target = .youtube
+        XCTAssertEqual(defaults.string(forKey: SongOpenPreferenceStore.preferenceKey), "youtube")
+
+        defaults.set("damaged", forKey: SongOpenPreferenceStore.preferenceKey)
+        XCTAssertEqual(SongOpenPreferenceStore(defaults: defaults).target, .youtube)
+        XCTAssertEqual(defaults.string(forKey: SongOpenPreferenceStore.preferenceKey), "youtube")
+        XCTAssertEqual(SongOpenTarget.youtube.openButtonTitle, "YouTube에서 열기")
+        XCTAssertEqual(SongOpenTarget.youtubeMusic.openButtonTitle, "YouTube Music에서 열기")
+    }
+
+    func testSongDetailPolicyFormatsDurationAndBuildsRelatedFilters() {
+        let song = SongCatalogItem(
+            id: "song", youtubeVideoId: "AbCdEf123_-", title: "Song", type: .cover,
+            durationSeconds: 3661,
+            members: [
+                MusicMemberSummary(id: "a", nameKo: "A", nameEn: nil, role: "main"),
+                MusicMemberSummary(id: "b", nameKo: "B", nameEn: nil, role: "collaboration")
+            ],
+            youtubeUrl: "https://www.youtube.com/watch?v=AbCdEf123_-"
+        )
+        XCTAssertEqual(SongDetailPolicy.durationText(for: song), "1:01:01")
+        XCTAssertEqual(SongDetailPolicy.memberFilter(id: "a").selectedMemberIds, ["a"])
+        XCTAssertEqual(SongDetailPolicy.allMembersFilter(for: song).selectedMemberIds, ["a", "b"])
+        XCTAssertEqual(SongDetailPolicy.allMembersFilter(for: song).matchMode, .all)
+        XCTAssertFalse(SongDetailPolicy.rows(for: song).contains { $0.label == "반주곡" })
+    }
+
+    func testMalformedSpecialFlagDoesNotFailSongDecoding() throws {
+        let data = Data(#"{"id":"song","youtubeVideoId":"AbCdEf123_-","title":"Song","type":"cover","publishedAt":null,"youtubeUrl":"https://www.youtube.com/watch?v=AbCdEf123_-","specialFlags":["short_or_preview",42,null]}"#.utf8)
+        let song = try JSONDecoder().decode(SongCatalogItem.self, from: data)
+        XCTAssertEqual(song.specialFlags, ["short_or_preview"])
     }
 
     func testSongMatchesSelectedGenerationByMemberIds() {
@@ -776,6 +840,8 @@ final class SongUiPolicyTests: XCTestCase {
             16.0 / 9.0,
             accuracy: 0.001
         )
+        XCTAssertEqual(IOSSongPagePolicy.titleLineLimit, 3)
+        XCTAssertEqual(IOSSongPagePolicy.subtitleLineLimit, 2)
     }
 
     func testHomeRecentCoverRowsUseSongPageInsets() {
@@ -833,6 +899,103 @@ final class SongUiPolicyTests: XCTestCase {
             IOSSongPagePolicy.recentSongs(songs, limit: 3).map(\.id),
             IOSSongPagePolicy.sortedSongs(songs, sortId: "publishedAt_desc").prefix(3).map(\.id)
         )
+    }
+
+    func testBrowseSessionSkipsEqualFiltersAndKeepsScrollNonObservable() {
+        let session = SongBrowseSessionStore()
+        var changeCount = 0
+        let cancellable = session.objectWillChange.sink { changeCount += 1 }
+
+        XCTAssertFalse(session.saveFilters(session.snapshot))
+        XCTAssertEqual(changeCount, 0)
+
+        var changed = session.snapshot
+        changed.query = "리코"
+        XCTAssertTrue(session.saveFilters(changed))
+        XCTAssertEqual(changeCount, 1)
+
+        let position = SongScrollPosition(
+            anchorSongId: "youtube:AbCdEf123_-",
+            anchorOffset: 0,
+            fallbackAbsoluteOffset: 241,
+            visibleLimitAtCapture: 20,
+            queryKey: changed.queryKey
+        )
+        XCTAssertTrue(session.saveScrollPosition(position))
+        XCTAssertFalse(session.saveScrollPosition(position))
+        XCTAssertEqual(changeCount, 1)
+        withExtendedLifetime(cancellable) {}
+    }
+
+    func testDerivedSongStateFiltersSortsAndReusesDisplayRows() {
+        let older = SongCatalogItem(
+            id: "older", youtubeVideoId: "AbCdEf123_-", title: "Older | Member A Cover", type: .cover,
+            publishedAt: Date(timeIntervalSince1970: 100),
+            catalogAddedAt: Date(timeIntervalSince1970: 200),
+            youtubeUrl: "https://www.youtube.com/watch?v=AbCdEf123_-"
+        )
+        let newer = SongCatalogItem(
+            id: "newer", youtubeVideoId: "ZyXwVu987_-", title: "Newer | Member B", type: .original,
+            publishedAt: Date(timeIntervalSince1970: 300),
+            catalogAddedAt: Date(timeIntervalSince1970: 120),
+            youtubeUrl: "https://www.youtube.com/watch?v=ZyXwVu987_-"
+        )
+        let discovery = SongDiscoveryStateV1(
+            initialized: true,
+            baselineAt: Date(timeIntervalSince1970: 150),
+            acknowledgedIds: []
+        )
+        let key = SongListQueryKey(
+            generationId: "all",
+            type: "cover",
+            libraryId: "favorites",
+            statusId: "new",
+            sortId: "publishedAt_desc",
+            selectedMemberIds: [],
+            memberMatchMode: .any,
+            participation: .any,
+            query: "older"
+        )
+        let state = SongsDerivedState.make(input: SongsDerivationInput(
+            songs: [newer, older],
+            catalogMembers: [],
+            queryKey: key,
+            favoriteIdentifiers: ["youtube:AbCdEf123_-"],
+            discoveryState: discovery,
+            visibleLimit: 20
+        ))
+
+        XCTAssertEqual(state.summary, SongFacetSummary(total: 2, original: 1, cover: 1))
+        XCTAssertEqual(state.filteredSongs.map(\.id), ["older"])
+        XCTAssertEqual(state.displayedCount, 1)
+        XCTAssertEqual(state.remainingCount, 0)
+        XCTAssertEqual(state.newSongCount, 1)
+        XCTAssertEqual(state.displayedRows[0].title, "Older")
+        XCTAssertEqual(state.displayedRows[0].tags.map(\.text), ["커버", "NEW"])
+        XCTAssertTrue(state.displayedRows[0].isFavorite)
+        XCTAssertEqual(state.displayedRows[0].videoURL?.absoluteString, "https://www.youtube.com/watch?v=AbCdEf123_-")
+    }
+
+    func testSongMetadataFlowLayoutWrapsUsingCachedMeasurements() {
+        let result = SongMetadataFlowLayout.layout(
+            sizes: [CGSize(width: 40, height: 20), CGSize(width: 50, height: 24), CGSize(width: 30, height: 18)],
+            width: 100,
+            spacing: 6
+        )
+
+        XCTAssertEqual(result.origins, [CGPoint(x: 0, y: 0), CGPoint(x: 46, y: 0), CGPoint(x: 0, y: 30)])
+        XCTAssertEqual(result.size, CGSize(width: 96, height: 48))
+    }
+
+    func testThumbnailCandidatesAdvanceOncePerFailure() {
+        var state = SongThumbnailCandidateState()
+        XCTAssertEqual(state.index, 0)
+        XCTAssertTrue(state.advance(urlCount: 3))
+        XCTAssertEqual(state.index, 1)
+        XCTAssertTrue(state.advance(urlCount: 3))
+        XCTAssertEqual(state.index, 2)
+        XCTAssertFalse(state.advance(urlCount: 3))
+        XCTAssertEqual(state.index, 2)
     }
 
     private func songMember(

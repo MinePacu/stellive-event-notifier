@@ -300,6 +300,37 @@ final class HubAPIClientTests: XCTestCase {
         XCTAssertEqual(response.items.first?.premiere?.actualStartAt, Date(timeIntervalSince1970: 1782633602))
     }
 
+    func testMusicDetailDecodesSourcePlaylists() async throws {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/v1/music/music-1")
+            return jsonResponse(statusCode: 200, body: """
+            {
+              "id": "music-1",
+              "youtubeVideoId": "AbCdEf123_-",
+              "title": "Song",
+              "type": "cover",
+              "publishedAt": null,
+              "thumbnailUrl": null,
+              "duration": null,
+              "members": [],
+              "youtubeUrl": "https://www.youtube.com/watch?v=AbCdEf123_-",
+              "sourcePlaylistId": "source-1",
+              "sourcePlaylists": [{
+                "youtubePlaylistId": "PL_PRIMARY_123",
+                "title": "Primary",
+                "type": "cover",
+                "youtubeUrl": "https://www.youtube.com/playlist?list=PL_PRIMARY_123",
+                "isPrimary": true
+              }]
+            }
+            """)
+        }
+
+        let detail = try await client.musicDetail(id: "music-1")
+        XCTAssertEqual(detail.sourcePlaylists.first?.youtubePlaylistId, "PL_PRIMARY_123")
+        XCTAssertEqual(detail.sourcePlaylists.first?.isPrimary, true)
+    }
+
     private func makeClient(
         handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)
     ) -> HubAPIClient {
