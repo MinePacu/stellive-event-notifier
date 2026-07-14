@@ -39,6 +39,7 @@ class PreferenceResolutionStateTest {
         val settings = MockHubRepository().settings
         assertEquals(AppearanceMode.SYSTEM, settings.appearanceMode)
         assertEquals("appearance_mode", PreferenceKeys.APPEARANCE_MODE)
+        assertEquals("song_open_target", PreferenceKeys.SONG_OPEN_TARGET)
     }
 
     @Test

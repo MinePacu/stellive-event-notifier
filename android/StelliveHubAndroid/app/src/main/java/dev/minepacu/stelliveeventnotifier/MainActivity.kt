@@ -106,6 +106,8 @@ import dev.minepacu.stelliveeventnotifier.feature.songs.SongIdentity
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongDetailBottomSheet
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongDetailPolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongLinkPolicy
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenPreferenceStore
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenTarget
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailFormatting
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventHeroTagTone
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventImagePolicy
@@ -240,6 +242,7 @@ private var songFavoriteIds: Set<String> = emptySet()
 private var songDiscoveryState = SongDiscoveryStateV1()
 private lateinit var songDiscoveryRepository: SongDiscoveryRepository
 private lateinit var songFavoritesRepository: SongFavoritesRepository
+private val songOpenPreferenceStore by lazy { SongOpenPreferenceStore(this) }
 private var selectedSongSortId: String
     get() = songBrowseSession.sortId
     set(value) { songBrowseSession.sortId = value }
@@ -2459,6 +2462,7 @@ private fun songFilterRow(
     private fun showSongDetail(song: SongCatalogItem) {
         val sheet = SongDetailBottomSheet(
             context = this,
+            openTarget = songOpenPreferenceStore.read(),
             isFavorite = { target -> MainUiPolicy.songFavoriteIdentifier(target)?.let(songFavoriteIds::contains) == true },
             onOpen = { openExternalUrl(it) },
             onShare = ::shareSongUrl,
@@ -2480,17 +2484,27 @@ private fun songFilterRow(
     }
 
     private fun showSongQuickMenu(anchor: View, song: SongCatalogItem) {
-        val url = SongLinkPolicy.videoUrl(song)
+        val selectedTarget = songOpenPreferenceStore.read()
+        val youtubeUrl = SongLinkPolicy.videoUrl(song, SongOpenTarget.YOUTUBE)
+        val youtubeMusicUrl = SongLinkPolicy.videoUrl(song, SongOpenTarget.YOUTUBE_MUSIC)
         PopupMenu(this, anchor).apply {
-            val open = menu.add("YouTube 열기")
+            val youtube = menu.add(
+                "YouTube에서 열기" + if (selectedTarget == SongOpenTarget.YOUTUBE) " · 기본" else "",
+            )
+            val youtubeMusic = menu.add(
+                "YouTube Music에서 열기" + if (selectedTarget == SongOpenTarget.YOUTUBE_MUSIC) " · 기본" else "",
+            )
             val share = menu.add("링크 공유")
             val copy = menu.add("링크 복사")
-            listOf(open, share, copy).forEach { it.isEnabled = url != null }
+            youtube.isEnabled = youtubeUrl != null
+            youtubeMusic.isEnabled = youtubeMusicUrl != null
+            listOf(share, copy).forEach { it.isEnabled = youtubeUrl != null }
             setOnMenuItemClickListener { item ->
                 when (item) {
-                    open -> url?.let(::openExternalUrl)
-                    share -> url?.let(::shareSongUrl)
-                    copy -> url?.let(::copySongUrl)
+                    youtube -> youtubeUrl?.let(::openExternalUrl)
+                    youtubeMusic -> youtubeMusicUrl?.let(::openExternalUrl)
+                    share -> youtubeUrl?.let(::shareSongUrl)
+                    copy -> youtubeUrl?.let(::copySongUrl)
                 }
                 true
             }
@@ -2672,6 +2686,7 @@ private fun songFilterRow(
             )
         )
         container.addView(appearanceModePanel())
+        container.addView(songOpenPreferencePanel())
         container.addView(debugModePanel())
         visibleServerConnectionDebugLogs().takeIf { it.isNotEmpty() }?.let { logs ->
             container.addView(
@@ -3186,6 +3201,57 @@ private fun songFilterRow(
                 addView(appearanceModeChip(AppearanceMode.DARK, "다크"))
             })
             addView(content)
+        }
+
+    private fun songOpenPreferencePanel(): MaterialCardView =
+        baseCard().apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                bottomMargin = dp(12)
+            }
+            val selectedTarget = songOpenPreferenceStore.read()
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(15), dp(15), dp(15), dp(15))
+                addView(TextView(context).apply {
+                    text = "노래 재생"
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                })
+                addView(TextView(context).apply {
+                    text = "기본 열기 앱"
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 13f
+                    setPadding(0, dp(8), 0, dp(8))
+                })
+                addView(ChipGroup(context).apply {
+                    isSingleSelection = true
+                    isSelectionRequired = true
+                    SongOpenTarget.entries.forEach { target ->
+                        addView(Chip(context).apply {
+                            text = target.displayName
+                            isCheckable = true
+                            isChecked = selectedTarget == target
+                            minHeight = dp(48)
+                            setOnClickListener {
+                                if (songOpenPreferenceStore.read() != target) {
+                                    songOpenPreferenceStore.write(target)
+                                    renderSettings()
+                                }
+                            }
+                        })
+                    }
+                })
+                addView(TextView(context).apply {
+                    text = "노래 상세의 기본 열기 버튼에 적용됩니다. 공유와 링크 복사는 YouTube 주소를 사용합니다."
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 12f
+                    setPadding(0, dp(10), 0, 0)
+                })
+            })
         }
 
     private fun debugModePanel(): MaterialCardView =
@@ -4118,7 +4184,12 @@ private fun hubEventDetailHero(event: dev.minepacu.stelliveeventnotifier.core.mo
 
     private fun openExternalUrl(url: String?) {
         val target = url?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: return
-        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(target))
+        if (intent.resolveActivity(packageManager) == null) {
+            Toast.makeText(this, "링크를 열 수 있는 앱이 없습니다.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        startActivity(intent)
     }
 
 private fun compactEventCard(title: String, body: String, pills: List<String>, thumbnailUrl: String? = null): MaterialCardView =

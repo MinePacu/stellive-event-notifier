@@ -22,6 +22,7 @@ import dev.minepacu.stelliveeventnotifier.ui.components.HubCardStyle
 
 class SongDetailBottomSheet(
     private val context: Context,
+    private val openTarget: SongOpenTarget,
     private val isFavorite: (SongCatalogItem) -> Boolean,
     private val onOpen: (String) -> Unit,
     private val onShare: (String) -> Unit,
@@ -66,13 +67,14 @@ class SongDetailBottomSheet(
         })
         body.addView(infoCard(song))
 
-        val url = SongLinkPolicy.videoUrl(song)
+        val primaryUrl = SongLinkPolicy.videoUrl(song, openTarget)
+        val youtubeUrl = SongLinkPolicy.videoUrl(song, SongOpenTarget.YOUTUBE)
         body.addView(sectionTitle("동작"))
-        body.addView(primaryActionButton("YouTube 열기", url, onOpen))
+        body.addView(primaryActionButton(openTarget.openButtonLabel, primaryUrl, onOpen))
         body.addView(LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(secondaryActionButton("링크 공유", url, onShare), weightedButtonParams(endMargin = dp(5)))
-            addView(secondaryActionButton("링크 복사", url, onCopy), weightedButtonParams(startMargin = dp(5)))
+            addView(secondaryActionButton("링크 공유", youtubeUrl, onShare), weightedButtonParams(endMargin = dp(5)))
+            addView(secondaryActionButton("링크 복사", youtubeUrl, onCopy), weightedButtonParams(startMargin = dp(5)))
         })
         body.addView(secondaryActionButton(
             label = if (isFavorite(song)) "즐겨찾기 해제" else "즐겨찾기 추가",

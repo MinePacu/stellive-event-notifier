@@ -10,9 +10,11 @@ struct SongDetailSheet: View {
     @EnvironmentObject private var serverStore: ServerHubStore
     @EnvironmentObject private var favoritesStore: SongFavoritesStore
     @EnvironmentObject private var discoveryStore: SongDiscoveryStore
+    @EnvironmentObject private var songOpenPreferenceStore: SongOpenPreferenceStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var song: SongCatalogItem
+    @State private var isOpenFailurePresented = false
 
     init(
         song: SongCatalogItem,
@@ -40,7 +42,11 @@ struct SongDetailSheet: View {
                 }
 
                 Section("동작") {
-                    actionButton("YouTube 열기", systemImage: "play.rectangle") { openURL($0) }
+                    actionButton(
+                        songOpenPreferenceStore.target.openButtonTitle,
+                        systemImage: "play.rectangle",
+                        url: SongLinkPolicy.videoURL(for: song, target: songOpenPreferenceStore.target)
+                    ) { openSongURL($0) }
                     if let url = SongLinkPolicy.videoURL(for: song) {
                         ShareLink(item: url) {
                             Label("링크 공유", systemImage: "square.and.arrow.up")
@@ -118,16 +124,33 @@ struct SongDetailSheet: View {
                 discoveryStore.acknowledge([fallback], catalog: serverStore.serverSongs)
                 song = await serverStore.loadSongDetail(id: fallback.id, fallback: fallback)
             }
+            .alert("링크를 열 수 없습니다", isPresented: $isOpenFailurePresented) {
+                Button("확인", role: .cancel) {}
+            } message: {
+                Text("이 링크를 처리할 수 있는 앱을 찾지 못했습니다.")
+            }
+        }
+    }
+
+    private func openSongURL(_ url: URL) {
+        openURL(url) { accepted in
+            if !accepted { isOpenFailurePresented = true }
         }
     }
 
     @ViewBuilder
-    private func actionButton(_ title: String, systemImage: String, action: @escaping (URL) -> Void) -> some View {
-        if let url = SongLinkPolicy.videoURL(for: song) {
+    private func actionButton(
+        _ title: String,
+        systemImage: String,
+        url: URL?,
+        action: @escaping (URL) -> Void
+    ) -> some View {
+        if let url {
             Button { action(url) } label: {
                 Label(title, systemImage: systemImage)
             }
             .songDetailActionRow()
+            .accessibilityLabel(title)
         } else {
             disabledAction(title, systemImage: systemImage)
         }

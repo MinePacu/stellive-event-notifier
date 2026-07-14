@@ -8,13 +8,28 @@ object SongLinkPolicy {
     private val videoIdPattern = Regex("^[A-Za-z0-9_-]{11}$")
     private val playlistIdPattern = Regex("^[A-Za-z0-9_-]{10,}$")
 
-    fun videoUrl(song: SongCatalogItem): String? {
-        val videoId = song.youtubeVideoId.trim()
-        if (videoIdPattern.matches(videoId)) return "https://www.youtube.com/watch?v=$videoId"
-        return validatedYoutubeUrl(song.youtubeUrl) ?: validatedYoutubeUrl(song.sourceUrl)
-    }
+    fun videoUrl(song: SongCatalogItem): String? = videoUrl(song, SongOpenTarget.YOUTUBE)
+
+    fun videoUrl(song: SongCatalogItem, target: SongOpenTarget): String? =
+        videoId(song)?.let { videoId ->
+            when (target) {
+                SongOpenTarget.YOUTUBE -> "https://www.youtube.com/watch?v=$videoId"
+                SongOpenTarget.YOUTUBE_MUSIC -> "https://music.youtube.com/watch?v=$videoId"
+            }
+        }
 
     fun validatedYoutubeUrl(raw: String?): String? {
+        val normalized = raw?.trim().orEmpty()
+        return normalized.takeIf { validatedVideoId(it) != null }
+    }
+
+    private fun videoId(song: SongCatalogItem): String? {
+        val directId = song.youtubeVideoId.trim()
+        if (videoIdPattern.matches(directId)) return directId
+        return validatedVideoId(song.youtubeUrl) ?: validatedVideoId(song.sourceUrl)
+    }
+
+    private fun validatedVideoId(raw: String?): String? {
         val uri = runCatching { URI(raw?.trim().orEmpty()) }.getOrNull() ?: return null
         if (!uri.scheme.equals("https", ignoreCase = true)) return null
         val host = uri.host?.lowercase() ?: return null
@@ -30,7 +45,7 @@ object SongLinkPolicy {
                 uri.path.takeIf { it.startsWith(prefix) }?.removePrefix(prefix)?.substringBefore('/')
             }
         }
-        return uri.toString().takeIf { videoId != null && videoIdPattern.matches(videoId) }
+        return videoId?.takeIf(videoIdPattern::matches)
     }
 
     fun playlistUrl(playlistId: String?): String? = playlistId?.trim()

@@ -651,7 +651,9 @@ struct SongRow: View {
     let model: SongRowDisplayModel
     let onOpenDetail: (SongCatalogItem) -> Void
     let onToggleFavorite: (SongCatalogItem) -> Void
+    @EnvironmentObject private var songOpenPreferenceStore: SongOpenPreferenceStore
     @Environment(\.openURL) private var openURL
+    @State private var isOpenFailurePresented = false
 
     init(
         model: SongRowDisplayModel,
@@ -720,15 +722,32 @@ struct SongRow: View {
                     .accessibilityLabel(model.isFavorite ? "즐겨찾기 해제" : "즐겨찾기 추가")
                 }
                 Menu {
-                    if let url = model.videoURL {
-                        Button("YouTube 열기", systemImage: "play.rectangle") { openURL(url) }
-                        ShareLink(item: url) { Label("링크 공유", systemImage: "square.and.arrow.up") }
+                    if let youtubeURL = model.videoURL,
+                       let youtubeMusicURL = SongLinkPolicy.videoURL(for: model.song, target: .youtubeMusic) {
+                        Button {
+                            openSongURL(youtubeURL)
+                        } label: {
+                            Label(
+                                "YouTube에서 열기",
+                                systemImage: songOpenPreferenceStore.target == .youtube ? "checkmark" : "play.rectangle"
+                            )
+                        }
+                        Button {
+                            openSongURL(youtubeMusicURL)
+                        } label: {
+                            Label(
+                                "YouTube Music에서 열기",
+                                systemImage: songOpenPreferenceStore.target == .youtubeMusic ? "checkmark" : "music.note"
+                            )
+                        }
+                        ShareLink(item: youtubeURL) { Label("링크 공유", systemImage: "square.and.arrow.up") }
                         Button("링크 복사", systemImage: "doc.on.doc") {
-                            UIPasteboard.general.url = url
+                            UIPasteboard.general.url = youtubeURL
                             UIAccessibility.post(notification: .announcement, argument: "링크를 복사했습니다")
                         }
                     } else {
-                        Button("YouTube 열기", systemImage: "play.rectangle") {}.disabled(true)
+                        Button("YouTube에서 열기", systemImage: "play.rectangle") {}.disabled(true)
+                        Button("YouTube Music에서 열기", systemImage: "music.note") {}.disabled(true)
                         Button("링크 공유", systemImage: "square.and.arrow.up") {}.disabled(true)
                         Button("링크 복사", systemImage: "doc.on.doc") {}.disabled(true)
                     }
@@ -737,7 +756,7 @@ struct SongRow: View {
                         .frame(width: 44, height: 44)
                 }
                 .accessibilityLabel(model.quickActionAccessibilityLabel)
-                .accessibilityHint(model.videoURL == nil ? SongLinkPolicy.unavailableReason : "열기, 공유 또는 복사")
+                .accessibilityHint(model.videoURL == nil ? SongLinkPolicy.unavailableReason : "YouTube 또는 YouTube Music에서 열기, 공유 또는 복사")
             }
             .padding(14)
         }
@@ -748,6 +767,17 @@ struct SongRow: View {
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
+        }
+        .alert("링크를 열 수 없습니다", isPresented: $isOpenFailurePresented) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text("이 링크를 처리할 수 있는 앱을 찾지 못했습니다.")
+        }
+    }
+
+    private func openSongURL(_ url: URL) {
+        openURL(url) { accepted in
+            if !accepted { isOpenFailurePresented = true }
         }
     }
 }

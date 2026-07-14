@@ -203,6 +203,7 @@ struct SettingsView: View {
 struct SettingsContentView: View {
     @EnvironmentObject private var store: MockHubStore
     @EnvironmentObject private var serverStore: ServerHubStore
+    @EnvironmentObject private var songOpenPreferenceStore: SongOpenPreferenceStore
     @State private var debugModeEnabled = false
 
     var body: some View {
@@ -219,6 +220,18 @@ struct SettingsContentView: View {
 
             Section("화면 모드") {
                 appearanceModePicker
+            }
+
+            Section("노래 재생") {
+                Picker("기본 열기 앱", selection: $songOpenPreferenceStore.target) {
+                    ForEach(SongOpenTarget.allCases) { target in
+                        Text(target.displayName).tag(target)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text("노래 상세의 기본 열기 버튼에 적용됩니다. 공유와 링크 복사는 YouTube 주소를 사용합니다.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("디버그") {

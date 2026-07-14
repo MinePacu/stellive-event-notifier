@@ -6,6 +6,8 @@ import dev.minepacu.stelliveeventnotifier.core.model.SongType
 import dev.minepacu.stelliveeventnotifier.feature.home.SongMemberMatchMode
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongDetailPolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongLinkPolicy
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenPreferenceStore
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenTarget
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -17,16 +19,49 @@ class SongDetailPolicyTest {
     fun `video id wins and produces one canonical URL for actions`() {
         val song = song(videoId = "AbCdEf123_-", youtubeUrl = "https://youtu.be/otherVideo1")
         assertEquals("https://www.youtube.com/watch?v=AbCdEf123_-", SongLinkPolicy.videoUrl(song))
+        assertEquals(
+            "https://music.youtube.com/watch?v=AbCdEf123_-",
+            SongLinkPolicy.videoUrl(song, SongOpenTarget.YOUTUBE_MUSIC),
+        )
     }
 
     @Test
     fun `only approved HTTPS YouTube hosts are accepted without homepage fallback`() {
-        assertEquals("https://youtu.be/AbCdEf123_-", SongLinkPolicy.videoUrl(song(videoId = "bad", youtubeUrl = "https://youtu.be/AbCdEf123_-")))
+        assertEquals(
+            "https://www.youtube.com/watch?v=AbCdEf123_-",
+            SongLinkPolicy.videoUrl(song(videoId = "bad", youtubeUrl = "https://youtu.be/AbCdEf123_-")),
+        )
         assertNull(SongLinkPolicy.videoUrl(song(videoId = "bad", youtubeUrl = "http://www.youtube.com/watch?v=AbCdEf123_-")))
         assertNull(SongLinkPolicy.videoUrl(song(videoId = "bad", youtubeUrl = "https://example.com/watch?v=AbCdEf123_-")))
         assertNull(SongLinkPolicy.videoUrl(song(videoId = "bad", youtubeUrl = "not a url")))
         assertNull(SongLinkPolicy.videoUrl(song(videoId = "bad", youtubeUrl = "https://www.youtube.com")))
         assertNull(SongLinkPolicy.videoUrl(song(videoId = "bad", youtubeUrl = "https://www.youtube.com/watch?v=bad")))
+    }
+
+    @Test
+    fun `song open target defaults and restores stable stored values`() {
+        assertEquals(SongOpenTarget.YOUTUBE, SongOpenTarget.fromStoredValue(null))
+        assertEquals(SongOpenTarget.YOUTUBE, SongOpenTarget.fromStoredValue("youtube"))
+        assertEquals(SongOpenTarget.YOUTUBE_MUSIC, SongOpenTarget.fromStoredValue("youtube_music"))
+        assertEquals(SongOpenTarget.YOUTUBE, SongOpenTarget.fromStoredValue("damaged"))
+        assertEquals("YouTube에서 열기", SongOpenTarget.YOUTUBE.openButtonLabel)
+        assertEquals("YouTube Music에서 열기", SongOpenTarget.YOUTUBE_MUSIC.openButtonLabel)
+    }
+
+    @Test
+    fun `song open preference store persists changes and recovers damaged values`() {
+        var storedValue: String? = null
+        val store = SongOpenPreferenceStore(
+            readStoredValue = { storedValue },
+            writeStoredValue = { storedValue = it },
+        )
+
+        assertEquals(SongOpenTarget.YOUTUBE, store.read())
+        store.write(SongOpenTarget.YOUTUBE_MUSIC)
+        assertEquals("youtube_music", storedValue)
+        assertEquals(SongOpenTarget.YOUTUBE_MUSIC, store.read())
+        storedValue = "damaged"
+        assertEquals(SongOpenTarget.YOUTUBE, store.read())
     }
 
     @Test

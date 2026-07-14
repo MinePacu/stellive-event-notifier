@@ -55,17 +55,41 @@ final class SongUiPolicyTests: XCTestCase {
     func testSongLinkPolicyNormalizesVideoIDAndRejectsUnsafeFallbacks() {
         let canonical = songCatalogItem(id: "AbCdEf123_-", title: "Song", memberName: "Member", publishedAt: nil)
         XCTAssertEqual(SongLinkPolicy.videoURL(for: canonical)?.absoluteString, "https://www.youtube.com/watch?v=AbCdEf123_-")
+        XCTAssertEqual(
+            SongLinkPolicy.videoURL(for: canonical, target: .youtubeMusic)?.absoluteString,
+            "https://music.youtube.com/watch?v=AbCdEf123_-"
+        )
 
         let short = SongCatalogItem(
             id: "song", youtubeVideoId: "bad", title: "Song", type: .cover,
             youtubeUrl: "https://youtu.be/AbCdEf123_-"
         )
-        XCTAssertEqual(SongLinkPolicy.videoURL(for: short)?.absoluteString, "https://youtu.be/AbCdEf123_-")
+        XCTAssertEqual(SongLinkPolicy.videoURL(for: short)?.absoluteString, "https://www.youtube.com/watch?v=AbCdEf123_-")
         XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("http://www.youtube.com/watch?v=AbCdEf123_-"))
         XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("https://example.com/watch?v=AbCdEf123_-"))
         XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("not a url"))
         XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("https://www.youtube.com"))
         XCTAssertNil(SongLinkPolicy.validatedYouTubeURL("https://www.youtube.com/watch?v=bad"))
+    }
+
+    func testSongOpenPreferenceStoreDefaultsRestoresAndRecoversInvalidValues() {
+        let suiteName = "SongOpenPreferenceStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertEqual(SongOpenPreferenceStore(defaults: defaults).target, .youtube)
+
+        defaults.set("youtube_music", forKey: SongOpenPreferenceStore.preferenceKey)
+        let restored = SongOpenPreferenceStore(defaults: defaults)
+        XCTAssertEqual(restored.target, .youtubeMusic)
+        restored.target = .youtube
+        XCTAssertEqual(defaults.string(forKey: SongOpenPreferenceStore.preferenceKey), "youtube")
+
+        defaults.set("damaged", forKey: SongOpenPreferenceStore.preferenceKey)
+        XCTAssertEqual(SongOpenPreferenceStore(defaults: defaults).target, .youtube)
+        XCTAssertEqual(defaults.string(forKey: SongOpenPreferenceStore.preferenceKey), "youtube")
+        XCTAssertEqual(SongOpenTarget.youtube.openButtonTitle, "YouTube에서 열기")
+        XCTAssertEqual(SongOpenTarget.youtubeMusic.openButtonTitle, "YouTube Music에서 열기")
     }
 
     func testSongDetailPolicyFormatsDurationAndBuildsRelatedFilters() {
