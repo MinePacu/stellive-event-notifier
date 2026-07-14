@@ -102,6 +102,11 @@ data class SettingsCardSpacing(
 object MainUiPolicy {
     const val SONG_PAGE_SIZE = 20
     const val SONG_THUMBNAIL_ASPECT_RATIO = 16f / 9f
+    const val SONG_COMPACT_WIDTH_BREAKPOINT_DP = 400
+    const val SONG_COMPACT_THUMBNAIL_WIDTH_DP = 96
+    const val SONG_REGULAR_THUMBNAIL_WIDTH_DP = 112
+    const val SONG_TITLE_MAX_LINES = 3
+    const val SONG_SUBTITLE_MAX_LINES = 2
     const val SONG_FILTER_SEGMENT_SPACING_DP = 12
     private val songPremiereZoneId: ZoneId = ZoneId.of("Asia/Seoul")
     private val songPremiereDateTimeFormatter: DateTimeFormatter =
@@ -389,6 +394,13 @@ object MainUiPolicy {
     )
 
     fun songThumbnailHeightDp(widthDp: Int): Int = (widthDp / SONG_THUMBNAIL_ASPECT_RATIO).roundToInt()
+
+    fun songThumbnailWidthDp(screenWidthDp: Int): Int =
+        if (screenWidthDp <= SONG_COMPACT_WIDTH_BREAKPOINT_DP) {
+            SONG_COMPACT_THUMBNAIL_WIDTH_DP
+        } else {
+            SONG_REGULAR_THUMBNAIL_WIDTH_DP
+        }
 
     fun songDisplayText(song: SongCatalogItem, catalogMembers: List<HubMember> = emptyList()): SongDisplayText {
         val parsed = parsedSongTitle(song)

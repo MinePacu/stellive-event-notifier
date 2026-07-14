@@ -163,12 +163,24 @@ export interface MusicCatalogItem {
   duration: string | null;
   durationSeconds?: number | null;
   isInstrumental?: boolean;
-  specialFlags?: unknown[];
+  specialFlags?: string[];
   classificationStatus?: string;
   members: MusicMemberSummary[];
   youtubeUrl: string;
   sourcePlaylistId: string | null;
   premiere?: YoutubePremiereMetadata;
+}
+
+export interface MusicSourcePlaylistSummary {
+  youtubePlaylistId: string;
+  title: string;
+  type: "cover" | "original" | "other";
+  youtubeUrl: string;
+  isPrimary: boolean;
+}
+
+export interface MusicCatalogDetail extends MusicCatalogItem {
+  sourcePlaylists: MusicSourcePlaylistSummary[];
 }
 
 export interface PlatformEvent {

@@ -508,6 +508,11 @@ class HubApiClientTest {
             return musicResponse
         }
 
+        override suspend fun musicDetail(id: String): MusicCatalogItemDto {
+            failure?.let { throw it }
+            return requireNotNull(musicResponse.items.firstOrNull { it.id == id } ?: musicResponse.items.firstOrNull())
+        }
+
         override suspend fun memberMusic(
             memberId: String,
             type: String?,

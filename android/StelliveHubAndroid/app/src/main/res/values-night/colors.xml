@@ -1,5 +1,6 @@
 <resources>
     <color name="hub_primary">#9FCED1</color>
+    <color name="hub_on_primary">#102124</color>
     <color name="hub_secondary">#D6B56B</color>
     <color name="hub_surface">#202020</color>
     <color name="hub_surface_dark">#111515</color>

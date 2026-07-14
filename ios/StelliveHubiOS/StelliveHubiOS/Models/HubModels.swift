@@ -424,6 +424,14 @@ struct YoutubePremiereMetadata: Codable, Equatable, Hashable {
     let actualEndAt: Date?
 }
 
+struct MusicSourcePlaylist: Codable, Equatable, Hashable {
+    let youtubePlaylistId: String
+    let title: String
+    let type: String
+    let youtubeUrl: String
+    let isPrimary: Bool
+}
+
 struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let youtubeVideoId: String
@@ -447,6 +455,7 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
     let youtubeUrl: String
     let sourcePlaylistId: String?
     let premiere: YoutubePremiereMetadata?
+    let sourcePlaylists: [MusicSourcePlaylist]
 
     init(
         id: String,
@@ -470,7 +479,8 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
         generationName: String? = nil,
         sourceUrl: String? = nil,
         thumbnail: SongThumbnail? = nil,
-        premiere: YoutubePremiereMetadata? = nil
+        premiere: YoutubePremiereMetadata? = nil,
+        sourcePlaylists: [MusicSourcePlaylist] = []
     ) {
         self.id = id
         self.youtubeVideoId = youtubeVideoId
@@ -494,6 +504,7 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
         self.youtubeUrl = youtubeUrl
         self.sourcePlaylistId = sourcePlaylistId
         self.premiere = premiere
+        self.sourcePlaylists = sourcePlaylists
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -519,6 +530,7 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
         case youtubeUrl
         case sourcePlaylistId
         case premiere
+        case sourcePlaylists
     }
 
     init(from decoder: Decoder) throws {
@@ -537,7 +549,7 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
             duration: try container.decodeIfPresent(String.self, forKey: .duration),
             durationSeconds: try container.decodeIfPresent(Int.self, forKey: .durationSeconds),
             isInstrumental: try container.decodeIfPresent(Bool.self, forKey: .isInstrumental) ?? false,
-            specialFlags: try container.decodeIfPresent([String].self, forKey: .specialFlags) ?? [],
+            specialFlags: (try? container.decode(LossyStringArray.self, forKey: .specialFlags))?.values ?? [],
             classificationStatus: try container.decodeIfPresent(String.self, forKey: .classificationStatus),
             members: try container.decodeIfPresent([MusicMemberSummary].self, forKey: .members) ?? [],
             youtubeUrl: try container.decodeIfPresent(String.self, forKey: .youtubeUrl) ?? sourceUrl ?? "https://www.youtube.com/watch?v=\(youtubeVideoId)",
@@ -548,9 +560,52 @@ struct SongCatalogItem: Identifiable, Codable, Equatable, Hashable {
             generationName: try container.decodeIfPresent(String.self, forKey: .generationName),
             sourceUrl: sourceUrl,
             thumbnail: try container.decodeIfPresent(SongThumbnail.self, forKey: .thumbnail),
-            premiere: try container.decodeIfPresent(YoutubePremiereMetadata.self, forKey: .premiere)
+            premiere: try container.decodeIfPresent(YoutubePremiereMetadata.self, forKey: .premiere),
+            sourcePlaylists: try container.decodeIfPresent([MusicSourcePlaylist].self, forKey: .sourcePlaylists) ?? []
         )
     }
+}
+
+private struct LossyStringArray: Decodable {
+    let values: [String]
+
+    init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        var output: [String] = []
+        while !container.isAtEnd {
+            if let value = try? container.decode(String.self) {
+                output.append(value)
+            } else {
+                _ = try? container.decode(DiscardedJSONValue.self)
+            }
+        }
+        values = output
+    }
+}
+
+private struct DiscardedJSONValue: Decodable {
+    init(from decoder: Decoder) throws {
+        if var array = try? decoder.unkeyedContainer() {
+            while !array.isAtEnd { _ = try? array.decode(DiscardedJSONValue.self) }
+            return
+        }
+        if let object = try? decoder.container(keyedBy: DynamicCodingKey.self) {
+            for key in object.allKeys { _ = try? object.decode(DiscardedJSONValue.self, forKey: key) }
+            return
+        }
+        let value = try decoder.singleValueContainer()
+        if value.decodeNil() { return }
+        if (try? value.decode(Bool.self)) != nil { return }
+        if (try? value.decode(Double.self)) != nil { return }
+        _ = try? value.decode(String.self)
+    }
+}
+
+private struct DynamicCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int? = nil
+    init?(stringValue: String) { self.stringValue = stringValue }
+    init?(intValue: Int) { return nil }
 }
 
 struct SongListResponse: Codable, Equatable {
@@ -623,7 +678,7 @@ enum SongIdentity {
     }
 }
 
-struct SongListQueryKey: Equatable {
+struct SongListQueryKey: Equatable, Hashable {
     let generationId: String
     let type: String
     let libraryId: String
@@ -645,7 +700,7 @@ struct SongListQueryKey: Equatable {
     }
 }
 
-struct SongScrollPosition: Equatable {
+struct SongScrollPosition: Equatable, Hashable {
     let anchorSongId: String?
     let anchorOffset: CGFloat
     let fallbackAbsoluteOffset: CGFloat
@@ -653,21 +708,19 @@ struct SongScrollPosition: Equatable {
     let queryKey: SongListQueryKey
 }
 
-@MainActor
-final class SongBrowseSessionStore: ObservableObject {
-    @Published var selectedGenerationId = "all"
-    @Published var selectedType = "all"
-    @Published var selectedLibraryId = "all"
-    @Published var selectedStatusId = "all"
-    @Published var selectedSortId = "publishedAt_desc"
-    @Published var memberFilter = SongMemberFilterState()
-    @Published var query = ""
-    @Published var visibleLimit = IOSSongPagePolicy.pageSize
-    @Published var scrollPosition: SongScrollPosition?
+struct SongBrowseSnapshot: Equatable, Hashable {
+    var selectedGenerationId = "all"
+    var selectedType = "all"
+    var selectedLibraryId = "all"
+    var selectedStatusId = "all"
+    var selectedSortId = "publishedAt_desc"
+    var memberFilter = SongMemberFilterState()
+    var query = ""
+    var visibleLimit = IOSSongPagePolicy.pageSize
 
     var queryKey: SongListQueryKey {
         SongListQueryKey(
-            generationId: "all",
+            generationId: selectedGenerationId,
             type: selectedType,
             libraryId: selectedLibraryId,
             statusId: selectedStatusId,
@@ -678,15 +731,43 @@ final class SongBrowseSessionStore: ObservableObject {
             query: query
         )
     }
+}
 
-    func resetForQueryChange() {
-        visibleLimit = IOSSongPagePolicy.pageSize
-        scrollPosition = nil
+@MainActor
+final class SongBrowseSessionStore: ObservableObject {
+    @Published private(set) var snapshot = SongBrowseSnapshot()
+    private(set) var scrollPosition: SongScrollPosition?
+
+    var queryKey: SongListQueryKey {
+        snapshot.queryKey
+    }
+
+    @discardableResult
+    func saveFilters(_ newSnapshot: SongBrowseSnapshot) -> Bool {
+        guard snapshot != newSnapshot else { return false }
+        snapshot = newSnapshot
+        return true
+    }
+
+    @discardableResult
+    func saveScrollPosition(_ position: SongScrollPosition?) -> Bool {
+        guard scrollPosition != position else { return false }
+        scrollPosition = position
+        return true
+    }
+
+    func resetForQueryChange(snapshot newSnapshot: SongBrowseSnapshot) {
+        var resetSnapshot = newSnapshot
+        resetSnapshot.visibleLimit = IOSSongPagePolicy.pageSize
+        saveFilters(resetSnapshot)
+        saveScrollPosition(nil)
     }
 }
 
 enum IOSSongPagePolicy {
     static let pageSize = 20
+    static let titleLineLimit = 3
+    static let subtitleLineLimit = 2
 
     static let generationFilters: [SongFilterOption] = [
         .init(id: "all", label: "전체"),

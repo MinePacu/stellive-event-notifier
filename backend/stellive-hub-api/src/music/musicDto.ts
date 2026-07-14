@@ -1,4 +1,4 @@
-import type { MusicCatalogItem } from "../../../../shared/schemas/domain.js";
+import type { MusicCatalogDetail, MusicCatalogItem } from "../../../../shared/schemas/domain.js";
 
 export function toMusicCatalogDto(item: MusicCatalogItem): MusicCatalogItem {
   return {
@@ -23,5 +23,12 @@ export function toMusicCatalogDto(item: MusicCatalogItem): MusicCatalogItem {
     youtubeUrl: item.youtubeUrl || `https://www.youtube.com/watch?v=${item.youtubeVideoId}`,
     sourcePlaylistId: item.sourcePlaylistId,
     premiere: item.premiere,
+  };
+}
+
+export function toMusicCatalogDetailDto(item: MusicCatalogDetail): MusicCatalogDetail {
+  return {
+    ...toMusicCatalogDto(item),
+    sourcePlaylists: item.sourcePlaylists,
   };
 }

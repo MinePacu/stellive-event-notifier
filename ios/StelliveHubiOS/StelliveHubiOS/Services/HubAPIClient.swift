@@ -347,6 +347,11 @@ final class HubAPIClient {
         return try await send(URLRequest(url: components.url!), responseType: MusicListResponse.self)
     }
 
+    func musicDetail(id: String) async throws -> SongCatalogItem {
+        let url = baseURL.appendingPathComponent("v1/music/\(id)")
+        return try await send(URLRequest(url: url), responseType: SongCatalogItem.self)
+    }
+
     func memberMusic(
         memberId: String,
         type: String? = nil,

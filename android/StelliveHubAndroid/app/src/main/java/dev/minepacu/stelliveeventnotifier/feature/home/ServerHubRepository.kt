@@ -19,6 +19,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.SongFacets
 import dev.minepacu.stelliveeventnotifier.core.model.SongFilterCount
 import dev.minepacu.stelliveeventnotifier.core.model.SongListResult
 import dev.minepacu.stelliveeventnotifier.core.model.SongMemberSummary
+import dev.minepacu.stelliveeventnotifier.core.model.SongSourcePlaylist
 import dev.minepacu.stelliveeventnotifier.core.model.SongThumbnail
 import dev.minepacu.stelliveeventnotifier.core.model.SongType
 import dev.minepacu.stelliveeventnotifier.core.model.YoutubePremiereMetadata
@@ -65,6 +66,7 @@ class ServerHubRepository(
     private val eventCache = linkedMapOf<String, HubEvent>()
     private var calendarCache: List<HubCalendarDay> = emptyList()
     private var songCache: SongListResult? = null
+    private val songDetailCache = linkedMapOf<String, SongCatalogItem>()
     private var songFacetCache: SongFacets? = null
 
     override suspend fun bootstrap(): HubDataState {
@@ -177,6 +179,17 @@ class ServerHubRepository(
             songCache?.items ?: fallback.songs().items,
             limit,
         )
+    }
+
+    override suspend fun songDetail(id: String, fallback: SongCatalogItem): SongCatalogItem {
+        val response = remoteDataSource.musicDetail(id)
+        if (response is HubNetworkResult.Success) {
+            response.value.toSongCatalogItemOrNull()?.let { detail ->
+                songDetailCache[id] = detail
+                return detail
+            }
+        }
+        return songDetailCache[id] ?: fallback
     }
 
     private suspend fun fetchAllMusicPages(
@@ -381,6 +394,15 @@ private fun MusicCatalogItemDto.toSongCatalogItemOrNull(): SongCatalogItem? {
         youtubeUrl = youtubeUrl,
         sourcePlaylistId = sourcePlaylistId,
         premiere = premiere.toYoutubePremiereMetadataOrNull(),
+        sourcePlaylists = sourcePlaylists.map {
+            SongSourcePlaylist(
+                youtubePlaylistId = it.youtubePlaylistId,
+                title = it.title,
+                type = it.type,
+                youtubeUrl = it.youtubeUrl,
+                isPrimary = it.isPrimary,
+            )
+        },
     )
 }
 
@@ -492,6 +514,8 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
         sort: String? = null,
     ): HubNetworkResult<MusicListResponseDto>
 
+    suspend fun musicDetail(id: String): HubNetworkResult<MusicCatalogItemDto> = HubNetworkResult.Failure(code = "not_supported")
+
     suspend fun memberMusic(
         memberId: String,
         type: String? = null,
@@ -558,6 +582,8 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
         sort: String?,
     ): HubNetworkResult<MusicListResponseDto> =
         client.music(type = type, cursor = cursor, limit = limit, sort = sort)
+
+    override suspend fun musicDetail(id: String): HubNetworkResult<MusicCatalogItemDto> = client.musicDetail(id)
 
     override suspend fun memberMusic(
         memberId: String,

@@ -637,7 +637,15 @@ class SongUiPolicyTest {
     @Test
     fun songThumbnailUsesSixteenByNineAspectRatio() {
         assertEquals(16f / 9f, MainUiPolicy.SONG_THUMBNAIL_ASPECT_RATIO)
+        assertEquals(96, MainUiPolicy.songThumbnailWidthDp(screenWidthDp = 320))
+        assertEquals(96, MainUiPolicy.songThumbnailWidthDp(screenWidthDp = 360))
+        assertEquals(96, MainUiPolicy.songThumbnailWidthDp(screenWidthDp = 400))
+        assertEquals(112, MainUiPolicy.songThumbnailWidthDp(screenWidthDp = 401))
+        assertEquals(112, MainUiPolicy.songThumbnailWidthDp(screenWidthDp = 412))
+        assertEquals(54, MainUiPolicy.songThumbnailHeightDp(widthDp = 96))
         assertEquals(63, MainUiPolicy.songThumbnailHeightDp(widthDp = 112))
+        assertEquals(3, MainUiPolicy.SONG_TITLE_MAX_LINES)
+        assertEquals(2, MainUiPolicy.SONG_SUBTITLE_MAX_LINES)
     }
 
     @Test
