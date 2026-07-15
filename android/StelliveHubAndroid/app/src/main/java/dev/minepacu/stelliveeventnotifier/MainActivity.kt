@@ -29,6 +29,7 @@ import android.view.DragEvent
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.ContextThemeWrapper
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -36,7 +37,6 @@ import android.widget.ImageView
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
-import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import android.widget.ScrollView
@@ -45,7 +45,7 @@ import androidx.activity.viewModels
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
-import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -121,6 +121,8 @@ import dev.minepacu.stelliveeventnotifier.feature.songs.DataStoreSongDiscoveryRe
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongDiscoveryPolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongDiscoveryRepository
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongDiscoveryStateV1
+import dev.minepacu.stelliveeventnotifier.ui.components.HubSingleChoiceBottomSheet
+import dev.minepacu.stelliveeventnotifier.ui.components.HubSingleChoiceOption
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -2009,17 +2011,17 @@ private fun songSelectorRow(
 
 private fun showSongSortDialog() {
     val options = MainUiPolicy.songSortOptions()
-    val selectedIndex = options.indexOfFirst { it.id == selectedSongSortId }.coerceAtLeast(0)
-    AlertDialog.Builder(this)
-        .setTitle("정렬")
-        .setSingleChoiceItems(options.map { it.label }.toTypedArray(), selectedIndex) { dialog, which ->
-            selectedSongSortId = options[which].id
+    HubSingleChoiceBottomSheet(
+        context = this,
+        title = getString(R.string.song_sort_title),
+        options = options.map { HubSingleChoiceOption(it.id, it.label) },
+        selectedId = selectedSongSortId,
+        onSelected = { selectedId ->
+            selectedSongSortId = selectedId
             resetSongBrowseForQueryChange()
-            dialog.dismiss()
             renderSongs()
-        }
-        .setNegativeButton("취소", null)
-        .show()
+        },
+    ).show()
 }
 
 private fun songSearchCard(): MaterialCardView =
@@ -2487,7 +2489,7 @@ private fun songFilterRow(
         val selectedTarget = songOpenPreferenceStore.read()
         val youtubeUrl = SongLinkPolicy.videoUrl(song, SongOpenTarget.YOUTUBE)
         val youtubeMusicUrl = SongLinkPolicy.videoUrl(song, SongOpenTarget.YOUTUBE_MUSIC)
-        PopupMenu(this, anchor).apply {
+        PopupMenu(ContextThemeWrapper(this, R.style.ThemeOverlay_StelliveHub_PopupMenu), anchor).apply {
             val youtube = menu.add(
                 "YouTube에서 열기" + if (selectedTarget == SongOpenTarget.YOUTUBE) " · 기본" else "",
             )
@@ -4433,18 +4435,13 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
         selectedId: String,
         onSelected: (String) -> Unit
     ) {
-        val selectedIndex = options.indexOfFirst { it.first == selectedId }.coerceAtLeast(0)
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setSingleChoiceItems(
-                options.map { it.second }.toTypedArray(),
-                selectedIndex
-            ) { dialog, which ->
-                onSelected(options[which].first)
-                dialog.dismiss()
-            }
-            .setNegativeButton("취소", null)
-            .show()
+        HubSingleChoiceBottomSheet(
+            context = this,
+            title = title,
+            options = options.map { HubSingleChoiceOption(it.first, it.second) },
+            selectedId = selectedId,
+            onSelected = onSelected,
+        ).show()
     }
 
     private fun settingRowView(row: SettingRow): LinearLayout = LinearLayout(this).apply {

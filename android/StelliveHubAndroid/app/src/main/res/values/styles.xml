@@ -6,4 +6,19 @@
         <item name="android:windowLightStatusBar">true</item>
     </style>
 
+    <style name="ThemeOverlay.StelliveHub.PopupMenu" parent="">
+        <item name="popupMenuStyle">@style/Widget.StelliveHub.PopupMenu</item>
+        <item name="textAppearanceLargePopupMenu">@style/TextAppearance.StelliveHub.PopupMenu</item>
+        <item name="textAppearanceSmallPopupMenu">@style/TextAppearance.StelliveHub.PopupMenu</item>
+    </style>
+
+    <style name="Widget.StelliveHub.PopupMenu" parent="Widget.AppCompat.PopupMenu">
+        <item name="android:popupBackground">@drawable/bg_hub_popup_menu</item>
+    </style>
+
+    <style name="TextAppearance.StelliveHub.PopupMenu" parent="TextAppearance.AppCompat.Widget.PopupMenu.Large">
+        <item name="android:textColor">@color/hub_popup_menu_text</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+
 </resources>

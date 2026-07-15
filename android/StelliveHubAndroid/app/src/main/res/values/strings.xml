@@ -16,4 +16,12 @@
     <string name="live_open_chzzk">CHZZK 열기</string>
     <string name="live_open_split">분할로 보기</string>
     <string name="hub_calendar_widget_description">굿즈와 행사 일정을 보여주는 캘린더 위젯</string>
+    <string name="dialog_cancel">취소</string>
+    <string name="dialog_confirm">확인</string>
+    <string name="choice_selected_state">선택됨</string>
+    <string name="choice_selected_mark">✓</string>
+    <string name="song_sort_title">정렬</string>
+    <string name="calendar_date_picker_title">날짜 선택</string>
+    <string name="calendar_range_start_picker_title">시작일 선택</string>
+    <string name="calendar_range_end_picker_title">종료일 선택</string>
 </resources>

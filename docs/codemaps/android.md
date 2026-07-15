@@ -8,6 +8,9 @@ Do not read this file for merge-only work unless a conflict or failed check dire
 
 - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/chrome/MainScreenChromePolicy.kt` - Root/detail screen header, scroll-title, and top action visibility policy.
 - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/components/HubCardFactory.kt` - Shared semantic Android card styles.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/components/HubBottomSheetDialog.kt` - Shared inset-aware, width-limited Android bottom-sheet shell.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/components/HubSingleChoiceBottomSheet.kt` - Shared single-choice bottom sheet for app-owned selection flows.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/components/HubDatePickerBottomSheet.kt` - Shared confirm-only date picker bottom sheet.
 - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/components/SectionHeaderView.kt` - Shared external section/date header.
 - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/components/TopFilterStripPolicy.kt` - Filter group data and equal-width/scroll layout policy.
 - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/ui/components/TopFilterStripView.kt` - Fixed top filter strip renderer and scroll-position preservation.
@@ -56,7 +59,11 @@ Do not read this file for merge-only work unless a conflict or failed check dire
 - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/ServerHubRepository.kt` - Android server-backed repository that maps backend bootstrap data into app state.
 - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/hubevents/HubEventImagePolicy.kt` - Android policy for displaying or falling back from hub event image metadata.
 - `android/StelliveHubAndroid/app/src/main/res/color/hub_bottom_nav_selector.xml` - Bottom navigation color state selector.
+- `android/StelliveHubAndroid/app/src/main/res/color/hub_popup_menu_text.xml` - Enabled and disabled Hub popup-menu text colors.
 - `android/StelliveHubAndroid/app/src/main/res/drawable/bg_avatar_placeholder.xml` - Placeholder avatar drawable.
+- `android/StelliveHubAndroid/app/src/main/res/drawable/bg_hub_bottom_sheet.xml` - Rounded Hub bottom-sheet surface background.
+- `android/StelliveHubAndroid/app/src/main/res/drawable/bg_hub_drag_handle.xml` - Shared bottom-sheet drag handle background.
+- `android/StelliveHubAndroid/app/src/main/res/drawable/bg_hub_popup_menu.xml` - Rounded Hub popup-menu background.
 - `android/StelliveHubAndroid/app/src/main/res/drawable/bg_top_bar_button_glass.xml` - Top bar button background drawable.
 - `android/StelliveHubAndroid/app/src/main/res/drawable/bg_top_bar_glass.xml` - Top bar background drawable.
 - `android/StelliveHubAndroid/app/src/main/res/drawable/ic_arrow_back.xml` - Back navigation icon.
@@ -104,4 +111,3 @@ Do not read this file for merge-only work unless a conflict or failed check dire
 - `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/PreferenceResolutionStateTest.kt` - Unit test for Android preference resolution state.
 - `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/ServerHubRepositoryTest.kt` - Unit test for server-backed Android repository mapping.
 - `android/StelliveHubAndroid/app/src/test/java/dev/minepacu/stelliveeventnotifier/SongUiPolicyTest.kt` - Unit test for Android song tab navigation, song filters, and history relocation policy.
-

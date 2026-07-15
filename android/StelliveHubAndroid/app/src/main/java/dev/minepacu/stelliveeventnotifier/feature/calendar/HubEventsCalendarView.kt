@@ -1,6 +1,5 @@
 package dev.minepacu.stelliveeventnotifier.feature.calendar
 
-import android.app.DatePickerDialog
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
@@ -18,6 +17,7 @@ import com.google.android.material.card.MaterialCardView
 import dev.minepacu.stelliveeventnotifier.R
 import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarDay
 import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarEntry
+import dev.minepacu.stelliveeventnotifier.ui.components.HubDatePickerBottomSheet
 import java.time.Clock
 import java.time.LocalDate
 import java.time.YearMonth
@@ -220,16 +220,16 @@ class HubEventsCalendarView(
     }
 
     private fun showDayPicker() {
-        showDatePicker(viewModel.uiState.selectedDay, "날짜 선택") { selectedDate ->
+        showDatePicker(viewModel.uiState.selectedDay, context.getString(R.string.calendar_date_picker_title)) { selectedDate ->
             updateState { viewModel.applySelectedDay(selectedDate) }
         }
     }
 
     private fun showRangeStartPicker() {
         val initialStart = viewModel.uiState.rangeStart ?: viewModel.uiState.selectedDay
-        showDatePicker(initialStart, "시작일 선택") { startDate ->
+        showDatePicker(initialStart, context.getString(R.string.calendar_range_start_picker_title)) { startDate ->
             val initialEnd = viewModel.uiState.rangeEnd ?: startDate.plusDays(6)
-            showDatePicker(initialEnd, "종료일 선택") { endDate ->
+            showDatePicker(initialEnd, context.getString(R.string.calendar_range_end_picker_title)) { endDate ->
                 updateState { viewModel.applySelectedRange(startDate, endDate) }
             }
         }
@@ -240,17 +240,12 @@ class HubEventsCalendarView(
         title: String,
         onDateSelected: (LocalDate) -> Unit,
     ) {
-        DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                onDateSelected(LocalDate.of(year, month + 1, dayOfMonth))
-            },
-            initialDate.year,
-            initialDate.monthValue - 1,
-            initialDate.dayOfMonth,
-        ).apply {
-            setTitle(title)
-        }.show()
+        HubDatePickerBottomSheet(
+            context = context,
+            title = title,
+            initialDate = initialDate,
+            onConfirmed = onDateSelected,
+        ).show()
     }
 
     private fun monthControl(): View = LinearLayout(context).apply {
