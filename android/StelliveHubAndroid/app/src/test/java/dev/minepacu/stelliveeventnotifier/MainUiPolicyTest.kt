@@ -41,7 +41,7 @@ class MainUiPolicyTest {
     fun settingsCardsUseCompactVerticalSpacing() {
         val spacing = MainUiPolicy.settingsCardSpacing
 
-        assertEquals(10, spacing.contentVerticalPaddingDp)
+        assertEquals(spacing.bottomMarginDp, spacing.contentVerticalPaddingDp)
         assertEquals(6, spacing.rowVerticalPaddingDp)
         assertEquals(8, spacing.bottomMarginDp)
     }
@@ -132,6 +132,7 @@ class MainUiPolicyTest {
         )
 
         assertEquals(listOf("delivery", "targets", "platforms", "event_types", "hub_events", "history", "advanced", "about"), rows.map { it.screenId })
+        assertEquals("알림 수신 방식", rows.first { it.screenId == "delivery" }.title)
         assertEquals("표준", rows.first { it.screenId == "delivery" }.value)
         assertEquals("4/5", rows.first { it.screenId == "platforms" }.value)
         assertEquals("켜짐 · 마감 임박 ON", rows.first { it.screenId == "hub_events" }.value)

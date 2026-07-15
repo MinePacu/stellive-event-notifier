@@ -144,6 +144,10 @@ import dev.minepacu.stelliveeventnotifier.ui.components.HubCardStyle
 import dev.minepacu.stelliveeventnotifier.ui.components.SectionHeaderView
 import dev.minepacu.stelliveeventnotifier.ui.components.TopFilterGroup
 import dev.minepacu.stelliveeventnotifier.ui.components.TopFilterOption
+import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenNavigationMotion
+import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenTransitionController
+import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenTransitionPolicy
+import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenTransitionReason
 
 private const val EXIT_BACK_PRESS_INTERVAL_MS = 2_000L
 private const val NAVIGATION_RAIL_WIDTH_DP = 80
@@ -186,6 +190,11 @@ private data class ScrollablePane(
 
 private data class SongPanes(val filter: ScrollablePane, val list: ScrollablePane)
 
+private data class PendingScreenRefresh(
+    val screen: HubScreen,
+    val render: () -> Unit,
+)
+
 private enum class SongScrollSlot { SONGS_SINGLE, SONGS_TWO_PANE, SONG_SEARCH }
 
 internal class SongBrowseSessionViewModel : ViewModel() {
@@ -223,6 +232,11 @@ private lateinit var binding: ActivityMainBinding
     private var selectedSettingsDetailScreen: HubScreen? = null
     private val serverConnectionDebugLogs = mutableListOf("bootstrap: 대기 중")
     private val navigationHistory = MainNavigationHistory()
+    private lateinit var screenTransitionController: ScreenTransitionController
+    private var latestNavigationDestination = HubScreen.HOME
+    private var latestRootDestination = HubScreen.HOME
+    private var pendingScreenRefresh: PendingScreenRefresh? = null
+    private var activeTwoPaneDetailPane: View? = null
     private var lastRootBackPressedAt = 0L
 private var selectedFilter = "all"
 private var selectedLiveStatusFilter = "all"
@@ -297,6 +311,11 @@ private var notificationPermissionRequested = false
         ) ?: true
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        screenTransitionController = ScreenTransitionController(
+            screenBody = binding.screenBody,
+            dp = { value -> dp(value).toFloat() },
+            onIdle = ::onScreenTransitionIdle,
+        )
         setupSongScrollToTopButton()
         serverRepository = createServerRepository()
         songFavoritesRepository = DataStoreSongFavoritesRepository(this)
@@ -306,7 +325,7 @@ private var notificationPermissionRequested = false
                 songFavoritesRepository.favorites.collect { favorites ->
                     songFavoriteIds = favorites
                     if (navigationHistory.currentScreen == HubScreen.SONGS && cachedSongItems.isNotEmpty()) {
-                        renderSongsFromCache()
+                        refreshScreenWhenIdle(HubScreen.SONGS, ::renderSongsFromCache)
                     }
                 }
             }
@@ -315,7 +334,9 @@ private var notificationPermissionRequested = false
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 songDiscoveryRepository.state.collect { state ->
                     songDiscoveryState = state
-                    if (navigationHistory.currentScreen == HubScreen.SONGS && cachedSongItems.isNotEmpty()) renderSongsFromCache()
+                    if (navigationHistory.currentScreen == HubScreen.SONGS && cachedSongItems.isNotEmpty()) {
+                        refreshScreenWhenIdle(HubScreen.SONGS, ::renderSongsFromCache)
+                    }
                 }
             }
         }
@@ -328,10 +349,8 @@ private var notificationPermissionRequested = false
         setupBottomNavigation()
         setupPullToRefresh()
         if (!handleAppDeepLink(intent)) {
-            renderHome()
-            updateSelectedBottomNavigation(HubScreen.HOME)
+            replaceScreenWithoutAnimation(HubScreen.HOME)
         }
-        updateNavigationChrome()
         loadServerBootstrap()
     }
 
@@ -354,6 +373,7 @@ private var notificationPermissionRequested = false
         liveClockHandler.removeCallbacks(liveClockTicker)
         pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
         liveClockTextViews.clear()
+        screenTransitionController.cancelAndClear()
         super.onDestroy()
     }
 
@@ -363,7 +383,8 @@ private var notificationPermissionRequested = false
             serverMembers = state.members
             liveStatusSourceLabel = state.liveStatusSourceLabel
             recordServerConnectionLog("bootstrap: $liveStatusSourceLabel")
-            renderScreen(navigationHistory.currentScreen)
+            val screen = navigationHistory.currentScreen
+            refreshScreenWhenIdle(screen) { replaceScreenWithoutAnimation(screen) }
             binding.contentRefresh.isRefreshing = false
         }
     }
@@ -410,7 +431,8 @@ private var notificationPermissionRequested = false
         currentAdaptiveSpec = nextSpec
         updateNavigationChrome()
         if (renderIfChanged && nextSpec.widthClass != previousSpec.widthClass) {
-            renderScreen(navigationHistory.currentScreen)
+            val screen = navigationHistory.currentScreen
+            refreshScreenWhenIdle(screen) { replaceScreenWithoutAnimation(screen) }
         }
     }
 
@@ -495,12 +517,13 @@ private var notificationPermissionRequested = false
         serverHubEventDetailLoadedId = null
         navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
         if (shouldUseGoodsEventsTwoPane()) {
-            renderGoodsEvents()
-            updateSelectedBottomNavigation(HubScreen.GOODS_EVENTS)
-            updateNavigationChrome()
+            replaceScreenWithoutAnimation(HubScreen.GOODS_EVENTS)
         } else {
-            navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
+            navigationHistory.select(HubScreen.GOODS_EVENT_DETAIL)
+            replaceScreenWithoutAnimation(HubScreen.GOODS_EVENT_DETAIL)
         }
+        latestNavigationDestination = navigationHistory.currentScreen
+        latestRootDestination = navigationHistory.currentRootScreen
         return true
     }
 
@@ -535,20 +558,16 @@ private var notificationPermissionRequested = false
 
     private fun setupTopBarActions() {
         binding.topBarSettings.setOnClickListener {
-            navigateTo(HubScreen.SETTINGS, addToBackStack = true)
+            pushScreen(HubScreen.SETTINGS)
         }
         binding.topBarSongSearch.setOnClickListener {
-            renderSongSearchTransitionLoading()
-            binding.topBarSongSearch.isEnabled = false
-            binding.root.post {
-                navigateTo(HubScreen.SONG_SEARCH, addToBackStack = true)
-            }
+            pushScreen(HubScreen.SONG_SEARCH)
         }
     }
 
     private fun setupBackNavigation() {
         binding.topBarBack.setOnClickListener {
-            if (!navigateBack()) finish()
+            if (!popScreen()) finish()
         }
         onBackPressedDispatcher.addCallback(
             this,
@@ -560,39 +579,71 @@ private var notificationPermissionRequested = false
         )
     }
 
-    private fun navigateTo(screen: HubScreen, addToBackStack: Boolean) {
-        if (addToBackStack && screen == navigationHistory.currentScreen) return
+    private fun navigateToRoot(screen: HubScreen) {
+        if (screen == latestNavigationDestination &&
+            (screenTransitionController.isTransitionRunning || !navigationHistory.canGoBack)
+        ) {
+            return
+        }
         captureActiveSongScrollPosition()
         lastRootBackPressedAt = 0L
-        if (addToBackStack) {
+        val from = latestRootDestination
+        val motion = ScreenTransitionPolicy.motion(from, screen, ScreenTransitionReason.ROOT_SELECTION)
+        latestNavigationDestination = screen
+        latestRootDestination = screen
+        performScreenTransition("root:${screen.id}", screen, motion) {
+            navigationHistory.selectRoot(screen)
+        }
+    }
+
+    private fun pushScreen(screen: HubScreen) {
+        if (screen == latestNavigationDestination) return
+        captureActiveSongScrollPosition()
+        lastRootBackPressedAt = 0L
+        val motion = ScreenTransitionPolicy.motion(
+            latestNavigationDestination,
+            screen,
+            ScreenTransitionReason.PUSH,
+        )
+        latestNavigationDestination = screen
+        performScreenTransition("push:${screen.id}", screen, motion) {
             navigationHistory.select(screen)
         }
-        renderScreen(screen)
-        updateSelectedBottomNavigation(screen)
-        updateNavigationChrome()
     }
 
-    private fun navigateToRoot(screen: HubScreen) {
-        lastRootBackPressedAt = 0L
-        if (screen == navigationHistory.currentScreen && !navigationHistory.canGoBack) return
-        captureActiveSongScrollPosition()
-        navigationHistory.selectRoot(screen)
-        renderScreen(screen)
-        updateSelectedBottomNavigation(screen)
-        updateNavigationChrome()
+    private fun popScreen(): Boolean {
+        if (screenTransitionController.isTransitionRunning) {
+            screenTransitionController.runWhenIdle("deferred:pop", ::popScreenNow)
+            return true
+        }
+        return popScreenNow()
     }
 
-    private fun navigateBack(): Boolean {
+    private fun popScreenNow(): Boolean {
+        val previous = navigationHistory.previousScreen ?: return false
         captureActiveSongScrollPosition()
-        val previous = navigationHistory.goBack() ?: return false
-        renderScreen(previous)
-        updateSelectedBottomNavigation(previous)
-        updateNavigationChrome()
+        latestNavigationDestination = previous
+        val motion = ScreenTransitionPolicy.motion(
+            navigationHistory.currentScreen,
+            previous,
+            ScreenTransitionReason.POP,
+        )
+        performScreenTransition("pop:${previous.id}", previous, motion) {
+            navigationHistory.goBack()
+        }
         return true
     }
 
     private fun handleSystemBackPressed() {
-        if (navigateBackToCurrentRoot()) {
+        if (screenTransitionController.isTransitionRunning) {
+            screenTransitionController.runWhenIdle("deferred:system_back", ::handleSystemBackPressedNow)
+            return
+        }
+        handleSystemBackPressedNow()
+    }
+
+    private fun handleSystemBackPressedNow() {
+        if (navigateBackToCurrentRootNow()) {
             lastRootBackPressedAt = 0L
             return
         }
@@ -606,12 +657,76 @@ private var notificationPermissionRequested = false
         Toast.makeText(this, "한 번 더 뒤로 가면 앱이 종료됩니다.", Toast.LENGTH_SHORT).show()
     }
 
-    private fun navigateBackToCurrentRoot(): Boolean {
-        val root = navigationHistory.goBackToCurrentRoot() ?: return false
-        renderScreen(root)
-        updateSelectedBottomNavigation(root)
-        updateNavigationChrome()
+    private fun navigateBackToCurrentRootNow(): Boolean {
+        val root = navigationHistory.currentRootScreen
+        if (root == navigationHistory.currentScreen) return false
+        latestNavigationDestination = root
+        val motion = ScreenTransitionPolicy.motion(
+            navigationHistory.currentScreen,
+            root,
+            ScreenTransitionReason.POP,
+        )
+        performScreenTransition("pop-to-root:${root.id}", root, motion) {
+            navigationHistory.goBackToCurrentRoot()
+        }
         return true
+    }
+
+    private fun performScreenTransition(
+        key: String,
+        screen: HubScreen,
+        motion: ScreenNavigationMotion,
+        updateHistory: () -> Unit,
+    ) {
+        screenTransitionController.transition(
+            key = key,
+            motion = motion,
+            isRtl = binding.root.layoutDirection == View.LAYOUT_DIRECTION_RTL,
+        ) {
+            updateHistory()
+            replaceScreenWithoutAnimation(screen)
+        }
+    }
+
+    private fun replaceScreenWithoutAnimation(screen: HubScreen) {
+        renderScreen(screen)
+        updateSelectedBottomNavigation(screen)
+        updateNavigationChrome()
+    }
+
+    private fun refreshScreenWhenIdle(screen: HubScreen, render: () -> Unit) {
+        if (screen != navigationHistory.currentScreen) return
+        if (screenTransitionController.isTransitionRunning) {
+            pendingScreenRefresh = PendingScreenRefresh(screen, render)
+        } else {
+            render()
+        }
+    }
+
+    private fun crossFadeTwoPaneSelection(key: String, render: () -> Unit) {
+        val screen = navigationHistory.currentScreen
+        val motion = ScreenTransitionPolicy.motion(
+            screen,
+            screen,
+            ScreenTransitionReason.TWO_PANE_SELECTION,
+        )
+        screenTransitionController.transition(
+            key = "two-pane:$key",
+            motion = motion,
+            isRtl = binding.root.layoutDirection == View.LAYOUT_DIRECTION_RTL,
+            targetProvider = { activeTwoPaneDetailPane },
+            commit = render,
+        )
+    }
+
+    private fun onScreenTransitionIdle() {
+        latestNavigationDestination = navigationHistory.currentScreen
+        latestRootDestination = navigationHistory.currentRootScreen
+        val pending = pendingScreenRefresh
+        pendingScreenRefresh = null
+        if (pending?.screen == navigationHistory.currentScreen) {
+            pending.render()
+        }
     }
 
     private fun renderScreen(screen: HubScreen) {
@@ -733,6 +848,7 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
 
 private fun startScreen(screenId: String, title: String, role: String) {
         binding.screenActionContainer.isVisible = false
+        activeTwoPaneDetailPane = null
         if (screenId != "song_member_filter") selectedSongMemberFilterDraft = null
         if (screenId != "songs" && screenId != "song_search") {
             activeSongScrollView = null
@@ -1099,7 +1215,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
             homeRecentSongs = serverRepository.recentSongs(limit = 5)
             isLoadingHomeRecentSongs = false
             if (navigationHistory.currentScreen == HubScreen.HOME) {
-                renderHome()
+                refreshScreenWhenIdle(HubScreen.HOME, ::renderHome)
             }
         }
     }
@@ -1116,7 +1232,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
             chipStrokeColor = ContextCompat.getColorStateList(context, R.color.hub_line)
             setTextColor(color(R.color.hub_text))
             setOnClickListener {
-                navigateTo(HubScreen.LIVE, addToBackStack = false)
+                navigateToRoot(HubScreen.LIVE)
             }
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -1153,7 +1269,9 @@ private fun startScreen(screenId: String, title: String, role: String) {
             goodsEventsDays = days
             goodsEvents = events
             if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS) {
-                renderServerGoodsEvents(days, events)
+                refreshScreenWhenIdle(HubScreen.GOODS_EVENTS) {
+                    renderServerGoodsEvents(days, events)
+                }
             }
         }
     }
@@ -1237,6 +1355,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 marginStart = dp(8)
             },
         )
+        activeTwoPaneDetailPane = detailPane.scrollView
         binding.contentList.addView(paneRow)
         renderGoodsEventsListInto(listPane.content, filteredDays, filteredEvents, monthDays)
         listPane.content.addView(
@@ -1292,12 +1411,17 @@ private fun startScreen(screenId: String, title: String, role: String) {
     }
 
     private fun onGoodsEventSelected(eventId: String) {
-        selectedHubEventId = eventId
-        serverHubEventDetailLoadedId = null
-
         when (HubEventsPanePolicy.selectionMode(currentAdaptiveSpec)) {
-            GoodsEventSelectionMode.UPDATE_INLINE_DETAIL -> renderServerGoodsEvents(goodsEventsDays, goodsEvents)
-            GoodsEventSelectionMode.NAVIGATE_TO_DETAIL -> navigateTo(HubScreen.GOODS_EVENT_DETAIL, addToBackStack = true)
+            GoodsEventSelectionMode.UPDATE_INLINE_DETAIL -> crossFadeTwoPaneSelection("goods-event:$eventId") {
+                selectedHubEventId = eventId
+                serverHubEventDetailLoadedId = null
+                renderServerGoodsEvents(goodsEventsDays, goodsEvents)
+            }
+            GoodsEventSelectionMode.NAVIGATE_TO_DETAIL -> {
+                selectedHubEventId = eventId
+                serverHubEventDetailLoadedId = null
+                pushScreen(HubScreen.GOODS_EVENT_DETAIL)
+            }
         }
     }
 
@@ -1319,7 +1443,9 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 serverHubEventDetail = serverRepository.hubEventDetail(eventId)
                 serverHubEventDetailLoadedId = eventId
                 if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS && selectedHubEventId == eventId) {
-                    renderServerGoodsEvents(goodsEventsDays, goodsEvents)
+                    refreshScreenWhenIdle(HubScreen.GOODS_EVENTS) {
+                        renderServerGoodsEvents(goodsEventsDays, goodsEvents)
+                    }
                 }
             }
             return
@@ -1377,7 +1503,7 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
                 serverHubEventDetail = serverRepository.hubEventDetail(eventId)
                 serverHubEventDetailLoadedId = eventId
                 if (navigationHistory.currentScreen == HubScreen.GOODS_EVENT_DETAIL && selectedHubEventId == eventId) {
-                    renderHubEventDetail()
+                    refreshScreenWhenIdle(HubScreen.GOODS_EVENT_DETAIL, ::renderHubEventDetail)
                 }
             }
             return
@@ -1550,18 +1676,20 @@ private fun renderSongs() {
         CoroutineScope(Dispatchers.Main).launch {
             val state = songRenderState(loadSongItemsForCurrentType())
             if (navigationHistory.currentScreen != HubScreen.SONGS) return@launch
-            startScreen(
-                screenId = "songs",
-                title = getString(R.string.songs_title),
-                role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
-            )
-            clearTopFilters()
-            if (shouldUseSongsTwoPane()) {
-                renderSongsTwoPane(state)
-            } else {
-                binding.contentList.addView(songFilterPanel())
-                renderSongListInto(binding.contentList, state, includeServerStatus = true)
-                registerSongScrollSession(binding.contentScroll, binding.contentList, state, SongScrollSlot.SONGS_SINGLE)
+            refreshScreenWhenIdle(HubScreen.SONGS) {
+                startScreen(
+                    screenId = "songs",
+                    title = getString(R.string.songs_title),
+                    role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
+                )
+                clearTopFilters()
+                if (shouldUseSongsTwoPane()) {
+                    renderSongsTwoPane(state)
+                } else {
+                    binding.contentList.addView(songFilterPanel())
+                    renderSongListInto(binding.contentList, state, includeServerStatus = true)
+                    registerSongScrollSession(binding.contentScroll, binding.contentList, state, SongScrollSlot.SONGS_SINGLE)
+                }
             }
         }
     }
@@ -1615,6 +1743,21 @@ private fun renderSongs() {
         }
     }
 
+    private fun renderSongsSelectionChange(render: () -> Unit = ::renderSongsFromCache) {
+        if (shouldUseSongsTwoPane() && activeTwoPaneDetailPane != null) {
+            val key = listOf(
+                selectedSongType,
+                selectedSongLibraryId,
+                selectedSongStatusId,
+                selectedSongSortId,
+                selectedSongQuery,
+            ).joinToString(":")
+            crossFadeTwoPaneSelection("songs:$key", render)
+        } else {
+            render()
+        }
+    }
+
     private fun renderSongsTwoPaneLoading() {
         val panes = songsTwoPaneContainer()
         renderSongFilterPaneInto(panes.filter.content)
@@ -1658,6 +1801,7 @@ private fun renderSongs() {
                 marginStart = dp(8)
             },
         )
+        activeTwoPaneDetailPane = listPane.scrollView
         binding.contentList.addView(paneRow)
         return SongPanes(filterPane, listPane)
     }
@@ -1734,17 +1878,6 @@ private fun renderSongs() {
         refreshSongSearchResults()
     }
 
-    private fun renderSongSearchTransitionLoading() {
-        startScreen(
-            screenId = "song_search",
-            title = "노래 검색",
-            role = "제목 또는 멤버 이름으로 검색합니다.",
-        )
-        binding.collapsedTitle.text = "노래 검색"
-        binding.collapsedRole.text = "제목 또는 멤버"
-        binding.contentList.addView(loadingCard(MainUiPolicy.songSearchTransitionLoadingPresentation()))
-    }
-
     private fun refreshSongSearchResults() {
         captureActiveSongScrollPosition()
         val container = songSearchResultsContainer ?: return
@@ -1772,8 +1905,11 @@ private fun renderSongs() {
             cachedSongItems = items
             cachedSongType = "all"
             if (navigationHistory.currentScreen != HubScreen.SONG_SEARCH) return@launch
-            container.removeAllViews()
-            renderItems(items)
+            refreshScreenWhenIdle(HubScreen.SONG_SEARCH) refresh@{
+                if (container !== songSearchResultsContainer) return@refresh
+                container.removeAllViews()
+                renderItems(items)
+            }
         }
     }
 
@@ -1840,7 +1976,7 @@ private fun songFilterPanel(): MaterialCardView =
             addView(songSegmentedRow(MainUiPolicy.songTypeFilters(), selectedSongType) { optionId ->
                 selectedSongType = optionId
                 resetSongBrowseForQueryChange()
-                renderSongsFromCache()
+                renderSongsSelectionChange()
             }.apply {
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -1853,7 +1989,7 @@ private fun songFilterPanel(): MaterialCardView =
             addView(songSegmentedRow(MainUiPolicy.songLibraryFilters(), selectedSongLibraryId) { optionId ->
                 selectedSongLibraryId = optionId
                 resetSongBrowseForQueryChange()
-                renderSongsFromCache()
+                renderSongsSelectionChange()
             }.apply {
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                     topMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
@@ -1867,7 +2003,7 @@ private fun songFilterPanel(): MaterialCardView =
             addView(songSegmentedRow(statusFilters, selectedSongStatusId) { optionId ->
                 selectedSongStatusId = optionId
                 resetSongBrowseForQueryChange()
-                renderSongsFromCache()
+                renderSongsSelectionChange()
             }.apply {
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                     topMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
@@ -1881,7 +2017,7 @@ private fun songFilterPanel(): MaterialCardView =
             if (SongsPanePolicy.memberSelectionMode(currentAdaptiveSpec) == SongMemberSelectionMode.NAVIGATE_TO_MEMBER_FILTER) {
                 addView(divider())
                 addView(songSelectorRow("멤버", MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberFilter), accentValue = false) {
-                    navigateTo(HubScreen.SONG_MEMBER_FILTER, addToBackStack = true)
+                    pushScreen(HubScreen.SONG_MEMBER_FILTER)
                 })
             }
         })
@@ -1918,7 +2054,7 @@ private fun songInlineMemberFilterPanel(visibleCount: Int): MaterialCardView =
                 isClickable = true
                 isFocusable = true
                 contentDescription = "멤버 필터 상세 조건 편집"
-                setOnClickListener { navigateTo(HubScreen.SONG_MEMBER_FILTER, addToBackStack = true) }
+                setOnClickListener { pushScreen(HubScreen.SONG_MEMBER_FILTER) }
             })
         })
     }
@@ -2019,7 +2155,7 @@ private fun showSongSortDialog() {
         onSelected = { selectedId ->
             selectedSongSortId = selectedId
             resetSongBrowseForQueryChange()
-            renderSongs()
+            renderSongsSelectionChange(::renderSongs)
         },
     ).show()
 }
@@ -2063,7 +2199,7 @@ private fun applySongSearchText(rawQuery: String) {
     if (shouldUseSongsTwoPane()) {
         selectedSongQuery = MainUiPolicy.normalizedSongQuery(rawQuery)
         resetSongBrowseForQueryChange()
-        renderSongs()
+        renderSongsSelectionChange(::renderSongs)
     } else {
         scheduleSongSearchRender(rawQuery)
     }
@@ -2079,7 +2215,7 @@ private fun scheduleSongSearchRender(rawQuery: String) {
         pendingSongSearchRender = null
         if (navigationHistory.currentScreen != HubScreen.SONG_SEARCH) return@Runnable
         appliedSongQuery = normalized
-        refreshSongSearchResults()
+        refreshScreenWhenIdle(HubScreen.SONG_SEARCH, ::refreshSongSearchResults)
     }.also { songSearchHandler.postDelayed(it, 150L) }
 }
 
@@ -2103,7 +2239,7 @@ private fun songMemberFilterCard(members: List<HubMember>, visibleCount: Int): M
         }
         isClickable = true
         isFocusable = true
-        setOnClickListener { navigateTo(HubScreen.SONG_MEMBER_FILTER, addToBackStack = true) }
+        setOnClickListener { pushScreen(HubScreen.SONG_MEMBER_FILTER) }
         addView(LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -2282,7 +2418,7 @@ private fun renderSongMemberFilter(restoreScrollY: Int? = null) {
         setOnClickListener {
             applySongMemberFilter(normalizedDraft)
             selectedSongMemberFilterDraft = null
-            navigateBack()
+            popScreen()
         }
     }
     restoreScrollY?.let { scrollY ->
@@ -2358,7 +2494,7 @@ private fun songFilterRow(
                         setOnClickListener {
                             onSelected(filter.id)
                             resetSongBrowseForQueryChange()
-                            renderSongs()
+                            renderSongsSelectionChange(::renderSongs)
                         }
                     }))
                 }
@@ -2532,7 +2668,7 @@ private fun songFilterRow(
         memberState?.let { selectedSongMemberFilter = it.normalized() }
         type?.let { selectedSongType = it }
         resetSongBrowseForQueryChange()
-        renderSongsFromCache()
+        renderSongsSelectionChange()
         Toast.makeText(this, "관련 노래 필터를 적용했습니다.", Toast.LENGTH_SHORT).show()
     }
 
@@ -2654,6 +2790,7 @@ private fun songFilterRow(
                 marginStart = dp(8)
             },
         )
+        activeTwoPaneDetailPane = detailPane.scrollView
         binding.contentList.addView(paneRow)
         renderSettingsHubInto(hubPane.content)
         renderSelectedSettingsDetailInto(detailPane.content)
@@ -2719,16 +2856,6 @@ private fun songFilterRow(
             val screen = settingsScreenForRow(row.screenId)
             container.addView(settingsNavigationCard(row, selected = selectedSettingsDetailScreen == screen))
         }
-        container.addView(
-            settingsPanel(
-                title = "표시 정책",
-                rows = listOf(
-                    SettingRow("Former 멤버", "MVP 카탈로그, 알림 대상, 필터, seed data에 포함하지 않습니다.", null, "제외"),
-                    SettingRow("강지", "감자 카테고리의 대표 항목으로 유지하되 굿즈/행사 MVP에는 표시하지 않습니다.", null, "대표"),
-                    SettingRow("이미지/로고/포스터", "공식 이미지, 로고, 포스터, 캡처, 팬아트는 저장하거나 재사용하지 않습니다.", null, "텍스트")
-                )
-            )
-        )
     }
 
     private fun requestNotificationPermissionIfNeeded(moment: NotificationPermissionPromptMoment) {
@@ -2743,7 +2870,7 @@ private fun songFilterRow(
     private fun renderSettingsDelivery() {
         startScreen(
             screenId = "settings_delivery",
-            title = "전달 방식",
+            title = "알림 수신 방식",
             role = "실시간 우선은 OS와 플랫폼 정책을 우회하지 않습니다."
         )
         renderSettingsDeliveryInto(binding.contentList)
@@ -2751,11 +2878,11 @@ private fun songFilterRow(
 
     private fun renderSettingsDeliveryInto(container: LinearLayout) {
         val settings = repository.settings
-        container.addView(sectionLabel("전달 방식"))
+        container.addView(sectionLabel("알림 수신 방식"))
         container.addView(
             settingsPanel(
                 rows = listOf(
-                    SettingRow("전달 방식", "표준 또는 realtime_best_effort. 비활성 알림을 다시 켜지는 않습니다.", null, settings.deliveryMode.name),
+                    SettingRow("알림 수신 방식", "표준 또는 realtime_best_effort. 비활성 알림을 다시 켜지는 않습니다.", null, settings.deliveryMode.name),
                     SettingRow("최대한 실시간으로 알림 받기", MainUiPolicy.realtimeDisclosureLines().joinToString(" "), settings.deliveryMode == DeliveryMode.REALTIME_BEST_EFFORT)
                 )
             )
@@ -3034,10 +3161,12 @@ private fun songFilterRow(
     private fun onSettingsRowSelected(row: SettingsHubRow) {
         val screen = settingsScreenForRow(row.screenId)
         if (shouldUseSettingsTwoPane() && isSettingsDetailPaneScreen(screen)) {
-            selectedSettingsDetailScreen = screen
-            renderSettings()
+            crossFadeTwoPaneSelection("settings:${screen.id}") {
+                selectedSettingsDetailScreen = screen
+                renderSettings()
+            }
         } else {
-            navigateTo(screen, addToBackStack = true)
+            pushScreen(screen)
         }
     }
 
@@ -4484,7 +4613,8 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
     private fun persistSettings(settings: dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState) {
         CoroutineScope(Dispatchers.Main).launch {
             serverRepository.updatePreferences(settings)
-            renderSettings()
+            val screen = navigationHistory.currentScreen
+            refreshScreenWhenIdle(screen) { replaceScreenWithoutAnimation(screen) }
         }
     }
 

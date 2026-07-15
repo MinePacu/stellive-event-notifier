@@ -116,7 +116,7 @@ object MainUiPolicy {
     }
 
     val settingsCardSpacing = SettingsCardSpacing(
-        contentVerticalPaddingDp = 10,
+        contentVerticalPaddingDp = 8,
         rowVerticalPaddingDp = 6,
         bottomMarginDp = 8,
     )
@@ -151,7 +151,7 @@ object MainUiPolicy {
         "song_member_filter" -> "노래 멤버 선택"
         "history" -> "기록"
         "settings" -> "설정"
-        "settings_delivery" -> "전달 방식"
+        "settings_delivery" -> "알림 수신 방식"
         "settings_targets" -> "대상별 알림"
         "settings_platforms" -> "플랫폼별 알림"
         "settings_event_types" -> "이벤트 타입"
@@ -751,7 +751,7 @@ object MainUiPolicy {
     ): List<SettingsHubRow> = listOf(
         SettingsHubRow(
             screenId = "delivery",
-            title = "전달 방식",
+            title = "알림 수신 방식",
             body = "표준, realtime_best_effort, 조용한 시간",
             value = if (deliveryMode == "REALTIME_BEST_EFFORT") "실시간 우선" else "표준"
         ),
