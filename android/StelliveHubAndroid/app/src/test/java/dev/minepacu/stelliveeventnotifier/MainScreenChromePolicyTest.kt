@@ -21,6 +21,7 @@ class MainScreenChromePolicyTest {
     @Test
     fun searchAndSettingsScreensRemoveBodyHeaderAndCollapseTitleAfterScroll() {
         listOf(
+            "history",
             "song_search",
             "song_member_filter",
             "settings",

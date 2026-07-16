@@ -19,6 +19,12 @@ enum class HubScreen(val id: String) {
     SETTINGS_ABOUT("settings_about");
 }
 
+data class MainNavigationHistoryState(
+    val currentRoot: HubScreen,
+    val currentScreen: HubScreen,
+    val previousScreens: List<HubScreen>,
+)
+
 class MainNavigationHistory(initialScreen: HubScreen = HubScreen.HOME) {
     private val previousScreens = mutableListOf<HubScreen>()
     private var currentRoot: HubScreen = initialScreen.rootScreen()
@@ -27,6 +33,12 @@ class MainNavigationHistory(initialScreen: HubScreen = HubScreen.HOME) {
 
     val canGoBack: Boolean
         get() = previousScreens.isNotEmpty()
+
+    val previousScreen: HubScreen?
+        get() = previousScreens.lastOrNull()
+
+    val currentRootScreen: HubScreen
+        get() = currentRoot
 
     fun select(screen: HubScreen) {
         if (screen == currentScreen) return
@@ -51,6 +63,19 @@ class MainNavigationHistory(initialScreen: HubScreen = HubScreen.HOME) {
         previousScreens.clear()
         currentScreen = currentRoot
         return currentRoot
+    }
+
+    fun snapshot(): MainNavigationHistoryState = MainNavigationHistoryState(
+        currentRoot = currentRoot,
+        currentScreen = currentScreen,
+        previousScreens = previousScreens.toList(),
+    )
+
+    fun restore(state: MainNavigationHistoryState) {
+        previousScreens.clear()
+        previousScreens += state.previousScreens
+        currentRoot = state.currentRoot.rootScreen()
+        currentScreen = state.currentScreen
     }
 }
 
