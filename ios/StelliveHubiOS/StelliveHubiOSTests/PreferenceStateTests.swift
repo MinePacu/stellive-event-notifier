@@ -157,6 +157,14 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertFalse(IOSPrimaryNavigationPolicy.shouldAttachSettingsToolbar(screenId: "settings_delivery"))
     }
 
+    func testAnnouncementActionUsesGlobalToolbarVisibility() {
+        XCTAssertTrue(IOSPrimaryNavigationPolicy.showsAnnouncementButton(screenId: "home"))
+        XCTAssertTrue(IOSPrimaryNavigationPolicy.showsAnnouncementButton(screenId: "member_detail"))
+        XCTAssertFalse(IOSPrimaryNavigationPolicy.showsAnnouncementButton(screenId: "announcements"))
+        XCTAssertFalse(IOSPrimaryNavigationPolicy.showsAnnouncementButton(screenId: "announcement_detail"))
+        XCTAssertFalse(IOSPrimaryNavigationPolicy.showsAnnouncementButton(screenId: "settings"))
+    }
+
     func testHubEventDetailPlacesActionsBeforeSummary() {
         XCTAssertEqual(
             HubEventDetailLayoutPolicy.contentOrder,
