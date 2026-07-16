@@ -3,6 +3,7 @@ package dev.minepacu.stelliveeventnotifier.feature.home
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationEventType
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationPlatform
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
+import dev.minepacu.stelliveeventnotifier.core.model.NotificationPreferenceScope
 import dev.minepacu.stelliveeventnotifier.core.model.ActiveStatus
 import dev.minepacu.stelliveeventnotifier.core.model.CatalogRole
 import dev.minepacu.stelliveeventnotifier.core.model.HubMember
@@ -87,6 +88,11 @@ data class SettingsHubRow(
     val value: String
 )
 
+data class SettingsHubSection(
+    val title: String,
+    val rows: List<SettingsHubRow>,
+)
+
 data class SettingsPolicyRow(
     val title: String,
     val body: String?,
@@ -127,9 +133,9 @@ object MainUiPolicy {
     }
 
     val settingsCardSpacing = SettingsCardSpacing(
-        contentVerticalPaddingDp = 8,
-        rowVerticalPaddingDp = 8,
-        standaloneRowVerticalPaddingDp = 13,
+        contentVerticalPaddingDp = 12,
+        rowVerticalPaddingDp = 12,
+        standaloneRowVerticalPaddingDp = 12,
         titleBodySpacingDp = 4,
         actionSpacingDp = 12,
         minimumTouchTargetDp = 48,
@@ -208,9 +214,9 @@ object MainUiPolicy {
         "settings_delivery" -> "알림 수신 방식"
         "settings_targets" -> "대상별 알림"
         "settings_platforms" -> "플랫폼별 알림"
-        "settings_event_types" -> "이벤트 타입"
+        "settings_event_types" -> "알림 종류"
         "settings_hub_events" -> "굿즈/행사"
-        "settings_advanced" -> "고급 설정"
+        "settings_advanced" -> "세부 알림 설정"
         "settings_about" -> "앱 정보"
         "goods_events" -> "굿즈/행사"
         "goods_event_detail" -> ""
@@ -222,14 +228,14 @@ object MainUiPolicy {
         "songs" -> "YouTube 업로드 곡 탐색"
         "song_search" -> "제목 또는 멤버"
         "song_member_filter" -> "노래 목록을 멤버별로 좁혀 봅니다"
-        "history" -> "허용된 알림 기록과 정책 제외 항목"
-        "settings" -> "알림 대상과 전송 정책"
-        "settings_delivery" -> "알림 전달과 제한"
-        "settings_targets" -> "카테고리와 개별 항목"
-        "settings_platforms" -> "플랫폼별 허용 여부"
-        "settings_event_types" -> "이벤트 종류별 허용 여부"
-        "settings_hub_events" -> "공식 출처 굿즈와 행사"
-        "settings_advanced" -> "조합 예외 규칙"
+        "history" -> "최근 받은 알림과 제외된 항목"
+        "settings" -> ""
+        "settings_delivery" -> "알림 속도와 방해 금지 시간"
+        "settings_targets" -> "알림 받을 대상 선택"
+        "settings_platforms" -> "플랫폼별 알림 선택"
+        "settings_event_types" -> "받을 알림 종류 선택"
+        "settings_hub_events" -> "굿즈와 행사 알림 설정"
+        "settings_advanced" -> "분류와 개별 대상의 우선순위"
         "settings_about" -> "프로젝트 소개와 버전"
         "goods_events" -> "공식 출처의 기간성 굿즈와 행사"
         "goods_event_detail" -> ""
@@ -240,6 +246,24 @@ object MainUiPolicy {
         TOP_BAR_ACTION_ICON_INSET_DP
 
     fun realtimeDisclosureLines(): List<String> = NotificationSettingState.REALTIME_DISCLOSURE_LINES
+
+    fun settingsDeliveryModeLabel(deliveryMode: String): String =
+        if (deliveryMode == "REALTIME_BEST_EFFORT") "실시간 우선" else "표준"
+
+    fun settingsTapActionLabel(tapAction: String): String =
+        if (tapAction == "OPEN_PLATFORM") "원본 플랫폼에서 열기" else "앱에서 열기"
+
+    fun settingsCombinationPreferenceLabel(scope: NotificationPreferenceScope): String = when (scope) {
+        NotificationPreferenceScope.GLOBAL -> "전체 알림"
+        NotificationPreferenceScope.GENERATION -> "분류별 알림"
+        NotificationPreferenceScope.MEMBER -> "개별 대상 알림"
+        NotificationPreferenceScope.PLATFORM -> "플랫폼별 알림"
+        NotificationPreferenceScope.EVENT_TYPE -> "알림 종류별 설정"
+        NotificationPreferenceScope.GENERATION_PLATFORM -> "분류별 플랫폼 설정"
+        NotificationPreferenceScope.GENERATION_EVENT_TYPE -> "분류별 알림 종류 설정"
+        NotificationPreferenceScope.MEMBER_PLATFORM -> "개별 대상의 플랫폼 설정"
+        NotificationPreferenceScope.MEMBER_EVENT_TYPE -> "개별 대상의 알림 종류 설정"
+    }
 
     fun hubEventStatusRank(status: HubEventStatus): Int = when (status) {
         HubEventStatus.CLOSING_SOON -> 0
@@ -807,12 +831,12 @@ object MainUiPolicy {
             screenId = "delivery",
             title = "알림 수신 방식",
             body = "표준, 실시간 우선, 방해 금지 시간",
-            value = if (deliveryMode == "REALTIME_BEST_EFFORT") "실시간 우선" else "표준"
+            value = settingsDeliveryModeLabel(deliveryMode)
         ),
         SettingsHubRow(
             screenId = "targets",
             title = "대상별 알림",
-            body = "기수, 감자, 기타, 개별 항목",
+            body = "기수, 감자, 기타, 개별 대상",
             value = "$enabledTargets/$totalTargets"
         ),
         SettingsHubRow(
@@ -823,8 +847,8 @@ object MainUiPolicy {
         ),
         SettingsHubRow(
             screenId = "event_types",
-            title = "이벤트 타입별 알림",
-            body = "방송, 업로드, 공식, 굿즈/행사",
+            title = "알림 종류별 설정",
+            body = "방송 시작·종료, 새 영상, 공식 소식, 굿즈/행사",
             value = "$enabledEventTypes/$totalEventTypes"
         ),
         SettingsHubRow(
@@ -833,29 +857,43 @@ object MainUiPolicy {
             body = "공식 출처 기준과 제외 대상",
             value = when {
                 !hubEventsEnabled -> "꺼짐"
-                deadlineSoonEnabled -> "켜짐 · 마감 임박 ON"
+                deadlineSoonEnabled -> "켜짐 · 마감 임박 우선"
                 else -> "켜짐"
             }
         ),
         SettingsHubRow(
             screenId = "history",
             title = "알림 기록",
-            body = "허용된 알림과 정책 제외 항목을 확인합니다.",
+            body = "최근 받은 알림과 설정에 따라 제외된 항목을 확인합니다.",
             value = "보기"
         ),
         SettingsHubRow(
             screenId = "advanced",
-            title = "고급 조합 설정",
-            body = "카테고리/개별 항목별 예외 규칙",
-            value = "예외 규칙"
+            title = "세부 알림 설정",
+            body = "분류와 개별 대상의 우선순위를 설정합니다.",
+            value = "우선순위"
         ),
         SettingsHubRow(
             screenId = "about",
             title = "앱 정보",
-            body = "프로젝트 소개, 버전, 오픈소스",
+            body = "프로젝트 소개, 버전, 오픈 소스",
             value = "보기"
         )
     )
+
+    fun settingsHubSections(rows: List<SettingsHubRow>): List<SettingsHubSection> {
+        val rowsByScreenId = rows.associateBy(SettingsHubRow::screenId)
+        fun section(title: String, screenIds: List<String>) = SettingsHubSection(
+            title = title,
+            rows = screenIds.mapNotNull(rowsByScreenId::get),
+        )
+
+        return listOf(
+            section("알림 기본 설정", listOf("delivery")),
+            section("알림 대상 및 종류", listOf("targets", "platforms", "event_types", "hub_events", "advanced")),
+            section("기록 및 정보", listOf("history", "about")),
+        )
+    }
 
     fun settingsEventTypeRows(settings: NotificationSettingState = NotificationSettingState()): List<SettingsPolicyRow> =
         NotificationEventType.entries.map { eventType ->
@@ -869,7 +907,7 @@ object MainUiPolicy {
     fun settingsHubEventRows(hubEventsEnabled: Boolean, deadlineSoonEnabled: Boolean): List<SettingsPolicyRow> = listOf(
         SettingsPolicyRow(
             title = "굿즈/행사 알림",
-            body = "공식/멤버/공식 콜라보 출처가 있는 기간성 정보만 포함합니다.",
+            body = "공식 채널, 멤버 또는 공식 협업처에서 안내한 기간 한정 정보만 포함합니다.",
             checked = hubEventsEnabled
         ),
         SettingsPolicyRow(
@@ -879,7 +917,7 @@ object MainUiPolicy {
         ),
         SettingsPolicyRow(
             title = "오프라인 행사",
-            body = "콘서트, 팝업, 공식 콜라보를 포함합니다.",
+            body = "콘서트, 팝업, 공식 협업 행사를 포함합니다.",
             checked = hubEventsEnabled
         ),
         SettingsPolicyRow(
@@ -889,21 +927,21 @@ object MainUiPolicy {
         ),
         SettingsPolicyRow(
             title = "변경 알림",
-            body = "MVP에서는 기본 OFF입니다.",
+            body = "기본적으로 꺼져 있습니다.",
             checked = false
         )
     )
 
     fun settingsPlatformPolicy(platform: NotificationPlatform): String? = when (platform) {
         NotificationPlatform.NAVER_CAFE ->
-            "공식 API와 약관을 우선합니다. 무단 수집이나 로그인 쿠키 수집은 사용하지 않습니다."
+            "공식 API와 이용 약관을 따르며, 로그인 정보가 필요한 방식으로 게시물을 수집하지 않습니다."
         NotificationPlatform.HUB_EVENT ->
-            "공식 출처가 있는 기간성 굿즈, 티켓, 오프라인 행사만 포함합니다."
+            "공식 출처에서 안내한 기간 한정 굿즈, 티켓, 오프라인 행사만 포함합니다."
         else -> null
     }
 
     fun settingsPlatformCommonNotice(): String =
-        "플랫폼 OFF이면 해당 플랫폼 이벤트 푸시를 차단합니다."
+        "플랫폼 알림을 끄면 해당 플랫폼의 푸시 알림을 받지 않습니다."
 
     fun debugServerConnectionLogs(debugModeEnabled: Boolean, logs: List<String>): List<String> =
         if (debugModeEnabled) logs else emptyList()
@@ -915,24 +953,24 @@ object MainUiPolicy {
         NotificationEventType.YOUTUBE_LIVE_ENDED,
         NotificationEventType.OFFICIAL_YOUTUBE_UPLOAD -> null
         NotificationEventType.CAFE_POST -> "무단 수집, 로그인 쿠키 수집, 비공개 접근 우회 없이 공식 경로만 사용합니다."
-        NotificationEventType.EVENT_ANNOUNCED -> "공식/멤버/공식 콜라보 출처가 있는 기간성 정보만 포함합니다."
-        NotificationEventType.EVENT_SALES_OPEN -> "굿즈, 티켓, 오프라인 행사의 예약/판매 시작 알림입니다."
+        NotificationEventType.EVENT_ANNOUNCED -> "공식 채널, 멤버 또는 공식 협업처에서 안내한 기간 한정 정보만 포함합니다."
+        NotificationEventType.EVENT_SALES_OPEN -> "굿즈, 티켓, 오프라인 행사의 예약이나 판매가 시작될 때 알려드립니다."
         NotificationEventType.EVENT_DEADLINE_SOON -> "예약/판매 종료가 가까운 항목을 홈과 알림에 우선 표시합니다."
-        NotificationEventType.EVENT_UPDATED -> "굿즈/행사 변경 알림이며 MVP에서는 기본 OFF입니다."
-        NotificationEventType.EVENT_CANCELLED -> "공식 출처의 취소 안내만 전송합니다."
+        NotificationEventType.EVENT_UPDATED -> "굿즈나 행사 정보가 바뀌었을 때 알려드리며, 기본적으로 꺼져 있습니다."
+        NotificationEventType.EVENT_CANCELLED -> "공식 채널에서 취소를 안내한 경우에만 알려드립니다."
         else -> null
     }
 
     fun settingsEventTypeCommonNotices(): List<String> = listOf(
-        "사용자 설정, 조용한 시간, 차단 키워드, rate limit은 계속 적용됩니다.",
-        "공식 채널에는 YouTube 라이브 예정/시작/종료를 적용하지 않으며, 공식 YouTube는 업로드 알림만 지원합니다."
+        "사용자가 선택한 알림 설정과 방해 금지 시간, 차단 키워드는 그대로 적용됩니다.",
+        "공식 채널의 YouTube 알림은 새 영상 업로드만 지원하며, 라이브 예정·시작·종료 알림은 보내지 않습니다."
     )
 
     fun hubEventPolicyNotice(): String =
-        "대표/강지 이벤트, 팬 주최 이벤트, 루틴 방송/라이브/업로드는 MVP 굿즈/행사 피드에 포함하지 않습니다."
+        "강지 대표 항목의 이벤트, 팬이 주최한 이벤트, 정기 방송·라이브·업로드는 굿즈/행사 알림에 포함하지 않습니다."
 
     fun historyPolicyNotice(): String =
-        "공식 YouTube 라이브 예정, 시작, 종료 이벤트는 생성하지 않아 기록에 나타나지 않습니다."
+        "공식 YouTube 채널의 라이브 예정·시작·종료 알림은 지원하지 않으므로 기록에도 표시되지 않습니다."
 
     fun liveStatusText(isLive: Boolean, startedAt: Instant?, now: Instant = Instant.now()): String {
         if (!isLive) return "오프라인"

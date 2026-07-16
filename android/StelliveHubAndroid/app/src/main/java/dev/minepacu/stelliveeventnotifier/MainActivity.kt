@@ -100,6 +100,7 @@ import dev.minepacu.stelliveeventnotifier.feature.home.SongMemberFilterState
 import dev.minepacu.stelliveeventnotifier.feature.home.SongMemberMatchMode
 import dev.minepacu.stelliveeventnotifier.feature.home.SongParticipation
 import dev.minepacu.stelliveeventnotifier.feature.home.MainNavigationHistory
+import dev.minepacu.stelliveeventnotifier.feature.home.MainNavigationHistoryState
 import dev.minepacu.stelliveeventnotifier.feature.home.MockHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.home.ServerHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongIdentity
@@ -158,6 +159,10 @@ private const val GOODS_EVENTS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1120
 private const val SONGS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1080
 private const val SETTINGS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1080
 private const val GOODS_EVENTS_CALENDAR_EXPANDED_STATE = "goods_events_calendar_expanded"
+private const val NAVIGATION_CURRENT_ROOT_STATE = "navigation_current_root"
+private const val NAVIGATION_CURRENT_SCREEN_STATE = "navigation_current_screen"
+private const val NAVIGATION_PREVIOUS_SCREENS_STATE = "navigation_previous_screens"
+private const val CONTENT_SCROLL_Y_STATE = "content_scroll_y"
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -239,6 +244,7 @@ private lateinit var binding: ActivityMainBinding
     private var latestRootDestination = HubScreen.HOME
     private var pendingScreenRefresh: PendingScreenRefresh? = null
     private var activeTwoPaneDetailPane: View? = null
+    private var activeSettingsHubScrollView: NestedScrollView? = null
     private var lastRootBackPressedAt = 0L
 private var selectedFilter = "all"
 private var selectedLiveStatusFilter = "all"
@@ -351,7 +357,14 @@ private var notificationPermissionRequested = false
         setupBottomNavigation()
         setupPullToRefresh()
         if (!handleAppDeepLink(intent)) {
-            replaceScreenWithoutAnimation(HubScreen.HOME)
+            val restoredNavigation = savedInstanceState?.restoredNavigationHistory()
+            if (restoredNavigation != null) {
+                navigationHistory.restore(restoredNavigation)
+                latestNavigationDestination = restoredNavigation.currentScreen
+                latestRootDestination = restoredNavigation.currentRoot
+            }
+            replaceScreenWithoutAnimation(restoredNavigation?.currentScreen ?: HubScreen.HOME)
+            savedInstanceState?.getInt(CONTENT_SCROLL_Y_STATE)?.let(::restoreContentScrollPosition)
         }
         loadServerBootstrap()
     }
@@ -368,6 +381,16 @@ private var notificationPermissionRequested = false
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean(GOODS_EVENTS_CALENDAR_EXPANDED_STATE, goodsEventsCalendarExpanded)
+        val navigation = navigationHistory.snapshot()
+        outState.putString(NAVIGATION_CURRENT_ROOT_STATE, navigation.currentRoot.id)
+        outState.putString(NAVIGATION_CURRENT_SCREEN_STATE, navigation.currentScreen.id)
+        outState.putStringArrayList(
+            NAVIGATION_PREVIOUS_SCREENS_STATE,
+            ArrayList(navigation.previousScreens.map(HubScreen::id)),
+        )
+        if (::binding.isInitialized) {
+            outState.putInt(CONTENT_SCROLL_Y_STATE, currentContentScrollY())
+        }
         super.onSaveInstanceState(outState)
     }
 
@@ -380,14 +403,44 @@ private var notificationPermissionRequested = false
     }
 
     private fun loadServerBootstrap() {
-        CoroutineScope(Dispatchers.Main).launch {
+        lifecycleScope.launch {
             val state = serverRepository.bootstrap()
             serverMembers = state.members
             liveStatusSourceLabel = state.liveStatusSourceLabel
             recordServerConnectionLog("bootstrap: $liveStatusSourceLabel")
             val screen = navigationHistory.currentScreen
-            refreshScreenWhenIdle(screen) { replaceScreenWithoutAnimation(screen) }
+            val scrollY = currentContentScrollY()
+            refreshScreenWhenIdle(screen) {
+                replaceScreenWithoutAnimation(screen)
+                restoreContentScrollPosition(scrollY)
+            }
             binding.contentRefresh.isRefreshing = false
+        }
+    }
+
+    private fun Bundle.restoredNavigationHistory(): MainNavigationHistoryState? {
+        fun screen(key: String): HubScreen? = getString(key)?.let { id ->
+            HubScreen.entries.firstOrNull { it.id == id }
+        }
+
+        val currentRoot = screen(NAVIGATION_CURRENT_ROOT_STATE) ?: return null
+        val currentScreen = screen(NAVIGATION_CURRENT_SCREEN_STATE) ?: return null
+        val previousScreens = getStringArrayList(NAVIGATION_PREVIOUS_SCREENS_STATE)
+            .orEmpty()
+            .mapNotNull { id -> HubScreen.entries.firstOrNull { it.id == id } }
+        return MainNavigationHistoryState(currentRoot, currentScreen, previousScreens)
+    }
+
+    private fun currentContentScrollY(): Int =
+        activeSettingsHubScrollView?.scrollY ?: binding.contentScroll.scrollY
+
+    private fun restoreContentScrollPosition(scrollY: Int) {
+        val scrollView = activeSettingsHubScrollView ?: binding.contentScroll
+        scrollView.post {
+            scrollView.scrollTo(0, scrollY)
+            if (scrollView === binding.contentScroll) {
+                updateTopBarScrolled(scrollY > dp(24))
+            }
         }
     }
 
@@ -851,6 +904,7 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
 private fun startScreen(screenId: String, title: String, role: String) {
         binding.screenActionContainer.isVisible = false
         activeTwoPaneDetailPane = null
+        activeSettingsHubScrollView = null
         if (screenId != "song_member_filter") selectedSongMemberFilterDraft = null
         if (screenId != "songs" && screenId != "song_search") {
             activeSongScrollView = null
@@ -861,7 +915,9 @@ private fun startScreen(screenId: String, title: String, role: String) {
         liveClockHandler.removeCallbacks(liveClockTicker)
         liveClockTextViews.clear()
         binding.collapsedTitle.text = MainUiPolicy.topBarTitle(screenId)
-        binding.collapsedRole.text = MainUiPolicy.topBarRole(screenId)
+        val topBarRole = MainUiPolicy.topBarRole(screenId)
+        binding.collapsedRole.text = topBarRole
+        binding.collapsedRole.isVisible = topBarRole.isNotBlank()
         binding.contentList.removeAllViews()
         resetTopBarScrollSources()
         clearTopFilters()
@@ -1639,7 +1695,7 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
         )
         if (filteredHistory.isEmpty()) {
             binding.contentList.addView(
-                compactEventCard(
+                settingsInfoCard(
                     "조건에 맞는 알림 없음",
                     "다른 알림 종류나 멤버를 선택하면 해당 기록만 볼 수 있습니다.",
                     listOf("필터")
@@ -1655,7 +1711,7 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
                 )
             }
         }
-        binding.contentList.addView(noticeCard(MainUiPolicy.historyPolicyNotice()))
+        binding.contentList.addView(settingsNoticeCard(MainUiPolicy.historyPolicyNotice()))
     }
 
 private fun renderSongs() {
@@ -2757,7 +2813,7 @@ private fun songFilterRow(
         startScreen(
             screenId = "settings",
             title = getString(R.string.settings_title),
-            role = "핵심 상태만 보고, 세부 설정은 항목별 화면에서 변경합니다."
+            role = ""
         )
         if (shouldUseSettingsTwoPane()) {
             renderSettingsTwoPane()
@@ -2793,6 +2849,8 @@ private fun songFilterRow(
             },
         )
         activeTwoPaneDetailPane = detailPane.scrollView
+        activeSettingsHubScrollView = hubPane.scrollView
+        registerTopBarScrollSource(hubPane.scrollView)
         binding.contentList.addView(paneRow)
         renderSettingsHubInto(hubPane.content)
         renderSelectedSettingsDetailInto(detailPane.content)
@@ -2800,13 +2858,13 @@ private fun songFilterRow(
 
     private fun renderSettingsHubInto(container: LinearLayout) {
         val settings = repository.settings
+        container.addView(sectionLabel("알림 기본 설정"))
         container.addView(
             settingsPanel(
-                title = "전체 알림",
                 rows = listOf(
                     SettingRow(
-                        "마스터 알림",
-                        "OFF이면 모든 푸시와 기록 생성 대상 알림을 차단합니다.",
+                        "전체 알림",
+                        "끄면 푸시 알림을 받지 않으며 새 알림 기록도 만들지 않습니다.",
                         settings.globalEnabled,
                         onCheckedChange = { enabled ->
                             if (enabled) {
@@ -2817,27 +2875,14 @@ private fun songFilterRow(
                     ),
                     SettingRow(
                         "서비스 공지",
-                        "전체/장애/점검/버전 공지를 받습니다. 마스터 알림 OFF가 우선합니다.",
+                        "서비스 전체 공지와 장애, 점검, 새 버전 안내를 받습니다. 전체 알림이 꺼져 있으면 받지 않습니다.",
                         settings.serviceAnnouncementsEnabled,
                         enabled = settings.globalEnabled,
                         onCheckedChange = { enabled -> persistSettings(settings.copy(serviceAnnouncementsEnabled = enabled)) },
-                    ),
-                    SettingRow("터치 동작", "알림을 눌렀을 때 열 위치입니다.", null, settings.tapAction.name)
+                    )
                 )
             )
         )
-        container.addView(appearanceModePanel())
-        container.addView(songOpenPreferencePanel())
-        container.addView(debugModePanel())
-        visibleServerConnectionDebugLogs().takeIf { it.isNotEmpty() }?.let { logs ->
-            container.addView(
-                compactEventCard(
-                    title = "서버 연결 로그",
-                    body = logs.joinToString("\n"),
-                    pills = listOf("임시", "디버그")
-                )
-            )
-        }
         val targetValues = settings.generationEnabled.values.toList() +
             repository.members.filter { it.catalogRole != CatalogRole.PLACEHOLDER }.map { member ->
                 settings.memberEnabled[member.id] ?: member.notificationEnabled
@@ -2853,10 +2898,44 @@ private fun songFilterRow(
             hubEventsEnabled = settings.platformEnabled[NotificationPlatform.HUB_EVENT] == true,
             deadlineSoonEnabled = settings.eventTypeEnabled[NotificationEventType.EVENT_DEADLINE_SOON] == true
         )
-        container.addView(sectionLabel("설정 항목"))
-        hubRows.forEach { row ->
-            val screen = settingsScreenForRow(row.screenId)
-            container.addView(settingsNavigationCard(row, selected = selectedSettingsDetailScreen == screen))
+        val hubSections = MainUiPolicy.settingsHubSections(hubRows).associateBy { it.title }
+        fun addNavigationRows(sectionTitle: String) {
+            hubSections.getValue(sectionTitle).rows.forEach { row ->
+                val screen = settingsScreenForRow(row.screenId)
+                container.addView(settingsNavigationCard(row, selected = selectedSettingsDetailScreen == screen))
+            }
+        }
+
+        addNavigationRows("알림 기본 설정")
+        container.addView(sectionLabel("알림 대상 및 종류"))
+        addNavigationRows("알림 대상 및 종류")
+        container.addView(sectionLabel("앱 사용"))
+        container.addView(
+            settingsPanel(
+                rows = listOf(
+                    SettingRow(
+                        "알림을 눌렀을 때",
+                        "알림을 누르면 열 화면을 선택합니다.",
+                        null,
+                        MainUiPolicy.settingsTapActionLabel(settings.tapAction.name),
+                    )
+                )
+            )
+        )
+        container.addView(appearanceModePanel())
+        container.addView(songOpenPreferencePanel())
+        container.addView(sectionLabel("기록 및 정보"))
+        addNavigationRows("기록 및 정보")
+        container.addView(sectionLabel("진단"))
+        container.addView(debugModePanel())
+        visibleServerConnectionDebugLogs().takeIf { it.isNotEmpty() }?.let { logs ->
+            container.addView(
+                settingsInfoCard(
+                    title = "서버 연결 로그",
+                    body = logs.joinToString("\n"),
+                    pills = listOf("임시", "진단")
+                )
+            )
         }
     }
 
@@ -2873,7 +2952,7 @@ private fun songFilterRow(
         startScreen(
             screenId = "settings_delivery",
             title = "알림 수신 방식",
-            role = "실시간 우선은 OS와 플랫폼 정책을 우회하지 않습니다."
+            role = "알림 속도와 방해 금지 시간을 설정합니다."
         )
         renderSettingsDeliveryInto(binding.contentList)
     }
@@ -2884,18 +2963,23 @@ private fun songFilterRow(
         container.addView(
             settingsPanel(
                 rows = listOf(
-                    SettingRow("알림 수신 방식", "표준 또는 realtime_best_effort. 비활성 알림을 다시 켜지는 않습니다.", null, settings.deliveryMode.name),
-                    SettingRow("최대한 실시간으로 알림 받기", MainUiPolicy.realtimeDisclosureLines().joinToString(" "), settings.deliveryMode == DeliveryMode.REALTIME_BEST_EFFORT)
+                    SettingRow(
+                        "알림 수신 방식",
+                        "표준 또는 실시간 우선 중에서 선택합니다. 꺼진 알림을 자동으로 켜지는 않습니다.",
+                        null,
+                        MainUiPolicy.settingsDeliveryModeLabel(settings.deliveryMode.name),
+                    ),
+                    SettingRow("최대한 실시간으로 받기", MainUiPolicy.realtimeDisclosureLines().joinToString(" "), settings.deliveryMode == DeliveryMode.REALTIME_BEST_EFFORT)
                 )
             )
         )
-        container.addView(sectionLabel("방해 금지 시간과 필터"))
+        container.addView(sectionLabel("방해 금지 시간 및 필터"))
         container.addView(
             settingsPanel(
                 rows = listOf(
                     SettingRow("방해 금지 시간", "${settings.quietHours.start}-${settings.quietHours.end} ${settings.quietHours.timezone}", settings.quietHours.enabled),
-                    SettingRow("키워드 필터", "CHZZK chat 푸시는 명시 필터가 있어야 허용됩니다.", settings.keywordFilters.hasExplicitFilters),
-                    SettingRow("CHZZK chat 푸시", "기본 OFF이며 명시 필터 없이는 푸시 전송 대상으로 쓰지 않습니다.", settings.canEnableChzzkChatPush)
+                    SettingRow("키워드 필터", "치지직 채팅 알림을 받으려면 허용하거나 차단할 키워드를 설정해야 합니다.", settings.keywordFilters.hasExplicitFilters),
+                    SettingRow("치지직 채팅 알림", "기본적으로 꺼져 있으며, 키워드 필터가 없으면 푸시 알림을 보내지 않습니다.", settings.canEnableChzzkChatPush)
                 )
             )
         )
@@ -2905,32 +2989,32 @@ private fun songFilterRow(
         startScreen(
             screenId = "settings_targets",
             title = "대상별 알림",
-            role = "기수/카테고리와 개별 항목을 분리해서 제어합니다."
+            role = "알림 받을 분류와 개별 대상을 선택합니다."
         )
         renderSettingsTargetsInto(binding.contentList)
     }
 
     private fun renderSettingsTargetsInto(container: LinearLayout) {
         val settings = repository.settings
-        container.addView(sectionLabel("카테고리"))
+        container.addView(sectionLabel("분류별 알림"))
         container.addView(
             settingsPanel(
                 rows = listOf(
-                    SettingRow("1기생, 2기생, 3기생", "활성 멤버만 표시합니다. Former 멤버는 MVP에서 제외합니다.", settings.generationEnabled["gen1"] == true && settings.generationEnabled["gen2"] == true && settings.generationEnabled["gen3"] == true),
-                    SettingRow("감자", "강지는 대표 항목으로만 포함합니다.", settings.generationEnabled["gamja"] == true),
+                    SettingRow("1기생, 2기생, 3기생", "현재 활동 중인 멤버만 포함하며, 활동이 종료된 멤버는 알림 대상에서 제외합니다.", settings.generationEnabled["gen1"] == true && settings.generationEnabled["gen2"] == true && settings.generationEnabled["gen3"] == true),
+                    SettingRow("감자", "강지는 감자의 대표 대상으로 포함합니다.", settings.generationEnabled["gamja"] == true),
                     SettingRow("기타", "스텔라이브 공식 X와 YouTube 업로드 알림입니다.", settings.generationEnabled["official"] == true),
-                    SettingRow("upcoming", "기본 OFF입니다. 사용자가 명시적으로 켤 수 있습니다.", settings.generationEnabled["gen4-upcoming"] == true)
+                    SettingRow("합류 예정 멤버", "기본적으로 꺼져 있으며, 필요한 경우 직접 켤 수 있습니다.", settings.generationEnabled["gen4-upcoming"] == true)
                 )
             )
         )
-        container.addView(sectionLabel("개별 항목"))
+        container.addView(sectionLabel("개별 대상"))
         repository.members.filter { it.catalogRole != CatalogRole.PLACEHOLDER }.forEach { member ->
             container.addView(
                 targetToggleCard(
                     title = member.koreanName,
                     body = when (member.catalogRole) {
-                        CatalogRole.REPRESENTATIVE -> "감자 카테고리의 대표 항목입니다."
-                        CatalogRole.OFFICIAL_CHANNEL -> "기타 카테고리의 공식 채널입니다."
+                        CatalogRole.REPRESENTATIVE -> "감자 분류의 대표 대상입니다."
+                        CatalogRole.OFFICIAL_CHANNEL -> "기타 분류에 포함된 공식 채널입니다."
                         else -> "${member.generationName} · ${member.roleLabel ?: "멤버"}"
                     },
                     checked = targetNotificationEnabledOverrides[member.id]
@@ -2948,7 +3032,7 @@ private fun songFilterRow(
         startScreen(
             screenId = "settings_platforms",
             title = "플랫폼별 알림",
-            role = "플랫폼별 허용 여부"
+            role = "플랫폼별로 받을 알림을 선택합니다."
         )
         renderSettingsPlatformsInto(binding.contentList)
     }
@@ -2968,10 +3052,10 @@ private fun songFilterRow(
             )
         )
         container.addView(
-            compactEventCard(
-                title = "공통 안내",
+            settingsInfoCard(
+                title = "알림 적용 기준",
                 body = MainUiPolicy.settingsPlatformCommonNotice(),
-                pills = listOf("플랫폼 OFF", "푸시 차단")
+                pills = listOf("플랫폼 알림", "푸시 알림")
             )
         )
     }
@@ -2979,15 +3063,15 @@ private fun songFilterRow(
     private fun renderSettingsEventTypes() {
         startScreen(
             screenId = "settings_event_types",
-            title = "이벤트 타입별 알림",
-            role = "이벤트 종류별 허용 여부"
+            title = "알림 종류",
+            role = "받을 알림 종류를 선택합니다."
         )
         renderSettingsEventTypesInto(binding.contentList)
     }
 
     private fun renderSettingsEventTypesInto(container: LinearLayout) {
         val settings = repository.settings
-        container.addView(sectionLabel("이벤트 타입별 알림"))
+        container.addView(sectionLabel("알림 종류별 설정"))
         container.addView(
             settingsPanel(
                 rows = MainUiPolicy.settingsEventTypeRows(settings).map { row ->
@@ -3000,26 +3084,26 @@ private fun songFilterRow(
             )
         )
         container.addView(
-            compactEventCard(
-                title = "공통 안내",
+            settingsInfoCard(
+                title = "알림 적용 기준",
                 body = MainUiPolicy.settingsEventTypeCommonNotices().first(),
-                pills = listOf("조용한 시간", "차단 키워드", "rate limit")
+                pills = listOf("방해 금지 시간", "차단 키워드")
             )
         )
         container.addView(sectionLabel("채팅 알림"))
         container.addView(
             settingsPanel(
                 rows = listOf(
-                    SettingRow("치지직 채팅 알림", "기본 OFF입니다. 키워드 또는 역할 필터를 설정한 경우에만 제한적으로 사용합니다.", settings.chatEnabled),
-                    SettingRow("Push 전달 가능", "명시 필터가 있을 때만 푸시 전송 대상으로 쓸 수 있습니다.", null, if (settings.canEnableChzzkChatPush) "필터 설정됨" else "필터 필요")
+                    SettingRow("치지직 채팅 알림", "기본적으로 꺼져 있으며, 키워드 또는 역할 필터를 설정한 경우에만 받을 수 있습니다.", settings.chatEnabled),
+                    SettingRow("채팅 푸시 알림", "허용하거나 차단할 키워드를 설정해야 푸시 알림을 받을 수 있습니다.", null, if (settings.canEnableChzzkChatPush) "사용 가능" else "키워드 설정 필요")
                 )
             )
         )
         container.addView(
-            compactEventCard(
+            settingsInfoCard(
                 title = "공식 채널 제한",
                 body = MainUiPolicy.settingsEventTypeCommonNotices().last(),
-                pills = listOf("공식 X 게시글", "공식 YouTube 업로드", "공식 YouTube live 제외")
+                pills = listOf("공식 X 게시글", "공식 YouTube 업로드", "YouTube 라이브 제외")
             )
         )
     }
@@ -3028,7 +3112,7 @@ private fun songFilterRow(
         startScreen(
             screenId = "settings_hub_events",
             title = "굿즈/행사",
-            role = "온라인 한정 굿즈와 오프라인 공식 행사를 중심으로 봅니다."
+            role = "굿즈와 행사 알림을 설정합니다."
         )
         renderSettingsHubEventsInto(binding.contentList)
     }
@@ -3044,35 +3128,35 @@ private fun songFilterRow(
                 ).map { row -> SettingRow(row.title, row.body, row.checked) }
             )
         )
-        container.addView(noticeCard(MainUiPolicy.hubEventPolicyNotice()))
-        container.addView(noticeCard("공식 이미지, 로고, 포스터는 앱에 저장하거나 재사용하지 않습니다."))
+        container.addView(settingsNoticeCard(MainUiPolicy.hubEventPolicyNotice()))
+        container.addView(settingsNoticeCard("공식 이미지, 로고, 포스터는 앱에 저장하거나 재사용하지 않습니다."))
     }
 
     private fun renderSettingsAdvanced() {
         startScreen(
             screenId = "settings_advanced",
-            title = "고급 조합 설정",
-            role = "복잡한 예외 규칙은 필요할 때만 조정합니다."
+            title = "세부 알림 설정",
+            role = "분류와 개별 대상의 우선순위를 설정합니다."
         )
         renderSettingsAdvancedInto(binding.contentList)
     }
 
     private fun renderSettingsAdvancedInto(container: LinearLayout) {
         val settings = repository.settings
-        container.addView(sectionLabel("조합 설정"))
+        container.addView(sectionLabel("알림 우선순위"))
         container.addView(
             settingsPanel(
                 rows = settings.combinationPreferences.map { preference ->
                     SettingRow(
-                        title = preference.label,
-                        body = "카테고리/개별 항목과 플랫폼/이벤트 타입을 함께 해석합니다.",
+                        title = MainUiPolicy.settingsCombinationPreferenceLabel(preference.scope),
+                        body = "분류 또는 개별 대상 설정과 플랫폼, 알림 종류를 함께 적용합니다.",
                         checked = preference.enabled
                     )
                 }
             )
         )
         container.addView(
-            noticeCard("개별 명시 설정은 카테고리 설정을 덮어쓸 수 있습니다. 플랫폼, 이벤트 타입, 조용한 시간, 키워드, rate limit은 이후에도 계속 적용됩니다.")
+            settingsNoticeCard("개별 대상에서 선택한 설정은 분류별 설정보다 우선할 수 있습니다. 플랫폼, 알림 종류, 방해 금지 시간과 키워드 필터는 그대로 적용됩니다.")
         )
     }
 
@@ -3097,7 +3181,7 @@ private fun songFilterRow(
             )
         )
 
-        container.addView(sectionLabel("오픈소스"))
+        container.addView(sectionLabel("오픈 소스"))
         container.addView(
             linkCard(
                 title = "GitHub 저장소",
@@ -3112,7 +3196,7 @@ private fun songFilterRow(
                 rows = listOf(
                     SettingRow(
                         "비공식 프로젝트",
-                        "Stellive, CHZZK, YouTube, X, Naver, Samsung, Apple과 공식 관계가 없습니다."
+                        "스텔라이브, 치지직, YouTube, X, 네이버, Samsung, Apple과 공식 관계가 없습니다."
                     )
                 )
             )
@@ -3151,7 +3235,7 @@ private fun songFilterRow(
 
     private fun renderSettingsDetailEmptyPane(container: LinearLayout) {
         container.addView(
-            compactEventCard(
+            settingsInfoCard(
                 title = "설정 항목을 선택하세요",
                 body = "왼쪽 목록에서 세부 설정을 선택하면 이 영역에 표시됩니다.",
                 pills = listOf("설정")
@@ -3188,13 +3272,11 @@ private fun songFilterRow(
             isClickable = true
             isFocusable = true
             isSelected = selected
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(10)
-            }
+            layoutParams = settingsCardLayoutParams()
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(15), dp(15), dp(15), dp(15))
+                applySettingsCardContentPadding()
             }
             content.addView(LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -3208,7 +3290,7 @@ private fun songFilterRow(
                     text = row.body
                     setTextColor(color(R.color.hub_text_muted))
                     textSize = 12f
-                    setPadding(0, dp(5), 0, 0)
+                    setPadding(0, dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp), 0, 0)
                     setLineSpacing(0f, 1.1f)
                 })
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -3228,13 +3310,11 @@ private fun songFilterRow(
 
     private fun aboutAppCard(): MaterialCardView =
         baseCard().apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(10)
-            }
+            layoutParams = settingsCardLayoutParams()
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(15), dp(15), dp(15), dp(15))
+                applySettingsCardContentPadding()
             }
             content.addView(TextView(context).apply {
                 text = "앱"
@@ -3255,10 +3335,10 @@ private fun songFilterRow(
                     typeface = Typeface.DEFAULT_BOLD
                 })
                 addView(TextView(context).apply {
-                    text = "굿즈/행사 일정, 멤버 기념일, 플랫폼 이벤트 알림을 한곳에서 확인하는 비공식 오픈소스 앱입니다."
+                    text = "굿즈/행사 일정, 멤버 기념일, 플랫폼 알림을 한곳에서 확인하는 비공식 오픈 소스 앱입니다."
                     setTextColor(color(R.color.hub_text_muted))
                     textSize = 12f
-                    setPadding(0, dp(6), 0, 0)
+                    setPadding(0, dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp), 0, 0)
                     setLineSpacing(0f, 1.1f)
                 })
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -3269,13 +3349,11 @@ private fun songFilterRow(
         baseCard(HubCardStyle.INTERACTIVE).apply {
             isClickable = true
             isFocusable = true
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(10)
-            }
+            layoutParams = settingsCardLayoutParams()
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(15), dp(15), dp(15), dp(15))
+                applySettingsCardContentPadding()
             }
             content.addView(LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -3289,7 +3367,7 @@ private fun songFilterRow(
                     text = body
                     setTextColor(color(R.color.hub_text_muted))
                     textSize = 12f
-                    setPadding(0, dp(6), 0, 0)
+                    setPadding(0, dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp), 0, 0)
                 })
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = dp(12)
@@ -3306,25 +3384,23 @@ private fun songFilterRow(
 
     private fun appearanceModePanel(): MaterialCardView =
         baseCard().apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(12)
-            }
+            layoutParams = settingsCardLayoutParams()
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(15), dp(15), dp(15), dp(15))
+                applySettingsCardContentPadding()
             }
             content.addView(TextView(context).apply {
                 text = "화면 모드"
                 setTextColor(color(R.color.hub_text))
                 textSize = 15f
                 typeface = Typeface.DEFAULT_BOLD
-                setPadding(0, 0, 0, dp(8))
+                setPadding(0, 0, 0, dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp))
             })
             content.addView(TextView(context).apply {
-                text = "자동은 기기의 시스템 설정을 따릅니다."
+                text = "자동 모드는 기기의 화면 설정을 따릅니다."
                 setTextColor(color(R.color.hub_text_muted))
                 textSize = 12f
-                setPadding(0, 0, 0, dp(10))
+                setPadding(0, 0, 0, dp(8))
             })
             content.addView(ChipGroup(context).apply {
                 isSingleSelection = true
@@ -3337,16 +3413,11 @@ private fun songFilterRow(
 
     private fun songOpenPreferencePanel(): MaterialCardView =
         baseCard().apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply {
-                bottomMargin = dp(12)
-            }
+            layoutParams = settingsCardLayoutParams()
             val selectedTarget = songOpenPreferenceStore.read()
             addView(LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(15), dp(15), dp(15), dp(15))
+                applySettingsCardContentPadding()
                 addView(TextView(context).apply {
                     text = "노래 재생"
                     setTextColor(color(R.color.hub_text))
@@ -3354,7 +3425,7 @@ private fun songFilterRow(
                     typeface = Typeface.DEFAULT_BOLD
                 })
                 addView(TextView(context).apply {
-                    text = "기본 열기 앱"
+                    text = "기본으로 열 앱"
                     setTextColor(color(R.color.hub_text))
                     textSize = 13f
                     setPadding(0, dp(8), 0, dp(8))
@@ -3371,50 +3442,44 @@ private fun songFilterRow(
                             setOnClickListener {
                                 if (songOpenPreferenceStore.read() != target) {
                                     songOpenPreferenceStore.write(target)
-                                    renderSettings()
                                 }
                             }
                         })
                     }
                 })
                 addView(TextView(context).apply {
-                    text = "노래 상세의 기본 열기 버튼에 적용됩니다. 공유와 링크 복사는 YouTube 주소를 사용합니다."
+                    text = "노래 상세 화면의 ‘열기’ 버튼에서 사용할 앱입니다. 공유와 링크 복사에는 YouTube 주소를 사용합니다."
                     setTextColor(color(R.color.hub_text_muted))
                     textSize = 12f
-                    setPadding(0, dp(10), 0, 0)
+                    setPadding(0, dp(8), 0, 0)
                 })
             })
         }
 
     private fun debugModePanel(): MaterialCardView =
         baseCard().apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = dp(12)
-            }
+            layoutParams = settingsCardLayoutParams()
 
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(15), dp(15), dp(15), dp(15))
+                applySettingsCardContentPadding()
             }
 
             content.addView(
                 LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
                     addView(TextView(context).apply {
-                        text = "디버그 모드"
+                        text = "진단 모드"
                         setTextColor(color(R.color.hub_text))
                         textSize = 15f
                         typeface = Typeface.DEFAULT_BOLD
                     })
                     addView(TextView(context).apply {
-                        text = "켜면 이 설정 화면에 서버 연결 상태 로그를 임시로 표시합니다."
+                        text = "켜면 이 화면에 서버 연결 기록을 임시로 표시합니다."
                         setTextColor(color(R.color.hub_text_muted))
                         textSize = 12f
-                        setPadding(0, dp(6), 0, 0)
+                        setPadding(0, dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp), 0, 0)
                     })
                 },
                 LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -3427,7 +3492,7 @@ private fun songFilterRow(
                 setOnCheckedChangeListener { _, checked ->
                     debugModeEnabled = checked
                     recordServerConnectionLog(
-                        if (checked) "debug: 서버 연결 로그 표시 켜짐" else "debug: 서버 연결 로그 표시 꺼짐"
+                        if (checked) "진단: 서버 연결 기록 표시 켜짐" else "진단: 서버 연결 기록 표시 꺼짐"
                     )
                     renderSettings()
                 }
@@ -3453,7 +3518,6 @@ private fun songFilterRow(
                     selectedAppearanceMode = mode
                     writeAppearanceMode(mode)
                     AppCompatDelegate.setDefaultNightMode(mode.toNightMode())
-                    renderSettings()
                 }
             }
         }
@@ -3721,6 +3785,12 @@ private fun noticeCard(text: String): TextView = TextView(this).apply {
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = dp(14)
         }
+    }
+
+    private fun settingsNoticeCard(text: String): TextView = noticeCard(text).apply {
+        val verticalPadding = dp(MainUiPolicy.settingsCardSpacing.contentVerticalPaddingDp)
+        setPadding(paddingLeft, verticalPadding, paddingRight, verticalPadding)
+        layoutParams = settingsCardLayoutParams()
     }
 
     private fun memberCard(member: HubMember): MaterialCardView =
@@ -4354,6 +4424,20 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
             addView(content)
         }
 
+    private fun settingsInfoCard(title: String, body: String, pills: List<String>): MaterialCardView =
+        compactEventCard(title, body, pills).apply {
+            layoutParams = settingsCardLayoutParams()
+            (getChildAt(0) as? LinearLayout)?.let { content ->
+                content.applySettingsCardContentPadding(horizontalPaddingDp = 13)
+                (content.getChildAt(1) as? TextView)?.setPadding(
+                    0,
+                    dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp),
+                    0,
+                    0,
+                )
+            }
+        }
+
     private fun targetToggleCard(
         title: String,
         body: String,
@@ -4361,9 +4445,7 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
         onCheckedChange: (Boolean) -> Unit
     ): MaterialCardView =
         baseCard().apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(10)
-            }
+            layoutParams = settingsCardLayoutParams()
 
             addView(
                 SettingsRowView(context).bind(
@@ -4416,13 +4498,11 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
 
     private fun historyEventCard(item: NotificationHistoryItem, member: HubMember?): MaterialCardView =
         baseCard().apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(10)
-            }
+            layoutParams = settingsCardLayoutParams()
             val row = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.TOP
-                setPadding(dp(13), dp(13), dp(13), dp(13))
+                applySettingsCardContentPadding(horizontalPaddingDp = 13)
             }
             if (member != null) {
                 row.addView(memberAvatar(member, dp(42)), LinearLayout.LayoutParams(dp(42), dp(42)))
@@ -4460,7 +4540,7 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
             text = item.body
             setTextColor(color(R.color.hub_text_muted))
             textSize = 12f
-            setPadding(0, dp(5), 0, 0)
+            setPadding(0, dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp), 0, 0)
             setLineSpacing(0f, 1.12f)
         })
         addView(pillRow(listOf(item.eventType, item.deliveryMode.name.lowercase(), "${item.deliveryLatencyMs ?: "-"}ms")))
@@ -4474,8 +4554,7 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
             }
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                val verticalPadding = MainUiPolicy.settingsPanelContentVerticalPaddingDp(hasTitle = title != null)
-                setPadding(dp(15), dp(verticalPadding), dp(15), dp(verticalPadding))
+                setPadding(dp(15), 0, dp(15), 0)
             }
             title?.let { panelTitle ->
                 content.addView(TextView(context).apply {
@@ -4483,11 +4562,12 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
                     setTextColor(color(R.color.hub_text))
                     textSize = 15f
                     typeface = Typeface.DEFAULT_BOLD
-                    setPadding(0, 0, 0, dp(10))
+                    val verticalPadding = MainUiPolicy.settingsPanelContentVerticalPaddingDp(hasTitle = true)
+                    setPadding(0, dp(verticalPadding), 0, dp(verticalPadding))
                 })
             }
             rows.forEachIndexed { index, row ->
-                if (index > 0) content.addView(divider())
+                if (index > 0 || title != null) content.addView(divider())
                 content.addView(settingRowView(row))
             }
             addView(content)
@@ -4495,22 +4575,21 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
 
     private fun historyFilterPanel(rows: List<HistoryFilterSelectorRow>): MaterialCardView =
         baseCard().apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(12)
-            }
+            layoutParams = settingsCardLayoutParams()
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(15), dp(15), dp(15), dp(15))
+                setPadding(dp(15), 0, dp(15), 0)
             }
             content.addView(TextView(context).apply {
                 text = "보기 필터"
                 setTextColor(color(R.color.hub_text))
                 textSize = 15f
                 typeface = Typeface.DEFAULT_BOLD
-                setPadding(0, 0, 0, dp(10))
+                val verticalPadding = dp(MainUiPolicy.settingsCardSpacing.contentVerticalPaddingDp)
+                setPadding(0, verticalPadding, 0, verticalPadding)
             })
-            rows.forEachIndexed { index, row ->
-                if (index > 0) content.addView(divider())
+            rows.forEach { row ->
+                content.addView(divider())
                 content.addView(historyFilterSelectorRowView(row))
             }
             addView(content)
@@ -4519,7 +4598,8 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
     private fun historyFilterSelectorRowView(row: HistoryFilterSelectorRow): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(0, dp(10), 0, dp(10))
+        val verticalPadding = dp(MainUiPolicy.settingsCardSpacing.rowVerticalPaddingDp)
+        setPadding(0, verticalPadding, 0, verticalPadding)
         isClickable = true
         isFocusable = true
         setOnClickListener { row.onClick() }
@@ -4679,6 +4759,19 @@ private fun pill(text: String, good: Boolean): TextView = TextView(this).apply {
 
 private fun baseCard(style: HubCardStyle = HubCardStyle.STANDARD): MaterialCardView =
         cardFactory.create(style)
+
+    private fun settingsCardLayoutParams(): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            bottomMargin = dp(MainUiPolicy.settingsCardSpacing.bottomMarginDp)
+        }
+
+    private fun LinearLayout.applySettingsCardContentPadding(horizontalPaddingDp: Int = 15) {
+        val verticalPadding = dp(MainUiPolicy.settingsCardSpacing.contentVerticalPaddingDp)
+        setPadding(dp(horizontalPaddingDp), verticalPadding, dp(horizontalPaddingDp), verticalPadding)
+    }
 
     private fun divider(): View = View(this).apply {
         setBackgroundColor(color(R.color.hub_line))

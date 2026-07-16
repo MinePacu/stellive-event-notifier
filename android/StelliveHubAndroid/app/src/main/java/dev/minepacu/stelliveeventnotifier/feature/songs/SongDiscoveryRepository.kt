@@ -3,12 +3,11 @@ package dev.minepacu.stelliveeventnotifier.feature.songs
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import androidx.datastore.preferences.preferencesDataStoreFile
+import androidx.datastore.preferences.preferencesDataStore
 import dev.minepacu.stelliveeventnotifier.core.model.SongCatalogItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -41,10 +40,12 @@ interface SongDiscoveryRepository {
     suspend fun acknowledge(songs: List<SongCatalogItem>, catalog: List<SongCatalogItem>)
 }
 
+private val Context.songDiscoveryDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "song_discovery.preferences_pb",
+)
+
 class DataStoreSongDiscoveryRepository(private val dataStore: DataStore<Preferences>) : SongDiscoveryRepository {
-    constructor(context: Context) : this(PreferenceDataStoreFactory.create {
-        context.applicationContext.preferencesDataStoreFile("song_discovery.preferences_pb")
-    })
+    constructor(context: Context) : this(context.applicationContext.songDiscoveryDataStore)
 
     override val state: Flow<SongDiscoveryStateV1> = dataStore.data.map(::decode)
 

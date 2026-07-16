@@ -45,6 +45,7 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertTrue(settings.combinationPreferences.map(\.scope).contains(.generationEventType))
         XCTAssertTrue(settings.combinationPreferences.map(\.scope).contains(.memberPlatform))
         XCTAssertTrue(settings.combinationPreferences.map(\.scope).contains(.memberEventType))
+        XCTAssertEqual(NotificationPreferenceScope.memberEventType.displayName, "개별 대상의 알림 종류 설정")
         XCTAssertFalse(settings.quietHours.enabled)
         XCTAssertFalse(settings.keywordFilters.hasExplicitFilters)
         XCTAssertEqual(settings.rateLimit.maxNotificationsPerMinute, 10)
@@ -57,9 +58,17 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertEqual(rows.map(\.route), [.history, .delivery, .targets, .platforms, .eventTypes, .hubEvents, .advanced, .about])
         XCTAssertEqual(rows.first { $0.route == .delivery }?.summary, "표준")
         XCTAssertEqual(rows.first { $0.route == .platforms }?.summary, "4/5")
-        XCTAssertEqual(rows.first { $0.route == .hubEvents }?.summary, "켜짐 · 마감 임박 ON")
+        XCTAssertEqual(rows.first { $0.route == .hubEvents }?.summary, "켜짐 · 마감 임박 우선")
+        XCTAssertEqual(rows.first { $0.route == .delivery }?.title, "알림 수신 방식")
+        XCTAssertEqual(rows.first { $0.route == .eventTypes }?.title, "알림 종류별 설정")
         XCTAssertEqual(rows.first { $0.route == .about }?.summary, "보기")
         XCTAssertFalse(rows.contains { $0.title == "CHZZK 채팅" })
+
+        let sections = SettingsNavigationPolicy.hubSections(rows: rows)
+        XCTAssertEqual(sections.map(\.title), ["알림 기본 설정", "알림 대상 및 종류", "기록 및 정보"])
+        XCTAssertEqual(sections[0].rows.map(\.route), [.delivery])
+        XCTAssertEqual(sections[1].rows.map(\.route), [.targets, .platforms, .eventTypes, .hubEvents, .advanced])
+        XCTAssertEqual(sections[2].rows.map(\.route), [.history, .about])
     }
 
     func testSettingsNavigationRowsCenterTrailingSummaryAgainstFullRow() {
@@ -76,28 +85,28 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertEqual(eventRows.first { $0.title == "YouTube 라이브 시작" }?.isEnabled, false)
         XCTAssertNil(eventRows.first { $0.title == "CHZZK 채팅" }?.note)
         XCTAssertNil(eventRows.first { $0.title == "YouTube 라이브 시작" }?.note)
-        XCTAssertTrue(SettingsNavigationPolicy.eventTypeSettingsCommonNotices.contains { $0.contains("공식 채널에는 YouTube 라이브 예정/시작/종료") })
-        XCTAssertTrue(SettingsNavigationPolicy.eventTypeSettingsCommonNotices.contains { $0.contains("조용한 시간") })
+        XCTAssertTrue(SettingsNavigationPolicy.eventTypeSettingsCommonNotices.contains { $0.contains("라이브 예정·시작·종료 알림은 보내지 않습니다") })
+        XCTAssertTrue(SettingsNavigationPolicy.eventTypeSettingsCommonNotices.contains { $0.contains("방해 금지 시간") })
 
         let hubRows = SettingsNavigationPolicy.hubEventRows(settings: store.settings)
         XCTAssertEqual(hubRows.first { $0.title == "굿즈/행사 알림" }?.isEnabled, true)
         XCTAssertEqual(hubRows.first { $0.title == "변경 알림" }?.isEnabled, false)
-        XCTAssertTrue(SettingsNavigationPolicy.hubEventPolicyNotice.contains("대표/강지 이벤트"))
+        XCTAssertTrue(SettingsNavigationPolicy.hubEventPolicyNotice.contains("강지 대표 항목의 이벤트"))
     }
 
     func testSettingsSharedPlatformPolicyIsShownOncePerSection() {
         XCTAssertNil(SettingsNavigationPolicy.platformPolicy(.chzzk))
         XCTAssertNil(SettingsNavigationPolicy.platformPolicy(.youtube))
-        XCTAssertEqual(SettingsNavigationPolicy.platformPolicy(.naverCafe), "공식 API와 약관을 우선합니다. 무단 수집이나 로그인 쿠키 수집은 사용하지 않습니다.")
-        XCTAssertEqual(SettingsNavigationPolicy.platformPolicy(.hubEvent), "공식 출처가 있는 기간성 굿즈, 티켓, 오프라인 행사만 포함합니다.")
-        XCTAssertTrue(SettingsNavigationPolicy.platformSettingsCommonNotice.contains("플랫폼 OFF"))
+        XCTAssertEqual(SettingsNavigationPolicy.platformPolicy(.naverCafe), "공식 API와 이용 약관을 따르며, 로그인 정보가 필요한 방식으로 게시물을 수집하지 않습니다.")
+        XCTAssertEqual(SettingsNavigationPolicy.platformPolicy(.hubEvent), "공식 출처에서 안내한 기간 한정 굿즈, 티켓, 오프라인 행사만 포함합니다.")
+        XCTAssertTrue(SettingsNavigationPolicy.platformSettingsCommonNotice.contains("플랫폼 알림을 끄면"))
     }
 
     func testRealtimeDisclosureMentionsPolicyLimits() {
         XCTAssertEqual(NotificationSettingsState.realtimeDisclosureLines, [
-            "최대한 실시간 모드는 가능한 한 빠르게 알림을 받도록 시도하지만, 플랫폼/OS/네트워크 사정으로 지연될 수 있습니다.",
-            "배터리와 데이터 사용량이 증가할 수 있습니다.",
-            "사용자가 꺼둔 알림, 조용한 시간, 차단 키워드, rate limit은 계속 적용됩니다."
+            "최대한 실시간으로 알림 받기는 알림을 빠르게 보내도록 시도하는 기능입니다. 플랫폼, 운영체제 또는 네트워크 상태에 따라 늦어질 수 있습니다.",
+            "배터리와 데이터 사용량이 늘어날 수 있습니다.",
+            "사용자가 꺼둔 알림과 방해 금지 시간, 차단 키워드, 알림 빈도 제한은 그대로 적용됩니다."
         ])
     }
 

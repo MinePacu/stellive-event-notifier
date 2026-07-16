@@ -349,9 +349,9 @@ data class NotificationSettingState(
 
     companion object {
         val REALTIME_DISCLOSURE_LINES = listOf(
-            "최대한 실시간 모드는 가능한 한 빠르게 알림을 받도록 시도하지만, 플랫폼/OS/네트워크 사정으로 지연될 수 있습니다.",
-            "배터리와 데이터 사용량이 증가할 수 있습니다.",
-            "사용자가 꺼둔 알림, 방해 금지 시간, 차단 키워드는 계속 적용됩니다."
+            "최대한 실시간으로 알림 받기는 알림을 빠르게 보내도록 시도하는 기능입니다. 플랫폼, 운영체제 또는 네트워크 상태에 따라 늦어질 수 있습니다.",
+            "배터리와 데이터 사용량이 늘어날 수 있습니다.",
+            "사용자가 꺼둔 알림과 방해 금지 시간, 차단 키워드는 그대로 적용됩니다."
         )
     }
 }
@@ -421,8 +421,8 @@ private fun defaultEventTypeEnabled(): Map<NotificationEventType, Boolean> = lin
 )
 
 private fun defaultCombinationPreferences(): List<CombinationPreference> = listOf(
-    CombinationPreference("generation_platform", NotificationPreferenceScope.GENERATION_PLATFORM, "카테고리 + 플랫폼"),
-    CombinationPreference("generation_event_type", NotificationPreferenceScope.GENERATION_EVENT_TYPE, "카테고리 + 이벤트 타입"),
-    CombinationPreference("member_platform", NotificationPreferenceScope.MEMBER_PLATFORM, "개별 항목 + 플랫폼"),
-    CombinationPreference("member_event_type", NotificationPreferenceScope.MEMBER_EVENT_TYPE, "개별 항목 + 이벤트 타입")
+    CombinationPreference("generation_platform", NotificationPreferenceScope.GENERATION_PLATFORM, "분류별 플랫폼 설정"),
+    CombinationPreference("generation_event_type", NotificationPreferenceScope.GENERATION_EVENT_TYPE, "분류별 알림 종류 설정"),
+    CombinationPreference("member_platform", NotificationPreferenceScope.MEMBER_PLATFORM, "개별 대상의 플랫폼 설정"),
+    CombinationPreference("member_event_type", NotificationPreferenceScope.MEMBER_EVENT_TYPE, "개별 대상의 알림 종류 설정")
 )
