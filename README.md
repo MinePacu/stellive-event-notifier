@@ -102,9 +102,10 @@ xcodebuild -project StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination
 | 상태·초기화 | `GET /health`, `GET /docs`, `GET /v1/bootstrap` |
 | 기기·선호도 | `POST /v1/devices/register`, `PUT /v1/devices/token`, `GET/PUT /v1/preferences` |
 | 굿즈·행사 | `GET /v1/hub-events`, `GET /v1/hub-events/:id`, `GET /v1/hub-events/calendar`, `GET /v1/hub-events/widget-snapshot`, `GET /v1/hub-events/summary` |
+| 앱 서비스 공지 | `GET /v1/announcements`, `GET /v1/announcements/:id`, `GET /v1/announcements/summary` |
 | 라이브·인증 | `GET /v1/live-status`, `GET /v1/auth/chzzk/start`, `GET /v1/auth/chzzk/callback` |
 | 음악 | `GET /v1/music`, `GET /v1/music/:id`, `GET /v1/members/:id/music` |
-| 관리자·내부 작업 | `GET /admin`, `/v1/admin/hub-events`, `/v1/internal/schedulers/*`, `/v1/internal/jobs/notifications/drain` |
+| 관리자·내부 작업 | `GET /admin`, `/v1/admin/hub-events`, `/v1/admin/announcements`, `/v1/internal/schedulers/*`, `/v1/internal/jobs/notifications/drain` |
 
 관리자와 internal API는 token/session 보호 경로입니다. production credential은 환경 변수 또는 secret manager로만 주입합니다.
 
