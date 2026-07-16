@@ -72,6 +72,18 @@ class HubApiClient(
         api.hubEvent(id)
     }
 
+    suspend fun announcements(
+        cursor: String? = null,
+        limit: Int = 20,
+        appVersion: String? = null,
+    ): HubNetworkResult<ServiceAnnouncementListResponseDto> = runCatchingNetwork {
+        api.announcements(cursor = cursor, limit = limit, appVersion = appVersion)
+    }
+
+    suspend fun announcement(id: String, appVersion: String? = null): HubNetworkResult<ServiceAnnouncementDto> = runCatchingNetwork {
+        api.announcement(id, appVersion = appVersion)
+    }
+
     suspend fun hubEventsCalendar(
         from: String,
         to: String,

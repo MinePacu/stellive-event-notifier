@@ -363,6 +363,58 @@ data class NotificationHistoryItem(
     val deliveryLatencyMs: Long? = null
 )
 
+enum class ServiceAnnouncementType(val apiValue: String, val displayName: String) {
+    GENERAL("general", "일반 안내"), INCIDENT("incident", "장애 및 복구"),
+    MAINTENANCE("maintenance", "예정된 점검"), VERSION_UPDATE("version_update", "앱 업데이트");
+}
+
+enum class ServiceAnnouncementSeverity(val apiValue: String, val displayName: String) {
+    INFO("info", "정보"), IMPORTANT("important", "중요"), CRITICAL("critical", "긴급");
+}
+
+data class ServiceAnnouncement(
+    val id: String,
+    val type: ServiceAnnouncementType,
+    val severity: ServiceAnnouncementSeverity,
+    val title: String,
+    val summary: String,
+    val body: String,
+    val isPinned: Boolean,
+    val targetPlatforms: List<String>,
+    val minimumAppVersion: String? = null,
+    val maximumAppVersion: String? = null,
+    val appDeepLink: String? = null,
+    val externalUrl: String? = null,
+    val actionLabel: String? = null,
+    val publishedAt: java.time.Instant,
+    val expiresAt: java.time.Instant? = null,
+    val resolvedAt: java.time.Instant? = null,
+    val archivedAt: java.time.Instant? = null,
+    val attentionRevision: Int,
+    val revision: Int,
+    val updatedAt: java.time.Instant,
+)
+
+data class AnnouncementSummaryItem(
+    val id: String,
+    val attentionRevision: Int,
+    val publishedAt: java.time.Instant,
+    val severity: ServiceAnnouncementSeverity,
+    val isPinned: Boolean,
+)
+
+data class AnnouncementsSummary(
+    val activeCount: Int = 0,
+    val items: List<AnnouncementSummaryItem> = emptyList(),
+    val pinned: ServiceAnnouncement? = null,
+    val generatedAt: java.time.Instant? = null,
+)
+
+data class ServiceAnnouncementListResult(
+    val items: List<ServiceAnnouncement>,
+    val nextCursor: String? = null,
+)
+
 private fun defaultGenerationEnabled(): Map<String, Boolean> = linkedMapOf(
     "gen1" to true,
     "gen2" to true,

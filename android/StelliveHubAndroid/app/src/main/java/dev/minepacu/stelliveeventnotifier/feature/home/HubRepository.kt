@@ -4,6 +4,9 @@ import dev.minepacu.stelliveeventnotifier.core.model.GenerationFilter
 import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarDay
 import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventsSummary
+import dev.minepacu.stelliveeventnotifier.core.model.AnnouncementsSummary
+import dev.minepacu.stelliveeventnotifier.core.model.ServiceAnnouncement
+import dev.minepacu.stelliveeventnotifier.core.model.ServiceAnnouncementListResult
 import dev.minepacu.stelliveeventnotifier.core.model.HubMember
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
 import dev.minepacu.stelliveeventnotifier.core.model.SongFacets
@@ -16,6 +19,7 @@ data class HubDataState(
     val members: List<HubMember>,
     val settings: NotificationSettingState,
     val hubEventsSummary: HubEventsSummary,
+    val announcementsSummary: AnnouncementsSummary = AnnouncementsSummary(),
     val liveStatusSourceLabel: String = "앱 내 목업",
 )
 
@@ -29,6 +33,8 @@ interface HubRepository {
         to: LocalDate? = null,
     ): List<HubEvent>
     suspend fun hubEventDetail(id: String): HubEvent?
+    suspend fun announcements(cursor: String? = null): ServiceAnnouncementListResult = ServiceAnnouncementListResult(emptyList())
+    suspend fun announcementDetail(id: String): ServiceAnnouncement? = null
     suspend fun hubCalendarDays(from: LocalDate, to: LocalDate, timezone: String): List<HubCalendarDay>
     suspend fun songs(
         generationId: String? = null,
