@@ -1,5 +1,6 @@
 import type {
   Generation,
+  AnnouncementsSummary,
   HubCalendarWidgetSnapshot,
   HubEventsSummary,
   LiveStatus,
@@ -40,6 +41,7 @@ export interface BootstrapResponse {
   liveStatus: LiveStatus[];
   hubEventsSummary: HubEventsSummary;
   hubCalendarWidgetSnapshot?: HubCalendarWidgetSnapshot;
+  announcementsSummary?: AnnouncementsSummary;
   serverTime: string;
 }
 

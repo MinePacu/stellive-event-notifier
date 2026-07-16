@@ -367,6 +367,55 @@ export interface HubEventsSummary {
   preview: HubEvent[];
 }
 
+export type ServiceAnnouncementType = "general" | "incident" | "maintenance" | "version_update";
+export type ServiceAnnouncementSeverity = "info" | "important" | "critical";
+export type ServiceAnnouncementPublicationState = "draft" | "published" | "archived";
+export type ServiceAnnouncementPlatform = "android" | "ios";
+
+export interface ServiceAnnouncement {
+  id: string;
+  type: ServiceAnnouncementType;
+  severity: ServiceAnnouncementSeverity;
+  title: string;
+  summary: string;
+  body: string;
+  isPinned: boolean;
+  targetPlatforms: ServiceAnnouncementPlatform[];
+  minimumAppVersion?: string;
+  maximumAppVersion?: string;
+  appDeepLink?: string;
+  externalUrl?: string;
+  actionLabel?: string;
+  publishedAt: string;
+  expiresAt?: string;
+  resolvedAt?: string;
+  archivedAt?: string;
+  attentionRevision: number;
+  revision: number;
+  updatedAt: string;
+}
+
+export interface AnnouncementSummaryItem {
+  id: string;
+  attentionRevision: number;
+  publishedAt: string;
+  severity: ServiceAnnouncementSeverity;
+  isPinned: boolean;
+}
+
+export interface AnnouncementsSummary {
+  activeCount: number;
+  items: AnnouncementSummaryItem[];
+  pinned?: ServiceAnnouncement;
+  generatedAt: string;
+}
+
+export interface ServiceAnnouncementListResponse {
+  items: ServiceAnnouncement[];
+  nextCursor?: string | null;
+  generatedAt: string;
+}
+
 export interface HubCalendarEntry {
   id: string;
   eventId: string;
