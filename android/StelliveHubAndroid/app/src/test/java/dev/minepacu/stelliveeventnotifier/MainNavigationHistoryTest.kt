@@ -2,6 +2,7 @@ package dev.minepacu.stelliveeventnotifier
 
 import dev.minepacu.stelliveeventnotifier.feature.home.HubScreen
 import dev.minepacu.stelliveeventnotifier.feature.home.MainNavigationHistory
+import dev.minepacu.stelliveeventnotifier.feature.home.MainNavigationHistoryState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -88,5 +89,22 @@ class MainNavigationHistoryTest {
 
         assertNull(history.goBackToCurrentRoot())
         assertEquals(HubScreen.GOODS_EVENTS, history.currentScreen)
+    }
+
+    @Test
+    fun restoredHistoryKeepsCurrentScreenRootAndBackStack() {
+        val history = MainNavigationHistory()
+
+        history.restore(
+            MainNavigationHistoryState(
+                currentRoot = HubScreen.LIVE,
+                currentScreen = HubScreen.SETTINGS,
+                previousScreens = listOf(HubScreen.LIVE),
+            )
+        )
+
+        assertEquals(HubScreen.SETTINGS, history.currentScreen)
+        assertEquals(HubScreen.LIVE, history.currentRootScreen)
+        assertEquals(HubScreen.LIVE, history.goBack())
     }
 }

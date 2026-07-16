@@ -2,6 +2,8 @@ package dev.minepacu.stelliveeventnotifier
 
 import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationPlatform
+import dev.minepacu.stelliveeventnotifier.core.model.NotificationPreferenceScope
+import dev.minepacu.stelliveeventnotifier.feature.home.SettingsRowActionEdge
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -16,8 +18,8 @@ class MainUiPolicyTest {
         assertEquals("라이브 현황과 최근 알림", MainUiPolicy.topBarRole("home"))
         assertEquals("방송 상태와 CHZZK 대상 현황", MainUiPolicy.topBarRole("live"))
         assertEquals("YouTube 업로드 곡 탐색", MainUiPolicy.topBarRole("songs"))
-        assertEquals("허용된 알림 기록과 정책 제외 항목", MainUiPolicy.topBarRole("history"))
-        assertEquals("알림 대상과 전송 정책", MainUiPolicy.topBarRole("settings"))
+        assertEquals("최근 받은 알림과 제외된 항목", MainUiPolicy.topBarRole("history"))
+        assertEquals("", MainUiPolicy.topBarRole("settings"))
         assertEquals("", MainUiPolicy.topBarTitle("goods_event_detail"))
         assertEquals("", MainUiPolicy.topBarRole("goods_event_detail"))
     }
@@ -38,12 +40,51 @@ class MainUiPolicyTest {
     }
 
     @Test
-    fun settingsCardsUseCompactVerticalSpacing() {
+    fun settingsCardsUseConsistentComfortableVerticalSpacing() {
         val spacing = MainUiPolicy.settingsCardSpacing
 
-        assertEquals(10, spacing.contentVerticalPaddingDp)
-        assertEquals(6, spacing.rowVerticalPaddingDp)
+        assertEquals(12, spacing.contentVerticalPaddingDp)
+        assertEquals(12, spacing.rowVerticalPaddingDp)
+        assertEquals(12, spacing.standaloneRowVerticalPaddingDp)
+        assertEquals(4, spacing.titleBodySpacingDp)
+        assertEquals(12, spacing.actionSpacingDp)
+        assertEquals(48, spacing.minimumTouchTargetDp)
+        assertEquals(52, spacing.switchVisualWidthDp)
+        assertEquals(32, spacing.switchVisualHeightDp)
         assertEquals(8, spacing.bottomMarginDp)
+        assertEquals(0, MainUiPolicy.settingsPanelContentVerticalPaddingDp(hasTitle = false))
+        assertEquals(12, MainUiPolicy.settingsPanelContentVerticalPaddingDp(hasTitle = true))
+    }
+
+    @Test
+    fun settingsToggleRowsUseTextHeightAndMinimumTouchTarget() {
+        assertEquals(48, MainUiPolicy.settingsToggleRowHeightDp(textHeightDp = 20))
+        assertEquals(56, MainUiPolicy.settingsToggleRowHeightDp(textHeightDp = 32))
+        assertEquals(82, MainUiPolicy.settingsToggleRowHeightDp(textHeightDp = 58))
+    }
+
+    @Test
+    fun settingsToggleRowHeightDoesNotDependOnVisualSwitchHeight() {
+        val rowHeight = MainUiPolicy.settingsToggleRowHeightDp(textHeightDp = 44)
+
+        assertEquals(68, rowHeight)
+        assertNotEquals(MainUiPolicy.settingsCardSpacing.switchVisualHeightDp, rowHeight)
+    }
+
+    @Test
+    fun settingsValueRowsUseTheTallerOfTextAndBadge() {
+        assertEquals(48, MainUiPolicy.settingsValueRowHeightDp(textHeightDp = 16, actionHeightDp = 24))
+        assertEquals(64, MainUiPolicy.settingsValueRowHeightDp(textHeightDp = 40, actionHeightDp = 24))
+    }
+
+    @Test
+    fun settingsRowStylesAndRtlActionPlacementKeepTheirPolicies() {
+        val spacing = MainUiPolicy.settingsCardSpacing
+
+        assertEquals(12, spacing.rowVerticalPaddingDp)
+        assertEquals(12, spacing.standaloneRowVerticalPaddingDp)
+        assertEquals(SettingsRowActionEdge.RIGHT, MainUiPolicy.settingsRowActionEdge(isRtl = false))
+        assertEquals(SettingsRowActionEdge.LEFT, MainUiPolicy.settingsRowActionEdge(isRtl = true))
     }
 
     @Test
@@ -112,9 +153,10 @@ class MainUiPolicyTest {
         val lines = MainUiPolicy.realtimeDisclosureLines()
 
         assertEquals(3, lines.size)
-        assertTrue(lines[0].contains("플랫폼/OS/네트워크"))
+        assertTrue(lines[0].contains("플랫폼, 운영체제 또는 네트워크"))
         assertTrue(lines[1].contains("배터리와 데이터"))
-        assertTrue(lines[2].contains("rate limit"))
+        assertTrue(lines[2].contains("방해 금지 시간"))
+        assertFalse(lines[2].contains("rate limit"))
     }
 
     @Test
@@ -132,11 +174,29 @@ class MainUiPolicyTest {
         )
 
         assertEquals(listOf("delivery", "targets", "platforms", "event_types", "hub_events", "history", "advanced", "about"), rows.map { it.screenId })
+        assertEquals("알림 수신 방식", rows.first { it.screenId == "delivery" }.title)
+        assertTrue(rows.first { it.screenId == "delivery" }.body.contains("방해 금지 시간"))
         assertEquals("표준", rows.first { it.screenId == "delivery" }.value)
         assertEquals("4/5", rows.first { it.screenId == "platforms" }.value)
-        assertEquals("켜짐 · 마감 임박 ON", rows.first { it.screenId == "hub_events" }.value)
+        assertEquals("켜짐 · 마감 임박 우선", rows.first { it.screenId == "hub_events" }.value)
+        assertEquals("알림 종류별 설정", rows.first { it.screenId == "event_types" }.title)
+        assertEquals("세부 알림 설정", rows.first { it.screenId == "advanced" }.title)
         assertEquals("보기", rows.first { it.screenId == "about" }.value)
         assertFalse(rows.any { it.title == "CHZZK 채팅" })
+        assertEquals("원본 플랫폼에서 열기", MainUiPolicy.settingsTapActionLabel("OPEN_PLATFORM"))
+        assertEquals(
+            "개별 대상의 알림 종류 설정",
+            MainUiPolicy.settingsCombinationPreferenceLabel(NotificationPreferenceScope.MEMBER_EVENT_TYPE),
+        )
+
+        val sections = MainUiPolicy.settingsHubSections(rows)
+        assertEquals(listOf("알림 기본 설정", "알림 대상 및 종류", "기록 및 정보"), sections.map { it.title })
+        assertEquals(listOf("delivery"), sections[0].rows.map { it.screenId })
+        assertEquals(
+            listOf("targets", "platforms", "event_types", "hub_events", "advanced"),
+            sections[1].rows.map { it.screenId },
+        )
+        assertEquals(listOf("history", "about"), sections[2].rows.map { it.screenId })
     }
 
     @Test
@@ -148,11 +208,11 @@ class MainUiPolicyTest {
         assertEquals(false, eventRows.first { it.title == "YouTube 라이브 시작" }.checked)
         assertNull(eventRows.first { it.title == "CHZZK 채팅" }.body)
         assertNull(eventRows.first { it.title == "YouTube 라이브 시작" }.body)
-        assertTrue(MainUiPolicy.settingsEventTypeCommonNotices().any { it.contains("공식 채널에는 YouTube 라이브 예정/시작/종료") })
-        assertTrue(MainUiPolicy.settingsEventTypeCommonNotices().any { it.contains("조용한 시간") })
+        assertTrue(MainUiPolicy.settingsEventTypeCommonNotices().any { it.contains("라이브 예정·시작·종료 알림은 보내지 않습니다") })
+        assertTrue(MainUiPolicy.settingsEventTypeCommonNotices().any { it.contains("방해 금지 시간") })
         assertEquals(true, hubRows.first { it.title == "굿즈/행사 알림" }.checked)
         assertEquals(false, hubRows.first { it.title == "변경 알림" }.checked)
-        assertTrue(MainUiPolicy.hubEventPolicyNotice().contains("대표/강지 이벤트"))
+        assertTrue(MainUiPolicy.hubEventPolicyNotice().contains("강지 대표 항목의 이벤트"))
     }
 
     @Test
@@ -160,14 +220,14 @@ class MainUiPolicyTest {
         assertNull(MainUiPolicy.settingsPlatformPolicy(NotificationPlatform.CHZZK))
         assertNull(MainUiPolicy.settingsPlatformPolicy(NotificationPlatform.YOUTUBE))
         assertEquals(
-            "공식 API와 약관을 우선합니다. 무단 수집이나 로그인 쿠키 수집은 사용하지 않습니다.",
+            "공식 API와 이용 약관을 따르며, 로그인 정보가 필요한 방식으로 게시물을 수집하지 않습니다.",
             MainUiPolicy.settingsPlatformPolicy(NotificationPlatform.NAVER_CAFE)
         )
         assertEquals(
-            "공식 출처가 있는 기간성 굿즈, 티켓, 오프라인 행사만 포함합니다.",
+            "공식 출처에서 안내한 기간 한정 굿즈, 티켓, 오프라인 행사만 포함합니다.",
             MainUiPolicy.settingsPlatformPolicy(NotificationPlatform.HUB_EVENT)
         )
-        assertTrue(MainUiPolicy.settingsPlatformCommonNotice().contains("플랫폼 OFF"))
+        assertTrue(MainUiPolicy.settingsPlatformCommonNotice().contains("플랫폼 알림을 끄면"))
     }
 
     @Test
@@ -233,7 +293,7 @@ class MainUiPolicyTest {
 
     @Test
     fun policyNoticesMatchScreenResponsibilities() {
-        assertTrue(MainUiPolicy.hubEventPolicyNotice().contains("팬 주최 이벤트"))
-        assertTrue(MainUiPolicy.historyPolicyNotice().contains("공식 YouTube 라이브 예정, 시작, 종료"))
+        assertTrue(MainUiPolicy.hubEventPolicyNotice().contains("팬이 주최한 이벤트"))
+        assertTrue(MainUiPolicy.historyPolicyNotice().contains("라이브 예정·시작·종료 알림"))
     }
 }

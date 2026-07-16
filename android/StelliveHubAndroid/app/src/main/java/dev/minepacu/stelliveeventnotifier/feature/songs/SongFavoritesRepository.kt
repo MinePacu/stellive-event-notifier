@@ -5,8 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import androidx.datastore.preferences.preferencesDataStoreFile
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -15,14 +14,14 @@ interface SongFavoritesRepository {
     suspend fun toggle(identifier: String)
 }
 
+private val Context.songFavoritesDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = DataStoreSongFavoritesRepository.FILE_NAME,
+)
+
 class DataStoreSongFavoritesRepository(
     private val dataStore: DataStore<Preferences>,
 ) : SongFavoritesRepository {
-    constructor(context: Context) : this(
-        PreferenceDataStoreFactory.create {
-            context.applicationContext.preferencesDataStoreFile(FILE_NAME)
-        },
-    )
+    constructor(context: Context) : this(context.applicationContext.songFavoritesDataStore)
 
     override val favorites: Flow<Set<String>> = dataStore.data.map { preferences ->
         preferences[FAVORITES_KEY].orEmpty().filterTo(linkedSetOf(), ::isValidIdentifier)

@@ -127,19 +127,19 @@ enum NotificationPreferenceScope: String, Codable, CaseIterable, Hashable {
         case .generation:
             return "기수/분류"
         case .member:
-            return "개별 항목"
+            return "개별 대상"
         case .platform:
             return "플랫폼"
         case .eventType:
-            return "이벤트 타입"
+            return "알림 종류"
         case .generationPlatform:
-            return "기수/분류 + 플랫폼"
+            return "분류별 플랫폼 설정"
         case .generationEventType:
-            return "기수/분류 + 이벤트 타입"
+            return "분류별 알림 종류 설정"
         case .memberPlatform:
-            return "항목 + 플랫폼"
+            return "개별 대상의 플랫폼 설정"
         case .memberEventType:
-            return "항목 + 이벤트 타입"
+            return "개별 대상의 알림 종류 설정"
         }
     }
 }
@@ -1591,9 +1591,9 @@ struct RateLimitState: Equatable {
 
 struct NotificationSettingsState: Equatable {
     static let realtimeDisclosureLines = [
-        "최대한 실시간 모드는 가능한 한 빠르게 알림을 받도록 시도하지만, 플랫폼/OS/네트워크 사정으로 지연될 수 있습니다.",
-        "배터리와 데이터 사용량이 증가할 수 있습니다.",
-        "사용자가 꺼둔 알림, 조용한 시간, 차단 키워드, rate limit은 계속 적용됩니다."
+        "최대한 실시간으로 알림 받기는 알림을 빠르게 보내도록 시도하는 기능입니다. 플랫폼, 운영체제 또는 네트워크 상태에 따라 늦어질 수 있습니다.",
+        "배터리와 데이터 사용량이 늘어날 수 있습니다.",
+        "사용자가 꺼둔 알림과 방해 금지 시간, 차단 키워드, 알림 빈도 제한은 그대로 적용됩니다."
     ]
 
     var globalEnabled = true
@@ -1638,10 +1638,10 @@ struct NotificationSettingsState: Equatable {
         .eventCancelled: true
     ]
     var combinationPreferences = [
-        CombinationPreference(id: "generation_platform", scope: .generationPlatform, label: "기수/분류 + 플랫폼", enabled: true),
-        CombinationPreference(id: "generation_event_type", scope: .generationEventType, label: "기수/분류 + 이벤트 타입", enabled: true),
-        CombinationPreference(id: "member_platform", scope: .memberPlatform, label: "항목 + 플랫폼", enabled: true),
-        CombinationPreference(id: "member_event_type", scope: .memberEventType, label: "항목 + 이벤트 타입", enabled: true)
+        CombinationPreference(id: "generation_platform", scope: .generationPlatform, label: "분류별 플랫폼 설정", enabled: true),
+        CombinationPreference(id: "generation_event_type", scope: .generationEventType, label: "분류별 알림 종류 설정", enabled: true),
+        CombinationPreference(id: "member_platform", scope: .memberPlatform, label: "개별 대상의 플랫폼 설정", enabled: true),
+        CombinationPreference(id: "member_event_type", scope: .memberEventType, label: "개별 대상의 알림 종류 설정", enabled: true)
     ]
     var quietHours = QuietHoursState()
     var keywordFilters = KeywordFilterState()
