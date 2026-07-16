@@ -2,6 +2,7 @@ package dev.minepacu.stelliveeventnotifier
 
 import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationPlatform
+import dev.minepacu.stelliveeventnotifier.feature.home.SettingsRowActionEdge
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -43,11 +44,46 @@ class MainUiPolicyTest {
 
         assertEquals(spacing.bottomMarginDp, spacing.contentVerticalPaddingDp)
         assertEquals(8, spacing.rowVerticalPaddingDp)
+        assertEquals(13, spacing.standaloneRowVerticalPaddingDp)
         assertEquals(4, spacing.titleBodySpacingDp)
-        assertEquals(0, spacing.controlMinHeightDp)
+        assertEquals(12, spacing.actionSpacingDp)
+        assertEquals(48, spacing.minimumTouchTargetDp)
+        assertEquals(52, spacing.switchVisualWidthDp)
+        assertEquals(32, spacing.switchVisualHeightDp)
         assertEquals(8, spacing.bottomMarginDp)
         assertEquals(0, MainUiPolicy.settingsPanelContentVerticalPaddingDp(hasTitle = false))
         assertEquals(8, MainUiPolicy.settingsPanelContentVerticalPaddingDp(hasTitle = true))
+    }
+
+    @Test
+    fun settingsToggleRowsUseTextHeightAndMinimumTouchTarget() {
+        assertEquals(48, MainUiPolicy.settingsToggleRowHeightDp(textHeightDp = 20))
+        assertEquals(48, MainUiPolicy.settingsToggleRowHeightDp(textHeightDp = 32))
+        assertEquals(74, MainUiPolicy.settingsToggleRowHeightDp(textHeightDp = 58))
+    }
+
+    @Test
+    fun settingsToggleRowHeightDoesNotDependOnVisualSwitchHeight() {
+        val rowHeight = MainUiPolicy.settingsToggleRowHeightDp(textHeightDp = 44)
+
+        assertEquals(60, rowHeight)
+        assertNotEquals(MainUiPolicy.settingsCardSpacing.switchVisualHeightDp, rowHeight)
+    }
+
+    @Test
+    fun settingsValueRowsUseTheTallerOfTextAndBadge() {
+        assertEquals(40, MainUiPolicy.settingsValueRowHeightDp(textHeightDp = 16, actionHeightDp = 24))
+        assertEquals(56, MainUiPolicy.settingsValueRowHeightDp(textHeightDp = 40, actionHeightDp = 24))
+    }
+
+    @Test
+    fun settingsRowStylesAndRtlActionPlacementKeepTheirPolicies() {
+        val spacing = MainUiPolicy.settingsCardSpacing
+
+        assertEquals(8, spacing.rowVerticalPaddingDp)
+        assertEquals(13, spacing.standaloneRowVerticalPaddingDp)
+        assertEquals(SettingsRowActionEdge.RIGHT, MainUiPolicy.settingsRowActionEdge(isRtl = false))
+        assertEquals(SettingsRowActionEdge.LEFT, MainUiPolicy.settingsRowActionEdge(isRtl = true))
     }
 
     @Test

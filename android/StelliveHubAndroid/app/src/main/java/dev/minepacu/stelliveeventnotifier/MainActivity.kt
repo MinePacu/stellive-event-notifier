@@ -142,6 +142,8 @@ import dev.minepacu.stelliveeventnotifier.ui.adaptive.HubFoldState
 import dev.minepacu.stelliveeventnotifier.ui.components.HubCardFactory
 import dev.minepacu.stelliveeventnotifier.ui.components.HubCardStyle
 import dev.minepacu.stelliveeventnotifier.ui.components.SectionHeaderView
+import dev.minepacu.stelliveeventnotifier.ui.components.SettingsRowStyle
+import dev.minepacu.stelliveeventnotifier.ui.components.SettingsRowView
 import dev.minepacu.stelliveeventnotifier.ui.components.TopFilterGroup
 import dev.minepacu.stelliveeventnotifier.ui.components.TopFilterOption
 import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenNavigationMotion
@@ -4363,17 +4365,15 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
                 bottomMargin = dp(10)
             }
 
-            addView(LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(13), dp(13), dp(13), dp(13))
-
-                addView(settingsRowTextBlock(title, body, titleTextSize = 15f), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    marginEnd = dp(12)
-                })
-
-                addView(settingsRowSwitch(checked, onCheckedChange = onCheckedChange))
-            })
+            addView(
+                SettingsRowView(context).bind(
+                    title = title,
+                    body = body,
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                    style = SettingsRowStyle.STANDALONE,
+                )
+            )
         }
 
     private fun hubEventThumbnail(imageUrl: String): ImageView =
@@ -4554,58 +4554,16 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
         ).show()
     }
 
-    private fun settingRowView(row: SettingRow): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        val verticalPadding = dp(MainUiPolicy.settingsCardSpacing.rowVerticalPaddingDp)
-        setPadding(0, verticalPadding, 0, verticalPadding)
-        addView(settingsRowTextBlock(row.title, row.body), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-            marginEnd = dp(12)
-        })
-        if (row.checked != null) {
-            addView(settingsRowSwitch(row.checked, row.enabled, row.onCheckedChange))
-        } else if (row.badge != null) {
-            addView(pill(row.badge, true))
-        }
-    }
-
-    private fun settingsRowTextBlock(
-        title: String,
-        body: String?,
-        titleTextSize: Float = 14f,
-    ): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        addView(TextView(context).apply {
-            text = title
-            setTextColor(color(R.color.hub_text))
-            textSize = titleTextSize
-            typeface = Typeface.DEFAULT_BOLD
-            includeFontPadding = false
-        })
-        body?.takeIf { it.isNotBlank() }?.let { description ->
-            addView(TextView(context).apply {
-                text = description
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 12f
-                includeFontPadding = false
-                setLineSpacing(0f, 1.1f)
-                setPadding(0, dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp), 0, 0)
-            })
-        }
-    }
-
-    private fun settingsRowSwitch(
-        checked: Boolean,
-        enabled: Boolean = true,
-        onCheckedChange: ((Boolean) -> Unit)? = null,
-    ): SwitchMaterial = SwitchMaterial(this).apply {
-        isChecked = checked
-        isEnabled = enabled
-        minHeight = dp(MainUiPolicy.settingsCardSpacing.controlMinHeightDp)
-        onCheckedChange?.let { listener ->
-            setOnCheckedChangeListener { _, isChecked -> listener(isChecked) }
-        }
-    }
+    private fun settingRowView(row: SettingRow): SettingsRowView =
+        SettingsRowView(this).bind(
+            title = row.title,
+            body = row.body,
+            checked = row.checked,
+            enabled = row.enabled,
+            badge = row.badge?.let { pill(it, true) },
+            onCheckedChange = row.onCheckedChange,
+            style = SettingsRowStyle.GROUPED,
+        )
 
     private fun persistSettings(settings: dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState) {
         CoroutineScope(Dispatchers.Main).launch {

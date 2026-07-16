@@ -96,10 +96,19 @@ data class SettingsPolicyRow(
 data class SettingsCardSpacing(
     val contentVerticalPaddingDp: Int,
     val rowVerticalPaddingDp: Int,
+    val standaloneRowVerticalPaddingDp: Int,
     val titleBodySpacingDp: Int,
-    val controlMinHeightDp: Int,
+    val actionSpacingDp: Int,
+    val minimumTouchTargetDp: Int,
+    val switchVisualWidthDp: Int,
+    val switchVisualHeightDp: Int,
     val bottomMarginDp: Int,
 )
+
+enum class SettingsRowActionEdge {
+    LEFT,
+    RIGHT,
+}
 
 object MainUiPolicy {
     const val SONG_PAGE_SIZE = 20
@@ -120,13 +129,51 @@ object MainUiPolicy {
     val settingsCardSpacing = SettingsCardSpacing(
         contentVerticalPaddingDp = 8,
         rowVerticalPaddingDp = 8,
+        standaloneRowVerticalPaddingDp = 13,
         titleBodySpacingDp = 4,
-        controlMinHeightDp = 0,
+        actionSpacingDp = 12,
+        minimumTouchTargetDp = 48,
+        switchVisualWidthDp = 52,
+        switchVisualHeightDp = 32,
         bottomMarginDp = 8,
     )
 
     fun settingsPanelContentVerticalPaddingDp(hasTitle: Boolean): Int =
         if (hasTitle) settingsCardSpacing.contentVerticalPaddingDp else 0
+
+    fun settingsToggleRowHeightDp(
+        textHeightDp: Int,
+        verticalPaddingDp: Int = settingsCardSpacing.rowVerticalPaddingDp,
+    ): Int = settingsToggleRowHeight(
+        textHeight = textHeightDp,
+        verticalPadding = verticalPaddingDp,
+        minimumTouchTarget = settingsCardSpacing.minimumTouchTargetDp,
+    )
+
+    fun settingsValueRowHeightDp(
+        textHeightDp: Int,
+        actionHeightDp: Int,
+        verticalPaddingDp: Int = settingsCardSpacing.rowVerticalPaddingDp,
+    ): Int = settingsValueRowHeight(
+        textHeight = textHeightDp,
+        actionHeight = actionHeightDp,
+        verticalPadding = verticalPaddingDp,
+    )
+
+    fun settingsToggleRowHeight(
+        textHeight: Int,
+        verticalPadding: Int,
+        minimumTouchTarget: Int,
+    ): Int = maxOf(minimumTouchTarget, textHeight + verticalPadding * 2)
+
+    fun settingsValueRowHeight(
+        textHeight: Int,
+        actionHeight: Int,
+        verticalPadding: Int,
+    ): Int = maxOf(textHeight, actionHeight) + verticalPadding * 2
+
+    fun settingsRowActionEdge(isRtl: Boolean): SettingsRowActionEdge =
+        if (isRtl) SettingsRowActionEdge.LEFT else SettingsRowActionEdge.RIGHT
 
     private const val TOP_BAR_ACTION_ICON_INSET_DP = 10
     private const val LIVE_CLOCK_REFRESH_DELAY_MILLIS = 1_000L
