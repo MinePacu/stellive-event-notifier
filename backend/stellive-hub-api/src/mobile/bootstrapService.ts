@@ -3,6 +3,7 @@ import type {
   DeviceTokenStatus,
   MobilePlatform,
 } from "../../../../shared/schemas/mobileApi.js";
+import type { AnnouncementsSummary } from "../../../../shared/schemas/domain.js";
 import type {
   Generation,
   HubEventsSummary,
@@ -37,6 +38,10 @@ interface HubEventsLike {
   summary(): Promise<HubEventsSummary> | HubEventsSummary;
 }
 
+interface AnnouncementsLike {
+  summary(input: { platform?: MobilePlatform; appVersion?: string }): Promise<AnnouncementsSummary>;
+}
+
 interface MemberProfileImageHydratorLike {
   hydrateMembers(members: Member[]): Promise<Member[]>;
 }
@@ -58,6 +63,7 @@ export interface BootstrapServiceDependencies {
   preferences: PreferenceLike;
   liveStatus: LiveStatusLike;
   hubEvents: HubEventsLike;
+  announcements?: AnnouncementsLike;
   memberProfileImages?: MemberProfileImageHydratorLike;
   clock?: () => Date;
   cacheTtlSeconds?: BootstrapCacheTtlSeconds;
@@ -143,6 +149,14 @@ export default class BootstrapService {
     const hubEventsSummary = await this.hubEventsSummaryCache.getOrLoad(() =>
       this.dependencies.hubEvents.summary(),
     );
+    // Announcements are an additive bootstrap hint. Keep the core bootstrap
+    // available during announcement-store startup/outage and let the dedicated
+    // endpoints surface their own availability independently.
+    const announcementsSummary = this.dependencies.announcements
+      ? await this.dependencies.announcements
+          .summary({ platform: input.platform, appVersion: input.appVersion })
+          .catch(() => ({ activeCount: 0, items: [], pinned: undefined, generatedAt: new Date().toISOString() }))
+      : undefined;
 
     return {
       config: {
@@ -166,6 +180,7 @@ export default class BootstrapService {
       preferences,
       liveStatus: liveStatus.map(toMobileDisplayLiveStatus),
       hubEventsSummary,
+      announcementsSummary,
       serverTime: this.clock().toISOString(),
     };
   }

@@ -10,6 +10,8 @@ import { PreferenceResolutionService } from "../preferences/preferenceResolution
 import { RealtimeDeliveryService } from "../realtime/realtimeDeliveryService.js";
 import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
 import { registerAppRoutes } from "./appRoutes.js";
+import { registerServiceAnnouncementRoutes } from "./serviceAnnouncementRoutes.js";
+import type { ServiceAnnouncementReadService } from "../announcements/serviceAnnouncementReadService.js";
 import registerHubEventReadRoutes from "./hubEventReadRoutes.js";
 import registerMusicRoutes from "./musicRoutes.js";
 import registerSongRoutes from "./songRoutes.js";
@@ -30,6 +32,7 @@ const deliveryAttempts: DeliveryAttempt[] = [];
 const devDeviceId = "dev-device";
 
 export interface AppRouteDependencies {
+  announcements?: ServiceAnnouncementReadService;
   hubEvents?: HubEventReadPort;
   songs?: SongRepository;
   hubCalendarSpecialDays?: HubCalendarSpecialDay[];
@@ -199,6 +202,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
           hubCalendarEnabled: true,
         },
         hubEventsSummary: await hubEvents.summary(),
+        announcementsSummary: { activeCount: 0, items: [], generatedAt: new Date().toISOString() },
         generations: catalog.getGenerations(),
         members: hydratedMembers,
         preferences: preferences.get(deviceId) ?? [],
@@ -207,6 +211,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
       };
     },
   });
+  await registerServiceAnnouncementRoutes(app, options.dependencies?.announcements);
 
   app.get("/v1/generations", async () => catalog.getGenerations());
   app.get("/v1/members", async () => getHydratedMembers());
