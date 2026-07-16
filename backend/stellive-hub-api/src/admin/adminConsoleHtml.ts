@@ -1588,6 +1588,7 @@ export function renderAdminConsoleHtml(): string {
       <div class="nav admin-nav-links">
         <button type="button" data-page-target="dashboard" aria-current="page">Dashboard<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
         <button type="button" data-page-target="hub-events">Hub events<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="announcements">공지 관리<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
         <button type="button" data-page-target="operations">Operations<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
         <button type="button" data-page-target="audit">Audit<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
         <button type="button" data-page-target="settings">Settings<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
@@ -1602,6 +1603,7 @@ export function renderAdminConsoleHtml(): string {
         <nav class="tabs admin-tabs" aria-label="Quick page tabs">
           <button type="button" data-page-target="dashboard" aria-current="page">Dashboard</button>
           <button type="button" data-page-target="hub-events">Hub events</button>
+          <button type="button" data-page-target="announcements">공지 관리</button>
           <button type="button" data-page-target="operations">Operations</button>
           <button type="button" data-page-target="audit">Audit</button>
           <button type="button" data-page-target="settings">Settings</button>
@@ -1963,6 +1965,69 @@ export function renderAdminConsoleHtml(): string {
       </section>
       </section>
 
+      <section class="page" id="page-announcements" data-admin-page="announcements">
+        <section class="section stack">
+          <div class="section-head">
+            <div><h2>공지 관리</h2><p class="subtle">앱 서비스 운영 공지를 작성하고 게시 상태와 FCM 발송을 관리합니다.</p></div>
+            <div class="hub-events-toolbar">
+              <button id="announcement-new" type="button">새 공지</button>
+              <button id="announcement-refresh" type="button">새로고침</button>
+              <button id="announcement-save" type="button">임시 저장</button>
+              <button id="announcement-publish" type="button">게시</button>
+              <button id="announcement-resolve" type="button">해결 처리</button>
+              <button id="announcement-archive" type="button">보관</button>
+              <button id="announcement-bump" type="button">다시 확인 필요</button>
+              <button id="announcement-resend" type="button">푸시 재발송</button>
+            </div>
+          </div>
+          <div class="section-body hub-events-workspace">
+            <form id="announcement-form" class="hub-events-editor-grid">
+              <input id="announcement-id" type="hidden">
+              <div class="hub-events-section">
+                <h3 class="hub-events-section-title">내용</h3>
+                <div class="hub-events-section-body">
+                  <div class="hub-events-two">
+                    <div class="field"><label for="announcement-type">유형</label><select id="announcement-type"><option value="general">일반 안내</option><option value="incident">장애 및 복구</option><option value="maintenance">예정된 점검</option><option value="version_update">앱 업데이트</option></select></div>
+                    <div class="field"><label for="announcement-severity">중요도</label><select id="announcement-severity"><option value="info">정보</option><option value="important">중요</option><option value="critical">긴급</option></select></div>
+                  </div>
+                  <div class="field"><label for="announcement-title">제목</label><input id="announcement-title" maxlength="120"></div>
+                  <div class="field"><label for="announcement-summary">요약</label><textarea id="announcement-summary" rows="3" maxlength="300"></textarea></div>
+                  <div class="field"><label for="announcement-body">본문</label><textarea id="announcement-body" rows="10"></textarea></div>
+                </div>
+              </div>
+              <div class="hub-events-section">
+                <h3 class="hub-events-section-title">대상과 동작</h3>
+                <div class="hub-events-section-body">
+                  <div class="hub-events-two">
+                    <label class="switch-control"><input id="announcement-platform-android" type="checkbox" checked> Android</label>
+                    <label class="switch-control"><input id="announcement-platform-ios" type="checkbox" checked> iOS</label>
+                  </div>
+                  <div class="hub-events-two">
+                    <div class="field"><label for="announcement-min-version">최소 앱 버전</label><input id="announcement-min-version" placeholder="1.0.0"></div>
+                    <div class="field"><label for="announcement-max-version">최대 앱 버전</label><input id="announcement-max-version" placeholder="2.0.0"></div>
+                  </div>
+                  <div class="field"><label for="announcement-expires-at">만료 시각</label><input id="announcement-expires-at" type="datetime-local"></div>
+                  <div class="field"><label for="announcement-action-label">CTA 라벨</label><input id="announcement-action-label" maxlength="40"></div>
+                  <div class="field"><label for="announcement-deep-link">앱 딥링크</label><input id="announcement-deep-link" placeholder="stellivehub://announcements/..."></div>
+                  <div class="field"><label for="announcement-external-url">외부 URL</label><input id="announcement-external-url" type="url"></div>
+                  <label class="switch-control"><input id="announcement-pinned" type="checkbox"> 홈 고정</label>
+                  <label class="switch-control"><input id="announcement-push-enabled" type="checkbox" checked> 게시 시 푸시 발송</label>
+                </div>
+              </div>
+            </form>
+            <div class="hub-events-sidebar">
+              <div class="hub-events-sidebar-header">공지 목록</div>
+              <div class="hub-events-filters"><div class="field"><label for="announcement-state-filter">게시 상태</label><select id="announcement-state-filter"><option value="">전체</option><option value="draft">임시 저장</option><option value="published">게시됨</option><option value="archived">보관됨</option></select></div></div>
+              <div id="announcement-list" class="hub-events-list" role="list"></div>
+            </div>
+            <div class="hub-events-footer">
+              <div class="hub-events-section panel"><h3>감사 로그</h3><ul id="announcement-audit-log" class="message-list"></ul></div>
+              <div class="hub-events-section panel"><h3>푸시 발송 이력</h3><ul id="announcement-push-attempts" class="message-list"></ul></div>
+            </div>
+          </div>
+        </section>
+      </section>
+
       <section class="page" id="page-operations" data-admin-page="operations">
       <section id="operations-section" class="section">
         <div class="section-head">
@@ -2176,6 +2241,7 @@ export function renderAdminConsoleHtml(): string {
       renewYoutube: "/v1/internal/schedulers/youtube/renew-subscriptions",
         pollChzzk: "/v1/internal/schedulers/chzzk/live-status",
         hubEvents: "/v1/admin/hub-events",
+        announcements: "/v1/admin/announcements",
         recalculateSpecialDays: "/v1/admin/hub-events/special-days/recalculate-status"
       };
 
@@ -2228,6 +2294,7 @@ export function renderAdminConsoleHtml(): string {
     const pageCopy = {
       dashboard: ["Dashboard", "Admin session and internal token are separate."],
       "hub-events": ["Hub events", "Create, validate, publish, and review Hub events."],
+      announcements: ["공지 관리", "앱 서비스 운영 공지와 푸시 발송을 관리합니다."],
       operations: ["Operations", "Run bounded internal maintenance actions."],
       audit: ["Audit", "Review operator-facing activity and event audit results."],
       settings: ["Settings", "Manage credentials and console preferences."]
@@ -3417,6 +3484,144 @@ export function renderAdminConsoleHtml(): string {
       }
     }
 
+    const announcementFields = {
+      id: document.getElementById("announcement-id"), type: document.getElementById("announcement-type"),
+      severity: document.getElementById("announcement-severity"), title: document.getElementById("announcement-title"),
+      summary: document.getElementById("announcement-summary"), body: document.getElementById("announcement-body"),
+      android: document.getElementById("announcement-platform-android"), ios: document.getElementById("announcement-platform-ios"),
+      minimumAppVersion: document.getElementById("announcement-min-version"), maximumAppVersion: document.getElementById("announcement-max-version"),
+      expiresAt: document.getElementById("announcement-expires-at"), actionLabel: document.getElementById("announcement-action-label"),
+      appDeepLink: document.getElementById("announcement-deep-link"), externalUrl: document.getElementById("announcement-external-url"),
+      isPinned: document.getElementById("announcement-pinned"), pushEnabled: document.getElementById("announcement-push-enabled")
+    };
+    const announcementListRoot = document.getElementById("announcement-list");
+    const announcementAuditRoot = document.getElementById("announcement-audit-log");
+    const announcementPushRoot = document.getElementById("announcement-push-attempts");
+    const announcementStateFilter = document.getElementById("announcement-state-filter");
+
+    function collectAnnouncementInput() {
+      const targetPlatforms = [];
+      if (announcementFields.android.checked) targetPlatforms.push("android");
+      if (announcementFields.ios.checked) targetPlatforms.push("ios");
+      return {
+        type: announcementFields.type.value,
+        severity: announcementFields.severity.value,
+        title: announcementFields.title.value.trim(),
+        summary: announcementFields.summary.value.trim(),
+        body: announcementFields.body.value.trim(),
+        isPinned: announcementFields.isPinned.checked,
+        targetPlatforms: targetPlatforms,
+        minimumAppVersion: announcementFields.minimumAppVersion.value.trim() || null,
+        maximumAppVersion: announcementFields.maximumAppVersion.value.trim() || null,
+        expiresAt: toIsoFromLocal(announcementFields.expiresAt.value) || null,
+        actionLabel: announcementFields.actionLabel.value.trim() || null,
+        appDeepLink: announcementFields.appDeepLink.value.trim() || null,
+        externalUrl: announcementFields.externalUrl.value.trim() || null,
+        pushEnabled: announcementFields.pushEnabled.checked
+      };
+    }
+
+    function bindAnnouncement(item) {
+      announcementFields.id.value = item.id || "";
+      announcementFields.type.value = item.type || "general";
+      announcementFields.severity.value = item.severity || "info";
+      announcementFields.title.value = item.title || "";
+      announcementFields.summary.value = item.summary || "";
+      announcementFields.body.value = item.body || "";
+      announcementFields.android.checked = (item.targetPlatforms || []).includes("android");
+      announcementFields.ios.checked = (item.targetPlatforms || []).includes("ios");
+      announcementFields.minimumAppVersion.value = item.minimumAppVersion || "";
+      announcementFields.maximumAppVersion.value = item.maximumAppVersion || "";
+      announcementFields.expiresAt.value = toLocalDateTime(item.expiresAt);
+      announcementFields.actionLabel.value = item.actionLabel || "";
+      announcementFields.appDeepLink.value = item.appDeepLink || "";
+      announcementFields.externalUrl.value = item.externalUrl || "";
+      announcementFields.isPinned.checked = item.isPinned === true;
+      announcementFields.pushEnabled.checked = item.pushEnabled !== false;
+    }
+
+    function clearAnnouncementForm() {
+      bindAnnouncement({ targetPlatforms: ["android", "ios"], pushEnabled: true });
+      announcementAuditRoot.replaceChildren();
+      announcementPushRoot.replaceChildren();
+    }
+
+    async function loadAnnouncementHistory(id) {
+      const results = await Promise.all([
+        adminApi(endpoints.announcements + "/" + encodeURIComponent(id) + "/audit-log"),
+        adminApi(endpoints.announcements + "/" + encodeURIComponent(id) + "/push-attempts")
+      ]);
+      announcementAuditRoot.replaceChildren();
+      (results[0] || []).forEach(function (entry) {
+        const row = document.createElement("li");
+        row.textContent = [formatLastCheckedAt(entry.createdAt), entry.action, entry.actorId || "unknown"].join(" - ");
+        announcementAuditRoot.appendChild(row);
+      });
+      announcementPushRoot.replaceChildren();
+      (results[1] || []).forEach(function (entry) {
+        const row = document.createElement("li");
+        row.textContent = [formatLastCheckedAt(entry.requestedAt), entry.topic, entry.status, entry.providerErrorCode].filter(Boolean).join(" - ");
+        announcementPushRoot.appendChild(row);
+      });
+    }
+
+    function renderAnnouncements(items) {
+      announcementListRoot.replaceChildren();
+      if (!items.length) {
+        const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "등록된 공지가 없습니다."; announcementListRoot.appendChild(empty); return;
+      }
+      items.forEach(function (item) {
+        const row = document.createElement("button"); row.type = "button"; row.className = "event-row";
+        const title = document.createElement("strong"); title.textContent = item.title || "제목 없음";
+        const meta = document.createElement("span"); meta.className = "event-meta";
+        meta.textContent = [item.publicationState, item.type, item.severity, "attention " + item.attentionRevision].join(" / ");
+        row.append(title, meta);
+        row.addEventListener("click", function () { bindAnnouncement(item); loadAnnouncementHistory(item.id); });
+        announcementListRoot.appendChild(row);
+      });
+    }
+
+    async function refreshAnnouncements() {
+      const params = new URLSearchParams();
+      if (announcementStateFilter.value) params.set("publicationState", announcementStateFilter.value);
+      const result = await adminApi(endpoints.announcements + (params.toString() ? "?" + params.toString() : ""));
+      renderAnnouncements(result.items || []);
+    }
+
+    async function saveAnnouncement() {
+      const id = announcementFields.id.value;
+      const result = await adminApi(endpoints.announcements + (id ? "/" + encodeURIComponent(id) : ""), {
+        method: id ? "PATCH" : "POST", body: JSON.stringify(collectAnnouncementInput())
+      });
+      bindAnnouncement(result);
+      await refreshAnnouncements();
+      await loadAnnouncementHistory(result.id);
+    }
+
+    async function runAnnouncementAction(action) {
+      const id = announcementFields.id.value;
+      if (!id) throw new Error("service_announcement_required");
+      const body = action === "publish" ? JSON.stringify({ sendPush: announcementFields.pushEnabled.checked }) : undefined;
+      const result = await adminApi(endpoints.announcements + "/" + encodeURIComponent(id) + "/" + action, { method: "POST", body: body });
+      if (result && result.id) bindAnnouncement(result);
+      await refreshAnnouncements();
+      await loadAnnouncementHistory(id);
+    }
+
+    document.getElementById("announcement-new").addEventListener("click", clearAnnouncementForm);
+    document.getElementById("announcement-refresh").addEventListener("click", function () { return runHubEventUiAction("공지 새로고침", refreshAnnouncements); });
+    document.getElementById("announcement-save").addEventListener("click", function () { return runHubEventUiAction("공지 저장", saveAnnouncement); });
+    document.getElementById("announcement-publish").addEventListener("click", function () {
+      const input = collectAnnouncementInput();
+      const summary = "대상: " + input.targetPlatforms.join(", ") + " / 버전: " + (input.minimumAppVersion || "제한 없음") + " ~ " + (input.maximumAppVersion || "제한 없음") + " / 홈 고정: " + (input.isPinned ? "예" : "아니오") + " / 푸시: " + (input.pushEnabled ? "발송" : "미발송");
+      if (!window.confirm(summary + "\\n이 설정으로 게시할까요?")) return;
+      return runHubEventUiAction("공지 게시", function () { return runAnnouncementAction("publish"); });
+    });
+    [["announcement-resolve", "resolve", "해결 처리"], ["announcement-archive", "archive", "보관"], ["announcement-bump", "bump-attention", "attention revision 증가"], ["announcement-resend", "resend", "푸시 재발송"]].forEach(function (entry) {
+      document.getElementById(entry[0]).addEventListener("click", function () { return runHubEventUiAction(entry[2], function () { return runAnnouncementAction(entry[1]); }); });
+    });
+    announcementStateFilter.addEventListener("change", function () { return runHubEventUiAction("공지 필터", refreshAnnouncements); });
+
     document.getElementById("hub-event-refresh").addEventListener("click", function () {
       return runHubEventUiAction("Refresh hub events", function () { return refreshHubEvents({ resetPage: true }); });
     });
@@ -3506,7 +3711,9 @@ export function renderAdminConsoleHtml(): string {
     });
     pageButtons.forEach(function (button) {
       button.addEventListener("click", function () {
-        setActivePage(button.getAttribute("data-page-target"));
+        const page = button.getAttribute("data-page-target");
+        setActivePage(page);
+        if (page === "announcements") runHubEventUiAction("공지 목록", refreshAnnouncements);
       });
     });
     internalTokenSaveButton.addEventListener("click", function () {
