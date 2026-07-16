@@ -2887,13 +2887,12 @@ private fun songFilterRow(
                 )
             )
         )
-        container.addView(sectionLabel("조용한 시간, 키워드, rate limit"))
+        container.addView(sectionLabel("방해 금지 시간과 필터"))
         container.addView(
             settingsPanel(
                 rows = listOf(
-                    SettingRow("조용한 시간", "${settings.quietHours.start}-${settings.quietHours.end} ${settings.quietHours.timezone}", settings.quietHours.enabled),
+                    SettingRow("방해 금지 시간", "${settings.quietHours.start}-${settings.quietHours.end} ${settings.quietHours.timezone}", settings.quietHours.enabled),
                     SettingRow("키워드 필터", "CHZZK chat 푸시는 명시 필터가 있어야 허용됩니다.", settings.keywordFilters.hasExplicitFilters),
-                    SettingRow("분당 제한", "사용자 설정과 서버 rate limit은 realtime_best_effort에서도 계속 적용됩니다.", null, "${settings.rateLimit.maxNotificationsPerMinute}/min"),
                     SettingRow("CHZZK chat 푸시", "기본 OFF이며 명시 필터 없이는 푸시 전송 대상으로 쓰지 않습니다.", settings.canEnableChzzkChatPush)
                 )
             )
@@ -4369,30 +4368,11 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(13), dp(13), dp(13), dp(13))
 
-                addView(LinearLayout(context).apply {
-                    orientation = LinearLayout.VERTICAL
-                    addView(TextView(context).apply {
-                        text = title
-                        setTextColor(color(R.color.hub_text))
-                        textSize = 15f
-                        typeface = Typeface.DEFAULT_BOLD
-                    })
-                    addView(TextView(context).apply {
-                        text = body
-                        setTextColor(color(R.color.hub_text_muted))
-                        textSize = 12f
-                        setPadding(0, dp(6), 0, 0)
-                    })
-                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                addView(settingsRowTextBlock(title, body, titleTextSize = 15f), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                     marginEnd = dp(12)
                 })
 
-                addView(SwitchMaterial(context).apply {
-                    isChecked = checked
-                    setOnCheckedChangeListener { _, isChecked ->
-                        onCheckedChange(isChecked)
-                    }
-                })
+                addView(settingsRowSwitch(checked, onCheckedChange = onCheckedChange))
             })
         }
 
@@ -4494,7 +4474,8 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
             }
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(15), dp(spacing.contentVerticalPaddingDp), dp(15), dp(spacing.contentVerticalPaddingDp))
+                val verticalPadding = MainUiPolicy.settingsPanelContentVerticalPaddingDp(hasTitle = title != null)
+                setPadding(dp(15), dp(verticalPadding), dp(15), dp(verticalPadding))
             }
             title?.let { panelTitle ->
                 content.addView(TextView(context).apply {
@@ -4578,35 +4559,51 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
         gravity = Gravity.CENTER_VERTICAL
         val verticalPadding = dp(MainUiPolicy.settingsCardSpacing.rowVerticalPaddingDp)
         setPadding(0, verticalPadding, 0, verticalPadding)
-        addView(LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(TextView(context).apply {
-                text = row.title
-                setTextColor(color(R.color.hub_text))
-                textSize = 14f
-                typeface = Typeface.DEFAULT_BOLD
-            })
-            row.body?.takeIf { it.isNotBlank() }?.let { body ->
-                addView(TextView(context).apply {
-                    text = body
-                    setTextColor(color(R.color.hub_text_muted))
-                    textSize = 12f
-                    setLineSpacing(0f, 1.1f)
-                })
-            }
-        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+        addView(settingsRowTextBlock(row.title, row.body), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
             marginEnd = dp(12)
         })
         if (row.checked != null) {
-            addView(SwitchMaterial(context).apply {
-                isChecked = row.checked
-                isEnabled = row.enabled
-                row.onCheckedChange?.let { onCheckedChange ->
-                    setOnCheckedChangeListener { _, checked -> onCheckedChange(checked) }
-                }
-            })
+            addView(settingsRowSwitch(row.checked, row.enabled, row.onCheckedChange))
         } else if (row.badge != null) {
             addView(pill(row.badge, true))
+        }
+    }
+
+    private fun settingsRowTextBlock(
+        title: String,
+        body: String?,
+        titleTextSize: Float = 14f,
+    ): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(TextView(context).apply {
+            text = title
+            setTextColor(color(R.color.hub_text))
+            textSize = titleTextSize
+            typeface = Typeface.DEFAULT_BOLD
+            includeFontPadding = false
+        })
+        body?.takeIf { it.isNotBlank() }?.let { description ->
+            addView(TextView(context).apply {
+                text = description
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 12f
+                includeFontPadding = false
+                setLineSpacing(0f, 1.1f)
+                setPadding(0, dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp), 0, 0)
+            })
+        }
+    }
+
+    private fun settingsRowSwitch(
+        checked: Boolean,
+        enabled: Boolean = true,
+        onCheckedChange: ((Boolean) -> Unit)? = null,
+    ): SwitchMaterial = SwitchMaterial(this).apply {
+        isChecked = checked
+        isEnabled = enabled
+        minHeight = dp(MainUiPolicy.settingsCardSpacing.controlMinHeightDp)
+        onCheckedChange?.let { listener ->
+            setOnCheckedChangeListener { _, isChecked -> listener(isChecked) }
         }
     }
 

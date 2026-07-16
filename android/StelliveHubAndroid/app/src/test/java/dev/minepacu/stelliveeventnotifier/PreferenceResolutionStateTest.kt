@@ -122,7 +122,7 @@ class PreferenceResolutionStateTest {
             listOf(
                 "최대한 실시간 모드는 가능한 한 빠르게 알림을 받도록 시도하지만, 플랫폼/OS/네트워크 사정으로 지연될 수 있습니다.",
                 "배터리와 데이터 사용량이 증가할 수 있습니다.",
-                "사용자가 꺼둔 알림, 조용한 시간, 차단 키워드, rate limit은 계속 적용됩니다."
+                "사용자가 꺼둔 알림, 방해 금지 시간, 차단 키워드는 계속 적용됩니다."
             ),
             NotificationSettingState.REALTIME_DISCLOSURE_LINES
         )

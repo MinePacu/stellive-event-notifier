@@ -42,8 +42,12 @@ class MainUiPolicyTest {
         val spacing = MainUiPolicy.settingsCardSpacing
 
         assertEquals(spacing.bottomMarginDp, spacing.contentVerticalPaddingDp)
-        assertEquals(6, spacing.rowVerticalPaddingDp)
+        assertEquals(8, spacing.rowVerticalPaddingDp)
+        assertEquals(4, spacing.titleBodySpacingDp)
+        assertEquals(0, spacing.controlMinHeightDp)
         assertEquals(8, spacing.bottomMarginDp)
+        assertEquals(0, MainUiPolicy.settingsPanelContentVerticalPaddingDp(hasTitle = false))
+        assertEquals(8, MainUiPolicy.settingsPanelContentVerticalPaddingDp(hasTitle = true))
     }
 
     @Test
@@ -114,7 +118,8 @@ class MainUiPolicyTest {
         assertEquals(3, lines.size)
         assertTrue(lines[0].contains("플랫폼/OS/네트워크"))
         assertTrue(lines[1].contains("배터리와 데이터"))
-        assertTrue(lines[2].contains("rate limit"))
+        assertTrue(lines[2].contains("방해 금지 시간"))
+        assertFalse(lines[2].contains("rate limit"))
     }
 
     @Test
@@ -133,6 +138,7 @@ class MainUiPolicyTest {
 
         assertEquals(listOf("delivery", "targets", "platforms", "event_types", "hub_events", "history", "advanced", "about"), rows.map { it.screenId })
         assertEquals("알림 수신 방식", rows.first { it.screenId == "delivery" }.title)
+        assertTrue(rows.first { it.screenId == "delivery" }.body.contains("방해 금지 시간"))
         assertEquals("표준", rows.first { it.screenId == "delivery" }.value)
         assertEquals("4/5", rows.first { it.screenId == "platforms" }.value)
         assertEquals("켜짐 · 마감 임박 ON", rows.first { it.screenId == "hub_events" }.value)

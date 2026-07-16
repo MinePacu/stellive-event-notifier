@@ -96,6 +96,8 @@ data class SettingsPolicyRow(
 data class SettingsCardSpacing(
     val contentVerticalPaddingDp: Int,
     val rowVerticalPaddingDp: Int,
+    val titleBodySpacingDp: Int,
+    val controlMinHeightDp: Int,
     val bottomMarginDp: Int,
 )
 
@@ -117,9 +119,14 @@ object MainUiPolicy {
 
     val settingsCardSpacing = SettingsCardSpacing(
         contentVerticalPaddingDp = 8,
-        rowVerticalPaddingDp = 6,
+        rowVerticalPaddingDp = 8,
+        titleBodySpacingDp = 4,
+        controlMinHeightDp = 0,
         bottomMarginDp = 8,
     )
+
+    fun settingsPanelContentVerticalPaddingDp(hasTitle: Boolean): Int =
+        if (hasTitle) settingsCardSpacing.contentVerticalPaddingDp else 0
 
     private const val TOP_BAR_ACTION_ICON_INSET_DP = 10
     private const val LIVE_CLOCK_REFRESH_DELAY_MILLIS = 1_000L
@@ -752,7 +759,7 @@ object MainUiPolicy {
         SettingsHubRow(
             screenId = "delivery",
             title = "알림 수신 방식",
-            body = "표준, realtime_best_effort, 조용한 시간",
+            body = "표준, 실시간 우선, 방해 금지 시간",
             value = if (deliveryMode == "REALTIME_BEST_EFFORT") "실시간 우선" else "표준"
         ),
         SettingsHubRow(
