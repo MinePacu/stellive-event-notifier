@@ -284,7 +284,7 @@ struct SongsView: View {
                 .coordinateSpace(name: "song-list-scroll")
                 .scrollContentBackground(.hidden)
                 .background(Color(uiColor: .systemGroupedBackground))
-                .settingsToolbar(path: $path)
+                .globalToolbar(path: $path)
                 .onChange(of: queryKey) { _ in
                     guard !isApplyingSession else { return }
                     resetSongList()

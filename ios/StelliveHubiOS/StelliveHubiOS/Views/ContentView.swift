@@ -48,6 +48,11 @@ struct IOSPrimaryNavigationPolicy {
         screenId != "settings" && !screenId.hasPrefix("settings_")
     }
 
+    static func shouldAttachGlobalToolbar(screenId: String) -> Bool { shouldAttachSettingsToolbar(screenId: screenId) }
+    static func showsAnnouncementButton(screenId: String) -> Bool {
+        shouldAttachGlobalToolbar(screenId: screenId) && screenId != "announcements" && screenId != "announcement_detail"
+    }
+
     static func showsSettingsButton(pathCount: Int, settingsRouteDepth: Int?) -> Bool {
         if settingsAccess.showsOnlyOnPrimaryRoots && pathCount > 0 {
             return false
@@ -63,10 +68,11 @@ struct IOSPrimaryNavigationPolicy {
 struct ContentView: View {
     @State private var selectedTab = "home"
     @State private var pendingHubEventId: String?
+    @State private var pendingAnnouncementId: String?
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            HomeView()
+            HomeView(deepLinkedAnnouncementId: $pendingAnnouncementId)
                 .tabItem { Label(IOSPrimaryNavigationPolicy.bottomTabs[0].title, systemImage: IOSPrimaryNavigationPolicy.bottomTabs[0].systemImage) }
                 .tag("home")
             LiveView()
@@ -80,6 +86,11 @@ struct ContentView: View {
                 .tag("hubEvents")
         }
         .onOpenURL { url in
+            if let announcementId = AnnouncementDeepLinkPolicy.id(from: url) {
+                selectedTab = "home"
+                pendingAnnouncementId = announcementId
+                return
+            }
             guard let eventId = HubCalendarDeepLinkPolicy.eventId(from: url) else { return }
             selectedTab = "hubEvents"
             pendingHubEventId = eventId
@@ -96,7 +107,7 @@ private struct HubEventsTabView: View {
     var body: some View {
         NavigationStack(path: $path) {
             HubEventsView()
-                .settingsToolbar(path: $path)
+                .globalToolbar(path: $path)
                 .navigationDestination(for: HubEvent.self) { event in
                     HubEventDetailContainerView(initialEvent: event)
                 }
@@ -130,13 +141,18 @@ private struct HubEventsTabView: View {
     }
 }
 
-private enum SettingsToolbarRoute: Hashable {
+enum GlobalToolbarRoute: Hashable {
     case settings
+    case announcements
+    case announcementDetail(String)
 }
 
-private struct SettingsToolbarModifier: ViewModifier {
+private struct GlobalToolbarModifier: ViewModifier {
     @Binding var path: NavigationPath
+    @EnvironmentObject private var serverStore: ServerHubStore
+    @EnvironmentObject private var readStore: AnnouncementReadStore
     @State private var settingsRouteDepth: Int?
+    @State private var announcementRouteDepth: Int?
 
     private var showsToolbarButton: Bool {
         IOSPrimaryNavigationPolicy.showsSettingsButton(
@@ -145,14 +161,38 @@ private struct SettingsToolbarModifier: ViewModifier {
         )
     }
 
+    private var unreadCount: Int {
+        serverStore.announcementsSummary?.items.filter {
+            !readStore.readKeys.contains(AnnouncementPolicy.readKey(id: $0.id, attentionRevision: $0.attentionRevision))
+        }.count ?? 0
+    }
+
+    private var showsAnnouncementButton: Bool {
+        showsToolbarButton && (announcementRouteDepth == nil || path.count < announcementRouteDepth!)
+    }
+
     func body(content: Content) -> some View {
         content
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        guard announcementRouteDepth == nil else { return }
+                        announcementRouteDepth = path.count + 1
+                        path.append(GlobalToolbarRoute.announcements)
+                    } label: {
+                        AnnouncementBellLabel(unreadCount: unreadCount)
+                            .frame(width: 34, height: 34)
+                            .background(Circle().fill(Color(.secondarySystemGroupedBackground)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHidden(!showsAnnouncementButton)
+                    .disabled(!showsAnnouncementButton)
+                    .opacity(showsAnnouncementButton ? 1 : 0)
+
                     Button {
                         guard settingsRouteDepth == nil else { return }
                         settingsRouteDepth = path.count + 1
-                        path.append(SettingsToolbarRoute.settings)
+                        path.append(GlobalToolbarRoute.settings)
                     } label: {
                         Image(systemName: IOSPrimaryNavigationPolicy.settingsAccess.systemImage)
                             .font(.system(size: 15, weight: .semibold))
@@ -170,22 +210,33 @@ private struct SettingsToolbarModifier: ViewModifier {
                     .opacity(showsToolbarButton ? 1 : 0)
                 }
             }
-            .navigationDestination(for: SettingsToolbarRoute.self) { route in
+            .navigationDestination(for: GlobalToolbarRoute.self) { route in
                 switch route {
                 case .settings:
                     SettingsContentView()
+                case .announcements:
+                    AnnouncementsView()
+                        .onAppear { if announcementRouteDepth == nil { announcementRouteDepth = path.count } }
+                case .announcementDetail(let id):
+                    AnnouncementDetailView(announcementID: id)
+                        .onAppear { if announcementRouteDepth == nil { announcementRouteDepth = path.count } }
                 }
             }
             .onChange(of: path.count) { newCount in
                 if let settingsRouteDepth, newCount < settingsRouteDepth {
                     self.settingsRouteDepth = nil
                 }
+                if let announcementRouteDepth, newCount < announcementRouteDepth {
+                    self.announcementRouteDepth = nil
+                }
             }
     }
 }
 
 extension View {
-    func settingsToolbar(path: Binding<NavigationPath>) -> some View {
-        modifier(SettingsToolbarModifier(path: path))
+    func globalToolbar(path: Binding<NavigationPath>) -> some View {
+        modifier(GlobalToolbarModifier(path: path))
     }
+
+    func settingsToolbar(path: Binding<NavigationPath>) -> some View { globalToolbar(path: path) }
 }

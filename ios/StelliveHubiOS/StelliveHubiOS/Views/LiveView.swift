@@ -46,7 +46,7 @@ struct LiveView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(Color(uiColor: .systemGroupedBackground))
-            .settingsToolbar(path: $path)
+            .globalToolbar(path: $path)
             .navigationBarTitleDisplayMode(.inline)
         }
     }
