@@ -36,13 +36,12 @@ data class SongListQueryKey(
     val memberMatchMode: SongMemberMatchMode,
     val participation: SongParticipation,
     val libraryId: String,
-    val statusId: String,
     val sortId: String,
     val query: String,
 ) {
-    constructor(generationId: String, type: String, memberId: String, libraryId: String, statusId: String, sortId: String, query: String) : this(
+    constructor(generationId: String, type: String, memberId: String, libraryId: String, sortId: String, query: String) : this(
         generationId, type, if (memberId.isBlank() || memberId == "all") emptyList() else listOf(memberId),
-        SongMemberMatchMode.ANY, SongParticipation.ANY, libraryId, statusId, sortId, query,
+        SongMemberMatchMode.ANY, SongParticipation.ANY, libraryId, sortId, query,
     )
 }
 
@@ -304,10 +303,6 @@ object MainUiPolicy {
 
     fun songFavoriteIdentifier(song: SongCatalogItem): String? =
         SongIdentity.identifier(song)
-
-    fun songStatusFilters(): List<SongFilterOption> = listOf(
-        SongFilterOption("all", "전체"), SongFilterOption("new", "새 노래"),
-    )
 
     fun songMatchesLibrary(song: SongCatalogItem, selectedLibraryId: String, favorites: Set<String>): Boolean =
         selectedLibraryId != "favorites" || songFavoriteIdentifier(song) in favorites
@@ -842,7 +837,7 @@ object MainUiPolicy {
         SettingsHubRow(
             screenId = "platforms",
             title = "플랫폼별 알림",
-            body = "CHZZK, YouTube, X, 굿즈/행사",
+            body = "CHZZK, YouTube, 굿즈/행사",
             value = "$enabledPlatforms/$totalPlatforms"
         ),
         SettingsHubRow(

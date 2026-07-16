@@ -59,14 +59,13 @@ struct SongsDerivationInput: Equatable, Hashable {
 struct SongsDerivedState: Equatable {
     static let empty = SongsDerivedState(
         summary: SongFacetSummary(total: 0, original: 0, cover: 0), filteredSongs: [], displayedRows: [],
-        displayedCount: 0, remainingCount: 0, newSongCount: 0
+        displayedCount: 0, remainingCount: 0
     )
     let summary: SongFacetSummary
     let filteredSongs: [SongCatalogItem]
     let displayedRows: [SongRowDisplayModel]
     let displayedCount: Int
     let remainingCount: Int
-    let newSongCount: Int
 
     static func make(input: SongsDerivationInput) -> Self {
         let rows = input.songs.map {
@@ -80,8 +79,7 @@ struct SongsDerivedState: Equatable {
             (key.type == "all" || row.song.type.rawValue == key.type) &&
                 IOSSongPagePolicy.matchesMember(row.song, state: memberState) &&
                 (key.query.isEmpty || row.title.localizedCaseInsensitiveContains(key.query) || row.subtitle.localizedCaseInsensitiveContains(key.query)) &&
-                (key.libraryId != "favorites" || row.isFavorite) &&
-                (key.statusId != "new" || row.isNew)
+                (key.libraryId != "favorites" || row.isFavorite)
         }
         let sorted = filtered.sorted { left, right in
             switch key.sortId {
@@ -98,7 +96,7 @@ struct SongsDerivedState: Equatable {
         return Self(
             summary: SongFacetSummary(total: input.songs.count, original: originalCount, cover: input.songs.count - originalCount),
             filteredSongs: sorted.map(\.song), displayedRows: Array(sorted.prefix(count)), displayedCount: count,
-            remainingCount: max(sorted.count - count, 0), newSongCount: rows.filter(\.isNew).count
+            remainingCount: max(sorted.count - count, 0)
         )
     }
 
@@ -137,7 +135,6 @@ struct SongsView: View {
     @State private var path = NavigationPath()
     @State private var selectedType = "all"
     @State private var selectedLibraryId = "all"
-    @State private var selectedStatusId = "all"
     @State private var selectedSortId = "publishedAt_desc"
     @State private var memberFilter = SongMemberFilterState()
     @State private var query = ""
@@ -158,7 +155,6 @@ struct SongsView: View {
             generationId: "all",
             type: selectedType,
             libraryId: selectedLibraryId,
-            statusId: selectedStatusId,
             sortId: selectedSortId,
             selectedMemberIds: memberFilter.selectedMemberIds.sorted(),
             memberMatchMode: memberFilter.normalized().matchMode,
@@ -238,13 +234,6 @@ struct SongsView: View {
             }
             .pickerStyle(.segmented)
 
-            Picker("상태", selection: $selectedStatusId) {
-                ForEach(IOSSongPagePolicy.statusFilters) { filter in
-                    Text(filter.id == "new" ? "새 노래 (\(derivedState.newSongCount))" : filter.label).tag(filter.id)
-                }
-            }
-            .pickerStyle(.segmented)
-
             Picker("정렬", selection: $selectedSortId) {
                 ForEach(IOSSongPagePolicy.sortOptions) { option in
                     Text(option.label).tag(option.id)
@@ -285,12 +274,6 @@ struct SongsView: View {
                             .onAppear { trackVisibleRow(row) }
                             .listRowInsets(IOSSongPagePolicy.songRowInsets)
                             .listRowSeparator(.hidden)
-                    }
-
-                    if selectedStatusId == "new" && derivedState.displayedRows.contains(where: \.isNew) {
-                        Button("표시된 새 노래 확인 완료") {
-                            discoveryStore.acknowledge(derivedState.displayedRows.map(\.song), catalog: serverStore.songCatalogItems)
-                        }
                     }
 
                     songLoadMoreControl
@@ -414,7 +397,6 @@ struct SongsView: View {
             selectedGenerationId: "all",
             selectedType: selectedType,
             selectedLibraryId: selectedLibraryId,
-            selectedStatusId: selectedStatusId,
             selectedSortId: selectedSortId,
             memberFilter: memberFilter.normalized(),
             query: query,
@@ -429,7 +411,6 @@ struct SongsView: View {
         let snapshot = browseSession.snapshot
         selectedType = snapshot.selectedType
         selectedLibraryId = snapshot.selectedLibraryId
-        selectedStatusId = snapshot.selectedStatusId
         selectedSortId = snapshot.selectedSortId
         memberFilter = snapshot.memberFilter
         query = snapshot.query
@@ -499,11 +480,6 @@ struct SongsView: View {
     }
 
     private var emptyStateMessage: String {
-        if selectedStatusId == "new" {
-            if !discoveryStore.state.initialized { return "새 노래 상태를 확인하는 중입니다." }
-            if derivedState.newSongCount == 0 { return "새로 추가된 노래가 없습니다." }
-            return "현재 필터 조건에 맞는 새 노래가 없습니다."
-        }
         if selectedLibraryId == "favorites" { return IOSSongPagePolicy.favoriteEmptyMessage(hasStoredFavorites: !favoritesStore.identifiers.isEmpty) }
         return IOSSongPagePolicy.memberFilterEmptyMessage(from: store.members, state: memberFilter)
     }
@@ -822,9 +798,9 @@ private struct SongMemberFilterView: View {
                 Picker("참여 형태", selection: Binding(get: { draft.participation }, set: { draft.participation = $0; normalizeDraft() })) {
                     Text("전체").tag(SongParticipation.any)
                     Text("솔로").tag(SongParticipation.solo)
-                    Text("콜라보").tag(SongParticipation.collaboration)
+                    Text("함께").tag(SongParticipation.collaboration)
                 }.pickerStyle(.segmented)
-                Text("솔로·콜라보는 연결된 스텔라이브 멤버 수 기준이며 외부 가수는 계산에 포함되지 않습니다.").font(.caption).foregroundStyle(.secondary)
+                Text("솔로는 1명, 함께 부른 곡은 연결된 스텔라이브 멤버 2명 이상을 기준으로 하며 외부 가수는 계산에 포함되지 않습니다.").font(.caption).foregroundStyle(.secondary)
             }
             Section("빠른 선택") {
                 ScrollView(.horizontal, showsIndicators: false) {

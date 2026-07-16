@@ -6,7 +6,6 @@
 
 ## Lightweight Backend Strategy
 
-- X: no-paid-API only. Use official X API paths only when free access is available and rate limits are viable. If official access requires paid billing, disable X integration behind feature flags and produce no X notifications.
 - YouTube: use WebSub for uploads. Use Data API fallback sparingly. Stellive official YouTube live events are excluded.
 - CHZZK: use official or documented allowed live-status/session mechanisms only. Unknown production methods remain `verify_required`.
 - Naver Cafe: automatic collection is deferred. If reintroduced, it must use public Search API results or another clearly allowed official path only. It is not realtime-eligible and falls back to standard delivery.
@@ -16,9 +15,8 @@
 
 Realtime-eligible allowed events enter the job pipeline in priority order:
 1. `chzzk_live_started`
-2. `x_post`, `official_x_post`
-3. `youtube_upload`, `official_youtube_upload`
-4. Other allowed events
+2. `youtube_upload`, `official_youtube_upload`
+3. Other allowed events
 
 The initial MVP can use a managed database `notification_jobs` table instead of Redis/BullMQ. Every job still enforces dedupe, quiet hours, keyword filtering, user opt-outs, rate limits, and official YouTube live exclusion. Redis/BullMQ can be introduced later behind the same job adapter if the database-backed queue becomes a bottleneck.
 

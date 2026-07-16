@@ -4,8 +4,6 @@ struct MobileConfigResponse: Codable, Equatable {
     let unofficialProject: Bool
     let catalogVersion: String
     let officialYoutubeLiveExcluded: Bool
-    let xNotificationsEnabled: Bool
-    let xDisabledReason: String?
     let hubCalendarEnabled: Bool
     let foregroundRealtimeEnabled: Bool?
 }

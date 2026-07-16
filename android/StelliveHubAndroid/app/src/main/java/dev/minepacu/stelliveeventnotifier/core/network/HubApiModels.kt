@@ -4,8 +4,6 @@ data class MobileConfigDto(
     val unofficialProject: Boolean,
     val catalogVersion: String,
     val officialYoutubeLiveExcluded: Boolean,
-    val xNotificationsEnabled: Boolean,
-    val xDisabledReason: String? = null,
     val hubCalendarEnabled: Boolean,
     val foregroundRealtimeEnabled: Boolean? = null,
 )

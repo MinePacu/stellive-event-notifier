@@ -81,7 +81,7 @@ enum SettingsNavigationPolicy {
             SettingsHubRow(
                 route: .platforms,
                 title: "플랫폼별 알림",
-                note: "CHZZK, YouTube, X, 굿즈/행사",
+                note: "CHZZK, YouTube, 굿즈/행사",
                 summary: enabledSummary(values: NotificationPlatform.allCases.map { settings.platformEnabled[$0] ?? false })
             ),
             SettingsHubRow(
@@ -405,7 +405,7 @@ struct SettingsContentView: View {
     private var targetSettings: some View {
         Form {
             Section("분류별 알림") {
-                ForEach(store.filters.filter { $0.id != "all" }) { filter in
+                ForEach(store.filters.filter { $0.id != "all" && $0.id != "gamja" }) { filter in
                     Toggle(targetFilterDisplayName(id: filter.id, defaultName: filter.displayName), isOn: generationBinding(filter.id, defaultValue: filter.notificationDefaultEnabled))
                 }
             }
@@ -416,11 +416,6 @@ struct SettingsContentView: View {
                 }
             }
 
-            Section("알림 대상 안내") {
-                LabeledContent("활동 종료 멤버", value: "알림 대상에서 제외")
-                LabeledContent("강지", value: "감자 대표")
-                LabeledContent("공식 채널", value: "기타에 포함")
-            }
         }
         .navigationTitle("대상별 알림")
     }
@@ -545,7 +540,7 @@ struct SettingsContentView: View {
 
             Section("고지") {
                 LabeledContent("비공식 프로젝트") {
-                    Text("스텔라이브, 치지직, YouTube, X, 네이버, Samsung, Apple과 공식 관계가 없습니다.")
+                    Text("스텔라이브, 치지직, YouTube, 네이버, Samsung, Apple과 공식 관계가 없습니다.")
                         .multilineTextAlignment(.trailing)
                 }
             }

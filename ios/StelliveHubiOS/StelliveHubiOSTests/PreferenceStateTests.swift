@@ -38,7 +38,6 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertEqual(settings.eventTypeEnabled[.eventDeadlineSoon], true)
         XCTAssertEqual(settings.eventTypeEnabled[.eventUpdated], false)
         XCTAssertEqual(settings.eventTypeEnabled[.eventCancelled], true)
-        XCTAssertEqual(settings.eventTypeEnabled[.officialXPost], true)
         XCTAssertEqual(settings.eventTypeEnabled[.officialYoutubeUpload], true)
         XCTAssertEqual(settings.eventTypeEnabled[.youtubeLiveStarted], false)
         XCTAssertTrue(settings.combinationPreferences.map(\.scope).contains(.generationPlatform))
@@ -57,7 +56,7 @@ final class PreferenceStateTests: XCTestCase {
 
         XCTAssertEqual(rows.map(\.route), [.history, .delivery, .targets, .platforms, .eventTypes, .hubEvents, .advanced, .about])
         XCTAssertEqual(rows.first { $0.route == .delivery }?.summary, "표준")
-        XCTAssertEqual(rows.first { $0.route == .platforms }?.summary, "4/5")
+        XCTAssertEqual(rows.first { $0.route == .platforms }?.summary, "3/4")
         XCTAssertEqual(rows.first { $0.route == .hubEvents }?.summary, "켜짐 · 마감 임박 우선")
         XCTAssertEqual(rows.first { $0.route == .delivery }?.title, "알림 수신 방식")
         XCTAssertEqual(rows.first { $0.route == .eventTypes }?.title, "알림 종류별 설정")

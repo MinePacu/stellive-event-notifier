@@ -48,8 +48,8 @@ interface PlatformApiStateDelegate {
   };
 }
 
-const adapterHealthSources = new Set<AdapterHealthSource>(["youtube", "chzzk", "x", "naver_cafe"]);
-const adapterHealthSourceList: AdapterHealthSource[] = ["youtube", "chzzk", "x", "naver_cafe"];
+const adapterHealthSources = new Set<AdapterHealthSource>(["youtube", "chzzk", "naver_cafe"]);
+const adapterHealthSourceList: AdapterHealthSource[] = ["youtube", "chzzk", "naver_cafe"];
 const adapterHealthStatuses = new Set<AdapterHealthStatus>(["enabled", "disabled", "verify_required", "rate_limited"]);
 
 function isAdapterHealthSource(source: string): source is AdapterHealthSource {

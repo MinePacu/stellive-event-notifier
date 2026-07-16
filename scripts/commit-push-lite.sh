@@ -41,6 +41,7 @@ GITHUB_REMOTE=""
 GITLAB_REMOTE=""
 BRANCH=""
 ADD_PATHS=()
+HAS_ADD_PATHS=false
 
 set_push_mode() {
   if [[ "$PUSH_MODE" != "none" ]]; then
@@ -66,6 +67,7 @@ while [[ $# -gt 0 ]]; do
     --add)
       [[ $# -ge 2 ]] || die "--add requires a path."
       ADD_PATHS+=("$2")
+      HAS_ADD_PATHS=true
       shift 2
       ;;
     --no-push) set_push_mode none_explicit; shift ;;
@@ -94,7 +96,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$MESSAGE" ]] || die "--message is required."
-if [[ "$STAGED_ONLY" == true && ( "$STAGE_ALL" == true || ${#ADD_PATHS[@]} -gt 0 ) ]]; then
+if [[ "$STAGED_ONLY" == true && "$STAGE_ALL" == true ]]; then
+  die "--staged cannot be combined with --all or --add."
+fi
+if [[ "$STAGED_ONLY" == true && "$HAS_ADD_PATHS" == true ]]; then
   die "--staged cannot be combined with --all or --add."
 fi
 
@@ -121,9 +126,11 @@ fi
 if [[ "$STAGE_ALL" == true ]]; then
   git add -u
 fi
-for ADD_PATH in "${ADD_PATHS[@]}"; do
-  git add -- "$ADD_PATH"
-done
+if [[ "$HAS_ADD_PATHS" == true ]]; then
+  for ADD_PATH in "${ADD_PATHS[@]}"; do
+    git add -- "$ADD_PATH"
+  done
+fi
 
 STAGED_PATHS="$(mktemp)"
 GITHUB_CANDIDATES="$(mktemp)"

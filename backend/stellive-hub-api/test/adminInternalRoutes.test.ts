@@ -436,7 +436,7 @@ describe("internal admin routes", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ source: "x", status: "disabled", reason: "x_no_free_official_api" })
+        expect.objectContaining({ source: "youtube", status: "disabled", reason: "youtube_websub_disabled" })
       ])
     );
   });
@@ -447,9 +447,9 @@ describe("internal admin routes", () => {
         getState: async () => null,
         listAdapterHealth: async () => [
           {
-            source: "x",
+            source: "naver_cafe",
             status: "disabled",
-            reason: "fake_x_health",
+            reason: "fake_naver_health",
             lastCheckedAt: "2026-06-07T00:00:00.000Z"
           }
         ]
@@ -466,9 +466,9 @@ describe("internal admin routes", () => {
     expect(response.json()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          source: "x",
+          source: "naver_cafe",
           status: "disabled",
-          reason: "fake_x_health",
+          reason: "fake_naver_health",
           lastCheckedAt: "2026-06-07T00:00:00.000Z"
         })
       ])
@@ -501,11 +501,10 @@ describe("internal admin routes", () => {
       expect.arrayContaining([
         expect.objectContaining({ source: "youtube", status: "disabled" }),
         expect.objectContaining({ source: "chzzk", status: "enabled", reason: "chzzk_live_api_verified" }),
-        expect.objectContaining({ source: "x", status: "disabled" }),
         expect.objectContaining({ source: "naver_cafe", status: "disabled" })
       ])
     );
-    expect(response.json()).toHaveLength(4);
+    expect(response.json()).toHaveLength(3);
   });
 
   it("does not register the optional platform API state route without a distinct contract", async () => {

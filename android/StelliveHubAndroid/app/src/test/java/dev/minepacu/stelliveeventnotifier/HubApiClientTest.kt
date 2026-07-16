@@ -43,8 +43,6 @@ class HubApiClientTest {
                         unofficialProject = true,
                         catalogVersion = "seed-2026-06-01",
                         officialYoutubeLiveExcluded = true,
-                        xNotificationsEnabled = false,
-                        xDisabledReason = "x_notifications_dropped_for_mvp",
                         hubCalendarEnabled = true,
                         foregroundRealtimeEnabled = false,
                     ),
@@ -73,8 +71,6 @@ class HubApiClientTest {
                 "unofficialProject": true,
                 "catalogVersion": "seed-2026-06-01",
                 "officialYoutubeLiveExcluded": true,
-                "xNotificationsEnabled": false,
-                "xDisabledReason": "x_notifications_dropped_for_mvp",
                 "hubCalendarEnabled": true
               },
               "generations": [{"id":"gen1","displayName":"1기생","sortOrder":1,"type":"member","notificationDefaultEnabled":true}],

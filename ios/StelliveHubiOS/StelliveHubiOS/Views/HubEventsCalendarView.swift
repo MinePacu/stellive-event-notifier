@@ -1,11 +1,70 @@
 import SwiftUI
 
+private let hubEventsCalendarExpansionDuration = 0.22
+
+private struct HubEventsCalendarContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct HubEventsCalendarChevronShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        return path
+    }
+}
+
+private struct HubEventsCalendarChevron: View {
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    let isExpanded: Bool
+    @State private var rotationDegrees: Double
+
+    init(isExpanded: Bool) {
+        self.isExpanded = isExpanded
+        _rotationDegrees = State(initialValue: isExpanded ? 180 : 0)
+    }
+
+    var body: some View {
+        ZStack {
+            HubEventsCalendarChevronShape()
+                .stroke(
+                    Color.primary,
+                    style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
+                )
+                .frame(width: 12, height: 7)
+                .rotationEffect(.degrees(rotationDegrees), anchor: .center)
+        }
+        .frame(width: 48, height: 48, alignment: .center)
+        .onAppear {
+            rotationDegrees = isExpanded ? 180 : 0
+        }
+        .onChange(of: isExpanded) { expanded in
+            let targetRotation = expanded ? 180.0 : 0.0
+            if accessibilityReduceMotion {
+                rotationDegrees = targetRotation
+            } else {
+                withAnimation(.easeOut(duration: hubEventsCalendarExpansionDuration)) {
+                    rotationDegrees = targetRotation
+                }
+            }
+        }
+    }
+}
+
 struct HubEventsCalendarView: View {
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     private let days: [HubCalendarDay]
     @Binding private var selectedMonth: Date
     @Binding private var isExpanded: Bool
     @StateObject private var viewModel: HubEventsCalendarViewModel
     @State private var presentedPicker: CalendarPickerPresentation?
+    @State private var calendarContentHeight: CGFloat = 0
 
     init(days: [HubCalendarDay], selectedMonth: Binding<Date>, isExpanded: Binding<Bool>) {
         self.days = days
@@ -15,7 +74,7 @@ struct HubEventsCalendarView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 0) {
             Button {
                 isExpanded.toggle()
             } label: {
@@ -31,13 +90,14 @@ struct HubEventsCalendarView: View {
 
                     Spacer(minLength: 8)
 
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(width: 24, height: 48)
-                        .fixedSize()
+                    Color.clear
+                        .frame(width: 48, height: 48)
                 }
                 .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
                 .contentShape(Rectangle())
+                .overlay(alignment: .topTrailing) {
+                    HubEventsCalendarChevron(isExpanded: isExpanded)
+                }
             }
             .buttonStyle(.plain)
             .contentShape(Rectangle())
@@ -46,13 +106,29 @@ struct HubEventsCalendarView: View {
             .accessibilityValue(isExpanded ? "펼침" : "접힘")
             .accessibilityHint(isExpanded ? "두 번 탭하여 접기" : "두 번 탭하여 펼치기")
 
-            if isExpanded {
-                monthControl
-                weekdayHeader
-                monthGrid
-            }
+            calendarContent
+                .padding(.top, 14)
+                .fixedSize(horizontal: false, vertical: true)
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: HubEventsCalendarContentHeightKey.self,
+                            value: proxy.size.height
+                        )
+                    }
+                }
+                .frame(height: isExpanded ? calendarContentHeight : 0, alignment: .top)
+                .opacity(isExpanded ? 1 : 0)
+                .clipped()
+                .allowsHitTesting(isExpanded)
+                .accessibilityHidden(!isExpanded)
+                .animation(calendarExpansionAnimation, value: isExpanded)
+                .onPreferenceChange(HubEventsCalendarContentHeightKey.self) { height in
+                    calendarContentHeight = height
+                }
 
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.vertical, 6)
         .onAppear {
             selectedMonth = viewModel.selectedMonth
@@ -91,6 +167,18 @@ struct HubEventsCalendarView: View {
                 )
             }
         }
+    }
+
+    private var calendarContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            monthControl
+            weekdayHeader
+            monthGrid
+        }
+    }
+
+    private var calendarExpansionAnimation: Animation? {
+        accessibilityReduceMotion ? nil : .easeOut(duration: hubEventsCalendarExpansionDuration)
     }
 
     private var monthControl: some View {

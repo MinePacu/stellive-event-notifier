@@ -14,7 +14,7 @@
 
 - Do not include Former members in the MVP catalog, notification targets, filters, seed data, tests, or UI.
 - Gangzi must remain a `representative` entry under the `gamja` category only.
-- The `official` category is displayed as `기타` and includes Stellive official YouTube and X notification targets.
+- The `official` category is displayed as `기타` and includes the Stellive official YouTube upload notification target.
 - Stellive official YouTube may produce `official_youtube_upload` only. Do not create official YouTube live scheduled, started, or ended notifications.
 - Use official APIs or clearly allowed documented platform paths only.
 - Do not implement login-cookie scraping, private Cafe collection, regular HTML scraping, access bypasses, or long-term storage of raw private platform payloads.
@@ -127,35 +127,6 @@ backend/stellive-hub-api/src/
 YOUTUBE_API_KEY=
 YOUTUBE_WEBSUB_CALLBACK_URL=
 YOUTUBE_WEBSUB_VERIFY_TOKEN=
-```
-
-### X
-
-**Allowed path**
-
-- X integration is optional and must be designed as no-paid-API only.
-- Use official X API paths only when the project can access them without paid API billing.
-- If no free official API access is available, keep the adapter disabled and produce no X notifications.
-- Do not design MVP notification delivery around paid X API plans, paid quota increases, or paid realtime stream access.
-- If a no-cost official path is available, prefer the lowest-volume mechanism that respects rate limits. Realtime X delivery is allowed only when the free official path supports it.
-
-**Rules**
-
-- Build API rules or polling targets only from verified `xHandle` values in the member catalog.
-- Keep queries account-scoped, for example `from:StelLive_kr -is:retweet`.
-- Do not open a stream connection unless the official API access is confirmed to be free for this project.
-- If free official access is unavailable, rate-limited beyond usefulness, unauthorized, or requires paid billing, report adapter health as `disabled` with reason `x_no_free_official_api` and stop producing events.
-- Use dedupe keys shaped as `x:<eventType>:<authorId>:<tweetId>`.
-- Treat media URLs as runtime display URLs only. Do not store image binaries.
-
-**Environment variables**
-
-```env
-X_BEARER_TOKEN=
-X_API_COST_POLICY=no_paid_api
-X_FREE_API_ENABLED=false
-X_FREE_STREAM_ENABLED=false
-X_FREE_POLLING_ENABLED=false
 ```
 
 ### CHZZK
@@ -369,7 +340,6 @@ Current mobile API backend status:
 - `POST /v1/webhooks/youtube`: receive WebSub Atom feed.
 - `POST /v1/internal/schedulers/youtube/renew-subscriptions`: renew WebSub leases.
 - `POST /v1/internal/schedulers/chzzk/live-status`: trigger CHZZK live status polling.
-- `POST /v1/internal/schedulers/x/poll`: trigger X fallback polling.
 - `POST /v1/internal/jobs/notifications/drain`: trigger database-backed job worker drain.
 - `GET /v1/internal/adapters/health`: report adapter health as `enabled`, `disabled`, `verify_required`, or `rate_limited`.
 
@@ -454,23 +424,7 @@ cd backend/stellive-hub-api
 npm test -- liveStatus
 ```
 
-### Phase 6: Implement No-Paid-API X Integration
-
-- [ ] Add `X_API_COST_POLICY=no_paid_api` validation in `config/env.ts`.
-- [ ] Add `xApiClient.ts` with bearer token handling, timeout, 429 backoff, and rate-limit header tracking, but only allow calls when `X_FREE_API_ENABLED=true`.
-- [ ] Start `xFilteredStreamAdapter.ts` only when `X_FREE_STREAM_ENABLED=true` and the configured access is confirmed to be free.
-- [ ] Add limited no-cost polling in `xPollingAdapter.ts` only when `X_FREE_POLLING_ENABLED=true`; otherwise return disabled health with `x_no_free_official_api`.
-- [ ] Store `since_id`, rate-limit reset time, stream health, and `costPolicy` in `PlatformApiState`.
-- [ ] Add tests proving paid-required access disables the adapter, no X notifications are produced, and only verified handles become targets when free access is enabled.
-
-Validation:
-
-```bash
-cd backend/stellive-hub-api
-npm test -- x
-```
-
-### Phase 7: Add Deferred Naver Cafe Adapter
+### Phase 6: Add Deferred Naver Cafe Adapter
 
 - [ ] Implement `naverCafeSearchAdapter.ts` as disabled by default.
 - [ ] When disabled, return adapter health with `disabled` and a clear reason.
@@ -505,8 +459,7 @@ npm test
 - Repository tests should use a Prisma test database or transaction rollback.
 - Worker tests should inject a fake FCM sender and verify delivery decisions without provider calls.
 - Official YouTube live exclusion must be covered at adapter, ingestion guard, and catalog policy boundaries.
-- CHZZK and X must have safe feature-flag-off behavior because access, cost, and allowed endpoints can change.
-- X tests must prove the adapter remains disabled when the only available official path requires paid API billing.
+- CHZZK must have safe feature-flag-off behavior because access and allowed endpoints can change.
 - `chzzk_chat` must remain skipped without explicit filters.
 
 ## Runtime Feature Flags
@@ -514,17 +467,13 @@ npm test
 ```env
 YOUTUBE_WEBSUB_ENABLED=true
 YOUTUBE_DATA_API_FALLBACK_ENABLED=false
-X_API_COST_POLICY=no_paid_api
-X_FREE_API_ENABLED=false
-X_FREE_STREAM_ENABLED=false
-X_FREE_POLLING_ENABLED=false
 CHZZK_LIVE_POLLING_ENABLED=false
 NAVER_CAFE_SEARCH_ENABLED=false
 DB_NOTIFICATION_QUEUE_ENABLED=true
 FOREGROUND_SSE_ENABLED=false
 ```
 
-Default MVP flags should minimize cost and platform-policy risk. X must remain disabled unless no-cost official API access is confirmed. Enable external integrations one at a time only after API access, rate limits, and billing constraints are confirmed.
+Default MVP flags should minimize cost and platform-policy risk. Enable external integrations one at a time only after API access, rate limits, and billing constraints are confirmed.
 
 ## Security and Policy Checklist
 
@@ -535,17 +484,15 @@ Default MVP flags should minimize cost and platform-policy risk. X must remain d
 - [ ] Drop official YouTube live events before storage.
 - [ ] Ensure global off blocks every push.
 - [ ] Ensure realtime mode does not bypass quiet hours, keyword rules, rate limits, or disabled preferences.
-- [ ] Ensure X integration does not require, recommend, or assume paid API billing.
 - [ ] Ensure no Naver Cafe private/login-only collection path exists.
 - [ ] Ensure internal scheduler/worker endpoints are not publicly callable.
 
 ## Official References
 
 - [YouTube Data API WebSub push notifications](https://developers.google.com/youtube/v3/guides/push_notifications)
-- [X API rate limits](https://docs.x.com/x-api/fundamentals/rate-limits)
 - [CHZZK Developers](https://developers.chzzk.naver.com/)
 - [CHZZK Open API authorization](https://chzzk.gitbook.io/chzzk/chzzk-api/authorization)
 - [CHZZK Open API tips](https://chzzk.gitbook.io/chzzk/chzzk-api/tips)
 - [Firebase Cloud Messaging server environment](https://firebase.google.com/docs/cloud-messaging/server-environment)
 - [Firebase Cloud Messaging message priority](https://firebase.google.com/docs/cloud-messaging/customize-messages/setting-message-priority)
-Calendar update: `GET /v1/hub-events/calendar` and `GET /v1/hub-events/widget-snapshot` expose read-only `HubEvent` projections for the `굿즈/행사` app calendar and Android/iOS cached widgets. X notification ingestion and delivery remain disabled for MVP; keep no-paid API flags false unless a verified no-cost official path is confirmed. Calendar/widget DTOs must stay text-first and must not include raw payloads, provider responses, image URLs, logos, posters, profile images, thumbnails, or copied media.
+Calendar update: `GET /v1/hub-events/calendar` and `GET /v1/hub-events/widget-snapshot` expose read-only `HubEvent` projections for the `굿즈/행사` app calendar and Android/iOS cached widgets. Calendar/widget DTOs must stay text-first and must not include raw payloads, provider responses, image URLs, logos, posters, profile images, thumbnails, or copied media.

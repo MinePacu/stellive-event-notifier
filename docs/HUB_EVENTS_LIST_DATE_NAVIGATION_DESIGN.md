@@ -343,7 +343,7 @@ rtk xcodebuild test -project ios/StelliveHubiOS/StelliveHubiOS.xcodeproj -scheme
 - 일정 생성, 수정, 삭제 진입점은 없다.
 - `/v1/hub-events/calendar` 외 새 backend ingestion 또는 push path가 생기지 않는다.
 - 공식 이미지, 로고, 포스터, 캡처 이미지, fan asset이 추가되지 않는다.
-- Former member, 공식 YouTube live event, X notification delivery가 재도입되지 않는다.
+- Former member와 공식 YouTube live event가 재도입되지 않는다.
 
 ## 롤아웃
 

@@ -24,6 +24,7 @@ run_logged "$LOG_FILE" \
   --exclude "dist/" \
   --exclude "build/" \
   --exclude "qa-screenshots/" \
+  --exclude "scripts/logs/" \
   --exclude ".DS_Store" \
   --exclude ".env" \
   --exclude ".env.*" \

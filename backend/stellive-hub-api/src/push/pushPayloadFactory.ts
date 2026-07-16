@@ -68,9 +68,7 @@ const titleByType: Partial<Record<PlatformEvent["type"], string>> = {
 const androidChannelByType: Partial<Record<PlatformEvent["type"], string>> = {
   chzzk_live_started: "stellive_chzzk_live",
   chzzk_live_ended: "stellive_chzzk_live",
-  x_post: "stellive_x_posts",
   youtube_upload: "stellive_youtube",
-  official_x_post: "stellive_official_x",
   official_youtube_upload: "stellive_official_youtube",
   event_announced: "stellive_hub_events",
   event_sales_open: "stellive_hub_events",

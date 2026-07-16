@@ -284,24 +284,24 @@ describe("PlatformApiStateRepository", () => {
     const repository = new PlatformApiStateRepository(prisma);
 
     await repository.upsert({
-      source: "x",
-      key: "integration",
-      value: { costPolicy: "no_paid_api" },
-      status: "disabled"
+      source: "youtube",
+      key: "websub",
+      value: { enabled: true },
+      status: "enabled"
     });
 
     expect(calls).toEqual([
       {
-        where: { source_key: { source: "x", key: "integration" } },
+        where: { source_key: { source: "youtube", key: "websub" } },
         create: {
-          source: "x",
-          key: "integration",
-          value: { costPolicy: "no_paid_api" },
-          status: "disabled"
+          source: "youtube",
+          key: "websub",
+          value: { enabled: true },
+          status: "enabled"
         },
         update: {
-          value: { costPolicy: "no_paid_api" },
-          status: "disabled"
+          value: { enabled: true },
+          status: "enabled"
         }
       }
     ]);

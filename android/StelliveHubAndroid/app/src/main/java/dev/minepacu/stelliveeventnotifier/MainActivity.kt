@@ -208,7 +208,6 @@ internal class SongBrowseSessionViewModel : ViewModel() {
     var generationId = "all"
     var type = "all"
     var libraryId = "all"
-    var statusId = "all"
     var sortId = "publishedAt_desc"
     var memberFilter = SongMemberFilterState()
     var query = ""
@@ -259,9 +258,6 @@ private var selectedSongType: String
 private var selectedSongLibraryId: String
     get() = songBrowseSession.libraryId
     set(value) { songBrowseSession.libraryId = value }
-private var selectedSongStatusId: String
-    get() = songBrowseSession.statusId
-    set(value) { songBrowseSession.statusId = value }
 private var songFavoriteIds: Set<String> = emptySet()
 private var songDiscoveryState = SongDiscoveryStateV1()
 private lateinit var songDiscoveryRepository: SongDiscoveryRepository
@@ -870,6 +866,7 @@ private fun updateNavigationChrome() {
         binding.navigationRailDivider.isVisible = navigationSpec.showNavigationRail
         updateTopGlassOverlayStartMargin(navigationSpec.showNavigationRail)
         updateContentWidthConstraint(navigationSpec.constrainContentWidth)
+        scheduleSongScrollToTopButtonPositionUpdate()
     }
 
     private fun screenForItem(itemId: Int): HubScreen = when (itemId) {
@@ -903,6 +900,7 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
 
 private fun startScreen(screenId: String, title: String, role: String) {
         binding.screenActionContainer.isVisible = false
+        scheduleSongScrollToTopButtonPositionUpdate()
         activeTwoPaneDetailPane = null
         activeSettingsHubScrollView = null
         if (screenId != "song_member_filter") selectedSongMemberFilterDraft = null
@@ -920,6 +918,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
         binding.collapsedRole.isVisible = topBarRole.isNotBlank()
         binding.contentList.removeAllViews()
         resetTopBarScrollSources()
+        registerTopBarScrollSource(binding.contentScroll)
         clearTopFilters()
         applyContentTopPadding(underTopBar = false)
         if (MainScreenChromePolicy.spec(screenId, navigationHistory.canGoBack).showExpandedBodyHeader) {
@@ -1027,6 +1026,49 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 bottomMargin = dp(80)
             },
         )
+        scheduleSongScrollToTopButtonPositionUpdate()
+    }
+
+    private fun scheduleSongScrollToTopButtonPositionUpdate() {
+        if (!::songScrollToTopButton.isInitialized || !::binding.isInitialized) return
+        binding.root.post {
+            val obstruction = when {
+                binding.screenActionContainer.isVisible -> binding.screenActionContainer
+                binding.bottomNavigation.isVisible -> binding.bottomNavigation
+                else -> null
+            }
+            val occupiedBottomHeight = obstruction?.let { view ->
+                val rootLocation = IntArray(2)
+                val viewLocation = IntArray(2)
+                binding.root.getLocationInWindow(rootLocation)
+                view.getLocationInWindow(viewLocation)
+                (rootLocation[1] + binding.root.height - viewLocation[1]).coerceAtLeast(0)
+            } ?: 0
+            val params = songScrollToTopButton.layoutParams as? FrameLayout.LayoutParams ?: return@post
+            val nextBottomMargin = occupiedBottomHeight + dp(16)
+            if (params.bottomMargin != nextBottomMargin) {
+                params.bottomMargin = nextBottomMargin
+                songScrollToTopButton.layoutParams = params
+            }
+        }
+    }
+
+    private fun registerSongMemberFilterScrollToTop() {
+        val source = binding.contentScroll
+        activeSongScrollView = source
+        activeSongListContainer = null
+        activeSongScrollSlot = null
+        source.setOnScrollChangeListener { view, _, scrollY, _, _ ->
+            topBarScrollSourceOffsets[view] = scrollY
+            updateTopBarScrolledFromSources()
+            songScrollToTopButton.isVisible = MainUiPolicy.shouldShowSongScrollToTop(
+                absoluteOffset = scrollY,
+                isLoading = false,
+                isEmpty = false,
+                isRestoring = false,
+                threshold = dp(240),
+            )
+        }
     }
 
     private fun currentSongQueryKey(): SongListQueryKey = SongListQueryKey(
@@ -1036,7 +1078,6 @@ private fun startScreen(screenId: String, title: String, role: String) {
         memberMatchMode = selectedSongMemberFilter.matchMode,
         participation = selectedSongMemberFilter.participation,
         libraryId = selectedSongLibraryId,
-        statusId = selectedSongStatusId,
         sortId = selectedSongSortId,
         query = selectedSongQuery,
     )
@@ -1773,8 +1814,7 @@ private fun renderSongs() {
                 (selectedSongType == "all" || song.type.apiValue == selectedSongType) &&
                     MainUiPolicy.songMatchesMember(song, selectedSongMemberFilter) &&
                     MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers) &&
-                    MainUiPolicy.songMatchesLibrary(song, selectedSongLibraryId, songFavoriteIds) &&
-                    (selectedSongStatusId != "new" || SongDiscoveryPolicy.isNew(song, songDiscoveryState))
+                    MainUiPolicy.songMatchesLibrary(song, selectedSongLibraryId, songFavoriteIds)
             },
             selectedSongSortId,
         )
@@ -1806,7 +1846,6 @@ private fun renderSongs() {
             val key = listOf(
                 selectedSongType,
                 selectedSongLibraryId,
-                selectedSongStatusId,
                 selectedSongSortId,
                 selectedSongQuery,
             ).joinToString(":")
@@ -1869,14 +1908,7 @@ private fun renderSongs() {
             container.addView(serverStatusStrip())
         }
         if (state.visibleSongs.isEmpty()) {
-            val allNewCount = cachedSongItems.count { SongDiscoveryPolicy.isNew(it, songDiscoveryState) }
-            val message = if (selectedSongStatusId == "new") {
-                when {
-                    !songDiscoveryState.initialized -> "새 노래 상태를 확인하는 중입니다."
-                    allNewCount == 0 -> "새로 추가된 노래가 없습니다."
-                    else -> "현재 필터 조건에 맞는 새 노래가 없습니다."
-                }
-            } else if (selectedSongLibraryId == "favorites") {
+            val message = if (selectedSongLibraryId == "favorites") {
                 MainUiPolicy.songFavoriteEmptyMessage(songFavoriteIds.isNotEmpty())
             } else SongMemberFilterPolicy.emptyMessage(state.catalogMembers, selectedSongMemberFilter)
             container.addView(noticeCard(message))
@@ -1890,22 +1922,6 @@ private fun renderSongs() {
 
     private fun addSongListFooter(container: LinearLayout, state: SongRenderState) {
         container.addView(songLoadMoreControl(container, state))
-        if (selectedSongStatusId == "new" && state.displayedSongs.any { SongDiscoveryPolicy.isNew(it, songDiscoveryState) }) {
-            container.addView(baseCard(HubCardStyle.INTERACTIVE).apply {
-                isClickable = true
-                isFocusable = true
-                contentDescription = "표시된 새 노래 확인 완료"
-                setOnClickListener { lifecycleScope.launch { songDiscoveryRepository.acknowledge(state.displayedSongs, cachedSongItems) } }
-                addView(TextView(context).apply {
-                    text = "표시된 새 노래 확인 완료"
-                    gravity = Gravity.CENTER
-                    setTextColor(color(R.color.hub_text))
-                    textSize = 14f
-                    typeface = Typeface.DEFAULT_BOLD
-                    setPadding(dp(14), dp(14), dp(14), dp(14))
-                })
-            })
-        }
     }
 
     private fun renderSongFilterPaneInto(container: LinearLayout, visibleCount: Int = 0) {
@@ -2046,20 +2062,6 @@ private fun songFilterPanel(): MaterialCardView =
             addView(divider())
             addView(songSegmentedRow(MainUiPolicy.songLibraryFilters(), selectedSongLibraryId) { optionId ->
                 selectedSongLibraryId = optionId
-                resetSongBrowseForQueryChange()
-                renderSongsSelectionChange()
-            }.apply {
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
-                    bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
-                }
-            })
-            addView(divider())
-            val statusFilters = MainUiPolicy.songStatusFilters().map {
-                if (it.id == "new") it.copy(label = "새 노래 (${cachedSongItems.count { song -> SongDiscoveryPolicy.isNew(song, songDiscoveryState) }})") else it
-            }
-            addView(songSegmentedRow(statusFilters, selectedSongStatusId) { optionId ->
-                selectedSongStatusId = optionId
                 resetSongBrowseForQueryChange()
                 renderSongsSelectionChange()
             }.apply {
@@ -2394,11 +2396,11 @@ private fun renderSongMemberFilter(restoreScrollY: Int? = null) {
                 typeface = Typeface.DEFAULT_BOLD
                 setPadding(0, dp(14), 0, dp(7))
             })
-            addView(songSegmentedRow(listOf(SongFilterOption("ANY", "전체"), SongFilterOption("SOLO", "솔로"), SongFilterOption("COLLABORATION", "콜라보")), draft.participation.name) {
+            addView(songSegmentedRow(listOf(SongFilterOption("ANY", "전체"), SongFilterOption("SOLO", "솔로"), SongFilterOption("COLLABORATION", "함께")), draft.participation.name) {
                 updateDraft(draft.copy(participation = SongParticipation.valueOf(it)))
             })
             addView(TextView(context).apply {
-                text = "솔로·콜라보는 연결된 스텔라이브 멤버 수 기준이며 외부 가수는 계산에 포함되지 않습니다."
+                text = "솔로는 1명, 함께 부른 곡은 연결된 스텔라이브 멤버 2명 이상을 기준으로 하며 외부 가수는 계산에 포함되지 않습니다."
                 setTextColor(color(R.color.hub_text_muted))
                 textSize = 12f
                 setPadding(0, dp(12), 0, 0)
@@ -2479,6 +2481,8 @@ private fun renderSongMemberFilter(restoreScrollY: Int? = null) {
             popScreen()
         }
     }
+    registerSongMemberFilterScrollToTop()
+    scheduleSongScrollToTopButtonPositionUpdate()
     restoreScrollY?.let { scrollY ->
         binding.contentScroll.post { binding.contentScroll.scrollTo(0, scrollY) }
     }
@@ -3001,8 +3005,7 @@ private fun songFilterRow(
             settingsPanel(
                 rows = listOf(
                     SettingRow("1기생, 2기생, 3기생", "현재 활동 중인 멤버만 포함하며, 활동이 종료된 멤버는 알림 대상에서 제외합니다.", settings.generationEnabled["gen1"] == true && settings.generationEnabled["gen2"] == true && settings.generationEnabled["gen3"] == true),
-                    SettingRow("감자", "강지는 감자의 대표 대상으로 포함합니다.", settings.generationEnabled["gamja"] == true),
-                    SettingRow("기타", "스텔라이브 공식 X와 YouTube 업로드 알림입니다.", settings.generationEnabled["official"] == true),
+                    SettingRow("기타", "스텔라이브 공식 YouTube 업로드 알림입니다.", settings.generationEnabled["official"] == true),
                     SettingRow("합류 예정 멤버", "기본적으로 꺼져 있으며, 필요한 경우 직접 켤 수 있습니다.", settings.generationEnabled["gen4-upcoming"] == true)
                 )
             )
@@ -3013,7 +3016,7 @@ private fun songFilterRow(
                 targetToggleCard(
                     title = member.koreanName,
                     body = when (member.catalogRole) {
-                        CatalogRole.REPRESENTATIVE -> "감자 분류의 대표 대상입니다."
+                        CatalogRole.REPRESENTATIVE -> null
                         CatalogRole.OFFICIAL_CHANNEL -> "기타 분류에 포함된 공식 채널입니다."
                         else -> "${member.generationName} · ${member.roleLabel ?: "멤버"}"
                     },
@@ -3103,7 +3106,7 @@ private fun songFilterRow(
             settingsInfoCard(
                 title = "공식 채널 제한",
                 body = MainUiPolicy.settingsEventTypeCommonNotices().last(),
-                pills = listOf("공식 X 게시글", "공식 YouTube 업로드", "YouTube 라이브 제외")
+                pills = listOf("공식 YouTube 업로드", "YouTube 라이브 제외")
             )
         )
     }
@@ -3196,7 +3199,7 @@ private fun songFilterRow(
                 rows = listOf(
                     SettingRow(
                         "비공식 프로젝트",
-                        "스텔라이브, 치지직, YouTube, X, 네이버, Samsung, Apple과 공식 관계가 없습니다."
+                        "스텔라이브, 치지직, YouTube, 네이버, Samsung, Apple과 공식 관계가 없습니다."
                     )
                 )
             )
@@ -3903,7 +3906,6 @@ private fun noticeCard(text: String): TextView = TextView(this).apply {
         val labels = mutableListOf<String>()
         if (member.chzzkChannelId != null) labels += "CHZZK"
         if (member.youtubeHandle != null) labels += if (member.catalogRole == CatalogRole.OFFICIAL_CHANNEL) "공식 YouTube 업로드" else "YouTube"
-        if (member.xHandle != null) labels += if (member.xHandle == "verify_required") "X 확인 필요" else if (member.catalogRole == CatalogRole.OFFICIAL_CHANNEL) "공식 X 게시글" else "X"
         if (member.catalogRole == CatalogRole.OFFICIAL_CHANNEL) labels += "YouTube LIVE 제외"
         return labels
     }
@@ -4440,7 +4442,7 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
 
     private fun targetToggleCard(
         title: String,
-        body: String,
+        body: String?,
         checked: Boolean,
         onCheckedChange: (Boolean) -> Unit
     ): MaterialCardView =
@@ -4694,7 +4696,7 @@ private fun rowChip(text: String): Chip = Chip(this).apply {
         centerChipText(this)
         val isWarning = text.contains("필터") || text.contains("확인")
         val isOff = text.contains("OFF") || text.contains("제외") || text.contains("unsupported")
-        val isGood = text.contains("LIVE") || text.contains("CHZZK") || text.contains("YouTube") || text.contains("X")
+        val isGood = text.contains("LIVE") || text.contains("CHZZK") || text.contains("YouTube")
         isCheckable = false
         isClickable = false
         setEnsureMinTouchTargetSize(false)

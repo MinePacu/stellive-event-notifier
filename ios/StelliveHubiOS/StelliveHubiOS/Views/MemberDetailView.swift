@@ -23,7 +23,6 @@ struct MemberDetailView: View {
             Section("알림") {
                 Toggle("항목 알림", isOn: .constant(member.notificationEnabled))
                 Toggle("최대한 실시간 모드", isOn: .constant(member.realtimeEnabled))
-                Toggle("X 게시글", isOn: .constant(member.xHandle != nil))
                 Toggle("YouTube 업로드", isOn: .constant(member.youtubeHandle != nil))
                 if member.catalogRole == .officialChannel {
                     LabeledContent("공식 YouTube 라이브", value: "지원하지 않음")
@@ -37,4 +36,3 @@ struct MemberDetailView: View {
         .navigationTitle(member.koreanName)
     }
 }
-

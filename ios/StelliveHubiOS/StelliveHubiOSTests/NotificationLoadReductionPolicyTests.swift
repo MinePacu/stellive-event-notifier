@@ -113,7 +113,7 @@ final class NotificationLoadReductionPolicyTests: XCTestCase {
     func testSummaryTextUsesReaderFriendlyLabels() {
         let text = NotificationSummaryTextPolicy.text(for: [
             payload(eventId: "official-1", memberId: "stellive-official", source: .youtube, eventType: .officialYoutubeUpload, title: "업로드 1"),
-            payload(eventId: "official-2", memberId: "stellive-official", source: .x, eventType: .officialXPost, title: "공지 2")
+            payload(eventId: "official-2", memberId: "stellive-official", source: .youtube, eventType: .officialYoutubeUpload, title: "업로드 2")
         ])
 
         XCTAssertEqual(text?.title, "공식 채널 새 소식 2건")

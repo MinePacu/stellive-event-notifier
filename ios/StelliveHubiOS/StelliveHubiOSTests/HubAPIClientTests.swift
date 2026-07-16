@@ -19,8 +19,6 @@ final class HubAPIClientTests: XCTestCase {
                     "unofficialProject": true,
                     "catalogVersion": "seed-2026-06-01",
                     "officialYoutubeLiveExcluded": true,
-                    "xNotificationsEnabled": false,
-                    "xDisabledReason": "x_notifications_dropped_for_mvp",
                     "hubCalendarEnabled": true,
                     "foregroundRealtimeEnabled": false
                   },

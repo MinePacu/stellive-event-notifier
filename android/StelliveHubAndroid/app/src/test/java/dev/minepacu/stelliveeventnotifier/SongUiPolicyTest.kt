@@ -185,7 +185,7 @@ class SongUiPolicyTest {
 
     @Test
     fun songScrollSessionRestoresOnlyMatchingQueryAndControlsTopButton() {
-        val key = SongListQueryKey("all", "all", "all", "all", "all", "publishedAt_desc", "")
+        val key = SongListQueryKey("all", "all", "all", "all", "publishedAt_desc", "")
         val changed = key.copy(query = "riko")
         val position = SongScrollPosition("youtube:63", -12, 2_400, 80, key)
 
@@ -629,7 +629,7 @@ class SongUiPolicyTest {
         assertEquals(SongMemberMatchMode.ANY, SongMemberFilterState(setOf("a", "b"), SongMemberMatchMode.ALL, SongParticipation.SOLO).normalized().matchMode)
         assertEquals(setOf("a"), SongMemberFilterState.migrate("a", setOf("a", "b")).selectedMemberIds)
         assertEquals(emptySet<String>(), SongMemberFilterState.migrate("unknown", setOf("a", "b")).selectedMemberIds)
-        val one = SongListQueryKey("all", "all", listOf("a", "b"), SongMemberMatchMode.ALL, SongParticipation.ANY, "all", "all", "publishedAt_desc", "")
+        val one = SongListQueryKey("all", "all", listOf("a", "b"), SongMemberMatchMode.ALL, SongParticipation.ANY, "all", "publishedAt_desc", "")
         val two = one.copy(selectedMemberIds = setOf("b", "a").sorted())
         assertEquals(one, two)
     }

@@ -1,14 +1,13 @@
 export type CatalogRole = "member" | "representative" | "official_channel" | "placeholder";
 export type ActiveStatus = "active" | "upcoming";
 export type GenerationType = "generation" | "gamja" | "official" | "upcoming";
-export type PlatformSource = "x" | "naver_cafe" | "chzzk" | "youtube" | "hub_event";
+export type PlatformSource = "naver_cafe" | "chzzk" | "youtube" | "hub_event";
 export type DeliveryMode = "standard" | "realtime_best_effort";
 export type NotificationDeliveryLevel = "immediate_push" | "summary_push" | "in_app_history_only";
 export type PushPriority = "normal" | "high";
 export type TapAction = "open_app" | "open_platform";
 
 export type PlatformEventType =
-  | "x_post"
   | "cafe_post"
   | "chzzk_live_started"
   | "chzzk_live_ended"
@@ -18,7 +17,6 @@ export type PlatformEventType =
   | "youtube_live_scheduled"
   | "youtube_live_started"
   | "youtube_live_ended"
-  | "official_x_post"
   | "official_youtube_upload"
   | "event_announced"
   | "event_sales_open"
@@ -38,7 +36,7 @@ export type NotificationPreferenceScope =
   | "member_event_type";
 
 export interface Avatar {
-  preferredSource: "permission_granted" | "chzzk_api" | "youtube_api" | "x_api" | "placeholder";
+  preferredSource: "permission_granted" | "chzzk_api" | "youtube_api" | "placeholder";
   imageUrl?: string;
   sourcePlatform?: PlatformSource;
   sourceProfileUrl?: string;
@@ -66,7 +64,6 @@ export interface Member {
     chzzkChannelId?: string | null;
     youtubeChannelId?: string | null;
     youtubeHandle?: string | null;
-    xHandle?: string | null;
     naverCafeQuery?: string | null;
     externalUrls: Record<string, string>;
   };

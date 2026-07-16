@@ -67,7 +67,6 @@ describe("admin console environment", () => {
       INTERNAL_API_TOKEN: "internal-token",
       ADMIN_CONSOLE_TOKEN: undefined,
       FCM_PRIVATE_KEY: "firebase-private-key",
-      X_BEARER_TOKEN: "   ",
       YOUTUBE_WEBSUB_VERIFY_TOKEN: "",
       CHZZK_CLIENT_SECRET: "replace_with_chzzk_client_secret"
     });
@@ -76,7 +75,6 @@ describe("admin console environment", () => {
       INTERNAL_API_TOKEN: "configured",
       ADMIN_CONSOLE_TOKEN: "missing",
       FCM_PRIVATE_KEY: "configured",
-      X_BEARER_TOKEN: "missing",
       YOUTUBE_WEBSUB_VERIFY_TOKEN: "missing",
       CHZZK_CLIENT_SECRET: "missing"
     });

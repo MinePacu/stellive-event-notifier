@@ -439,7 +439,6 @@ struct MemberRow: View {
         var labels: [String] = []
         if member.chzzkChannelId != nil { labels.append("CHZZK") }
         if member.youtubeHandle != nil { labels.append("YouTube") }
-        if member.xHandle != nil { labels.append("X") }
         return labels.joined(separator: " · ")
     }
 }

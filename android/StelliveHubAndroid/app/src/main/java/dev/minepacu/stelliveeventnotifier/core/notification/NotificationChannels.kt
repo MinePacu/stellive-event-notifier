@@ -24,13 +24,11 @@ object NotificationChannels {
     const val GROUP_HUB_EVENTS = "stellive_group_hub_events"
     const val GROUP_LOW_NOISE = "stellive_group_low_noise"
 
-    const val X_POSTS = "stellive_x_posts"
     const val CAFE_POSTS = "stellive_cafe_posts"
     const val CHZZK_LIVE = "stellive_chzzk_live"
     const val CHZZK_CHAT = "stellive_chzzk_chat"
     const val CHZZK_SUBSCRIPTION = "stellive_chzzk_subscription"
     const val YOUTUBE = "stellive_youtube"
-    const val OFFICIAL_X = "stellive_official_x"
     const val OFFICIAL_YOUTUBE = "stellive_official_youtube"
     const val HUB_EVENTS = "stellive_hub_events"
 
@@ -52,28 +50,12 @@ object NotificationChannels {
             eventTypes = setOf(NotificationEventType.CHZZK_LIVE_STARTED, NotificationEventType.CHZZK_LIVE_ENDED)
         ),
         NotificationChannelDefinition(
-            id = X_POSTS,
-            groupId = GROUP_PLATFORM_ACTIVITY,
-            displayName = "X 게시글",
-            description = "멤버 X 게시글 알림",
-            importance = NotificationManager.IMPORTANCE_DEFAULT,
-            eventTypes = setOf(NotificationEventType.X_POST)
-        ),
-        NotificationChannelDefinition(
             id = YOUTUBE,
             groupId = GROUP_PLATFORM_ACTIVITY,
             displayName = "YouTube 업로드",
             description = "멤버 YouTube 업로드 알림",
             importance = NotificationManager.IMPORTANCE_DEFAULT,
             eventTypes = setOf(NotificationEventType.YOUTUBE_UPLOAD)
-        ),
-        NotificationChannelDefinition(
-            id = OFFICIAL_X,
-            groupId = GROUP_OFFICIAL,
-            displayName = "공식 X",
-            description = "스텔라이브 공식 X 게시글 알림",
-            importance = NotificationManager.IMPORTANCE_DEFAULT,
-            eventTypes = setOf(NotificationEventType.OFFICIAL_X_POST)
         ),
         NotificationChannelDefinition(
             id = OFFICIAL_YOUTUBE,

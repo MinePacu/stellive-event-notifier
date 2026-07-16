@@ -12,9 +12,7 @@ export interface PreferenceResolutionContext {
 
 const realtimeEligibleTypes = new Set<PlatformEventType>([
   "chzzk_live_started",
-  "x_post",
   "youtube_upload",
-  "official_x_post",
   "official_youtube_upload"
 ]);
 

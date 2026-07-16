@@ -21,8 +21,6 @@ export interface MobileConfig {
   unofficialProject: true;
   catalogVersion: string;
   officialYoutubeLiveExcluded: true;
-  xNotificationsEnabled: boolean;
-  xDisabledReason?: string;
   hubCalendarEnabled: boolean;
   foregroundRealtimeEnabled: boolean;
 }

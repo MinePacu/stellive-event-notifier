@@ -384,7 +384,7 @@ FCM_SEND_BURST=1000
 금지:
 
 - Android app에서 Firebase를 backend storage/auth/config로 사용.
-- Android app에서 CHZZK/YouTube/X/Naver protected API 호출.
+- Android app에서 CHZZK/YouTube/Naver protected API 호출.
 - push payload에서 꺼진 설정을 되살리는 client-side override.
 - copied image asset, logo, fan art를 notification에 포함.
 
