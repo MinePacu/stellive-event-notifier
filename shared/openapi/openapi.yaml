@@ -74,6 +74,12 @@ paths:
       parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminServiceAnnouncementWrite" } } } }
       responses: { "200": { description: Announcement updated. } }
+    delete:
+      summary: Soft-delete an announcement while preserving its audit and push history.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses:
+        "200": { description: Announcement deleted and hidden from public and default admin reads. }
+        "404": { description: Announcement is missing or already deleted. }
   /v1/admin/announcements/{id}/publish:
     post:
       summary: Publish a stored announcement and optionally send its FCM notification.

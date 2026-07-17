@@ -41,6 +41,7 @@ export async function registerAdminServiceAnnouncementRoutes(app: FastifyInstanc
   app.get<{ Params: { id: string } }>("/v1/admin/announcements/:id/push-attempts", privileged, async (request) => options.service.listPushAttempts(request.params.id, parseLimit((request.query as Record<string, unknown>).limit)));
   app.get<{ Params: { id: string } }>("/v1/admin/announcements/:id", privileged, async (request, reply) => { const value = await options.service.getById(request.params.id); return value ?? reply.code(404).send({ error: "service_announcement_not_found" }); });
   app.patch<{ Params: { id: string } }>("/v1/admin/announcements/:id", privileged, async (request, reply) => { noStore(reply); try { return await options.service.update(request.params.id, request.body, actor(request)); } catch (error) { return handle(error, reply); } });
+  app.delete<{ Params: { id: string } }>("/v1/admin/announcements/:id", privileged, async (request, reply) => { noStore(reply); try { return await options.service.delete(request.params.id, actor(request)); } catch (error) { return handle(error, reply); } });
   for (const [action, execute] of Object.entries({
     publish: (id: string, request: FastifyRequest) => options.service.publish(id, actor(request)),
     resolve: (id: string, request: FastifyRequest) => options.service.resolve(id, actor(request)),

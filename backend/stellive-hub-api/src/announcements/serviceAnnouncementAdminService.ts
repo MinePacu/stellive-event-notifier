@@ -140,6 +140,14 @@ export class ServiceAnnouncementAdminService {
     return after;
   }
 
+  async delete(id: string, actor: ServiceAnnouncementAdminActor = {}) {
+    const before = await this.existing(id);
+    const after = await this.repository.softDelete(id, this.now(), actor.actorId);
+    await this.audit("delete", actor, before, after);
+    this.options.invalidateCache();
+    return after;
+  }
+
   async bumpAttention(id: string, actor: ServiceAnnouncementAdminActor = {}) {
     const before = await this.existing(id);
     const after = await this.repository.bumpAttention(id, actor.actorId);

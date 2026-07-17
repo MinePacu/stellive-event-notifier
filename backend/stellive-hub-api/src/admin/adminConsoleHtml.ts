@@ -1976,6 +1976,7 @@ export function renderAdminConsoleHtml(): string {
               <button id="announcement-publish" type="button">게시</button>
               <button id="announcement-resolve" type="button">해결 처리</button>
               <button id="announcement-archive" type="button">보관</button>
+              <button id="announcement-delete" type="button">삭제</button>
               <button id="announcement-bump" type="button">다시 확인 필요</button>
               <button id="announcement-resend" type="button">푸시 재발송</button>
             </div>
@@ -3608,6 +3609,16 @@ export function renderAdminConsoleHtml(): string {
       await loadAnnouncementHistory(id);
     }
 
+    async function deleteAnnouncement() {
+      const id = announcementFields.id.value;
+      if (!id) throw new Error("service_announcement_required");
+      const title = announcementFields.title.value.trim() || "제목 없음";
+      if (!window.confirm('"' + title + '" 공지를 삭제할까요?\\n삭제한 공지는 앱과 관리자 목록에서 숨겨집니다.')) return;
+      await adminApi(endpoints.announcements + "/" + encodeURIComponent(id), { method: "DELETE" });
+      clearAnnouncementForm();
+      await refreshAnnouncements();
+    }
+
     document.getElementById("announcement-new").addEventListener("click", clearAnnouncementForm);
     document.getElementById("announcement-refresh").addEventListener("click", function () { return runHubEventUiAction("공지 새로고침", refreshAnnouncements); });
     document.getElementById("announcement-save").addEventListener("click", function () { return runHubEventUiAction("공지 저장", saveAnnouncement); });
@@ -3620,6 +3631,7 @@ export function renderAdminConsoleHtml(): string {
     [["announcement-resolve", "resolve", "해결 처리"], ["announcement-archive", "archive", "보관"], ["announcement-bump", "bump-attention", "attention revision 증가"], ["announcement-resend", "resend", "푸시 재발송"]].forEach(function (entry) {
       document.getElementById(entry[0]).addEventListener("click", function () { return runHubEventUiAction(entry[2], function () { return runAnnouncementAction(entry[1]); }); });
     });
+    document.getElementById("announcement-delete").addEventListener("click", function () { return runHubEventUiAction("공지 삭제", deleteAnnouncement); });
     announcementStateFilter.addEventListener("change", function () { return runHubEventUiAction("공지 필터", refreshAnnouncements); });
 
     document.getElementById("hub-event-refresh").addEventListener("click", function () {

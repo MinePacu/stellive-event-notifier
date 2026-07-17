@@ -229,7 +229,7 @@ export class ServiceAnnouncementRepository {
   async listAdmin(input: { publicationState?: ServiceAnnouncementPublicationState; limit?: number; cursor?: string } = {}) {
     const limit = Math.min(100, Math.max(1, input.limit ?? 50));
     const records = await this.prisma.serviceAnnouncement.findMany({
-      where: stripUndefined({ publicationState: input.publicationState }),
+      where: stripUndefined({ publicationState: input.publicationState, deletedAt: null }),
       orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
       take: limit + 1,
       cursor: input.cursor ? { id: input.cursor } : undefined,
@@ -269,6 +269,13 @@ export class ServiceAnnouncementRepository {
   async bumpAttention(id: string, actorId?: string): Promise<AdminServiceAnnouncement> {
     const record = await this.prisma.serviceAnnouncement.update({ where: { id }, data: {
       attentionRevision: { increment: 1 }, revision: { increment: 1 }, updatedBy: actorId,
+    } });
+    return toAdmin(record);
+  }
+
+  async softDelete(id: string, deletedAt: Date, actorId?: string): Promise<AdminServiceAnnouncement> {
+    const record = await this.prisma.serviceAnnouncement.update({ where: { id }, data: {
+      deletedAt, updatedBy: actorId, revision: { increment: 1 },
     } });
     return toAdmin(record);
   }

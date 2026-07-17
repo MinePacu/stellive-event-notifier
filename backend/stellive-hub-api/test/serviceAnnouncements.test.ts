@@ -1,5 +1,8 @@
+import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
+import { renderAdminConsoleHtml } from "../src/admin/adminConsoleHtml.js";
 import BootstrapService from "../src/mobile/bootstrapService.js";
+import { loadEnv } from "../src/config/env.js";
 import { ServiceAnnouncementAdminService } from "../src/announcements/serviceAnnouncementAdminService.js";
 import { ServiceAnnouncementReadService } from "../src/announcements/serviceAnnouncementReadService.js";
 import {
@@ -8,6 +11,7 @@ import {
   type AdminServiceAnnouncement,
   type ServiceAnnouncementRecord,
 } from "../src/announcements/serviceAnnouncementRepository.js";
+import { registerAdminServiceAnnouncementRoutes } from "../src/routes/adminServiceAnnouncementRoutes.js";
 
 const now = new Date("2026-07-16T09:00:00.000Z");
 
@@ -30,6 +34,7 @@ describe("service announcement public policy", () => {
     expect(isAnnouncementVisibleToClient(record({ expiresAt: new Date("2026-07-16T08:59:59Z") }), { platform: "android", now })).toBe(false);
     expect(isAnnouncementVisibleToClient(record({ publicationState: "archived" }), { platform: "android", now })).toBe(false);
     expect(isAnnouncementVisibleToClient(record({ publicationState: "archived" }), { platform: "android", includeArchived: true, now })).toBe(true);
+    expect(isAnnouncementVisibleToClient(record({ deletedAt: now }), { platform: "android", now })).toBe(false);
     expect(isAnnouncementVisibleToClient(record({ targetPlatforms: ["ios"] }), { platform: "android", now })).toBe(false);
     expect(isAnnouncementVisibleToClient(record({ minimumAppVersion: "2.1.0" }), { platform: "android", appVersion: "2.0.9", now })).toBe(false);
     expect(isAnnouncementVisibleToClient(record({ maximumAppVersion: "2.1.0" }), { platform: "android", appVersion: "2.2.0", now })).toBe(false);
@@ -59,6 +64,7 @@ class MemoryAnnouncementRepository {
   async update(_id: string, input: Record<string, unknown>) { this.value = { ...this.value, ...input, revision: this.value.revision + 1 } as AdminServiceAnnouncement; return this.value; }
   async transition(_id: string, data: Record<string, unknown>) { this.value = { ...this.value, ...data, revision: this.value.revision + 1 } as AdminServiceAnnouncement; return this.value; }
   async bumpAttention() { this.value = { ...this.value, attentionRevision: this.value.attentionRevision + 1, revision: this.value.revision + 1 }; return this.value; }
+  async softDelete(_id: string, deletedAt: Date, actorId?: string) { this.value = { ...this.value, deletedAt, updatedBy: actorId ?? null, revision: this.value.revision + 1 }; return this.value; }
   async writeAudit(input: { action: string }) { this.audits.push(input.action); }
   async hasSuccessfulPush(_id: string, revision: number) { return this.attempts.some((item) => item.attentionRevision === revision && item.status === "sent"); }
   async createPushAttempt(input: { attentionRevision: number }) { const id = `attempt-${this.attempts.length + 1}`; this.attempts.push({ id, status: "sending", attentionRevision: input.attentionRevision }); return id; }
@@ -93,6 +99,55 @@ describe("service announcement publish flow", () => {
     await service.bumpAttention("notice-1", { actorId: "admin" });
     expect(repository.value.attentionRevision).toBe(2);
     expect(repository.audits).toContain("bump_attention");
+  });
+
+  it("soft-deletes a selected announcement, audits it, and invalidates public summaries", async () => {
+    const repository = new MemoryAnnouncementRepository();
+    const invalidateCache = vi.fn();
+    const service = new ServiceAnnouncementAdminService({
+      repository: repository as never,
+      sender: { send: vi.fn() },
+      invalidateCache,
+      now: () => now,
+    });
+
+    const deleted = await service.delete("notice-1", { actorId: "admin" });
+
+    expect(deleted.deletedAt).toEqual(now);
+    expect(deleted.revision).toBe(2);
+    expect(repository.audits).toContain("delete");
+    expect(invalidateCache).toHaveBeenCalledOnce();
+    await expect(service.delete("notice-1", { actorId: "admin" })).rejects.toThrow("service_announcement_not_found");
+  });
+});
+
+describe("service announcement admin deletion", () => {
+  it("renders a delete action for the selected announcement", () => {
+    const html = renderAdminConsoleHtml();
+    expect(html).toContain('id="announcement-delete"');
+    expect(html).toContain('method: "DELETE"');
+  });
+
+  it("dispatches authenticated DELETE requests to the admin service", async () => {
+    const remove = vi.fn(async () => ({ id: "notice-1", deletedAt: now.toISOString() }));
+    const app = Fastify();
+    await registerAdminServiceAnnouncementRoutes(app, {
+      env: loadEnv({ DATABASE_URL: "postgresql://test:test@localhost:5432/test", ADMIN_CONSOLE_ENABLED: true, ADMIN_CONSOLE_TOKEN: "admin-token" }),
+      service: { delete: remove } as never,
+    });
+
+    const unauthorized = await app.inject({ method: "DELETE", url: "/v1/admin/announcements/notice-1" });
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/v1/admin/announcements/notice-1",
+      headers: { authorization: "Bearer admin-token" },
+    });
+    await app.close();
+
+    expect(unauthorized.statusCode).toBe(401);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ id: "notice-1" });
+    expect(remove).toHaveBeenCalledWith("notice-1", { actorId: "admin", reason: undefined, sendPush: undefined });
   });
 });
 
