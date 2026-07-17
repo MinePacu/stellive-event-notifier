@@ -28,8 +28,10 @@ Do not read this file for merge-only work unless a conflict or failed check dire
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/PushTokenSyncer.swift` - APNs/FCM token sync logic with the backend.
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/RealtimeStreamClient.swift` - Foreground realtime stream client.
 - `ios/StelliveHubiOS/StelliveHubiOS/Services/ServerHubStore.swift` - Server-backed store that maps backend DTOs into app state.
+- `ios/StelliveHubiOS/StelliveHubiOS/Services/AnnouncementReadStore.swift` - Announcement DTOs, read/badge/home/deep-link policy, and UserDefaults-backed local read state.
 - `ios/StelliveHubiOS/StelliveHubiOS/StelliveHubiOS.entitlements` - Main iOS app entitlements.
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/ContentView.swift` - Root SwiftUI view and tab/navigation composition.
+- `ios/StelliveHubiOS/StelliveHubiOS/Views/AnnouncementsView.swift` - Announcement bell label, home section, list, and detail screens.
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HistoryView.swift` - Notification history screen.
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HomeView.swift` - Home summary screen.
 - `ios/StelliveHubiOS/StelliveHubiOS/Views/HubEventDetailView.swift` - Hub event detail screen.

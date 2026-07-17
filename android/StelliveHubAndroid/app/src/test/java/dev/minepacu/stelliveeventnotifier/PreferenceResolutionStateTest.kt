@@ -102,7 +102,6 @@ class PreferenceResolutionStateTest {
         assertFalse(settings.generationEnabled.getValue("gen4-upcoming"))
         assertEquals(NotificationPlatform.entries.toSet(), settings.platformEnabled.keys)
         assertEquals(NotificationEventType.entries.toSet(), settings.eventTypeEnabled.keys)
-        assertTrue(settings.eventTypeEnabled.getValue(NotificationEventType.OFFICIAL_X_POST))
         assertTrue(settings.eventTypeEnabled.getValue(NotificationEventType.OFFICIAL_YOUTUBE_UPLOAD))
         assertFalse(settings.eventTypeEnabled.getValue(NotificationEventType.YOUTUBE_LIVE_SCHEDULED))
         assertFalse(settings.eventTypeEnabled.getValue(NotificationEventType.YOUTUBE_LIVE_STARTED))

@@ -1,14 +1,13 @@
 export type CatalogRole = "member" | "representative" | "official_channel" | "placeholder";
 export type ActiveStatus = "active" | "upcoming";
 export type GenerationType = "generation" | "gamja" | "official" | "upcoming";
-export type PlatformSource = "x" | "naver_cafe" | "chzzk" | "youtube" | "hub_event";
+export type PlatformSource = "naver_cafe" | "chzzk" | "youtube" | "hub_event";
 export type DeliveryMode = "standard" | "realtime_best_effort";
 export type NotificationDeliveryLevel = "immediate_push" | "summary_push" | "in_app_history_only";
 export type PushPriority = "normal" | "high";
 export type TapAction = "open_app" | "open_platform";
 
 export type PlatformEventType =
-  | "x_post"
   | "cafe_post"
   | "chzzk_live_started"
   | "chzzk_live_ended"
@@ -18,7 +17,6 @@ export type PlatformEventType =
   | "youtube_live_scheduled"
   | "youtube_live_started"
   | "youtube_live_ended"
-  | "official_x_post"
   | "official_youtube_upload"
   | "event_announced"
   | "event_sales_open"
@@ -38,7 +36,7 @@ export type NotificationPreferenceScope =
   | "member_event_type";
 
 export interface Avatar {
-  preferredSource: "permission_granted" | "chzzk_api" | "youtube_api" | "x_api" | "placeholder";
+  preferredSource: "permission_granted" | "chzzk_api" | "youtube_api" | "placeholder";
   imageUrl?: string;
   sourcePlatform?: PlatformSource;
   sourceProfileUrl?: string;
@@ -66,7 +64,6 @@ export interface Member {
     chzzkChannelId?: string | null;
     youtubeChannelId?: string | null;
     youtubeHandle?: string | null;
-    xHandle?: string | null;
     naverCafeQuery?: string | null;
     externalUrls: Record<string, string>;
   };
@@ -368,6 +365,55 @@ export interface HubEventsSummary {
   upcomingCount: number;
   closingSoonCount: number;
   preview: HubEvent[];
+}
+
+export type ServiceAnnouncementType = "general" | "incident" | "maintenance" | "version_update";
+export type ServiceAnnouncementSeverity = "info" | "important" | "critical";
+export type ServiceAnnouncementPublicationState = "draft" | "published" | "archived";
+export type ServiceAnnouncementPlatform = "android" | "ios";
+
+export interface ServiceAnnouncement {
+  id: string;
+  type: ServiceAnnouncementType;
+  severity: ServiceAnnouncementSeverity;
+  title: string;
+  summary: string;
+  body: string;
+  isPinned: boolean;
+  targetPlatforms: ServiceAnnouncementPlatform[];
+  minimumAppVersion?: string;
+  maximumAppVersion?: string;
+  appDeepLink?: string;
+  externalUrl?: string;
+  actionLabel?: string;
+  publishedAt: string;
+  expiresAt?: string;
+  resolvedAt?: string;
+  archivedAt?: string;
+  attentionRevision: number;
+  revision: number;
+  updatedAt: string;
+}
+
+export interface AnnouncementSummaryItem {
+  id: string;
+  attentionRevision: number;
+  publishedAt: string;
+  severity: ServiceAnnouncementSeverity;
+  isPinned: boolean;
+}
+
+export interface AnnouncementsSummary {
+  activeCount: number;
+  items: AnnouncementSummaryItem[];
+  pinned?: ServiceAnnouncement;
+  generatedAt: string;
+}
+
+export interface ServiceAnnouncementListResponse {
+  items: ServiceAnnouncement[];
+  nextCursor?: string | null;
+  generatedAt: string;
 }
 
 export interface HubCalendarEntry {

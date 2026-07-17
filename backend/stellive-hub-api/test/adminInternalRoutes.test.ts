@@ -436,7 +436,7 @@ describe("internal admin routes", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ source: "x", status: "disabled", reason: "x_no_free_official_api" })
+        expect.objectContaining({ source: "youtube", status: "disabled", reason: "youtube_websub_disabled" })
       ])
     );
   });
@@ -447,9 +447,9 @@ describe("internal admin routes", () => {
         getState: async () => null,
         listAdapterHealth: async () => [
           {
-            source: "x",
+            source: "naver_cafe",
             status: "disabled",
-            reason: "fake_x_health",
+            reason: "fake_naver_health",
             lastCheckedAt: "2026-06-07T00:00:00.000Z"
           }
         ]
@@ -466,9 +466,9 @@ describe("internal admin routes", () => {
     expect(response.json()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          source: "x",
+          source: "naver_cafe",
           status: "disabled",
-          reason: "fake_x_health",
+          reason: "fake_naver_health",
           lastCheckedAt: "2026-06-07T00:00:00.000Z"
         })
       ])
@@ -501,11 +501,10 @@ describe("internal admin routes", () => {
       expect.arrayContaining([
         expect.objectContaining({ source: "youtube", status: "disabled" }),
         expect.objectContaining({ source: "chzzk", status: "enabled", reason: "chzzk_live_api_verified" }),
-        expect.objectContaining({ source: "x", status: "disabled" }),
         expect.objectContaining({ source: "naver_cafe", status: "disabled" })
       ])
     );
-    expect(response.json()).toHaveLength(4);
+    expect(response.json()).toHaveLength(3);
   });
 
   it("does not register the optional platform API state route without a distinct contract", async () => {
@@ -1087,7 +1086,8 @@ describe("admin console routes", () => {
 
     expect(response.statusCode).toBe(401);
     expect(response.headers["content-type"]).toContain("text/html");
-    expect(response.headers["set-cookie"]).toBeUndefined();
+    expect(response.headers["set-cookie"]).toContain("stellive_admin_language=en");
+    expect(response.headers["set-cookie"]).not.toContain(`${adminSessionCookieName}=`);
     expect(response.body).toContain("Invalid admin token.");
     expect(response.body).not.toContain("admin-token");
   });
@@ -1109,7 +1109,7 @@ describe("admin console routes", () => {
     });
     await app.close();
 
-    const setCookie = response.headers["set-cookie"];
+    const setCookie = String(response.headers["set-cookie"]);
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toBe("/admin");
     expect(response.headers["cache-control"]).toBe("no-store");
@@ -1143,7 +1143,7 @@ describe("admin console routes", () => {
     await app.close();
 
     expect(response.statusCode).toBe(303);
-    expect(response.headers["set-cookie"]).not.toEqual(expect.stringContaining("Secure"));
+    expect(String(response.headers["set-cookie"])).not.toContain("Secure");
   });
 
   it("adds Secure to the session cookie when ADMIN_CONSOLE_COOKIE_SECURE is enabled", async () => {
@@ -1165,7 +1165,7 @@ describe("admin console routes", () => {
     await app.close();
 
     expect(response.statusCode).toBe(303);
-    expect(response.headers["set-cookie"]).toEqual(expect.stringContaining("Secure"));
+    expect(String(response.headers["set-cookie"])).toContain("Secure");
   });
 
   it("serves the admin console with a valid admin session cookie", async () => {
@@ -1214,10 +1214,12 @@ describe("admin console routes", () => {
     expect(response.headers.location).toBe("/admin/login");
     expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.headers.pragma).toBe("no-cache");
-    expect(response.headers["set-cookie"]).toEqual(expect.stringContaining(`${adminSessionCookieName}=`));
-    expect(response.headers["set-cookie"]).toEqual(expect.stringContaining("Max-Age=0"));
-    expect(response.headers["set-cookie"]).toEqual(expect.stringContaining("HttpOnly"));
-    expect(response.headers["set-cookie"]).toEqual(expect.stringContaining("SameSite=Strict"));
+    expect(String(response.headers["set-cookie"])).toContain(`${adminSessionCookieName}=`);
+    expect(String(response.headers["set-cookie"])).toContain("Max-Age=0");
+    expect(String(response.headers["set-cookie"])).toContain("HttpOnly");
+    expect(String(response.headers["set-cookie"])).toContain("SameSite=Strict");
+    expect(String(response.headers["set-cookie"])).toContain("stellive_admin_language=en");
+    expect(String(response.headers["set-cookie"])).toContain("Max-Age=31536000");
   });
 
   it("does not make non-admin form requests permissive", async () => {

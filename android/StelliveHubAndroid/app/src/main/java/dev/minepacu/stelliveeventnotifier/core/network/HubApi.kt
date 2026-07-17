@@ -44,6 +44,22 @@ interface HubApi {
     @GET("v1/hub-events/{id}")
     suspend fun hubEvent(@Path("id") id: String): HubEventDto
 
+    @GET("v1/announcements")
+    suspend fun announcements(
+        @Query("platform") platform: String = "android",
+        @Query("appVersion") appVersion: String? = null,
+        @Query("includeArchived") includeArchived: Boolean = false,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int = 20,
+    ): ServiceAnnouncementListResponseDto
+
+    @GET("v1/announcements/{id}")
+    suspend fun announcement(
+        @Path("id") id: String,
+        @Query("platform") platform: String = "android",
+        @Query("appVersion") appVersion: String? = null,
+    ): ServiceAnnouncementDto
+
     @GET("v1/hub-events/calendar")
     suspend fun hubEventsCalendar(
         @Query("from") from: String,

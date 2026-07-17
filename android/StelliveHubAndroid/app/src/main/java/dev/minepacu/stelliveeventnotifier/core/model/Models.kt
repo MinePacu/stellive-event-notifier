@@ -21,13 +21,11 @@ enum class SongType(val apiValue: String, val displayName: String) {
 enum class NotificationPlatform(val displayName: String) {
     CHZZK("CHZZK"),
     YOUTUBE("YouTube"),
-    X("X"),
     HUB_EVENT("굿즈/행사"),
     NAVER_CAFE("Naver Cafe")
 }
 
 enum class NotificationEventType(val wireName: String, val displayName: String) {
-    X_POST("x_post", "X 게시글"),
     CAFE_POST("cafe_post", "카페 게시글"),
     CHZZK_LIVE_STARTED("chzzk_live_started", "CHZZK 방송 시작"),
     CHZZK_LIVE_ENDED("chzzk_live_ended", "CHZZK 방송 종료"),
@@ -37,7 +35,6 @@ enum class NotificationEventType(val wireName: String, val displayName: String) 
     YOUTUBE_LIVE_SCHEDULED("youtube_live_scheduled", "YouTube 라이브 예정"),
     YOUTUBE_LIVE_STARTED("youtube_live_started", "YouTube 라이브 시작"),
     YOUTUBE_LIVE_ENDED("youtube_live_ended", "YouTube 라이브 종료"),
-    OFFICIAL_X_POST("official_x_post", "공식 X 게시글"),
     OFFICIAL_YOUTUBE_UPLOAD("official_youtube_upload", "공식 YouTube 업로드"),
     EVENT_ANNOUNCED("event_announced", "굿즈/행사 공개"),
     EVENT_SALES_OPEN("event_sales_open", "예약/판매 시작"),
@@ -157,7 +154,6 @@ data class HubMember(
     val isPerson: Boolean,
     val chzzkChannelId: String? = null,
     val youtubeHandle: String? = null,
-    val xHandle: String? = null,
     val isLive: Boolean = false,
     val notificationEnabled: Boolean = true,
     val realtimeEnabled: Boolean = false,
@@ -367,6 +363,58 @@ data class NotificationHistoryItem(
     val deliveryLatencyMs: Long? = null
 )
 
+enum class ServiceAnnouncementType(val apiValue: String, val displayName: String) {
+    GENERAL("general", "일반 안내"), INCIDENT("incident", "장애 및 복구"),
+    MAINTENANCE("maintenance", "예정된 점검"), VERSION_UPDATE("version_update", "앱 업데이트");
+}
+
+enum class ServiceAnnouncementSeverity(val apiValue: String, val displayName: String) {
+    INFO("info", "정보"), IMPORTANT("important", "중요"), CRITICAL("critical", "긴급");
+}
+
+data class ServiceAnnouncement(
+    val id: String,
+    val type: ServiceAnnouncementType,
+    val severity: ServiceAnnouncementSeverity,
+    val title: String,
+    val summary: String,
+    val body: String,
+    val isPinned: Boolean,
+    val targetPlatforms: List<String>,
+    val minimumAppVersion: String? = null,
+    val maximumAppVersion: String? = null,
+    val appDeepLink: String? = null,
+    val externalUrl: String? = null,
+    val actionLabel: String? = null,
+    val publishedAt: java.time.Instant,
+    val expiresAt: java.time.Instant? = null,
+    val resolvedAt: java.time.Instant? = null,
+    val archivedAt: java.time.Instant? = null,
+    val attentionRevision: Int,
+    val revision: Int,
+    val updatedAt: java.time.Instant,
+)
+
+data class AnnouncementSummaryItem(
+    val id: String,
+    val attentionRevision: Int,
+    val publishedAt: java.time.Instant,
+    val severity: ServiceAnnouncementSeverity,
+    val isPinned: Boolean,
+)
+
+data class AnnouncementsSummary(
+    val activeCount: Int = 0,
+    val items: List<AnnouncementSummaryItem> = emptyList(),
+    val pinned: ServiceAnnouncement? = null,
+    val generatedAt: java.time.Instant? = null,
+)
+
+data class ServiceAnnouncementListResult(
+    val items: List<ServiceAnnouncement>,
+    val nextCursor: String? = null,
+)
+
 private fun defaultGenerationEnabled(): Map<String, Boolean> = linkedMapOf(
     "gen1" to true,
     "gen2" to true,
@@ -395,13 +443,11 @@ private fun defaultMemberEnabled(): Map<String, Boolean> = linkedMapOf(
 private fun defaultPlatformEnabled(): Map<NotificationPlatform, Boolean> = linkedMapOf(
     NotificationPlatform.CHZZK to true,
     NotificationPlatform.YOUTUBE to true,
-    NotificationPlatform.X to true,
     NotificationPlatform.HUB_EVENT to true,
     NotificationPlatform.NAVER_CAFE to false
 )
 
 private fun defaultEventTypeEnabled(): Map<NotificationEventType, Boolean> = linkedMapOf(
-    NotificationEventType.X_POST to true,
     NotificationEventType.CAFE_POST to false,
     NotificationEventType.CHZZK_LIVE_STARTED to true,
     NotificationEventType.CHZZK_LIVE_ENDED to true,
@@ -411,7 +457,6 @@ private fun defaultEventTypeEnabled(): Map<NotificationEventType, Boolean> = lin
     NotificationEventType.YOUTUBE_LIVE_SCHEDULED to false,
     NotificationEventType.YOUTUBE_LIVE_STARTED to false,
     NotificationEventType.YOUTUBE_LIVE_ENDED to false,
-    NotificationEventType.OFFICIAL_X_POST to true,
     NotificationEventType.OFFICIAL_YOUTUBE_UPLOAD to true,
     NotificationEventType.EVENT_ANNOUNCED to true,
     NotificationEventType.EVENT_SALES_OPEN to true,

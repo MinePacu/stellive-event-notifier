@@ -97,10 +97,6 @@ OCI 서버-앱 CHZZK 테스트:
 6. 승인된 주기로 platform scheduler 또는 cron이 internal route를 호출하게 한다.
 7. realtime fan-out을 넓히기 전 adapter health, live-status cache freshness, dedupe count, notification job volume을 모니터링한다.
 
-## X
-
-X 연동은 no-paid-API 경로가 확인될 때만 설계한다. 무료 공식 API 접근이 불가능하거나 rate limit상 유용하지 않으면 feature flag 뒤에 비활성으로 둔다. scraping 또는 login-cookie 대안은 구현하지 않는다.
-
 ## YouTube
 
 Stellive official YouTube `UC2b4WRE5BZ6SIUWBeJU8rwg` / `@stellive_official`은 MVP에서 업로드 알림만 지원한다. 공식 YouTube live 예정/시작/종료 알림은 수집하지 않는다.

@@ -28,6 +28,8 @@ import dev.minepacu.stelliveeventnotifier.core.network.SongFilterCountDto
 import dev.minepacu.stelliveeventnotifier.core.network.SongListResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.SongThumbnailDto
 import dev.minepacu.stelliveeventnotifier.core.network.YoutubePremiereMetadataDto
+import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementDto
+import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementListResponseDto
 import dev.minepacu.stelliveeventnotifier.feature.home.MockHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.home.ServerHubRepository
 import java.time.LocalDate
@@ -392,8 +394,6 @@ class ServerHubRepositoryTest {
                         unofficialProject = true,
                         catalogVersion = "seed-2026-06-01",
                         officialYoutubeLiveExcluded = true,
-                        xNotificationsEnabled = false,
-                        xDisabledReason = "x_notifications_dropped_for_mvp",
                         hubCalendarEnabled = true,
                     foregroundRealtimeEnabled = false,
                 ),
@@ -501,6 +501,12 @@ class ServerHubRepositoryTest {
                     generatedAt = "2026-06-11T03:00:00.000Z",
                 ),
             )
+
+        override suspend fun announcements(cursor: String?): HubNetworkResult<ServiceAnnouncementListResponseDto> =
+            HubNetworkResult.Success(ServiceAnnouncementListResponseDto())
+
+        override suspend fun announcement(id: String): HubNetworkResult<ServiceAnnouncementDto> =
+            HubNetworkResult.Failure(code = "not_supported")
 
         override suspend fun songs(
             generationId: String?,

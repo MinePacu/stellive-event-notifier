@@ -21,6 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import dev.minepacu.stelliveeventnotifier.feature.announcements.AnnouncementDeepLinkPolicy
 
 class StelliveFirebaseMessagingService : FirebaseMessagingService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -37,6 +38,7 @@ class StelliveFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
+        if (showServiceAnnouncement(message)) return
         val payload = NotificationPayload.fromData(message.data)
         if (payload == null) {
             Log.d(TAG, "push_received result=ignored reason=invalid_payload")
@@ -63,6 +65,35 @@ class StelliveFirebaseMessagingService : FirebaseMessagingService() {
                 .build()
         )
         Log.d(TAG, "push_received eventId=${payload.eventId} eventType=${payload.eventType.wireName} channel=$channelId result=shown")
+    }
+
+    private fun showServiceAnnouncement(message: RemoteMessage): Boolean {
+        val deepLink = message.data["appDeepLink"] ?: return false
+        val announcementId = AnnouncementDeepLinkPolicy.idFromAppDeepLink(deepLink) ?: return false
+        if (!canPostNotifications()) return true
+        val title = message.notification?.title ?: "서비스 공지"
+        val body = message.notification?.body.orEmpty()
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(deepLink), this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            announcementId.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        NotificationManagerCompat.from(this).notify(
+            announcementId.hashCode(),
+            NotificationCompat.Builder(this, NotificationChannels.SERVICE_ANNOUNCEMENTS)
+                .setSmallIcon(R.drawable.ic_launcher_placeholder)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+                .build(),
+        )
+        return true
     }
 
     private fun defaultHubBaseUrl(): String = BuildConfig.HUB_BASE_URL

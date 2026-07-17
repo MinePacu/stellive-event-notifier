@@ -36,13 +36,12 @@ data class SongListQueryKey(
     val memberMatchMode: SongMemberMatchMode,
     val participation: SongParticipation,
     val libraryId: String,
-    val statusId: String,
     val sortId: String,
     val query: String,
 ) {
-    constructor(generationId: String, type: String, memberId: String, libraryId: String, statusId: String, sortId: String, query: String) : this(
+    constructor(generationId: String, type: String, memberId: String, libraryId: String, sortId: String, query: String) : this(
         generationId, type, if (memberId.isBlank() || memberId == "all") emptyList() else listOf(memberId),
-        SongMemberMatchMode.ANY, SongParticipation.ANY, libraryId, statusId, sortId, query,
+        SongMemberMatchMode.ANY, SongParticipation.ANY, libraryId, sortId, query,
     )
 }
 
@@ -210,6 +209,8 @@ object MainUiPolicy {
         "song_search" -> "노래 검색"
         "song_member_filter" -> "노래 멤버 선택"
         "history" -> "기록"
+        "announcements" -> "공지사항"
+        "announcement_detail" -> "공지사항"
         "settings" -> "설정"
         "settings_delivery" -> "알림 수신 방식"
         "settings_targets" -> "대상별 알림"
@@ -229,6 +230,8 @@ object MainUiPolicy {
         "song_search" -> "제목 또는 멤버"
         "song_member_filter" -> "노래 목록을 멤버별로 좁혀 봅니다"
         "history" -> "최근 받은 알림과 제외된 항목"
+        "announcements" -> "앱 서비스 운영 안내"
+        "announcement_detail" -> "앱 서비스 운영 안내"
         "settings" -> ""
         "settings_delivery" -> "알림 속도와 방해 금지 시간"
         "settings_targets" -> "알림 받을 대상 선택"
@@ -304,10 +307,6 @@ object MainUiPolicy {
 
     fun songFavoriteIdentifier(song: SongCatalogItem): String? =
         SongIdentity.identifier(song)
-
-    fun songStatusFilters(): List<SongFilterOption> = listOf(
-        SongFilterOption("all", "전체"), SongFilterOption("new", "새 노래"),
-    )
 
     fun songMatchesLibrary(song: SongCatalogItem, selectedLibraryId: String, favorites: Set<String>): Boolean =
         selectedLibraryId != "favorites" || songFavoriteIdentifier(song) in favorites
@@ -842,7 +841,7 @@ object MainUiPolicy {
         SettingsHubRow(
             screenId = "platforms",
             title = "플랫폼별 알림",
-            body = "CHZZK, YouTube, X, 굿즈/행사",
+            body = "CHZZK, YouTube, 굿즈/행사",
             value = "$enabledPlatforms/$totalPlatforms"
         ),
         SettingsHubRow(

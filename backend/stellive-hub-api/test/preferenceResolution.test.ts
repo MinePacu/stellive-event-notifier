@@ -177,17 +177,29 @@ describe("PreferenceResolutionService", () => {
     expect(result.reason).toBe("rate_limited");
   });
 
-  it("mock event ingestion drops unsupported member events before delivery attempts", async () => {
+  it("mock event ingestion drops official YouTube live events before delivery attempts", async () => {
     const app = await buildApp();
     const response = await app.inject({
       method: "POST",
       url: "/v1/dev/mock-events",
-      payload: { memberId: "stellive-official", generationId: "official", source: "x", type: "x_post" }
+      payload: { memberId: "stellive-official", generationId: "official", source: "youtube", type: "youtube_live_started" }
     });
     await app.close();
 
     expect(response.statusCode).toBe(202);
-    expect(response.json()).toEqual({ dropped: true, reason: "unsupported_event_for_member" });
+    expect(response.json()).toEqual({ dropped: true, reason: "official_youtube_live_excluded" });
+  });
+
+  it("rejects removed X event inputs", async () => {
+    const app = await buildApp();
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/dev/mock-events",
+      payload: { memberId: "ayatsuno-yuni", generationId: "gen1", source: "x", type: "x_post" }
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(400);
   });
 });
 

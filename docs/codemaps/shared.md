@@ -12,3 +12,4 @@ Do not read this file for merge-only work unless a conflict or failed check dire
 - `shared/schemas/domain.ts` - Shared TypeScript domain types and schema helpers for catalog entries, events, live status, preferences, and hub events.
 - `shared/schemas/mobileApi.ts` - Shared mobile API DTO definitions for app bootstrap and client-facing backend responses.
 
+Service announcements are additive `mobile-api-v1` contracts: public DTOs live in `domain.ts`, while bootstrap exposes only optional `announcementsSummary`.

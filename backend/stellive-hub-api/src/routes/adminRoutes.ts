@@ -7,6 +7,9 @@ import {
   shouldEnableAdminConsole
 } from "../admin/adminAuth.js";
 import { renderAdminConsoleHtml } from "../admin/adminConsoleHtml.js";
+import { translateAdmin, type AdminLocale } from "../admin/adminI18n.js";
+import { renderAdminLanguageHtml } from "../admin/adminLanguageHtml.js";
+import { createAdminLanguageCookie, resolveAdminLocale } from "../admin/adminLocale.js";
 import {
   renderAdminThemeBehaviorScript,
   renderAdminThemeControl,
@@ -58,6 +61,8 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       return reply.code(503).send({ error: "admin_console_token_missing" });
     }
 
+    const locale = resolveAdminRequestLocale(request);
+    applyAdminLocaleHeaders(request, reply, options.env, locale);
     const authorizationHeader = readAuthorizationHeader(request.headers.authorization);
     if (authorizationHeader) {
       const auth = authenticateBearerToken(authorizationHeader, options.env.ADMIN_CONSOLE_TOKEN);
@@ -66,7 +71,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       }
 
       applyAdminConsoleHeaders(reply);
-      return reply.type("text/html; charset=utf-8").send(renderAdminConsoleHtml());
+      return reply.type("text/html; charset=utf-8").send(renderAdminConsoleHtml(locale));
     }
 
     const sessionAuth = authenticateAdminSessionCookie(readHeader(request.headers.cookie), options.env.ADMIN_CONSOLE_TOKEN);
@@ -75,10 +80,10 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     }
 
     applyAdminConsoleHeaders(reply);
-    return reply.type("text/html; charset=utf-8").send(renderAdminConsoleHtml());
+    return reply.type("text/html; charset=utf-8").send(renderAdminConsoleHtml(locale));
   });
 
-  app.get("/admin/login", privilegedRouteOptions, async (_request: FastifyRequest, reply: FastifyReply) => {
+  app.get("/admin/login", privilegedRouteOptions, async (request: FastifyRequest, reply: FastifyReply) => {
     if (!options.env.ADMIN_CONSOLE_ENABLED) {
       return reply.callNotFound();
     }
@@ -87,8 +92,10 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       return reply.code(503).send({ error: "admin_console_token_missing" });
     }
 
+    const locale = resolveAdminRequestLocale(request);
+    applyAdminLocaleHeaders(request, reply, options.env, locale);
     applyAdminConsoleHeaders(reply);
-    return reply.type("text/html; charset=utf-8").send(renderAdminLoginHtml());
+    return reply.type("text/html; charset=utf-8").send(renderAdminLoginHtml(locale));
   });
 
   app.post("/admin/login", privilegedRouteOptions, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -100,11 +107,13 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       return reply.code(503).send({ error: "admin_console_token_missing" });
     }
 
+    const locale = resolveAdminRequestLocale(request);
     const token = readLoginToken(request.body);
     const auth = authenticateBearerToken(token ? `Bearer ${token}` : undefined, options.env.ADMIN_CONSOLE_TOKEN);
     if (!auth.ok) {
       applyAdminConsoleHeaders(reply);
-      return reply.code(401).type("text/html; charset=utf-8").send(renderAdminLoginHtml("Invalid admin token."));
+      applyAdminLocaleHeaders(request, reply, options.env, locale);
+      return reply.code(401).type("text/html; charset=utf-8").send(renderAdminLoginHtml(locale, translateAdmin(locale, "error.invalidAdminToken")));
     }
 
     const cookie = createAdminSessionCookie({
@@ -117,7 +126,8 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
 
     return reply
       .code(303)
-      .header("Set-Cookie", cookie.header)
+      .header("Set-Cookie", [cookie.header, createAdminLanguageCookie(locale, isSecureRequest(request, options.env.ADMIN_CONSOLE_COOKIE_SECURE))])
+      .header("Content-Language", locale)
       .header("Location", "/admin")
       .headers(adminConsoleNoStoreHeaders())
       .send();
@@ -132,9 +142,12 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       return reply.code(503).send({ error: "admin_console_token_missing" });
     }
 
+    const locale = resolveAdminRequestLocale(request);
+    const secure = isSecureRequest(request, options.env.ADMIN_CONSOLE_COOKIE_SECURE);
     return reply
       .code(303)
-      .header("Set-Cookie", clearAdminSessionCookie(isSecureRequest(request, options.env.ADMIN_CONSOLE_COOKIE_SECURE)))
+      .header("Set-Cookie", [clearAdminSessionCookie(secure), createAdminLanguageCookie(locale, secure)])
+      .header("Content-Language", locale)
       .header("Location", "/admin/login")
       .headers(adminConsoleNoStoreHeaders())
       .send();
@@ -161,6 +174,21 @@ function applyAdminConsoleHeaders(reply: FastifyReply) {
   reply.headers(adminConsoleNoStoreHeaders());
   reply.header("X-Frame-Options", "DENY");
   reply.header("Content-Security-Policy", adminConsoleContentSecurityPolicy);
+}
+
+function resolveAdminRequestLocale(request: FastifyRequest): AdminLocale {
+  const queryStart = request.url.indexOf("?");
+  const queryLanguage = queryStart >= 0 ? new URLSearchParams(request.url.slice(queryStart + 1)).get("lang") : undefined;
+  return resolveAdminLocale({
+    queryLanguage,
+    cookieHeader: readHeader(request.headers.cookie),
+    acceptLanguage: readHeader(request.headers["accept-language"])
+  });
+}
+
+function applyAdminLocaleHeaders(request: FastifyRequest, reply: FastifyReply, env: AppEnv, locale: AdminLocale) {
+  reply.header("Content-Language", locale);
+  reply.header("Set-Cookie", createAdminLanguageCookie(locale, isSecureRequest(request, env.ADMIN_CONSOLE_COOKIE_SECURE)));
 }
 
 function adminConsoleNoStoreHeaders(): Record<string, string> {
@@ -190,15 +218,17 @@ function isSecureRequest(request: FastifyRequest, forceSecureCookie: boolean): b
   return forceSecureCookie || request.protocol === "https";
 }
 
-function renderAdminLoginHtml(errorMessage?: string): string {
+export function renderAdminLoginHtml(locale: AdminLocale = "en", errorMessage?: string): string {
+  const t = (key: Parameters<typeof translateAdmin>[1]) => translateAdmin(locale, key);
+  const themeLabels = { label: t("theme.label"), light: t("theme.light"), system: t("theme.system"), dark: t("theme.dark"), black: t("theme.black") };
   const errorHtml = errorMessage ? `<p role="alert" class="error">${escapeHtml(errorMessage)}</p>` : "";
 
   return `<!doctype html>
-<html lang="en">
+<html lang="${locale}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Stellive Hub Admin Login</title>
+    <title>${escapeHtml(t("login.title"))}</title>
     ${renderAdminThemeInitScript()}
     <style>
       ${renderAdminThemeStyle()}
@@ -400,6 +430,24 @@ function renderAdminLoginHtml(errorMessage?: string): string {
         color: var(--admin-danger);
         font-weight: 600;
       }
+      .language-control {
+        display: flex;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 14px;
+      }
+      .language-control a {
+        border-radius: 8px;
+        padding: 6px 8px;
+        color: var(--admin-muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .language-control a[aria-current="page"] {
+        background: var(--admin-surface-hover);
+        color: var(--admin-text);
+      }
       @media (max-width: 920px) {
         .login-shell {
           grid-template-columns: 1fr;
@@ -441,24 +489,24 @@ function renderAdminLoginHtml(errorMessage?: string): string {
     </style>
   </head>
   <body>
-    <main class="login-shell" aria-label="Stellive Hub Admin login">
-      <section class="login-copy" aria-label="Admin access overview">
+    <main class="login-shell" aria-label="${escapeHtml(t("login.mainAria"))}">
+      <section class="login-copy" aria-label="${escapeHtml(t("login.overviewAria"))}">
         <div class="login-brand">
           <div class="login-brand-mark" aria-hidden="true"></div>
           <div class="login-brand-title">Stellive Hub Admin</div>
         </div>
         <div class="login-hero">
-          <span class="login-badge">Admin console</span>
-          <h2>Secure access for hub operations.</h2>
-          <p>Dashboard is for status review, Hub events is for publishing work, and Settings keeps tokens and console preferences separated from the login step.</p>
+          <span class="login-badge">${escapeHtml(t("login.console"))}</span>
+          <h2>${escapeHtml(t("login.hero"))}</h2>
+          <p>${escapeHtml(t("login.description"))}</p>
           <div class="login-flow">
             <div class="login-flow-item">
-              <strong>Admin session first</strong>
-              <p>Sign in with the admin console token to open the server-rendered console.</p>
+              <strong>${escapeHtml(t("login.sessionFirst"))}</strong>
+              <p>${escapeHtml(t("login.sessionDescription"))}</p>
             </div>
             <div class="login-flow-item">
-              <strong>Internal token later</strong>
-              <p>Enter the Internal API bearer token after login in Settings when an internal operation needs it.</p>
+              <strong>${escapeHtml(t("login.internalLater"))}</strong>
+              <p>${escapeHtml(t("login.internalDescription"))}</p>
             </div>
           </div>
         </div>
@@ -467,21 +515,22 @@ function renderAdminLoginHtml(errorMessage?: string): string {
       <form method="post" action="/admin/login" class="login-card" autocomplete="off">
         <div class="login-header">
           <div class="login-card-title">
-            <h1>Sign in</h1>
-            <p class="login-note">Admin session access only.</p>
+            <h1>${escapeHtml(t("login.signIn"))}</h1>
+            <p class="login-note">${escapeHtml(t("login.sessionOnly"))}</p>
           </div>
-          ${renderAdminThemeControl()}
+          ${renderAdminThemeControl(themeLabels)}
         </div>
         ${errorHtml}
         <label>
-          <span>Admin console token <span class="private-badge">private</span></span>
+          <span>${escapeHtml(t("login.token"))} <span class="private-badge">${escapeHtml(t("common.private"))}</span></span>
           <span class="password-wrap">
             <span class="password-icon" aria-hidden="true">lock</span>
-            <input name="token" type="password" required autofocus autocomplete="current-password" spellcheck="false" placeholder="Enter admin console token">
+            <input name="token" type="password" required autofocus autocomplete="current-password" spellcheck="false" placeholder="${escapeHtml(t("login.tokenPlaceholder"))}">
           </span>
         </label>
-        <button class="login-button" type="submit">Sign in</button>
+        <button class="login-button" type="submit">${escapeHtml(t("login.signIn"))}</button>
       </form>
+      ${renderAdminLanguageHtml(locale, "/admin/login")}
       </section>
     </main>
     ${renderAdminThemeBehaviorScript()}

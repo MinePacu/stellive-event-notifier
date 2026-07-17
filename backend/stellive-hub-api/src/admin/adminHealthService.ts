@@ -17,7 +17,6 @@ const neverCheckedAt = new Date(0).toISOString();
 const defaultAdapterHealth: AdapterHealth[] = [
   { source: "youtube", status: "disabled", reason: "youtube_websub_disabled", lastCheckedAt: neverCheckedAt },
   { source: "chzzk", status: "verify_required", reason: "chzzk_allowed_api_not_confirmed", lastCheckedAt: neverCheckedAt },
-  { source: "x", status: "disabled", reason: "x_no_free_official_api", lastCheckedAt: neverCheckedAt },
   { source: "naver_cafe", status: "disabled", reason: "naver_cafe_search_disabled", lastCheckedAt: neverCheckedAt }
 ];
 
@@ -83,10 +82,6 @@ export class AdminHealthService {
     return {
       YOUTUBE_WEBSUB_ENABLED: this.env.YOUTUBE_WEBSUB_ENABLED,
       YOUTUBE_DATA_API_FALLBACK_ENABLED: this.env.YOUTUBE_DATA_API_FALLBACK_ENABLED,
-      X_API_COST_POLICY: this.env.X_API_COST_POLICY,
-      X_FREE_API_ENABLED: this.env.X_FREE_API_ENABLED,
-      X_FREE_STREAM_ENABLED: this.env.X_FREE_STREAM_ENABLED,
-      X_FREE_POLLING_ENABLED: this.env.X_FREE_POLLING_ENABLED,
       NAVER_CAFE_SEARCH_ENABLED: this.env.NAVER_CAFE_SEARCH_ENABLED,
       CHZZK_LIVE_POLLING_ENABLED: this.env.CHZZK_LIVE_POLLING_ENABLED,
       DB_NOTIFICATION_QUEUE_ENABLED: this.env.DB_NOTIFICATION_QUEUE_ENABLED,
@@ -106,7 +101,6 @@ export class AdminHealthService {
       YOUTUBE_API_KEY: this.env.YOUTUBE_API_KEY,
       YOUTUBE_WEBSUB_CALLBACK_URL: this.env.YOUTUBE_WEBSUB_CALLBACK_URL,
       YOUTUBE_WEBSUB_VERIFY_TOKEN: this.env.YOUTUBE_WEBSUB_VERIFY_TOKEN,
-      X_BEARER_TOKEN: this.env.X_BEARER_TOKEN,
       NAVER_CLIENT_ID: this.env.NAVER_CLIENT_ID,
       NAVER_CLIENT_SECRET: this.env.NAVER_CLIENT_SECRET,
       CHZZK_CLIENT_ID: this.env.CHZZK_CLIENT_ID,

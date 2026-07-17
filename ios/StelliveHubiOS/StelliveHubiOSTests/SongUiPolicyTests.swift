@@ -202,11 +202,11 @@ final class SongUiPolicyTests: XCTestCase {
 
     func testSongScrollSessionRestoresOnlyMatchingQueryAndControlsTopButton() {
         let key = SongListQueryKey(
-            generationId: "all", type: "all", libraryId: "all", statusId: "all",
+            generationId: "all", type: "all", libraryId: "all",
             sortId: "publishedAt_desc", memberId: "all", query: ""
         )
         let changed = SongListQueryKey(
-            generationId: "all", type: "all", libraryId: "all", statusId: "all",
+            generationId: "all", type: "all", libraryId: "all",
             sortId: "publishedAt_desc", memberId: "all", query: "riko"
         )
         let position = SongScrollPosition(
@@ -826,9 +826,9 @@ final class SongUiPolicyTests: XCTestCase {
         XCTAssertEqual(SongMemberFilterState(selectedMemberIds: ["a", "b"], matchMode: .all, participation: .solo).normalized().matchMode, .any)
         XCTAssertEqual(SongMemberFilterState.migrate(selectedMemberId: "a", validMemberIds: ["a", "b"]).selectedMemberIds, ["a"])
         XCTAssertEqual(SongMemberFilterState.migrate(selectedMemberId: "unknown", validMemberIds: ["a", "b"]).selectedMemberIds, [])
-        let one = SongListQueryKey(generationId: "all", type: "all", libraryId: "all", statusId: "all", sortId: "publishedAt_desc",
+        let one = SongListQueryKey(generationId: "all", type: "all", libraryId: "all", sortId: "publishedAt_desc",
                                    selectedMemberIds: ["a", "b"], memberMatchMode: .all, participation: .any, query: "")
-        let two = SongListQueryKey(generationId: "all", type: "all", libraryId: "all", statusId: "all", sortId: "publishedAt_desc",
+        let two = SongListQueryKey(generationId: "all", type: "all", libraryId: "all", sortId: "publishedAt_desc",
                                    selectedMemberIds: ["b", "a"], memberMatchMode: .all, participation: .any, query: "")
         XCTAssertEqual(one, two)
     }
@@ -949,7 +949,6 @@ final class SongUiPolicyTests: XCTestCase {
             generationId: "all",
             type: "cover",
             libraryId: "favorites",
-            statusId: "new",
             sortId: "publishedAt_desc",
             selectedMemberIds: [],
             memberMatchMode: .any,
@@ -969,7 +968,6 @@ final class SongUiPolicyTests: XCTestCase {
         XCTAssertEqual(state.filteredSongs.map(\.id), ["older"])
         XCTAssertEqual(state.displayedCount, 1)
         XCTAssertEqual(state.remainingCount, 0)
-        XCTAssertEqual(state.newSongCount, 1)
         XCTAssertEqual(state.displayedRows[0].title, "Older")
         XCTAssertEqual(state.displayedRows[0].tags.map(\.text), ["커버", "NEW"])
         XCTAssertTrue(state.displayedRows[0].isFavorite)
@@ -1019,7 +1017,6 @@ final class SongUiPolicyTests: XCTestCase {
             isPerson: role == .member,
             chzzkChannelId: nil,
             youtubeHandle: nil,
-            xHandle: nil,
             isLive: false,
             notificationEnabled: true,
             realtimeEnabled: false

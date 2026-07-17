@@ -49,7 +49,6 @@ The backend still mediates notification delivery. Mobile apps must not call prot
 ## Event Collection Strategy
 
 - **YouTube:** Prefer WebSub for uploads. Use YouTube Data API fallback sparingly. Stellive official YouTube supports upload notifications only; official YouTube live scheduled/started/ended events are excluded.
-- **X:** Treat X support as optional and no-paid-API only. Use official X API paths only if the project has free access that can satisfy the required rate limits. If official access requires paid billing, keep the integration disabled behind feature flags and produce no X notifications.
 - **CHZZK:** Use official or documented allowed APIs only. For live progress display, normalize official Live API `openDate` to `LiveStatus.startedAt` on the backend and let mobile apps calculate elapsed time locally. Unknown or unverified endpoints remain `verify_required`.
 - **Naver Cafe:** Defer automatic collection for now. If it returns later, limit it to public Search API results or another clearly allowed official path. Do not scrape cafe pages, use login cookies, or monitor member-only/private posts.
 
@@ -101,5 +100,5 @@ User-visible notification history is stored on device by default. Android should
 - Choose the first managed database provider for MVP.
 - Choose whether the first thin backend runs on the existing OCI instance, serverless functions, or Docker self-hosting.
 - Decide retention windows for normalized event records and short-lived delivery attempts.
-- Confirm allowed production CHZZK API method and whether X has a no-cost official API path that is usable for the MVP.
+- Confirm the allowed production CHZZK API method.
 - Decide whether Naver Cafe should remain deferred permanently or return as public Search API-only support.

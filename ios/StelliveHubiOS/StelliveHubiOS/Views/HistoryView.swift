@@ -64,7 +64,7 @@ struct HistoryView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .settingsToolbar(path: $path)
+            .globalToolbar(path: $path)
         }
     }
 

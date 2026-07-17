@@ -26,7 +26,6 @@ enum TapAction: String, Codable {
 enum NotificationPlatform: String, Codable, CaseIterable, Hashable, Identifiable {
     case chzzk
     case youtube
-    case x
     case hubEvent = "hub_event"
     case naverCafe = "naver_cafe"
 
@@ -38,8 +37,6 @@ enum NotificationPlatform: String, Codable, CaseIterable, Hashable, Identifiable
             return "CHZZK"
         case .youtube:
             return "YouTube"
-        case .x:
-            return "X"
         case .hubEvent:
             return "굿즈/행사"
         case .naverCafe:
@@ -49,7 +46,6 @@ enum NotificationPlatform: String, Codable, CaseIterable, Hashable, Identifiable
 }
 
 enum NotificationEventType: String, Codable, CaseIterable, Hashable, Identifiable {
-    case xPost = "x_post"
     case cafePost = "cafe_post"
     case chzzkLiveStarted = "chzzk_live_started"
     case chzzkLiveEnded = "chzzk_live_ended"
@@ -59,7 +55,6 @@ enum NotificationEventType: String, Codable, CaseIterable, Hashable, Identifiabl
     case youtubeLiveScheduled = "youtube_live_scheduled"
     case youtubeLiveStarted = "youtube_live_started"
     case youtubeLiveEnded = "youtube_live_ended"
-    case officialXPost = "official_x_post"
     case officialYoutubeUpload = "official_youtube_upload"
     case eventAnnounced = "event_announced"
     case eventSalesOpen = "event_sales_open"
@@ -71,8 +66,6 @@ enum NotificationEventType: String, Codable, CaseIterable, Hashable, Identifiabl
 
     var displayName: String {
         switch self {
-        case .xPost:
-            return "X 게시글"
         case .cafePost:
             return "카페 게시글"
         case .chzzkLiveStarted:
@@ -91,8 +84,6 @@ enum NotificationEventType: String, Codable, CaseIterable, Hashable, Identifiabl
             return "YouTube 라이브 시작"
         case .youtubeLiveEnded:
             return "YouTube 라이브 종료"
-        case .officialXPost:
-            return "공식 X 게시글"
         case .officialYoutubeUpload:
             return "공식 YouTube 업로드"
         case .eventAnnounced:
@@ -682,20 +673,19 @@ struct SongListQueryKey: Equatable, Hashable {
     let generationId: String
     let type: String
     let libraryId: String
-    let statusId: String
     let sortId: String
     let selectedMemberIds: [String]
     let memberMatchMode: SongMemberMatchMode
     let participation: SongParticipation
     let query: String
 
-    init(generationId: String, type: String, libraryId: String, statusId: String, sortId: String, selectedMemberIds: [String], memberMatchMode: SongMemberMatchMode, participation: SongParticipation, query: String) {
-        self.generationId = generationId; self.type = type; self.libraryId = libraryId; self.statusId = statusId; self.sortId = sortId
+    init(generationId: String, type: String, libraryId: String, sortId: String, selectedMemberIds: [String], memberMatchMode: SongMemberMatchMode, participation: SongParticipation, query: String) {
+        self.generationId = generationId; self.type = type; self.libraryId = libraryId; self.sortId = sortId
         self.selectedMemberIds = selectedMemberIds.sorted(); self.memberMatchMode = memberMatchMode; self.participation = participation; self.query = query
     }
 
-    init(generationId: String, type: String, libraryId: String, statusId: String, sortId: String, memberId: String, query: String) {
-        self.init(generationId: generationId, type: type, libraryId: libraryId, statusId: statusId, sortId: sortId,
+    init(generationId: String, type: String, libraryId: String, sortId: String, memberId: String, query: String) {
+        self.init(generationId: generationId, type: type, libraryId: libraryId, sortId: sortId,
                   selectedMemberIds: memberId.isEmpty || memberId == "all" ? [] : [memberId], memberMatchMode: .any, participation: .any, query: query)
     }
 }
@@ -712,7 +702,6 @@ struct SongBrowseSnapshot: Equatable, Hashable {
     var selectedGenerationId = "all"
     var selectedType = "all"
     var selectedLibraryId = "all"
-    var selectedStatusId = "all"
     var selectedSortId = "publishedAt_desc"
     var memberFilter = SongMemberFilterState()
     var query = ""
@@ -723,7 +712,6 @@ struct SongBrowseSnapshot: Equatable, Hashable {
             generationId: selectedGenerationId,
             type: selectedType,
             libraryId: selectedLibraryId,
-            statusId: selectedStatusId,
             sortId: selectedSortId,
             selectedMemberIds: memberFilter.selectedMemberIds.sorted(),
             memberMatchMode: memberFilter.normalized().matchMode,
@@ -790,8 +778,6 @@ enum IOSSongPagePolicy {
     static func favoriteIdentifier(for song: SongCatalogItem) -> String? {
         SongIdentity.identifier(for: song)
     }
-
-    static let statusFilters: [SongFilterOption] = [.init(id: "all", label: "전체"), .init(id: "new", label: "새 노래")]
 
     static func matchesLibrary(_ song: SongCatalogItem, selectedLibraryId: String, favorites: Set<String>) -> Bool {
         selectedLibraryId != "favorites" || favoriteIdentifier(for: song).map(favorites.contains) == true
@@ -876,12 +862,12 @@ enum IOSSongPagePolicy {
         let state = rawState.normalized()
         if let preset = generationPresetLabel(members, state: state) {
             if state.participation == .any { return preset }
-            return preset + (state.participation == .solo ? " · 솔로" : " · 콜라보")
+            return preset + (state.participation == .solo ? " · 솔로" : " · 함께")
         }
         if state.selectedMemberIds.isEmpty && state.participation == .any { return "멤버 전체" }
         var text = state.selectedMemberIds.isEmpty ? "멤버 전체" : "선택 \(state.selectedMemberIds.count)명"
         if state.selectedMemberIds.count >= 2 { text += state.matchMode == .all ? " · 모두 참여" : " · 한 명 이상" }
-        if state.participation != .any { text += state.participation == .solo ? " · 솔로" : " · 콜라보" }
+        if state.participation != .any { text += state.participation == .solo ? " · 솔로" : " · 함께" }
         return text
     }
 
@@ -901,7 +887,7 @@ enum IOSSongPagePolicy {
         let state = rawState.normalized()
         if generationPresetLabel(members, state: state) != nil { return "선택한 기수 전원이 참여한 노래가 없습니다." }
         if state.participation == .solo { return "조건에 맞는 솔로곡이 없습니다." }
-        if state.participation == .collaboration { return "조건에 맞는 콜라보곡이 없습니다." }
+        if state.participation == .collaboration { return "조건에 맞는 함께 부른 곡이 없습니다." }
         return state.matchMode == .all && state.selectedMemberIds.count >= 2
             ? "선택한 멤버가 모두 참여한 노래가 없습니다."
             : "선택한 멤버 중 한 명 이상 참여한 노래가 없습니다."
@@ -1429,7 +1415,6 @@ struct HubMember: Identifiable, Hashable {
     let isPerson: Bool
     let chzzkChannelId: String?
     let youtubeHandle: String?
-    let xHandle: String?
     var isLive: Bool
     var notificationEnabled: Bool
     var realtimeEnabled: Bool
@@ -1455,7 +1440,6 @@ struct HubMember: Identifiable, Hashable {
         isPerson: Bool,
         chzzkChannelId: String?,
         youtubeHandle: String?,
-        xHandle: String?,
         isLive: Bool,
         notificationEnabled: Bool,
         realtimeEnabled: Bool,
@@ -1480,7 +1464,6 @@ struct HubMember: Identifiable, Hashable {
         self.isPerson = isPerson
         self.chzzkChannelId = chzzkChannelId
         self.youtubeHandle = youtubeHandle
-        self.xHandle = xHandle
         self.isLive = isLive
         self.notificationEnabled = notificationEnabled
         self.realtimeEnabled = realtimeEnabled
@@ -1614,12 +1597,10 @@ struct NotificationSettingsState: Equatable {
     var platformEnabled: [NotificationPlatform: Bool] = [
         .chzzk: true,
         .youtube: true,
-        .x: true,
         .hubEvent: true,
         .naverCafe: false
     ]
     var eventTypeEnabled: [NotificationEventType: Bool] = [
-        .xPost: true,
         .cafePost: false,
         .chzzkLiveStarted: true,
         .chzzkLiveEnded: true,
@@ -1629,7 +1610,6 @@ struct NotificationSettingsState: Equatable {
         .youtubeLiveScheduled: false,
         .youtubeLiveStarted: false,
         .youtubeLiveEnded: false,
-        .officialXPost: true,
         .officialYoutubeUpload: true,
         .eventAnnounced: true,
         .eventSalesOpen: true,

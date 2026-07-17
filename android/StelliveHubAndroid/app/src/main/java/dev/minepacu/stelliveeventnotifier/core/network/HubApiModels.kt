@@ -4,8 +4,6 @@ data class MobileConfigDto(
     val unofficialProject: Boolean,
     val catalogVersion: String,
     val officialYoutubeLiveExcluded: Boolean,
-    val xNotificationsEnabled: Boolean,
-    val xDisabledReason: String? = null,
     val hubCalendarEnabled: Boolean,
     val foregroundRealtimeEnabled: Boolean? = null,
 )
@@ -82,6 +80,50 @@ data class HubEventsSummaryDto(
     val upcomingCount: Int,
     val closingSoonCount: Int,
     val preview: List<HubEventDto> = emptyList(),
+)
+
+data class ServiceAnnouncementDto(
+    val id: String,
+    val type: String,
+    val severity: String,
+    val title: String,
+    val summary: String,
+    val body: String,
+    val isPinned: Boolean = false,
+    val targetPlatforms: List<String> = emptyList(),
+    val minimumAppVersion: String? = null,
+    val maximumAppVersion: String? = null,
+    val appDeepLink: String? = null,
+    val externalUrl: String? = null,
+    val actionLabel: String? = null,
+    val publishedAt: String,
+    val expiresAt: String? = null,
+    val resolvedAt: String? = null,
+    val archivedAt: String? = null,
+    val attentionRevision: Int = 1,
+    val revision: Int = 1,
+    val updatedAt: String,
+)
+
+data class AnnouncementSummaryItemDto(
+    val id: String,
+    val attentionRevision: Int,
+    val publishedAt: String,
+    val severity: String,
+    val isPinned: Boolean = false,
+)
+
+data class AnnouncementsSummaryDto(
+    val activeCount: Int = 0,
+    val items: List<AnnouncementSummaryItemDto> = emptyList(),
+    val pinned: ServiceAnnouncementDto? = null,
+    val generatedAt: String? = null,
+)
+
+data class ServiceAnnouncementListResponseDto(
+    val items: List<ServiceAnnouncementDto> = emptyList(),
+    val nextCursor: String? = null,
+    val generatedAt: String? = null,
 )
 
 data class HubEventDto(
@@ -265,6 +307,7 @@ data class BootstrapResponseDto(
     val liveStatus: List<LiveStatusDto> = emptyList(),
     val hubEventsSummary: HubEventsSummaryDto? = null,
     val hubCalendarWidgetSnapshot: HubCalendarWidgetSnapshotDto? = null,
+    val announcementsSummary: AnnouncementsSummaryDto? = null,
     val serverTime: String? = null,
 ) {
     val effectiveCatalog: BootstrapCatalogDto

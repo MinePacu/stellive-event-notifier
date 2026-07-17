@@ -7,7 +7,7 @@ enum NotificationCollapsePolicy {
             return "live:\(payload.memberId):\(payload.source.rawValue)"
         case .eventAnnounced, .eventSalesOpen, .eventDeadlineSoon, .eventUpdated, .eventCancelled:
             return NotificationThreadPolicy.threadIdentifier(for: payload)
-        case .officialXPost, .officialYoutubeUpload:
+        case .officialYoutubeUpload:
             return "official:\(payload.eventType.rawValue)"
         default:
             return payload.summaryGroupId.map { "summary:\($0)" }

@@ -20,8 +20,6 @@ describe("mobile API contract", () => {
         unofficialProject: true,
         catalogVersion: "seed-2026-06-01",
         officialYoutubeLiveExcluded: true,
-        xNotificationsEnabled: false,
-        xDisabledReason: "x_notifications_dropped_for_mvp",
         hubCalendarEnabled: true,
         foregroundRealtimeEnabled: false,
       },
@@ -46,7 +44,6 @@ describe("mobile API contract", () => {
     } satisfies BootstrapResponse;
 
     expect(response.config.officialYoutubeLiveExcluded).toBe(true);
-    expect(response.config.xNotificationsEnabled).toBe(false);
     expect(JSON.stringify(response)).not.toContain("rawPayload");
     expect(JSON.stringify(response)).not.toContain("providerResponse");
   });
@@ -99,8 +96,6 @@ describe("mobile bootstrap routes", () => {
                 unofficialProject: true,
                 catalogVersion: "route-service",
                 officialYoutubeLiveExcluded: true,
-                xNotificationsEnabled: false,
-                xDisabledReason: "x_notifications_dropped_for_mvp",
                 hubCalendarEnabled: true,
                 foregroundRealtimeEnabled: false,
               },
@@ -445,8 +440,6 @@ describe("BootstrapService", () => {
     expect(bootstrap.config).toMatchObject({
       unofficialProject: true,
       officialYoutubeLiveExcluded: true,
-      xNotificationsEnabled: false,
-      xDisabledReason: "x_notifications_dropped_for_mvp",
       hubCalendarEnabled: true,
       foregroundRealtimeEnabled: false,
     });

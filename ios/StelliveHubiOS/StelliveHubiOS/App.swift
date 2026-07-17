@@ -9,6 +9,7 @@ struct StelliveHubApp: App {
     @StateObject private var songDiscoveryStore: SongDiscoveryStore
     @StateObject private var songBrowseSessionStore: SongBrowseSessionStore
     @StateObject private var songOpenPreferenceStore: SongOpenPreferenceStore
+    @StateObject private var announcementReadStore: AnnouncementReadStore
 
     init() {
         let fallback = MockHubStore()
@@ -23,6 +24,7 @@ struct StelliveHubApp: App {
         _songDiscoveryStore = StateObject(wrappedValue: SongDiscoveryStore())
         _songBrowseSessionStore = StateObject(wrappedValue: SongBrowseSessionStore())
         _songOpenPreferenceStore = StateObject(wrappedValue: SongOpenPreferenceStore())
+        _announcementReadStore = StateObject(wrappedValue: AnnouncementReadStore())
     }
 
     var body: some Scene {
@@ -34,9 +36,11 @@ struct StelliveHubApp: App {
                 .environmentObject(songDiscoveryStore)
                 .environmentObject(songBrowseSessionStore)
                 .environmentObject(songOpenPreferenceStore)
+                .environmentObject(announcementReadStore)
                 .preferredColorScheme(store.settings.appearanceMode.preferredColorScheme)
                 .task {
                     _ = await serverStore.bootstrap()
+                    if let summary = serverStore.announcementsSummary { announcementReadStore.initialize(summaryItems: summary.items) }
                     try? HubCalendarWidgetStore.saveToSharedContainer(store.calendarWidgetSnapshot())
                 }
         }

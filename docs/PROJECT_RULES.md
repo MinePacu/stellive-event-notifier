@@ -2,7 +2,7 @@
 
 ## Status
 
-Stellive Notification Hub is an unofficial open-source fan project. It is not affiliated with, endorsed by, or sponsored by Stellive, CHZZK, YouTube, X, Naver, Samsung, or Apple. No direct monetization is planned, but legal and platform restrictions still apply.
+Stellive Notification Hub is an unofficial open-source fan project. It is not affiliated with, endorsed by, or sponsored by Stellive, CHZZK, YouTube, Naver, Samsung, or Apple. No direct monetization is planned, but legal and platform restrictions still apply.
 
 ## Catalog Policy
 
@@ -20,7 +20,7 @@ Stellive official channels are represented as:
 - `catalogRole: "official_channel"`
 - `roleLabel: "스텔라이브 공식 채널"`
 
-The official channel item supports only `official_x_post` and `official_youtube_upload`. Official YouTube live scheduled/started/ended events must not be generated, delivered, or written to history.
+The official channel item supports only `official_youtube_upload`. Official YouTube live scheduled/started/ended events must not be generated, delivered, or written to history.
 
 ## API And Data Policy
 
@@ -61,7 +61,7 @@ Preference resolution order:
 
 ## Realtime Policy
 
-Realtime mode is best-effort near-real-time. It may use X streams, YouTube WebSub, CHZZK live diff/session mechanisms, FCM high priority, APNs priority 10, and foreground SSE/WebSocket streams. It must not violate platform rate limits, OS battery policies, push-service policies, quiet hours, block lists, or user opt-outs.
+Realtime mode is best-effort near-real-time. It may use YouTube WebSub, CHZZK live diff/session mechanisms, FCM high priority, APNs priority 10, and foreground SSE/WebSocket streams. It must not violate platform rate limits, OS battery policies, push-service policies, quiet hours, block lists, or user opt-outs.
 
 ## New Feature Checklist
 
@@ -73,4 +73,3 @@ Realtime mode is best-effort near-real-time. It may use X streams, YouTube WebSu
 - Confirm `realtime_best_effort` does not bypass user settings.
 - Confirm no secrets, logos, profile images, fan art, or screenshots are added.
 - Confirm docs and tests are updated when behavior changes.
-

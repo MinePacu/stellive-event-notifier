@@ -517,3 +517,76 @@ model HubEventAuditLog {
   @@index([hubEventId, createdAt])
   @@index([action, createdAt])
 }
+
+model ServiceAnnouncement {
+  id                 String   @id @default(cuid(2))
+  type               String
+  severity           String
+  publicationState   String   @default("draft")
+  title              String
+  summary            String
+  body               String
+  isPinned           Boolean  @default(false)
+  targetPlatforms    Json
+  minimumAppVersion  String?
+  maximumAppVersion  String?
+  appDeepLink        String?
+  externalUrl        String?
+  actionLabel        String?
+  publishedAt        DateTime?
+  expiresAt          DateTime?
+  resolvedAt         DateTime?
+  archivedAt         DateTime?
+  deletedAt          DateTime?
+  pushEnabled        Boolean  @default(true)
+  pushStatus         String   @default("not_requested")
+  pushSentAt         DateTime?
+  attentionRevision  Int      @default(1)
+  revision           Int      @default(1)
+  createdBy          String?
+  updatedBy          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  pushAttempts ServiceAnnouncementPushAttempt[]
+
+  @@index([publicationState, publishedAt])
+  @@index([type, publicationState])
+  @@index([severity, publicationState])
+  @@index([expiresAt, publicationState])
+  @@index([deletedAt, publicationState])
+}
+
+model ServiceAnnouncementPushAttempt {
+  id                String   @id @default(cuid(2))
+  announcementId    String
+  attentionRevision Int
+  topic             String
+  status            String
+  providerMessageId String?
+  providerErrorCode String?
+  retryAfterMs      Int?
+  requestedBy       String?
+  requestedAt       DateTime @default(now())
+  completedAt       DateTime?
+
+  announcement ServiceAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@index([announcementId, requestedAt])
+  @@index([status, requestedAt])
+  @@index([announcementId, attentionRevision, status])
+}
+
+model ServiceAnnouncementAuditLog {
+  id             String   @id @default(cuid(2))
+  announcementId String
+  action         String
+  actorId        String?
+  reason         String?
+  before         Json?
+  after          Json?
+  createdAt      DateTime @default(now())
+
+  @@index([announcementId, createdAt])
+  @@index([action, createdAt])
+}

@@ -24,7 +24,7 @@
 - official/기타 채널 기념일
 - 공식 로고, 프로필 이미지, 팬아트, 캡처 이미지, 복사된 CDN 이미지
 - 푸시 알림 자동 생성
-- CHZZK, YouTube, X, Naver Cafe 외부 수집 경로 추가
+- CHZZK, YouTube, Naver Cafe 외부 수집 경로 추가
 - private Cafe, 로그인 쿠키, HTML 크롤링, 접근 우회
 
 ## 정책 원칙

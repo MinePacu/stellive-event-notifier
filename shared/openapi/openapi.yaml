@@ -11,6 +11,9 @@ paths:
           description: API health.
   /v1/bootstrap:
     get:
+      parameters:
+        - { name: platform, in: query, schema: { $ref: "#/components/schemas/ServiceAnnouncementPlatform" } }
+        - { name: appVersion, in: query, schema: { type: string } }
       responses:
         "200":
           description: App config, catalog, preferences, and realtime summary.
@@ -18,6 +21,100 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BootstrapResponse"
+  /v1/announcements:
+    get:
+      summary: Published app service announcements.
+      parameters:
+        - { name: platform, in: query, schema: { $ref: "#/components/schemas/ServiceAnnouncementPlatform" } }
+        - { name: appVersion, in: query, schema: { type: string } }
+        - { name: includeArchived, in: query, schema: { type: boolean, default: false } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, minimum: 1, maximum: 100 } }
+      responses:
+        "200":
+          description: Cursor-paginated visible announcements.
+          content: { application/json: { schema: { $ref: "#/components/schemas/ServiceAnnouncementListResponse" } } }
+  /v1/announcements/summary:
+    get:
+      summary: Short-lived announcement badge and pinned-home summary.
+      parameters:
+        - { name: platform, in: query, schema: { $ref: "#/components/schemas/ServiceAnnouncementPlatform" } }
+        - { name: appVersion, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Announcement summary.
+          content: { application/json: { schema: { $ref: "#/components/schemas/AnnouncementsSummary" } } }
+  /v1/announcements/{id}:
+    get:
+      summary: A currently visible app service announcement.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: platform, in: query, schema: { $ref: "#/components/schemas/ServiceAnnouncementPlatform" } }
+        - { name: appVersion, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Announcement detail.
+          content: { application/json: { schema: { $ref: "#/components/schemas/ServiceAnnouncement" } } }
+        "404": { description: Announcement is missing or not visible to this client. }
+  /v1/admin/announcements:
+    get:
+      summary: Admin announcement list.
+      responses: { "200": { description: Admin announcement list. } }
+    post:
+      summary: Create an announcement draft.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminServiceAnnouncementWrite" } } } }
+      responses: { "201": { description: Draft created. } }
+  /v1/admin/announcements/{id}:
+    get:
+      summary: Admin announcement detail.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { "200": { description: Admin announcement detail. } }
+    patch:
+      summary: Update an announcement and increment revision without changing attentionRevision.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminServiceAnnouncementWrite" } } } }
+      responses: { "200": { description: Announcement updated. } }
+    delete:
+      summary: Soft-delete an announcement while preserving its audit and push history.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses:
+        "200": { description: Announcement deleted and hidden from public and default admin reads. }
+        "404": { description: Announcement is missing or already deleted. }
+  /v1/admin/announcements/{id}/publish:
+    post:
+      summary: Publish a stored announcement and optionally send its FCM notification.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { "200": { description: Published announcement. } }
+  /v1/admin/announcements/{id}/resolve:
+    post:
+      summary: Mark an incident announcement as resolved.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { "200": { description: Resolved announcement. } }
+  /v1/admin/announcements/{id}/archive:
+    post:
+      summary: Archive a stored announcement.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { "200": { description: Archived announcement. } }
+  /v1/admin/announcements/{id}/resend:
+    post:
+      summary: Explicitly resend FCM without changing attentionRevision.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { "200": { description: Push attempt result. } }
+  /v1/admin/announcements/{id}/bump-attention:
+    post:
+      summary: Increment attentionRevision so clients treat the announcement as unread again.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { "200": { description: Updated announcement. } }
+  /v1/admin/announcements/{id}/audit-log:
+    get:
+      summary: Announcement lifecycle audit log.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { "200": { description: Audit log entries. } }
+  /v1/admin/announcements/{id}/push-attempts:
+    get:
+      summary: Announcement FCM attempt history.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { "200": { description: Push attempt entries. } }
   /v1/devices/register:
     post:
       requestBody:
@@ -1042,7 +1139,6 @@ components:
         - unofficialProject
         - catalogVersion
         - officialYoutubeLiveExcluded
-        - xNotificationsEnabled
         - hubCalendarEnabled
         - foregroundRealtimeEnabled
       properties:
@@ -1054,10 +1150,6 @@ components:
         officialYoutubeLiveExcluded:
           type: boolean
           const: true
-        xNotificationsEnabled:
-          type: boolean
-        xDisabledReason:
-          type: string
         hubCalendarEnabled:
           type: boolean
         foregroundRealtimeEnabled:
@@ -1510,6 +1602,8 @@ components:
           $ref: "#/components/schemas/HubEventsSummary"
         hubCalendarWidgetSnapshot:
           $ref: "#/components/schemas/HubCalendarWidgetSnapshot"
+        announcementsSummary:
+          $ref: "#/components/schemas/AnnouncementsSummary"
         serverTime:
           type: string
           format: date-time
@@ -1736,7 +1830,6 @@ components:
           enum:
             - youtube
             - chzzk
-            - x
             - naver_cafe
         status:
           type: string
@@ -2265,3 +2358,78 @@ components:
         createdAt:
           type: string
           format: date-time
+    ServiceAnnouncementType:
+      type: string
+      enum: [general, incident, maintenance, version_update]
+    ServiceAnnouncementSeverity:
+      type: string
+      enum: [info, important, critical]
+    ServiceAnnouncementPlatform:
+      type: string
+      enum: [android, ios]
+    ServiceAnnouncement:
+      type: object
+      required: [id, type, severity, title, summary, body, isPinned, targetPlatforms, publishedAt, attentionRevision, revision, updatedAt]
+      properties:
+        id: { type: string }
+        type: { $ref: "#/components/schemas/ServiceAnnouncementType" }
+        severity: { $ref: "#/components/schemas/ServiceAnnouncementSeverity" }
+        title: { type: string }
+        summary: { type: string }
+        body: { type: string, description: Plain text only. }
+        isPinned: { type: boolean }
+        targetPlatforms: { type: array, items: { $ref: "#/components/schemas/ServiceAnnouncementPlatform" } }
+        minimumAppVersion: { type: string }
+        maximumAppVersion: { type: string }
+        appDeepLink: { type: string }
+        externalUrl: { type: string, format: uri }
+        actionLabel: { type: string }
+        publishedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        resolvedAt: { type: string, format: date-time }
+        archivedAt: { type: string, format: date-time }
+        attentionRevision: { type: integer, minimum: 1 }
+        revision: { type: integer, minimum: 1 }
+        updatedAt: { type: string, format: date-time }
+    AnnouncementSummaryItem:
+      type: object
+      required: [id, attentionRevision, publishedAt, severity, isPinned]
+      properties:
+        id: { type: string }
+        attentionRevision: { type: integer, minimum: 1 }
+        publishedAt: { type: string, format: date-time }
+        severity: { $ref: "#/components/schemas/ServiceAnnouncementSeverity" }
+        isPinned: { type: boolean }
+    AnnouncementsSummary:
+      type: object
+      required: [activeCount, items, generatedAt]
+      properties:
+        activeCount: { type: integer, minimum: 0 }
+        items: { type: array, items: { $ref: "#/components/schemas/AnnouncementSummaryItem" } }
+        pinned: { $ref: "#/components/schemas/ServiceAnnouncement" }
+        generatedAt: { type: string, format: date-time }
+    ServiceAnnouncementListResponse:
+      type: object
+      required: [items, generatedAt]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ServiceAnnouncement" } }
+        nextCursor: { type: string }
+        generatedAt: { type: string, format: date-time }
+    AdminServiceAnnouncementWrite:
+      type: object
+      required: [type, severity, title, summary, body, targetPlatforms]
+      properties:
+        type: { $ref: "#/components/schemas/ServiceAnnouncementType" }
+        severity: { $ref: "#/components/schemas/ServiceAnnouncementSeverity" }
+        title: { type: string, maxLength: 120 }
+        summary: { type: string, maxLength: 300 }
+        body: { type: string, maxLength: 20000 }
+        isPinned: { type: boolean }
+        targetPlatforms: { type: array, minItems: 1, items: { $ref: "#/components/schemas/ServiceAnnouncementPlatform" } }
+        minimumAppVersion: { type: string }
+        maximumAppVersion: { type: string }
+        expiresAt: { type: string, format: date-time }
+        actionLabel: { type: string, maxLength: 40 }
+        appDeepLink: { type: string }
+        externalUrl: { type: string, format: uri }
+        pushEnabled: { type: boolean }

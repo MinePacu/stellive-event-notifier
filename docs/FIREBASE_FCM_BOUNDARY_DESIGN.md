@@ -25,7 +25,7 @@ Stellive Notification Hub는 서버 중재형 알림 허브다. 백엔드는 플
 - Firebase를 application backend, primary data store, event store, preference store, job queue로 사용하지 않는다.
 - Firestore, Realtime Database, Firebase Auth, Cloud Functions, Cloud Scheduler, Remote Config, Analytics, Crashlytics, Storage를 MVP 알림 백엔드 기능 구성 요소로 도입하지 않는다.
 - 일반 이벤트에 Firebase topic/condition fan-out을 사용하거나 사용자 preference resolution을 우회하지 않는다. 예외는 서버 allowlist로 고정된 service-wide announcement topic뿐이다.
-- 클라이언트가 CHZZK, YouTube, X, Naver 등 보호된 플랫폼 API를 직접 호출하게 하지 않는다.
+- 클라이언트가 CHZZK, YouTube, Naver 등 보호된 플랫폼 API를 직접 호출하게 하지 않는다.
 
 ## 기능 경계
 

@@ -2,7 +2,7 @@ import type { SecretReadiness } from "./adminAuth.js";
 
 export type AdminHealthStatus = "ok" | "degraded" | "disabled" | "verify_required" | "rate_limited";
 export type AdapterHealthStatus = "enabled" | "disabled" | "verify_required" | "rate_limited";
-export type AdapterHealthSource = "youtube" | "chzzk" | "x" | "naver_cafe";
+export type AdapterHealthSource = "youtube" | "chzzk" | "naver_cafe";
 
 export interface AdapterHealth {
   source: AdapterHealthSource;

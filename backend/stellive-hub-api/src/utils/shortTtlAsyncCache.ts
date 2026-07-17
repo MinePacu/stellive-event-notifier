@@ -38,4 +38,10 @@ export class ShortTtlAsyncCache<T> {
     this.inFlight = inFlight;
     return inFlight;
   }
+
+  clear(): void {
+    this.value = undefined;
+    this.hasValue = false;
+    this.expiresAt = 0;
+  }
 }

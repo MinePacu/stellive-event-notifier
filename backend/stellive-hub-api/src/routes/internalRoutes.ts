@@ -157,7 +157,6 @@ const neverCheckedAt = new Date(0).toISOString();
 const fallbackAdapterHealth: AdapterHealth[] = [
   { source: "youtube", status: "disabled", reason: "youtube_websub_disabled", lastCheckedAt: neverCheckedAt },
   { source: "chzzk", status: "verify_required", reason: "chzzk_allowed_api_not_confirmed", lastCheckedAt: neverCheckedAt },
-  { source: "x", status: "disabled", reason: "x_no_free_official_api", lastCheckedAt: neverCheckedAt },
   { source: "naver_cafe", status: "disabled", reason: "naver_cafe_collection_deferred", lastCheckedAt: neverCheckedAt }
 ];
 
@@ -337,6 +336,10 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
   });
 
   app.post("/v1/internal/notifications/service-announcements", async (request, reply) => {
+    // Compatibility-only endpoint. New operational sends must use the persisted
+    // announcement admin publish/resend flow so delivery attempts are auditable.
+    reply.header("Deprecation", "true");
+    reply.header("Warning", '299 - "Use /v1/admin/announcements/:id/publish or /resend"');
     const body = request.body as Record<string, unknown> | undefined;
     const allowedKeys = ["scope", "title", "body", "appDeepLink", "platformUrl"];
     if (

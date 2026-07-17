@@ -51,6 +51,8 @@ Do not read this file for merge-only work unless a conflict or failed check dire
 - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubCalendarWidgetProvider.kt` - Android home-screen widget provider for hub calendar entries.
 - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarView.kt` - Custom Android view for the hub events calendar.
 - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/calendar/HubEventsCalendarViewModel.kt` - Android calendar state and projection view model.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/announcements/AnnouncementPolicy.kt` - Announcement read keys, badge, home priority, ordering, first-sync, and deep-link policy.
+- `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/announcements/AnnouncementReadStore.kt` - DataStore-backed local announcement read state.
 - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/HubRepository.kt` - Android repository contract for hub home, live, history, settings, and events state.
 - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/LiveMemberOrderingPolicy.kt` - Android policy for live member ordering and manual reorder behavior.
 - `android/StelliveHubAndroid/app/src/main/java/dev/minepacu/stelliveeventnotifier/feature/home/MainNavigationHistory.kt` - Android navigation stack helper for main screens.

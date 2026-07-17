@@ -86,7 +86,7 @@ object SongMemberFilterPolicy {
         if (generationPresetLabel(members, state) != null) return "선택한 기수 전원이 참여한 노래가 없습니다."
         return when (state.participation) {
             SongParticipation.SOLO -> "조건에 맞는 솔로곡이 없습니다."
-            SongParticipation.COLLABORATION -> "조건에 맞는 콜라보곡이 없습니다."
+            SongParticipation.COLLABORATION -> "조건에 맞는 함께 부른 곡이 없습니다."
             SongParticipation.ANY -> if (state.matchMode == SongMemberMatchMode.ALL && state.selectedMemberIds.size >= 2)
                 "선택한 멤버가 모두 참여한 노래가 없습니다." else "선택한 멤버 중 한 명 이상 참여한 노래가 없습니다."
         }
@@ -95,6 +95,6 @@ object SongMemberFilterPolicy {
     private fun participationLabel(value: SongParticipation) = when (value) {
         SongParticipation.ANY -> "전체"
         SongParticipation.SOLO -> "솔로"
-        SongParticipation.COLLABORATION -> "콜라보"
+        SongParticipation.COLLABORATION -> "함께"
     }
 }

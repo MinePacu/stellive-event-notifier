@@ -4,15 +4,13 @@ import type { HubCalendarResponse, HubCalendarWidgetSnapshot } from "../src/hub-
 import type { HubEvent } from "../src/types.js";
 
 describe("hub event calendar routes", () => {
-  it("exposes calendar support and X notification de-scope flags in bootstrap config", async () => {
+  it("exposes calendar support in bootstrap config", async () => {
     const app = await buildApp();
     const response = await app.inject({ method: "GET", url: "/v1/bootstrap" });
     await app.close();
 
     expect(response.statusCode).toBe(200);
     expect(response.json().config).toMatchObject({
-      xNotificationsEnabled: false,
-      xDisabledReason: "x_notifications_dropped_for_mvp",
       hubCalendarEnabled: true
     });
   });

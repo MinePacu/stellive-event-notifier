@@ -1,5 +1,6 @@
 import type {
   Generation,
+  AnnouncementsSummary,
   HubCalendarWidgetSnapshot,
   HubEventsSummary,
   LiveStatus,
@@ -21,8 +22,6 @@ export interface MobileConfig {
   unofficialProject: true;
   catalogVersion: string;
   officialYoutubeLiveExcluded: true;
-  xNotificationsEnabled: boolean;
-  xDisabledReason?: string;
   hubCalendarEnabled: boolean;
   foregroundRealtimeEnabled: boolean;
 }
@@ -42,6 +41,7 @@ export interface BootstrapResponse {
   liveStatus: LiveStatus[];
   hubEventsSummary: HubEventsSummary;
   hubCalendarWidgetSnapshot?: HubCalendarWidgetSnapshot;
+  announcementsSummary?: AnnouncementsSummary;
   serverTime: string;
 }
 

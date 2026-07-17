@@ -59,7 +59,6 @@ iOS는 `HubAPIClient.hubEventsCalendar(from:to:timezone:)`가 이미 있지만 `
 - unauthorized crawling, login-cookie scraping, private cafe 수집
 - 공식 로고, 프로필 이미지 바이너리, 팬아트, 캡처 이미지 번들링
 - 공식 YouTube live scheduled/started/ended 행사 생성
-- X 알림 ingestion/delivery 활성화
 
 ## 공개 API 데이터 계약
 
@@ -135,7 +134,7 @@ iOS는 `HubAPIClient.hubEventsCalendar(from:to:timezone:)`가 이미 있지만 `
 - `MainActivity.kt`: 굿즈/행사 목록/캘린더/상세가 repository read state를 사용하도록 연결
 - `feature/calendar/HubCalendarDeepLinkPolicy.kt`: `entryKind == HUB_EVENT`만 상세 진입 허용 유지
 
-Android 앱은 CHZZK, YouTube, X, Naver 등 외부 플랫폼 API를 직접 호출하지 않는다.
+Android 앱은 CHZZK, YouTube, Naver 등 외부 플랫폼 API를 직접 호출하지 않는다.
 
 ## iOS 구성
 

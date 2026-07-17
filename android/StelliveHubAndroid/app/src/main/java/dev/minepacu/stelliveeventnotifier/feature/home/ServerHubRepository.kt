@@ -1,5 +1,6 @@
 package dev.minepacu.stelliveeventnotifier.feature.home
 
+import dev.minepacu.stelliveeventnotifier.BuildConfig
 import dev.minepacu.stelliveeventnotifier.core.device.DeviceIdStore
 import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarDay
 import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarEntry
@@ -13,6 +14,12 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventSourceType
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
+import dev.minepacu.stelliveeventnotifier.core.model.AnnouncementSummaryItem
+import dev.minepacu.stelliveeventnotifier.core.model.AnnouncementsSummary
+import dev.minepacu.stelliveeventnotifier.core.model.ServiceAnnouncement
+import dev.minepacu.stelliveeventnotifier.core.model.ServiceAnnouncementListResult
+import dev.minepacu.stelliveeventnotifier.core.model.ServiceAnnouncementSeverity
+import dev.minepacu.stelliveeventnotifier.core.model.ServiceAnnouncementType
 import dev.minepacu.stelliveeventnotifier.core.model.SongCatalogItem
 import dev.minepacu.stelliveeventnotifier.core.model.SongFacetSummary
 import dev.minepacu.stelliveeventnotifier.core.model.SongFacets
@@ -24,6 +31,8 @@ import dev.minepacu.stelliveeventnotifier.core.model.SongThumbnail
 import dev.minepacu.stelliveeventnotifier.core.model.SongType
 import dev.minepacu.stelliveeventnotifier.core.model.YoutubePremiereMetadata
 import dev.minepacu.stelliveeventnotifier.core.network.BootstrapResponseDto
+import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementDto
+import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementListResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarEntryDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventDto
@@ -79,6 +88,7 @@ class ServerHubRepository(
             return fallback.bootstrap()
                 .mergeCatalogProfileImages(response.value.effectiveCatalog.members)
                 .mergeLiveStatus(response.value.liveStatus)
+                .copy(announcementsSummary = response.value.announcementsSummary?.toModel() ?: AnnouncementsSummary())
         }
         return fallback.bootstrap().copy(liveStatusSourceLabel = "서버 연결 실패 · 앱 내 목업")
     }
@@ -137,6 +147,18 @@ class ServerHubRepository(
             return event
         }
         return eventCache[id]
+    }
+
+    override suspend fun announcements(cursor: String?): ServiceAnnouncementListResult {
+        val response = remoteDataSource.announcements(cursor)
+        return if (response is HubNetworkResult.Success) {
+            ServiceAnnouncementListResult(response.value.items.mapNotNull { it.toModelOrNull() }, response.value.nextCursor)
+        } else ServiceAnnouncementListResult(emptyList())
+    }
+
+    override suspend fun announcementDetail(id: String): ServiceAnnouncement? {
+        val response = remoteDataSource.announcement(id)
+        return if (response is HubNetworkResult.Success) response.value.toModelOrNull() else null
     }
 
     override suspend fun hubCalendarDays(from: LocalDate, to: LocalDate, timezone: String): List<HubCalendarDay> {
@@ -482,6 +504,33 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
     private inline fun <reified T : Enum<T>> String.toEnum(): T? =
         runCatching { enumValueOf<T>(replace('-', '_').uppercase(Locale.US)) }.getOrNull()
 
+    private fun dev.minepacu.stelliveeventnotifier.core.network.AnnouncementsSummaryDto.toModel(): AnnouncementsSummary =
+        AnnouncementsSummary(
+            activeCount = activeCount,
+            items = items.mapNotNull { item ->
+                val published = parseInstantOrNull(item.publishedAt) ?: return@mapNotNull null
+                val severity = ServiceAnnouncementSeverity.entries.firstOrNull { it.apiValue == item.severity } ?: return@mapNotNull null
+                AnnouncementSummaryItem(item.id, item.attentionRevision, published, severity, item.isPinned)
+            },
+            pinned = pinned?.toModelOrNull(),
+            generatedAt = generatedAt?.let(::parseInstantOrNull),
+        )
+
+    private fun ServiceAnnouncementDto.toModelOrNull(): ServiceAnnouncement? {
+        val published = parseInstantOrNull(publishedAt) ?: return null
+        val updated = parseInstantOrNull(updatedAt) ?: return null
+        val announcementType = ServiceAnnouncementType.entries.firstOrNull { it.apiValue == type } ?: return null
+        val announcementSeverity = ServiceAnnouncementSeverity.entries.firstOrNull { it.apiValue == severity } ?: return null
+        return ServiceAnnouncement(
+            id = id, type = announcementType, severity = announcementSeverity, title = title, summary = summary,
+            body = body, isPinned = isPinned, targetPlatforms = targetPlatforms,
+            minimumAppVersion = minimumAppVersion, maximumAppVersion = maximumAppVersion,
+            appDeepLink = appDeepLink, externalUrl = externalUrl, actionLabel = actionLabel,
+            publishedAt = published, expiresAt = expiresAt?.let(::parseInstantOrNull), resolvedAt = resolvedAt?.let(::parseInstantOrNull),
+            archivedAt = archivedAt?.let(::parseInstantOrNull), attentionRevision = attentionRevision, revision = revision, updatedAt = updated,
+        )
+    }
+
     private fun String.toImagePolicyState(): HubEventImagePolicyState =
         HubEventImagePolicyState.entries.firstOrNull { it.apiValue == this } ?: HubEventImagePolicyState.VERIFY_REQUIRED
 
@@ -497,6 +546,8 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
             limit: Int? = null,
         ): HubNetworkResult<dev.minepacu.stelliveeventnotifier.core.network.HubEventsListResponseDto>
         suspend fun hubEvent(id: String): HubNetworkResult<HubEventDto>
+        suspend fun announcements(cursor: String? = null): HubNetworkResult<ServiceAnnouncementListResponseDto>
+        suspend fun announcement(id: String): HubNetworkResult<ServiceAnnouncementDto>
         suspend fun hubEventsCalendar(from: String, to: String, timezone: String): HubNetworkResult<HubCalendarResponseDto>
         suspend fun songs(
             generationId: String? = null,
@@ -536,7 +587,7 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
         private val client: HubApiClient,
     ) : RemoteDataSource {
         override suspend fun bootstrap(deviceId: String?): HubNetworkResult<BootstrapResponseDto> =
-            client.bootstrap(deviceId = deviceId)
+            client.bootstrap(deviceId = deviceId, appVersion = BuildConfig.VERSION_NAME)
 
         override suspend fun registerDevice(
             request: RegisterDeviceRequestDto,
@@ -558,6 +609,10 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
         client.hubEvents(generationId = generationId, from = from, to = to, limit = limit)
 
         override suspend fun hubEvent(id: String): HubNetworkResult<HubEventDto> = client.hubEvent(id)
+        override suspend fun announcements(cursor: String?): HubNetworkResult<ServiceAnnouncementListResponseDto> =
+            client.announcements(cursor = cursor, appVersion = BuildConfig.VERSION_NAME)
+        override suspend fun announcement(id: String): HubNetworkResult<ServiceAnnouncementDto> =
+            client.announcement(id, appVersion = BuildConfig.VERSION_NAME)
 
         override suspend fun hubEventsCalendar(
             from: String,

@@ -109,12 +109,6 @@ const envSchema = z
   DAILY_RECONCILE_CRON: z.string().default("0 4 * * *"),
     MUSIC_LIGHT_SYNC_MAX_PAGES: z.coerce.number().int().positive().default(2),
 
-    X_BEARER_TOKEN: optionalString(),
-    X_API_COST_POLICY: z.literal("no_paid_api").default("no_paid_api"),
-    X_FREE_API_ENABLED: booleanFlag(false),
-    X_FREE_STREAM_ENABLED: booleanFlag(false),
-    X_FREE_POLLING_ENABLED: booleanFlag(false),
-
     NAVER_CLIENT_ID: optionalString(),
     NAVER_CLIENT_SECRET: optionalString(),
     NAVER_CAFE_SEARCH_ENABLED: booleanFlag(false),

@@ -9,8 +9,6 @@ export interface RealtimeQueueItem {
 
 const priorityByType: Record<string, number> = {
   chzzk_live_started: 1,
-  x_post: 2,
-  official_x_post: 2,
   youtube_upload: 3,
   official_youtube_upload: 3
 };
@@ -39,7 +37,6 @@ export class RealtimeDeliveryService {
       queueDepth: this.queue.length,
       lastEventAt: this.lastEventAt,
       adapters: [
-        { name: "x", realtimeCapable: true, mode: "mock_stream", health: "verify_required" },
         { name: "youtube", realtimeCapable: true, mode: "mock_websub", health: "verify_required" },
         { name: "chzzk", realtimeCapable: true, mode: "mock_live_diff", health: "verify_required" },
         { name: "naver_cafe", realtimeCapable: false, mode: "public_search_polling", health: "verify_required" }

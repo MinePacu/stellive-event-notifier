@@ -82,6 +82,8 @@ import dev.minepacu.stelliveeventnotifier.core.model.NotificationPlatform
 import dev.minepacu.stelliveeventnotifier.core.notification.NotificationPermissionPromptMoment
 import dev.minepacu.stelliveeventnotifier.core.notification.NotificationPermissionPromptPolicy
 import dev.minepacu.stelliveeventnotifier.core.model.SongCatalogItem
+import dev.minepacu.stelliveeventnotifier.core.model.AnnouncementsSummary
+import dev.minepacu.stelliveeventnotifier.core.model.ServiceAnnouncement
 import dev.minepacu.stelliveeventnotifier.databinding.ActivityMainBinding
 import dev.minepacu.stelliveeventnotifier.feature.calendar.HubCalendarDeepLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.calendar.CalendarUiPolicy
@@ -114,6 +116,9 @@ import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventHeroTagTone
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventImagePolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.GoodsEventSelectionMode
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventsPanePolicy
+import dev.minepacu.stelliveeventnotifier.feature.announcements.AnnouncementDeepLinkPolicy
+import dev.minepacu.stelliveeventnotifier.feature.announcements.AnnouncementPolicy
+import dev.minepacu.stelliveeventnotifier.feature.announcements.AnnouncementReadStore
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongMemberSelectionMode
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongsPanePolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.DataStoreSongFavoritesRepository
@@ -208,7 +213,6 @@ internal class SongBrowseSessionViewModel : ViewModel() {
     var generationId = "all"
     var type = "all"
     var libraryId = "all"
-    var statusId = "all"
     var sortId = "publishedAt_desc"
     var memberFilter = SongMemberFilterState()
     var query = ""
@@ -259,9 +263,6 @@ private var selectedSongType: String
 private var selectedSongLibraryId: String
     get() = songBrowseSession.libraryId
     set(value) { songBrowseSession.libraryId = value }
-private var selectedSongStatusId: String
-    get() = songBrowseSession.statusId
-    set(value) { songBrowseSession.statusId = value }
 private var songFavoriteIds: Set<String> = emptySet()
 private var songDiscoveryState = SongDiscoveryStateV1()
 private lateinit var songDiscoveryRepository: SongDiscoveryRepository
@@ -296,6 +297,12 @@ private var songSearchResultsContainer: LinearLayout? = null
 private var homeRecentSongs: List<SongCatalogItem>? = null
 private var isLoadingHomeRecentSongs = false
 private var selectedHubEventId: String? = null
+private var selectedAnnouncementId: String? = null
+private var announcementsSummary = AnnouncementsSummary()
+private var announcementItems: List<ServiceAnnouncement> = emptyList()
+private var announcementNextCursor: String? = null
+private var announcementReadKeys: Set<String> = emptySet()
+private lateinit var announcementReadStore: AnnouncementReadStore
     private var goodsEventsDays: List<HubCalendarDay> = emptyList()
     private var goodsEvents: List<HubEvent> = emptyList()
     private var goodsEventsSelectedMonth: YearMonth = YearMonth.now()
@@ -328,6 +335,16 @@ private var notificationPermissionRequested = false
         serverRepository = createServerRepository()
         songFavoritesRepository = DataStoreSongFavoritesRepository(this)
         songDiscoveryRepository = DataStoreSongDiscoveryRepository(this)
+        announcementReadStore = AnnouncementReadStore(this)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                announcementReadStore.readKeys.collect { keys ->
+                    announcementReadKeys = keys
+                    updateAnnouncementAction()
+                    if (navigationHistory.currentScreen == HubScreen.ANNOUNCEMENTS) refreshScreenWhenIdle(HubScreen.ANNOUNCEMENTS, ::renderAnnouncements)
+                }
+            }
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 songFavoritesRepository.favorites.collect { favorites ->
@@ -406,6 +423,8 @@ private var notificationPermissionRequested = false
         lifecycleScope.launch {
             val state = serverRepository.bootstrap()
             serverMembers = state.members
+            announcementsSummary = state.announcementsSummary
+            announcementReadStore.initializeSummary(announcementsSummary.items)
             liveStatusSourceLabel = state.liveStatusSourceLabel
             recordServerConnectionLog("bootstrap: $liveStatusSourceLabel")
             val screen = navigationHistory.currentScreen
@@ -530,7 +549,7 @@ private var notificationPermissionRequested = false
  private fun setupPullToRefresh() {
  binding.contentRefresh.isEnabled = false
  binding.contentRefresh.setOnRefreshListener {
- loadServerBootstrap()
+ if (navigationHistory.currentScreen == HubScreen.ANNOUNCEMENTS) loadAnnouncements(reset = true) else loadServerBootstrap()
  }
  }
 
@@ -567,7 +586,19 @@ private var notificationPermissionRequested = false
     }
 
     private fun handleAppDeepLink(intent: Intent?): Boolean {
-        val eventId = HubCalendarDeepLinkPolicy.eventIdFromAppDeepLink(intent?.dataString) ?: return false
+        val deepLink = intent?.dataString ?: intent?.getStringExtra("appDeepLink")
+        val announcementId = AnnouncementDeepLinkPolicy.idFromAppDeepLink(deepLink)
+        if (announcementId != null) {
+            selectedAnnouncementId = announcementId
+            navigationHistory.selectRoot(HubScreen.HOME)
+            navigationHistory.select(HubScreen.ANNOUNCEMENTS)
+            navigationHistory.select(HubScreen.ANNOUNCEMENT_DETAIL)
+            replaceScreenWithoutAnimation(HubScreen.ANNOUNCEMENT_DETAIL)
+            latestNavigationDestination = navigationHistory.currentScreen
+            latestRootDestination = navigationHistory.currentRootScreen
+            return true
+        }
+        val eventId = HubCalendarDeepLinkPolicy.eventIdFromAppDeepLink(deepLink) ?: return false
         selectedHubEventId = eventId
         serverHubEventDetailLoadedId = null
         navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
@@ -612,6 +643,7 @@ private var notificationPermissionRequested = false
     }
 
     private fun setupTopBarActions() {
+        binding.topBarAnnouncement.setOnClickListener { pushScreen(HubScreen.ANNOUNCEMENTS) }
         binding.topBarSettings.setOnClickListener {
             pushScreen(HubScreen.SETTINGS)
         }
@@ -798,7 +830,9 @@ HubScreen.SONG_MEMBER_FILTER -> renderSongMemberFilter()
 HubScreen.GOODS_EVENTS -> renderGoodsEvents()
             HubScreen.GOODS_EVENT_DETAIL -> renderHubEventDetail()
             HubScreen.LIVE -> renderLive()
-            HubScreen.HISTORY -> renderHistory()
+HubScreen.HISTORY -> renderHistory()
+            HubScreen.ANNOUNCEMENTS -> renderAnnouncements()
+            HubScreen.ANNOUNCEMENT_DETAIL -> renderAnnouncementDetail()
             HubScreen.SETTINGS -> renderSettings()
             HubScreen.SETTINGS_DELIVERY -> renderSettingsDelivery()
             HubScreen.SETTINGS_TARGETS -> renderSettingsTargets()
@@ -817,7 +851,7 @@ HubScreen.GOODS_EVENTS -> renderGoodsEvents()
                 screen == HubScreen.SONGS && shouldUseSongsTwoPane() ||
                 screen == HubScreen.SETTINGS && shouldUseSettingsTwoPane()
         binding.contentRefresh.isEnabled =
-            !isTwoPaneScreen && (screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS || screen == HubScreen.SONGS)
+            !isTwoPaneScreen && (screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS || screen == HubScreen.SONGS || screen == HubScreen.ANNOUNCEMENTS)
         if (isTwoPaneScreen) {
             binding.contentRefresh.isRefreshing = false
         }
@@ -863,6 +897,8 @@ private fun updateNavigationChrome() {
         )
         binding.topBarTitleGroup.isVisible = spec.showTopBarTitleAtRest
         binding.topBarSettings.isVisible = spec.showSettingsAction
+        binding.topBarAnnouncementContainer.isVisible = spec.showAnnouncementAction
+        updateAnnouncementAction()
         binding.topBarSongSearch.isVisible = spec.showSongSearchAction &&
             SongsPanePolicy.shouldShowTopBarSearchAction(currentAdaptiveSpec)
         binding.bottomNavigation.isVisible = navigationSpec.showBottomNavigation
@@ -870,6 +906,7 @@ private fun updateNavigationChrome() {
         binding.navigationRailDivider.isVisible = navigationSpec.showNavigationRail
         updateTopGlassOverlayStartMargin(navigationSpec.showNavigationRail)
         updateContentWidthConstraint(navigationSpec.constrainContentWidth)
+        scheduleSongScrollToTopButtonPositionUpdate()
     }
 
     private fun screenForItem(itemId: Int): HubScreen = when (itemId) {
@@ -891,6 +928,8 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
         HubScreen.GOODS_EVENT_DETAIL -> R.id.tab_goods_events
         HubScreen.LIVE -> R.id.tab_live
         HubScreen.HISTORY -> null
+        HubScreen.ANNOUNCEMENTS -> null
+        HubScreen.ANNOUNCEMENT_DETAIL -> null
         HubScreen.SETTINGS -> null
         HubScreen.SETTINGS_DELIVERY -> null
         HubScreen.SETTINGS_TARGETS -> null
@@ -903,6 +942,7 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
 
 private fun startScreen(screenId: String, title: String, role: String) {
         binding.screenActionContainer.isVisible = false
+        scheduleSongScrollToTopButtonPositionUpdate()
         activeTwoPaneDetailPane = null
         activeSettingsHubScrollView = null
         if (screenId != "song_member_filter") selectedSongMemberFilterDraft = null
@@ -920,6 +960,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
         binding.collapsedRole.isVisible = topBarRole.isNotBlank()
         binding.contentList.removeAllViews()
         resetTopBarScrollSources()
+        registerTopBarScrollSource(binding.contentScroll)
         clearTopFilters()
         applyContentTopPadding(underTopBar = false)
         if (MainScreenChromePolicy.spec(screenId, navigationHistory.canGoBack).showExpandedBodyHeader) {
@@ -1027,6 +1068,49 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 bottomMargin = dp(80)
             },
         )
+        scheduleSongScrollToTopButtonPositionUpdate()
+    }
+
+    private fun scheduleSongScrollToTopButtonPositionUpdate() {
+        if (!::songScrollToTopButton.isInitialized || !::binding.isInitialized) return
+        binding.root.post {
+            val obstruction = when {
+                binding.screenActionContainer.isVisible -> binding.screenActionContainer
+                binding.bottomNavigation.isVisible -> binding.bottomNavigation
+                else -> null
+            }
+            val occupiedBottomHeight = obstruction?.let { view ->
+                val rootLocation = IntArray(2)
+                val viewLocation = IntArray(2)
+                binding.root.getLocationInWindow(rootLocation)
+                view.getLocationInWindow(viewLocation)
+                (rootLocation[1] + binding.root.height - viewLocation[1]).coerceAtLeast(0)
+            } ?: 0
+            val params = songScrollToTopButton.layoutParams as? FrameLayout.LayoutParams ?: return@post
+            val nextBottomMargin = occupiedBottomHeight + dp(16)
+            if (params.bottomMargin != nextBottomMargin) {
+                params.bottomMargin = nextBottomMargin
+                songScrollToTopButton.layoutParams = params
+            }
+        }
+    }
+
+    private fun registerSongMemberFilterScrollToTop() {
+        val source = binding.contentScroll
+        activeSongScrollView = source
+        activeSongListContainer = null
+        activeSongScrollSlot = null
+        source.setOnScrollChangeListener { view, _, scrollY, _, _ ->
+            topBarScrollSourceOffsets[view] = scrollY
+            updateTopBarScrolledFromSources()
+            songScrollToTopButton.isVisible = MainUiPolicy.shouldShowSongScrollToTop(
+                absoluteOffset = scrollY,
+                isLoading = false,
+                isEmpty = false,
+                isRestoring = false,
+                threshold = dp(240),
+            )
+        }
     }
 
     private fun currentSongQueryKey(): SongListQueryKey = SongListQueryKey(
@@ -1036,7 +1120,6 @@ private fun startScreen(screenId: String, title: String, role: String) {
         memberMatchMode = selectedSongMemberFilter.matchMode,
         participation = selectedSongMemberFilter.participation,
         libraryId = selectedSongLibraryId,
-        statusId = selectedSongStatusId,
         sortId = selectedSongSortId,
         query = selectedSongQuery,
     )
@@ -1184,6 +1267,13 @@ private fun startScreen(screenId: String, title: String, role: String) {
             title = getString(R.string.home_title),
             role = "지금 라이브, 최근 알림, 마감 임박 굿즈/행사를 확인합니다."
         )
+        val homeAnnouncement = AnnouncementPolicy.homeAnnouncement(
+            (announcementItems + listOfNotNull(announcementsSummary.pinned)).distinctBy { it.id }
+        )
+        if (homeAnnouncement != null) {
+            binding.contentList.addView(sectionLabel("중요 공지"))
+            binding.contentList.addView(announcementCard(homeAnnouncement, showBody = false))
+        }
         binding.contentList.addView(sectionLabel("지금 라이브"))
         binding.contentList.addView(serverStatusStrip())
         if (liveMembersForUi().isEmpty()) {
@@ -1263,6 +1353,122 @@ private fun startScreen(screenId: String, title: String, role: String) {
                     }
                 }
             )
+        }
+    }
+
+    private fun updateAnnouncementAction() {
+        if (!::binding.isInitialized) return
+        val unreadCount = announcementsSummary.items.count {
+            AnnouncementPolicy.readKey(it.id, it.attentionRevision) !in announcementReadKeys
+        }
+        binding.topBarAnnouncementBadge.text = AnnouncementPolicy.badgeText(unreadCount).orEmpty()
+        binding.topBarAnnouncementBadge.isVisible = unreadCount > 0 && binding.topBarAnnouncementContainer.isVisible
+        binding.topBarAnnouncement.contentDescription = AnnouncementPolicy.accessibilityLabel(unreadCount)
+    }
+
+    private fun renderAnnouncements() {
+        startScreen("announcements", "공지사항", "앱 서비스 운영 안내와 장애·점검·업데이트 소식입니다.")
+        if (announcementItems.isEmpty()) {
+            binding.contentList.addView(compactEventCard("공지 확인 중", "서버에서 최신 공지를 불러오고 있습니다.", emptyList()))
+            loadAnnouncements(reset = true)
+            return
+        }
+        val sorted = AnnouncementPolicy.sorted(announcementItems)
+        val pinned = sorted.filter { it.isPinned }
+        val recent = sorted.filterNot { it.isPinned }
+        if (pinned.isNotEmpty()) {
+            binding.contentList.addView(sectionLabel("고정 공지"))
+            pinned.forEach { binding.contentList.addView(announcementCard(it, showBody = false)) }
+        }
+        binding.contentList.addView(sectionLabel("최근 공지"))
+        recent.forEach { binding.contentList.addView(announcementCard(it, showBody = false)) }
+        announcementNextCursor?.let {
+            binding.contentList.addView(compactEventCard("더 불러오기", "이전 공지를 이어서 확인합니다.", emptyList()).apply {
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { loadAnnouncements(reset = false) }
+            })
+        }
+    }
+
+    private fun loadAnnouncements(reset: Boolean) {
+        lifecycleScope.launch {
+            val page = serverRepository.announcements(if (reset) null else announcementNextCursor)
+            announcementItems = if (reset) page.items else (announcementItems + page.items).distinctBy { it.id }
+            announcementNextCursor = page.nextCursor
+            announcementReadStore.initialize(announcementItems)
+            binding.contentRefresh.isRefreshing = false
+            if (navigationHistory.currentScreen == HubScreen.ANNOUNCEMENTS) refreshScreenWhenIdle(HubScreen.ANNOUNCEMENTS, ::renderAnnouncements)
+        }
+    }
+
+    private fun announcementCard(announcement: ServiceAnnouncement, showBody: Boolean): MaterialCardView {
+        val unread = AnnouncementPolicy.readKey(announcement.id, announcement.attentionRevision) !in announcementReadKeys
+        val meta = mutableListOf(announcement.type.displayName, announcement.severity.displayName)
+        if (unread) meta += "읽지 않음"
+        if (announcement.resolvedAt != null) meta += "해결됨"
+        meta += announcement.publishedAt.toString().take(10)
+        return compactEventCard(
+            announcement.title,
+            if (showBody) announcement.body else announcement.summary,
+            meta,
+        ).apply {
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                selectedAnnouncementId = announcement.id
+                markAnnouncementRead(announcement)
+                pushScreen(HubScreen.ANNOUNCEMENT_DETAIL)
+            }
+        }
+    }
+
+    private fun markAnnouncementRead(announcement: ServiceAnnouncement) {
+        announcementReadKeys = announcementReadKeys + AnnouncementPolicy.readKey(announcement.id, announcement.attentionRevision)
+        updateAnnouncementAction()
+        lifecycleScope.launch { announcementReadStore.markRead(announcement) }
+    }
+
+    private fun renderAnnouncementDetail() {
+        startScreen("announcement_detail", "공지사항", "")
+        val id = selectedAnnouncementId
+        val announcement = announcementItems.firstOrNull { it.id == id } ?: announcementsSummary.pinned?.takeIf { it.id == id }
+        if (id == null) {
+            binding.contentList.addView(compactEventCard("공지를 찾을 수 없습니다", "공지 목록에서 다시 선택해 주세요.", emptyList()))
+            return
+        }
+        if (announcement == null) {
+            binding.contentList.addView(compactEventCard("공지 불러오는 중", "상세 내용을 확인하고 있습니다.", emptyList()))
+            lifecycleScope.launch {
+                serverRepository.announcementDetail(id)?.let {
+                    announcementItems = (announcementItems + it).distinctBy(ServiceAnnouncement::id)
+                    markAnnouncementRead(it)
+                    refreshScreenWhenIdle(HubScreen.ANNOUNCEMENT_DETAIL, ::renderAnnouncementDetail)
+                }
+            }
+            return
+        }
+        markAnnouncementRead(announcement)
+        binding.contentList.addView(sectionLabel(announcement.type.displayName + " · " + announcement.severity.displayName))
+        binding.contentList.addView(screenTitle(announcement.title))
+        binding.contentList.addView(screenCopy("게시 ${announcement.publishedAt.toString().take(16).replace('T', ' ')} · 수정 ${announcement.updatedAt.toString().take(16).replace('T', ' ')}"))
+        binding.contentList.addView(compactEventCard("", announcement.body, listOfNotNull(if (announcement.resolvedAt != null) "해결됨" else null)))
+        if (!announcement.actionLabel.isNullOrBlank() && (!announcement.appDeepLink.isNullOrBlank() || !announcement.externalUrl.isNullOrBlank())) {
+            binding.contentList.addView(compactEventCard(announcement.actionLabel, "관련 화면 또는 링크를 엽니다.", emptyList()).apply {
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    announcement.appDeepLink?.let { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) }
+                        ?: openExternalUrl(announcement.externalUrl)
+                }
+            })
+        }
+        announcement.externalUrl?.let { url ->
+            binding.contentList.addView(compactEventCard("외부 링크", url, emptyList()).apply {
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { openExternalUrl(url) }
+            })
         }
     }
 
@@ -1773,8 +1979,7 @@ private fun renderSongs() {
                 (selectedSongType == "all" || song.type.apiValue == selectedSongType) &&
                     MainUiPolicy.songMatchesMember(song, selectedSongMemberFilter) &&
                     MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers) &&
-                    MainUiPolicy.songMatchesLibrary(song, selectedSongLibraryId, songFavoriteIds) &&
-                    (selectedSongStatusId != "new" || SongDiscoveryPolicy.isNew(song, songDiscoveryState))
+                    MainUiPolicy.songMatchesLibrary(song, selectedSongLibraryId, songFavoriteIds)
             },
             selectedSongSortId,
         )
@@ -1806,7 +2011,6 @@ private fun renderSongs() {
             val key = listOf(
                 selectedSongType,
                 selectedSongLibraryId,
-                selectedSongStatusId,
                 selectedSongSortId,
                 selectedSongQuery,
             ).joinToString(":")
@@ -1869,14 +2073,7 @@ private fun renderSongs() {
             container.addView(serverStatusStrip())
         }
         if (state.visibleSongs.isEmpty()) {
-            val allNewCount = cachedSongItems.count { SongDiscoveryPolicy.isNew(it, songDiscoveryState) }
-            val message = if (selectedSongStatusId == "new") {
-                when {
-                    !songDiscoveryState.initialized -> "새 노래 상태를 확인하는 중입니다."
-                    allNewCount == 0 -> "새로 추가된 노래가 없습니다."
-                    else -> "현재 필터 조건에 맞는 새 노래가 없습니다."
-                }
-            } else if (selectedSongLibraryId == "favorites") {
+            val message = if (selectedSongLibraryId == "favorites") {
                 MainUiPolicy.songFavoriteEmptyMessage(songFavoriteIds.isNotEmpty())
             } else SongMemberFilterPolicy.emptyMessage(state.catalogMembers, selectedSongMemberFilter)
             container.addView(noticeCard(message))
@@ -1890,22 +2087,6 @@ private fun renderSongs() {
 
     private fun addSongListFooter(container: LinearLayout, state: SongRenderState) {
         container.addView(songLoadMoreControl(container, state))
-        if (selectedSongStatusId == "new" && state.displayedSongs.any { SongDiscoveryPolicy.isNew(it, songDiscoveryState) }) {
-            container.addView(baseCard(HubCardStyle.INTERACTIVE).apply {
-                isClickable = true
-                isFocusable = true
-                contentDescription = "표시된 새 노래 확인 완료"
-                setOnClickListener { lifecycleScope.launch { songDiscoveryRepository.acknowledge(state.displayedSongs, cachedSongItems) } }
-                addView(TextView(context).apply {
-                    text = "표시된 새 노래 확인 완료"
-                    gravity = Gravity.CENTER
-                    setTextColor(color(R.color.hub_text))
-                    textSize = 14f
-                    typeface = Typeface.DEFAULT_BOLD
-                    setPadding(dp(14), dp(14), dp(14), dp(14))
-                })
-            })
-        }
     }
 
     private fun renderSongFilterPaneInto(container: LinearLayout, visibleCount: Int = 0) {
@@ -2046,20 +2227,6 @@ private fun songFilterPanel(): MaterialCardView =
             addView(divider())
             addView(songSegmentedRow(MainUiPolicy.songLibraryFilters(), selectedSongLibraryId) { optionId ->
                 selectedSongLibraryId = optionId
-                resetSongBrowseForQueryChange()
-                renderSongsSelectionChange()
-            }.apply {
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
-                    bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
-                }
-            })
-            addView(divider())
-            val statusFilters = MainUiPolicy.songStatusFilters().map {
-                if (it.id == "new") it.copy(label = "새 노래 (${cachedSongItems.count { song -> SongDiscoveryPolicy.isNew(song, songDiscoveryState) }})") else it
-            }
-            addView(songSegmentedRow(statusFilters, selectedSongStatusId) { optionId ->
-                selectedSongStatusId = optionId
                 resetSongBrowseForQueryChange()
                 renderSongsSelectionChange()
             }.apply {
@@ -2394,11 +2561,11 @@ private fun renderSongMemberFilter(restoreScrollY: Int? = null) {
                 typeface = Typeface.DEFAULT_BOLD
                 setPadding(0, dp(14), 0, dp(7))
             })
-            addView(songSegmentedRow(listOf(SongFilterOption("ANY", "전체"), SongFilterOption("SOLO", "솔로"), SongFilterOption("COLLABORATION", "콜라보")), draft.participation.name) {
+            addView(songSegmentedRow(listOf(SongFilterOption("ANY", "전체"), SongFilterOption("SOLO", "솔로"), SongFilterOption("COLLABORATION", "함께")), draft.participation.name) {
                 updateDraft(draft.copy(participation = SongParticipation.valueOf(it)))
             })
             addView(TextView(context).apply {
-                text = "솔로·콜라보는 연결된 스텔라이브 멤버 수 기준이며 외부 가수는 계산에 포함되지 않습니다."
+                text = "솔로는 1명, 함께 부른 곡은 연결된 스텔라이브 멤버 2명 이상을 기준으로 하며 외부 가수는 계산에 포함되지 않습니다."
                 setTextColor(color(R.color.hub_text_muted))
                 textSize = 12f
                 setPadding(0, dp(12), 0, 0)
@@ -2479,6 +2646,8 @@ private fun renderSongMemberFilter(restoreScrollY: Int? = null) {
             popScreen()
         }
     }
+    registerSongMemberFilterScrollToTop()
+    scheduleSongScrollToTopButtonPositionUpdate()
     restoreScrollY?.let { scrollY ->
         binding.contentScroll.post { binding.contentScroll.scrollTo(0, scrollY) }
     }
@@ -3001,8 +3170,7 @@ private fun songFilterRow(
             settingsPanel(
                 rows = listOf(
                     SettingRow("1기생, 2기생, 3기생", "현재 활동 중인 멤버만 포함하며, 활동이 종료된 멤버는 알림 대상에서 제외합니다.", settings.generationEnabled["gen1"] == true && settings.generationEnabled["gen2"] == true && settings.generationEnabled["gen3"] == true),
-                    SettingRow("감자", "강지는 감자의 대표 대상으로 포함합니다.", settings.generationEnabled["gamja"] == true),
-                    SettingRow("기타", "스텔라이브 공식 X와 YouTube 업로드 알림입니다.", settings.generationEnabled["official"] == true),
+                    SettingRow("기타", "스텔라이브 공식 YouTube 업로드 알림입니다.", settings.generationEnabled["official"] == true),
                     SettingRow("합류 예정 멤버", "기본적으로 꺼져 있으며, 필요한 경우 직접 켤 수 있습니다.", settings.generationEnabled["gen4-upcoming"] == true)
                 )
             )
@@ -3013,7 +3181,7 @@ private fun songFilterRow(
                 targetToggleCard(
                     title = member.koreanName,
                     body = when (member.catalogRole) {
-                        CatalogRole.REPRESENTATIVE -> "감자 분류의 대표 대상입니다."
+                        CatalogRole.REPRESENTATIVE -> null
                         CatalogRole.OFFICIAL_CHANNEL -> "기타 분류에 포함된 공식 채널입니다."
                         else -> "${member.generationName} · ${member.roleLabel ?: "멤버"}"
                     },
@@ -3103,7 +3271,7 @@ private fun songFilterRow(
             settingsInfoCard(
                 title = "공식 채널 제한",
                 body = MainUiPolicy.settingsEventTypeCommonNotices().last(),
-                pills = listOf("공식 X 게시글", "공식 YouTube 업로드", "YouTube 라이브 제외")
+                pills = listOf("공식 YouTube 업로드", "YouTube 라이브 제외")
             )
         )
     }
@@ -3196,7 +3364,7 @@ private fun songFilterRow(
                 rows = listOf(
                     SettingRow(
                         "비공식 프로젝트",
-                        "스텔라이브, 치지직, YouTube, X, 네이버, Samsung, Apple과 공식 관계가 없습니다."
+                        "스텔라이브, 치지직, YouTube, 네이버, Samsung, Apple과 공식 관계가 없습니다."
                     )
                 )
             )
@@ -3903,7 +4071,6 @@ private fun noticeCard(text: String): TextView = TextView(this).apply {
         val labels = mutableListOf<String>()
         if (member.chzzkChannelId != null) labels += "CHZZK"
         if (member.youtubeHandle != null) labels += if (member.catalogRole == CatalogRole.OFFICIAL_CHANNEL) "공식 YouTube 업로드" else "YouTube"
-        if (member.xHandle != null) labels += if (member.xHandle == "verify_required") "X 확인 필요" else if (member.catalogRole == CatalogRole.OFFICIAL_CHANNEL) "공식 X 게시글" else "X"
         if (member.catalogRole == CatalogRole.OFFICIAL_CHANNEL) labels += "YouTube LIVE 제외"
         return labels
     }
@@ -4440,7 +4607,7 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
 
     private fun targetToggleCard(
         title: String,
-        body: String,
+        body: String?,
         checked: Boolean,
         onCheckedChange: (Boolean) -> Unit
     ): MaterialCardView =
@@ -4694,7 +4861,7 @@ private fun rowChip(text: String): Chip = Chip(this).apply {
         centerChipText(this)
         val isWarning = text.contains("필터") || text.contains("확인")
         val isOff = text.contains("OFF") || text.contains("제외") || text.contains("unsupported")
-        val isGood = text.contains("LIVE") || text.contains("CHZZK") || text.contains("YouTube") || text.contains("X")
+        val isGood = text.contains("LIVE") || text.contains("CHZZK") || text.contains("YouTube")
         isCheckable = false
         isClickable = false
         setEnsureMinTouchTargetSize(false)

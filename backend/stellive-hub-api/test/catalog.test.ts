@@ -35,7 +35,7 @@ describe("catalog seed policy", () => {
     expect(official?.catalogRole).toBe("official_channel");
     expect(official?.platforms.youtubeChannelId).toBe("UC2b4WRE5BZ6SIUWBeJU8rwg");
     expect(official?.platforms.youtubeHandle).toBe("@stellive_official");
-    expect(official?.platforms.xHandle).toBe("StelLive_kr");
+    expect(official?.platforms.youtubeHandle).toBe("@stellive_official");
     expect(catalog.isSupportedEventForMember("stellive-official", "official_youtube_upload")).toBe(true);
     expect(catalog.isSupportedEventForMember("stellive-official", "youtube_live_started")).toBe(false);
   });

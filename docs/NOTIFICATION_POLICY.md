@@ -23,7 +23,6 @@ Generations/categories include `gen1`, `gen2`, `gen3`, `gamja`, `official`, and 
 - Delivery mode: standard
 - Realtime mode: off until user enables it
 - CHZZK chat: off
-- Official X post: on
 - Official YouTube upload: on
 - Official YouTube live events: unsupported and not generated
 
@@ -51,7 +50,7 @@ Notification noise and push-volume reduction policies are defined in [Notificati
 - `gen2=false` plus `neneko-mashiro=true explicitOverride` allows Neneko Mashiro notifications.
 - `youtube=false` plus `tenko-shibuki/youtube=true explicitOverride` allows Tenko Shibuki YouTube notifications.
 - `gamja=false` plus `gangzi=true explicitOverride` allows Gangzi notifications.
-- `official=false` plus `stellive-official=true explicitOverride` allows official X/upload notifications.
+- `official=false` plus `stellive-official=true explicitOverride` allows official YouTube upload notifications.
 - Official YouTube live events are never generated even if a setting exists.
 
 ## Tap Action
@@ -64,4 +63,4 @@ A single verified HTTPS image URL may be included only in provider visual notifi
 
 Raw provider payloads, private platform responses, image binaries, logos, profile images, posters, screenshots, fan art, copied media, production device tokens, OAuth tokens, API keys, Firebase service accounts, and unverified image URLs must never be included.
 
-MVP update: X-side notification ingestion and delivery are intentionally disabled for the current `굿즈/행사` calendar/widget scope. The calendar and widget surfaces are read-only schedule projections and do not send push notifications or bypass global, platform, event-type, generation, member, quiet-hours, keyword, or rate-limit preference resolution.
+The calendar and widget surfaces are read-only schedule projections and do not send push notifications or bypass global, platform, event-type, generation, member, quiet-hours, keyword, or rate-limit preference resolution.

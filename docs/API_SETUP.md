@@ -86,10 +86,6 @@ OCI server-app CHZZK test:
 10. Use a platform scheduler or cron to call the internal route at the approved polling interval.
 11. Monitor adapter health, live-status cache freshness, dedupe counts, and notification job volume before enabling realtime fan-out broadly.
 
-## X
-
-Design X integration as no-paid-API only. Use official X API paths only when the project can access them without paid API billing. If free official access is unavailable, unauthorized, rate-limited beyond usefulness, or requires paid billing, keep X disabled behind feature flags and do not generate X notifications. Do not implement scraping or login-cookie alternatives.
-
 ## YouTube
 
 Use WebSub for upload notifications and YouTube Data API for limited fallback and live status where allowed. Stellive official YouTube channel `UC2b4WRE5BZ6SIUWBeJU8rwg` / `@stellive_official` supports upload notifications only in this MVP. Do not collect official YouTube live scheduled/started/ended notifications.

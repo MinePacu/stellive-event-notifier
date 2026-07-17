@@ -10,10 +10,12 @@ import { PreferenceResolutionService } from "../preferences/preferenceResolution
 import { RealtimeDeliveryService } from "../realtime/realtimeDeliveryService.js";
 import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
 import { registerAppRoutes } from "./appRoutes.js";
+import { registerServiceAnnouncementRoutes } from "./serviceAnnouncementRoutes.js";
+import type { ServiceAnnouncementReadService } from "../announcements/serviceAnnouncementReadService.js";
 import registerHubEventReadRoutes from "./hubEventReadRoutes.js";
 import registerMusicRoutes from "./musicRoutes.js";
 import registerSongRoutes from "./songRoutes.js";
-import type { DeliveryAttempt, HubCalendarSpecialDay, PlatformEvent, UserNotificationPreference } from "../types.js";
+import type { DeliveryAttempt, HubCalendarSpecialDay, PlatformEvent, PlatformEventType, PlatformSource, UserNotificationPreference } from "../types.js";
 import type { BootstrapResponse, MobilePlatform } from "../../../../shared/schemas/mobileApi.js";
 import type { SongRepository } from "../repositories/songRepository.js";
 import type { Member } from "../types.js";
@@ -30,6 +32,7 @@ const deliveryAttempts: DeliveryAttempt[] = [];
 const devDeviceId = "dev-device";
 
 export interface AppRouteDependencies {
+  announcements?: ServiceAnnouncementReadService;
   hubEvents?: HubEventReadPort;
   songs?: SongRepository;
   hubCalendarSpecialDays?: HubCalendarSpecialDay[];
@@ -131,6 +134,31 @@ function sampleEvent(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
   };
 }
 
+const supportedPlatformSources = new Set<PlatformSource>(["naver_cafe", "chzzk", "youtube", "hub_event"]);
+const supportedPlatformEventTypes = new Set<PlatformEventType>([
+  "cafe_post",
+  "chzzk_live_started",
+  "chzzk_live_ended",
+  "chzzk_chat",
+  "chzzk_subscription",
+  "youtube_upload",
+  "youtube_live_scheduled",
+  "youtube_live_started",
+  "youtube_live_ended",
+  "official_youtube_upload",
+  "event_announced",
+  "event_sales_open",
+  "event_deadline_soon",
+  "event_updated",
+  "event_cancelled"
+]);
+
+function isSupportedPlatformEventInput(input: { source?: unknown; type?: unknown }): boolean {
+  const sourceSupported = input.source === undefined || supportedPlatformSources.has(input.source as PlatformSource);
+  const typeSupported = input.type === undefined || supportedPlatformEventTypes.has(input.type as PlatformEventType);
+  return sourceSupported && typeSupported;
+}
+
 export async function registerRoutes(app: FastifyInstance, options: AppRouteOptions = {}) {
   const liveStatusRepository = options.dependencies?.liveStatus ?? new LiveStatusRepository();
   const hubEvents = options.dependencies?.hubEvents ?? defaultHubEvents;
@@ -165,19 +193,16 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
           unofficialProject: true,
           catalogVersion: "seed-2026-06-01",
           officialYoutubeLiveExcluded: true,
-          xNotificationsEnabled: false,
-          xDisabledReason: "x_notifications_dropped_for_mvp",
           hubCalendarEnabled: true,
         },
         appConfig: {
           unofficialProject: true,
           catalogVersion: "seed-2026-06-01",
           officialYoutubeLiveExcluded: true,
-          xNotificationsEnabled: false,
-          xDisabledReason: "x_notifications_dropped_for_mvp",
           hubCalendarEnabled: true,
         },
         hubEventsSummary: await hubEvents.summary(),
+        announcementsSummary: { activeCount: 0, items: [], generatedAt: new Date().toISOString() },
         generations: catalog.getGenerations(),
         members: hydratedMembers,
         preferences: preferences.get(deviceId) ?? [],
@@ -186,6 +211,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
       };
     },
   });
+  await registerServiceAnnouncementRoutes(app, options.dependencies?.announcements);
 
   app.get("/v1/generations", async () => catalog.getGenerations());
   app.get("/v1/members", async () => getHydratedMembers());
@@ -196,13 +222,16 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
     return member;
   });
 
-  app.get("/v1/preferences/resolved", async (request) => {
-    const query = request.query as { deviceId?: string; memberId?: string; generationId?: string; source?: PlatformEvent["source"]; eventType?: PlatformEvent["type"] };
+  app.get("/v1/preferences/resolved", async (request, reply) => {
+    const query = request.query as { deviceId?: string; memberId?: string; generationId?: string; source?: unknown; eventType?: unknown };
+    if (!isSupportedPlatformEventInput({ source: query.source, type: query.eventType })) {
+      return reply.badRequest("unsupported platform event");
+    }
     const event = sampleEvent({
       memberId: query.memberId,
       generationId: query.generationId,
-      source: query.source,
-      type: query.eventType
+      source: query.source as PlatformSource | undefined,
+      type: query.eventType as PlatformEventType | undefined
     });
     return preferenceResolution.resolve(event, query.deviceId ?? "dev-device", preferences.get(query.deviceId ?? "dev-device") ?? []);
   });
@@ -275,7 +304,9 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
   app.get("/v1/notifications/delivery-attempts", async () => deliveryAttempts);
 
   app.post("/v1/dev/mock-events", async (request, reply) => {
-    const event = sampleEvent(request.body as Partial<PlatformEvent>);
+    const input = request.body as Partial<PlatformEvent>;
+    if (!isSupportedPlatformEventInput(input)) return reply.badRequest("unsupported platform event");
+    const event = sampleEvent(input);
     if (shouldDropEventBeforeStorage(event)) return reply.code(202).send({ dropped: true, reason: "official_youtube_live_excluded" });
     if (!catalog.isSupportedEventForMember(event.memberId, event.type)) {
       return reply.code(202).send({ dropped: true, reason: "unsupported_event_for_member" });
@@ -315,8 +346,9 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
   });
   app.post("/v1/dev/mock-live-status", async () => ({ updated: true }));
   app.post("/v1/dev/mock-realtime-event", async () => ({ queued: true, status: realtime.status() }));
-  app.post("/v1/dev/resolve-preference", async (request) => {
+  app.post("/v1/dev/resolve-preference", async (request, reply) => {
     const body = request.body as { event?: Partial<PlatformEvent>; deviceId?: string; preferences?: UserNotificationPreference[] };
+    if (!isSupportedPlatformEventInput(body.event ?? {})) return reply.badRequest("unsupported platform event");
     return preferenceResolution.resolve(sampleEvent(body.event), body.deviceId ?? "dev-device", body.preferences ?? []);
   });
 }

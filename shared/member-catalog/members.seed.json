@@ -10,7 +10,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown", "rightsNotes": "Use app-owned placeholder unless an official API returns a displayable URL." },
-    "platforms": { "chzzkChannelId": "45e71a76e949e16a34764deb962f9d9f", "youtubeChannelId": "UClbYIn9LDbbFZ9w2shX3K0g", "youtubeHandle": "@ayatsunoyuni", "xHandle": "AyatsunoYuni", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "45e71a76e949e16a34764deb962f9d9f", "youtubeChannelId": "UClbYIn9LDbbFZ9w2shX3K0g", "youtubeHandle": "@ayatsunoyuni", "externalUrls": {} }
   },
   {
     "id": "sakihane-huya",
@@ -23,7 +23,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "36ddb9bb4f17593b60f1b63cec86611d", "youtubeChannelId": "UC0YQnenKBCu5sGb7H61n6HA", "youtubeHandle": "@Sakihanechannel", "xHandle": "verify_required", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "36ddb9bb4f17593b60f1b63cec86611d", "youtubeChannelId": "UC0YQnenKBCu5sGb7H61n6HA", "youtubeHandle": "@Sakihanechannel", "externalUrls": {} }
   },
   {
     "id": "shirayuki-hina",
@@ -36,7 +36,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "b044e3a3b9259246bc92e863e7d3f3b8", "youtubeChannelId": "UC1afpiIuBDcjYlmruAa0HiA", "xHandle": "verify_required", "youtubeHandle": "@ShirayukiHina", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "b044e3a3b9259246bc92e863e7d3f3b8", "youtubeChannelId": "UC1afpiIuBDcjYlmruAa0HiA", "youtubeHandle": "@ShirayukiHina", "externalUrls": {} }
   },
   {
     "id": "neneko-mashiro",
@@ -49,7 +49,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "4515b179f86b67b4981e16190817c580", "youtubeChannelId": "UC_eeSpMBz8PG4ssdBPnP07g", "xHandle": "verify_required", "youtubeHandle": "@neneko_mashiro", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "4515b179f86b67b4981e16190817c580", "youtubeChannelId": "UC_eeSpMBz8PG4ssdBPnP07g", "youtubeHandle": "@neneko_mashiro", "externalUrls": {} }
   },
   {
     "id": "akane-lize",
@@ -62,7 +62,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "4325b1d5bbc321fad3042306646e2e50", "youtubeChannelId": "UC7-m6jQLinZQWIbwm9W-1iw", "xHandle": "verify_required", "youtubeHandle": "@AkaneLize", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "4325b1d5bbc321fad3042306646e2e50", "youtubeChannelId": "UC7-m6jQLinZQWIbwm9W-1iw", "youtubeHandle": "@AkaneLize", "externalUrls": {} }
   },
   {
     "id": "arahashi-tabi",
@@ -75,7 +75,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "a6c4ddb09cdb160478996007bff35296", "youtubeChannelId": "UCAHVQ44O81aehLWfy9O6Elw", "xHandle": "verify_required", "youtubeHandle": "@ArahashiTabi", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "a6c4ddb09cdb160478996007bff35296", "youtubeChannelId": "UCAHVQ44O81aehLWfy9O6Elw", "youtubeHandle": "@ArahashiTabi", "externalUrls": {} }
   },
   {
     "id": "tenko-shibuki",
@@ -88,7 +88,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "64d76089fba26b180d9c9e48a32600d9", "youtubeChannelId": "UCYxLMfeX1CbMBll9MsGlzmw", "xHandle": "TenkoShibuki", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "64d76089fba26b180d9c9e48a32600d9", "youtubeChannelId": "UCYxLMfeX1CbMBll9MsGlzmw", "externalUrls": {} }
   },
   {
     "id": "aokumo-rin",
@@ -101,7 +101,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "516937b5f85cbf2249ce31b0ad046b0f", "youtubeChannelId": "UCQmcltnre6aG9SkDRYZqFIg", "xHandle": "AokumoRin", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "516937b5f85cbf2249ce31b0ad046b0f", "youtubeChannelId": "UCQmcltnre6aG9SkDRYZqFIg", "externalUrls": {} }
   },
   {
     "id": "hanako-nana",
@@ -114,7 +114,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "4d812b586ff63f8a2946e64fa860bbf5", "youtubeChannelId": "UCcA21_PzN1EhNe7xS4MJGsQ", "xHandle": "HanakoNana_", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "4d812b586ff63f8a2946e64fa860bbf5", "youtubeChannelId": "UCcA21_PzN1EhNe7xS4MJGsQ", "externalUrls": {} }
   },
   {
     "id": "yuzuha-riko",
@@ -127,7 +127,7 @@
     "activeStatus": "active",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "8fd39bb8de623317de90654718638b10", "youtubeChannelId": "UCj0c1jUr91dTetIQP2pFeLA", "xHandle": "YuzuhaRiko", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "8fd39bb8de623317de90654718638b10", "youtubeChannelId": "UCj0c1jUr91dTetIQP2pFeLA", "externalUrls": {} }
   },
   {
     "id": "gangzi",
@@ -141,7 +141,7 @@
     "roleLabel": "스텔라이브 대표",
     "isPerson": true,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "chzzkChannelId": "b5ed5db484d04faf4d150aedd362f34b", "youtubeHandle": "@GANGZI1", "xHandle": "GANGZIIII", "naverCafeQuery": "강지", "externalUrls": {} }
+    "platforms": { "chzzkChannelId": "b5ed5db484d04faf4d150aedd362f34b", "youtubeHandle": "@GANGZI1", "naverCafeQuery": "강지", "externalUrls": {} }
   },
   {
     "id": "stellive-official",
@@ -155,8 +155,8 @@
     "roleLabel": "스텔라이브 공식 채널",
     "isPerson": false,
     "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown", "rightsNotes": "Do not bundle official logos. Use platform API URLs only when allowed." },
-    "platforms": { "chzzkChannelId": null, "youtubeChannelId": "UC2b4WRE5BZ6SIUWBeJU8rwg", "youtubeHandle": "@stellive_official", "xHandle": "StelLive_kr", "naverCafeQuery": "verify_required", "externalUrls": {} },
-    "supportedEventTypes": ["official_x_post", "official_youtube_upload"],
+    "platforms": { "chzzkChannelId": null, "youtubeChannelId": "UC2b4WRE5BZ6SIUWBeJU8rwg", "youtubeHandle": "@stellive_official", "naverCafeQuery": "verify_required", "externalUrls": {} },
+    "supportedEventTypes": ["official_youtube_upload"],
     "excludedEventTypes": ["official_youtube_live_scheduled", "official_youtube_live_started", "official_youtube_live_ended", "youtube_live_scheduled", "youtube_live_started", "youtube_live_ended"]
   },
   {
