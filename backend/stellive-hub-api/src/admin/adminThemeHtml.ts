@@ -34,13 +34,33 @@ export function renderAdminThemeInitScript(): string {
   </script>`;
 }
 
-export function renderAdminThemeControl(): string {
-  return `<div class="theme-control" role="group" aria-label="Theme" data-theme-default="system">
-    <button type="button" class="theme-option" data-theme-option="light" aria-pressed="false">Light</button>
-    <button type="button" class="theme-option" data-theme-option="system" aria-pressed="false">System</button>
-    <button type="button" class="theme-option" data-theme-option="dark" aria-pressed="false">Dark</button>
-    <button type="button" class="theme-option" data-theme-option="black" aria-pressed="false">Black</button>
+export interface AdminThemeLabels {
+  label: string;
+  light: string;
+  system: string;
+  dark: string;
+  black: string;
+}
+
+const defaultAdminThemeLabels: AdminThemeLabels = {
+  label: "Theme",
+  light: "Light",
+  system: "System",
+  dark: "Dark",
+  black: "Black"
+};
+
+export function renderAdminThemeControl(labels: AdminThemeLabels = defaultAdminThemeLabels): string {
+  return `<div class="theme-control" role="group" aria-label="${escapeHtml(labels.label)}" data-theme-default="system">
+    <button type="button" class="theme-option" data-theme-option="light" aria-pressed="false">${escapeHtml(labels.light)}</button>
+    <button type="button" class="theme-option" data-theme-option="system" aria-pressed="false">${escapeHtml(labels.system)}</button>
+    <button type="button" class="theme-option" data-theme-option="dark" aria-pressed="false">${escapeHtml(labels.dark)}</button>
+    <button type="button" class="theme-option" data-theme-option="black" aria-pressed="false">${escapeHtml(labels.black)}</button>
   </div>`;
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }
 
 export function renderAdminThemeStyle(): string {

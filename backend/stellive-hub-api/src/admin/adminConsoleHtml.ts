@@ -4,10 +4,20 @@ import {
   renderAdminThemeInitScript,
   renderAdminThemeStyle
 } from "./adminThemeHtml.js";
+import { localizeAdminDocument, serializeAdminCatalog, translateAdmin, type AdminLocale } from "./adminI18n.js";
+import { renderAdminLanguageHtml } from "./adminLanguageHtml.js";
+import { adminIntlLocale } from "./adminLocale.js";
 
-export function renderAdminConsoleHtml(): string {
-  return `<!doctype html>
-<html lang="en">
+export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
+  const themeLabels = {
+    label: translateAdmin(locale, "theme.label"),
+    light: translateAdmin(locale, "theme.light"),
+    system: translateAdmin(locale, "theme.system"),
+    dark: translateAdmin(locale, "theme.dark"),
+    black: translateAdmin(locale, "theme.black")
+  };
+  return localizeAdminDocument(`<!doctype html>
+<html lang="${locale}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -247,6 +257,23 @@ export function renderAdminConsoleHtml(): string {
       justify-content: flex-end;
       flex-wrap: nowrap;
       gap: 12px;
+    }
+    .language-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .language-control a {
+      border-radius: 7px;
+      padding: 5px 7px;
+      color: var(--admin-muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .language-control a[aria-current="page"] {
+      background: var(--admin-surface-hover);
+      color: var(--admin-text);
     }
     .icon-button {
       display: grid;
@@ -1588,7 +1615,7 @@ export function renderAdminConsoleHtml(): string {
       <div class="nav admin-nav-links">
         <button type="button" data-page-target="dashboard" aria-current="page">Dashboard<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
         <button type="button" data-page-target="hub-events">Hub events<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
-        <button type="button" data-page-target="announcements">공지 관리<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="announcements">Announcements<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
         <button type="button" data-page-target="operations">Operations<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
         <button type="button" data-page-target="audit">Audit<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
         <button type="button" data-page-target="settings">Settings<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
@@ -1603,12 +1630,13 @@ export function renderAdminConsoleHtml(): string {
         <nav class="tabs admin-tabs" aria-label="Quick page tabs">
           <button type="button" data-page-target="dashboard" aria-current="page">Dashboard</button>
           <button type="button" data-page-target="hub-events">Hub events</button>
-          <button type="button" data-page-target="announcements">공지 관리</button>
+          <button type="button" data-page-target="announcements">Announcements</button>
           <button type="button" data-page-target="operations">Operations</button>
           <button type="button" data-page-target="audit">Audit</button>
           <button type="button" data-page-target="settings">Settings</button>
         </nav>
         <div class="top-actions topbar-actions">
+          ${renderAdminLanguageHtml(locale, "/admin")}
           <button class="icon-button has-tooltip" data-tooltip="Refresh adapter, secret, feature flag, and job status." title="Refresh adapter, secret, feature flag, and job status." id="refresh" type="button" aria-label="Refresh">&#8635;</button>
           <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle dark mode">&#9790;</button>
           <button class="icon-button" type="button" aria-label="Console status">&#9825;</button>
@@ -1968,62 +1996,62 @@ export function renderAdminConsoleHtml(): string {
       <section class="page" id="page-announcements" data-admin-page="announcements">
         <section class="section stack">
           <div class="section-head">
-            <div><h2>공지 관리</h2><p class="subtle">앱 서비스 운영 공지를 작성하고 게시 상태와 FCM 발송을 관리합니다.</p></div>
+            <div><h2>Announcement management</h2><p class="subtle">Create app service announcements and manage publication state and FCM delivery.</p></div>
             <div class="hub-events-toolbar">
-              <button id="announcement-new" type="button">새 공지</button>
-              <button id="announcement-refresh" type="button">새로고침</button>
-              <button id="announcement-save" type="button">임시 저장</button>
-              <button id="announcement-publish" type="button">게시</button>
-              <button id="announcement-resolve" type="button">해결 처리</button>
-              <button id="announcement-archive" type="button">보관</button>
-              <button id="announcement-delete" type="button">삭제</button>
-              <button id="announcement-bump" type="button">다시 확인 필요</button>
-              <button id="announcement-resend" type="button">푸시 재발송</button>
+              <button id="announcement-new" type="button">New announcement</button>
+              <button id="announcement-refresh" type="button">Refresh</button>
+              <button id="announcement-save" type="button">Save draft</button>
+              <button id="announcement-publish" type="button">Publish</button>
+              <button id="announcement-resolve" type="button">Resolve</button>
+              <button id="announcement-archive" type="button">Archive</button>
+              <button id="announcement-delete" type="button">Delete</button>
+              <button id="announcement-bump" type="button">Bump attention revision</button>
+              <button id="announcement-resend" type="button">Resend push</button>
             </div>
           </div>
           <div class="section-body hub-events-workspace">
             <form id="announcement-form" class="hub-events-editor-grid">
               <input id="announcement-id" type="hidden">
               <div class="hub-events-section">
-                <h3 class="hub-events-section-title">내용</h3>
+                <h3 class="hub-events-section-title">Content</h3>
                 <div class="hub-events-section-body">
                   <div class="hub-events-two">
-                    <div class="field"><label for="announcement-type">유형</label><select id="announcement-type"><option value="general">일반 안내</option><option value="incident">장애 및 복구</option><option value="maintenance">예정된 점검</option><option value="version_update">앱 업데이트</option></select></div>
-                    <div class="field"><label for="announcement-severity">중요도</label><select id="announcement-severity"><option value="info">정보</option><option value="important">중요</option><option value="critical">긴급</option></select></div>
+                    <div class="field"><label for="announcement-type">Type</label><select id="announcement-type"><option value="general">General</option><option value="incident">Incident</option><option value="maintenance">Maintenance</option><option value="version_update">Version update</option></select></div>
+                    <div class="field"><label for="announcement-severity">Severity</label><select id="announcement-severity"><option value="info">Info</option><option value="important">Important</option><option value="critical">Critical</option></select></div>
                   </div>
-                  <div class="field"><label for="announcement-title">제목</label><input id="announcement-title" maxlength="120"></div>
-                  <div class="field"><label for="announcement-summary">요약</label><textarea id="announcement-summary" rows="3" maxlength="300"></textarea></div>
-                  <div class="field"><label for="announcement-body">본문</label><textarea id="announcement-body" rows="10"></textarea></div>
+                  <div class="field"><label for="announcement-title">Title</label><input id="announcement-title" maxlength="120"></div>
+                  <div class="field"><label for="announcement-summary">Summary</label><textarea id="announcement-summary" rows="3" maxlength="300"></textarea></div>
+                  <div class="field"><label for="announcement-body">Body</label><textarea id="announcement-body" rows="10"></textarea></div>
                 </div>
               </div>
               <div class="hub-events-section">
-                <h3 class="hub-events-section-title">대상과 동작</h3>
+                <h3 class="hub-events-section-title">Targets and actions</h3>
                 <div class="hub-events-section-body">
                   <div class="hub-events-two">
                     <label class="switch-control"><input id="announcement-platform-android" type="checkbox" checked> Android</label>
                     <label class="switch-control"><input id="announcement-platform-ios" type="checkbox" checked> iOS</label>
                   </div>
                   <div class="hub-events-two">
-                    <div class="field"><label for="announcement-min-version">최소 앱 버전</label><input id="announcement-min-version" placeholder="1.0.0"></div>
-                    <div class="field"><label for="announcement-max-version">최대 앱 버전</label><input id="announcement-max-version" placeholder="2.0.0"></div>
+                    <div class="field"><label for="announcement-min-version">Minimum app version</label><input id="announcement-min-version" placeholder="1.0.0"></div>
+                    <div class="field"><label for="announcement-max-version">Maximum app version</label><input id="announcement-max-version" placeholder="2.0.0"></div>
                   </div>
-                  <div class="field"><label for="announcement-expires-at">만료 시각</label><input id="announcement-expires-at" type="datetime-local"></div>
-                  <div class="field"><label for="announcement-action-label">CTA 라벨</label><input id="announcement-action-label" maxlength="40"></div>
-                  <div class="field"><label for="announcement-deep-link">앱 딥링크</label><input id="announcement-deep-link" placeholder="stellivehub://announcements/..."></div>
-                  <div class="field"><label for="announcement-external-url">외부 URL</label><input id="announcement-external-url" type="url"></div>
-                  <label class="switch-control"><input id="announcement-pinned" type="checkbox"> 홈 고정</label>
-                  <label class="switch-control"><input id="announcement-push-enabled" type="checkbox" checked> 게시 시 푸시 발송</label>
+                  <div class="field"><label for="announcement-expires-at">Expires at</label><input id="announcement-expires-at" type="datetime-local"></div>
+                  <div class="field"><label for="announcement-action-label">CTA label</label><input id="announcement-action-label" maxlength="40"></div>
+                  <div class="field"><label for="announcement-deep-link">App deep link</label><input id="announcement-deep-link" placeholder="stellivehub://announcements/..."></div>
+                  <div class="field"><label for="announcement-external-url">External URL</label><input id="announcement-external-url" type="url"></div>
+                  <label class="switch-control"><input id="announcement-pinned" type="checkbox"> Pin on home</label>
+                  <label class="switch-control"><input id="announcement-push-enabled" type="checkbox" checked> Send push on publish</label>
                 </div>
               </div>
             </form>
             <div class="hub-events-sidebar">
-              <div class="hub-events-sidebar-header">공지 목록</div>
-              <div class="hub-events-filters"><div class="field"><label for="announcement-state-filter">게시 상태</label><select id="announcement-state-filter"><option value="">전체</option><option value="draft">임시 저장</option><option value="published">게시됨</option><option value="archived">보관됨</option></select></div></div>
+              <div class="hub-events-sidebar-header">Announcement list</div>
+              <div class="hub-events-filters"><div class="field"><label for="announcement-state-filter">Publication state</label><select id="announcement-state-filter"><option value="">All</option><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select></div></div>
               <div id="announcement-list" class="hub-events-list" role="list"></div>
             </div>
             <div class="hub-events-footer">
-              <div class="hub-events-section panel"><h3>감사 로그</h3><ul id="announcement-audit-log" class="message-list"></ul></div>
-              <div class="hub-events-section panel"><h3>푸시 발송 이력</h3><ul id="announcement-push-attempts" class="message-list"></ul></div>
+              <div class="hub-events-section panel"><h3>Audit log</h3><ul id="announcement-audit-log" class="message-list"></ul></div>
+              <div class="hub-events-section panel"><h3>Push attempts</h3><ul id="announcement-push-attempts" class="message-list"></ul></div>
             </div>
           </div>
         </section>
@@ -2189,7 +2217,7 @@ export function renderAdminConsoleHtml(): string {
               <div class="settings-row">
                 <div class="settings-title">Theme</div>
                 <div class="settings-description">Choose the console color mode for this browser.</div>
-                ${renderAdminThemeControl()}
+                ${renderAdminThemeControl(themeLabels)}
               </div>
               <div class="settings-row">
                 <div class="settings-title">Auto refresh</div>
@@ -2234,6 +2262,16 @@ export function renderAdminConsoleHtml(): string {
   </div>
   ${renderAdminThemeBehaviorScript()}
   <script>
+    const adminCatalog = ${serializeAdminCatalog(locale)};
+    const adminIntlLocale = ${JSON.stringify(adminIntlLocale(locale))};
+    const adminTimeZone = "Asia/Seoul";
+    const adminNumberFormatter = new Intl.NumberFormat(adminIntlLocale);
+    function t(key, parameters) {
+      const template = adminCatalog[key] || key;
+      return template.replace(/\{([A-Za-z0-9_]+)\}/g, function (match, name) {
+        return parameters && Object.prototype.hasOwnProperty.call(parameters, name) ? String(parameters[name]) : match;
+      });
+    }
     const endpoints = {
       overview: "/v1/internal/admin/overview",
       externalApiCalls: "/v1/internal/admin/external-api-calls",
@@ -2292,13 +2330,14 @@ export function renderAdminConsoleHtml(): string {
     let uptimeBaseSeconds = null;
     let uptimeBaseTimestamp = 0;
     let uptimeTimerId = null;
+    const activePageStorageKey = "stellive.admin.activePage";
     const pageCopy = {
-      dashboard: ["Dashboard", "Admin session and internal token are separate."],
-      "hub-events": ["Hub events", "Create, validate, publish, and review Hub events."],
-      announcements: ["공지 관리", "앱 서비스 운영 공지와 푸시 발송을 관리합니다."],
-      operations: ["Operations", "Run bounded internal maintenance actions."],
-      audit: ["Audit", "Review operator-facing activity and event audit results."],
-      settings: ["Settings", "Manage credentials and console preferences."]
+      dashboard: [t("nav.dashboard"), t("page.dashboardDescription")],
+      "hub-events": [t("nav.hubEvents"), t("page.hubEventsDescription")],
+      announcements: [t("nav.announcements"), t("page.announcementsDescription")],
+      operations: [t("nav.operations"), t("page.operationsDescription")],
+      audit: [t("nav.audit"), t("page.auditDescription")],
+      settings: [t("nav.settings"), t("page.settingsDescription")]
     };
 
     function readStoredInternalToken() {
@@ -2377,20 +2416,39 @@ export function renderAdminConsoleHtml(): string {
           button.removeAttribute("aria-current");
         }
       });
+      try {
+        window.localStorage.setItem(activePageStorageKey, nextPage);
+      } catch (_error) {
+        // Page restoration is optional when browser storage is unavailable.
+      }
     }
 
     function requireToken() {
       const token = (tokenInput?.value || "").trim() || readStoredInternalToken().trim();
       if (!token) {
-        throw new Error("Internal API bearer token is required. Add it in Settings.");
+        throw new Error(t("error.internalTokenRequired"));
       }
       return token;
+    }
+
+    const displayValueKeys = {
+      draft: "status.draft", published: "status.published", archived: "status.archived", resolved: "status.resolved",
+      enabled: "status.enabled", disabled: "status.disabled", healthy: "status.healthy", failed: "status.failed",
+      open: "status.open", ended: "status.ended", cancelled: "status.cancelled", inactive: "status.inactive",
+      deleted: "status.deleted", blocked: "status.blocked", queued: "status.queued", sent: "status.sent", skipped: "status.skipped",
+      general: "enum.general", incident: "enum.incident", maintenance: "enum.maintenance", version_update: "enum.versionUpdate",
+      info: "enum.info", important: "enum.important", critical: "enum.critical"
+    };
+
+    function displayValue(value) {
+      const normalized = String(value == null ? "" : value);
+      return displayValueKeys[normalized] ? t(displayValueKeys[normalized]) : normalized;
     }
 
     function createPill(value) {
       const span = document.createElement("span");
       span.className = "pill " + String(value).replaceAll("_", "-");
-      span.textContent = String(value);
+      span.textContent = displayValue(value);
       return span;
     }
 
@@ -2503,9 +2561,15 @@ export function renderAdminConsoleHtml(): string {
       return Number.isFinite(next) && next >= 0 ? next : 0;
     }
 
+    function formatNumber(value) {
+      return adminNumberFormatter.format(numericValue(value));
+    }
+
     function shortDateLabel(dateKey) {
-      const parts = String(dateKey || "").split("-");
-      return parts.length === 3 ? parts[1] + "/" + parts[2] : String(dateKey || "-");
+      const date = new Date(String(dateKey || "") + "T00:00:00+09:00");
+      return Number.isNaN(date.getTime()) ? String(dateKey || "-") : new Intl.DateTimeFormat(adminIntlLocale, {
+        month: "2-digit", day: "2-digit", timeZone: adminTimeZone
+      }).format(date);
     }
 
     function formatFailureRate(totals) {
@@ -2522,7 +2586,7 @@ export function renderAdminConsoleHtml(): string {
       labelNode.textContent = label;
       const valueNode = document.createElement("div");
       valueNode.className = "queue-summary-value";
-      valueNode.textContent = value == null || value === "" ? "-" : String(value);
+      valueNode.textContent = value == null || value === "" ? "-" : typeof value === "number" ? formatNumber(value) : String(value);
       const descriptionNode = document.createElement("div");
       descriptionNode.className = "metric-hint";
       descriptionNode.textContent = description || "";
@@ -2569,8 +2633,8 @@ export function renderAdminConsoleHtml(): string {
         bar.className = "queue-bar";
         bar.setAttribute(
           "aria-label",
-          item.date + ": " + numericValue(item.sent) + " sent, " + numericValue(item.queued) + " queued, " +
-            numericValue(item.skipped) + " skipped, " + numericValue(item.failed) + " failed"
+          item.date + ": " + formatNumber(item.sent) + " sent, " + formatNumber(item.queued) + " queued, " +
+            formatNumber(item.skipped) + " skipped, " + formatNumber(item.failed) + " failed"
         );
         bar.title = bar.getAttribute("aria-label") || "";
 
@@ -2600,7 +2664,7 @@ export function renderAdminConsoleHtml(): string {
         createQueueSummaryCard("Today failed", numericValue(today.failed), "Failed attempts today."),
         createQueueSummaryCard((trend.days || items.length) + "d total", numericValue(totals.total), "Sent, queued, skipped, and failed."),
         createQueueSummaryCard("Failure rate", formatFailureRate(totals), "Failed attempts over total attempts."),
-        createQueueSummaryCard("Peak day", shortDateLabel(peak.date), numericValue(peak.total) + " attempts")
+        createQueueSummaryCard("Peak day", shortDateLabel(peak.date), formatNumber(peak.total) + " attempts")
       );
     }
 
@@ -2651,7 +2715,7 @@ export function renderAdminConsoleHtml(): string {
       const totalLabel = document.createElement("span");
       totalLabel.textContent = "Total calls";
       const totalValue = document.createElement("strong");
-      totalValue.textContent = String(numericValue(item.total));
+      totalValue.textContent = formatNumber(item.total);
       total.append(totalLabel, totalValue);
 
       const rows = document.createElement("div");
@@ -2665,7 +2729,7 @@ export function renderAdminConsoleHtml(): string {
         dot.setAttribute("aria-hidden", "true");
         sourceLabel.append(dot, document.createTextNode(source));
         const count = document.createElement("strong");
-        count.textContent = String(numericValue(item.bySource && item.bySource[source]));
+        count.textContent = formatNumber(item.bySource && item.bySource[source]);
         row.append(sourceLabel, count);
         rows.appendChild(row);
       }
@@ -2782,7 +2846,7 @@ export function renderAdminConsoleHtml(): string {
       if (!value) return "-";
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return "-";
-      return date.toLocaleString();
+      return date.toLocaleString(adminIntlLocale, { timeZone: adminTimeZone });
     }
 
     function renderExternalApiResults(items) {
@@ -2825,7 +2889,7 @@ export function renderAdminConsoleHtml(): string {
         const result = await api(endpoints.externalApiCalls + "?" + params.toString());
         renderExternalApiResults(result.items || []);
       } catch (error) {
-        renderExternalApiNotice(error instanceof Error ? error.message : "Unable to load external API results.");
+        renderExternalApiNotice(error instanceof Error ? error.message : t("dashboard.externalResultsError"));
       }
     }
 
@@ -2980,14 +3044,15 @@ export function renderAdminConsoleHtml(): string {
         return "-";
       }
 
-      return date.toLocaleString(undefined, {
+      return date.toLocaleString(adminIntlLocale, {
         year: "numeric",
         month: "short",
         day: "numeric",
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",
-        timeZoneName: "short"
+        timeZoneName: "short",
+        timeZone: adminTimeZone
       });
     }
 
@@ -3052,7 +3117,7 @@ export function renderAdminConsoleHtml(): string {
       refreshInFlight = true;
       if (source === "manual") {
         setBusy(true);
-        setMessage("Loading overview...", false);
+        setMessage(t("dashboard.loading"), false);
       } else {
         setAutoRefreshStatus(autoRefreshLabel);
       }
@@ -3067,7 +3132,7 @@ export function renderAdminConsoleHtml(): string {
           await refreshExternalApiResults();
         }
         if (source === "manual") {
-          setMessage("Overview refreshed.", false);
+          setMessage(t("dashboard.refreshed"), false);
         }
         if (autoRefreshInput.checked) {
           setAutoRefreshStatus(autoRefreshLabel);
@@ -3107,7 +3172,7 @@ export function renderAdminConsoleHtml(): string {
     async function runAction(label, path, init) {
       actionInFlight = true;
       setBusy(true);
-      setMessage(label + " in progress...", false);
+      setMessage(t("operations.inProgress", { action: label }), false);
       try {
         const result = await api(path, init);
         const status = result && typeof result === "object" && "status" in result ? result.status : "ok";
@@ -3257,7 +3322,7 @@ export function renderAdminConsoleHtml(): string {
       hubEventValidationRoot.replaceChildren();
       if (errors.length === 0) {
         const item = document.createElement("li");
-        item.textContent = result && result.valid === false ? "Validation failed." : "No validation errors.";
+        item.textContent = result && result.valid === false ? t("hubEvent.validationFailed") : t("hubEvent.noValidationErrors");
         hubEventValidationRoot.appendChild(item);
         return;
       }
@@ -3299,7 +3364,7 @@ export function renderAdminConsoleHtml(): string {
       if (!events.length) {
         const empty = document.createElement("div");
         empty.className = "empty event-row";
-        empty.textContent = "No hub events found.";
+        empty.textContent = t("hubEvent.none");
         hubEventListRoot.appendChild(empty);
         return;
       }
@@ -3477,7 +3542,7 @@ export function renderAdminConsoleHtml(): string {
       try {
         setBusy(true);
         await action();
-        setMessage(label + " completed.", false);
+        setMessage(t("operations.completed", { action: label }), false);
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "unknown_error", true);
       } finally {
@@ -3569,13 +3634,13 @@ export function renderAdminConsoleHtml(): string {
     function renderAnnouncements(items) {
       announcementListRoot.replaceChildren();
       if (!items.length) {
-        const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "등록된 공지가 없습니다."; announcementListRoot.appendChild(empty); return;
+        const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = t("announcement.none"); announcementListRoot.appendChild(empty); return;
       }
       items.forEach(function (item) {
         const row = document.createElement("button"); row.type = "button"; row.className = "event-row";
-        const title = document.createElement("strong"); title.textContent = item.title || "제목 없음";
+        const title = document.createElement("strong"); title.textContent = item.title || t("announcement.untitled");
         const meta = document.createElement("span"); meta.className = "event-meta";
-        meta.textContent = [item.publicationState, item.type, item.severity, "attention " + item.attentionRevision].join(" / ");
+        meta.textContent = [displayValue(item.publicationState), displayValue(item.type), displayValue(item.severity), "attention " + item.attentionRevision].join(" / ");
         row.append(title, meta);
         row.addEventListener("click", function () { bindAnnouncement(item); loadAnnouncementHistory(item.id); });
         announcementListRoot.appendChild(row);
@@ -3612,27 +3677,27 @@ export function renderAdminConsoleHtml(): string {
     async function deleteAnnouncement() {
       const id = announcementFields.id.value;
       if (!id) throw new Error("service_announcement_required");
-      const title = announcementFields.title.value.trim() || "제목 없음";
-      if (!window.confirm('"' + title + '" 공지를 삭제할까요?\\n삭제한 공지는 앱과 관리자 목록에서 숨겨집니다.')) return;
+      const title = announcementFields.title.value.trim() || t("announcement.untitled");
+      if (!window.confirm(t("announcement.deleteConfirm", { title: title }))) return;
       await adminApi(endpoints.announcements + "/" + encodeURIComponent(id), { method: "DELETE" });
       clearAnnouncementForm();
       await refreshAnnouncements();
     }
 
     document.getElementById("announcement-new").addEventListener("click", clearAnnouncementForm);
-    document.getElementById("announcement-refresh").addEventListener("click", function () { return runHubEventUiAction("공지 새로고침", refreshAnnouncements); });
-    document.getElementById("announcement-save").addEventListener("click", function () { return runHubEventUiAction("공지 저장", saveAnnouncement); });
+    document.getElementById("announcement-refresh").addEventListener("click", function () { return runHubEventUiAction(t("common.refresh"), refreshAnnouncements); });
+    document.getElementById("announcement-save").addEventListener("click", function () { return runHubEventUiAction(t("announcement.saveDraft"), saveAnnouncement); });
     document.getElementById("announcement-publish").addEventListener("click", function () {
       const input = collectAnnouncementInput();
-      const summary = "대상: " + input.targetPlatforms.join(", ") + " / 버전: " + (input.minimumAppVersion || "제한 없음") + " ~ " + (input.maximumAppVersion || "제한 없음") + " / 홈 고정: " + (input.isPinned ? "예" : "아니오") + " / 푸시: " + (input.pushEnabled ? "발송" : "미발송");
-      if (!window.confirm(summary + "\\n이 설정으로 게시할까요?")) return;
-      return runHubEventUiAction("공지 게시", function () { return runAnnouncementAction("publish"); });
+      const summary = "Platforms: " + input.targetPlatforms.join(", ") + " / Version: " + (input.minimumAppVersion || t("announcement.noLimit")) + " ~ " + (input.maximumAppVersion || t("announcement.noLimit")) + " / Pinned: " + (input.isPinned ? t("common.yes") : t("common.no")) + " / Push: " + (input.pushEnabled ? t("announcement.send") : t("announcement.doNotSend"));
+      if (!window.confirm(t("announcement.publishConfirm", { summary: summary }))) return;
+      return runHubEventUiAction(t("announcement.publish"), function () { return runAnnouncementAction("publish"); });
     });
-    [["announcement-resolve", "resolve", "해결 처리"], ["announcement-archive", "archive", "보관"], ["announcement-bump", "bump-attention", "attention revision 증가"], ["announcement-resend", "resend", "푸시 재발송"]].forEach(function (entry) {
+    [["announcement-resolve", "resolve", t("announcement.resolve")], ["announcement-archive", "archive", t("announcement.archive")], ["announcement-bump", "bump-attention", t("announcement.bumpAttention")], ["announcement-resend", "resend", t("announcement.resend")]].forEach(function (entry) {
       document.getElementById(entry[0]).addEventListener("click", function () { return runHubEventUiAction(entry[2], function () { return runAnnouncementAction(entry[1]); }); });
     });
-    document.getElementById("announcement-delete").addEventListener("click", function () { return runHubEventUiAction("공지 삭제", deleteAnnouncement); });
-    announcementStateFilter.addEventListener("change", function () { return runHubEventUiAction("공지 필터", refreshAnnouncements); });
+    document.getElementById("announcement-delete").addEventListener("click", function () { return runHubEventUiAction(t("common.delete"), deleteAnnouncement); });
+    announcementStateFilter.addEventListener("change", function () { return runHubEventUiAction(t("announcement.listAction"), refreshAnnouncements); });
 
     document.getElementById("hub-event-refresh").addEventListener("click", function () {
       return runHubEventUiAction("Refresh hub events", function () { return refreshHubEvents({ resetPage: true }); });
@@ -3721,16 +3786,22 @@ export function renderAdminConsoleHtml(): string {
     externalApiStatusFilter.addEventListener("change", function () {
       return runHubEventUiAction("Filter external API results", refreshExternalApiResults);
     });
+    try {
+      const storedPage = window.localStorage.getItem(activePageStorageKey);
+      if (storedPage && pageCopy[storedPage]) setActivePage(storedPage);
+    } catch (_error) {
+      // Keep Dashboard active when browser storage is unavailable.
+    }
     pageButtons.forEach(function (button) {
       button.addEventListener("click", function () {
         const page = button.getAttribute("data-page-target");
         setActivePage(page);
-        if (page === "announcements") runHubEventUiAction("공지 목록", refreshAnnouncements);
+        if (page === "announcements") runHubEventUiAction(t("announcement.listAction"), refreshAnnouncements);
       });
     });
     internalTokenSaveButton.addEventListener("click", function () {
       persistInternalToken();
-      setSettingsTokenStatus(tokenInput.value.trim() ? "Token stored for this session." : "Token cleared.", false);
+      setSettingsTokenStatus(tokenInput.value.trim() ? t("settings.tokenStored") : t("settings.tokenCleared"), false);
     });
     internalTokenTestButton.addEventListener("click", function () {
       return refreshDashboard({ source: "manual" });
@@ -3738,7 +3809,7 @@ export function renderAdminConsoleHtml(): string {
     internalTokenClearButton.addEventListener("click", function () {
       tokenInput.value = "";
       clearStoredInternalToken();
-      setSettingsTokenStatus("Token cleared.", false);
+      setSettingsTokenStatus(t("settings.tokenCleared"), false);
     });
     autoRefreshInput.addEventListener("change", function () {
       if (autoRefreshInput.checked) {
@@ -3755,5 +3826,5 @@ export function renderAdminConsoleHtml(): string {
     }
   </script>
 </body>
-</html>`;
+</html>`, locale);
 }
