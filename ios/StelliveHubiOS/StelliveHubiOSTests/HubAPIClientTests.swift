@@ -191,6 +191,33 @@ final class HubAPIClientTests: XCTestCase {
         XCTAssertEqual(detail.id, "event-1")
     }
 
+    func testAnnouncementListAndDetailSendPlatformVersionAndDecodeResponses() async throws {
+        var seenPaths: [String] = []
+        let item = """
+            {"id":"notice-1","type":"maintenance","severity":"important","title":"점검 안내",
+             "summary":"서비스 점검 예정","body":"01시부터 점검합니다.","isPinned":true,
+             "targetPlatforms":["ios"],"publishedAt":"2026-07-16T00:00:00.000Z",
+             "attentionRevision":2,"revision":3,"updatedAt":"2026-07-16T01:00:00.000Z"}
+            """
+        let client = makeClient { request in
+            seenPaths.append(request.url?.path ?? "")
+            let query = URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems ?? []
+            XCTAssertEqual(query.first(where: { $0.name == "platform" })?.value, "ios")
+            XCTAssertNotNil(query.first(where: { $0.name == "appVersion" })?.value)
+            if request.url?.path == "/v1/announcements" {
+                return jsonResponse(statusCode: 200, body: "{\"items\":[\(item)],\"nextCursor\":null,\"generatedAt\":\"2026-07-16T02:00:00.000Z\"}")
+            }
+            return jsonResponse(statusCode: 200, body: item)
+        }
+
+        let list = try await client.announcements()
+        let detail = try await client.announcement(id: "notice-1")
+
+        XCTAssertEqual(seenPaths, ["/v1/announcements", "/v1/announcements/notice-1"])
+        XCTAssertEqual(list.items.first?.type, .maintenance)
+        XCTAssertEqual(detail.attentionRevision, 2)
+    }
+
     func testSongsListAndFacetsSendExpectedPathsAndDecodeResponses() async throws {
         var seenPaths: [String] = []
         let client = makeClient { request in

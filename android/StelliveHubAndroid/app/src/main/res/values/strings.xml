@@ -1,4 +1,5 @@
 <resources>
+    <string name="action_announcements">공지사항</string>
     <string name="app_name">스텔라이브 알림 허브</string>
     <string name="home_title">홈</string>
     <string name="live_title">라이브</string>

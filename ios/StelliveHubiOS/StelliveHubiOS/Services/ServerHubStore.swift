@@ -55,6 +55,10 @@ final class ServerHubStore: ObservableObject {
     @Published private(set) var isRefreshingRecentSongs = false
     @Published private(set) var loadingHubEventDetailIds: Set<String> = []
     @Published private(set) var loadingSongDetailIds: Set<String> = []
+    @Published private(set) var announcementsSummary: AnnouncementsSummaryResponse?
+    @Published private(set) var serviceAnnouncements: [ServiceAnnouncement] = []
+    @Published private(set) var announcementNextCursor: String?
+    @Published private(set) var announcementDetailCache: [String: ServiceAnnouncement] = [:]
 
     init(
         api: HubAPIClient,
@@ -73,6 +77,7 @@ final class ServerHubStore: ObservableObject {
       try? await registerDevice()
     }
             fallback.applyBootstrap(response)
+            announcementsSummary = response.announcementsSummary
             try? HubCalendarWidgetStore.saveToSharedContainer(fallback.calendarWidgetSnapshot())
             return fallback
         } catch {
@@ -239,6 +244,29 @@ final class ServerHubStore: ObservableObject {
         } catch {
             return hubEventDetailCache[id]
         }
+    }
+
+    func refreshAnnouncements(reset: Bool) async {
+        do {
+            let response = try await api.announcements(cursor: reset ? nil : announcementNextCursor)
+            serviceAnnouncements = reset ? response.items : Array(Dictionary(uniqueKeysWithValues: (serviceAnnouncements + response.items).map { ($0.id, $0) }).values)
+            serviceAnnouncements.sort { $0.publishedAt > $1.publishedAt }
+            announcementNextCursor = response.nextCursor
+            response.items.forEach { announcementDetailCache[$0.id] = $0 }
+        } catch { }
+    }
+
+    func loadAnnouncementDetail(id: String) async -> ServiceAnnouncement? {
+        do {
+            let announcement = try await api.announcement(id: id)
+            announcementDetailCache[id] = announcement
+            if !serviceAnnouncements.contains(where: { $0.id == id }) { serviceAnnouncements.append(announcement) }
+            return announcement
+        } catch { return announcementDetailCache[id] }
+    }
+
+    func cachedAnnouncement(id: String) -> ServiceAnnouncement? {
+        announcementDetailCache[id] ?? serviceAnnouncements.first(where: { $0.id == id }) ?? announcementsSummary?.pinned.flatMap { $0.id == id ? $0 : nil }
     }
 
     func loadSongDetail(id: String, fallback: SongCatalogItem) async -> SongCatalogItem {

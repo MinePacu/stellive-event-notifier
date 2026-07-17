@@ -26,6 +26,8 @@ import dev.minepacu.stelliveeventnotifier.core.network.UpdateDeviceTokenRequestD
 import dev.minepacu.stelliveeventnotifier.core.network.UpdateDeviceTokenResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.UpdatePreferencesRequestDto
 import dev.minepacu.stelliveeventnotifier.core.network.UpdatePreferencesResponseDto
+import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementDto
+import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementListResponseDto
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -193,6 +195,25 @@ class HubApiClientTest {
 
         assertEquals("server-event", decoded?.items?.single()?.id)
         assertEquals("official_runtime_url", decoded?.items?.single()?.image?.policyState)
+    }
+
+    @Test
+    fun announcementListAndDetailDtosDecodePublicServerShape() {
+        val itemJson = """
+            {
+              "id":"notice-1","type":"maintenance","severity":"important",
+              "title":"점검 안내","summary":"서비스 점검 예정","body":"01시부터 점검합니다.",
+              "isPinned":true,"targetPlatforms":["android"],"publishedAt":"2026-07-16T00:00:00.000Z",
+              "attentionRevision":2,"revision":3,"updatedAt":"2026-07-16T01:00:00.000Z"
+            }
+        """.trimIndent()
+        val list = HubApiClient.moshi().adapter(ServiceAnnouncementListResponseDto::class.java)
+            .fromJson("""{"items":[$itemJson],"nextCursor":"notice-0","generatedAt":"2026-07-16T02:00:00.000Z"}""")
+        val detail = HubApiClient.moshi().adapter(ServiceAnnouncementDto::class.java).fromJson(itemJson)
+
+        assertEquals("maintenance", list?.items?.single()?.type)
+        assertEquals(2, detail?.attentionRevision)
+        assertEquals(list?.items?.single()?.id, detail?.id)
     }
 
     @Test
@@ -459,6 +480,12 @@ class HubApiClientTest {
             failure?.let { throw it }
             return hubEventResponse
         }
+
+        override suspend fun announcements(platform: String, appVersion: String?, includeArchived: Boolean, cursor: String?, limit: Int): ServiceAnnouncementListResponseDto =
+            ServiceAnnouncementListResponseDto()
+
+        override suspend fun announcement(id: String, platform: String, appVersion: String?): ServiceAnnouncementDto =
+            ServiceAnnouncementDto(id, "general", "info", "공지", "요약", "본문", publishedAt = "2026-07-16T00:00:00Z", updatedAt = "2026-07-16T00:00:00Z")
 
         override suspend fun hubEventsCalendar(
             from: String,

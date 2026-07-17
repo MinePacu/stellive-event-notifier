@@ -86,6 +86,17 @@ class MainScreenChromePolicyTest {
     }
 
     @Test
+    fun announcementActionFollowsGlobalToolbarPolicy() {
+        listOf("home", "live", "songs", "goods_events", "goods_event_detail", "song_search").forEach {
+            assertTrue(MainScreenChromePolicy.spec(it, canGoBack = it != "home").showAnnouncementAction)
+        }
+        listOf("announcements", "announcement_detail", "settings", "settings_delivery").forEach {
+            assertFalse(MainScreenChromePolicy.spec(it, canGoBack = true).showAnnouncementAction)
+        }
+        assertTrue(MainScreenChromePolicy.spec("announcements", canGoBack = true).showSettingsAction)
+    }
+
+    @Test
     fun compactNavigationChromeKeepsBottomTabs() {
         val spec = MainScreenChromePolicy.navigationSpec(HubAdaptivePolicy.spec(widthDp = 599))
 

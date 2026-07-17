@@ -4,6 +4,7 @@ import UIKit
 private enum HomeRoute: Hashable { case songs }
 
 struct HomeView: View {
+    @Binding var deepLinkedAnnouncementId: String?
     @EnvironmentObject private var store: MockHubStore
     @EnvironmentObject private var serverStore: ServerHubStore
     @EnvironmentObject private var browseSession: SongBrowseSessionStore
@@ -15,6 +16,10 @@ struct HomeView: View {
     var body: some View {
         NavigationStack(path: $path) {
             List {
+                if let pinned = serverStore.announcementsSummary?.pinned,
+                   let important = AnnouncementPolicy.homeAnnouncement([pinned]) {
+                    AnnouncementHomeSection(announcement: important, destination: .announcementDetail(important.id))
+                }
                 Section("지금 라이브") {
                     if store.homeLiveMembers.isEmpty {
                         Text("현재 라이브 없음")
@@ -109,7 +114,7 @@ struct HomeView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .settingsToolbar(path: $path)
+            .globalToolbar(path: $path)
             .navigationDestination(for: HubMember.self) { member in
                 MemberDetailView(member: member)
             }
@@ -118,7 +123,9 @@ struct HomeView: View {
             }
             .task {
                 await serverStore.refreshRecentSongs()
+                openPendingAnnouncement()
             }
+            .onChange(of: deepLinkedAnnouncementId) { _ in openPendingAnnouncement() }
             .sheet(item: $selectedSong) { song in
                 SongDetailSheet(
                     song: song,
@@ -130,6 +137,14 @@ struct HomeView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+    }
+
+    private func openPendingAnnouncement() {
+        guard let id = deepLinkedAnnouncementId else { return }
+        path.removeLast(path.count)
+        path.append(GlobalToolbarRoute.announcements)
+        path.append(GlobalToolbarRoute.announcementDetail(id))
+        deepLinkedAnnouncementId = nil
     }
 
     private func applyRelatedFilter(member: SongMemberFilterState?, type: String?) {

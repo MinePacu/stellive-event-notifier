@@ -42,4 +42,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     ) async -> UNNotificationPresentationOptions {
         [.banner, .list, .sound]
     }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        guard
+            let rawValue = response.notification.request.content.userInfo["appDeepLink"] as? String,
+            let url = URL(string: rawValue),
+            AnnouncementDeepLinkPolicy.id(from: url) != nil
+        else { return }
+        await UIApplication.shared.open(url)
+    }
 }

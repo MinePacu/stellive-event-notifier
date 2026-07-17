@@ -17,6 +17,9 @@ import Fastify, { type FastifyRequest } from "fastify";
 import { Redis } from "ioredis";
 import { loadEnv } from "./config/env.js";
 import { HubEventRepository } from "./hub-events/hubEventRepository.js";
+import { ServiceAnnouncementRepository } from "./announcements/serviceAnnouncementRepository.js";
+import { ServiceAnnouncementReadService } from "./announcements/serviceAnnouncementReadService.js";
+import { ServiceAnnouncementAdminService } from "./announcements/serviceAnnouncementAdminService.js";
 import { createHubCalendarSpecialDayOccurrenceRepositoryIfAvailable } from "./hub-events/hubCalendarSpecialDayOccurrenceRepository.js";
 import NotificationJobRepository from "./jobs/notificationJobRepository.js";
 import NotificationWorker from "./jobs/notificationWorker.js";
@@ -45,6 +48,7 @@ import { WebhookSubscriptionRepository } from "./repositories/webhookSubscriptio
 import SongIngestionService from "./songs/songIngestionService.js";
 import SongBackfillService from "./songs/songBackfillService.js";
 import { type AdminHubEventRouteDependencies, registerAdminHubEventRoutes } from "./routes/adminHubEventRoutes.js";
+import { registerAdminServiceAnnouncementRoutes } from "./routes/adminServiceAnnouncementRoutes.js";
 import { registerAdminRoutes } from "./routes/adminRoutes.js";
 import registerChzzkAuthRoutes, { type ChzzkAuthRouteOptions } from "./routes/chzzkAuthRoutes.js";
 import { type InternalRouteDependencies, registerInternalRoutes } from "./routes/internalRoutes.js";
@@ -65,6 +69,9 @@ export interface BuildAppOptions {
   };
   adminHubEventRoutes?: {
     dependencies?: Partial<AdminHubEventRouteDependencies>;
+  };
+  adminServiceAnnouncementRoutes?: {
+    service?: ServiceAnnouncementAdminService;
   };
   appRoutes?: {
     dependencies?: AppRouteDependencies;
@@ -491,7 +498,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
   });
   await app.register(swaggerUi, { routePrefix: "/docs" });
   const sharedFcmClient = createDefaultFcmClient(env);
+  const announcementRepository = new ServiceAnnouncementRepository();
+  const announcementReads = options.appRoutes?.dependencies?.announcements ?? new ServiceAnnouncementReadService(announcementRepository);
   const appRouteDependencies: AppRouteDependencies = {
+    announcements: announcementReads,
     ...createDefaultMemberProfileImageHydrator(
       env,
       options.appRoutes?.dependencies,
@@ -533,6 +543,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       hubEvents: {
         summary: async () => hubEvents.summary()
       },
+      announcements: announcementReads,
       memberProfileImages: appRouteDependencies.memberProfileImages,
       cacheTtlSeconds: {
         catalog: env.BOOTSTRAP_CATALOG_CACHE_TTL_SECONDS,
@@ -582,5 +593,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await registerInternalRoutes(app, { env, dependencies: internalRouteDependencies });
   await registerAdminRoutes(app, { env });
   await registerAdminHubEventRoutes(app, { env, dependencies: options.adminHubEventRoutes?.dependencies });
+  const announcementAdminService = options.adminServiceAnnouncementRoutes?.service ?? new ServiceAnnouncementAdminService({
+    repository: announcementRepository,
+    sender: createDefaultServiceAnnouncementSender(env, sharedFcmClient),
+    invalidateCache: () => announcementReads.invalidate(),
+  });
+  await registerAdminServiceAnnouncementRoutes(app, { env, service: announcementAdminService });
   return app;
 }

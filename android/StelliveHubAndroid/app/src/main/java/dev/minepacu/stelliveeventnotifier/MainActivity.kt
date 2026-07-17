@@ -82,6 +82,8 @@ import dev.minepacu.stelliveeventnotifier.core.model.NotificationPlatform
 import dev.minepacu.stelliveeventnotifier.core.notification.NotificationPermissionPromptMoment
 import dev.minepacu.stelliveeventnotifier.core.notification.NotificationPermissionPromptPolicy
 import dev.minepacu.stelliveeventnotifier.core.model.SongCatalogItem
+import dev.minepacu.stelliveeventnotifier.core.model.AnnouncementsSummary
+import dev.minepacu.stelliveeventnotifier.core.model.ServiceAnnouncement
 import dev.minepacu.stelliveeventnotifier.databinding.ActivityMainBinding
 import dev.minepacu.stelliveeventnotifier.feature.calendar.HubCalendarDeepLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.calendar.CalendarUiPolicy
@@ -114,6 +116,9 @@ import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventHeroTagTone
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventImagePolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.GoodsEventSelectionMode
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventsPanePolicy
+import dev.minepacu.stelliveeventnotifier.feature.announcements.AnnouncementDeepLinkPolicy
+import dev.minepacu.stelliveeventnotifier.feature.announcements.AnnouncementPolicy
+import dev.minepacu.stelliveeventnotifier.feature.announcements.AnnouncementReadStore
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongMemberSelectionMode
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongsPanePolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.DataStoreSongFavoritesRepository
@@ -292,6 +297,12 @@ private var songSearchResultsContainer: LinearLayout? = null
 private var homeRecentSongs: List<SongCatalogItem>? = null
 private var isLoadingHomeRecentSongs = false
 private var selectedHubEventId: String? = null
+private var selectedAnnouncementId: String? = null
+private var announcementsSummary = AnnouncementsSummary()
+private var announcementItems: List<ServiceAnnouncement> = emptyList()
+private var announcementNextCursor: String? = null
+private var announcementReadKeys: Set<String> = emptySet()
+private lateinit var announcementReadStore: AnnouncementReadStore
     private var goodsEventsDays: List<HubCalendarDay> = emptyList()
     private var goodsEvents: List<HubEvent> = emptyList()
     private var goodsEventsSelectedMonth: YearMonth = YearMonth.now()
@@ -324,6 +335,16 @@ private var notificationPermissionRequested = false
         serverRepository = createServerRepository()
         songFavoritesRepository = DataStoreSongFavoritesRepository(this)
         songDiscoveryRepository = DataStoreSongDiscoveryRepository(this)
+        announcementReadStore = AnnouncementReadStore(this)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                announcementReadStore.readKeys.collect { keys ->
+                    announcementReadKeys = keys
+                    updateAnnouncementAction()
+                    if (navigationHistory.currentScreen == HubScreen.ANNOUNCEMENTS) refreshScreenWhenIdle(HubScreen.ANNOUNCEMENTS, ::renderAnnouncements)
+                }
+            }
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 songFavoritesRepository.favorites.collect { favorites ->
@@ -402,6 +423,8 @@ private var notificationPermissionRequested = false
         lifecycleScope.launch {
             val state = serverRepository.bootstrap()
             serverMembers = state.members
+            announcementsSummary = state.announcementsSummary
+            announcementReadStore.initializeSummary(announcementsSummary.items)
             liveStatusSourceLabel = state.liveStatusSourceLabel
             recordServerConnectionLog("bootstrap: $liveStatusSourceLabel")
             val screen = navigationHistory.currentScreen
@@ -526,7 +549,7 @@ private var notificationPermissionRequested = false
  private fun setupPullToRefresh() {
  binding.contentRefresh.isEnabled = false
  binding.contentRefresh.setOnRefreshListener {
- loadServerBootstrap()
+ if (navigationHistory.currentScreen == HubScreen.ANNOUNCEMENTS) loadAnnouncements(reset = true) else loadServerBootstrap()
  }
  }
 
@@ -563,7 +586,19 @@ private var notificationPermissionRequested = false
     }
 
     private fun handleAppDeepLink(intent: Intent?): Boolean {
-        val eventId = HubCalendarDeepLinkPolicy.eventIdFromAppDeepLink(intent?.dataString) ?: return false
+        val deepLink = intent?.dataString ?: intent?.getStringExtra("appDeepLink")
+        val announcementId = AnnouncementDeepLinkPolicy.idFromAppDeepLink(deepLink)
+        if (announcementId != null) {
+            selectedAnnouncementId = announcementId
+            navigationHistory.selectRoot(HubScreen.HOME)
+            navigationHistory.select(HubScreen.ANNOUNCEMENTS)
+            navigationHistory.select(HubScreen.ANNOUNCEMENT_DETAIL)
+            replaceScreenWithoutAnimation(HubScreen.ANNOUNCEMENT_DETAIL)
+            latestNavigationDestination = navigationHistory.currentScreen
+            latestRootDestination = navigationHistory.currentRootScreen
+            return true
+        }
+        val eventId = HubCalendarDeepLinkPolicy.eventIdFromAppDeepLink(deepLink) ?: return false
         selectedHubEventId = eventId
         serverHubEventDetailLoadedId = null
         navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
@@ -608,6 +643,7 @@ private var notificationPermissionRequested = false
     }
 
     private fun setupTopBarActions() {
+        binding.topBarAnnouncement.setOnClickListener { pushScreen(HubScreen.ANNOUNCEMENTS) }
         binding.topBarSettings.setOnClickListener {
             pushScreen(HubScreen.SETTINGS)
         }
@@ -794,7 +830,9 @@ HubScreen.SONG_MEMBER_FILTER -> renderSongMemberFilter()
 HubScreen.GOODS_EVENTS -> renderGoodsEvents()
             HubScreen.GOODS_EVENT_DETAIL -> renderHubEventDetail()
             HubScreen.LIVE -> renderLive()
-            HubScreen.HISTORY -> renderHistory()
+HubScreen.HISTORY -> renderHistory()
+            HubScreen.ANNOUNCEMENTS -> renderAnnouncements()
+            HubScreen.ANNOUNCEMENT_DETAIL -> renderAnnouncementDetail()
             HubScreen.SETTINGS -> renderSettings()
             HubScreen.SETTINGS_DELIVERY -> renderSettingsDelivery()
             HubScreen.SETTINGS_TARGETS -> renderSettingsTargets()
@@ -813,7 +851,7 @@ HubScreen.GOODS_EVENTS -> renderGoodsEvents()
                 screen == HubScreen.SONGS && shouldUseSongsTwoPane() ||
                 screen == HubScreen.SETTINGS && shouldUseSettingsTwoPane()
         binding.contentRefresh.isEnabled =
-            !isTwoPaneScreen && (screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS || screen == HubScreen.SONGS)
+            !isTwoPaneScreen && (screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS || screen == HubScreen.SONGS || screen == HubScreen.ANNOUNCEMENTS)
         if (isTwoPaneScreen) {
             binding.contentRefresh.isRefreshing = false
         }
@@ -859,6 +897,8 @@ private fun updateNavigationChrome() {
         )
         binding.topBarTitleGroup.isVisible = spec.showTopBarTitleAtRest
         binding.topBarSettings.isVisible = spec.showSettingsAction
+        binding.topBarAnnouncementContainer.isVisible = spec.showAnnouncementAction
+        updateAnnouncementAction()
         binding.topBarSongSearch.isVisible = spec.showSongSearchAction &&
             SongsPanePolicy.shouldShowTopBarSearchAction(currentAdaptiveSpec)
         binding.bottomNavigation.isVisible = navigationSpec.showBottomNavigation
@@ -888,6 +928,8 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
         HubScreen.GOODS_EVENT_DETAIL -> R.id.tab_goods_events
         HubScreen.LIVE -> R.id.tab_live
         HubScreen.HISTORY -> null
+        HubScreen.ANNOUNCEMENTS -> null
+        HubScreen.ANNOUNCEMENT_DETAIL -> null
         HubScreen.SETTINGS -> null
         HubScreen.SETTINGS_DELIVERY -> null
         HubScreen.SETTINGS_TARGETS -> null
@@ -1225,6 +1267,13 @@ private fun startScreen(screenId: String, title: String, role: String) {
             title = getString(R.string.home_title),
             role = "지금 라이브, 최근 알림, 마감 임박 굿즈/행사를 확인합니다."
         )
+        val homeAnnouncement = AnnouncementPolicy.homeAnnouncement(
+            (announcementItems + listOfNotNull(announcementsSummary.pinned)).distinctBy { it.id }
+        )
+        if (homeAnnouncement != null) {
+            binding.contentList.addView(sectionLabel("중요 공지"))
+            binding.contentList.addView(announcementCard(homeAnnouncement, showBody = false))
+        }
         binding.contentList.addView(sectionLabel("지금 라이브"))
         binding.contentList.addView(serverStatusStrip())
         if (liveMembersForUi().isEmpty()) {
@@ -1304,6 +1353,122 @@ private fun startScreen(screenId: String, title: String, role: String) {
                     }
                 }
             )
+        }
+    }
+
+    private fun updateAnnouncementAction() {
+        if (!::binding.isInitialized) return
+        val unreadCount = announcementsSummary.items.count {
+            AnnouncementPolicy.readKey(it.id, it.attentionRevision) !in announcementReadKeys
+        }
+        binding.topBarAnnouncementBadge.text = AnnouncementPolicy.badgeText(unreadCount).orEmpty()
+        binding.topBarAnnouncementBadge.isVisible = unreadCount > 0 && binding.topBarAnnouncementContainer.isVisible
+        binding.topBarAnnouncement.contentDescription = AnnouncementPolicy.accessibilityLabel(unreadCount)
+    }
+
+    private fun renderAnnouncements() {
+        startScreen("announcements", "공지사항", "앱 서비스 운영 안내와 장애·점검·업데이트 소식입니다.")
+        if (announcementItems.isEmpty()) {
+            binding.contentList.addView(compactEventCard("공지 확인 중", "서버에서 최신 공지를 불러오고 있습니다.", emptyList()))
+            loadAnnouncements(reset = true)
+            return
+        }
+        val sorted = AnnouncementPolicy.sorted(announcementItems)
+        val pinned = sorted.filter { it.isPinned }
+        val recent = sorted.filterNot { it.isPinned }
+        if (pinned.isNotEmpty()) {
+            binding.contentList.addView(sectionLabel("고정 공지"))
+            pinned.forEach { binding.contentList.addView(announcementCard(it, showBody = false)) }
+        }
+        binding.contentList.addView(sectionLabel("최근 공지"))
+        recent.forEach { binding.contentList.addView(announcementCard(it, showBody = false)) }
+        announcementNextCursor?.let {
+            binding.contentList.addView(compactEventCard("더 불러오기", "이전 공지를 이어서 확인합니다.", emptyList()).apply {
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { loadAnnouncements(reset = false) }
+            })
+        }
+    }
+
+    private fun loadAnnouncements(reset: Boolean) {
+        lifecycleScope.launch {
+            val page = serverRepository.announcements(if (reset) null else announcementNextCursor)
+            announcementItems = if (reset) page.items else (announcementItems + page.items).distinctBy { it.id }
+            announcementNextCursor = page.nextCursor
+            announcementReadStore.initialize(announcementItems)
+            binding.contentRefresh.isRefreshing = false
+            if (navigationHistory.currentScreen == HubScreen.ANNOUNCEMENTS) refreshScreenWhenIdle(HubScreen.ANNOUNCEMENTS, ::renderAnnouncements)
+        }
+    }
+
+    private fun announcementCard(announcement: ServiceAnnouncement, showBody: Boolean): MaterialCardView {
+        val unread = AnnouncementPolicy.readKey(announcement.id, announcement.attentionRevision) !in announcementReadKeys
+        val meta = mutableListOf(announcement.type.displayName, announcement.severity.displayName)
+        if (unread) meta += "읽지 않음"
+        if (announcement.resolvedAt != null) meta += "해결됨"
+        meta += announcement.publishedAt.toString().take(10)
+        return compactEventCard(
+            announcement.title,
+            if (showBody) announcement.body else announcement.summary,
+            meta,
+        ).apply {
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                selectedAnnouncementId = announcement.id
+                markAnnouncementRead(announcement)
+                pushScreen(HubScreen.ANNOUNCEMENT_DETAIL)
+            }
+        }
+    }
+
+    private fun markAnnouncementRead(announcement: ServiceAnnouncement) {
+        announcementReadKeys = announcementReadKeys + AnnouncementPolicy.readKey(announcement.id, announcement.attentionRevision)
+        updateAnnouncementAction()
+        lifecycleScope.launch { announcementReadStore.markRead(announcement) }
+    }
+
+    private fun renderAnnouncementDetail() {
+        startScreen("announcement_detail", "공지사항", "")
+        val id = selectedAnnouncementId
+        val announcement = announcementItems.firstOrNull { it.id == id } ?: announcementsSummary.pinned?.takeIf { it.id == id }
+        if (id == null) {
+            binding.contentList.addView(compactEventCard("공지를 찾을 수 없습니다", "공지 목록에서 다시 선택해 주세요.", emptyList()))
+            return
+        }
+        if (announcement == null) {
+            binding.contentList.addView(compactEventCard("공지 불러오는 중", "상세 내용을 확인하고 있습니다.", emptyList()))
+            lifecycleScope.launch {
+                serverRepository.announcementDetail(id)?.let {
+                    announcementItems = (announcementItems + it).distinctBy(ServiceAnnouncement::id)
+                    markAnnouncementRead(it)
+                    refreshScreenWhenIdle(HubScreen.ANNOUNCEMENT_DETAIL, ::renderAnnouncementDetail)
+                }
+            }
+            return
+        }
+        markAnnouncementRead(announcement)
+        binding.contentList.addView(sectionLabel(announcement.type.displayName + " · " + announcement.severity.displayName))
+        binding.contentList.addView(screenTitle(announcement.title))
+        binding.contentList.addView(screenCopy("게시 ${announcement.publishedAt.toString().take(16).replace('T', ' ')} · 수정 ${announcement.updatedAt.toString().take(16).replace('T', ' ')}"))
+        binding.contentList.addView(compactEventCard("", announcement.body, listOfNotNull(if (announcement.resolvedAt != null) "해결됨" else null)))
+        if (!announcement.actionLabel.isNullOrBlank() && (!announcement.appDeepLink.isNullOrBlank() || !announcement.externalUrl.isNullOrBlank())) {
+            binding.contentList.addView(compactEventCard(announcement.actionLabel, "관련 화면 또는 링크를 엽니다.", emptyList()).apply {
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    announcement.appDeepLink?.let { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) }
+                        ?: openExternalUrl(announcement.externalUrl)
+                }
+            })
+        }
+        announcement.externalUrl?.let { url ->
+            binding.contentList.addView(compactEventCard("외부 링크", url, emptyList()).apply {
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { openExternalUrl(url) }
+            })
         }
     }
 

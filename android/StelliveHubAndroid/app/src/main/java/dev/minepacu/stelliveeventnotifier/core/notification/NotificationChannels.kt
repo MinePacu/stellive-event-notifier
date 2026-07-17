@@ -22,6 +22,7 @@ object NotificationChannels {
     const val GROUP_PLATFORM_ACTIVITY = "stellive_group_platform_activity"
     const val GROUP_OFFICIAL = "stellive_group_official"
     const val GROUP_HUB_EVENTS = "stellive_group_hub_events"
+    const val GROUP_SERVICE = "stellive_group_service"
     const val GROUP_LOW_NOISE = "stellive_group_low_noise"
 
     const val CAFE_POSTS = "stellive_cafe_posts"
@@ -31,16 +32,26 @@ object NotificationChannels {
     const val YOUTUBE = "stellive_youtube"
     const val OFFICIAL_YOUTUBE = "stellive_official_youtube"
     const val HUB_EVENTS = "stellive_hub_events"
+    const val SERVICE_ANNOUNCEMENTS = "stellive_service_announcements"
 
     val groups = listOf(
         NotificationChannelGroupDefinition(GROUP_LIVE, "라이브"),
         NotificationChannelGroupDefinition(GROUP_PLATFORM_ACTIVITY, "플랫폼 활동"),
         NotificationChannelGroupDefinition(GROUP_OFFICIAL, "공식 채널"),
         NotificationChannelGroupDefinition(GROUP_HUB_EVENTS, "굿즈/행사"),
+        NotificationChannelGroupDefinition(GROUP_SERVICE, "앱 서비스"),
         NotificationChannelGroupDefinition(GROUP_LOW_NOISE, "낮은 소음")
     )
 
     val channels = listOf(
+        NotificationChannelDefinition(
+            id = SERVICE_ANNOUNCEMENTS,
+            groupId = GROUP_SERVICE,
+            displayName = "서비스 공지",
+            description = "앱 운영, 장애, 점검, 업데이트 안내",
+            importance = NotificationManager.IMPORTANCE_DEFAULT,
+            eventTypes = emptySet()
+        ),
         NotificationChannelDefinition(
             id = CHZZK_LIVE,
             groupId = GROUP_LIVE,

@@ -9,6 +9,8 @@ enum class HubScreen(val id: String) {
     GOODS_EVENT_DETAIL("goods_event_detail"),
     LIVE("live"),
     HISTORY("history"),
+    ANNOUNCEMENTS("announcements"),
+    ANNOUNCEMENT_DETAIL("announcement_detail"),
     SETTINGS("settings"),
     SETTINGS_DELIVERY("settings_delivery"),
     SETTINGS_TARGETS("settings_targets"),
@@ -86,5 +88,7 @@ fun HubScreen.rootScreen(): HubScreen = when (this) {
     HubScreen.SONG_MEMBER_FILTER -> HubScreen.SONGS
     HubScreen.GOODS_EVENTS,
     HubScreen.GOODS_EVENT_DETAIL -> HubScreen.GOODS_EVENTS
+    HubScreen.ANNOUNCEMENTS,
+    HubScreen.ANNOUNCEMENT_DETAIL -> HubScreen.HOME
     else -> HubScreen.HOME
 }

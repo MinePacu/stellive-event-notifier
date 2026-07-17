@@ -336,6 +336,10 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
   });
 
   app.post("/v1/internal/notifications/service-announcements", async (request, reply) => {
+    // Compatibility-only endpoint. New operational sends must use the persisted
+    // announcement admin publish/resend flow so delivery attempts are auditable.
+    reply.header("Deprecation", "true");
+    reply.header("Warning", '299 - "Use /v1/admin/announcements/:id/publish or /resend"');
     const body = request.body as Record<string, unknown> | undefined;
     const allowedKeys = ["scope", "title", "body", "appDeepLink", "platformUrl"];
     if (

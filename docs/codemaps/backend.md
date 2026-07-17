@@ -79,6 +79,10 @@ Do not read this file for merge-only work unless a conflict or failed check dire
 
 ### Backend Event, Hub Event, And Calendar Logic
 
+- `backend/stellive-hub-api/src/announcements/serviceAnnouncementRepository.ts` - Prisma persistence, public visibility/version filtering, audit logs, and push attempts for app service announcements.
+- `backend/stellive-hub-api/src/announcements/serviceAnnouncementReadService.ts` - Public list/detail and 30-second summary cache.
+- `backend/stellive-hub-api/src/announcements/serviceAnnouncementAdminService.ts` - Draft, publish, resolve, archive, attention revision, and resend workflow.
+
 - `backend/stellive-hub-api/src/events/chzzkEventIngestor.ts` - Ingests CHZZK live transitions into normalized platform events.
 - `backend/stellive-hub-api/src/events/eventGuards.ts` - Policy guards that drop unsupported or forbidden platform events before storage or notification.
 - `backend/stellive-hub-api/src/hub-events/hubCalendarSpecialDayCatalog.ts` - Verified special-day catalog source for birthdays and generation anniversaries.
@@ -128,6 +132,8 @@ Do not read this file for merge-only work unless a conflict or failed check dire
 - `backend/stellive-hub-api/src/admin/adminThemeHtml.ts` - Shared admin console styling and theme HTML.
 - `backend/stellive-hub-api/src/admin/adminTypes.ts` - Admin route and console data types.
 - `backend/stellive-hub-api/src/routes/adminHubEventRoutes.ts` - Admin routes for hub event management.
+- `backend/stellive-hub-api/src/routes/adminServiceAnnouncementRoutes.ts` - Authenticated service announcement management and history routes.
+- `backend/stellive-hub-api/src/routes/serviceAnnouncementRoutes.ts` - Public announcement list, detail, and summary routes.
 - `backend/stellive-hub-api/src/routes/adminRoutes.ts` - Admin console and admin health routes.
 - `backend/stellive-hub-api/src/routes/appRoutes.ts` - Mobile app routes for bootstrap, devices, preferences, live status, and foreground data.
 - `backend/stellive-hub-api/src/routes/chzzkAuthRoutes.ts` - CHZZK OAuth connect and callback routes.
@@ -184,4 +190,3 @@ Do not read this file for merge-only work unless a conflict or failed check dire
 - `backend/stellive-hub-api/test/youtubeWebSubInternalRoutes.test.ts` - Tests internal YouTube subscription renewal scheduler delegation.
 - `backend/stellive-hub-api/test/youtubeWebSubRoutes.test.ts` - Tests public YouTube WebSub verification and Atom ingestion route behavior.
 - `backend/stellive-hub-api/test/youtubeWebSubSubscriptionService.test.ts` - Tests YouTube WebSub subscription renewal request and error handling.
-

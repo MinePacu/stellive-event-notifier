@@ -17,6 +17,7 @@ struct BootstrapResponse: Codable, Equatable {
     let liveStatus: [LiveStatusResponse]
     let hubEventsSummary: HubEventsSummaryResponse?
     let hubCalendarWidgetSnapshot: HubCalendarWidgetSnapshot?
+    let announcementsSummary: AnnouncementsSummaryResponse?
     let serverTime: String?
 
     var effectiveCatalog: BootstrapCatalogResponse {
@@ -32,6 +33,7 @@ struct BootstrapResponse: Codable, Equatable {
         case liveStatus
         case hubEventsSummary
         case hubCalendarWidgetSnapshot
+        case announcementsSummary
         case serverTime
     }
 
@@ -44,6 +46,7 @@ struct BootstrapResponse: Codable, Equatable {
         liveStatus: [LiveStatusResponse] = [],
         hubEventsSummary: HubEventsSummaryResponse? = nil,
         hubCalendarWidgetSnapshot: HubCalendarWidgetSnapshot? = nil,
+        announcementsSummary: AnnouncementsSummaryResponse? = nil,
         serverTime: String? = nil
     ) {
         self.config = config
@@ -54,6 +57,7 @@ struct BootstrapResponse: Codable, Equatable {
         self.liveStatus = liveStatus
         self.hubEventsSummary = hubEventsSummary
         self.hubCalendarWidgetSnapshot = hubCalendarWidgetSnapshot
+        self.announcementsSummary = announcementsSummary
         self.serverTime = serverTime
     }
 
@@ -67,6 +71,7 @@ struct BootstrapResponse: Codable, Equatable {
         self.liveStatus = try container.decodeIfPresent([LiveStatusResponse].self, forKey: .liveStatus) ?? []
         self.hubEventsSummary = try container.decodeIfPresent(HubEventsSummaryResponse.self, forKey: .hubEventsSummary)
         self.hubCalendarWidgetSnapshot = try container.decodeIfPresent(HubCalendarWidgetSnapshot.self, forKey: .hubCalendarWidgetSnapshot)
+        self.announcementsSummary = try container.decodeIfPresent(AnnouncementsSummaryResponse.self, forKey: .announcementsSummary)
         self.serverTime = try container.decodeIfPresent(String.self, forKey: .serverTime)
     }
 }
@@ -251,6 +256,7 @@ final class HubAPIClient {
         components.queryItems = [
             URLQueryItem(name: "deviceId", value: deviceId),
             URLQueryItem(name: "platform", value: "ios"),
+            URLQueryItem(name: "appVersion", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String),
         ].filter { $0.value != nil }
         return try await send(URLRequest(url: components.url!), responseType: BootstrapResponse.self)
     }
@@ -291,6 +297,26 @@ final class HubAPIClient {
 
     func hubEvent(id: String) async throws -> HubEventResponse {
         try await send(URLRequest(url: baseURL.appendingPathComponent("v1/hub-events/\(id)")), responseType: HubEventResponse.self)
+    }
+
+    func announcements(cursor: String? = nil, limit: Int = 20) async throws -> ServiceAnnouncementListResponse {
+        var components = URLComponents(url: baseURL.appendingPathComponent("v1/announcements"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "platform", value: "ios"),
+            URLQueryItem(name: "appVersion", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String),
+            URLQueryItem(name: "cursor", value: cursor),
+            URLQueryItem(name: "limit", value: String(limit))
+        ].filter { $0.value != nil }
+        return try await send(URLRequest(url: components.url!), responseType: ServiceAnnouncementListResponse.self)
+    }
+
+    func announcement(id: String) async throws -> ServiceAnnouncement {
+        var components = URLComponents(url: baseURL.appendingPathComponent("v1/announcements/\(id)"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "platform", value: "ios"),
+            URLQueryItem(name: "appVersion", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)
+        ]
+        return try await send(URLRequest(url: components.url!), responseType: ServiceAnnouncement.self)
     }
 
     func songs(

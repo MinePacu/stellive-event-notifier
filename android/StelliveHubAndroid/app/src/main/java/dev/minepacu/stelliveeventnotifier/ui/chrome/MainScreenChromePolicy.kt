@@ -7,6 +7,7 @@ data class MainScreenChromeSpec(
     val showTopBarTitleAtRest: Boolean,
     val keepTopBarTitleWhenScrolled: Boolean,
     val showSettingsAction: Boolean,
+    val showAnnouncementAction: Boolean,
     val showSongSearchAction: Boolean,
 )
 
@@ -28,6 +29,7 @@ object MainScreenChromePolicy {
             showTopBarTitleAtRest = true,
             keepTopBarTitleWhenScrolled = screenId in titleStickyWhileScrollingScreens,
             showSettingsAction = screenId != "settings" && !screenId.startsWith("settings_"),
+            showAnnouncementAction = screenId != "announcements" && screenId != "announcement_detail" && screenId != "settings" && !screenId.startsWith("settings_"),
             showSongSearchAction = screenId == "songs" && !canGoBack,
         )
     }
