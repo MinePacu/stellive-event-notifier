@@ -297,6 +297,7 @@ private var songSearchResultsContainer: LinearLayout? = null
 private var homeRecentSongs: List<SongCatalogItem>? = null
 private var isLoadingHomeRecentSongs = false
 private var selectedHubEventId: String? = null
+private var selectedHubEventScheduleItemId: String? = null
 private var selectedAnnouncementId: String? = null
 private var announcementsSummary = AnnouncementsSummary()
 private var announcementItems: List<ServiceAnnouncement> = emptyList()
@@ -600,6 +601,7 @@ private var notificationPermissionRequested = false
         }
         val eventId = HubCalendarDeepLinkPolicy.eventIdFromAppDeepLink(deepLink) ?: return false
         selectedHubEventId = eventId
+        selectedHubEventScheduleItemId = HubCalendarDeepLinkPolicy.scheduleItemIdFromAppDeepLink(deepLink)
         serverHubEventDetailLoadedId = null
         navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
         if (shouldUseGoodsEventsTwoPane()) {
@@ -1678,11 +1680,13 @@ private fun startScreen(screenId: String, title: String, role: String) {
         when (HubEventsPanePolicy.selectionMode(currentAdaptiveSpec)) {
             GoodsEventSelectionMode.UPDATE_INLINE_DETAIL -> crossFadeTwoPaneSelection("goods-event:$eventId") {
                 selectedHubEventId = eventId
+                selectedHubEventScheduleItemId = null
                 serverHubEventDetailLoadedId = null
                 renderServerGoodsEvents(goodsEventsDays, goodsEvents)
             }
             GoodsEventSelectionMode.NAVIGATE_TO_DETAIL -> {
                 selectedHubEventId = eventId
+                selectedHubEventScheduleItemId = null
                 serverHubEventDetailLoadedId = null
                 pushScreen(HubScreen.GOODS_EVENT_DETAIL)
             }
@@ -1821,6 +1825,28 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
                 pills = emptyList()
             ).let { if (fullScreen) it.withDetailHorizontalMargins() else it }
         )
+        val timeline = HubEventDetailFormatting.timeline(event)
+        if (timeline.isNotEmpty()) {
+            container.addView(sectionLabel("세부 일정").let { if (fullScreen) it.withDetailHorizontalMargins() else it })
+            timeline.forEach { item ->
+                val highlighted = item.schedule.id == selectedHubEventScheduleItemId
+                val card = compactEventCard(
+                    title = item.schedule.label,
+                    body = listOfNotNull(item.schedule.description, item.timingText).joinToString(" · "),
+                    pills = buildList {
+                        add(item.stateText)
+                        if (highlighted) add("선택한 일정")
+                    },
+                ).let { if (fullScreen) it.withDetailHorizontalMargins() else it }
+                val actionUrl = item.schedule.actionUrl ?: item.schedule.sourceUrl
+                if (!actionUrl.isNullOrBlank()) {
+                    card.isClickable = true
+                    card.isFocusable = true
+                    card.setOnClickListener { openExternalUrl(actionUrl) }
+                }
+                container.addView(card)
+            }
+        }
         container.addView(sectionLabel("행사 정보").let { if (fullScreen) it.withDetailHorizontalMargins() else it })
         container.addView(
             settingsPanel(

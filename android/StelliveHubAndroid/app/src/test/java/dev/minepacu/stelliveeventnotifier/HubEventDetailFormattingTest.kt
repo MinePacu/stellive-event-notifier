@@ -3,6 +3,8 @@ package dev.minepacu.stelliveeventnotifier
 import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleItem
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleKind
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventSourceType
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailFormatting
@@ -95,6 +97,33 @@ class HubEventDetailFormattingTest {
         )
         assertEquals(tags.size, tags.map { it.label }.toSet().size)
     }
+
+    @Test
+    fun timelineSortsChronologicallyAndShowsCompletedCurrentAndCancelledStates() {
+        val event = sampleEvent().copy(
+            scheduleItems = listOf(
+                schedule("future", "2026-06-20T00:00:00Z"),
+                schedule("completed", "2026-06-10T00:00:00Z"),
+                schedule("current", "2026-06-12T00:00:00Z", "2026-06-14T00:00:00Z"),
+                schedule("cancelled", "2026-06-11T00:00:00Z", cancelled = true),
+            ),
+        )
+
+        val timeline = HubEventDetailFormatting.timeline(event, Instant.parse("2026-06-13T00:00:00Z"))
+
+        assertEquals(listOf("completed", "cancelled", "current", "future"), timeline.map { it.schedule.id })
+        assertEquals(listOf("완료", "취소", "진행", "예정"), timeline.map { it.stateText })
+    }
+
+    private fun schedule(id: String, startsAt: String, endsAt: String? = null, cancelled: Boolean = false) =
+        HubEventScheduleItem(
+            id = id,
+            kind = HubEventScheduleKind.CUSTOM,
+            label = id,
+            startsAt = Instant.parse(startsAt),
+            endsAt = endsAt?.let(Instant::parse),
+            cancelledAt = if (cancelled) Instant.parse("2026-06-10T00:00:00Z") else null,
+        )
 
     private fun sampleEvent(): HubEvent =
         HubEvent(

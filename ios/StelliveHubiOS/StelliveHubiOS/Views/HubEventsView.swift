@@ -83,7 +83,7 @@ struct HubEventsView: View {
                             if row.entry.entryKind == .hubEvent {
                                 if let event = serverStore.cachedHubEvent(id: row.entry.eventId) {
                                     if HubCalendarDeepLinkPolicy.canNavigateToDetail(row.entry) {
-                                        HubEventNavigationRow(event: event)
+                                        HubEventNavigationRow(event: event, scheduleItemId: row.entry.scheduleItemId)
                                     } else {
                                         HubEventRow(event: event)
                                     }
@@ -224,7 +224,7 @@ struct HubEventsFeedRow: Identifiable {
     let day: HubCalendarDay
     let entry: HubCalendarEntry
 
-    var id: String { entry.eventId }
+    var id: String { entry.scheduleItemId.map { "\(entry.eventId):\($0)" } ?? entry.eventId }
 }
 
 struct HubEventsFeedSection: Identifiable {
@@ -256,7 +256,7 @@ enum HubEventsFeedPolicy {
                 orderedBefore(lhs, rhs)
             }
             .filter { row in
-                seenEventIDs.insert(row.entry.eventId).inserted
+                seenEventIDs.insert(row.id).inserted
             }
     }
 
@@ -307,13 +307,14 @@ enum HubEventsFeedPolicy {
 struct HubEventDetailContainerView: View {
     @EnvironmentObject private var serverStore: ServerHubStore
     let initialEvent: HubEvent
+    var highlightedScheduleItemId: String? = nil
     @State private var event: HubEvent?
     @State private var didLoad = false
 
     var body: some View {
         Group {
             if let event {
-                HubEventDetailView(event: event)
+                HubEventDetailView(event: event, highlightedScheduleItemId: highlightedScheduleItemId)
             } else if didLoad {
                 VStack(spacing: 12) {
                     Image(systemName: "bag")
@@ -329,7 +330,7 @@ struct HubEventDetailContainerView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding()
             } else {
-                HubEventDetailView(event: initialEvent)
+                HubEventDetailView(event: initialEvent, highlightedScheduleItemId: highlightedScheduleItemId)
             }
         }
         .task(id: initialEvent.id) {
@@ -395,13 +396,14 @@ struct HubEventRow: View {
 
 private struct HubEventNavigationRow: View {
     let event: HubEvent
+    let scheduleItemId: String?
 
     var body: some View {
         HubEventRow(event: event, showsChevron: true)
             .contentShape(Rectangle())
             .overlay {
                 NavigationLink {
-                    HubEventDetailContainerView(initialEvent: event)
+                    HubEventDetailContainerView(initialEvent: event, highlightedScheduleItemId: scheduleItemId)
                 } label: {
                     Color.clear
                 }

@@ -440,6 +440,7 @@ model HubEvent {
   category              String
   participationMode     String
   status                String
+  scheduleMode          String   @default("single_window")
   title                 String
   summary               String?
   memberId              String?
@@ -466,6 +467,7 @@ model HubEvent {
   updatedBy             String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+  scheduleItems         HubEventScheduleItem[]
 
   @@index([publicationState, deletedAt])
   @@index([status])
@@ -476,6 +478,34 @@ model HubEvent {
   @@index([startsAt])
   @@index([endsAt])
   @@index([updatedAt])
+}
+
+model HubEventScheduleItem {
+  id                   String   @id @default(cuid(2))
+  hubEventId           String
+  kind                 String
+  label                String
+  description          String?
+  startsAt             DateTime
+  endsAt               DateTime?
+  timePrecision        String
+  timezone             String   @default("Asia/Seoul")
+  actionUrl            String?
+  sourceUrl            String?
+  sourceLabel          String?
+  notificationEligible Boolean  @default(true)
+  isPrimary            Boolean  @default(false)
+  sortOrder            Int      @default(0)
+  cancelledAt          DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  hubEvent HubEvent @relation(fields: [hubEventId], references: [id], onDelete: Cascade)
+
+  @@index([hubEventId, sortOrder])
+  @@index([hubEventId, startsAt])
+  @@index([startsAt])
+  @@index([cancelledAt])
 }
 
 model HubCalendarSpecialDayOccurrence {

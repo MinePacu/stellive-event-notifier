@@ -8,10 +8,12 @@ import type {
   HubEvent,
   HubEventCategory,
   HubEventParticipationMode,
+  HubEventScheduleItem,
   HubEventStatus
 } from "../types.js";
 import { buildSpecialDayEntries } from "./hubCalendarSpecialDays.js";
 import type { SpecialDayOccurrence } from "./hubCalendarSpecialDayMaterializer.js";
+import { resolveEffectiveHubEventStatus, resolveScheduleItemTiming } from "./hubEventStatus.js";
 
 export type { HubCalendarDay, HubCalendarEntry, HubCalendarResponse, HubCalendarWidgetSnapshot } from "../types.js";
 
@@ -36,7 +38,6 @@ export interface WidgetSnapshotOptions {
   memberId?: string;
 }
 
-const closingSoonWindowMs = 24 * 60 * 60 * 1000;
 const widgetStaleAfterMs = 6 * 60 * 60 * 1000;
 const statusRank: Record<HubEventStatus, number> = {
   closing_soon: 0,
@@ -102,33 +103,26 @@ function eventOverlapsWindow(event: HubEvent, from: Date, to: Date): boolean {
 }
 
 export function effectiveStatus(event: HubEvent, now: Date): HubEventStatus {
-  if (event.status === "cancelled") return "cancelled";
-  if (event.status === "ended") return "ended";
-
-  const nowTime = now.getTime();
-  const startsAt = asDate(event.startsAt);
-  const endsAt = asDate(event.endsAt);
-
-  if (event.status === "closing_soon") {
-    return endsAt && nowTime >= endsAt.getTime() ? "ended" : "closing_soon";
-  }
-  if (endsAt && nowTime >= endsAt.getTime()) return "ended";
-  if (startsAt && nowTime < startsAt.getTime()) return "upcoming";
-  if (endsAt && endsAt.getTime() - nowTime <= closingSoonWindowMs) return "closing_soon";
-  if (startsAt || endsAt) return "open";
-  return "announced";
+  return resolveEffectiveHubEventStatus(event, now);
 }
 
-function displayTimeText(event: HubEvent, date: string, timezone: string): string {
-  const startsAt = asDate(event.startsAt);
-  const endsAt = asDate(event.endsAt);
+function displayTimeText(
+  event: HubEvent,
+  date: string,
+  timezone: string,
+  scheduleItem?: HubEventScheduleItem
+): string {
+  const startsAt = asDate(scheduleItem?.startsAt ?? event.startsAt);
+  const endsAt = asDate(scheduleItem?.endsAt ?? event.endsAt);
+  const label = scheduleItem?.label;
+  if (scheduleItem?.timePrecision === "date") return label ? `${label} · 종일` : "종일";
+  let timing = "종일";
   if (startsAt && localDateString(startsAt, timezone) === date) {
-    return `${localTimeString(startsAt, timezone)} 시작`;
+    timing = `${localTimeString(startsAt, timezone)} 시작`;
+  } else if (endsAt && localDateString(endsAt, timezone) === date) {
+    timing = `${localTimeString(endsAt, timezone)} 마감`;
   }
-  if (endsAt && localDateString(endsAt, timezone) === date) {
-    return `${localTimeString(endsAt, timezone)} 마감`;
-  }
-  return "종일";
+  return label ? `${label} · ${timing}` : timing;
 }
 
 function specialDayOccurrenceStatus(occurrence: SpecialDayOccurrence, now: Date): "ended" | "open" | "upcoming" {
@@ -194,24 +188,52 @@ function calendarDatesFor(event: HubEvent, options: CalendarResponseOptions): st
   return [...sparseDates].sort();
 }
 
-function toEntry(event: HubEvent, date: string, status: HubEventStatus, timezone: string): HubCalendarEntry {
+function calendarDatesForScheduleItem(item: HubEventScheduleItem, options: CalendarResponseOptions): string[] {
+  const startsAt = asDate(item.startsAt);
+  if (!startsAt) return [];
+  const timezone = item.timezone || options.timezone;
+  const eventStart = localDateString(startsAt, timezone);
+  const eventEnd = item.endsAt ? localDateString(asDate(item.endsAt) ?? startsAt, timezone) : eventStart;
+  const windowStart = localDateString(options.from, options.timezone);
+  const windowEnd = localDateString(options.to, options.timezone);
+  return enumerateLocalDates(eventStart, eventEnd).filter((date) => date >= windowStart && date <= windowEnd);
+}
+
+function scheduleStatus(item: HubEventScheduleItem, now: Date): HubEventStatus {
+  const timing = resolveScheduleItemTiming(item, now);
+  if (timing === "future") return "upcoming";
+  return timing;
+}
+
+function toEntry(
+  event: HubEvent,
+  date: string,
+  status: HubEventStatus,
+  timezone: string,
+  scheduleItem?: HubEventScheduleItem
+): HubCalendarEntry {
   return {
-    id: `${event.id}:${date}`,
+    id: scheduleItem ? `${event.id}:${scheduleItem.id}:${date}` : `${event.id}:${date}`,
     eventId: event.id,
     entryKind: "hub_event",
+    scheduleItemId: scheduleItem?.id,
+    scheduleKind: scheduleItem?.kind,
+    scheduleLabel: scheduleItem?.label,
     title: event.title,
     category: event.category,
     status,
     participationMode: event.participationMode,
     generationId: event.generationId,
     memberId: event.memberId,
-    startsAt: event.startsAt,
-    endsAt: event.endsAt,
+    startsAt: scheduleItem?.startsAt ?? event.startsAt,
+    endsAt: scheduleItem?.endsAt ?? event.endsAt,
     displayDate: date,
-    displayTimeText: displayTimeText(event, date, timezone),
-    sourceLabel: event.sourceLabel,
-    appDeepLink: `stellivehub://hub-events/${event.id}`,
-    platformUrl: event.purchaseUrl ?? event.ticketUrl ?? event.sourceUrl
+    displayTimeText: displayTimeText(event, date, scheduleItem?.timezone ?? timezone, scheduleItem),
+    sourceLabel: scheduleItem?.sourceLabel ?? event.sourceLabel,
+    appDeepLink: scheduleItem
+      ? `stellivehub://hub-events/${event.id}?scheduleItemId=${encodeURIComponent(scheduleItem.id)}`
+      : `stellivehub://hub-events/${event.id}`,
+    platformUrl: scheduleItem?.actionUrl ?? scheduleItem?.sourceUrl ?? event.purchaseUrl ?? event.ticketUrl ?? event.sourceUrl
   };
 }
 
@@ -235,12 +257,22 @@ export function buildHubCalendarResponse(
   const days = new Map<string, HubCalendarEntry[]>();
 
   for (const event of events) {
-    if (!eventOverlapsWindow(event, options.from, options.to)) continue;
-    const status = effectiveStatus(event, options.now);
-    for (const date of calendarDatesFor(event, options)) {
-      const entries = days.get(date) ?? [];
-      entries.push(toEntry(event, date, status, options.timezone));
-      days.set(date, entries);
+    if (event.scheduleMode === "timeline") {
+      for (const scheduleItem of (event.scheduleItems ?? []).filter((item) => !item.cancelledAt)) {
+        for (const date of calendarDatesForScheduleItem(scheduleItem, options)) {
+          const entries = days.get(date) ?? [];
+          entries.push(toEntry(event, date, scheduleStatus(scheduleItem, options.now), options.timezone, scheduleItem));
+          days.set(date, entries);
+        }
+      }
+    } else {
+      if (!eventOverlapsWindow(event, options.from, options.to)) continue;
+      const status = effectiveStatus(event, options.now);
+      for (const date of calendarDatesFor(event, options)) {
+        const entries = days.get(date) ?? [];
+        entries.push(toEntry(event, date, status, options.timezone));
+        days.set(date, entries);
+      }
     }
   }
 
@@ -289,9 +321,23 @@ export function buildHubCalendarWidgetSnapshot(
   specialDays: HubCalendarSpecialDay[] = [],
   specialDayOccurrences: SpecialDayOccurrence[] = []
 ): HubCalendarWidgetSnapshot {
-  const hubEventEntries = events.map((event) => {
-    const date = localDateString(primaryStart(event), options.timezone);
-    return toEntry(event, date, effectiveStatus(event, options.now), options.timezone);
+  const today = localDateString(options.now, options.timezone);
+  const hubEventEntries = events.flatMap((event) => {
+    if (event.scheduleMode !== "timeline") {
+      const date = localDateString(primaryStart(event), options.timezone);
+      return date >= today ? [toEntry(event, date, effectiveStatus(event, options.now), options.timezone)] : [];
+    }
+    return (event.scheduleItems ?? [])
+      .filter((item) => !item.cancelledAt)
+      .flatMap((item) => {
+        const dates = calendarDatesForScheduleItem(item, {
+          ...options,
+          from: options.now,
+          to: new Date(options.now.getTime() + 90 * 24 * 60 * 60 * 1000)
+        });
+        const date = dates.find((candidate) => candidate >= today);
+        return date ? [toEntry(event, date, scheduleStatus(item, options.now), options.timezone, item)] : [];
+      });
   });
   const materializedSpecialDayEntries = options.includeSpecialDays === false
     ? []
@@ -310,7 +356,9 @@ export function buildHubCalendarWidgetSnapshot(
   const entries = options.entryKinds?.length
     ? [...hubEventEntries, ...specialDayEntries].filter((entry) => options.entryKinds?.includes(entry.entryKind))
     : [...hubEventEntries, ...specialDayEntries];
-  const hubEntries = entries.filter((entry) => entry.entryKind === "hub_event").sort(compareCalendarEntries);
+  const hubEntries = entries
+    .filter((entry) => entry.entryKind === "hub_event" && entry.status !== "ended" && entry.status !== "cancelled")
+    .sort((left, right) => left.displayDate.localeCompare(right.displayDate) || compareCalendarEntries(left, right));
   const fallbackEntries = entries.filter((entry) => entry.entryKind !== "hub_event").sort(compareCalendarEntries);
   const sourceEntries = [
     ...hubEntries,

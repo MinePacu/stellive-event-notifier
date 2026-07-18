@@ -59,6 +59,7 @@ enum NotificationEventType: String, Codable, CaseIterable, Hashable, Identifiabl
     case eventAnnounced = "event_announced"
     case eventSalesOpen = "event_sales_open"
     case eventDeadlineSoon = "event_deadline_soon"
+    case eventMilestoneDue = "event_milestone_due"
     case eventUpdated = "event_updated"
     case eventCancelled = "event_cancelled"
 
@@ -92,6 +93,8 @@ enum NotificationEventType: String, Codable, CaseIterable, Hashable, Identifiabl
             return "예약/판매 시작"
         case .eventDeadlineSoon:
             return "마감 임박"
+        case .eventMilestoneDue:
+            return "굿즈/행사 마일스톤"
         case .eventUpdated:
             return "굿즈/행사 변경"
         case .eventCancelled:
@@ -246,6 +249,45 @@ enum HubEventSourceType: String, Codable, Hashable {
     case officialCollab = "official_collab"
 }
 
+enum HubEventScheduleMode: String, Codable, Hashable {
+    case singleWindow = "single_window"
+    case timeline
+}
+
+enum HubEventScheduleKind: String, Codable, Hashable {
+    case mainWindow = "main_window"
+    case announcement
+    case salesOpen = "sales_open"
+    case ticketOpen = "ticket_open"
+    case contentReveal = "content_reveal"
+    case release
+    case deadline
+    case custom
+}
+
+enum HubEventTimePrecision: String, Codable, Hashable {
+    case date
+    case datetime
+}
+
+struct HubEventScheduleItem: Identifiable, Hashable {
+    let id: String
+    let kind: HubEventScheduleKind
+    let label: String
+    let description: String?
+    let startsAt: Date
+    let endsAt: Date?
+    let timePrecision: HubEventTimePrecision
+    let timezone: String
+    let actionUrl: String?
+    let sourceUrl: String?
+    let sourceLabel: String?
+    let notificationEligible: Bool
+    let isPrimary: Bool
+    let sortOrder: Int
+    let cancelledAt: Date?
+}
+
 enum HubEventImagePolicyState: String, Codable, Hashable {
     case none
     case officialRuntimeUrl = "official_runtime_url"
@@ -290,6 +332,8 @@ struct HubEvent: Identifiable, Hashable {
     let sourceUrl: String
     let sourceLabel: String
     let sourceType: HubEventSourceType
+    var scheduleMode: HubEventScheduleMode = .singleWindow
+    var scheduleItems: [HubEventScheduleItem] = []
     let announcedAt: Date?
     let startsAt: Date?
     let endsAt: Date?
@@ -315,6 +359,9 @@ struct HubCalendarEntry: Identifiable, Codable, Equatable {
     let entryKind: HubCalendarEntryKind
     let specialDayKind: HubCalendarSpecialDayKind?
     let specialDayLabel: String?
+    var scheduleItemId: String? = nil
+    var scheduleKind: HubEventScheduleKind? = nil
+    var scheduleLabel: String? = nil
     let title: String
     let category: HubEventCategory
     let status: HubEventStatus
@@ -357,6 +404,15 @@ enum HubCalendarDeepLinkPolicy {
         let eventId = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !eventId.isEmpty, !eventId.contains("/") else { return nil }
         return eventId
+    }
+
+    static func scheduleItemId(from url: URL?) -> String? {
+        guard let url, url.scheme == scheme, url.host == hubEventsHost else { return nil }
+        let value = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == "scheduleItemId" })?
+            .value
+        return value?.isEmpty == false ? value : nil
     }
 
     static func canNavigateToDetail(_ entry: HubCalendarEntry) -> Bool {
@@ -1614,6 +1670,7 @@ struct NotificationSettingsState: Equatable {
         .eventAnnounced: true,
         .eventSalesOpen: true,
         .eventDeadlineSoon: true,
+        .eventMilestoneDue: true,
         .eventUpdated: false,
         .eventCancelled: true
     ]

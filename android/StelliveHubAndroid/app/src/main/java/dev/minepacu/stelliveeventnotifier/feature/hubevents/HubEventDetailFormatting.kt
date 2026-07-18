@@ -2,6 +2,9 @@ package dev.minepacu.stelliveeventnotifier.feature.hubevents
 
 import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleItem
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventTimePrecision
+import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -22,6 +25,12 @@ enum class HubEventHeroTagTone {
     PARTICIPATION,
 }
 
+data class HubEventScheduleTimelineItem(
+    val schedule: HubEventScheduleItem,
+    val timingText: String,
+    val stateText: String,
+)
+
 object HubEventDetailFormatting {
     const val SummaryLabel = "핵심 안내"
     const val NoticeText = "일정, 장소, 판매/입장 조건은 공식 공지 변경에 따라 달라질 수 있습니다. 앱은 확인용 요약만 제공하므로 참여 전 반드시 출처 링크에서 최신 공지를 확인하세요."
@@ -40,6 +49,51 @@ object HubEventDetailFormatting {
             add(HubEventDetailRow("분류", event.category.displayName))
             add(HubEventDetailRow("출처", event.sourceLabel))
         }
+
+    fun timeline(
+        event: HubEvent,
+        now: Instant = Instant.now(),
+    ): List<HubEventScheduleTimelineItem> =
+        event.scheduleItems
+            .sortedWith(compareBy<HubEventScheduleItem> { it.startsAt }.thenBy { it.sortOrder })
+            .map { item ->
+                val zoneId = runCatching { ZoneId.of(item.timezone) }.getOrDefault(ZoneId.of("Asia/Seoul"))
+                HubEventScheduleTimelineItem(
+                    schedule = item,
+                    timingText = schedulePeriodText(item, zoneId),
+                    stateText = scheduleStateText(item, now, zoneId),
+                )
+            }
+
+    private fun schedulePeriodText(item: HubEventScheduleItem, zoneId: ZoneId): String {
+        if (item.timePrecision == HubEventTimePrecision.DATE) {
+            val start = item.startsAt.atZone(zoneId).toLocalDate().toString()
+            val end = item.endsAt?.atZone(zoneId)?.toLocalDate()?.toString()
+            return if (end != null && end != start) "$start - $end" else start
+        }
+        return item.endsAt?.let { "${formatDateTime(item.startsAt, zoneId)} - ${formatDateTime(it, zoneId)}" }
+            ?: formatDateTime(item.startsAt, zoneId)
+    }
+
+    private fun scheduleStateText(item: HubEventScheduleItem, now: Instant, zoneId: ZoneId): String {
+        if (item.cancelledAt != null) return "취소"
+        if (item.timePrecision == HubEventTimePrecision.DATE) {
+            val today = now.atZone(zoneId).toLocalDate()
+            val start = item.startsAt.atZone(zoneId).toLocalDate()
+            val end = item.endsAt?.atZone(zoneId)?.toLocalDate() ?: start
+            return when {
+                today < start -> "예정"
+                today > end -> "완료"
+                else -> "진행"
+            }
+        }
+        return when {
+            now < item.startsAt -> "예정"
+            item.endsAt != null && now < item.endsAt -> "진행"
+            item.endsAt == null && now == item.startsAt -> "진행"
+            else -> "완료"
+        }
+    }
 
     fun heroSubtitleLines(event: HubEvent, zoneId: ZoneId = ZoneId.systemDefault()): List<String> {
         val venue = event.venueName?.takeIf { it.isNotBlank() } ?: event.sourceLabel

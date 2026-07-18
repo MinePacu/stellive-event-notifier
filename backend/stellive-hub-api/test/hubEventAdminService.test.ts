@@ -7,10 +7,11 @@ import {
 import type { AdminHubEvent } from "../src/hub-events/hubEventAdminTypes.js";
 import type { AdminHubEventWriteInput, HubEventAuditLogInput } from "../src/hub-events/hubEventRepository.js";
 
-type AdminHubEventOverrides = Partial<Omit<AdminHubEvent, "announcedAt" | "startsAt" | "endsAt">> & {
+type AdminHubEventOverrides = Partial<Omit<AdminHubEvent, "announcedAt" | "startsAt" | "endsAt" | "scheduleItems">> & {
   announcedAt?: string | Date | null;
   startsAt?: string | Date | null;
   endsAt?: string | Date | null;
+  scheduleItems?: AdminHubEventWriteInput["scheduleItems"];
 };
 
 function adminEvent(overrides: AdminHubEventOverrides = {}): AdminHubEvent {
@@ -212,6 +213,35 @@ describe("HubEventAdminService", () => {
     const updated = await service.update("event-1", { endsAt: null }, { actorId: "admin" });
 
     expect(updated.endsAt).toBeUndefined();
+  });
+
+  it("includes schedule changes in update audit snapshots", async () => {
+    const fake = createFakeRepository();
+    const service = createService(fake.repository);
+    const scheduleItems: NonNullable<AdminHubEventWriteInput["scheduleItems"]> = [{
+      id: "release",
+      kind: "release",
+      label: "앨범 발매",
+      startsAt: "2026-07-11T09:00:00.000Z",
+      timePrecision: "datetime",
+      timezone: "Asia/Seoul",
+      notificationEligible: true,
+      isPrimary: true,
+      sortOrder: 0
+    }];
+
+    await service.update(
+      "event-1",
+      { scheduleMode: "timeline", scheduleItems },
+      { actorId: "admin", reason: "timeline added" }
+    );
+
+    expect(fake.audits.at(-1)).toMatchObject({
+      action: "update",
+      reason: "timeline added",
+      before: expect.not.objectContaining({ scheduleItems }),
+      after: expect.objectContaining({ scheduleMode: "timeline", scheduleItems })
+    });
   });
 
   it("does not restore a cleared endsAt during publish", async () => {

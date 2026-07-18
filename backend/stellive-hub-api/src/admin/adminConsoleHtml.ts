@@ -1225,6 +1225,13 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     .hub-event-form-wide .form-section:first-of-type {
       grid-column: 1 / -1;
     }
+    .hub-event-schedule-list { display: grid; gap: 12px; margin-top: 12px; }
+    .hub-event-schedule-row { border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: var(--surface-soft); }
+    .hub-event-schedule-row[aria-invalid="true"] { border-color: var(--danger); }
+    .hub-event-schedule-row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .hub-event-schedule-row [aria-invalid="true"] { outline: 2px solid var(--danger); outline-offset: 1px; }
+    .hub-event-schedule-flags { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+    .hub-event-schedule-hidden { display: none !important; }
 
     .hub-events-section-body {
       display: grid;
@@ -1885,8 +1892,15 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
               <h3 class="form-section-title hub-events-section-title">Schedule</h3>
               <div class="hub-events-section-body">
                 <div class="field"><label for="hub-event-announced-at">Announced at</label><input id="hub-event-announced-at" name="announcedAt" type="datetime-local"></div>
-                <div class="field"><label for="hub-event-starts-at">Starts at</label><input id="hub-event-starts-at" name="startsAt" type="datetime-local"></div>
-                <div class="field"><label for="hub-event-ends-at">Ends at</label><input id="hub-event-ends-at" name="endsAt" type="datetime-local"></div>
+                <div class="field"><label for="hub-event-schedule-mode">Schedule mode</label><select id="hub-event-schedule-mode" name="scheduleMode"><option value="single_window">Single window</option><option value="timeline">Multiple schedule items</option></select></div>
+                <div id="hub-event-single-window-fields">
+                  <div class="field"><label for="hub-event-starts-at">Starts at</label><input id="hub-event-starts-at" name="startsAt" type="datetime-local"></div>
+                  <div class="field"><label for="hub-event-ends-at">Ends at</label><input id="hub-event-ends-at" name="endsAt" type="datetime-local"></div>
+                </div>
+                <div id="hub-event-timeline-fields" class="hub-event-schedule-hidden">
+                  <div class="hub-event-schedule-row-actions"><button id="hub-event-schedule-add" type="button">Add schedule item</button></div>
+                  <div id="hub-event-schedule-items" class="hub-event-schedule-list"></div>
+                </div>
               </div>
             </div>
             <div class="form-section hub-events-section">
@@ -3204,6 +3218,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       imageSourceLabel: document.getElementById("hub-event-image-source-label"),
       imageSourceUrl: document.getElementById("hub-event-image-source-url"),
       announcedAt: document.getElementById("hub-event-announced-at"),
+      scheduleMode: document.getElementById("hub-event-schedule-mode"),
       startsAt: document.getElementById("hub-event-starts-at"),
       endsAt: document.getElementById("hub-event-ends-at"),
       purchaseUrl: document.getElementById("hub-event-purchase-url"),
@@ -3215,6 +3230,9 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     const hubEventListRoot = document.getElementById("hub-event-list");
     const hubEventValidationRoot = document.getElementById("hub-event-validation");
     const hubEventAuditRoot = document.getElementById("hub-event-audit-log");
+    const hubEventSingleWindowFields = document.getElementById("hub-event-single-window-fields");
+    const hubEventTimelineFields = document.getElementById("hub-event-timeline-fields");
+    const hubEventScheduleItemsRoot = document.getElementById("hub-event-schedule-items");
     const hubEventStateFilter = document.getElementById("hub-event-state-filter");
     const hubEventStatusFilter = document.getElementById("hub-event-status-filter");
     const hubEventCategoryFilter = document.getElementById("hub-event-category-filter");
@@ -3235,6 +3253,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     };
     let hubEventSearchTimer = 0;
     let selectedHubEventId = "";
+    let singleWindowScheduleItemId = "";
 
     function getHubEventPageLimit() {
       const parsed = Number.parseInt(hubEventPageSize?.value || "10", 10);
@@ -3252,6 +3271,154 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       const parsed = new Date(value);
       if (Number.isNaN(parsed.getTime())) return "";
       return new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+
+    function toScheduleDate(value, timezone) {
+      if (!value) return "";
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
+      try {
+        return new Intl.DateTimeFormat("en-CA", {
+          timeZone: timezone || "Asia/Seoul",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit"
+        }).format(parsed);
+      } catch (_error) {
+        return String(value).slice(0, 10);
+      }
+    }
+
+    function scheduleItemId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
+      return "schedule-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+    }
+
+    function scheduleKindOptions(selected) {
+      return [
+        ["main_window", "Main window"], ["announcement", "Announcement"], ["sales_open", "Sales open"],
+        ["ticket_open", "Ticket open"], ["content_reveal", "Content reveal"], ["release", "Release"],
+        ["deadline", "Deadline"], ["custom", "Custom"]
+      ].map(function (entry) {
+        return '<option value="' + entry[0] + '"' + (entry[0] === selected ? " selected" : "") + ">" + entry[1] + "</option>";
+      }).join("");
+    }
+
+    function setScheduleDateInputType(row, precision) {
+      row.querySelectorAll('[data-schedule-field="startsAt"], [data-schedule-field="endsAt"]').forEach(function (input) {
+        const previous = input.value;
+        input.type = precision === "date" ? "date" : "datetime-local";
+        if (precision === "date" && previous) input.value = previous.slice(0, 10);
+      });
+    }
+
+    function createScheduleRow(item) {
+      const value = item || {};
+      const row = document.createElement("div");
+      row.className = "hub-event-schedule-row";
+      row.dataset.scheduleItemId = value.id || scheduleItemId();
+      const precision = value.timePrecision || "datetime";
+      const startsValue = precision === "date" ? toScheduleDate(value.startsAt, value.timezone) : toLocalDateTime(value.startsAt);
+      const endsValue = precision === "date" ? toScheduleDate(value.endsAt, value.timezone) : toLocalDateTime(value.endsAt);
+      row.innerHTML =
+        '<div class="hub-events-three">' +
+          '<div class="field"><label>Kind</label><select data-schedule-field="kind">' + scheduleKindOptions(value.kind || "custom") + '</select></div>' +
+          '<div class="field"><label>Label</label><input data-schedule-field="label" autocomplete="off"></div>' +
+          '<div class="field"><label>Precision</label><select data-schedule-field="timePrecision"><option value="datetime">Date and time</option><option value="date">Date only</option></select></div>' +
+        '</div>' +
+        '<div class="field"><label>Description</label><textarea data-schedule-field="description" rows="2"></textarea></div>' +
+        '<div class="hub-events-two">' +
+          '<div class="field"><label>Starts at</label><input data-schedule-field="startsAt"></div>' +
+          '<div class="field"><label>Ends at</label><input data-schedule-field="endsAt"></div>' +
+        '</div>' +
+        '<div class="field"><label>Timezone</label><input data-schedule-field="timezone" autocomplete="off"></div>' +
+        '<div class="hub-events-three">' +
+          '<div class="field"><label>Action URL</label><input data-schedule-field="actionUrl" type="url"></div>' +
+          '<div class="field"><label>Source URL</label><input data-schedule-field="sourceUrl" type="url"></div>' +
+          '<div class="field"><label>Source label</label><input data-schedule-field="sourceLabel"></div>' +
+        '</div>' +
+        '<div class="hub-event-schedule-flags">' +
+          '<label class="switch-control"><input data-schedule-field="notificationEligible" type="checkbox"> Notification eligible</label>' +
+          '<label class="switch-control"><input data-schedule-field="isPrimary" type="radio" name="hub-event-primary-schedule"> Primary</label>' +
+          '<label class="switch-control"><input data-schedule-field="cancelled" type="checkbox"> Cancelled</label>' +
+        '</div>' +
+        '<div class="hub-event-schedule-row-actions"><button data-schedule-action="up" type="button">Move up</button><button data-schedule-action="down" type="button">Move down</button><button data-schedule-action="delete" type="button">Remove</button></div>';
+      row.querySelector('[data-schedule-field="label"]').value = value.label || "";
+      row.querySelector('[data-schedule-field="description"]').value = value.description || "";
+      row.querySelector('[data-schedule-field="timePrecision"]').value = precision;
+      row.querySelector('[data-schedule-field="startsAt"]').value = startsValue;
+      row.querySelector('[data-schedule-field="endsAt"]').value = endsValue;
+      row.querySelector('[data-schedule-field="timezone"]').value = value.timezone || "Asia/Seoul";
+      row.querySelector('[data-schedule-field="actionUrl"]').value = value.actionUrl || "";
+      row.querySelector('[data-schedule-field="sourceUrl"]').value = value.sourceUrl || "";
+      row.querySelector('[data-schedule-field="sourceLabel"]').value = value.sourceLabel || "";
+      row.querySelector('[data-schedule-field="notificationEligible"]').checked = value.notificationEligible !== false;
+      row.querySelector('[data-schedule-field="isPrimary"]').checked = value.isPrimary === true;
+      row.querySelector('[data-schedule-field="cancelled"]').checked = Boolean(value.cancelledAt);
+      setScheduleDateInputType(row, precision);
+      row.querySelector('[data-schedule-field="timePrecision"]').addEventListener("change", function (event) {
+        setScheduleDateInputType(row, event.target.value);
+      });
+      row.querySelector('[data-schedule-action="up"]').addEventListener("click", function () {
+        if (row.previousElementSibling) hubEventScheduleItemsRoot.insertBefore(row, row.previousElementSibling);
+      });
+      row.querySelector('[data-schedule-action="down"]').addEventListener("click", function () {
+        if (row.nextElementSibling) hubEventScheduleItemsRoot.insertBefore(row.nextElementSibling, row);
+      });
+      row.querySelector('[data-schedule-action="delete"]').addEventListener("click", function () { row.remove(); });
+      return row;
+    }
+
+    function renderScheduleItems(items) {
+      hubEventScheduleItemsRoot.replaceChildren();
+      (items || []).forEach(function (item) { hubEventScheduleItemsRoot.appendChild(createScheduleRow(item)); });
+    }
+
+    function updateScheduleModeUi() {
+      const timeline = hubEventFields.scheduleMode.value === "timeline";
+      hubEventSingleWindowFields.classList.toggle("hub-event-schedule-hidden", timeline);
+      hubEventTimelineFields.classList.toggle("hub-event-schedule-hidden", !timeline);
+      if (timeline && hubEventScheduleItemsRoot.children.length === 0 && hubEventFields.startsAt.value) {
+        hubEventScheduleItemsRoot.appendChild(createScheduleRow({
+          id: singleWindowScheduleItemId || scheduleItemId(),
+          kind: "main_window",
+          label: hubEventFields.title.value.trim() || "Event schedule",
+          startsAt: toIsoFromLocal(hubEventFields.startsAt.value),
+          endsAt: toIsoFromLocal(hubEventFields.endsAt.value),
+          timePrecision: "datetime",
+          timezone: "Asia/Seoul",
+          notificationEligible: hubEventFields.notificationEligible.checked,
+          isPrimary: true
+        }));
+      }
+    }
+
+    function collectScheduleItems() {
+      return Array.from(hubEventScheduleItemsRoot.querySelectorAll(".hub-event-schedule-row")).map(function (row, index) {
+        const field = function (name) { return row.querySelector('[data-schedule-field="' + name + '"]'); };
+        const precision = field("timePrecision").value;
+        const startsValue = field("startsAt").value;
+        const endsValue = field("endsAt").value;
+        const startsAt = precision === "date" ? startsValue : toIsoFromLocal(startsValue);
+        const endsAt = precision === "date" ? endsValue : toIsoFromLocal(endsValue);
+        return {
+          id: row.dataset.scheduleItemId || scheduleItemId(),
+          kind: field("kind").value,
+          label: field("label").value.trim(),
+          description: field("description").value.trim() || null,
+          startsAt: startsAt || null,
+          endsAt: endsAt || null,
+          timePrecision: precision,
+          timezone: field("timezone").value.trim() || "Asia/Seoul",
+          actionUrl: field("actionUrl").value.trim() || null,
+          sourceUrl: field("sourceUrl").value.trim() || null,
+          sourceLabel: field("sourceLabel").value.trim() || null,
+          notificationEligible: field("notificationEligible").checked,
+          isPrimary: field("isPrimary").checked,
+          sortOrder: index,
+          cancelledAt: field("cancelled").checked ? new Date().toISOString() : null
+        };
+      });
     }
 
     function setSelectedHubEventId(id) {
@@ -3298,6 +3465,25 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         if (imageSourceUrl) image.sourceUrl = imageSourceUrl;
         input.image = image;
       }
+      input.scheduleMode = hubEventFields.scheduleMode.value;
+      if (input.scheduleMode === "timeline") {
+        input.scheduleItems = collectScheduleItems();
+      } else {
+        const startsAt = input.startsAt || input.endsAt;
+        input.scheduleItems = startsAt ? [{
+          id: singleWindowScheduleItemId || scheduleItemId(),
+          kind: "main_window",
+          label: input.title || "Event schedule",
+          startsAt: startsAt,
+          endsAt: input.startsAt ? (input.endsAt || null) : null,
+          timePrecision: "datetime",
+          timezone: "Asia/Seoul",
+          notificationEligible: input.notificationEligible !== false,
+          isPrimary: true,
+          sortOrder: 0,
+          cancelledAt: null
+        }] : [];
+      }
       return input;
     }
 
@@ -3312,13 +3498,17 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       const payload = contentType.includes("application/json") ? await response.json() : await response.text();
       if (!response.ok) {
         const reason = payload && typeof payload === "object" && "error" in payload ? payload.error : "request_failed";
-        throw new Error(String(reason));
+        const error = new Error(String(reason));
+        error.validationPayload = payload;
+        throw error;
       }
       return payload;
     }
 
     function renderHubEventValidation(result) {
       const errors = result && result.errors ? result.errors : [];
+      document.querySelectorAll('#hub-event-form [aria-invalid="true"]').forEach(function (element) { element.removeAttribute("aria-invalid"); });
+      hubEventScheduleItemsRoot.querySelectorAll('[aria-invalid="true"]').forEach(function (element) { element.removeAttribute("aria-invalid"); });
       hubEventValidationRoot.replaceChildren();
       if (errors.length === 0) {
         const item = document.createElement("li");
@@ -3330,6 +3520,18 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         const item = document.createElement("li");
         item.textContent = [error.field, error.reason, error.message].filter(Boolean).join(" - ");
         hubEventValidationRoot.appendChild(item);
+        const scheduleMatch = String(error.field || "").match(/^scheduleItems\.(\d+)(?:\.(.+))?$/);
+        if (scheduleMatch) {
+          const row = hubEventScheduleItemsRoot.children[Number(scheduleMatch[1])];
+          if (row) {
+            row.setAttribute("aria-invalid", "true");
+            const scheduleField = scheduleMatch[2] && row.querySelector('[data-schedule-field="' + scheduleMatch[2] + '"]');
+            if (scheduleField) scheduleField.setAttribute("aria-invalid", "true");
+          }
+        } else {
+          const baseField = hubEventFields[error.field];
+          if (baseField) baseField.setAttribute("aria-invalid", "true");
+        }
       });
     }
 
@@ -3350,6 +3552,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       hubEventFields.imageSourceLabel.value = event.image?.sourceLabel || "";
       hubEventFields.imageSourceUrl.value = event.image?.sourceUrl || "";
       hubEventFields.announcedAt.value = toLocalDateTime(event.announcedAt);
+      hubEventFields.scheduleMode.value = event.scheduleMode || "single_window";
       hubEventFields.startsAt.value = toLocalDateTime(event.startsAt);
       hubEventFields.endsAt.value = toLocalDateTime(event.endsAt);
       hubEventFields.purchaseUrl.value = event.purchaseUrl || "";
@@ -3357,6 +3560,10 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       hubEventFields.venueName.value = event.venueName || "";
       hubEventFields.venueAddress.value = event.venueAddress || "";
       hubEventFields.notificationEligible.checked = event.notificationEligible !== false;
+      const activePrimary = (event.scheduleItems || []).find(function (item) { return item.isPrimary && !item.cancelledAt; });
+      singleWindowScheduleItemId = event.scheduleMode === "timeline" ? "" : (activePrimary?.id || event.scheduleItems?.[0]?.id || "");
+      renderScheduleItems(event.scheduleMode === "timeline" ? (event.scheduleItems || []) : []);
+      updateScheduleModeUi();
     }
 
     function renderHubEvents(events) {
@@ -3544,6 +3751,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         await action();
         setMessage(t("operations.completed", { action: label }), false);
       } catch (error) {
+        if (error && error.validationPayload) renderHubEventValidation(error.validationPayload);
         setMessage(error instanceof Error ? error.message : "unknown_error", true);
       } finally {
         setBusy(false);
@@ -3701,6 +3909,17 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
 
     document.getElementById("hub-event-refresh").addEventListener("click", function () {
       return runHubEventUiAction("Refresh hub events", function () { return refreshHubEvents({ resetPage: true }); });
+    });
+    hubEventFields.scheduleMode.addEventListener("change", updateScheduleModeUi);
+    document.getElementById("hub-event-schedule-add").addEventListener("click", function () {
+      hubEventScheduleItemsRoot.appendChild(createScheduleRow({
+        kind: "custom",
+        label: "",
+        timePrecision: "datetime",
+        timezone: "Asia/Seoul",
+        notificationEligible: true,
+        isPrimary: hubEventScheduleItemsRoot.children.length === 0
+      }));
     });
     hubEventPrevPage.addEventListener("click", function () {
       return runHubEventUiAction("Previous hub events page", previousHubEventPage);

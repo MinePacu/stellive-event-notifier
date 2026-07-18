@@ -8,6 +8,13 @@ final class HubCalendarDeepLinkPolicyTests: XCTestCase {
         XCTAssertEqual(HubCalendarDeepLinkPolicy.eventId(from: url), "ticket-drop")
     }
 
+    func testParsesScheduleItemFromTimelineDeepLink() {
+        let url = URL(string: "stellivehub://hub-events/album?scheduleItemId=track-list")!
+
+        XCTAssertEqual(HubCalendarDeepLinkPolicy.eventId(from: url), "album")
+        XCTAssertEqual(HubCalendarDeepLinkPolicy.scheduleItemId(from: url), "track-list")
+    }
+
     func testRejectsUnsupportedDeepLinks() {
         XCTAssertNil(HubCalendarDeepLinkPolicy.eventId(from: URL(string: "https://example.com/events/ticket-drop")!))
         XCTAssertNil(HubCalendarDeepLinkPolicy.eventId(from: URL(string: "stellivehub://members/ayatsuno-yuni")!))

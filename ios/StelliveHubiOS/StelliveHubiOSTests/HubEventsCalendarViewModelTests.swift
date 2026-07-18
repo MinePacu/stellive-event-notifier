@@ -158,6 +158,19 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(rows.first?.day.date, "2026-06-19")
     }
 
+    func testFeedRowsKeepDifferentScheduleItemsFromSameParentEvent() {
+        let rows = HubEventsFeedPolicy.rowsForMonth(
+            days: [day("2026-06-20", entries: [
+                entry(id: "album:tracks", eventId: "album", scheduleItemId: "tracks"),
+                entry(id: "album:release", eventId: "album", scheduleItemId: "release")
+            ])],
+            selectedMonth: date("2026-06-01"),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(rows.map(\.entry.scheduleItemId), ["release", "tracks"])
+    }
+
     func testRangeMiddleMarkerDistinguishesDatesWithAndWithoutEntries() {
         let viewModel = makeViewModel(days: [
             day("2026-06-13", entries: [entry(id: "start")]),
@@ -534,6 +547,22 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(Set(tags.map(\.label)).count, tags.count)
     }
 
+    func testHubEventTimelineSortsAndComputesDisplayStates() {
+        var event = detailEvent()
+        event.scheduleMode = .timeline
+        event.scheduleItems = [
+            schedule("future", "2026-06-20T00:00:00Z"),
+            schedule("completed", "2026-06-10T00:00:00Z"),
+            schedule("current", "2026-06-12T00:00:00Z", endsAt: "2026-06-14T00:00:00Z"),
+            schedule("cancelled", "2026-06-11T00:00:00Z", cancelled: true)
+        ]
+
+        let timeline = HubEventDetailFormatting.timeline(for: event, now: dateTime("2026-06-13T00:00:00Z"))
+
+        XCTAssertEqual(timeline.map(\.schedule.id), ["completed", "cancelled", "current", "future"])
+        XCTAssertEqual(timeline.map(\.stateText), ["완료", "취소", "진행", "예정"])
+    }
+
     func testHubEventHeroTagStyleUsesReadableImageOverlayOpacities() {
         XCTAssertEqual(HubEventHeroTagStyle.backgroundOpacity, 0.78, accuracy: 0.001)
         XCTAssertEqual(HubEventHeroTagStyle.borderOpacity, 0.95, accuracy: 0.001)
@@ -600,6 +629,31 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         )
     }
 
+    private func schedule(
+        _ id: String,
+        _ startsAt: String,
+        endsAt: String? = nil,
+        cancelled: Bool = false
+    ) -> HubEventScheduleItem {
+        HubEventScheduleItem(
+            id: id,
+            kind: .custom,
+            label: id,
+            description: nil,
+            startsAt: dateTime(startsAt),
+            endsAt: endsAt.map { dateTime($0) },
+            timePrecision: .datetime,
+            timezone: "Asia/Seoul",
+            actionUrl: nil,
+            sourceUrl: nil,
+            sourceLabel: nil,
+            notificationEligible: true,
+            isPrimary: false,
+            sortOrder: 0,
+            cancelledAt: cancelled ? dateTime("2026-06-10T00:00:00Z") : nil
+        )
+    }
+
     private func startOnlyDetailEvent() -> HubEvent {
         HubEvent(
             id: "start-only-concert",
@@ -655,6 +709,7 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
     private func entry(
         id: String,
         eventId: String? = nil,
+        scheduleItemId: String? = nil,
         category: HubEventCategory = .onlineGoods,
         participationMode: HubEventParticipationMode = .online,
         status: HubEventStatus = .open,
@@ -667,6 +722,7 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
             entryKind: .hubEvent,
             specialDayKind: nil,
             specialDayLabel: nil,
+            scheduleItemId: scheduleItemId,
             title: id,
             category: category,
             status: status,

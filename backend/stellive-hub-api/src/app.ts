@@ -143,6 +143,7 @@ function createDefaultNotificationWorker(env: AppEnv, fcmClient = createDefaultF
   return new NotificationWorker({
     notificationJobs: new NotificationJobRepository(),
     platformEvents: new PlatformEventRepository(),
+    hubEventSchedules: new HubEventRepository(),
     devices: new DeviceRepository(),
     preferences: new PreferenceRepository(),
     deliveryAttempts: new DeliveryAttemptRepository(),

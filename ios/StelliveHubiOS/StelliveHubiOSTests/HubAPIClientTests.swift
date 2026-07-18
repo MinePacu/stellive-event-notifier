@@ -177,6 +177,18 @@ final class HubAPIClientTests: XCTestCase {
                   "sourceUrl": "https://example.com/event-1",
                   "sourceLabel": "공식 공지",
                   "sourceType": "official",
+                  "scheduleMode": "timeline",
+                  "scheduleItems": [{
+                    "id": "track-list",
+                    "kind": "content_reveal",
+                    "label": "트랙 리스트 공개",
+                    "startsAt": "2026-06-20T01:00:00.000Z",
+                    "timePrecision": "datetime",
+                    "timezone": "Asia/Seoul",
+                    "notificationEligible": true,
+                    "isPrimary": true,
+                    "sortOrder": 0
+                  }],
                   "notificationEligible": true,
                   "updatedAt": "2026-06-18T00:00:00.000Z"
                 }
@@ -188,7 +200,11 @@ final class HubAPIClientTests: XCTestCase {
 
         XCTAssertEqual(seenPaths, ["/v1/hub-events", "/v1/hub-events/event-1"])
         XCTAssertEqual(list.items.first?.id, "event-1")
+        XCTAssertNil(list.items.first?.scheduleMode)
+        XCTAssertNil(list.items.first?.scheduleItems)
         XCTAssertEqual(detail.id, "event-1")
+        XCTAssertEqual(detail.scheduleMode, .timeline)
+        XCTAssertEqual(detail.scheduleItems?.first?.label, "트랙 리스트 공개")
     }
 
     func testAnnouncementListAndDetailSendPlatformVersionAndDecodeResponses() async throws {
@@ -378,6 +394,7 @@ final class ServerHubStoreTests: XCTestCase {
 
     func testUpdatePreferencesPreservesScopedRulesAndReplacesGlobalRule() async throws {
         var requests: [URLRequest] = []
+        var updateBody: Data?
         let store = makeStore { request in
             requests.append(request)
             if request.httpMethod == "GET" {
@@ -385,6 +402,7 @@ final class ServerHubStoreTests: XCTestCase {
                     {"deviceId":"device-1","preferences":[{"deviceId":"device-1","scope":"member","enabled":true,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","serviceAnnouncementsEnabled":null,"updatedAt":"2026-07-06T00:00:00Z"}],"updatedAt":"2026-07-06T00:00:00Z","conflict":null}
                     """)
             }
+            updateBody = request.httpBody ?? request.httpBodyStream.flatMap(Self.readAll)
             return jsonResponse(statusCode: 200, body: """
                 {"deviceId":"device-1","preferences":[],"updatedAt":"2026-07-06T00:00:00Z","conflict":null}
                 """)
@@ -396,11 +414,25 @@ final class ServerHubStoreTests: XCTestCase {
         await store.updatePreferences(settings)
 
         XCTAssertEqual(requests.map { $0.httpMethod }, ["GET", "PUT"])
-        let body = try XCTUnwrap(requests.last?.httpBody)
+        let body = try XCTUnwrap(updateBody)
         let request = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: body)
         XCTAssertEqual(request.preferences.map(\.scope), ["member", "global"])
         XCTAssertEqual(request.preferences.last?.enabled, false)
         XCTAssertEqual(request.preferences.last?.serviceAnnouncementsEnabled, false)
+    }
+
+    private static func readAll(from stream: InputStream) -> Data? {
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 1024)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            guard count >= 0 else { return nil }
+            if count == 0 { break }
+            data.append(buffer, count: count)
+        }
+        return data
     }
 
     func testRefreshHubEventsCachesListAndDetailEntries() async {

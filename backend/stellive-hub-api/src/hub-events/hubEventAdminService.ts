@@ -49,7 +49,7 @@ interface HubEventPlatformEventRepository {
 }
 
 interface HubEventNotificationJobRepository {
-  enqueue(input: { eventId: string; priority: number }): Promise<unknown>;
+  enqueue(input: { eventId: string; priority: number; runAfter?: Date }): Promise<unknown>;
 }
 
 export interface HubEventAdminServiceOptions {
@@ -87,7 +87,8 @@ export class HubEventAdminService {
 
   async createDraft(input: AdminHubEventWriteInput, actor: HubEventAdminActor = {}): Promise<AdminHubEvent> {
     this.assertValid(input, "draft");
-    const created = await this.repository.createDraft({ ...input, actorId: actor.actorId });
+    const normalized = this.normalizeSingleWindowWrite(input);
+    const created = await this.repository.createDraft({ ...normalized, actorId: actor.actorId });
     await this.audit("create", created.id, actor, null, created);
     return created;
   }
@@ -96,7 +97,8 @@ export class HubEventAdminService {
     const before = await this.getExisting(id);
     this.assertMutable(before);
     this.assertValid({ ...before, ...input }, before.publicationState === "published" ? "publish" : "draft");
-    const updated = await this.repository.update(id, { ...input, actorId: actor.actorId });
+    const normalized = this.normalizeSingleWindowWrite(input, before);
+    const updated = await this.repository.update(id, { ...normalized, actorId: actor.actorId });
     await this.audit("update", id, actor, before, updated);
     await this.enqueueNotificationCandidates("update", before, updated);
     return updated;
@@ -198,6 +200,42 @@ export class HubEventAdminService {
     }
   }
 
+  private normalizeSingleWindowWrite(
+    input: AdminHubEventWriteInput,
+    existing?: AdminHubEvent
+  ): AdminHubEventWriteInput {
+    if (input.scheduleItems !== undefined) return input;
+    const scheduleMode = input.scheduleMode ?? existing?.scheduleMode ?? "single_window";
+    if (scheduleMode !== "single_window") return input;
+
+    const datesChanged = input.startsAt !== undefined || input.endsAt !== undefined;
+    if (existing && !datesChanged) return input;
+    const startsAt = input.startsAt !== undefined ? input.startsAt : existing?.startsAt;
+    const endsAt = input.endsAt !== undefined ? input.endsAt : existing?.endsAt;
+    if (!startsAt && !endsAt) return { ...input, scheduleMode };
+
+    const previous = existing?.scheduleItems?.find((item) => item.isPrimary && !item.cancelledAt) ??
+      existing?.scheduleItems?.find((item) => !item.cancelledAt);
+    return {
+      ...input,
+      scheduleMode,
+      scheduleItems: [{
+        ...previous,
+        id: previous?.id,
+        kind: "main_window",
+        label: previous?.label ?? input.title ?? existing?.title ?? "행사 일정",
+        startsAt: startsAt ?? endsAt,
+        endsAt: startsAt ? endsAt : null,
+        timePrecision: previous?.timePrecision ?? "datetime",
+        timezone: previous?.timezone ?? "Asia/Seoul",
+        notificationEligible: previous?.notificationEligible ?? input.notificationEligible ?? existing?.notificationEligible ?? true,
+        isPrimary: true,
+        sortOrder: previous?.sortOrder ?? 0,
+        cancelledAt: null
+      }]
+    };
+  }
+
   private async enqueueNotificationCandidates(
     action: HubEventAdminAction,
     before: AdminHubEvent | undefined,
@@ -207,7 +245,13 @@ export class HubEventAdminService {
     for (const candidate of candidates) {
       const result = await this.platformEvents.createIfNotExists(candidate);
       if (result.created) {
-        await this.notificationJobs.enqueue({ eventId: candidate.id, priority: 5 });
+        const metadata = candidate.rawPayload;
+        const isScheduleCandidate = typeof metadata === "object" && metadata !== null && "scheduleItemId" in metadata;
+        await this.notificationJobs.enqueue({
+          eventId: candidate.id,
+          priority: 5,
+          ...(isScheduleCandidate ? { runAfter: new Date(candidate.occurredAt) } : {})
+        });
       }
     }
   }

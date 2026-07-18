@@ -1033,6 +1033,12 @@ components:
             - generation_anniversary
         specialDayLabel:
           type: string
+        scheduleItemId:
+          type: string
+        scheduleKind:
+          $ref: "#/components/schemas/HubEventScheduleKind"
+        scheduleLabel:
+          type: string
         title:
           type: string
         category:
@@ -2182,6 +2188,12 @@ components:
           type: string
         sourceType:
           type: string
+        scheduleMode:
+          $ref: "#/components/schemas/HubEventScheduleMode"
+        scheduleItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/HubEventScheduleItem"
         announcedAt:
           type: string
           format: date-time
@@ -2208,6 +2220,88 @@ components:
           $ref: "#/components/schemas/HubEventImage"
         notificationEligible:
           type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    HubEventScheduleMode:
+      type: string
+      enum:
+        - single_window
+        - timeline
+    HubEventScheduleKind:
+      type: string
+      enum:
+        - main_window
+        - announcement
+        - sales_open
+        - ticket_open
+        - content_reveal
+        - release
+        - deadline
+        - custom
+    HubEventTimePrecision:
+      type: string
+      enum:
+        - date
+        - datetime
+    HubEventScheduleItem:
+      type: object
+      required:
+        - id
+        - kind
+        - label
+        - startsAt
+        - timePrecision
+        - timezone
+        - notificationEligible
+        - isPrimary
+        - sortOrder
+      properties:
+        id:
+          type: string
+        kind:
+          $ref: "#/components/schemas/HubEventScheduleKind"
+        label:
+          type: string
+        description:
+          type: string
+        startsAt:
+          oneOf:
+            - type: string
+              format: date
+            - type: string
+              format: date-time
+        endsAt:
+          oneOf:
+            - type: string
+              format: date
+            - type: string
+              format: date-time
+        timePrecision:
+          $ref: "#/components/schemas/HubEventTimePrecision"
+        timezone:
+          type: string
+          default: Asia/Seoul
+        actionUrl:
+          type: string
+          format: uri
+        sourceUrl:
+          type: string
+          format: uri
+        sourceLabel:
+          type: string
+        notificationEligible:
+          type: boolean
+        isPrimary:
+          type: boolean
+        sortOrder:
+          type: integer
+        cancelledAt:
+          type: string
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -2256,6 +2350,13 @@ components:
           type: string
         sourceType:
           type: string
+        scheduleMode:
+          $ref: "#/components/schemas/HubEventScheduleMode"
+        scheduleItems:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/HubEventScheduleItem"
         announcedAt:
           type: string
           format: date-time

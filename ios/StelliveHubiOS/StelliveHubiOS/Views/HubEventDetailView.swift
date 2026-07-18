@@ -11,16 +11,18 @@ private enum HubEventDetailColors {
 enum HubEventDetailContentSection: Hashable {
     case actions
     case summary
+    case timeline
     case info
     case notice
 }
 
 enum HubEventDetailLayoutPolicy {
-    static let contentOrder: [HubEventDetailContentSection] = [.actions, .summary, .info, .notice]
+    static let contentOrder: [HubEventDetailContentSection] = [.actions, .summary, .timeline, .info, .notice]
 }
 
 struct HubEventDetailView: View {
     let event: HubEvent
+    var highlightedScheduleItemId: String? = nil
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -55,6 +57,12 @@ struct HubEventDetailView: View {
         case .summary:
             detailSection(HubEventDetailFormatting.summaryLabel) {
                 summaryCard
+            }
+        case .timeline:
+            if !event.scheduleItems.isEmpty {
+                detailSection("세부 일정") {
+                    timelineCard
+                }
             }
         case .info:
             detailSection("행사 정보") {
@@ -171,6 +179,42 @@ struct HubEventDetailView: View {
         .background(HubEventDetailColors.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
+    private var timelineCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(HubEventDetailFormatting.timeline(for: event).enumerated()), id: \.element.schedule.id) { index, item in
+                if index > 0 { Divider() }
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(item.schedule.label)
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Text(item.stateText)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(item.schedule.id == highlightedScheduleItemId ? Color.teal : HubEventDetailColors.muted)
+                    }
+                    Text(item.timingText)
+                        .font(.footnote)
+                        .foregroundStyle(HubEventDetailColors.muted)
+                    if let description = item.schedule.description, !description.isEmpty {
+                        Text(description)
+                            .font(.footnote)
+                            .foregroundStyle(HubEventDetailColors.text)
+                    }
+                    if let actionURL = url(from: item.schedule.actionUrl) ?? url(from: item.schedule.sourceUrl) {
+                        Link("일정 링크 열기", destination: actionURL)
+                            .font(.footnote.weight(.semibold))
+                    }
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, item.schedule.id == highlightedScheduleItemId ? 10 : 0)
+                .background(item.schedule.id == highlightedScheduleItemId ? Color.teal.opacity(0.1) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+        }
+        .padding(16)
+        .background(HubEventDetailColors.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
     private var noticeCard: some View {
         Text(HubEventDetailFormatting.noticeText)
             .font(.footnote)
@@ -190,6 +234,12 @@ struct HubEventDetailView: View {
 struct HubEventDetailRow: Equatable {
     let label: String
     let value: String
+}
+
+struct HubEventScheduleTimelineItem: Equatable {
+    let schedule: HubEventScheduleItem
+    let timingText: String
+    let stateText: String
 }
 
 struct HubEventHeroTag: Equatable, Identifiable {
@@ -230,6 +280,55 @@ enum HubEventDetailFormatting {
         rows.append(HubEventDetailRow(label: "분류", value: event.category.displayName))
         rows.append(HubEventDetailRow(label: "출처", value: event.sourceLabel))
         return rows
+    }
+
+    static func timeline(for event: HubEvent, now: Date = Date()) -> [HubEventScheduleTimelineItem] {
+        event.scheduleItems
+            .sorted { left, right in
+                left.startsAt == right.startsAt ? left.sortOrder < right.sortOrder : left.startsAt < right.startsAt
+            }
+            .map { item in
+                HubEventScheduleTimelineItem(
+                    schedule: item,
+                    timingText: schedulePeriodText(item),
+                    stateText: scheduleStateText(item, now: now)
+                )
+            }
+    }
+
+    private static func schedulePeriodText(_ item: HubEventScheduleItem) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: item.timezone) ?? TimeZone(identifier: "Asia/Seoul")!
+        if item.timePrecision == .date {
+            let start = calendar.startOfDay(for: item.startsAt)
+            let end = item.endsAt.map { calendar.startOfDay(for: $0) }
+            let dateFormatter = DateFormatter()
+            dateFormatter.calendar = calendar
+            dateFormatter.timeZone = calendar.timeZone
+            dateFormatter.dateFormat = "yyyy.MM.dd"
+            if let end, end != start { return "\(dateFormatter.string(from: start)) - \(dateFormatter.string(from: end))" }
+            return dateFormatter.string(from: start)
+        }
+        if let end = item.endsAt { return "\(format(item.startsAt)) - \(format(end))" }
+        return format(item.startsAt)
+    }
+
+    private static func scheduleStateText(_ item: HubEventScheduleItem, now: Date) -> String {
+        if item.cancelledAt != nil { return "취소" }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: item.timezone) ?? TimeZone(identifier: "Asia/Seoul")!
+        if item.timePrecision == .date {
+            let today = calendar.startOfDay(for: now)
+            let start = calendar.startOfDay(for: item.startsAt)
+            let end = item.endsAt.map { calendar.startOfDay(for: $0) } ?? start
+            if today < start { return "예정" }
+            if today > end { return "완료" }
+            return "진행"
+        }
+        if now < item.startsAt { return "예정" }
+        if let end = item.endsAt, now < end { return "진행" }
+        if item.endsAt == nil && now == item.startsAt { return "진행" }
+        return "완료"
     }
 
     static func heroSubtitleLines(for event: HubEvent) -> [String] {

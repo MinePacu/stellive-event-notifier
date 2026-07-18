@@ -835,7 +835,8 @@ describe("HubEventRepository", () => {
           id: "event-1",
           publicationState: "published",
           deletedAt: null
-        }
+        },
+        include: { scheduleItems: { orderBy: [{ sortOrder: "asc" }, { startsAt: "asc" }, { id: "asc" }] } }
       }
     ]);
   });
@@ -903,6 +904,99 @@ describe("HubEventRepository", () => {
         })
       })
     ]);
+  });
+
+  it("updates parent and schedule items in one transaction and soft-cancels removed items", async () => {
+    const calls: string[] = [];
+    const scheduleWrites: unknown[] = [];
+    const client = {
+      hubEvent: {
+        async update(args: { data: unknown }) {
+          calls.push("parent:update");
+          return { ...record, ...(args.data as object), scheduleMode: "timeline", scheduleItems: [] };
+        },
+        async findFirst() {
+          calls.push("parent:read");
+          return { ...record, scheduleMode: "timeline", scheduleItems: [] };
+        }
+      },
+      hubEventScheduleItem: {
+        async findMany() {
+          calls.push("schedule:list");
+          return [{ id: "keep" }, { id: "remove" }];
+        },
+        async update(args: unknown) {
+          calls.push("schedule:update");
+          scheduleWrites.push(args);
+          return args;
+        },
+        async create(args: unknown) {
+          calls.push("schedule:create");
+          scheduleWrites.push(args);
+          return { id: "created" };
+        },
+        async updateMany(args: unknown) {
+          calls.push("schedule:cancel");
+          scheduleWrites.push(args);
+          return { count: 1 };
+        }
+      }
+    };
+    const transaction = async <T>(run: (transaction: typeof client) => Promise<T>) => {
+        calls.push("transaction:start");
+        const result = await run(client);
+        calls.push("transaction:end");
+        return result;
+    };
+    const repository = new HubEventRepository({
+      ...client,
+      $transaction: transaction as never
+    } as never);
+
+    await repository.update("event-1", {
+      scheduleMode: "timeline",
+      scheduleItems: [
+        {
+          id: "keep",
+          kind: "sales_open",
+          label: "예약 판매 시작",
+          startsAt: "2026-06-13T00:00:00.000Z",
+          timePrecision: "datetime",
+          timezone: "Asia/Seoul",
+          notificationEligible: true,
+          isPrimary: true,
+          sortOrder: 0
+        },
+        {
+          kind: "release",
+          label: "앨범 발매",
+          startsAt: "2026-06-20T00:00:00.000Z",
+          timePrecision: "datetime",
+          timezone: "Asia/Seoul",
+          notificationEligible: true,
+          isPrimary: false,
+          sortOrder: 1
+        }
+      ],
+      actorId: "admin-2"
+    });
+
+    expect(calls).toEqual([
+      "transaction:start",
+      "parent:update",
+      "schedule:list",
+      "schedule:update",
+      "schedule:create",
+      "schedule:cancel",
+      "parent:read",
+      "transaction:end"
+    ]);
+    expect(scheduleWrites).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        where: { id: { in: ["remove"] }, hubEventId: "event-1", cancelledAt: null },
+        data: { cancelledAt: expect.any(Date) }
+      })
+    ]));
   });
 
   it("passes explicit null dates through update writes", async () => {

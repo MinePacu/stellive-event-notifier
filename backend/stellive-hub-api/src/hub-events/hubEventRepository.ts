@@ -1,5 +1,12 @@
 import { getPrismaClient } from "../storage/prisma.js";
-import type { HubEvent, HubEventImage, HubEventsSummary, HubEventStatus } from "../types.js";
+import type {
+  HubEvent,
+  HubEventImage,
+  HubEventScheduleItem,
+  HubEventsSummary,
+  HubEventStatus,
+  PlatformEvent
+} from "../types.js";
 import type { AdminHubEvent, HubEventAdminAction, HubEventPublicationState } from "./hubEventAdminTypes.js";
 import type { HubEventFilters, HubEventListResult } from "./hubEventService.js";
 import { koreaDateKey, resolveEffectiveHubEventStatus, withEffectiveHubEventStatus } from "./hubEventStatus.js";
@@ -9,6 +16,7 @@ interface HubEventRecord {
   category: string;
   participationMode: string;
   status: string;
+  scheduleMode?: string;
   title: string;
   summary: string | null;
   memberId: string | null;
@@ -35,6 +43,28 @@ interface HubEventRecord {
   updatedBy: string | null;
   createdAt: Date;
   updatedAt: Date;
+  scheduleItems?: HubEventScheduleItemRecord[];
+}
+
+interface HubEventScheduleItemRecord {
+  id: string;
+  hubEventId: string;
+  kind: string;
+  label: string;
+  description: string | null;
+  startsAt: Date;
+  endsAt: Date | null;
+  timePrecision: string;
+  timezone: string;
+  actionUrl: string | null;
+  sourceUrl: string | null;
+  sourceLabel: string | null;
+  notificationEligible: boolean;
+  isPrimary: boolean;
+  sortOrder: number;
+  cancelledAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 interface HubEventAuditLogRecord {
@@ -49,11 +79,19 @@ interface HubEventAuditLogRecord {
 }
 
 interface HubEventDelegate {
+  $transaction?<T>(callback: (transaction: HubEventDelegate) => Promise<T>): Promise<T>;
   hubEvent?: {
     findMany?(args: unknown): Promise<HubEventRecord[]>;
     findFirst?(args: unknown): Promise<HubEventRecord | null>;
-    create?(args: { data: Record<string, unknown> }): Promise<HubEventRecord>;
-    update?(args: { where: { id: string }; data: Record<string, unknown> }): Promise<HubEventRecord>;
+    create?(args: { data: Record<string, unknown>; include?: Record<string, unknown> }): Promise<HubEventRecord>;
+    update?(args: { where: { id: string }; data: Record<string, unknown>; include?: Record<string, unknown> }): Promise<HubEventRecord>;
+    updateMany?(args: { where: Record<string, unknown>; data: Record<string, unknown> }): Promise<{ count: number }>;
+  };
+  hubEventScheduleItem?: {
+    findMany?(args: unknown): Promise<HubEventScheduleItemRecord[]>;
+    findFirst?(args: unknown): Promise<HubEventScheduleItemRecord | null>;
+    create?(args: { data: Record<string, unknown> }): Promise<HubEventScheduleItemRecord>;
+    update?(args: { where: { id: string }; data: Record<string, unknown> }): Promise<HubEventScheduleItemRecord>;
     updateMany?(args: { where: Record<string, unknown>; data: Record<string, unknown> }): Promise<{ count: number }>;
   };
   hubEventAuditLog?: {
@@ -75,10 +113,24 @@ export interface AdminHubEventListResult {
 
 type NullableDateInput = string | Date | null | undefined;
 
-export type AdminHubEventWriteInput = Omit<Partial<HubEvent>, "announcedAt" | "startsAt" | "endsAt"> & {
+export type AdminHubEventScheduleItemWriteInput = Omit<
+  Partial<HubEventScheduleItem>,
+  "id" | "startsAt" | "endsAt" | "cancelledAt" | "createdAt" | "updatedAt"
+> & {
+  id?: string;
+  startsAt?: NullableDateInput;
+  endsAt?: NullableDateInput;
+  cancelledAt?: NullableDateInput;
+};
+
+export type AdminHubEventWriteInput = Omit<
+  Partial<HubEvent>,
+  "announcedAt" | "startsAt" | "endsAt" | "scheduleItems"
+> & {
   announcedAt?: NullableDateInput;
   startsAt?: NullableDateInput;
   endsAt?: NullableDateInput;
+  scheduleItems?: AdminHubEventScheduleItemWriteInput[];
   actorId?: string;
 };
 
@@ -163,12 +215,36 @@ function normalizeHubEventImage(value: unknown): HubEventImage | undefined {
   }) as unknown as HubEventImage;
 }
 
+function toScheduleItem(record: HubEventScheduleItemRecord): HubEventScheduleItem {
+  return stripUndefined({
+    id: record.id,
+    kind: record.kind,
+    label: record.label,
+    description: record.description ?? undefined,
+    startsAt: record.startsAt.toISOString(),
+    endsAt: toIso(record.endsAt),
+    timePrecision: record.timePrecision,
+    timezone: record.timezone,
+    actionUrl: record.actionUrl ?? undefined,
+    sourceUrl: record.sourceUrl ?? undefined,
+    sourceLabel: record.sourceLabel ?? undefined,
+    notificationEligible: record.notificationEligible,
+    isPrimary: record.isPrimary,
+    sortOrder: record.sortOrder,
+    cancelledAt: toIso(record.cancelledAt),
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString()
+  }) as unknown as HubEventScheduleItem;
+}
+
 function toPublicHubEvent(record: HubEventRecord): HubEvent {
   return stripUndefined({
     id: record.id,
     category: record.category,
     participationMode: record.participationMode,
     status: record.status,
+    scheduleMode: record.scheduleMode ?? "single_window",
+    scheduleItems: (record.scheduleItems ?? []).map(toScheduleItem),
     title: record.title,
     summary: record.summary ?? undefined,
     memberId: record.memberId ?? undefined,
@@ -210,11 +286,56 @@ function toDate(value: NullableDateInput): Date | null | undefined {
   return value instanceof Date ? value : new Date(value);
 }
 
+function dateOnlyInTimezone(value: string, timezone: string): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  const utcGuess = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
+  const offsetAt = (timestamp: number) => {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(new Date(timestamp)).map((part) => [part.type, part.value]));
+    return Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour),
+      Number(parts.minute),
+      Number(parts.second)
+    ) - timestamp;
+  };
+  let result = utcGuess - offsetAt(utcGuess);
+  result = utcGuess - offsetAt(result);
+  return new Date(result);
+}
+
+function toScheduleDate(
+  value: NullableDateInput,
+  precision: AdminHubEventScheduleItemWriteInput["timePrecision"],
+  timezone: string
+): Date | null | undefined {
+  if (precision === "date" && typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return dateOnlyInTimezone(value, timezone);
+  }
+  return toDate(value);
+}
+
 function toWriteData(input: AdminHubEventWriteInput): Record<string, unknown> {
+  const activeSchedules = input.scheduleItems?.filter((item) => !item.cancelledAt) ?? [];
+  const projectedSchedule = activeSchedules.find((item) => item.isPrimary) ??
+    (input.scheduleMode === "single_window" ? activeSchedules[0] : undefined);
+  const hasScheduleWrite = input.scheduleItems !== undefined;
+  const projectedTimezone = projectedSchedule?.timezone ?? "Asia/Seoul";
   return stripUndefined({
     category: input.category,
     participationMode: input.participationMode,
     status: input.status,
+    scheduleMode: input.scheduleMode,
     title: input.title,
     summary: input.summary,
     memberId: input.memberId,
@@ -223,8 +344,12 @@ function toWriteData(input: AdminHubEventWriteInput): Record<string, unknown> {
     sourceLabel: input.sourceLabel,
     sourceType: input.sourceType,
     announcedAt: toDate(input.announcedAt),
-    startsAt: toDate(input.startsAt),
-    endsAt: toDate(input.endsAt),
+    startsAt: hasScheduleWrite
+      ? toScheduleDate(projectedSchedule?.startsAt ?? null, projectedSchedule?.timePrecision, projectedTimezone)
+      : toDate(input.startsAt),
+    endsAt: hasScheduleWrite
+      ? toScheduleDate(projectedSchedule?.endsAt ?? null, projectedSchedule?.timePrecision, projectedTimezone)
+      : toDate(input.endsAt),
     purchaseUrl: input.purchaseUrl,
     ticketUrl: input.ticketUrl,
     venueName: input.venueName,
@@ -233,6 +358,33 @@ function toWriteData(input: AdminHubEventWriteInput): Record<string, unknown> {
     notificationEligible: input.notificationEligible
   });
 }
+
+function toScheduleWriteData(
+  item: AdminHubEventScheduleItemWriteInput,
+  hubEventId: string
+): Record<string, unknown> {
+  const timezone = item.timezone ?? "Asia/Seoul";
+  return stripUndefined({
+    id: item.id,
+    hubEventId,
+    kind: item.kind,
+    label: item.label,
+    description: item.description,
+    startsAt: toScheduleDate(item.startsAt, item.timePrecision, timezone),
+    endsAt: toScheduleDate(item.endsAt, item.timePrecision, timezone),
+    timePrecision: item.timePrecision,
+    timezone,
+    actionUrl: item.actionUrl,
+    sourceUrl: item.sourceUrl,
+    sourceLabel: item.sourceLabel,
+    notificationEligible: item.notificationEligible ?? true,
+    isPrimary: item.isPrimary ?? false,
+    sortOrder: item.sortOrder ?? 0,
+    cancelledAt: toDate(item.cancelledAt)
+  });
+}
+
+const scheduleItemsInclude = { scheduleItems: { orderBy: [{ sortOrder: "asc" }, { startsAt: "asc" }, { id: "asc" }] } };
 
 function addHubEventFilters(where: Record<string, unknown>, filters: HubEventFilters, options: { includeStatus?: boolean } = {}) {
   if (filters.category) where.category = filters.category;
@@ -246,8 +398,6 @@ function requireMethod<T>(method: T | undefined, name: string): T {
   if (!method) throw new Error(`${name}_unavailable`);
   return method;
 }
-
-const closingSoonWindowMs = 24 * 60 * 60 * 1000;
 
 function asDate(value?: string | Date): Date | undefined {
   if (!value) return undefined;
@@ -275,6 +425,35 @@ export class HubEventRepository {
     return this.getPublishedById(id);
   }
 
+  async isScheduleNotificationCurrent(event: PlatformEvent, now: Date = new Date()): Promise<boolean> {
+    if (event.source !== "hub_event" || !isRecord(event.rawPayload)) return true;
+    const hubEventId = stringValue(event.rawPayload.hubEventId);
+    const scheduleItemId = stringValue(event.rawPayload.scheduleItemId);
+    const scheduledAt = stringValue(event.rawPayload.scheduledAt);
+    if (!hubEventId || !scheduleItemId || !scheduledAt) return true;
+
+    const parent = await this.getAdminById(hubEventId);
+    if (
+      !parent ||
+      parent.publicationState !== "published" ||
+      parent.deletedAt ||
+      parent.cancelledAt ||
+      !parent.notificationEligible
+    ) {
+      return false;
+    }
+    const scheduleItem = parent.scheduleItems?.find((item) => item.id === scheduleItemId);
+    if (!scheduleItem || scheduleItem.cancelledAt || !scheduleItem.notificationEligible) return false;
+    const currentScheduledAt = asDate(scheduleItem.startsAt);
+    const expectedScheduledAt = asDate(scheduledAt);
+    return Boolean(
+      currentScheduledAt &&
+      expectedScheduledAt &&
+      currentScheduledAt.getTime() === expectedScheduledAt.getTime() &&
+      expectedScheduledAt.getTime() <= now.getTime()
+    );
+  }
+
   async summary(now: Date = new Date()): Promise<HubEventsSummary> {
     const { items } = await this.listPublished({ limit: 100 }, now);
     const statuses = items.map((event) => effectiveStatus(event, now));
@@ -286,6 +465,30 @@ export class HubEventRepository {
   }
 
   async reconcileDueStatuses(now: Date = new Date()): Promise<HubEventStatusReconcileResult> {
+    const findManyRecords = this.prisma.hubEvent?.findMany?.bind(this.prisma.hubEvent);
+    const updateRecord = this.prisma.hubEvent?.update?.bind(this.prisma.hubEvent);
+    if (findManyRecords && updateRecord) {
+      const records = await findManyRecords({
+        where: { publicationState: "published", deletedAt: null },
+        include: scheduleItemsInclude
+      });
+      let opened = 0;
+      let ended = 0;
+      let startOnlyEnded = 0;
+      for (const record of records) {
+        const event = toPublicHubEvent(record);
+        const status = resolveEffectiveHubEventStatus(event, now);
+        if (status === record.status) continue;
+        await updateRecord({ where: { id: record.id }, data: { status } });
+        if (status === "open" || status === "closing_soon") opened += 1;
+        if (status === "ended") {
+          ended += 1;
+          if ((event.scheduleItems ?? []).length === 0 && event.startsAt && !event.endsAt) startOnlyEnded += 1;
+        }
+      }
+      return { status: "ok", checkedAt: now.toISOString(), opened, ended, startOnlyEnded };
+    }
+
     const updateMany = requireMethod(this.prisma.hubEvent?.updateMany?.bind(this.prisma.hubEvent), "hub_event_update_many");
     const baseWhere = {
       publicationState: "published",
@@ -340,6 +543,7 @@ export class HubEventRepository {
 
     const records = await findMany({
       where,
+      include: scheduleItemsInclude,
       orderBy: [{ endsAt: "asc" }, { startsAt: "asc" }, { updatedAt: "desc" }],
       take: queryLimit,
       cursor: filters.cursor ? { id: filters.cursor } : undefined,
@@ -360,7 +564,8 @@ export class HubEventRepository {
         id,
         publicationState: "published",
         deletedAt: null
-      }
+      },
+      include: scheduleItemsInclude
     });
     return record ? withEffectiveHubEventStatus(toPublicHubEvent(record)) : undefined;
   }
@@ -381,6 +586,7 @@ export class HubEventRepository {
 
     const records = await findMany({
       where,
+      include: scheduleItemsInclude,
       orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
       take: limit + 1,
       cursor: filters.cursor ? { id: filters.cursor } : undefined,
@@ -396,7 +602,7 @@ export class HubEventRepository {
 
   async getAdminById(id: string): Promise<AdminHubEvent | undefined> {
     const findFirst = requireMethod(this.prisma.hubEvent?.findFirst?.bind(this.prisma.hubEvent), "hub_event_find_first");
-    const record = await findFirst({ where: { id } });
+    const record = await findFirst({ where: { id }, include: scheduleItemsInclude });
     return record ? toAdminHubEvent(record) : undefined;
   }
 
@@ -405,26 +611,87 @@ export class HubEventRepository {
     const record = await create({
       data: {
         ...toWriteData(input),
+        scheduleItems: input.scheduleItems?.length
+          ? { create: input.scheduleItems.map((item) => {
+              const data = toScheduleWriteData(item, "");
+              delete data.hubEventId;
+              return data;
+            }) }
+          : undefined,
         publicationState: "draft",
         revision: 1,
         createdBy: input.actorId,
         updatedBy: input.actorId
-      }
+      },
+      include: scheduleItemsInclude
     });
     return toAdminHubEvent(record);
   }
 
   async update(id: string, input: AdminHubEventWriteInput): Promise<AdminHubEvent> {
-    const update = requireMethod(this.prisma.hubEvent?.update?.bind(this.prisma.hubEvent), "hub_event_update");
-    const record = await update({
-      where: { id },
-      data: {
-        ...toWriteData(input),
-        updatedBy: input.actorId,
-        revision: { increment: 1 }
+    const run = async (client: HubEventDelegate): Promise<AdminHubEvent> => {
+      const update = requireMethod(client.hubEvent?.update?.bind(client.hubEvent), "hub_event_update");
+      const record = await update({
+        where: { id },
+        data: {
+          ...toWriteData(input),
+          updatedBy: input.actorId,
+          revision: { increment: 1 }
+        },
+        include: scheduleItemsInclude
+      });
+
+      if (input.scheduleItems === undefined || !client.hubEventScheduleItem) {
+        return toAdminHubEvent(record);
       }
-    });
-    return toAdminHubEvent(record);
+
+      const findMany = requireMethod(
+        client.hubEventScheduleItem.findMany?.bind(client.hubEventScheduleItem),
+        "hub_event_schedule_item_find_many"
+      );
+      const create = requireMethod(
+        client.hubEventScheduleItem.create?.bind(client.hubEventScheduleItem),
+        "hub_event_schedule_item_create"
+      );
+      const updateSchedule = requireMethod(
+        client.hubEventScheduleItem.update?.bind(client.hubEventScheduleItem),
+        "hub_event_schedule_item_update"
+      );
+      const updateMany = requireMethod(
+        client.hubEventScheduleItem.updateMany?.bind(client.hubEventScheduleItem),
+        "hub_event_schedule_item_update_many"
+      );
+      const existing = await findMany({ where: { hubEventId: id }, select: { id: true } });
+      const existingIds = new Set(existing.map((item) => item.id));
+      const retainedIds = new Set<string>();
+
+      for (const item of input.scheduleItems) {
+        const data = toScheduleWriteData(item, id);
+        if (item.id && existingIds.has(item.id)) {
+          retainedIds.add(item.id);
+          delete data.id;
+          delete data.hubEventId;
+          await updateSchedule({ where: { id: item.id }, data });
+        } else {
+          const created = await create({ data });
+          retainedIds.add(created.id);
+        }
+      }
+
+      const removedIds = [...existingIds].filter((scheduleItemId) => !retainedIds.has(scheduleItemId));
+      if (removedIds.length > 0) {
+        await updateMany({
+          where: { id: { in: removedIds }, hubEventId: id, cancelledAt: null },
+          data: { cancelledAt: new Date() }
+        });
+      }
+
+      const findFirst = requireMethod(client.hubEvent?.findFirst?.bind(client.hubEvent), "hub_event_find_first");
+      const refreshed = await findFirst({ where: { id }, include: scheduleItemsInclude });
+      return toAdminHubEvent(refreshed ?? record);
+    };
+
+    return this.prisma.$transaction ? this.prisma.$transaction(run) : run(this.prisma);
   }
 
   async setPublicationState(input: SetHubEventPublicationStateInput): Promise<AdminHubEvent> {
@@ -438,7 +705,8 @@ export class HubEventRepository {
         deactivatedAt: input.deactivatedAt,
         updatedBy: input.actorId,
         revision: { increment: 1 }
-      })
+      }),
+      include: scheduleItemsInclude
     });
     return toAdminHubEvent(record);
   }
@@ -452,7 +720,8 @@ export class HubEventRepository {
         deletedAt: input.deletedAt,
         updatedBy: input.actorId,
         revision: { increment: 1 }
-      }
+      },
+      include: scheduleItemsInclude
     });
     return toAdminHubEvent(record);
   }

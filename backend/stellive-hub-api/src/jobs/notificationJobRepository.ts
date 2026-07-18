@@ -30,7 +30,7 @@ interface NotificationJobDiagnosticSelect {
 
 interface NotificationJobDelegate {
   notificationJob: {
-    create?(args: { data: { eventId: string; priority: number; status: string } }): Promise<unknown>;
+    create?(args: { data: { eventId: string; priority: number; status: string; runAfter?: Date } }): Promise<unknown>;
     groupBy?(args: {
       by: ["status"];
       _count: { status: true };
@@ -49,6 +49,7 @@ interface NotificationJobDelegate {
 export interface EnqueueNotificationJobInput {
   eventId: string;
   priority: number;
+  runAfter?: Date;
 }
 
 export interface ClaimedNotificationJob {
@@ -133,7 +134,8 @@ export class NotificationJobRepository {
       data: {
         eventId: input.eventId,
         priority: input.priority,
-        status: "queued"
+        status: "queued",
+        runAfter: input.runAfter
       }
     });
   }

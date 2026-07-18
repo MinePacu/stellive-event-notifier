@@ -68,6 +68,7 @@ struct IOSPrimaryNavigationPolicy {
 struct ContentView: View {
     @State private var selectedTab = "home"
     @State private var pendingHubEventId: String?
+    @State private var pendingHubEventScheduleItemId: String?
     @State private var pendingAnnouncementId: String?
 
     var body: some View {
@@ -81,7 +82,10 @@ struct ContentView: View {
             SongsView()
                 .tabItem { Label(IOSPrimaryNavigationPolicy.bottomTabs[2].title, systemImage: IOSPrimaryNavigationPolicy.bottomTabs[2].systemImage) }
                 .tag("songs")
-            HubEventsTabView(deepLinkedEventId: $pendingHubEventId)
+            HubEventsTabView(
+                deepLinkedEventId: $pendingHubEventId,
+                deepLinkedScheduleItemId: $pendingHubEventScheduleItemId
+            )
                 .tabItem { Label(IOSPrimaryNavigationPolicy.bottomTabs[3].title, systemImage: IOSPrimaryNavigationPolicy.bottomTabs[3].systemImage) }
                 .tag("hubEvents")
         }
@@ -94,6 +98,7 @@ struct ContentView: View {
             guard let eventId = HubCalendarDeepLinkPolicy.eventId(from: url) else { return }
             selectedTab = "hubEvents"
             pendingHubEventId = eventId
+            pendingHubEventScheduleItemId = HubCalendarDeepLinkPolicy.scheduleItemId(from: url)
         }
     }
 }
@@ -102,14 +107,18 @@ private struct HubEventsTabView: View {
     @EnvironmentObject private var store: MockHubStore
     @EnvironmentObject private var serverStore: ServerHubStore
     @Binding var deepLinkedEventId: String?
+    @Binding var deepLinkedScheduleItemId: String?
     @State private var path = NavigationPath()
 
     var body: some View {
         NavigationStack(path: $path) {
             HubEventsView()
                 .globalToolbar(path: $path)
-                .navigationDestination(for: HubEvent.self) { event in
-                    HubEventDetailContainerView(initialEvent: event)
+                .navigationDestination(for: HubEventDetailRoute.self) { route in
+                    HubEventDetailContainerView(
+                        initialEvent: route.event,
+                        highlightedScheduleItemId: route.scheduleItemId
+                    )
                 }
                 .onAppear(perform: openPendingHubEvent)
                 .onChange(of: deepLinkedEventId) { _ in
@@ -127,8 +136,9 @@ private struct HubEventsTabView: View {
                 Task {
                     if let event = await serverStore.loadHubEventDetail(id: eventId) {
                         path.removeLast(path.count)
-                        path.append(event)
+                        path.append(HubEventDetailRoute(event: event, scheduleItemId: deepLinkedScheduleItemId))
                         deepLinkedEventId = nil
+                        deepLinkedScheduleItemId = nil
                     }
                 }
             }
@@ -136,9 +146,15 @@ private struct HubEventsTabView: View {
         }
 
         path.removeLast(path.count)
-        path.append(event)
+        path.append(HubEventDetailRoute(event: event, scheduleItemId: deepLinkedScheduleItemId))
         deepLinkedEventId = nil
+        deepLinkedScheduleItemId = nil
     }
+}
+
+private struct HubEventDetailRoute: Hashable {
+    let event: HubEvent
+    let scheduleItemId: String?
 }
 
 enum GlobalToolbarRoute: Hashable {

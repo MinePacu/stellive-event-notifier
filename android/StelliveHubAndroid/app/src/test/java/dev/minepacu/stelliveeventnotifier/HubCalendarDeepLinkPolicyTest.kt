@@ -24,6 +24,15 @@ class HubCalendarDeepLinkPolicyTest {
     }
 
     @Test
+    fun parsesScheduleItemFromTimelineDeepLink() {
+        val deepLink = HubCalendarDeepLinkPolicy.appDeepLinkForEvent("album", "track-list")
+
+        assertEquals("stellivehub://hub-events/album?scheduleItemId=track-list", deepLink)
+        assertEquals("album", HubCalendarDeepLinkPolicy.eventIdFromAppDeepLink(deepLink))
+        assertEquals("track-list", HubCalendarDeepLinkPolicy.scheduleItemIdFromAppDeepLink(deepLink))
+    }
+
+    @Test
     fun rejectsUnsupportedDeepLinks() {
         assertNull(HubCalendarDeepLinkPolicy.eventIdFromAppDeepLink("https://example.com/events/ticket-drop"))
         assertNull(HubCalendarDeepLinkPolicy.eventIdFromAppDeepLink("stellivehub://members/ayatsuno-yuni"))
