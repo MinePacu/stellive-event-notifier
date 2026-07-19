@@ -22,6 +22,7 @@ const immediateEventTypes = new Set<PlatformEvent["type"]>([
   "chzzk_live_started",
   "event_sales_open",
   "event_deadline_soon",
+  "event_milestone_due",
   "event_cancelled"
 ]);
 

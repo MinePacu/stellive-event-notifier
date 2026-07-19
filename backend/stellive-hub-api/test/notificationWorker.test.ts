@@ -87,6 +87,7 @@ function createWorker(options: {
   preferenceBatchSize?: number;
   deliveryAttemptBatchSize?: number;
   withoutCreateMany?: boolean;
+  scheduleCurrent?: boolean;
 }) {
   const calls = {
     completed: [] as string[],
@@ -114,6 +115,11 @@ function createWorker(options: {
     platformEvents: {
       async findById() {
         return options.event ?? event();
+      }
+    },
+    hubEventSchedules: {
+      async isScheduleNotificationCurrent() {
+        return options.scheduleCurrent ?? true;
       }
     },
     devices: {
@@ -184,6 +190,16 @@ describe("NotificationWorker", () => {
   it("calculates injectable retry jitter deterministically", () => {
     expect(calculateRetryDelayMs(0, undefined, () => 0)).toBe(54_000);
     expect(calculateRetryDelayMs(0, undefined, () => 1)).toBe(66_000);
+  });
+  it("completes stale rescheduled or cancelled schedule jobs without sending", async () => {
+    const { worker, calls } = createWorker({ scheduleCurrent: false });
+
+    const result = await worker.drain({ limit: 5, lockedBy: "test-worker", now });
+
+    expect(result).toMatchObject({ claimed: 1, completed: 1, skipped: 1, sent: 0, failed: 0 });
+    expect(calls.completed).toEqual(["job-1"]);
+    expect(calls.sent).toEqual([]);
+    expect(calls.attempts).toEqual([]);
   });
   it("sends allowed HubEvent pushes and skips blocked devices with delivery attempts", async () => {
     const allowedDevice = device({ deviceId: "allowed-device" });

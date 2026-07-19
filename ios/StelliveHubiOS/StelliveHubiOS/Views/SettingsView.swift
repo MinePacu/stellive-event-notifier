@@ -162,6 +162,12 @@ enum SettingsNavigationPolicy {
                 isEnabled: settings.eventTypeEnabled[.eventDeadlineSoon] ?? false
             ),
             SettingsToggleRow(
+                id: NotificationEventType.eventMilestoneDue.rawValue,
+                title: "세부 일정 알림",
+                note: "콘텐츠 공개와 발매 같은 개별 일정을 알려드립니다.",
+                isEnabled: settings.eventTypeEnabled[.eventMilestoneDue] ?? false
+            ),
+            SettingsToggleRow(
                 id: NotificationEventType.eventUpdated.rawValue,
                 title: "변경 알림",
                 note: "기본적으로 꺼져 있습니다.",
@@ -182,6 +188,8 @@ enum SettingsNavigationPolicy {
             return "굿즈, 티켓, 오프라인 행사의 예약이나 판매가 시작될 때 알려드립니다."
         case .eventDeadlineSoon:
             return "예약/판매 종료가 가까운 항목을 홈과 알림에 우선 표시합니다."
+        case .eventMilestoneDue:
+            return "트랙 리스트, 콘텐츠 공개와 발매 같은 개별 일정을 알려드립니다."
         case .eventUpdated:
             return "굿즈나 행사 정보가 바뀌었을 때 알려드리며, 기본적으로 꺼져 있습니다."
         case .eventCancelled:

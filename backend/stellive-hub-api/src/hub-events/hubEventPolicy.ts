@@ -1,10 +1,20 @@
 import type { CatalogService } from "../catalog/catalog.js";
-import type { HubEvent, HubEventCategory, HubEventSourceType, HubEventStatus } from "../types.js";
+import type {
+  HubEvent,
+  HubEventCategory,
+  HubEventLinkKind,
+  HubEventScheduleKind,
+  HubEventScheduleMode,
+  HubEventSourceType,
+  HubEventStatus,
+  HubEventTimePrecision
+} from "../types.js";
 import type {
   HubEventAdminValidationResult,
   HubEventValidationError,
   HubEventValidationReason
 } from "./hubEventAdminTypes.js";
+import { hubEventLinkKinds } from "./hubEventLinkPolicy.js";
 
 const allowedSourceTypes = new Set<HubEventSourceType>(["official", "member", "official_collab"]);
 const allowedCategories = new Set<HubEventCategory>([
@@ -17,6 +27,19 @@ const allowedCategories = new Set<HubEventCategory>([
 ]);
 const allowedStatuses = new Set<HubEventStatus>(["announced", "upcoming", "open", "closing_soon", "ended", "cancelled"]);
 const displayableImagePolicyStates = new Set(["official_runtime_url", "third_party_allowed"]);
+const allowedScheduleModes = new Set<HubEventScheduleMode>(["single_window", "timeline"]);
+const allowedScheduleKinds = new Set<HubEventScheduleKind>([
+  "main_window",
+  "announcement",
+  "sales_open",
+  "ticket_open",
+  "content_reveal",
+  "release",
+  "deadline",
+  "custom"
+]);
+const allowedTimePrecisions = new Set<HubEventTimePrecision>(["date", "datetime"]);
+const allowedLinkKinds = new Set<HubEventLinkKind>(hubEventLinkKinds);
 
 export function canDisplayHubEventImage(image: HubEvent["image"]): boolean {
   if (!image?.url || !displayableImagePolicyStates.has(image.policyState)) {
@@ -85,6 +108,53 @@ function addHttpsUrlErrorIfNeeded(errors: HubEventValidationError[], input: Reco
   if (!hasHttpsUrl(value)) {
     addError(errors, field, "url_not_https", `${field} must be an HTTPS URL.`);
   }
+}
+
+function validateLinks(
+  errors: HubEventValidationError[],
+  rawLinks: unknown,
+  field: string,
+  maximum: number
+) {
+  if (rawLinks === undefined) return;
+  if (!Array.isArray(rawLinks)) {
+    addError(errors, field, "link_invalid", "links must be an array.");
+    return;
+  }
+  if (rawLinks.length > maximum) {
+    addError(errors, field, "links_too_many", `At most ${maximum} links are allowed.`);
+  }
+  const urls = new Set<string>();
+  rawLinks.forEach((rawLink, index) => {
+    const linkField = `${field}.${index}`;
+    if (!isRecord(rawLink)) {
+      addError(errors, linkField, "link_invalid", "Link must be an object.");
+      return;
+    }
+    const kind = stringField(rawLink, "kind") as HubEventLinkKind | undefined;
+    if (!kind || !allowedLinkKinds.has(kind)) {
+      addError(errors, `${linkField}.kind`, "link_kind_not_allowed", "Unsupported link kind.");
+    }
+    const label = stringField(rawLink, "label")?.trim();
+    if (kind === "custom" && !label) {
+      addError(errors, `${linkField}.label`, "link_label_required", "Custom links require a label.");
+    }
+    if (label && label.length > 80) {
+      addError(errors, `${linkField}.label`, "link_label_too_long", "Link label must be at most 80 characters.");
+    }
+    const url = stringField(rawLink, "url")?.trim();
+    if (!url || !hasHttpsUrl(url)) {
+      addError(errors, `${linkField}.url`, "url_not_https", "Link URL must be an HTTPS URL.");
+    } else if (urls.has(url)) {
+      addError(errors, `${linkField}.url`, "link_url_duplicate", "Link URLs must be unique within their owner.");
+    } else {
+      urls.add(url);
+    }
+    const sortOrder = rawLink.sortOrder;
+    if (!Number.isInteger(sortOrder) || Number(sortOrder) < 0) {
+      addError(errors, `${linkField}.sortOrder`, "link_sort_order_invalid", "sortOrder must be a non-negative integer.");
+    }
+  });
 }
 
 function validateHubEventImageForAdmin(errors: HubEventValidationError[], input: Record<string, unknown>) {
@@ -167,7 +237,125 @@ function isOfficialYoutubeLiveInput(input: Record<string, unknown>): boolean {
 }
 
 function hasAnyDateField(input: Record<string, unknown>): boolean {
-  return Boolean(stringField(input, "announcedAt") || stringField(input, "startsAt") || stringField(input, "endsAt"));
+  return Boolean(
+    stringField(input, "announcedAt") ||
+    stringField(input, "startsAt") ||
+    stringField(input, "endsAt") ||
+    (Array.isArray(input.scheduleItems) && input.scheduleItems.some((item) => isRecord(item) && Boolean(stringField(item, "startsAt"))))
+  );
+}
+
+function validTimezone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function validatesPrecision(value: string, precision: HubEventTimePrecision): boolean {
+  if (precision === "date") {
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) || /^\d{4}-\d{2}-\d{2}T00:00:00(?:\.000)?Z$/.test(value);
+  }
+  return /^\d{4}-\d{2}-\d{2}T/.test(value) && asTime(value) !== undefined;
+}
+
+function validateScheduleItems(
+  errors: HubEventValidationError[],
+  input: Record<string, unknown>,
+  mode: "draft" | "publish"
+) {
+  const scheduleMode = (stringField(input, "scheduleMode") ?? "single_window") as HubEventScheduleMode;
+  if (!allowedScheduleModes.has(scheduleMode)) {
+    addError(errors, "scheduleMode", "schedule_mode_not_allowed", "scheduleMode must be single_window or timeline.");
+    return;
+  }
+
+  const rawItems = input.scheduleItems;
+  if (rawItems !== undefined && !Array.isArray(rawItems)) {
+    addError(errors, "scheduleItems", "schedule_item_invalid", "scheduleItems must be an array.");
+    return;
+  }
+  const items = Array.isArray(rawItems) ? rawItems : [];
+  if (items.length > 50) {
+    addError(errors, "scheduleItems", "schedule_items_too_many", "A hub event can contain at most 50 schedule items.");
+  }
+
+  let activeCount = 0;
+  let primaryCount = 0;
+  items.forEach((rawItem, index) => {
+    const field = `scheduleItems.${index}`;
+    if (!isRecord(rawItem)) {
+      addError(errors, field, "schedule_item_invalid", "Schedule item must be an object.");
+      return;
+    }
+    const cancelled = Boolean(stringField(rawItem, "cancelledAt"));
+    if (!cancelled) activeCount += 1;
+    if (!cancelled && rawItem.isPrimary === true) primaryCount += 1;
+
+    const kind = stringField(rawItem, "kind") as HubEventScheduleKind | undefined;
+    if (!kind || !allowedScheduleKinds.has(kind)) {
+      addError(errors, `${field}.kind`, "schedule_item_kind_not_allowed", "Unsupported schedule item kind.");
+    }
+    const title = stringField(rawItem, "title")?.trim();
+    const label = stringField(rawItem, "label")?.trim();
+    const description = stringField(rawItem, "description")?.trim();
+    if (!title && !label) {
+      addError(errors, `${field}.title`, "schedule_item_required", "Schedule item title or label is required.");
+    }
+    if (title && title.length > 160) {
+      addError(errors, `${field}.title`, "schedule_item_too_long", "Schedule item title must be at most 160 characters.");
+    }
+    if (label && label.length > 80) {
+      addError(errors, `${field}.label`, "schedule_item_too_long", "Schedule item label must be at most 80 characters.");
+    }
+    if (description && description.length > 2_000) {
+      addError(errors, `${field}.description`, "schedule_item_too_long", "Schedule item description must be at most 2,000 characters.");
+    }
+    const startsAt = stringField(rawItem, "startsAt");
+    if (!startsAt || asTime(startsAt) === undefined) {
+      addError(errors, `${field}.startsAt`, "schedule_item_required", "A valid startsAt is required.");
+    }
+    const endsAt = stringField(rawItem, "endsAt");
+    if (startsAt && endsAt && asTime(startsAt)! > asTime(endsAt)!) {
+      addError(errors, `${field}.endsAt`, "date_window_invalid", "endsAt must be greater than or equal to startsAt.");
+    }
+    const precision = stringField(rawItem, "timePrecision") as HubEventTimePrecision | undefined;
+    if (!precision || !allowedTimePrecisions.has(precision)) {
+      addError(errors, `${field}.timePrecision`, "schedule_item_precision_invalid", "timePrecision must be date or datetime.");
+    } else {
+      if (startsAt && !validatesPrecision(startsAt, precision)) {
+        addError(errors, `${field}.startsAt`, "schedule_item_precision_invalid", "startsAt does not match timePrecision.");
+      }
+      if (endsAt && !validatesPrecision(endsAt, precision)) {
+        addError(errors, `${field}.endsAt`, "schedule_item_precision_invalid", "endsAt does not match timePrecision.");
+      }
+    }
+    const timezone = stringField(rawItem, "timezone") ?? "Asia/Seoul";
+    if (!validTimezone(timezone)) {
+      addError(errors, `${field}.timezone`, "schedule_item_timezone_invalid", "Schedule item timezone is invalid.");
+    }
+    for (const urlField of ["actionUrl", "sourceUrl"] as const) {
+      const value = stringField(rawItem, urlField);
+      if (value && !hasHttpsUrl(value)) {
+        addError(errors, `${field}.${urlField}`, "url_not_https", `${urlField} must be an HTTPS URL.`);
+      }
+    }
+    validateLinks(errors, rawItem.links, `${field}.links`, 10);
+  });
+
+  if (primaryCount > 1) {
+    addError(errors, "scheduleItems", "schedule_primary_duplicate", "Only one active schedule item can be primary.");
+  }
+  if (mode === "publish" && scheduleMode === "timeline") {
+    if (activeCount === 0) {
+      addError(errors, "scheduleItems", "schedule_item_required", "A published timeline requires an active schedule item.");
+    }
+    if (primaryCount !== 1) {
+      addError(errors, "scheduleItems", "schedule_primary_required", "A published timeline requires exactly one active primary schedule item.");
+    }
+  }
 }
 
 export function validateHubEvent(event: HubEvent, catalog: CatalogService): HubEventValidationResult {
@@ -276,7 +464,9 @@ export function validateHubEventForAdmin(
   addHttpsUrlErrorIfNeeded(errors, input, "sourceUrl");
   addHttpsUrlErrorIfNeeded(errors, input, "purchaseUrl");
   addHttpsUrlErrorIfNeeded(errors, input, "ticketUrl");
+  validateLinks(errors, input.links, "links", 20);
   validateHubEventImageForAdmin(errors, input);
+  validateScheduleItems(errors, input, mode);
 
   const startsAt = asTime(stringField(input, "startsAt"));
   const endsAt = asTime(stringField(input, "endsAt"));

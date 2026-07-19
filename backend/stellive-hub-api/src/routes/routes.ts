@@ -149,6 +149,7 @@ const supportedPlatformEventTypes = new Set<PlatformEventType>([
   "event_announced",
   "event_sales_open",
   "event_deadline_soon",
+  "event_milestone_due",
   "event_updated",
   "event_cancelled"
 ]);

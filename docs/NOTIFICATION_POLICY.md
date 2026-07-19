@@ -28,11 +28,11 @@ Generations/categories include `gen1`, `gen2`, `gen3`, `gamja`, `official`, and 
 
 ## Hub Event Notifications
 
-Hub event notification types are `event_announced`, `event_sales_open`, `event_deadline_soon`, `event_updated`, and `event_cancelled`. The MVP enables announced, sales-open, deadline-soon, and cancelled by default, while updated starts disabled.
+Hub event notification types are `event_announced`, `event_sales_open`, `event_deadline_soon`, `event_milestone_due`, `event_updated`, and `event_cancelled`. The MVP enables announced, sales-open, deadline-soon, milestone-due, and cancelled by default, while updated starts disabled.
 
 Hub event notifications are standard delivery by default. Global off, generation/category, member, event type, quiet hours, keyword filters, and rate limits still apply. Realtime best-effort does not enable disabled hub event notifications.
 
-Hub event worker delivery treats `event_sales_open`, `event_deadline_soon`, and `event_cancelled` as immediate-push candidates only after preference resolution allows the event. `event_announced` and `event_updated` remain summary/default delivery unless later policy changes explicitly promote them. Disabled preferences, global off, quiet hours, keyword blocks, and rate limits still downgrade to app-history-only or skipped delivery before any FCM/APNs send.
+Hub event worker delivery treats `event_sales_open`, `event_deadline_soon`, `event_milestone_due`, and `event_cancelled` as immediate-push candidates only after preference resolution allows the event. Schedule candidates are queued for their current schedule timestamp and revalidated before delivery, so past-on-registration, moved, or cancelled items are not sent. `event_announced` and `event_updated` remain summary/default delivery unless later policy changes explicitly promote them. Disabled preferences, global off, quiet hours, keyword blocks, and rate limits still downgrade to app-history-only or skipped delivery before any FCM/APNs send.
 
 ## Resolution
 

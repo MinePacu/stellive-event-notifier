@@ -172,8 +172,21 @@ class CalendarUiPolicyTest {
             month = YearMonth.of(2026, 6),
         )
 
-        assertEquals(listOf("goods-range", "ticket"), rows.map { it.entry.eventId })
-        assertEquals("2026-06-19", rows.first().day.date)
+        assertEquals(listOf("ticket", "goods-range"), rows.map { it.entry.eventId })
+        assertEquals("2026-06-20", rows.first().day.date)
+    }
+
+    @Test
+    fun feedEntriesKeepDifferentScheduleItemsFromTheSameParentEvent() {
+        val first = calendarEntry("album").copy(id = "album:tracks:2026-06-20", scheduleItemId = "tracks", displayDate = "2026-06-20")
+        val second = calendarEntry("album").copy(id = "album:release:2026-06-20", scheduleItemId = "release", displayDate = "2026-06-20")
+
+        val rows = CalendarUiPolicy.feedEntriesForMonth(
+            days = listOf(HubCalendarDay("2026-06-20", listOf(first, second))),
+            month = YearMonth.of(2026, 6),
+        )
+
+        assertEquals(listOf("tracks", "release"), rows.map { it.entry.scheduleItemId })
     }
 
     @Test

@@ -345,7 +345,8 @@ final class HubEventsCalendarViewModel: ObservableObject {
             }
             .flatMap { filteredEntries(from: $0.entries) }
             .reduce(into: [String: HubCalendarEntry]()) { result, entry in
-                result[entry.eventId] = result[entry.eventId] ?? entry
+                let key = projectionKey(entry)
+                result[key] = result[key] ?? entry
             }
             .compactMap { _, entry -> DurationCandidate? in
                 guard let startsAt = entry.startsAt, let endsAt = entry.endsAt else { return nil }
@@ -590,8 +591,12 @@ final class HubEventsCalendarViewModel: ObservableObject {
     private func deduplicatedByEventId(_ entries: [HubCalendarEntry]) -> [HubCalendarEntry] {
         var seen = Set<String>()
         return entries.filter { entry in
-            seen.insert(entry.eventId).inserted
+            seen.insert(projectionKey(entry)).inserted
         }
+    }
+
+    private func projectionKey(_ entry: HubCalendarEntry) -> String {
+        entry.scheduleItemId.map { "\(entry.eventId):\($0)" } ?? entry.eventId
     }
 
     private func filteredEntries(from entries: [HubCalendarEntry]) -> [HubCalendarEntry] {

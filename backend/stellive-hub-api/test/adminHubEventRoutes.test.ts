@@ -3,6 +3,7 @@ import { createAdminSessionCookie } from "../src/admin/adminAuth.js";
 import { renderAdminConsoleHtml } from "../src/admin/adminConsoleHtml.js";
 import { buildApp } from "../src/app.js";
 import type { AdminHubEvent, HubEventAdminValidationResult } from "../src/hub-events/hubEventAdminTypes.js";
+import { HubEventRevisionConflictException } from "../src/hub-events/hubEventAdminService.js";
 
 const env = {
   DATABASE_URL: "postgresql://stellive:stellive@localhost:5432/stellive_hub",
@@ -40,7 +41,12 @@ function createFakeService() {
     deactivate: vi.fn(async () => ({ ...event, publicationState: "inactive", deactivatedAt: "2026-06-12T12:00:00.000Z" })),
     delete: vi.fn(async () => ({ ...event, publicationState: "deleted", deletedAt: "2026-06-12T12:00:00.000Z" })),
     validate: vi.fn((): HubEventAdminValidationResult => ({ valid: true, errors: [] })),
-    listAuditLog: vi.fn(async () => [])
+    listAuditLog: vi.fn(async () => []),
+    createScheduleItem: vi.fn(async () => event),
+    updateScheduleItem: vi.fn(async () => event),
+    deleteScheduleItem: vi.fn(async () => ({ event, scheduleItemId: "schedule-1", deletion: "hard_deleted" as const })),
+    restoreScheduleItem: vi.fn(async () => event),
+    reorderScheduleItems: vi.fn(async () => event)
   };
 }
 
@@ -88,7 +94,7 @@ describe("admin hub event routes", () => {
       ["hub-event-source-url", "hub-event-source-label", "hub-event-image-url"],
       ["hub-event-image-url", "hub-event-image-source-label", "hub-event-image-source-url"],
       ["hub-event-announced-at", "hub-event-starts-at", "hub-event-ends-at"],
-      ["hub-event-purchase-url", "hub-event-ticket-url", "hub-event-venue-name", "hub-event-venue-address"],
+      ["hub-event-link-add", "hub-event-links", "hub-event-venue-name", "hub-event-venue-address"],
     ]) {
       const positions = anchors.map((anchor) => html.indexOf(`id="${anchor}"`));
       expect(positions.every((position) => position >= 0)).toBe(true);
@@ -117,8 +123,10 @@ describe("admin hub event routes", () => {
       "hub-event-announced-at",
       "hub-event-starts-at",
       "hub-event-ends-at",
-      "hub-event-purchase-url",
-      "hub-event-ticket-url",
+      "hub-event-link-add",
+      "hub-event-links",
+      "hub-event-schedule-link-add",
+      "hub-event-schedule-links",
       "hub-event-venue-name",
       "hub-event-venue-address",
       "hub-event-notification-eligible",
@@ -128,6 +136,23 @@ describe("admin hub event routes", () => {
     ]) {
       expect(html).toContain(`id="${id}"`);
     }
+  });
+
+  it("renders repeated event and schedule link editors with a primary schedule radio", () => {
+    const html = renderAdminConsoleHtml();
+
+    expect(html).toContain('row.className = "hub-event-link-row"');
+    expect(html).toContain('kind.dataset.linkField = "kind"');
+    expect(html).toContain('label.dataset.linkField = "label"');
+    expect(html).toContain('url.dataset.linkField = "url"');
+    expect(html).toContain('primary.name = "hub-event-primary-schedule"');
+    expect(html).toContain("setPrimaryScheduleItem");
+    expect(html).toContain("collectLinkEditor(hubEventLinksRoot)");
+    expect(html).toContain("collectLinkEditor(hubEventScheduleLinksRoot)");
+    expect(html).toContain("moveLinkEditorRow(row, -1)");
+    expect(html).toContain("moveLinkEditorRow(row, 1)");
+    expect(html).toContain("updateLinkEditorCount(root)");
+    expect(html).toContain('t("hubEvent.scheduleLinkCount", { count: linkCount })');
   });
 
   it("defaults the hub event status filter to open while keeping all statuses and ended available", () => {
@@ -381,5 +406,91 @@ describe("admin hub event routes", () => {
 
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: "hub_event_not_found" });
+  });
+
+  it("dispatches authenticated schedule item mutations with expected revisions", async () => {
+    const { app, service } = await buildTestApp();
+    const headers = { authorization: "Bearer admin-token", "content-type": "application/json" };
+    const mutation = {
+      expectedRevision: 1,
+      kind: "sales_open",
+      label: "판매 시작",
+      startsAt: "2026-07-20T01:00:00.000Z",
+      timePrecision: "datetime",
+      timezone: "Asia/Seoul"
+    };
+
+    expect((await app.inject({ method: "POST", url: "/v1/admin/hub-events/event-1/schedule-items", headers, payload: mutation })).statusCode).toBe(201);
+    expect((await app.inject({ method: "PATCH", url: "/v1/admin/hub-events/event-1/schedule-items/schedule-1", headers, payload: mutation })).statusCode).toBe(200);
+    expect((await app.inject({ method: "DELETE", url: "/v1/admin/hub-events/event-1/schedule-items/schedule-1", headers, payload: { expectedRevision: 1 } })).statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: "/v1/admin/hub-events/event-1/schedule-items/schedule-1/restore", headers, payload: { expectedRevision: 1 } })).statusCode).toBe(200);
+    expect((await app.inject({ method: "PUT", url: "/v1/admin/hub-events/event-1/schedule-items/order", headers, payload: { expectedRevision: 1, scheduleItemIds: ["schedule-1"] } })).statusCode).toBe(200);
+    await app.close();
+
+    expect(service.createScheduleItem).toHaveBeenCalledWith("event-1", expect.objectContaining({ expectedRevision: 1 }), expect.any(Object));
+    expect(service.updateScheduleItem).toHaveBeenCalledWith("event-1", "schedule-1", expect.objectContaining({ expectedRevision: 1 }), expect.any(Object));
+    expect(service.deleteScheduleItem).toHaveBeenCalledWith("event-1", "schedule-1", 1, expect.any(Object));
+    expect(service.restoreScheduleItem).toHaveBeenCalledWith("event-1", "schedule-1", 1, expect.any(Object));
+    expect(service.reorderScheduleItems).toHaveBeenCalledOnce();
+  });
+
+  it("renders tabbed schedule editing without expanded schedule arrays in the event form", () => {
+    const html = renderAdminConsoleHtml();
+
+    expect(html).toContain('data-hub-event-tab="info"');
+    expect(html).toContain('data-hub-event-tab="schedule"');
+    expect(html).toContain('data-hub-event-tab="history"');
+    expect(html).toContain('id="hub-event-schedule-dialog"');
+    expect(html).toContain('id="hub-event-schedule-save"');
+    expect(html).toContain('id="hub-event-schedule-title" autocomplete="off" required maxlength="160"');
+    expect(html).toContain('id="hub-event-schedule-description" rows="3" maxlength="2000"');
+    expect(html).toContain('id="hub-event-schedule-timing"');
+    expect(html).toContain('<option value="point">Single point</option>');
+    expect(html).toContain('<option value="period">Period</option>');
+    expect(html).toContain('id="hub-event-schedule-ends-at" type="datetime-local" disabled');
+    expect(html).toContain('function setScheduleTimingUi(timing)');
+    expect(html).toContain('endsAt: timing === "period"');
+    expect(html).toContain('id="hub-event-schedule-label" autocomplete="off" maxlength="80"');
+    expect(html).toContain('label: value("hub-event-schedule-label") || title');
+    expect(html).not.toContain('input.scheduleItems = collectScheduleItems()');
+  });
+
+  it("localizes required title and optional schedule fields", () => {
+    const html = renderAdminConsoleHtml("ko");
+
+    expect(html).toContain(">제목<");
+    expect(html).toContain(">설명 (선택 사항)<");
+    expect(html).toContain(">짧은 라벨 (선택 사항)<");
+    expect(html).toContain(">비우면 제목을 사용합니다<");
+    expect(html).toContain('<option value="point">단일 시점</option>');
+    expect(html).toContain('<option value="period">기간</option>');
+    expect(html).toContain('t("hubEvent.scheduleTitleRequired")');
+  });
+
+  it("returns schedule revision conflicts as 409 responses", async () => {
+    const service = createFakeService();
+    service.createScheduleItem.mockRejectedValueOnce(new HubEventRevisionConflictException(2, 3));
+    const { app } = await buildTestApp(service);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/admin/hub-events/event-1/schedule-items",
+      headers: { authorization: "Bearer admin-token", "content-type": "application/json" },
+      payload: {
+        expectedRevision: 2,
+        kind: "custom",
+        label: "일정",
+        startsAt: "2026-07-20T01:00:00.000Z",
+        timePrecision: "datetime",
+        timezone: "Asia/Seoul"
+      }
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: "hub_event_revision_conflict",
+      expectedRevision: 2,
+      currentRevision: 3
+    });
   });
 });

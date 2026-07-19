@@ -40,6 +40,9 @@ export interface NotificationWorkerDrainResult {
 interface NotificationWorkerDependencies {
   notificationJobs: Pick<NotificationJobRepository, "claimReady" | "complete" | "fail">;
   platformEvents: Pick<PlatformEventRepository, "findById">;
+  hubEventSchedules?: {
+    isScheduleNotificationCurrent(event: PlatformEvent, now: Date): Promise<boolean>;
+  };
   devices: {
     listPushTargetsPage?(input: { cursor?: string; limit: number }): Promise<{ items: PushTargetDevice[]; nextCursor: string | null }>;
     listPushTargets?(): Promise<PushTargetDevice[]>;
@@ -149,6 +152,16 @@ export class NotificationWorker {
         terminal: true
       });
       totals.failed += 1;
+      return;
+    }
+
+    if (
+      this.dependencies.hubEventSchedules &&
+      !(await this.dependencies.hubEventSchedules.isScheduleNotificationCurrent(event, now))
+    ) {
+      await this.dependencies.notificationJobs.complete(job.id);
+      totals.completed += 1;
+      totals.skipped += 1;
       return;
     }
 

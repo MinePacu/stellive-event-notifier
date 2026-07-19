@@ -11,8 +11,14 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventImage
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventImagePolicyState
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleItem
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventLink
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventLinkKind
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleKind
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventSourceType
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventTimePrecision
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
 import dev.minepacu.stelliveeventnotifier.core.model.AnnouncementSummaryItem
 import dev.minepacu.stelliveeventnotifier.core.model.AnnouncementsSummary
@@ -55,6 +61,7 @@ import dev.minepacu.stelliveeventnotifier.core.network.SongListResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.YoutubePremiereMetadataDto
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -332,6 +339,12 @@ class ServerHubRepository(
     private fun parseInstantOrNull(value: String): Instant? =
         runCatching { Instant.parse(value) }.getOrNull()
 
+    private fun parseScheduleInstantOrNull(value: String?): Instant? {
+        if (value.isNullOrBlank()) return null
+        return parseInstantOrNull(value)
+            ?: runCatching { LocalDate.parse(value).atStartOfDay(ZoneOffset.UTC).toInstant() }.getOrNull()
+    }
+
     private fun HubEventDto.toHubEventOrNull(): HubEvent? {
         val category = category?.toEnum<HubEventCategory>() ?: return null
         val mode = participationMode?.toEnum<HubEventParticipationMode>() ?: return null
@@ -353,6 +366,59 @@ class ServerHubRepository(
             sourceUrl = sourceUrl,
             sourceLabel = sourceLabel,
             sourceType = sourceType,
+            scheduleMode = scheduleMode.toEnum<HubEventScheduleMode>() ?: HubEventScheduleMode.SINGLE_WINDOW,
+            scheduleItems = scheduleItems.mapNotNull { item ->
+                val itemId = item.id ?: return@mapNotNull null
+                val itemKind = item.kind?.toEnum<HubEventScheduleKind>() ?: return@mapNotNull null
+                val itemTitle = item.title?.trim()?.takeIf(String::isNotEmpty)
+                val itemLabel = item.label?.trim()?.takeIf(String::isNotEmpty) ?: itemTitle.orEmpty()
+                val itemStartsAt = parseScheduleInstantOrNull(item.startsAt) ?: return@mapNotNull null
+                HubEventScheduleItem(
+                    id = itemId,
+                    kind = itemKind,
+                    title = itemTitle,
+                    label = itemLabel,
+                    description = item.description?.trim()?.takeIf(String::isNotEmpty),
+                    startsAt = itemStartsAt,
+                    endsAt = parseScheduleInstantOrNull(item.endsAt),
+                    timePrecision = item.timePrecision.toEnum<HubEventTimePrecision>() ?: HubEventTimePrecision.DATETIME,
+                    timezone = item.timezone,
+                    actionUrl = item.actionUrl,
+                    sourceUrl = item.sourceUrl,
+                    sourceLabel = item.sourceLabel,
+                    links = item.links.mapNotNull { link ->
+                        val kind = link.kind?.toEnum<HubEventLinkKind>() ?: return@mapNotNull null
+                        val url = link.url?.trim()?.takeIf(String::isNotEmpty) ?: return@mapNotNull null
+                        HubEventLink(
+                            id = link.id ?: "legacy:${itemId}:${link.sortOrder}:$url",
+                            kind = kind,
+                            label = link.label?.trim()?.takeIf(String::isNotEmpty),
+                            url = url,
+                            sortOrder = link.sortOrder,
+                            createdAt = parseScheduleInstantOrNull(link.createdAt),
+                            updatedAt = parseScheduleInstantOrNull(link.updatedAt),
+                        )
+                    },
+                    notificationEligible = item.notificationEligible,
+                    isPrimary = item.isPrimary,
+                    sortOrder = item.sortOrder,
+                    cancelledAt = parseScheduleInstantOrNull(item.cancelledAt),
+                    createdAt = parseScheduleInstantOrNull(item.createdAt),
+                )
+            }.sortedWith(compareBy<HubEventScheduleItem> { it.startsAt }.thenBy { it.sortOrder }),
+            links = links.mapNotNull { link ->
+                val kind = link.kind?.toEnum<HubEventLinkKind>() ?: return@mapNotNull null
+                val url = link.url?.trim()?.takeIf(String::isNotEmpty) ?: return@mapNotNull null
+                HubEventLink(
+                    id = link.id ?: "legacy:$id:${link.sortOrder}:$url",
+                    kind = kind,
+                    label = link.label?.trim()?.takeIf(String::isNotEmpty),
+                    url = url,
+                    sortOrder = link.sortOrder,
+                    createdAt = parseScheduleInstantOrNull(link.createdAt),
+                    updatedAt = parseScheduleInstantOrNull(link.updatedAt),
+                )
+            },
             announcedAt = announcedAt?.let(::parseInstantOrNull),
             startsAt = startsAt?.let(::parseInstantOrNull),
             endsAt = endsAt?.let(::parseInstantOrNull),
@@ -485,6 +551,9 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
             entryKind = kind,
             specialDayKind = specialDayKind?.toEnum<HubCalendarSpecialDayKind>(),
             specialDayLabel = specialDayLabel,
+            scheduleItemId = scheduleItemId,
+            scheduleKind = scheduleKind?.toEnum<HubEventScheduleKind>(),
+            scheduleLabel = scheduleLabel,
             title = title,
             category = category?.toEnum<HubEventCategory>() ?: HubEventCategory.ONLINE_GOODS,
             status = status?.toEnum<HubEventStatus>() ?: HubEventStatus.ANNOUNCED,
