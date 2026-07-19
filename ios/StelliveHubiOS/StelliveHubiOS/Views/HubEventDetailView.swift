@@ -20,33 +20,56 @@ enum HubEventDetailLayoutPolicy {
     static let contentOrder: [HubEventDetailContentSection] = [.actions, .summary, .timeline, .info, .notice]
 }
 
+enum HubEventScheduleScrollPolicy {
+    static func target(highlightedID: String?, lastScrolledID: String?) -> String? {
+        guard let highlightedID, highlightedID != lastScrolledID else { return nil }
+        return highlightedID
+    }
+}
+
 struct HubEventDetailView: View {
     let event: HubEvent
     var highlightedScheduleItemId: String? = nil
+    @State private var lastScrolledScheduleItemId: String? = nil
 
     var body: some View {
         ZStack(alignment: .top) {
             HubEventDetailColors.background.ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 0) {
-                    hero
-                    VStack(spacing: 14) {
-                        ForEach(HubEventDetailLayoutPolicy.contentOrder, id: \.self) { section in
-                            contentSection(section)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        hero
+                        VStack(spacing: 14) {
+                            ForEach(HubEventDetailLayoutPolicy.contentOrder, id: \.self) { section in
+                                contentSection(section)
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 18)
+                        .padding(.bottom, 28)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 18)
-                    .padding(.bottom, 28)
+                    .padding(.top, -36)
+                    .frame(width: UIScreen.main.bounds.width)
                 }
-                .padding(.top, -36)
-                .frame(width: UIScreen.main.bounds.width)
+                .ignoresSafeArea(edges: .top)
+                .onAppear { scrollToHighlightedSchedule(using: proxy) }
+                .onChange(of: highlightedScheduleItemId) { _ in scrollToHighlightedSchedule(using: proxy) }
             }
-            .ignoresSafeArea(edges: .top)
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+    }
+
+    private func scrollToHighlightedSchedule(using proxy: ScrollViewProxy) {
+        guard let id = HubEventScheduleScrollPolicy.target(
+            highlightedID: highlightedScheduleItemId,
+            lastScrolledID: lastScrolledScheduleItemId
+        ) else { return }
+        lastScrolledScheduleItemId = id
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
+        }
     }
 
     @ViewBuilder
@@ -59,9 +82,9 @@ struct HubEventDetailView: View {
                 summaryCard
             }
         case .timeline:
-            if !event.scheduleItems.isEmpty {
+            if HubEventDetailFormatting.hasTimelineSchedule(event), !event.scheduleItems.isEmpty {
                 detailSection("세부 일정") {
-                    timelineCard
+                    timelineCards
                 }
             }
         case .info:
@@ -179,40 +202,16 @@ struct HubEventDetailView: View {
         .background(HubEventDetailColors.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
-    private var timelineCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(HubEventDetailFormatting.timeline(for: event).enumerated()), id: \.element.schedule.id) { index, item in
-                if index > 0 { Divider() }
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(item.schedule.label)
-                            .font(.subheadline.weight(.semibold))
-                        Spacer()
-                        Text(item.stateText)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(item.schedule.id == highlightedScheduleItemId ? Color.teal : HubEventDetailColors.muted)
-                    }
-                    Text(item.timingText)
-                        .font(.footnote)
-                        .foregroundStyle(HubEventDetailColors.muted)
-                    if let description = item.schedule.description, !description.isEmpty {
-                        Text(description)
-                            .font(.footnote)
-                            .foregroundStyle(HubEventDetailColors.text)
-                    }
-                    if let actionURL = url(from: item.schedule.actionUrl) ?? url(from: item.schedule.sourceUrl) {
-                        Link("일정 링크 열기", destination: actionURL)
-                            .font(.footnote.weight(.semibold))
-                    }
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, item.schedule.id == highlightedScheduleItemId ? 10 : 0)
-                .background(item.schedule.id == highlightedScheduleItemId ? Color.teal.opacity(0.1) : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    private var timelineCards: some View {
+        VStack(spacing: 10) {
+            ForEach(HubEventDetailFormatting.timeline(for: event), id: \.schedule.id) { item in
+                HubEventScheduleCard(
+                    item: item,
+                    highlighted: item.schedule.id == highlightedScheduleItemId
+                )
+                .id(item.schedule.id)
             }
         }
-        .padding(16)
-        .background(HubEventDetailColors.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private var noticeCard: some View {
@@ -227,7 +226,64 @@ struct HubEventDetailView: View {
 
     private func url(from rawValue: String?) -> URL? {
         guard let rawValue, !rawValue.isEmpty else { return nil }
-        return URL(string: rawValue)
+        guard let url = URL(string: rawValue), url.scheme?.lowercased() == "https", url.host != nil else { return nil }
+        return url
+    }
+}
+
+private struct HubEventScheduleCard: View {
+    let item: HubEventScheduleTimelineItem
+    let highlighted: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                scheduleBadge(item.stateText)
+                scheduleBadge(HubEventDetailFormatting.scheduleKindLabel(item.schedule.kind))
+                if item.schedule.isPrimary { scheduleBadge("대표 일정") }
+                Spacer(minLength: 0)
+            }
+            Text(item.schedule.label)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(HubEventDetailColors.text)
+            Text(item.timingText)
+                .font(.footnote)
+                .foregroundStyle(HubEventDetailColors.muted)
+            if let description = item.schedule.description, !description.isEmpty {
+                Text(description)
+                    .font(.footnote)
+                    .foregroundStyle(HubEventDetailColors.text)
+            }
+            if let source = item.schedule.sourceLabel, !source.isEmpty {
+                Text("출처 · \(source)")
+                    .font(.caption)
+                    .foregroundStyle(HubEventDetailColors.muted)
+            }
+            if let actionURL = HubEventDetailFormatting.scheduleActionURL(item.schedule) {
+                Link(HubEventDetailFormatting.scheduleActionLabel(item.schedule.kind), destination: actionURL)
+                    .font(.footnote.weight(.semibold))
+                    .accessibilityLabel("\(HubEventDetailFormatting.scheduleActionLabel(item.schedule.kind)), 외부 링크 열기")
+                    .padding(.top, 2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(highlighted ? Color.teal.opacity(0.1) : HubEventDetailColors.card)
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(highlighted ? Color.teal : HubEventDetailColors.line, lineWidth: highlighted ? 2 : 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .opacity(item.schedule.cancelledAt == nil ? 1 : 0.58)
+    }
+
+    private func scheduleBadge(_ label: String) -> some View {
+        Text(label)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(HubEventDetailColors.muted)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
     }
 }
 
@@ -274,8 +330,10 @@ enum HubEventDetailFormatting {
         if let venueName = event.venueName, !venueName.isEmpty {
             rows.append(HubEventDetailRow(label: "장소", value: venueName))
         }
-        rows.append(HubEventDetailRow(label: "시작", value: event.startsAt.map(format) ?? "미정"))
-        rows.append(HubEventDetailRow(label: "기간", value: periodText(for: event)))
+        if showsParentPeriod(event) {
+            rows.append(HubEventDetailRow(label: "시작", value: event.startsAt.map(format) ?? "미정"))
+            rows.append(HubEventDetailRow(label: "기간", value: periodText(for: event)))
+        }
         rows.append(HubEventDetailRow(label: "참여 방식", value: event.participationMode.displayName))
         rows.append(HubEventDetailRow(label: "분류", value: event.category.displayName))
         rows.append(HubEventDetailRow(label: "출처", value: event.sourceLabel))
@@ -285,7 +343,9 @@ enum HubEventDetailFormatting {
     static func timeline(for event: HubEvent, now: Date = Date()) -> [HubEventScheduleTimelineItem] {
         event.scheduleItems
             .sorted { left, right in
-                left.startsAt == right.startsAt ? left.sortOrder < right.sortOrder : left.startsAt < right.startsAt
+                if left.startsAt != right.startsAt { return left.startsAt < right.startsAt }
+                if left.sortOrder != right.sortOrder { return left.sortOrder < right.sortOrder }
+                return left.id < right.id
             }
             .map { item in
                 HubEventScheduleTimelineItem(
@@ -294,6 +354,62 @@ enum HubEventDetailFormatting {
                     stateText: scheduleStateText(item, now: now)
                 )
             }
+    }
+
+    static func activeScheduleItems(_ event: HubEvent) -> [HubEventScheduleItem] {
+        event.scheduleItems.filter { $0.cancelledAt == nil }
+    }
+
+    static func hasTimelineSchedule(_ event: HubEvent) -> Bool {
+        event.scheduleMode == .timeline || activeScheduleItems(event).count >= 2
+    }
+
+    static func showsParentPeriod(_ event: HubEvent) -> Bool {
+        !hasTimelineSchedule(event)
+    }
+
+    static func nextScheduleItem(_ event: HubEvent, now: Date = Date()) -> HubEventScheduleItem? {
+        activeScheduleItems(event)
+            .filter { item in item.endsAt.map { $0 >= now } ?? (item.startsAt >= now) }
+            .sorted { left, right in
+                if left.startsAt != right.startsAt { return left.startsAt < right.startsAt }
+                if left.sortOrder != right.sortOrder { return left.sortOrder < right.sortOrder }
+                return left.id < right.id
+            }
+            .first
+    }
+
+    static func scheduleActionURL(_ item: HubEventScheduleItem) -> URL? {
+        [item.actionUrl, item.sourceUrl]
+            .compactMap { $0 }
+            .compactMap { rawValue -> URL? in
+                guard let url = URL(string: rawValue), url.scheme?.lowercased() == "https", url.host != nil else { return nil }
+                return url
+            }
+            .first
+    }
+
+    static func scheduleActionLabel(_ kind: HubEventScheduleKind) -> String {
+        switch kind {
+        case .salesOpen: return "구매/예약 페이지"
+        case .ticketOpen: return "티켓 페이지"
+        case .contentReveal: return "콘텐츠"
+        case .announcement: return "공지"
+        case .deadline, .mainWindow, .release, .custom: return "상세 보기"
+        }
+    }
+
+    static func scheduleKindLabel(_ kind: HubEventScheduleKind) -> String {
+        switch kind {
+        case .mainWindow: return "행사 기간"
+        case .announcement: return "공지"
+        case .salesOpen: return "판매 시작"
+        case .ticketOpen: return "예매 시작"
+        case .contentReveal: return "콘텐츠 공개"
+        case .release: return "출시"
+        case .deadline: return "마감"
+        case .custom: return "일정"
+        }
     }
 
     private static func schedulePeriodText(_ item: HubEventScheduleItem) -> String {
@@ -331,9 +447,12 @@ enum HubEventDetailFormatting {
         return "완료"
     }
 
-    static func heroSubtitleLines(for event: HubEvent) -> [String] {
+    static func heroSubtitleLines(for event: HubEvent, now: Date = Date()) -> [String] {
         let venue = event.venueName?.isEmpty == false ? event.venueName! : event.sourceLabel
-        return [venue, periodText(for: event)]
+        let timing = hasTimelineSchedule(event)
+            ? nextScheduleItem(event, now: now).map { "다음 일정 · \($0.label) · \(schedulePeriodText($0))" } ?? "예정된 세부 일정이 없습니다."
+            : periodText(for: event)
+        return [venue, timing]
             .filter { !$0.isEmpty }
             .reduce(into: [String]()) { result, line in
                 if !result.contains(line) {

@@ -7,7 +7,13 @@ import {
 import { CatalogService } from "../catalog/catalog.js";
 import type { AppEnv } from "../config/env.js";
 import { clearSpecialDayStatusSnapshotCache } from "../hub-events/hubCalendarSpecialDays.js";
-import { HubEventAdminService, HubEventAdminValidationException } from "../hub-events/hubEventAdminService.js";
+import {
+  HubEventAdminService,
+  HubEventAdminValidationException,
+  HubEventRevisionConflictException,
+  type HubEventScheduleMutationInput,
+  type HubEventScheduleOrderInput
+} from "../hub-events/hubEventAdminService.js";
 import type { HubEventAdminValidationResult } from "../hub-events/hubEventAdminTypes.js";
 import type { AdminHubEventFilters } from "../hub-events/hubEventRepository.js";
 
@@ -22,6 +28,11 @@ interface HubEventAdminRouteService {
   delete(id: string, actor: { actorId?: string; reason?: string }): Promise<unknown>;
   validate(input: unknown, mode: "draft" | "publish"): HubEventAdminValidationResult;
   listAuditLog(id: string, limit: number): Promise<unknown>;
+  createScheduleItem(id: string, input: HubEventScheduleMutationInput, actor: { actorId?: string; reason?: string }): Promise<unknown>;
+  updateScheduleItem(id: string, scheduleItemId: string, input: HubEventScheduleMutationInput, actor: { actorId?: string; reason?: string }): Promise<unknown>;
+  deleteScheduleItem(id: string, scheduleItemId: string, expectedRevision: number, actor: { actorId?: string; reason?: string }): Promise<unknown>;
+  restoreScheduleItem(id: string, scheduleItemId: string, expectedRevision: number, actor: { actorId?: string; reason?: string }): Promise<unknown>;
+  reorderScheduleItems(id: string, input: HubEventScheduleOrderInput, actor: { actorId?: string; reason?: string }): Promise<unknown>;
 }
 
 export interface AdminHubEventRouteDependencies {
@@ -88,8 +99,21 @@ async function sendServiceError(error: unknown, reply: FastifyReply) {
   if (error instanceof HubEventAdminValidationException) {
     return reply.code(error.statusCode).send({ valid: false, errors: error.errors });
   }
+  if (error instanceof HubEventRevisionConflictException) {
+    return reply.code(error.statusCode).send({
+      error: error.message,
+      expectedRevision: error.expectedRevision,
+      currentRevision: error.currentRevision
+    });
+  }
   if (error instanceof Error && error.message === "hub_event_not_found") {
     return reply.code(404).send({ error: "hub_event_not_found" });
+  }
+  if (error instanceof Error && error.message === "hub_event_schedule_item_not_found") {
+    return reply.code(404).send({ error: "hub_event_schedule_item_not_found" });
+  }
+  if (error instanceof Error && error.message === "hub_event_revision_conflict") {
+    return reply.code(409).send({ error: "hub_event_revision_conflict" });
   }
   throw error;
 }
@@ -144,6 +168,93 @@ export async function registerAdminHubEventRoutes(app: FastifyInstance, options:
     if (!event) return reply.code(404).send({ error: "hub_event_not_found" });
     return event;
   });
+
+  app.post<{ Params: { id: string } }>("/v1/admin/hub-events/:id/schedule-items", privilegedRouteOptions, async (request, reply) => {
+    applyNoStore(reply);
+    try {
+      const created = await service.createScheduleItem(
+        request.params.id,
+        request.body as HubEventScheduleMutationInput,
+        actorFromRequest(request)
+      );
+      return reply.code(201).send(created);
+    } catch (error) {
+      return sendServiceError(error, reply);
+    }
+  });
+
+  app.patch<{ Params: { id: string; scheduleItemId: string } }>(
+    "/v1/admin/hub-events/:id/schedule-items/:scheduleItemId",
+    privilegedRouteOptions,
+    async (request, reply) => {
+      applyNoStore(reply);
+      try {
+        return await service.updateScheduleItem(
+          request.params.id,
+          request.params.scheduleItemId,
+          request.body as HubEventScheduleMutationInput,
+          actorFromRequest(request)
+        );
+      } catch (error) {
+        return sendServiceError(error, reply);
+      }
+    }
+  );
+
+  app.delete<{ Params: { id: string; scheduleItemId: string } }>(
+    "/v1/admin/hub-events/:id/schedule-items/:scheduleItemId",
+    privilegedRouteOptions,
+    async (request, reply) => {
+      applyNoStore(reply);
+      try {
+        const body = (request.body ?? {}) as { expectedRevision?: number };
+        return await service.deleteScheduleItem(
+          request.params.id,
+          request.params.scheduleItemId,
+          Number(body.expectedRevision),
+          actorFromRequest(request)
+        );
+      } catch (error) {
+        return sendServiceError(error, reply);
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string; scheduleItemId: string } }>(
+    "/v1/admin/hub-events/:id/schedule-items/:scheduleItemId/restore",
+    privilegedRouteOptions,
+    async (request, reply) => {
+      applyNoStore(reply);
+      try {
+        const body = (request.body ?? {}) as { expectedRevision?: number };
+        return await service.restoreScheduleItem(
+          request.params.id,
+          request.params.scheduleItemId,
+          Number(body.expectedRevision),
+          actorFromRequest(request)
+        );
+      } catch (error) {
+        return sendServiceError(error, reply);
+      }
+    }
+  );
+
+  app.put<{ Params: { id: string } }>(
+    "/v1/admin/hub-events/:id/schedule-items/order",
+    privilegedRouteOptions,
+    async (request, reply) => {
+      applyNoStore(reply);
+      try {
+        return await service.reorderScheduleItems(
+          request.params.id,
+          request.body as HubEventScheduleOrderInput,
+          actorFromRequest(request)
+        );
+      } catch (error) {
+        return sendServiceError(error, reply);
+      }
+    }
+  );
 
   app.put<{ Params: { id: string } }>("/v1/admin/hub-events/:id", privilegedRouteOptions, async (request, reply) => {
     applyNoStore(reply);

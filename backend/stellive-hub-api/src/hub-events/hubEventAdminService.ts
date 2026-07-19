@@ -15,11 +15,16 @@ import {
   HubEventRepository,
   type AdminHubEventFilters,
   type AdminHubEventListResult,
+  type AdminHubEventScheduleItemWriteInput,
   type AdminHubEventWriteInput,
   type HubEventAuditLogEntry,
   type HubEventAuditLogInput
 } from "./hubEventRepository.js";
 import { validateHubEventForAdmin } from "./hubEventPolicy.js";
+import {
+  deriveHubEventScheduleMode,
+  withDefaultPrimaryScheduleItem
+} from "./hubEventSchedulePolicy.js";
 
 export interface HubEventAdminActor {
   actorId?: string;
@@ -29,6 +34,7 @@ export interface HubEventAdminActor {
 interface HubEventAdminRepository {
   createDraft(input: AdminHubEventWriteInput): Promise<AdminHubEvent>;
   update(id: string, input: AdminHubEventWriteInput): Promise<AdminHubEvent>;
+  hardDeleteScheduleItem?(id: string, scheduleItemId: string, input: AdminHubEventWriteInput): Promise<AdminHubEvent>;
   setPublicationState(input: {
     id: string;
     publicationState: HubEventPublicationState;
@@ -68,6 +74,29 @@ export class HubEventAdminValidationException extends Error {
   }
 }
 
+export class HubEventRevisionConflictException extends Error {
+  readonly statusCode = 409;
+
+  constructor(readonly expectedRevision: number, readonly currentRevision: number) {
+    super("hub_event_revision_conflict");
+  }
+}
+
+export interface HubEventScheduleMutationInput extends AdminHubEventScheduleItemWriteInput {
+  expectedRevision: number;
+}
+
+export interface HubEventScheduleOrderInput {
+  expectedRevision: number;
+  scheduleItemIds: string[];
+}
+
+export interface HubEventScheduleDeleteResult {
+  event: AdminHubEvent;
+  scheduleItemId: string;
+  deletion: "cancelled" | "hard_deleted";
+}
+
 export class HubEventAdminService {
   private readonly repository: HubEventAdminRepository;
   private readonly platformEvents: HubEventPlatformEventRepository;
@@ -86,8 +115,12 @@ export class HubEventAdminService {
   }
 
   async createDraft(input: AdminHubEventWriteInput, actor: HubEventAdminActor = {}): Promise<AdminHubEvent> {
-    this.assertValid(input, "draft");
-    const normalized = this.normalizeSingleWindowWrite(input);
+    const singleWindowNormalized = this.normalizeSingleWindowWrite(input);
+    const normalized = this.normalizeScheduleWrite({
+      ...singleWindowNormalized,
+      scheduleItems: singleWindowNormalized.scheduleItems ?? []
+    });
+    this.assertValid(normalized, "draft");
     const created = await this.repository.createDraft({ ...normalized, actorId: actor.actorId });
     await this.audit("create", created.id, actor, null, created);
     return created;
@@ -96,8 +129,11 @@ export class HubEventAdminService {
   async update(id: string, input: AdminHubEventWriteInput, actor: HubEventAdminActor = {}): Promise<AdminHubEvent> {
     const before = await this.getExisting(id);
     this.assertMutable(before);
-    this.assertValid({ ...before, ...input }, before.publicationState === "published" ? "publish" : "draft");
-    const normalized = this.normalizeSingleWindowWrite(input, before);
+    const normalized = this.withExistingScheduleProjection(
+      this.normalizeScheduleWrite(this.normalizeSingleWindowWrite(input, before)),
+      before
+    );
+    this.assertValid({ ...before, ...normalized }, before.publicationState === "published" ? "publish" : "draft");
     const updated = await this.repository.update(id, { ...normalized, actorId: actor.actorId });
     await this.audit("update", id, actor, before, updated);
     await this.enqueueNotificationCandidates("update", before, updated);
@@ -181,6 +217,119 @@ export class HubEventAdminService {
     return this.repository.listAuditLog(id, limit);
   }
 
+  async createScheduleItem(
+    id: string,
+    input: HubEventScheduleMutationInput,
+    actor: HubEventAdminActor = {}
+  ): Promise<AdminHubEvent> {
+    const before = await this.getScheduleMutableEvent(id, input.expectedRevision);
+    const { expectedRevision, id: _ignoredScheduleItemId, ...scheduleInput } = input;
+    const existingItems = this.scheduleWriteItems(before).map((item) =>
+      scheduleInput.isPrimary === true ? { ...item, isPrimary: false } : item
+    );
+    const items = [...existingItems, {
+      ...scheduleInput,
+      sortOrder: scheduleInput.sortOrder ?? before.scheduleItems?.length ?? 0,
+      cancelledAt: null
+    }];
+    return this.persistScheduleMutation(before, items, expectedRevision, "schedule_create", actor);
+  }
+
+  async updateScheduleItem(
+    id: string,
+    scheduleItemId: string,
+    input: HubEventScheduleMutationInput,
+    actor: HubEventAdminActor = {}
+  ): Promise<AdminHubEvent> {
+    const before = await this.getScheduleMutableEvent(id, input.expectedRevision);
+    const existing = this.requireOwnedScheduleItem(before, scheduleItemId);
+    const { expectedRevision, ...patch } = input;
+    const items = this.scheduleWriteItems(before).map((item) =>
+      item.id === scheduleItemId
+        ? { ...existing, ...patch, id: scheduleItemId }
+        : patch.isPrimary === true ? { ...item, isPrimary: false } : item
+    );
+    return this.persistScheduleMutation(before, items, expectedRevision, "schedule_update", actor);
+  }
+
+  async deleteScheduleItem(
+    id: string,
+    scheduleItemId: string,
+    expectedRevision: number,
+    actor: HubEventAdminActor = {}
+  ): Promise<HubEventScheduleDeleteResult> {
+    const before = await this.getScheduleMutableEvent(id, expectedRevision);
+    const existing = this.requireOwnedScheduleItem(before, scheduleItemId);
+    this.assertPrimaryCanBeCancelled(before, existing);
+    const hardDelete = before.publicationState === "draft";
+    if (hardDelete) {
+      const items = this.scheduleWriteItems(before).filter((item) => item.id !== scheduleItemId);
+      const normalized = withDefaultPrimaryScheduleItem(items);
+      const scheduleMode = deriveHubEventScheduleMode(normalized);
+      this.assertValid(
+        { ...before, scheduleMode, scheduleItems: normalized },
+        before.publicationState === "published" ? "publish" : "draft"
+      );
+      const hardDeleteScheduleItem = this.repository.hardDeleteScheduleItem?.bind(this.repository);
+      if (!hardDeleteScheduleItem) throw new Error("hub_event_schedule_item_delete_unavailable");
+      const event = await this.runRevisionWrite(before, expectedRevision, () =>
+        hardDeleteScheduleItem(id, scheduleItemId, {
+          scheduleMode,
+          scheduleItems: normalized,
+          expectedRevision,
+          actorId: actor.actorId
+        })
+      );
+      await this.audit("schedule_delete", id, actor, before, event);
+      await this.enqueueNotificationCandidates("schedule_delete", before, event);
+      return { event, scheduleItemId, deletion: "hard_deleted" };
+    }
+
+    const cancelledAt = this.now().toISOString();
+    const items = this.scheduleWriteItems(before).map((item) =>
+      item.id === scheduleItemId ? { ...item, cancelledAt, isPrimary: false } : item
+    );
+    const event = await this.persistScheduleMutation(before, items, expectedRevision, "schedule_cancel", actor);
+    return { event, scheduleItemId, deletion: "cancelled" };
+  }
+
+  async restoreScheduleItem(
+    id: string,
+    scheduleItemId: string,
+    expectedRevision: number,
+    actor: HubEventAdminActor = {}
+  ): Promise<AdminHubEvent> {
+    const before = await this.getScheduleMutableEvent(id, expectedRevision);
+    const existing = this.requireOwnedScheduleItem(before, scheduleItemId);
+    if (!existing.cancelledAt) return before;
+    const items = this.scheduleWriteItems(before).map((item) =>
+      item.id === scheduleItemId ? { ...item, cancelledAt: null } : item
+    );
+    return this.persistScheduleMutation(before, items, expectedRevision, "schedule_restore", actor);
+  }
+
+  async reorderScheduleItems(
+    id: string,
+    input: HubEventScheduleOrderInput,
+    actor: HubEventAdminActor = {}
+  ): Promise<AdminHubEvent> {
+    const before = await this.getScheduleMutableEvent(id, input.expectedRevision);
+    const current = this.scheduleWriteItems(before);
+    const currentIds = new Set(current.map((item) => item.id).filter(Boolean));
+    if (input.scheduleItemIds.length !== current.length ||
+        new Set(input.scheduleItemIds).size !== current.length ||
+        input.scheduleItemIds.some((itemId) => !currentIds.has(itemId))) {
+      throw new HubEventAdminValidationException([{
+        field: "scheduleItemIds",
+        reason: "schedule_item_invalid",
+        message: "scheduleItemIds must contain every schedule item exactly once."
+      }]);
+    }
+    const order = new Map(input.scheduleItemIds.map((itemId, index) => [itemId, index]));
+    const items = current.map((item) => ({ ...item, sortOrder: order.get(item.id ?? "") ?? item.sortOrder ?? 0 }));
+    return this.persistScheduleMutation(before, items, input.expectedRevision, "schedule_reorder", actor);
+  }
+
   private assertValid(input: unknown, mode: "draft" | "publish") {
     const result = this.validate(input, mode);
     if (!result.valid) {
@@ -197,6 +346,98 @@ export class HubEventAdminService {
   private assertMutable(event: AdminHubEvent) {
     if (event.publicationState === "deleted" || event.deletedAt) {
       throw new Error("hub_event_deleted");
+    }
+  }
+
+  private normalizeScheduleWrite(input: AdminHubEventWriteInput): AdminHubEventWriteInput {
+    if (input.scheduleItems === undefined) return input;
+    const scheduleItems = withDefaultPrimaryScheduleItem(input.scheduleItems);
+    return { ...input, scheduleItems, scheduleMode: deriveHubEventScheduleMode(scheduleItems) };
+  }
+
+  private withExistingScheduleProjection(
+    input: AdminHubEventWriteInput,
+    existing: AdminHubEvent
+  ): AdminHubEventWriteInput {
+    if (input.scheduleItems !== undefined) return input;
+    if ((existing.scheduleItems ?? []).length === 0) return { ...input, scheduleMode: "single_window" };
+    const scheduleItems = this.scheduleWriteItems(existing);
+    return {
+      ...input,
+      scheduleItems,
+      scheduleMode: deriveHubEventScheduleMode(scheduleItems)
+    };
+  }
+
+  private scheduleWriteItems(event: AdminHubEvent): AdminHubEventScheduleItemWriteInput[] {
+    return (event.scheduleItems ?? []).map((item) => ({ ...item }));
+  }
+
+  private async getScheduleMutableEvent(id: string, expectedRevision: number): Promise<AdminHubEvent> {
+    const event = await this.getExisting(id);
+    this.assertMutable(event);
+    if (!Number.isInteger(expectedRevision) || expectedRevision < 1 || event.revision !== expectedRevision) {
+      throw new HubEventRevisionConflictException(expectedRevision, event.revision);
+    }
+    return event;
+  }
+
+  private requireOwnedScheduleItem(before: AdminHubEvent, scheduleItemId: string) {
+    const item = before.scheduleItems?.find((candidate) => candidate.id === scheduleItemId);
+    if (!item) throw new Error("hub_event_schedule_item_not_found");
+    return item;
+  }
+
+  private assertPrimaryCanBeCancelled(before: AdminHubEvent, item: NonNullable<AdminHubEvent["scheduleItems"]>[number]) {
+    if (!item.cancelledAt && item.isPrimary && (
+      before.publicationState === "published" ||
+      (before.scheduleItems ?? []).some((candidate) => candidate.id !== item.id && !candidate.cancelledAt)
+    )) {
+      throw new HubEventAdminValidationException([{
+        field: "scheduleItems",
+        reason: "schedule_primary_required",
+        message: "Choose a replacement primary schedule before cancelling the current primary schedule."
+      }]);
+    }
+  }
+
+  private async persistScheduleMutation(
+    before: AdminHubEvent,
+    items: AdminHubEventScheduleItemWriteInput[],
+    expectedRevision: number,
+    action: Extract<HubEventAdminAction, `schedule_${string}`>,
+    actor: HubEventAdminActor
+  ): Promise<AdminHubEvent> {
+    const scheduleItems = withDefaultPrimaryScheduleItem(items);
+    const scheduleMode = deriveHubEventScheduleMode(scheduleItems);
+    this.assertValid(
+      { ...before, scheduleMode, scheduleItems },
+      before.publicationState === "published" ? "publish" : "draft"
+    );
+    const updated = await this.runRevisionWrite(before, expectedRevision, () => this.repository.update(before.id, {
+      scheduleMode,
+      scheduleItems,
+      expectedRevision,
+      actorId: actor.actorId
+    }));
+    await this.audit(action, before.id, actor, before, updated);
+    await this.enqueueNotificationCandidates(action, before, updated);
+    return updated;
+  }
+
+  private async runRevisionWrite(
+    before: AdminHubEvent,
+    expectedRevision: number,
+    write: () => Promise<AdminHubEvent>
+  ): Promise<AdminHubEvent> {
+    try {
+      return await write();
+    } catch (error) {
+      if (error instanceof Error && error.message === "hub_event_revision_conflict") {
+        const current = await this.repository.getAdminById(before.id);
+        throw new HubEventRevisionConflictException(expectedRevision, current?.revision ?? before.revision);
+      }
+      throw error;
     }
   }
 

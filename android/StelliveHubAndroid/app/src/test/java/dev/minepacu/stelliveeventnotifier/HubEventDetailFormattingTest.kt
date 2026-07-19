@@ -5,6 +5,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleItem
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleKind
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventSourceType
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailFormatting
@@ -113,6 +114,41 @@ class HubEventDetailFormattingTest {
 
         assertEquals(listOf("completed", "cancelled", "current", "future"), timeline.map { it.schedule.id })
         assertEquals(listOf("완료", "취소", "진행", "예정"), timeline.map { it.stateText })
+    }
+
+    @Test
+    fun timelineModeHidesParentPeriodRowsAndUsesNextActiveScheduleInHero() {
+        val event = sampleEvent().copy(
+            scheduleMode = HubEventScheduleMode.TIMELINE,
+            scheduleItems = listOf(
+                schedule("cancelled", "2026-06-14T00:00:00Z", cancelled = true),
+                schedule("next", "2026-06-20T00:00:00Z"),
+            ),
+        )
+
+        assertFalse(HubEventDetailFormatting.rows(event, zone).any { it.label == "시작" || it.label == "기간" })
+        assertEquals(listOf("next"), HubEventDetailFormatting.activeScheduleItems(event).map { it.id })
+        assertEquals("next", HubEventDetailFormatting.nextScheduleItem(event, Instant.parse("2026-06-15T00:00:00Z"))?.id)
+        assertEquals(
+            "다음 일정 · next · 2026.06.20 (토) 09:00",
+            HubEventDetailFormatting.heroSubtitleLines(event, zone, Instant.parse("2026-06-15T00:00:00Z")).last(),
+        )
+    }
+
+    @Test
+    fun scheduleActionsPreferHttpsActionUrlAndMapLabels() {
+        val item = schedule("sales", "2026-06-20T00:00:00Z").copy(
+            kind = HubEventScheduleKind.SALES_OPEN,
+            actionUrl = "http://unsafe.example/action",
+            sourceUrl = "https://safe.example/source",
+        )
+
+        assertEquals("https://safe.example/source", HubEventDetailFormatting.scheduleActionUrl(item))
+        assertEquals("구매/예약 페이지", HubEventDetailFormatting.scheduleActionLabel(item.kind))
+        assertEquals("티켓 페이지", HubEventDetailFormatting.scheduleActionLabel(HubEventScheduleKind.TICKET_OPEN))
+        assertEquals("콘텐츠", HubEventDetailFormatting.scheduleActionLabel(HubEventScheduleKind.CONTENT_REVEAL))
+        assertEquals("공지", HubEventDetailFormatting.scheduleActionLabel(HubEventScheduleKind.ANNOUNCEMENT))
+        assertEquals("상세 보기", HubEventDetailFormatting.scheduleActionLabel(HubEventScheduleKind.DEADLINE))
     }
 
     private fun schedule(id: String, startsAt: String, endsAt: String? = null, cancelled: Boolean = false) =

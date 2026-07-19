@@ -563,6 +563,47 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(timeline.map(\.stateText), ["완료", "취소", "진행", "예정"])
     }
 
+    func testTimelinePolicyHidesParentPeriodAndSelectsNextActiveSchedule() {
+        var event = detailEvent()
+        event.scheduleMode = .timeline
+        event.scheduleItems = [
+            schedule("cancelled", "2026-06-14T00:00:00Z", cancelled: true),
+            schedule("next", "2026-06-20T00:00:00Z")
+        ]
+
+        XCTAssertFalse(HubEventDetailFormatting.rows(for: event).contains { $0.label == "시작" || $0.label == "기간" })
+        XCTAssertEqual(HubEventDetailFormatting.activeScheduleItems(event).map(\.id), ["next"])
+        XCTAssertEqual(HubEventDetailFormatting.nextScheduleItem(event, now: dateTime("2026-06-15T00:00:00Z"))?.id, "next")
+        XCTAssertEqual(
+            HubEventDetailFormatting.heroSubtitleLines(for: event, now: dateTime("2026-06-15T00:00:00Z")).last,
+            "다음 일정 · next · 2026.06.20 (토) 09:00"
+        )
+    }
+
+    func testScheduleActionPolicyUsesHttpsAndKindSpecificLabels() {
+        let item = schedule(
+            "sales",
+            "2026-06-20T00:00:00Z",
+            kind: .salesOpen,
+            actionURL: "http://unsafe.example/action",
+            sourceURL: "https://safe.example/source"
+        )
+
+        XCTAssertEqual(HubEventDetailFormatting.scheduleActionURL(item)?.absoluteString, "https://safe.example/source")
+        XCTAssertEqual(HubEventDetailFormatting.scheduleActionLabel(.salesOpen), "구매/예약 페이지")
+        XCTAssertEqual(HubEventDetailFormatting.scheduleActionLabel(.ticketOpen), "티켓 페이지")
+        XCTAssertEqual(HubEventDetailFormatting.scheduleActionLabel(.contentReveal), "콘텐츠")
+        XCTAssertEqual(HubEventDetailFormatting.scheduleActionLabel(.announcement), "공지")
+        XCTAssertEqual(HubEventDetailFormatting.scheduleActionLabel(.deadline), "상세 보기")
+    }
+
+    func testScheduleScrollPolicyOnlyTargetsFirstDisplayOrChangedID() {
+        XCTAssertEqual(HubEventScheduleScrollPolicy.target(highlightedID: "schedule-1", lastScrolledID: nil), "schedule-1")
+        XCTAssertNil(HubEventScheduleScrollPolicy.target(highlightedID: "schedule-1", lastScrolledID: "schedule-1"))
+        XCTAssertEqual(HubEventScheduleScrollPolicy.target(highlightedID: "schedule-2", lastScrolledID: "schedule-1"), "schedule-2")
+        XCTAssertNil(HubEventScheduleScrollPolicy.target(highlightedID: nil, lastScrolledID: "schedule-1"))
+    }
+
     func testHubEventHeroTagStyleUsesReadableImageOverlayOpacities() {
         XCTAssertEqual(HubEventHeroTagStyle.backgroundOpacity, 0.78, accuracy: 0.001)
         XCTAssertEqual(HubEventHeroTagStyle.borderOpacity, 0.95, accuracy: 0.001)
@@ -633,19 +674,22 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         _ id: String,
         _ startsAt: String,
         endsAt: String? = nil,
-        cancelled: Bool = false
+        cancelled: Bool = false,
+        kind: HubEventScheduleKind = .custom,
+        actionURL: String? = nil,
+        sourceURL: String? = nil
     ) -> HubEventScheduleItem {
         HubEventScheduleItem(
             id: id,
-            kind: .custom,
+            kind: kind,
             label: id,
             description: nil,
             startsAt: dateTime(startsAt),
             endsAt: endsAt.map { dateTime($0) },
             timePrecision: .datetime,
             timezone: "Asia/Seoul",
-            actionUrl: nil,
-            sourceUrl: nil,
+            actionUrl: actionURL,
+            sourceUrl: sourceURL,
             sourceLabel: nil,
             notificationEligible: true,
             isPrimary: false,

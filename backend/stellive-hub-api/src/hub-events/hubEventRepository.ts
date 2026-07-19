@@ -10,6 +10,7 @@ import type {
 import type { AdminHubEvent, HubEventAdminAction, HubEventPublicationState } from "./hubEventAdminTypes.js";
 import type { HubEventFilters, HubEventListResult } from "./hubEventService.js";
 import { koreaDateKey, resolveEffectiveHubEventStatus, withEffectiveHubEventStatus } from "./hubEventStatus.js";
+import { deriveHubEventScheduleMode } from "./hubEventSchedulePolicy.js";
 
 interface HubEventRecord {
   id: string;
@@ -93,6 +94,7 @@ interface HubEventDelegate {
     create?(args: { data: Record<string, unknown> }): Promise<HubEventScheduleItemRecord>;
     update?(args: { where: { id: string }; data: Record<string, unknown> }): Promise<HubEventScheduleItemRecord>;
     updateMany?(args: { where: Record<string, unknown>; data: Record<string, unknown> }): Promise<{ count: number }>;
+    delete?(args: { where: { id: string } }): Promise<HubEventScheduleItemRecord>;
   };
   hubEventAuditLog?: {
     create?(args: { data: Record<string, unknown> }): Promise<unknown>;
@@ -132,6 +134,7 @@ export type AdminHubEventWriteInput = Omit<
   endsAt?: NullableDateInput;
   scheduleItems?: AdminHubEventScheduleItemWriteInput[];
   actorId?: string;
+  expectedRevision?: number;
 };
 
 export interface SetHubEventPublicationStateInput {
@@ -327,15 +330,14 @@ function toScheduleDate(
 
 function toWriteData(input: AdminHubEventWriteInput): Record<string, unknown> {
   const activeSchedules = input.scheduleItems?.filter((item) => !item.cancelledAt) ?? [];
-  const projectedSchedule = activeSchedules.find((item) => item.isPrimary) ??
-    (input.scheduleMode === "single_window" ? activeSchedules[0] : undefined);
+  const projectedSchedule = activeSchedules.find((item) => item.isPrimary);
   const hasScheduleWrite = input.scheduleItems !== undefined;
   const projectedTimezone = projectedSchedule?.timezone ?? "Asia/Seoul";
   return stripUndefined({
     category: input.category,
     participationMode: input.participationMode,
     status: input.status,
-    scheduleMode: input.scheduleMode,
+    scheduleMode: hasScheduleWrite ? deriveHubEventScheduleMode(input.scheduleItems ?? []) : input.scheduleMode,
     title: input.title,
     summary: input.summary,
     memberId: input.memberId,
@@ -430,6 +432,7 @@ export class HubEventRepository {
     const hubEventId = stringValue(event.rawPayload.hubEventId);
     const scheduleItemId = stringValue(event.rawPayload.scheduleItemId);
     const scheduledAt = stringValue(event.rawPayload.scheduledAt);
+    const revision = typeof event.rawPayload.revision === "number" ? event.rawPayload.revision : undefined;
     if (!hubEventId || !scheduleItemId || !scheduledAt) return true;
 
     const parent = await this.getAdminById(hubEventId);
@@ -438,7 +441,8 @@ export class HubEventRepository {
       parent.publicationState !== "published" ||
       parent.deletedAt ||
       parent.cancelledAt ||
-      !parent.notificationEligible
+      !parent.notificationEligible ||
+      (revision !== undefined && parent.revision !== revision)
     ) {
       return false;
     }
@@ -630,16 +634,24 @@ export class HubEventRepository {
 
   async update(id: string, input: AdminHubEventWriteInput): Promise<AdminHubEvent> {
     const run = async (client: HubEventDelegate): Promise<AdminHubEvent> => {
-      const update = requireMethod(client.hubEvent?.update?.bind(client.hubEvent), "hub_event_update");
-      const record = await update({
-        where: { id },
-        data: {
-          ...toWriteData(input),
-          updatedBy: input.actorId,
-          revision: { increment: 1 }
-        },
-        include: scheduleItemsInclude
-      });
+      const updateData = {
+        ...toWriteData(input),
+        updatedBy: input.actorId,
+        revision: { increment: 1 }
+      };
+      let record: HubEventRecord;
+      if (input.expectedRevision !== undefined) {
+        const updateMany = requireMethod(client.hubEvent?.updateMany?.bind(client.hubEvent), "hub_event_update_many");
+        const result = await updateMany({ where: { id, revision: input.expectedRevision }, data: updateData });
+        if (result.count !== 1) throw new Error("hub_event_revision_conflict");
+        const findFirst = requireMethod(client.hubEvent?.findFirst?.bind(client.hubEvent), "hub_event_find_first");
+        const found = await findFirst({ where: { id }, include: scheduleItemsInclude });
+        if (!found) throw new Error("hub_event_not_found");
+        record = found;
+      } else {
+        const update = requireMethod(client.hubEvent?.update?.bind(client.hubEvent), "hub_event_update");
+        record = await update({ where: { id }, data: updateData, include: scheduleItemsInclude });
+      }
 
       if (input.scheduleItems === undefined || !client.hubEventScheduleItem) {
         return toAdminHubEvent(record);
@@ -691,6 +703,39 @@ export class HubEventRepository {
       return toAdminHubEvent(refreshed ?? record);
     };
 
+    return this.prisma.$transaction ? this.prisma.$transaction(run) : run(this.prisma);
+  }
+
+  async hardDeleteScheduleItem(
+    id: string,
+    scheduleItemId: string,
+    input: AdminHubEventWriteInput
+  ): Promise<AdminHubEvent> {
+    const run = async (client: HubEventDelegate): Promise<AdminHubEvent> => {
+      const findSchedule = requireMethod(
+        client.hubEventScheduleItem?.findFirst?.bind(client.hubEventScheduleItem),
+        "hub_event_schedule_item_find_first"
+      );
+      const owned = await findSchedule({ where: { id: scheduleItemId, hubEventId: id } });
+      if (!owned) throw new Error("hub_event_schedule_item_not_found");
+
+      const updateMany = requireMethod(client.hubEvent?.updateMany?.bind(client.hubEvent), "hub_event_update_many");
+      const result = await updateMany({
+        where: { id, revision: input.expectedRevision },
+        data: { ...toWriteData(input), updatedBy: input.actorId, revision: { increment: 1 } }
+      });
+      if (result.count !== 1) throw new Error("hub_event_revision_conflict");
+
+      const deleteSchedule = requireMethod(
+        client.hubEventScheduleItem?.delete?.bind(client.hubEventScheduleItem),
+        "hub_event_schedule_item_delete"
+      );
+      await deleteSchedule({ where: { id: scheduleItemId } });
+      const findFirst = requireMethod(client.hubEvent?.findFirst?.bind(client.hubEvent), "hub_event_find_first");
+      const refreshed = await findFirst({ where: { id }, include: scheduleItemsInclude });
+      if (!refreshed) throw new Error("hub_event_not_found");
+      return toAdminHubEvent(refreshed);
+    };
     return this.prisma.$transaction ? this.prisma.$transaction(run) : run(this.prisma);
   }
 

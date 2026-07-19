@@ -2,7 +2,19 @@ import type { HubEvent } from "../types.js";
 
 export type HubEventPublicationState = "draft" | "published" | "inactive" | "deleted";
 
-export type HubEventAdminAction = "create" | "update" | "publish" | "cancel" | "deactivate" | "delete";
+export type HubEventAdminAction =
+  | "create"
+  | "update"
+  | "publish"
+  | "cancel"
+  | "deactivate"
+  | "delete"
+  | "schedule_create"
+  | "schedule_update"
+  | "schedule_cancel"
+  | "schedule_restore"
+  | "schedule_delete"
+  | "schedule_reorder";
 
 export interface AdminHubEvent extends HubEvent {
   publicationState: HubEventPublicationState;

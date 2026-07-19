@@ -1826,24 +1826,12 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
             ).let { if (fullScreen) it.withDetailHorizontalMargins() else it }
         )
         val timeline = HubEventDetailFormatting.timeline(event)
-        if (timeline.isNotEmpty()) {
+        if (HubEventDetailFormatting.hasTimelineSchedule(event) && timeline.isNotEmpty()) {
             container.addView(sectionLabel("세부 일정").let { if (fullScreen) it.withDetailHorizontalMargins() else it })
             timeline.forEach { item ->
                 val highlighted = item.schedule.id == selectedHubEventScheduleItemId
-                val card = compactEventCard(
-                    title = item.schedule.label,
-                    body = listOfNotNull(item.schedule.description, item.timingText).joinToString(" · "),
-                    pills = buildList {
-                        add(item.stateText)
-                        if (highlighted) add("선택한 일정")
-                    },
-                ).let { if (fullScreen) it.withDetailHorizontalMargins() else it }
-                val actionUrl = item.schedule.actionUrl ?: item.schedule.sourceUrl
-                if (!actionUrl.isNullOrBlank()) {
-                    card.isClickable = true
-                    card.isFocusable = true
-                    card.setOnClickListener { openExternalUrl(actionUrl) }
-                }
+                val card = hubEventScheduleCard(item, highlighted)
+                    .let { if (fullScreen) it.withDetailHorizontalMargins() else it }
                 container.addView(card)
             }
         }
@@ -1856,6 +1844,61 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
             ).let { if (fullScreen) it.withDetailHorizontalMargins() else it }
         )
         container.addView(noticeCard(HubEventDetailFormatting.NoticeText).let { if (fullScreen) it.withDetailHorizontalMargins() else it })
+    }
+
+    private fun hubEventScheduleCard(
+        item: dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventScheduleTimelineItem,
+        highlighted: Boolean,
+    ): MaterialCardView = baseCard(HubCardStyle.COMPACT).apply {
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(10)
+        }
+        if (highlighted) {
+            strokeWidth = dp(2)
+            strokeColor = color(R.color.hub_primary)
+            setCardBackgroundColor(color(R.color.hub_accent_soft))
+        }
+        alpha = if (item.schedule.cancelledAt != null) 0.58f else 1f
+        val content = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(13), dp(14), dp(13))
+            addView(pillRow(buildList {
+                add(item.stateText)
+                add(HubEventDetailFormatting.scheduleKindLabel(item.schedule.kind))
+                if (item.schedule.isPrimary) add("대표 일정")
+                if (highlighted) add("선택한 일정")
+            }))
+            addView(TextView(context).apply {
+                text = item.schedule.label
+                setTextColor(color(R.color.hub_text))
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(0, dp(8), 0, 0)
+            })
+            addView(TextView(context).apply {
+                text = listOfNotNull(item.timingText, item.schedule.description).joinToString("\n")
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 12f
+                setPadding(0, dp(5), 0, 0)
+            })
+            item.schedule.sourceLabel?.takeIf { it.isNotBlank() }?.let { source ->
+                addView(TextView(context).apply {
+                    text = "출처 · $source"
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 11f
+                    setPadding(0, dp(5), 0, 0)
+                })
+            }
+            HubEventDetailFormatting.scheduleActionUrl(item.schedule)?.let { url ->
+                val label = HubEventDetailFormatting.scheduleActionLabel(item.schedule.kind)
+                addView(detailActionButton(label, primary = false) { openExternalUrl(url) }.apply {
+                    contentDescription = "$label, 외부 링크 열기"
+                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44)).apply {
+                    topMargin = dp(10)
+                })
+            }
+        }
+        addView(content)
     }
 
     private fun renderLive() {

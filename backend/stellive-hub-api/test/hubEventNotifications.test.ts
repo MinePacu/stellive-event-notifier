@@ -135,7 +135,7 @@ describe("hub event notification candidates", () => {
     });
     expect(publishCandidates[1]).toMatchObject({
       type: "event_sales_open",
-      dedupeKey: "hub_event:event-1:schedule:schedule-sales-open:event_sales_open:2026-06-13T00:00:00.000Z",
+      dedupeKey: "hub_event:event-1:schedule:schedule-sales-open:event_sales_open:2026-06-13T00:00:00.000Z:r2",
       appDeepLink: "stellivehub://hub-events/event-1?scheduleItemId=schedule-sales-open"
     });
 

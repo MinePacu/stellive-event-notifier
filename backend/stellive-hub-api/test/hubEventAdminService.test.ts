@@ -63,8 +63,18 @@ function createFakeRepository(seed: AdminHubEvent = adminEvent()) {
       },
     async update(id: string, input: AdminHubEventWriteInput) {
       calls.push(`update:${id}`);
+      const projected = input.scheduleItems?.find((item) => item.isPrimary && !item.cancelledAt);
       current = normalizeAdminEvent(
-        adminEvent({ ...current, ...input, revision: current.revision + 1, updatedBy: input.actorId })
+        adminEvent({
+          ...current,
+          ...input,
+          ...(input.scheduleItems !== undefined ? {
+            startsAt: projected?.startsAt ?? null,
+            endsAt: projected?.endsAt ?? null
+          } : {}),
+          revision: current.revision + 1,
+          updatedBy: input.actorId
+        })
       );
       return current;
     },
@@ -97,6 +107,17 @@ function createFakeRepository(seed: AdminHubEvent = adminEvent()) {
           revision: current.revision + 1,
           updatedBy: input.actorId
         });
+        return current;
+      },
+      async hardDeleteScheduleItem(_id: string, scheduleItemId: string, input: AdminHubEventWriteInput) {
+        calls.push(`hardDeleteScheduleItem:${scheduleItemId}`);
+        current = normalizeAdminEvent(adminEvent({
+          ...current,
+          ...input,
+          scheduleItems: input.scheduleItems,
+          revision: current.revision + 1,
+          updatedBy: input.actorId
+        }));
         return current;
       },
       async getAdminById() {
@@ -345,5 +366,133 @@ describe("HubEventAdminService", () => {
 
     expect(exception.message).toBe("hub_event_validation_failed");
     expect(exception.statusCode).toBe(400);
+  });
+
+  it("creates a first schedule item as primary and derives single-window mode", async () => {
+    const fake = createFakeRepository(adminEvent({ scheduleItems: [], scheduleMode: "timeline" }));
+    const service = createService(fake.repository);
+
+    const updated = await service.createScheduleItem("event-1", {
+      expectedRevision: 1,
+      kind: "main_window",
+      label: "판매 기간",
+      startsAt: "2026-07-20T01:00:00.000Z",
+      timePrecision: "datetime",
+      timezone: "Asia/Seoul"
+    }, { actorId: "admin" });
+
+    expect(updated.scheduleMode).toBe("single_window");
+    expect(updated.scheduleItems?.[0]).toMatchObject({ isPrimary: true, kind: "main_window" });
+    expect(fake.audits.at(-1)?.action).toBe("schedule_create");
+  });
+
+  it("rejects stale schedule revisions before writing", async () => {
+    const fake = createFakeRepository(adminEvent({ revision: 3 }));
+    const service = createService(fake.repository);
+
+    await expect(service.createScheduleItem("event-1", {
+      expectedRevision: 2,
+      kind: "custom",
+      label: "추가 일정",
+      startsAt: "2026-07-20T01:00:00.000Z",
+      timePrecision: "datetime",
+      timezone: "Asia/Seoul"
+    })).rejects.toMatchObject({
+      message: "hub_event_revision_conflict",
+      expectedRevision: 2,
+      currentRevision: 3
+    });
+    expect(fake.calls).toEqual([]);
+  });
+
+  it("hard deletes a safe draft schedule item and distinguishes the result", async () => {
+    const scheduleItems: NonNullable<AdminHubEventWriteInput["scheduleItems"]> = [{
+      id: "draft-item",
+      kind: "main_window",
+      label: "초안 일정",
+      startsAt: "2026-07-20T01:00:00.000Z",
+      timePrecision: "datetime",
+      timezone: "Asia/Seoul",
+      isPrimary: true,
+      sortOrder: 0
+    }];
+    const fake = createFakeRepository(adminEvent({ scheduleMode: "single_window", scheduleItems }));
+    const service = createService(fake.repository);
+
+    const result = await service.deleteScheduleItem("event-1", "draft-item", 1, { actorId: "admin" });
+
+    expect(result.deletion).toBe("hard_deleted");
+    expect(result.event.scheduleItems).toEqual([]);
+    expect(fake.audits.at(-1)?.action).toBe("schedule_delete");
+  });
+
+  it("promotes a replacement primary in the same schedule update", async () => {
+    const scheduleItems: NonNullable<AdminHubEventWriteInput["scheduleItems"]> = [
+      {
+        id: "primary",
+        kind: "main_window",
+        label: "행사 기간",
+        startsAt: "2026-07-20T01:00:00.000Z",
+        timePrecision: "datetime",
+        timezone: "Asia/Seoul",
+        isPrimary: true,
+        sortOrder: 0
+      },
+      {
+        id: "replacement",
+        kind: "sales_open",
+        label: "판매 시작",
+        startsAt: "2026-07-21T01:00:00.000Z",
+        timePrecision: "datetime",
+        timezone: "Asia/Seoul",
+        isPrimary: false,
+        sortOrder: 1
+      }
+    ];
+    const fake = createFakeRepository(adminEvent({ scheduleMode: "timeline", scheduleItems }));
+    const service = createService(fake.repository);
+
+    const updated = await service.updateScheduleItem("event-1", "replacement", {
+      expectedRevision: 1,
+      isPrimary: true
+    });
+
+    expect(updated.scheduleItems?.find((item) => item.id === "primary")?.isPrimary).toBe(false);
+    expect(updated.scheduleItems?.find((item) => item.id === "replacement")?.isPrimary).toBe(true);
+  });
+
+  it("keeps timeline parent dates projected from the primary schedule", async () => {
+    const scheduleItems: NonNullable<AdminHubEventWriteInput["scheduleItems"]> = [
+      {
+        id: "primary",
+        kind: "main_window",
+        label: "대표 일정",
+        startsAt: "2026-07-20T01:00:00.000Z",
+        endsAt: "2026-07-21T01:00:00.000Z",
+        timePrecision: "datetime",
+        timezone: "Asia/Seoul",
+        isPrimary: true,
+        sortOrder: 0
+      },
+      {
+        id: "later",
+        kind: "deadline",
+        label: "마감",
+        startsAt: "2026-08-01T01:00:00.000Z",
+        timePrecision: "datetime",
+        timezone: "Asia/Seoul",
+        sortOrder: 1
+      }
+    ];
+    const fake = createFakeRepository(adminEvent({ scheduleMode: "timeline", scheduleItems }));
+    const service = createService(fake.repository);
+
+    const updated = await service.update("event-1", {
+      startsAt: "2026-09-01T01:00:00.000Z",
+      endsAt: "2026-09-02T01:00:00.000Z"
+    });
+
+    expect(updated.startsAt).toBe("2026-07-20T01:00:00.000Z");
+    expect(updated.endsAt).toBe("2026-07-21T01:00:00.000Z");
   });
 });

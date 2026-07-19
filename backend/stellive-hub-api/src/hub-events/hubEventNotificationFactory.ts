@@ -94,7 +94,7 @@ function scheduleCandidates(
     return [candidate(
       event,
       type,
-      `hub_event:${event.id}:schedule:${scheduleItem.id}:${type}:${timestamp}`,
+      `hub_event:${event.id}:schedule:${scheduleItem.id}:${type}:${timestamp}:r${event.revision}`,
       action,
       now,
       scheduleItem
@@ -105,6 +105,7 @@ function scheduleCandidates(
 export function buildHubEventNotificationCandidates(input: HubEventNotificationCandidateInput): PlatformEvent[] {
   const { after, action, now } = input;
   if (!after.notificationEligible) return [];
+  if (action !== "publish" && action !== "cancel" && after.publicationState !== "published") return [];
 
   if (action === "publish") {
     const candidates = [
@@ -130,6 +131,10 @@ export function buildHubEventNotificationCandidates(input: HubEventNotificationC
       candidate(after, "event_updated", `hub_event:${after.id}:event_updated:${after.revision}`, action, now),
       ...scheduleCandidates(after, action, now)
     ];
+  }
+
+  if (action.startsWith("schedule_") && input.before) {
+    return scheduleCandidates(after, action, now);
   }
 
   return [];

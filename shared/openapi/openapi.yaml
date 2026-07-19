@@ -695,6 +695,112 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminHubEventResponse"
+  /v1/admin/hub-events/{id}/schedule-items:
+    post:
+      summary: Add a schedule item to an admin hub event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventScheduleItemCreateRequest"
+      responses:
+        "201":
+          description: Schedule item created and parent revision incremented.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "409":
+          description: Parent revision conflict.
+  /v1/admin/hub-events/{id}/schedule-items/{scheduleItemId}:
+    patch:
+      summary: Update a schedule item
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+        - $ref: "#/components/parameters/HubEventScheduleItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventScheduleItemMutationRequest"
+      responses:
+        "200":
+          description: Schedule item updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "409":
+          description: Parent revision conflict.
+    delete:
+      summary: Delete a safe draft schedule item or cancel a reference-prone item
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+        - $ref: "#/components/parameters/HubEventScheduleItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventRevisionRequest"
+      responses:
+        "200":
+          description: Schedule item deleted or cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventScheduleDeleteResponse"
+        "409":
+          description: Parent revision conflict.
+  /v1/admin/hub-events/{id}/schedule-items/{scheduleItemId}/restore:
+    post:
+      summary: Restore a cancelled schedule item
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+        - $ref: "#/components/parameters/HubEventScheduleItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventRevisionRequest"
+      responses:
+        "200":
+          description: Schedule item restored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "409":
+          description: Parent revision conflict.
+  /v1/admin/hub-events/{id}/schedule-items/order:
+    put:
+      summary: Reorder all schedule items
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventScheduleOrderRequest"
+      responses:
+        "200":
+          description: Schedule items reordered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "409":
+          description: Parent revision conflict.
   /v1/admin/hub-events/{id}/cancel:
     post:
       summary: Cancel a published hub event
@@ -949,6 +1055,18 @@ components:
       bearerFormat: opaque
       description: Bearer token protection for `/v1/internal/*` operational routes.
   parameters:
+    HubEventId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    HubEventScheduleItemId:
+      name: scheduleItemId
+      in: path
+      required: true
+      schema:
+        type: string
     InternalLimit25:
       name: limit
       in: query
@@ -2381,6 +2499,85 @@ components:
     AdminHubEventUpdateRequest:
       allOf:
         - $ref: "#/components/schemas/AdminHubEventCreateRequest"
+    AdminHubEventRevisionRequest:
+      type: object
+      required:
+        - expectedRevision
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 1
+        changeReason:
+          type: string
+    AdminHubEventScheduleItemMutationRequest:
+      allOf:
+        - type: object
+          properties:
+            kind:
+              $ref: "#/components/schemas/HubEventScheduleKind"
+            label:
+              type: string
+            description:
+              type: string
+            startsAt:
+              type: string
+            endsAt:
+              type: string
+            timePrecision:
+              $ref: "#/components/schemas/HubEventTimePrecision"
+            timezone:
+              type: string
+              default: Asia/Seoul
+            actionUrl:
+              type: string
+              format: uri
+            sourceUrl:
+              type: string
+              format: uri
+            sourceLabel:
+              type: string
+            notificationEligible:
+              type: boolean
+            isPrimary:
+              type: boolean
+            sortOrder:
+              type: integer
+        - $ref: "#/components/schemas/AdminHubEventRevisionRequest"
+    AdminHubEventScheduleItemCreateRequest:
+      allOf:
+        - $ref: "#/components/schemas/AdminHubEventScheduleItemMutationRequest"
+        - type: object
+          required:
+            - kind
+            - label
+            - startsAt
+            - timePrecision
+            - timezone
+    AdminHubEventScheduleOrderRequest:
+      allOf:
+        - $ref: "#/components/schemas/AdminHubEventRevisionRequest"
+        - type: object
+          required:
+            - scheduleItemIds
+          properties:
+            scheduleItemIds:
+              type: array
+              items:
+                type: string
+    AdminHubEventScheduleDeleteResponse:
+      type: object
+      required:
+        - event
+        - scheduleItemId
+        - deletion
+      properties:
+        event:
+          $ref: "#/components/schemas/AdminHubEventResponse"
+        scheduleItemId:
+          type: string
+        deletion:
+          type: string
+          enum: [cancelled, hard_deleted]
     AdminHubEventResponse:
       allOf:
         - $ref: "#/components/schemas/HubEvent"
