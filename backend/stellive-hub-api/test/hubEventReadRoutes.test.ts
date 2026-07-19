@@ -278,8 +278,8 @@ describe("HubEvent read routes", () => {
 
   it("returns widget snapshot entries with freshness metadata", async () => {
     const app = await buildRouteApp([
-      hubEvent({ id: "widget-1" }),
-      hubEvent({ id: "widget-2", startsAt: "2026-06-13T00:00:00.000Z" }),
+      hubEvent({ id: "widget-1", startsAt: "2099-06-12T00:00:00.000Z", endsAt: "2099-06-19T14:59:59.000Z" }),
+      hubEvent({ id: "widget-2", startsAt: "2099-06-13T00:00:00.000Z", endsAt: "2099-06-20T14:59:59.000Z" }),
     ]);
     const response = await app.inject({ method: "GET", url: "/v1/hub-events/widget-snapshot?timezone=Asia/Seoul&limit=1" });
     await app.close();
@@ -327,8 +327,8 @@ describe("HubEvent read routes", () => {
       [
         hubEvent({
           id: "widget-event",
-          startsAt: "2026-07-11T09:00:00.000Z",
-          endsAt: "2026-07-11T12:00:00.000Z"
+          startsAt: "2099-07-11T09:00:00.000Z",
+          endsAt: "2099-07-11T12:00:00.000Z"
         })
       ],
       [],
@@ -400,11 +400,18 @@ describe("HubEvent read routes", () => {
       sourceLabel: "공식 공지",
       sourceUrl: "https://example.com/notice"
     };
-    const app = await buildRouteApp([hubEvent({ id: "compact-image-event", image })]);
+    const app = await buildRouteApp([
+      hubEvent({
+        id: "compact-image-event",
+        image,
+        startsAt: "2099-06-12T00:00:00.000Z",
+        endsAt: "2099-06-19T14:59:59.000Z"
+      })
+    ]);
 
     const calendarResponse = await app.inject({
       method: "GET",
-      url: "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul"
+      url: "/v1/hub-events/calendar?from=2099-06-01T00:00:00.000Z&to=2099-06-30T23:59:59.999Z&timezone=Asia/Seoul"
     });
     const widgetResponse = await app.inject({ method: "GET", url: "/v1/hub-events/widget-snapshot?timezone=Asia/Seoul&limit=1" });
 

@@ -186,7 +186,7 @@ object CalendarUiPolicy {
                 date != null && date in visibleStart..visibleEnd
             }
             .flatMap { it.entries.asSequence() }
-            .distinctBy { it.eventId }
+            .distinctBy(::calendarProjectionKey)
             .mapNotNull { entry ->
                 val startsAt = entry.startsAt ?: return@mapNotNull null
                 val endsAt = entry.endsAt ?: return@mapNotNull null
@@ -417,15 +417,19 @@ object CalendarUiPolicy {
                     { it.entry.eventId },
                 )
             )
-            .filter { row -> seen.add(row.entry.eventId) }
+            .filter { row -> seen.add(calendarProjectionKey(row.entry)) }
             .toList()
     }
 
     private fun feedPrimaryDate(row: CalendarFeedEntry): LocalDate =
-        (row.entry.startsAt ?: row.entry.endsAt)
-            ?.atZone(feedSortZoneId)
-            ?.toLocalDate()
-            ?: LocalDate.parse(row.day.date)
+        if (row.entry.entryKind != HubCalendarEntryKind.HUB_EVENT) {
+            LocalDate.MIN
+        } else {
+            (row.entry.startsAt ?: row.entry.endsAt)
+                ?.atZone(feedSortZoneId)
+                ?.toLocalDate()
+                ?: LocalDate.parse(row.day.date)
+        }
 
     private fun feedEndDate(row: CalendarFeedEntry): LocalDate =
         row.entry.endsAt
@@ -458,8 +462,11 @@ object CalendarUiPolicy {
 
     private fun List<HubCalendarEntry>.distinctByEventIdInDisplayOrder(): List<HubCalendarEntry> {
         val seen = linkedSetOf<String>()
-        return filter { entry -> seen.add(entry.eventId) }
+        return filter { entry -> seen.add(calendarProjectionKey(entry)) }
     }
+
+    private fun calendarProjectionKey(entry: HubCalendarEntry): String =
+        entry.scheduleItemId?.let { entry.eventId + ":" + it } ?: entry.eventId
 
     fun markerForDate(
         date: LocalDate,

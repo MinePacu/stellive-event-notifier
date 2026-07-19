@@ -955,6 +955,7 @@ object MainUiPolicy {
         NotificationEventType.EVENT_ANNOUNCED -> "공식 채널, 멤버 또는 공식 협업처에서 안내한 기간 한정 정보만 포함합니다."
         NotificationEventType.EVENT_SALES_OPEN -> "굿즈, 티켓, 오프라인 행사의 예약이나 판매가 시작될 때 알려드립니다."
         NotificationEventType.EVENT_DEADLINE_SOON -> "예약/판매 종료가 가까운 항목을 홈과 알림에 우선 표시합니다."
+        NotificationEventType.EVENT_MILESTONE_DUE -> "트랙 리스트, 콘텐츠 공개와 발매 같은 개별 일정을 알려드립니다."
         NotificationEventType.EVENT_UPDATED -> "굿즈나 행사 정보가 바뀌었을 때 알려드리며, 기본적으로 꺼져 있습니다."
         NotificationEventType.EVENT_CANCELLED -> "공식 채널에서 취소를 안내한 경우에만 알려드립니다."
         else -> null

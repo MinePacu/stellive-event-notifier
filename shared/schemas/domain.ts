@@ -21,6 +21,7 @@ export type PlatformEventType =
   | "event_announced"
   | "event_sales_open"
   | "event_deadline_soon"
+  | "event_milestone_due"
   | "event_updated"
   | "event_cancelled";
 
@@ -299,6 +300,62 @@ export type HubEventStatus = "announced" | "upcoming" | "open" | "closing_soon" 
 
 export type HubEventSourceType = "official" | "member" | "official_collab";
 
+export type HubEventScheduleMode = "single_window" | "timeline";
+
+export type HubEventScheduleKind =
+  | "main_window"
+  | "announcement"
+  | "sales_open"
+  | "ticket_open"
+  | "content_reveal"
+  | "release"
+  | "deadline"
+  | "custom";
+
+export type HubEventTimePrecision = "date" | "datetime";
+
+export type HubEventLinkKind =
+  | "source"
+  | "purchase"
+  | "ticket"
+  | "reservation"
+  | "content"
+  | "video"
+  | "map"
+  | "custom";
+
+export interface HubEventLink {
+  id?: string;
+  kind: HubEventLinkKind;
+  label?: string;
+  url: string;
+  sortOrder: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HubEventScheduleItem {
+  id: string;
+  kind: HubEventScheduleKind;
+  title?: string;
+  label: string;
+  description?: string;
+  startsAt: string;
+  endsAt?: string;
+  timePrecision: HubEventTimePrecision;
+  timezone: string;
+  actionUrl?: string;
+  sourceUrl?: string;
+  sourceLabel?: string;
+  links?: HubEventLink[];
+  notificationEligible: boolean;
+  isPrimary: boolean;
+  sortOrder: number;
+  cancelledAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type HubCalendarEntryKind = "hub_event" | "member_birthday" | "generation_anniversary";
 
 export type HubCalendarSpecialDayKind = "member_birthday" | "generation_anniversary";
@@ -347,6 +404,9 @@ export interface HubEvent {
   sourceUrl: string;
   sourceLabel: string;
   sourceType: HubEventSourceType;
+  scheduleMode?: HubEventScheduleMode;
+  scheduleItems?: HubEventScheduleItem[];
+  links?: HubEventLink[];
   announcedAt?: string;
   startsAt?: string;
   endsAt?: string;
@@ -422,6 +482,9 @@ export interface HubCalendarEntry {
   entryKind: HubCalendarEntryKind;
   specialDayKind?: HubCalendarSpecialDayKind;
   specialDayLabel?: string;
+  scheduleItemId?: string;
+  scheduleKind?: HubEventScheduleKind;
+  scheduleLabel?: string;
   title: string;
   category: HubEventCategory;
   status: HubEventStatus;

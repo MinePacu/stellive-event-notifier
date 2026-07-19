@@ -59,6 +59,7 @@ enum NotificationEventType: String, Codable, CaseIterable, Hashable, Identifiabl
     case eventAnnounced = "event_announced"
     case eventSalesOpen = "event_sales_open"
     case eventDeadlineSoon = "event_deadline_soon"
+    case eventMilestoneDue = "event_milestone_due"
     case eventUpdated = "event_updated"
     case eventCancelled = "event_cancelled"
 
@@ -92,6 +93,8 @@ enum NotificationEventType: String, Codable, CaseIterable, Hashable, Identifiabl
             return "예약/판매 시작"
         case .eventDeadlineSoon:
             return "마감 임박"
+        case .eventMilestoneDue:
+            return "굿즈/행사 마일스톤"
         case .eventUpdated:
             return "굿즈/행사 변경"
         case .eventCancelled:
@@ -246,6 +249,69 @@ enum HubEventSourceType: String, Codable, Hashable {
     case officialCollab = "official_collab"
 }
 
+enum HubEventScheduleMode: String, Codable, Hashable {
+    case singleWindow = "single_window"
+    case timeline
+}
+
+enum HubEventScheduleKind: String, Codable, Hashable {
+    case mainWindow = "main_window"
+    case announcement
+    case salesOpen = "sales_open"
+    case ticketOpen = "ticket_open"
+    case contentReveal = "content_reveal"
+    case release
+    case deadline
+    case custom
+}
+
+enum HubEventTimePrecision: String, Codable, Hashable {
+    case date
+    case datetime
+}
+
+enum HubEventLinkKind: String, Codable, Hashable {
+    case source
+    case purchase
+    case ticket
+    case reservation
+    case content
+    case video
+    case map
+    case custom
+}
+
+struct HubEventLink: Identifiable, Hashable {
+    let id: String
+    let kind: HubEventLinkKind
+    let label: String?
+    let url: String
+    let sortOrder: Int
+    var createdAt: Date? = nil
+    var updatedAt: Date? = nil
+}
+
+struct HubEventScheduleItem: Identifiable, Hashable {
+    let id: String
+    let kind: HubEventScheduleKind
+    let title: String?
+    let label: String
+    let description: String?
+    let startsAt: Date
+    let endsAt: Date?
+    let timePrecision: HubEventTimePrecision
+    let timezone: String
+    let actionUrl: String?
+    let sourceUrl: String?
+    let sourceLabel: String?
+    var links: [HubEventLink] = []
+    let notificationEligible: Bool
+    let isPrimary: Bool
+    let sortOrder: Int
+    let cancelledAt: Date?
+    var createdAt: Date? = nil
+}
+
 enum HubEventImagePolicyState: String, Codable, Hashable {
     case none
     case officialRuntimeUrl = "official_runtime_url"
@@ -290,6 +356,9 @@ struct HubEvent: Identifiable, Hashable {
     let sourceUrl: String
     let sourceLabel: String
     let sourceType: HubEventSourceType
+    var scheduleMode: HubEventScheduleMode = .singleWindow
+    var scheduleItems: [HubEventScheduleItem] = []
+    var links: [HubEventLink] = []
     let announcedAt: Date?
     let startsAt: Date?
     let endsAt: Date?
@@ -300,6 +369,109 @@ struct HubEvent: Identifiable, Hashable {
     var image: HubEventImage? = nil
     let notificationEligible: Bool
     let updatedAt: Date
+}
+
+enum HubEventLinkCTAMode: Equatable {
+    case none
+    case direct
+    case sheet
+}
+
+enum HubEventLinkPolicy {
+    static func resolvedEventLinks(_ event: HubEvent) -> [HubEventLink] {
+        let explicit = resolved(event.links)
+        guard explicit.isEmpty else { return explicit }
+        return resolved([
+            legacy(id: "legacy:\(event.id):purchase", kind: .purchase, label: nil, url: event.purchaseUrl, sortOrder: 0),
+            legacy(id: "legacy:\(event.id):ticket", kind: .ticket, label: nil, url: event.ticketUrl, sortOrder: 1),
+            legacy(id: "legacy:\(event.id):source", kind: .source, label: event.sourceLabel, url: event.sourceUrl, sortOrder: 2),
+        ].compactMap { $0 })
+    }
+
+    static func resolvedScheduleLinks(_ item: HubEventScheduleItem) -> [HubEventLink] {
+        let explicit = resolved(item.links)
+        guard explicit.isEmpty else { return explicit }
+        let actionKind: HubEventLinkKind = switch item.kind {
+        case .salesOpen: .purchase
+        case .ticketOpen: .ticket
+        case .deadline, .mainWindow: .reservation
+        case .announcement: .source
+        case .contentReveal, .release, .custom: .content
+        }
+        return resolved([
+            legacy(id: "legacy:\(item.id):action", kind: actionKind, label: nil, url: item.actionUrl, sortOrder: 0),
+            legacy(id: "legacy:\(item.id):source", kind: .source, label: item.sourceLabel, url: item.sourceUrl, sortOrder: 1),
+        ].compactMap { $0 })
+    }
+
+    static func displayLabel(_ link: HubEventLink) -> String {
+        if let label = link.label?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
+            return label
+        }
+        return switch link.kind {
+        case .source: "출처"
+        case .purchase: "구매"
+        case .ticket: "티켓"
+        case .reservation: "예약"
+        case .content: "콘텐츠"
+        case .video: "영상"
+        case .map: "지도"
+        case .custom: "관련 링크"
+        }
+    }
+
+    static func eventCTAMode(_ event: HubEvent) -> HubEventLinkCTAMode {
+        switch resolvedEventLinks(event).count {
+        case 0: .none
+        case 1: .direct
+        default: .sheet
+        }
+    }
+
+    static func effectivePrimaryScheduleItemID(_ event: HubEvent) -> String? {
+        event.scheduleItems
+            .filter { $0.cancelledAt == nil && $0.isPrimary }
+            .sorted { left, right in
+                if left.sortOrder != right.sortOrder { return left.sortOrder < right.sortOrder }
+                if left.startsAt != right.startsAt { return left.startsAt < right.startsAt }
+                let leftCreatedAt = left.createdAt ?? .distantPast
+                let rightCreatedAt = right.createdAt ?? .distantPast
+                if leftCreatedAt != rightCreatedAt { return leftCreatedAt < rightCreatedAt }
+                return left.id < right.id
+            }
+            .first?.id
+    }
+
+    private static func resolved(_ links: [HubEventLink]) -> [HubEventLink] {
+        var seen = Set<String>()
+        return links
+            .compactMap { link -> HubEventLink? in
+                let value = link.url.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard isHTTPS(value) else { return nil }
+                let label = link.label?.trimmingCharacters(in: .whitespacesAndNewlines)
+                return HubEventLink(
+                    id: link.id,
+                    kind: link.kind,
+                    label: label?.isEmpty == false ? label : nil,
+                    url: value,
+                    sortOrder: link.sortOrder
+                )
+            }
+            .sorted { left, right in
+                left.sortOrder == right.sortOrder ? left.id < right.id : left.sortOrder < right.sortOrder
+            }
+            .filter { seen.insert($0.url).inserted }
+    }
+
+    private static func legacy(id: String, kind: HubEventLinkKind, label: String?, url: String?, sortOrder: Int) -> HubEventLink? {
+        guard let url else { return nil }
+        return HubEventLink(id: id, kind: kind, label: label, url: url, sortOrder: sortOrder)
+    }
+
+    private static func isHTTPS(_ value: String) -> Bool {
+        guard let components = URLComponents(string: value) else { return false }
+        return components.scheme?.lowercased() == "https" && components.host?.isEmpty == false
+    }
 }
 
 struct HubEventsSummary: Equatable {
@@ -315,6 +487,9 @@ struct HubCalendarEntry: Identifiable, Codable, Equatable {
     let entryKind: HubCalendarEntryKind
     let specialDayKind: HubCalendarSpecialDayKind?
     let specialDayLabel: String?
+    var scheduleItemId: String? = nil
+    var scheduleKind: HubEventScheduleKind? = nil
+    var scheduleLabel: String? = nil
     let title: String
     let category: HubEventCategory
     let status: HubEventStatus
@@ -357,6 +532,15 @@ enum HubCalendarDeepLinkPolicy {
         let eventId = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !eventId.isEmpty, !eventId.contains("/") else { return nil }
         return eventId
+    }
+
+    static func scheduleItemId(from url: URL?) -> String? {
+        guard let url, url.scheme == scheme, url.host == hubEventsHost else { return nil }
+        let value = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == "scheduleItemId" })?
+            .value
+        return value?.isEmpty == false ? value : nil
     }
 
     static func canNavigateToDetail(_ entry: HubCalendarEntry) -> Bool {
@@ -1614,6 +1798,7 @@ struct NotificationSettingsState: Equatable {
         .eventAnnounced: true,
         .eventSalesOpen: true,
         .eventDeadlineSoon: true,
+        .eventMilestoneDue: true,
         .eventUpdated: false,
         .eventCancelled: true
     ]

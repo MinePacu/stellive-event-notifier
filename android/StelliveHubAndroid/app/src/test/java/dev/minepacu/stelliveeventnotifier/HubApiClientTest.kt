@@ -183,6 +183,18 @@ class HubApiClientTest {
                   "sourceUrl": "https://example.com/event",
                   "sourceLabel": "공식 공지",
                   "sourceType": "official",
+                  "scheduleMode": "timeline",
+                  "scheduleItems": [{
+                    "id": "legacy-item",
+                    "kind": "custom",
+                    "label": "레거시 라벨",
+                    "startsAt": "2026-06-20T01:00:00.000Z",
+                    "timePrecision": "datetime",
+                    "timezone": "Asia/Seoul",
+                    "notificationEligible": true,
+                    "isPrimary": true,
+                    "sortOrder": 0
+                  }],
                   "image": {"policyState": "official_runtime_url", "url": "https://example.com/event.jpg"},
                   "notificationEligible": true,
                   "updatedAt": "2026-06-18T00:00:00.000Z"
@@ -195,6 +207,8 @@ class HubApiClientTest {
 
         assertEquals("server-event", decoded?.items?.single()?.id)
         assertEquals("official_runtime_url", decoded?.items?.single()?.image?.policyState)
+        assertEquals(null, decoded?.items?.single()?.scheduleItems?.single()?.title)
+        assertEquals("레거시 라벨", decoded?.items?.single()?.scheduleItems?.single()?.label)
     }
 
     @Test

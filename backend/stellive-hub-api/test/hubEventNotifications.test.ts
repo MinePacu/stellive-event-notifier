@@ -10,10 +10,11 @@ import { buildHubEventNotificationCandidates } from "../src/hub-events/hubEventN
 import type { AdminHubEventWriteInput, HubEventAuditLogInput } from "../src/hub-events/hubEventRepository.js";
 import type { PlatformEvent } from "../src/types.js";
 
-type AdminHubEventOverrides = Partial<Omit<AdminHubEvent, "announcedAt" | "startsAt" | "endsAt">> & {
+type AdminHubEventOverrides = Partial<Omit<AdminHubEvent, "announcedAt" | "startsAt" | "endsAt" | "scheduleItems">> & {
   announcedAt?: string | Date | null;
   startsAt?: string | Date | null;
   endsAt?: string | Date | null;
+  scheduleItems?: AdminHubEventWriteInput["scheduleItems"];
 };
 
 function adminEvent(overrides: AdminHubEventOverrides = {}): AdminHubEvent {
@@ -28,6 +29,18 @@ function adminEvent(overrides: AdminHubEventOverrides = {}): AdminHubEvent {
     sourceLabel: "Stellive Official",
     sourceType: "official",
     startsAt: "2026-06-12T00:00:00.000Z",
+    scheduleMode: "timeline",
+    scheduleItems: [{
+      id: "schedule-sales-open",
+      kind: "sales_open",
+      label: "예약 판매 시작",
+      startsAt: "2026-06-13T00:00:00.000Z",
+      timePrecision: "datetime",
+      timezone: "Asia/Seoul",
+      notificationEligible: true,
+      isPrimary: true,
+      sortOrder: 0
+    }],
     notificationEligible: true,
     publicationState: "draft",
     revision: 1,
@@ -120,6 +133,11 @@ describe("hub event notification candidates", () => {
       realtimeEligible: false,
       dedupeKey: "hub_event:event-1:event_announced:2"
     });
+    expect(publishCandidates[1]).toMatchObject({
+      type: "event_sales_open",
+      dedupeKey: "hub_event:event-1:schedule:schedule-sales-open:event_sales_open:2026-06-13T00:00:00.000Z:r2",
+      appDeepLink: "stellivehub://hub-events/event-1?scheduleItemId=schedule-sales-open"
+    });
 
     const cancelCandidates = buildHubEventNotificationCandidates({
       action: "cancel",
@@ -133,6 +151,40 @@ describe("hub event notification candidates", () => {
       type: "event_cancelled",
       dedupeKey: "hub_event:event-1:event_cancelled:2026-06-12T12:00:00.000Z"
     });
+  });
+
+  it("does not backfill past or cancelled schedule notifications and maps milestone kinds", () => {
+    const candidates = buildHubEventNotificationCandidates({
+      action: "publish",
+      after: adminEvent({
+        scheduleItems: [
+          adminEvent().scheduleItems![0],
+          { ...adminEvent().scheduleItems![0], id: "past", startsAt: "2026-06-11T00:00:00.000Z" },
+          { ...adminEvent().scheduleItems![0], id: "cancelled", startsAt: "2026-06-14T00:00:00.000Z", cancelledAt: now.toISOString() },
+          { ...adminEvent().scheduleItems![0], id: "release", kind: "release", startsAt: "2026-06-15T00:00:00.000Z" }
+        ]
+      }),
+      now
+    });
+
+    expect(candidates.map((event) => event.type)).toEqual(["event_announced", "event_sales_open", "event_milestone_due"]);
+    expect(new Set(candidates.map((event) => event.dedupeKey)).size).toBe(candidates.length);
+  });
+
+  it("does not create another schedule notification when only its title changes", () => {
+    const before = adminEvent({ publicationState: "published", revision: 2 });
+    const after = adminEvent({
+      publicationState: "published",
+      revision: 3,
+      scheduleItems: before.scheduleItems?.map((item) => ({ ...item, title: "새 상세 제목" }))
+    });
+
+    expect(buildHubEventNotificationCandidates({
+      action: "schedule_update",
+      before,
+      after,
+      now
+    })).toEqual([]);
   });
 
   it.each(["official_runtime_url", "third_party_allowed"] as const)(
@@ -193,7 +245,7 @@ describe("hub event notification candidates", () => {
   it("stores created platform events and enqueues notification jobs from admin publish", async () => {
     const fake = createRepository(adminEvent());
     const platformEvents: PlatformEvent[] = [];
-    const jobs: Array<{ eventId: string; priority: number }> = [];
+    const jobs: Array<{ eventId: string; priority: number; runAfter?: Date }> = [];
     const service = new HubEventAdminService({
       catalog: new CatalogService(),
       repository: fake.repository,
@@ -214,7 +266,8 @@ describe("hub event notification candidates", () => {
     await service.publish("event-1", { actorId: "admin" });
 
     expect(platformEvents.map((event) => event.type)).toEqual(["event_announced", "event_sales_open"]);
-    expect(jobs).toEqual(platformEvents.map((event) => ({ eventId: event.id, priority: 5 })));
+    expect(jobs[0]).toEqual({ eventId: platformEvents[0].id, priority: 5 });
+    expect(jobs[1]).toEqual({ eventId: platformEvents[1].id, priority: 5, runAfter: new Date("2026-06-13T00:00:00.000Z") });
     expect(platformEvents.every((event) => event.rawPayload && typeof event.rawPayload === "object")).toBe(true);
   });
 });
@@ -248,7 +301,7 @@ describe("HubEvent notification job delivery flow", () => {
   it("drains admin-created HubEvent jobs through preference-gated delivery attempts", async () => {
     const fake = createRepository(adminEvent());
     const platformEvents: PlatformEvent[] = [];
-    const jobs: Array<{ eventId: string; priority: number }> = [];
+    const jobs: Array<{ eventId: string; priority: number; runAfter?: Date }> = [];
     const service = new HubEventAdminService({
       catalog: new CatalogService(),
       repository: fake.repository,
@@ -354,7 +407,8 @@ describe("HubEvent notification job delivery flow", () => {
     const result = await worker.drain({ limit: 10, lockedBy: "test-worker", now });
 
     expect(platformEvents.map((event) => event.type)).toEqual(["event_announced", "event_sales_open"]);
-    expect(jobs).toEqual(platformEvents.map((event) => ({ eventId: event.id, priority: 5 })));
+    expect(jobs[0]).toEqual({ eventId: platformEvents[0].id, priority: 5 });
+    expect(jobs[1]).toEqual({ eventId: platformEvents[1].id, priority: 5, runAfter: new Date("2026-06-13T00:00:00.000Z") });
     expect(result).toMatchObject({
       claimed: 2,
       completed: 2,

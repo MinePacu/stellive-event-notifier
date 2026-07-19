@@ -86,6 +86,7 @@ object NotificationChannels {
                 NotificationEventType.EVENT_ANNOUNCED,
                 NotificationEventType.EVENT_SALES_OPEN,
                 NotificationEventType.EVENT_DEADLINE_SOON,
+                NotificationEventType.EVENT_MILESTONE_DUE,
                 NotificationEventType.EVENT_UPDATED,
                 NotificationEventType.EVENT_CANCELLED
             )

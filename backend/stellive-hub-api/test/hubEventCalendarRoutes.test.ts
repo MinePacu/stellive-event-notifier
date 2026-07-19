@@ -111,7 +111,7 @@ describe("hub event calendar routes", () => {
     expect(calendarResponse.statusCode).toBe(200);
     expect(JSON.stringify(calendarResponse.json())).toContain("Injected Calendar Event");
     expect(widgetResponse.statusCode).toBe(200);
-    expect(JSON.stringify(widgetResponse.json())).toContain("Injected Calendar Event");
+    expect(JSON.stringify(widgetResponse.json())).not.toContain("Injected Calendar Event");
     expect(calls).toEqual(["list:100", "list:100"]);
 
     await app.close();

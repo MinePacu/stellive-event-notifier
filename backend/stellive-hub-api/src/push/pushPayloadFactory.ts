@@ -61,6 +61,7 @@ const titleByType: Partial<Record<PlatformEvent["type"], string>> = {
   event_announced: "굿즈/행사 일정이 공개됐어요",
   event_sales_open: "굿즈/행사 신청이 시작됐어요",
   event_deadline_soon: "굿즈/행사 마감이 가까워요",
+  event_milestone_due: "굿즈/행사 새 일정이 시작됐어요",
   event_updated: "굿즈/행사 일정이 변경됐어요",
   event_cancelled: "굿즈/행사 일정이 취소됐어요"
 };
@@ -73,6 +74,7 @@ const androidChannelByType: Partial<Record<PlatformEvent["type"], string>> = {
   event_announced: "stellive_hub_events",
   event_sales_open: "stellive_hub_events",
   event_deadline_soon: "stellive_hub_events",
+  event_milestone_due: "stellive_hub_events",
   event_updated: "stellive_hub_events",
   event_cancelled: "stellive_hub_events",
   chzzk_chat: "stellive_chzzk_chat",

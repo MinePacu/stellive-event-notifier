@@ -695,6 +695,112 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminHubEventResponse"
+  /v1/admin/hub-events/{id}/schedule-items:
+    post:
+      summary: Add a schedule item to an admin hub event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventScheduleItemCreateRequest"
+      responses:
+        "201":
+          description: Schedule item created and parent revision incremented.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "409":
+          description: Parent revision conflict.
+  /v1/admin/hub-events/{id}/schedule-items/{scheduleItemId}:
+    patch:
+      summary: Update a schedule item
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+        - $ref: "#/components/parameters/HubEventScheduleItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventScheduleItemMutationRequest"
+      responses:
+        "200":
+          description: Schedule item updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "409":
+          description: Parent revision conflict.
+    delete:
+      summary: Delete a safe draft schedule item or cancel a reference-prone item
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+        - $ref: "#/components/parameters/HubEventScheduleItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventRevisionRequest"
+      responses:
+        "200":
+          description: Schedule item deleted or cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventScheduleDeleteResponse"
+        "409":
+          description: Parent revision conflict.
+  /v1/admin/hub-events/{id}/schedule-items/{scheduleItemId}/restore:
+    post:
+      summary: Restore a cancelled schedule item
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+        - $ref: "#/components/parameters/HubEventScheduleItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventRevisionRequest"
+      responses:
+        "200":
+          description: Schedule item restored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "409":
+          description: Parent revision conflict.
+  /v1/admin/hub-events/{id}/schedule-items/order:
+    put:
+      summary: Reorder all schedule items
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventScheduleOrderRequest"
+      responses:
+        "200":
+          description: Schedule items reordered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "409":
+          description: Parent revision conflict.
   /v1/admin/hub-events/{id}/cancel:
     post:
       summary: Cancel a published hub event
@@ -949,6 +1055,18 @@ components:
       bearerFormat: opaque
       description: Bearer token protection for `/v1/internal/*` operational routes.
   parameters:
+    HubEventId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    HubEventScheduleItemId:
+      name: scheduleItemId
+      in: path
+      required: true
+      schema:
+        type: string
     InternalLimit25:
       name: limit
       in: query
@@ -1032,6 +1150,12 @@ components:
             - member_birthday
             - generation_anniversary
         specialDayLabel:
+          type: string
+        scheduleItemId:
+          type: string
+        scheduleKind:
+          $ref: "#/components/schemas/HubEventScheduleKind"
+        scheduleLabel:
           type: string
         title:
           type: string
@@ -2143,6 +2267,53 @@ components:
           format: uri
         altText:
           type: string
+    HubEventLinkKind:
+      type: string
+      enum:
+        - source
+        - purchase
+        - ticket
+        - reservation
+        - content
+        - video
+        - map
+        - custom
+    HubEventLinkInput:
+      type: object
+      required:
+        - kind
+        - url
+        - sortOrder
+      properties:
+        id:
+          type: string
+        kind:
+          $ref: "#/components/schemas/HubEventLinkKind"
+        label:
+          type: string
+          maxLength: 80
+        url:
+          type: string
+          format: uri
+          pattern: "^https://"
+        sortOrder:
+          type: integer
+          minimum: 0
+    HubEventLink:
+      allOf:
+        - $ref: "#/components/schemas/HubEventLinkInput"
+        - type: object
+          required:
+            - id
+            - createdAt
+            - updatedAt
+          properties:
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
     HubEvent:
       type: object
       required:
@@ -2182,6 +2353,16 @@ components:
           type: string
         sourceType:
           type: string
+        scheduleMode:
+          $ref: "#/components/schemas/HubEventScheduleMode"
+        scheduleItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/HubEventScheduleItem"
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/HubEventLink"
         announcedAt:
           type: string
           format: date-time
@@ -2208,6 +2389,98 @@ components:
           $ref: "#/components/schemas/HubEventImage"
         notificationEligible:
           type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    HubEventScheduleMode:
+      type: string
+      enum:
+        - single_window
+        - timeline
+    HubEventScheduleKind:
+      type: string
+      enum:
+        - main_window
+        - announcement
+        - sales_open
+        - ticket_open
+        - content_reveal
+        - release
+        - deadline
+        - custom
+    HubEventTimePrecision:
+      type: string
+      enum:
+        - date
+        - datetime
+    HubEventScheduleItem:
+      type: object
+      required:
+        - id
+        - kind
+        - label
+        - startsAt
+        - timePrecision
+        - timezone
+        - notificationEligible
+        - isPrimary
+        - sortOrder
+      properties:
+        id:
+          type: string
+        kind:
+          $ref: "#/components/schemas/HubEventScheduleKind"
+        title:
+          type: string
+          maxLength: 160
+        label:
+          type: string
+          maxLength: 80
+        description:
+          type: string
+          nullable: true
+          maxLength: 2000
+        startsAt:
+          oneOf:
+            - type: string
+              format: date
+            - type: string
+              format: date-time
+        endsAt:
+          oneOf:
+            - type: string
+              format: date
+            - type: string
+              format: date-time
+        timePrecision:
+          $ref: "#/components/schemas/HubEventTimePrecision"
+        timezone:
+          type: string
+          default: Asia/Seoul
+        actionUrl:
+          type: string
+          format: uri
+        sourceUrl:
+          type: string
+          format: uri
+        sourceLabel:
+          type: string
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/HubEventLink"
+        notificationEligible:
+          type: boolean
+        isPrimary:
+          type: boolean
+        sortOrder:
+          type: integer
+        cancelledAt:
+          type: string
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -2256,6 +2529,18 @@ components:
           type: string
         sourceType:
           type: string
+        scheduleMode:
+          $ref: "#/components/schemas/HubEventScheduleMode"
+        scheduleItems:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/HubEventScheduleItem"
+        links:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/HubEventLinkInput"
         announcedAt:
           type: string
           format: date-time
@@ -2280,6 +2565,93 @@ components:
     AdminHubEventUpdateRequest:
       allOf:
         - $ref: "#/components/schemas/AdminHubEventCreateRequest"
+    AdminHubEventRevisionRequest:
+      type: object
+      required:
+        - expectedRevision
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 1
+        changeReason:
+          type: string
+    AdminHubEventScheduleItemMutationRequest:
+      allOf:
+        - type: object
+          properties:
+            kind:
+              $ref: "#/components/schemas/HubEventScheduleKind"
+            title:
+              type: string
+              maxLength: 160
+            label:
+              type: string
+            description:
+              type: string
+            startsAt:
+              type: string
+            endsAt:
+              type: string
+            timePrecision:
+              $ref: "#/components/schemas/HubEventTimePrecision"
+            timezone:
+              type: string
+              default: Asia/Seoul
+            actionUrl:
+              type: string
+              format: uri
+            sourceUrl:
+              type: string
+              format: uri
+            sourceLabel:
+              type: string
+            links:
+              type: array
+              maxItems: 10
+              items:
+                $ref: "#/components/schemas/HubEventLinkInput"
+            notificationEligible:
+              type: boolean
+            isPrimary:
+              type: boolean
+            sortOrder:
+              type: integer
+        - $ref: "#/components/schemas/AdminHubEventRevisionRequest"
+    AdminHubEventScheduleItemCreateRequest:
+      allOf:
+        - $ref: "#/components/schemas/AdminHubEventScheduleItemMutationRequest"
+        - type: object
+          required:
+            - kind
+            - label
+            - startsAt
+            - timePrecision
+            - timezone
+    AdminHubEventScheduleOrderRequest:
+      allOf:
+        - $ref: "#/components/schemas/AdminHubEventRevisionRequest"
+        - type: object
+          required:
+            - scheduleItemIds
+          properties:
+            scheduleItemIds:
+              type: array
+              items:
+                type: string
+    AdminHubEventScheduleDeleteResponse:
+      type: object
+      required:
+        - event
+        - scheduleItemId
+        - deletion
+      properties:
+        event:
+          $ref: "#/components/schemas/AdminHubEventResponse"
+        scheduleItemId:
+          type: string
+        deletion:
+          type: string
+          enum: [cancelled, hard_deleted]
     AdminHubEventResponse:
       allOf:
         - $ref: "#/components/schemas/HubEvent"

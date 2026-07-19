@@ -5,6 +5,7 @@ import dev.minepacu.stelliveeventnotifier.core.network.BootstrapResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.BootstrapCatalogDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventDto
+import dev.minepacu.stelliveeventnotifier.core.network.HubEventScheduleItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventsListResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubNetworkResult
 import dev.minepacu.stelliveeventnotifier.core.network.LiveStatusDto
@@ -128,6 +129,50 @@ class ServerHubRepositoryTest {
 
             assertNull(remote.lastHubEventsGenerationId)
         }
+    }
+
+    @Test
+    fun hubEventScheduleMappingNormalizesOptionalTitleAndDescription() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            hubEventsResponse = HubEventsListResponseDto(
+                items = listOf(
+                    HubEventDto(
+                        id = "event-1",
+                        category = "online_goods",
+                        participationMode = "online",
+                        status = "upcoming",
+                        title = "행사",
+                        generationId = "official",
+                        sourceUrl = "https://example.com/source",
+                        sourceLabel = "공식 공지",
+                        sourceType = "official",
+                        scheduleMode = "timeline",
+                        scheduleItems = listOf(
+                            HubEventScheduleItemDto(
+                                id = "item-1",
+                                kind = "custom",
+                                title = "  상세 제목  ",
+                                label = "짧은 라벨",
+                                description = "   ",
+                                startsAt = "2026-07-20T01:00:00.000Z",
+                            ),
+                        ),
+                        updatedAt = "2026-07-19T00:00:00.000Z",
+                    ),
+                ),
+            )
+        }
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val item = repository.hubEvents("all", null, null).single().scheduleItems.single()
+
+        assertEquals("상세 제목", item.title)
+        assertEquals("짧은 라벨", item.label)
+        assertNull(item.description)
     }
 
     @Test
@@ -338,6 +383,7 @@ class ServerHubRepositoryTest {
         var lastHubEventsGenerationId: String? = null
         var lastHubEventsFrom: String? = null
         var lastHubEventsTo: String? = null
+        var hubEventsResponse = HubEventsListResponseDto()
         var lastSongGenerationId: String? = null
         var lastSongMemberId: String? = null
         var lastSongType: String? = null
@@ -484,7 +530,7 @@ class ServerHubRepositoryTest {
             lastHubEventsGenerationId = generationId
             lastHubEventsFrom = from
             lastHubEventsTo = to
-            return HubNetworkResult.Success(HubEventsListResponseDto())
+            return HubNetworkResult.Success(hubEventsResponse)
         }
 
         override suspend fun hubEvent(id: String): HubNetworkResult<HubEventDto> =

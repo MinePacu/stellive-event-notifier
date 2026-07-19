@@ -2,7 +2,19 @@ import type { HubEvent } from "../types.js";
 
 export type HubEventPublicationState = "draft" | "published" | "inactive" | "deleted";
 
-export type HubEventAdminAction = "create" | "update" | "publish" | "cancel" | "deactivate" | "delete";
+export type HubEventAdminAction =
+  | "create"
+  | "update"
+  | "publish"
+  | "cancel"
+  | "deactivate"
+  | "delete"
+  | "schedule_create"
+  | "schedule_update"
+  | "schedule_cancel"
+  | "schedule_restore"
+  | "schedule_delete"
+  | "schedule_reorder";
 
 export interface AdminHubEvent extends HubEvent {
   publicationState: HubEventPublicationState;
@@ -31,6 +43,23 @@ export type HubEventValidationReason =
   | "member_generation_mismatch"
   | "date_window_required"
   | "date_window_invalid"
+  | "schedule_mode_not_allowed"
+  | "schedule_items_too_many"
+  | "schedule_item_invalid"
+  | "schedule_item_required"
+  | "schedule_item_too_long"
+  | "schedule_item_kind_not_allowed"
+  | "schedule_item_precision_invalid"
+  | "schedule_item_timezone_invalid"
+  | "schedule_primary_required"
+  | "schedule_primary_duplicate"
+  | "links_too_many"
+  | "link_invalid"
+  | "link_kind_not_allowed"
+  | "link_label_required"
+  | "link_label_too_long"
+  | "link_url_duplicate"
+  | "link_sort_order_invalid"
   | "url_not_https"
   | "official_youtube_live_excluded"
   | "routine_platform_activity_excluded";

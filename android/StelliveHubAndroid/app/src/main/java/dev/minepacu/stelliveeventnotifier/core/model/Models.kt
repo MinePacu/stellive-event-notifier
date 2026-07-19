@@ -39,6 +39,7 @@ enum class NotificationEventType(val wireName: String, val displayName: String) 
     EVENT_ANNOUNCED("event_announced", "굿즈/행사 공개"),
     EVENT_SALES_OPEN("event_sales_open", "예약/판매 시작"),
     EVENT_DEADLINE_SOON("event_deadline_soon", "마감 임박"),
+    EVENT_MILESTONE_DUE("event_milestone_due", "굿즈/행사 마일스톤"),
     EVENT_UPDATED("event_updated", "굿즈/행사 변경"),
     EVENT_CANCELLED("event_cancelled", "굿즈/행사 취소")
 }
@@ -86,6 +87,63 @@ enum class HubEventSourceType {
     MEMBER,
     OFFICIAL_COLLAB
 }
+
+enum class HubEventScheduleMode { SINGLE_WINDOW, TIMELINE }
+
+enum class HubEventScheduleKind {
+    MAIN_WINDOW,
+    ANNOUNCEMENT,
+    SALES_OPEN,
+    TICKET_OPEN,
+    CONTENT_REVEAL,
+    RELEASE,
+    DEADLINE,
+    CUSTOM,
+}
+
+enum class HubEventTimePrecision { DATE, DATETIME }
+
+enum class HubEventLinkKind {
+    SOURCE,
+    PURCHASE,
+    TICKET,
+    RESERVATION,
+    CONTENT,
+    VIDEO,
+    MAP,
+    CUSTOM,
+}
+
+data class HubEventLink(
+    val id: String,
+    val kind: HubEventLinkKind,
+    val label: String? = null,
+    val url: String,
+    val sortOrder: Int = 0,
+    val createdAt: Instant? = null,
+    val updatedAt: Instant? = null,
+)
+
+data class HubEventScheduleItem(
+    val id: String,
+    val kind: HubEventScheduleKind,
+    val title: String? = null,
+    val label: String,
+    val description: String? = null,
+    val startsAt: Instant,
+    val endsAt: Instant? = null,
+    val timePrecision: HubEventTimePrecision = HubEventTimePrecision.DATETIME,
+    val timezone: String = "Asia/Seoul",
+    val actionUrl: String? = null,
+    val sourceUrl: String? = null,
+    val sourceLabel: String? = null,
+    val links: List<HubEventLink> = emptyList(),
+    val notificationEligible: Boolean = true,
+    val isPrimary: Boolean = false,
+    val sortOrder: Int = 0,
+    val cancelledAt: Instant? = null,
+    val createdAt: Instant? = null,
+)
 
 enum class HubEventImagePolicyState(val apiValue: String) {
     NONE("none"),
@@ -179,6 +237,9 @@ data class HubEvent(
     val sourceUrl: String,
     val sourceLabel: String,
     val sourceType: HubEventSourceType,
+    val scheduleMode: HubEventScheduleMode = HubEventScheduleMode.SINGLE_WINDOW,
+    val scheduleItems: List<HubEventScheduleItem> = emptyList(),
+    val links: List<HubEventLink> = emptyList(),
     val announcedAt: Instant? = null,
     val startsAt: Instant? = null,
     val endsAt: Instant? = null,
@@ -204,6 +265,9 @@ data class HubCalendarEntry(
     val entryKind: HubCalendarEntryKind = HubCalendarEntryKind.HUB_EVENT,
     val specialDayKind: HubCalendarSpecialDayKind? = null,
     val specialDayLabel: String? = null,
+    val scheduleItemId: String? = null,
+    val scheduleKind: HubEventScheduleKind? = null,
+    val scheduleLabel: String? = null,
     val title: String,
     val category: HubEventCategory,
     val status: HubEventStatus,
@@ -461,6 +525,7 @@ private fun defaultEventTypeEnabled(): Map<NotificationEventType, Boolean> = lin
     NotificationEventType.EVENT_ANNOUNCED to true,
     NotificationEventType.EVENT_SALES_OPEN to true,
     NotificationEventType.EVENT_DEADLINE_SOON to true,
+    NotificationEventType.EVENT_MILESTONE_DUE to true,
     NotificationEventType.EVENT_UPDATED to false,
     NotificationEventType.EVENT_CANCELLED to true
 )
