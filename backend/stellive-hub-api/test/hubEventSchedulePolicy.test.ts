@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   activeHubEventScheduleItems,
   deriveHubEventScheduleMode,
+  normalizeHubEventScheduleText,
   withDefaultPrimaryScheduleItem
 } from "../src/hub-events/hubEventSchedulePolicy.js";
 import type { AdminHubEventScheduleItemWriteInput } from "../src/hub-events/hubEventRepository.js";
@@ -38,5 +39,23 @@ describe("hub event schedule policy", () => {
     ]);
     expect(items.find((candidate) => candidate.id === "cancelled")?.isPrimary).not.toBe(true);
     expect(items.find((candidate) => candidate.id === "active")?.isPrimary).toBe(true);
+  });
+
+  it("normalizes title, label, and optional description with compatibility fallbacks", () => {
+    expect(normalizeHubEventScheduleText({ title: "  상세 제목  ", label: "  짧은 라벨  ", description: "  설명  " })).toEqual({
+      title: "상세 제목",
+      label: "짧은 라벨",
+      description: "설명"
+    });
+    expect(normalizeHubEventScheduleText({ title: "제목", description: "   " })).toEqual({
+      title: "제목",
+      label: "제목",
+      description: null
+    });
+    expect(normalizeHubEventScheduleText({ label: "레거시 라벨" })).toEqual({
+      title: "레거시 라벨",
+      label: "레거시 라벨",
+      description: null
+    });
   });
 });

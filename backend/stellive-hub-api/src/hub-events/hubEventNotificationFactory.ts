@@ -83,13 +83,25 @@ function scheduleEventType(kind: HubEventScheduleItem["kind"]): PlatformEventTyp
 function scheduleCandidates(
   event: AdminHubEvent,
   action: HubEventAdminAction,
-  now: Date
+  now: Date,
+  before?: AdminHubEvent
 ): PlatformEvent[] {
   return (event.scheduleItems ?? []).flatMap((scheduleItem) => {
     const type = scheduleEventType(scheduleItem.kind);
     if (!type || scheduleItem.cancelledAt || !scheduleItem.notificationEligible) return [];
     const scheduledAt = new Date(scheduleItem.startsAt);
     if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() <= now.getTime()) return [];
+    const previous = before?.scheduleItems?.find((item) => item.id === scheduleItem.id);
+    if (
+      action !== "publish" &&
+      previous &&
+      previous.kind === scheduleItem.kind &&
+      new Date(previous.startsAt).getTime() === scheduledAt.getTime() &&
+      previous.notificationEligible === scheduleItem.notificationEligible &&
+      Boolean(previous.cancelledAt) === Boolean(scheduleItem.cancelledAt)
+    ) {
+      return [];
+    }
     const timestamp = scheduledAt.toISOString();
     return [candidate(
       event,
@@ -129,12 +141,12 @@ export function buildHubEventNotificationCandidates(input: HubEventNotificationC
   if (action === "update" && input.before) {
     return [
       candidate(after, "event_updated", `hub_event:${after.id}:event_updated:${after.revision}`, action, now),
-      ...scheduleCandidates(after, action, now)
+      ...scheduleCandidates(after, action, now, input.before)
     ];
   }
 
   if (action.startsWith("schedule_") && input.before) {
-    return scheduleCandidates(after, action, now);
+    return scheduleCandidates(after, action, now, input.before);
   }
 
   return [];

@@ -158,4 +158,41 @@ describe("hub event timeline validation", () => {
     }, catalog, "publish");
     expect(duplicate).toMatchObject({ valid: false, errors: expect.arrayContaining([expect.objectContaining({ reason: "schedule_primary_duplicate" })]) });
   });
+
+  it("accepts legacy labels, rejects missing titles and labels, and enforces text limits", () => {
+    const catalog = new CatalogService();
+    const legacy = validateHubEventForAdmin({
+      ...base,
+      scheduleItems: [schedule("legacy", "2026-06-10T00:00:00.000Z", { isPrimary: true })]
+    }, catalog, "publish");
+    expect(legacy.valid).toBe(true);
+
+    const invalid = validateHubEventForAdmin({
+      ...base,
+      scheduleItems: [schedule("invalid", "2026-06-10T00:00:00.000Z", {
+        title: " ",
+        label: " ",
+        description: "x".repeat(2_001),
+        isPrimary: true
+      })]
+    }, catalog, "publish");
+    expect(invalid).toMatchObject({
+      valid: false,
+      errors: expect.arrayContaining([
+        expect.objectContaining({ field: "scheduleItems.0.title", reason: "schedule_item_required" }),
+        expect.objectContaining({ field: "scheduleItems.0.description", reason: "schedule_item_too_long" })
+      ])
+    });
+
+    for (const [field, value] of [["title", "x".repeat(161)], ["label", "x".repeat(81)]] as const) {
+      const result = validateHubEventForAdmin({
+        ...base,
+        scheduleItems: [schedule("long", "2026-06-10T00:00:00.000Z", { [field]: value, isPrimary: true })]
+      }, catalog, "publish");
+      expect(result).toMatchObject({
+        valid: false,
+        errors: expect.arrayContaining([expect.objectContaining({ field: `scheduleItems.0.${field}`, reason: "schedule_item_too_long" })])
+      });
+    }
+  });
 });

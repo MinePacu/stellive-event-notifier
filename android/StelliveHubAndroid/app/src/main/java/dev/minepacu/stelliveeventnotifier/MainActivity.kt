@@ -1850,8 +1850,15 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
         item: dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventScheduleTimelineItem,
         highlighted: Boolean,
     ): MaterialCardView = baseCard(HubCardStyle.COMPACT).apply {
+        val displayTitle = HubEventDetailFormatting.displayTitle(item.schedule)
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = dp(10)
+        }
+        contentDescription = buildString {
+            append(displayTitle)
+            append(", ")
+            append(item.timingText)
+            if (highlighted) append(", 선택한 일정")
         }
         if (highlighted) {
             strokeWidth = dp(2)
@@ -1869,18 +1876,26 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
                 if (highlighted) add("선택한 일정")
             }))
             addView(TextView(context).apply {
-                text = item.schedule.label
+                text = displayTitle
                 setTextColor(color(R.color.hub_text))
                 textSize = 15f
                 typeface = Typeface.DEFAULT_BOLD
                 setPadding(0, dp(8), 0, 0)
             })
             addView(TextView(context).apply {
-                text = listOfNotNull(item.timingText, item.schedule.description).joinToString("\n")
+                text = item.timingText
                 setTextColor(color(R.color.hub_text_muted))
                 textSize = 12f
                 setPadding(0, dp(5), 0, 0)
             })
+            HubEventDetailFormatting.scheduleDescription(item.schedule)?.let { description ->
+                addView(TextView(context).apply {
+                    text = description
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 12f
+                    setPadding(0, dp(5), 0, 0)
+                })
+            }
             item.schedule.sourceLabel?.takeIf { it.isNotBlank() }?.let { source ->
                 addView(TextView(context).apply {
                     text = "출처 · $source"

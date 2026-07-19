@@ -169,6 +169,7 @@ struct HubEventResponse: Codable, Equatable {
 struct HubEventScheduleItemResponse: Codable, Equatable {
     let id: String
     let kind: HubEventScheduleKind
+    let title: String?
     let label: String
     let description: String?
     let startsAt: String

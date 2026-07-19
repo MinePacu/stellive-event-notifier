@@ -136,6 +136,41 @@ class HubEventDetailFormattingTest {
     }
 
     @Test
+    fun scheduleDisplayTitlePrefersTitleThenLabelThenLocalizedKind() {
+        val base = schedule("label", "2026-06-20T00:00:00Z")
+
+        assertEquals("상세 제목", HubEventDetailFormatting.displayTitle(base.copy(title = "  상세 제목  ")))
+        assertEquals("label", HubEventDetailFormatting.displayTitle(base.copy(title = "   ")))
+        assertEquals(
+            "판매 시작",
+            HubEventDetailFormatting.displayTitle(base.copy(title = null, label = " ", kind = HubEventScheduleKind.SALES_OPEN)),
+        )
+    }
+
+    @Test
+    fun scheduleDescriptionTreatsNullEmptyAndWhitespaceAsMissing() {
+        val base = schedule("item", "2026-06-20T00:00:00Z")
+
+        assertEquals(null, HubEventDetailFormatting.scheduleDescription(base))
+        assertEquals(null, HubEventDetailFormatting.scheduleDescription(base.copy(description = "")))
+        assertEquals(null, HubEventDetailFormatting.scheduleDescription(base.copy(description = "   ")))
+        assertEquals("설명", HubEventDetailFormatting.scheduleDescription(base.copy(description = "  설명  ")))
+    }
+
+    @Test
+    fun timelineHeroUsesDetailedTitleInsteadOfShortLabel() {
+        val event = sampleEvent().copy(
+            scheduleMode = HubEventScheduleMode.TIMELINE,
+            scheduleItems = listOf(schedule("short", "2026-06-20T00:00:00Z").copy(title = "상세 일정 제목")),
+        )
+
+        assertEquals(
+            "다음 일정 · 상세 일정 제목 · 2026.06.20 (토) 09:00",
+            HubEventDetailFormatting.heroSubtitleLines(event, zone, Instant.parse("2026-06-15T00:00:00Z")).last(),
+        )
+    }
+
+    @Test
     fun scheduleActionsPreferHttpsActionUrlAndMapLabels() {
         val item = schedule("sales", "2026-06-20T00:00:00Z").copy(
             kind = HubEventScheduleKind.SALES_OPEN,

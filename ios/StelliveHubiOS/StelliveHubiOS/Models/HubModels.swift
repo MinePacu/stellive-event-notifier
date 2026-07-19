@@ -273,6 +273,7 @@ enum HubEventTimePrecision: String, Codable, Hashable {
 struct HubEventScheduleItem: Identifiable, Hashable {
     let id: String
     let kind: HubEventScheduleKind
+    let title: String?
     let label: String
     let description: String?
     let startsAt: Date

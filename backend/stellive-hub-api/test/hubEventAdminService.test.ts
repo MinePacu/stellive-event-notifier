@@ -261,7 +261,14 @@ describe("HubEventAdminService", () => {
       action: "update",
       reason: "timeline added",
       before: expect.not.objectContaining({ scheduleItems }),
-      after: expect.objectContaining({ scheduleMode: "timeline", scheduleItems })
+      after: expect.objectContaining({
+        scheduleMode: "timeline",
+        scheduleItems: [expect.objectContaining({
+          ...scheduleItems[0],
+          title: "앨범 발매",
+          description: null
+        })]
+      })
     });
   });
 
@@ -375,7 +382,7 @@ describe("HubEventAdminService", () => {
     const updated = await service.createScheduleItem("event-1", {
       expectedRevision: 1,
       kind: "main_window",
-      label: "판매 기간",
+      title: "판매 기간",
       startsAt: "2026-07-20T01:00:00.000Z",
       timePrecision: "datetime",
       timezone: "Asia/Seoul"
@@ -384,6 +391,38 @@ describe("HubEventAdminService", () => {
     expect(updated.scheduleMode).toBe("single_window");
     expect(updated.scheduleItems?.[0]).toMatchObject({ isPrimary: true, kind: "main_window" });
     expect(fake.audits.at(-1)?.action).toBe("schedule_create");
+  });
+
+  it("requires a title for schedule-item creation while keeping legacy parent arrays compatible", async () => {
+    const fake = createFakeRepository(adminEvent({ scheduleItems: [] }));
+    const service = createService(fake.repository);
+
+    await expect(service.createScheduleItem("event-1", {
+      expectedRevision: 1,
+      kind: "custom",
+      label: "레거시 라벨",
+      startsAt: "2026-07-20T01:00:00.000Z",
+      timePrecision: "datetime",
+      timezone: "Asia/Seoul"
+    })).rejects.toMatchObject({
+      message: "hub_event_validation_failed",
+      errors: [expect.objectContaining({ field: "title", reason: "schedule_item_required" })]
+    });
+
+    const updated = await service.update("event-1", {
+      scheduleItems: [{
+        kind: "custom",
+        label: "레거시 라벨",
+        description: "   ",
+        startsAt: "2026-07-20T01:00:00.000Z",
+        timePrecision: "datetime",
+        timezone: "Asia/Seoul",
+        isPrimary: true
+      }]
+    });
+    expect(updated.scheduleItems).toEqual([
+      expect.objectContaining({ title: "레거시 라벨", label: "레거시 라벨", description: null })
+    ]);
   });
 
   it("rejects stale schedule revisions before writing", async () => {
@@ -459,6 +498,40 @@ describe("HubEventAdminService", () => {
 
     expect(updated.scheduleItems?.find((item) => item.id === "primary")?.isPrimary).toBe(false);
     expect(updated.scheduleItems?.find((item) => item.id === "replacement")?.isPrimary).toBe(true);
+  });
+
+  it("increments the parent revision and audits a title-only schedule update", async () => {
+    const scheduleItems: NonNullable<AdminHubEventWriteInput["scheduleItems"]> = [{
+      id: "title-item",
+      kind: "custom",
+      title: "기존 상세 제목",
+      label: "짧은 라벨",
+      startsAt: "2026-07-20T01:00:00.000Z",
+      timePrecision: "datetime",
+      timezone: "Asia/Seoul",
+      isPrimary: true,
+      sortOrder: 0
+    }];
+    const fake = createFakeRepository(adminEvent({ scheduleMode: "single_window", scheduleItems }));
+    const service = createService(fake.repository);
+
+    const updated = await service.updateScheduleItem("event-1", "title-item", {
+      expectedRevision: 1,
+      title: "새 상세 제목"
+    }, { actorId: "admin" });
+
+    expect(updated.revision).toBe(2);
+    expect(updated.scheduleItems?.[0]).toMatchObject({
+      id: "title-item",
+      title: "새 상세 제목",
+      label: "짧은 라벨",
+      startsAt: "2026-07-20T01:00:00.000Z"
+    });
+    expect(fake.audits.at(-1)).toMatchObject({
+      action: "schedule_update",
+      before: expect.objectContaining({ revision: 1 }),
+      after: expect.objectContaining({ revision: 2 })
+    });
   });
 
   it("keeps timeline parent dates projected from the primary schedule", async () => {

@@ -10,7 +10,7 @@ import type {
 import type { AdminHubEvent, HubEventAdminAction, HubEventPublicationState } from "./hubEventAdminTypes.js";
 import type { HubEventFilters, HubEventListResult } from "./hubEventService.js";
 import { koreaDateKey, resolveEffectiveHubEventStatus, withEffectiveHubEventStatus } from "./hubEventStatus.js";
-import { deriveHubEventScheduleMode } from "./hubEventSchedulePolicy.js";
+import { deriveHubEventScheduleMode, normalizeHubEventScheduleText } from "./hubEventSchedulePolicy.js";
 
 interface HubEventRecord {
   id: string;
@@ -51,6 +51,7 @@ interface HubEventScheduleItemRecord {
   id: string;
   hubEventId: string;
   kind: string;
+  title?: string | null;
   label: string;
   description: string | null;
   startsAt: Date;
@@ -117,9 +118,10 @@ type NullableDateInput = string | Date | null | undefined;
 
 export type AdminHubEventScheduleItemWriteInput = Omit<
   Partial<HubEventScheduleItem>,
-  "id" | "startsAt" | "endsAt" | "cancelledAt" | "createdAt" | "updatedAt"
+  "id" | "description" | "startsAt" | "endsAt" | "cancelledAt" | "createdAt" | "updatedAt"
 > & {
   id?: string;
+  description?: string | null;
   startsAt?: NullableDateInput;
   endsAt?: NullableDateInput;
   cancelledAt?: NullableDateInput;
@@ -219,11 +221,13 @@ function normalizeHubEventImage(value: unknown): HubEventImage | undefined {
 }
 
 function toScheduleItem(record: HubEventScheduleItemRecord): HubEventScheduleItem {
+  const text = normalizeHubEventScheduleText(record);
   return stripUndefined({
     id: record.id,
     kind: record.kind,
-    label: record.label,
-    description: record.description ?? undefined,
+    title: text.title,
+    label: text.label,
+    description: text.description ?? undefined,
     startsAt: record.startsAt.toISOString(),
     endsAt: toIso(record.endsAt),
     timePrecision: record.timePrecision,
@@ -366,12 +370,14 @@ function toScheduleWriteData(
   hubEventId: string
 ): Record<string, unknown> {
   const timezone = item.timezone ?? "Asia/Seoul";
+  const text = normalizeHubEventScheduleText(item);
   return stripUndefined({
     id: item.id,
     hubEventId,
     kind: item.kind,
-    label: item.label,
-    description: item.description,
+    title: text.title,
+    label: text.label,
+    description: text.description,
     startsAt: toScheduleDate(item.startsAt, item.timePrecision, timezone),
     endsAt: toScheduleDate(item.endsAt, item.timePrecision, timezone),
     timePrecision: item.timePrecision,

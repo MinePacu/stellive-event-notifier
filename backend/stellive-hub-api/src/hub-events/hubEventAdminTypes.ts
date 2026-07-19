@@ -47,6 +47,7 @@ export type HubEventValidationReason =
   | "schedule_items_too_many"
   | "schedule_item_invalid"
   | "schedule_item_required"
+  | "schedule_item_too_long"
   | "schedule_item_kind_not_allowed"
   | "schedule_item_precision_invalid"
   | "schedule_item_timezone_invalid"

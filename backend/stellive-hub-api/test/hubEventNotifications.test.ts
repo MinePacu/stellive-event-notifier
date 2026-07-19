@@ -171,6 +171,22 @@ describe("hub event notification candidates", () => {
     expect(new Set(candidates.map((event) => event.dedupeKey)).size).toBe(candidates.length);
   });
 
+  it("does not create another schedule notification when only its title changes", () => {
+    const before = adminEvent({ publicationState: "published", revision: 2 });
+    const after = adminEvent({
+      publicationState: "published",
+      revision: 3,
+      scheduleItems: before.scheduleItems?.map((item) => ({ ...item, title: "새 상세 제목" }))
+    });
+
+    expect(buildHubEventNotificationCandidates({
+      action: "schedule_update",
+      before,
+      after,
+      now
+    })).toEqual([]);
+  });
+
   it.each(["official_runtime_url", "third_party_allowed"] as const)(
     "maps an allowed %s HubEvent image to PlatformEvent.thumbnailUrl",
     (policyState) => {

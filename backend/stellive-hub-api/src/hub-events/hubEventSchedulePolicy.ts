@@ -4,6 +4,34 @@ type ScheduleItemLike = Pick<Partial<HubEventScheduleItem>, "kind" | "isPrimary"
   cancelledAt?: string | Date | null;
 };
 
+export interface HubEventScheduleTextInput {
+  title?: string | null;
+  label?: string | null;
+  description?: string | null;
+}
+
+export interface NormalizedHubEventScheduleText {
+  title?: string;
+  label?: string;
+  description: string | null;
+}
+
+function normalizedText(value: string | null | undefined): string | undefined {
+  return value?.trim() || undefined;
+}
+
+export function normalizeHubEventScheduleText(
+  input: HubEventScheduleTextInput
+): NormalizedHubEventScheduleText {
+  const title = normalizedText(input.title);
+  const label = normalizedText(input.label);
+  return {
+    title: title ?? label,
+    label: label ?? title,
+    description: normalizedText(input.description) ?? null
+  };
+}
+
 export function activeHubEventScheduleItems<T extends ScheduleItemLike>(items: readonly T[]): T[] {
   return items.filter((item) => !item.cancelledAt);
 }

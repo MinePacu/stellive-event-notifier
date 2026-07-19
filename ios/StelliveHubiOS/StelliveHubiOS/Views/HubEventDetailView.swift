@@ -243,13 +243,13 @@ private struct HubEventScheduleCard: View {
                 if item.schedule.isPrimary { scheduleBadge("대표 일정") }
                 Spacer(minLength: 0)
             }
-            Text(item.schedule.label)
+            Text(HubEventDetailFormatting.displayTitle(item.schedule))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(HubEventDetailColors.text)
             Text(item.timingText)
                 .font(.footnote)
                 .foregroundStyle(HubEventDetailColors.muted)
-            if let description = item.schedule.description, !description.isEmpty {
+            if let description = HubEventDetailFormatting.scheduleDescription(item.schedule) {
                 Text(description)
                     .font(.footnote)
                     .foregroundStyle(HubEventDetailColors.text)
@@ -273,6 +273,12 @@ private struct HubEventScheduleCard: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(highlighted ? Color.teal : HubEventDetailColors.line, lineWidth: highlighted ? 2 : 1)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            highlighted
+                ? "\(HubEventDetailFormatting.displayTitle(item.schedule)), 선택한 일정"
+                : HubEventDetailFormatting.displayTitle(item.schedule)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .opacity(item.schedule.cancelledAt == nil ? 1 : 0.58)
     }
@@ -412,6 +418,20 @@ enum HubEventDetailFormatting {
         }
     }
 
+    static func displayTitle(_ item: HubEventScheduleItem) -> String {
+        if let title = item.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+            return title
+        }
+        let label = item.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        return label.isEmpty ? scheduleKindLabel(item.kind) : label
+    }
+
+    static func scheduleDescription(_ item: HubEventScheduleItem) -> String? {
+        guard let description = item.description?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !description.isEmpty else { return nil }
+        return description
+    }
+
     private static func schedulePeriodText(_ item: HubEventScheduleItem) -> String {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: item.timezone) ?? TimeZone(identifier: "Asia/Seoul")!
@@ -450,7 +470,7 @@ enum HubEventDetailFormatting {
     static func heroSubtitleLines(for event: HubEvent, now: Date = Date()) -> [String] {
         let venue = event.venueName?.isEmpty == false ? event.venueName! : event.sourceLabel
         let timing = hasTimelineSchedule(event)
-            ? nextScheduleItem(event, now: now).map { "다음 일정 · \($0.label) · \(schedulePeriodText($0))" } ?? "예정된 세부 일정이 없습니다."
+            ? nextScheduleItem(event, now: now).map { "다음 일정 · \(displayTitle($0)) · \(schedulePeriodText($0))" } ?? "예정된 세부 일정이 없습니다."
             : periodText(for: event)
         return [venue, timing]
             .filter { !$0.isEmpty }

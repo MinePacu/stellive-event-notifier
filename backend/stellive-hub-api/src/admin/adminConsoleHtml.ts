@@ -1944,7 +1944,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
               <input id="hub-event-schedule-edit-id" type="hidden">
               <div class="hub-events-two">
                 <div class="field"><label for="hub-event-schedule-kind">Kind</label><select id="hub-event-schedule-kind"><option value="main_window">Main window</option><option value="announcement">Announcement</option><option value="sales_open">Sales open</option><option value="ticket_open">Ticket open</option><option value="content_reveal">Content reveal</option><option value="release">Release</option><option value="deadline">Deadline</option><option value="custom">Custom</option></select></div>
-                <div class="field"><label for="hub-event-schedule-label">Label</label><input id="hub-event-schedule-label" autocomplete="off" required></div>
+                <div class="field"><label for="hub-event-schedule-title">Title</label><input id="hub-event-schedule-title" autocomplete="off" required maxlength="160"></div>
               </div>
               <div class="hub-events-two">
                 <div class="field"><label for="hub-event-schedule-starts-at">Starts at</label><input id="hub-event-schedule-starts-at" type="datetime-local" required></div>
@@ -1953,7 +1953,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
               <div class="hub-event-schedule-flags"><label class="switch-control"><input id="hub-event-schedule-primary" type="checkbox"> Primary</label><label class="switch-control"><input id="hub-event-schedule-notification" type="checkbox" checked> Notification eligible</label></div>
               <details><summary>Additional information</summary>
                 <div class="hub-events-section-body">
-                  <div class="field"><label for="hub-event-schedule-description">Description</label><textarea id="hub-event-schedule-description" rows="3"></textarea></div>
+                  <div class="field"><label for="hub-event-schedule-description">Description (optional)</label><textarea id="hub-event-schedule-description" rows="3" maxlength="2000"></textarea></div>
+                  <div class="field"><label for="hub-event-schedule-label">Short label (optional)</label><input id="hub-event-schedule-label" autocomplete="off" maxlength="80"><span class="subtle">Uses the title when empty</span></div>
                   <div class="hub-events-two"><div class="field"><label for="hub-event-schedule-precision">Time precision</label><select id="hub-event-schedule-precision"><option value="datetime">Date and time</option><option value="date">Date only</option></select></div><div class="field"><label for="hub-event-schedule-timezone">Timezone</label><input id="hub-event-schedule-timezone" value="Asia/Seoul"></div></div>
                   <div class="field"><label for="hub-event-schedule-action-url">Action URL</label><input id="hub-event-schedule-action-url" type="url"></div>
                   <div class="field"><label for="hub-event-schedule-source-url">Schedule source URL</label><input id="hub-event-schedule-source-url" type="url"></div>
@@ -3388,16 +3389,25 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       const summary = document.createElement("div");
       summary.className = "hub-event-schedule-summary";
       const title = document.createElement("strong");
-      title.textContent = value.label || t("hubEvent.untitled");
+      const displayTitle = String(value.title || "").trim() || String(value.label || "").trim();
+      title.textContent = displayTitle || t("hubEvent.untitled");
+      const description = String(value.description || "").trim();
       const timing = document.createElement("span");
       timing.className = "subtle";
       timing.textContent = [value.startsAt ? formatLastCheckedAt(value.startsAt) : "-", value.endsAt ? formatLastCheckedAt(value.endsAt) : ""].filter(Boolean).join(" - ");
       const meta = document.createElement("div");
       meta.className = "hub-event-schedule-meta";
-      [scheduleKindLabel(value.kind), value.cancelledAt ? t("hubEvent.scheduleCancelled") : t("hubEvent.scheduleActive"), value.isPrimary ? t("hubEvent.schedulePrimary") : "", value.notificationEligible ? t("hubEvent.scheduleNotified") : "", (value.actionUrl || value.sourceUrl) ? t("hubEvent.scheduleLinked") : ""].filter(Boolean).forEach(function (label) {
+      [scheduleKindLabel(value.kind), value.cancelledAt ? t("hubEvent.scheduleCancelled") : t("hubEvent.scheduleActive"), value.isPrimary ? t("hubEvent.schedulePrimary") : "", value.notificationEligible ? t("hubEvent.scheduleNotified") : "", (value.actionUrl || value.sourceUrl) ? t("hubEvent.scheduleLinked") : "", value.label && String(value.label).trim() !== displayTitle ? t("hubEvent.scheduleShortLabelMeta", { label: String(value.label).trim() }) : ""].filter(Boolean).forEach(function (label) {
         const pill = document.createElement("span"); pill.textContent = label; meta.appendChild(pill);
       });
-      summary.append(title, timing, meta);
+      summary.appendChild(title);
+      if (description) {
+        const descriptionText = document.createElement("span");
+        descriptionText.className = "subtle";
+        descriptionText.textContent = description;
+        summary.appendChild(descriptionText);
+      }
+      summary.append(timing, meta);
       const actions = document.createElement("div");
       actions.className = "hub-event-schedule-row-actions";
       const edit = document.createElement("button"); edit.type = "button"; edit.textContent = t("common.edit");
@@ -3445,7 +3455,9 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       document.getElementById("hub-event-schedule-dialog-title").textContent = value.id ? t("hubEvent.scheduleEdit") : t("hubEvent.scheduleCreate");
       document.getElementById("hub-event-schedule-edit-id").value = value.id || "";
       document.getElementById("hub-event-schedule-kind").value = value.kind || "custom";
-      document.getElementById("hub-event-schedule-label").value = value.label || "";
+      const title = String(value.title || "").trim() || String(value.label || "").trim();
+      document.getElementById("hub-event-schedule-title").value = title;
+      document.getElementById("hub-event-schedule-label").value = value.label && String(value.label).trim() !== title ? String(value.label).trim() : "";
       document.getElementById("hub-event-schedule-description").value = value.description || "";
       document.getElementById("hub-event-schedule-precision").value = precision;
       setScheduleDateInputType(precision);
@@ -3465,9 +3477,11 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       const precision = value("hub-event-schedule-precision");
       const startsValue = value("hub-event-schedule-starts-at");
       const endsValue = value("hub-event-schedule-ends-at");
+      const title = value("hub-event-schedule-title");
       return {
         kind: value("hub-event-schedule-kind"),
-        label: value("hub-event-schedule-label"),
+        title: title,
+        label: value("hub-event-schedule-label") || title,
         description: value("hub-event-schedule-description") || null,
         startsAt: precision === "date" ? startsValue : (toIsoFromLocal(startsValue) || null),
         endsAt: precision === "date" ? (endsValue || null) : (toIsoFromLocal(endsValue) || null),
@@ -4040,6 +4054,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       return runHubEventUiAction(t("hubEvent.scheduleCreate"), addScheduleItem);
     });
     document.getElementById("hub-event-schedule-dialog-close").addEventListener("click", function () { hubEventScheduleDialog.close(); });
+    document.getElementById("hub-event-schedule-title").addEventListener("invalid", function (event) { event.target.setCustomValidity(t("hubEvent.scheduleTitleRequired")); });
+    document.getElementById("hub-event-schedule-title").addEventListener("input", function (event) { event.target.setCustomValidity(""); });
     document.getElementById("hub-event-schedule-precision").addEventListener("change", function (event) { setScheduleDateInputType(event.target.value); });
     hubEventScheduleForm.addEventListener("input", function () { scheduleDirty = true; });
     hubEventScheduleForm.addEventListener("submit", function (event) {

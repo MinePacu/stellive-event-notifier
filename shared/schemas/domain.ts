@@ -317,6 +317,7 @@ export type HubEventTimePrecision = "date" | "datetime";
 export interface HubEventScheduleItem {
   id: string;
   kind: HubEventScheduleKind;
+  title?: string;
   label: string;
   description?: string;
   startsAt: string;

@@ -110,6 +110,14 @@ object HubEventDetailFormatting {
         HubEventScheduleKind.CUSTOM -> "일정"
     }
 
+    fun displayTitle(item: HubEventScheduleItem): String =
+        item.title?.trim()?.takeIf(String::isNotEmpty)
+            ?: item.label.trim().takeIf(String::isNotEmpty)
+            ?: scheduleKindLabel(item.kind)
+
+    fun scheduleDescription(item: HubEventScheduleItem): String? =
+        item.description?.trim()?.takeIf(String::isNotEmpty)
+
     private fun isHttpsUrl(value: String): Boolean = runCatching {
         val uri = URI(value)
         uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank()
@@ -154,7 +162,7 @@ object HubEventDetailFormatting {
         val period = if (hasTimelineSchedule(event)) {
             nextScheduleItem(event, now)?.let { item ->
                 val itemZone = runCatching { ZoneId.of(item.timezone) }.getOrDefault(zoneId)
-                "다음 일정 · ${item.label} · ${schedulePeriodText(item, itemZone)}"
+                "다음 일정 · ${displayTitle(item)} · ${schedulePeriodText(item, itemZone)}"
             } ?: "예정된 세부 일정이 없습니다."
         } else {
             periodText(event, zoneId)

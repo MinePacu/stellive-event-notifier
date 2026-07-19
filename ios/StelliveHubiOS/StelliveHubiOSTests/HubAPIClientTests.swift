@@ -205,6 +205,7 @@ final class HubAPIClientTests: XCTestCase {
         XCTAssertEqual(detail.id, "event-1")
         XCTAssertEqual(detail.scheduleMode, .timeline)
         XCTAssertEqual(detail.scheduleItems?.first?.label, "트랙 리스트 공개")
+        XCTAssertNil(detail.scheduleItems?.first?.title)
     }
 
     func testAnnouncementListAndDetailSendPlatformVersionAndDecodeResponses() async throws {

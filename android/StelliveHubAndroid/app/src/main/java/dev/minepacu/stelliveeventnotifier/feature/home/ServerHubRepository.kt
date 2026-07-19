@@ -368,13 +368,15 @@ class ServerHubRepository(
             scheduleItems = scheduleItems.mapNotNull { item ->
                 val itemId = item.id ?: return@mapNotNull null
                 val itemKind = item.kind?.toEnum<HubEventScheduleKind>() ?: return@mapNotNull null
-                val itemLabel = item.label?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+                val itemTitle = item.title?.trim()?.takeIf(String::isNotEmpty)
+                val itemLabel = item.label?.trim()?.takeIf(String::isNotEmpty) ?: itemTitle.orEmpty()
                 val itemStartsAt = parseScheduleInstantOrNull(item.startsAt) ?: return@mapNotNull null
                 HubEventScheduleItem(
                     id = itemId,
                     kind = itemKind,
+                    title = itemTitle,
                     label = itemLabel,
-                    description = item.description,
+                    description = item.description?.trim()?.takeIf(String::isNotEmpty),
                     startsAt = itemStartsAt,
                     endsAt = parseScheduleInstantOrNull(item.endsAt),
                     timePrecision = item.timePrecision.toEnum<HubEventTimePrecision>() ?: HubEventTimePrecision.DATETIME,

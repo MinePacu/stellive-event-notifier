@@ -379,11 +379,14 @@ private extension HubEventResponse {
             scheduleMode: scheduleMode ?? .singleWindow,
             scheduleItems: (scheduleItems ?? []).compactMap { item in
                 guard let startsAt = Self.parseScheduleDate(item.startsAt) else { return nil }
+                let title = item.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let description = item.description?.trimmingCharacters(in: .whitespacesAndNewlines)
                 return HubEventScheduleItem(
                     id: item.id,
                     kind: item.kind,
+                    title: title?.isEmpty == false ? title : nil,
                     label: item.label,
-                    description: item.description,
+                    description: description?.isEmpty == false ? description : nil,
                     startsAt: startsAt,
                     endsAt: item.endsAt.flatMap(Self.parseScheduleDate),
                     timePrecision: item.timePrecision,

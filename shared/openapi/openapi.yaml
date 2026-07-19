@@ -2382,10 +2382,16 @@ components:
           type: string
         kind:
           $ref: "#/components/schemas/HubEventScheduleKind"
+        title:
+          type: string
+          maxLength: 160
         label:
           type: string
+          maxLength: 80
         description:
           type: string
+          nullable: true
+          maxLength: 2000
         startsAt:
           oneOf:
             - type: string

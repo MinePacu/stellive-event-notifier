@@ -580,6 +580,39 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         )
     }
 
+    func testScheduleDisplayTitlePrefersTitleThenLabelThenLocalizedKind() {
+        let base = schedule("label", "2026-06-20T00:00:00Z")
+
+        XCTAssertEqual(HubEventDetailFormatting.displayTitle(schedule("label", "2026-06-20T00:00:00Z", title: "  상세 제목  ")), "상세 제목")
+        XCTAssertEqual(HubEventDetailFormatting.displayTitle(schedule("label", "2026-06-20T00:00:00Z", title: "   ")), "label")
+        XCTAssertEqual(
+            HubEventDetailFormatting.displayTitle(schedule("item", "2026-06-20T00:00:00Z", kind: .salesOpen, label: " ")),
+            "판매 시작"
+        )
+        XCTAssertEqual(HubEventDetailFormatting.displayTitle(base), "label")
+    }
+
+    func testScheduleDescriptionTreatsNullEmptyAndWhitespaceAsMissing() {
+        XCTAssertNil(HubEventDetailFormatting.scheduleDescription(schedule("item", "2026-06-20T00:00:00Z")))
+        XCTAssertNil(HubEventDetailFormatting.scheduleDescription(schedule("item", "2026-06-20T00:00:00Z", description: "")))
+        XCTAssertNil(HubEventDetailFormatting.scheduleDescription(schedule("item", "2026-06-20T00:00:00Z", description: "   ")))
+        XCTAssertEqual(
+            HubEventDetailFormatting.scheduleDescription(schedule("item", "2026-06-20T00:00:00Z", description: "  설명  ")),
+            "설명"
+        )
+    }
+
+    func testTimelineHeroUsesDetailedTitleInsteadOfShortLabel() {
+        var event = detailEvent()
+        event.scheduleMode = .timeline
+        event.scheduleItems = [schedule("short", "2026-06-20T00:00:00Z", title: "상세 일정 제목")]
+
+        XCTAssertEqual(
+            HubEventDetailFormatting.heroSubtitleLines(for: event, now: dateTime("2026-06-15T00:00:00Z")).last,
+            "다음 일정 · 상세 일정 제목 · 2026.06.20 (토) 09:00"
+        )
+    }
+
     func testScheduleActionPolicyUsesHttpsAndKindSpecificLabels() {
         let item = schedule(
             "sales",
@@ -677,13 +710,17 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         cancelled: Bool = false,
         kind: HubEventScheduleKind = .custom,
         actionURL: String? = nil,
-        sourceURL: String? = nil
+        sourceURL: String? = nil,
+        title: String? = nil,
+        label: String? = nil,
+        description: String? = nil
     ) -> HubEventScheduleItem {
         HubEventScheduleItem(
             id: id,
             kind: kind,
-            label: id,
-            description: nil,
+            title: title,
+            label: label ?? id,
+            description: description,
             startsAt: dateTime(startsAt),
             endsAt: endsAt.map { dateTime($0) },
             timePrecision: .datetime,

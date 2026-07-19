@@ -423,7 +423,21 @@ describe("admin hub event routes", () => {
     expect(html).toContain('data-hub-event-tab="history"');
     expect(html).toContain('id="hub-event-schedule-dialog"');
     expect(html).toContain('id="hub-event-schedule-save"');
+    expect(html).toContain('id="hub-event-schedule-title" autocomplete="off" required maxlength="160"');
+    expect(html).toContain('id="hub-event-schedule-description" rows="3" maxlength="2000"');
+    expect(html).toContain('id="hub-event-schedule-label" autocomplete="off" maxlength="80"');
+    expect(html).toContain('label: value("hub-event-schedule-label") || title');
     expect(html).not.toContain('input.scheduleItems = collectScheduleItems()');
+  });
+
+  it("localizes required title and optional schedule fields", () => {
+    const html = renderAdminConsoleHtml("ko");
+
+    expect(html).toContain(">제목<");
+    expect(html).toContain(">설명 (선택 사항)<");
+    expect(html).toContain(">짧은 라벨 (선택 사항)<");
+    expect(html).toContain(">비우면 제목을 사용합니다<");
+    expect(html).toContain('t("hubEvent.scheduleTitleRequired")');
   });
 
   it("returns schedule revision conflicts as 409 responses", async () => {

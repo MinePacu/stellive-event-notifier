@@ -23,6 +23,7 @@ import {
 import { validateHubEventForAdmin } from "./hubEventPolicy.js";
 import {
   deriveHubEventScheduleMode,
+  normalizeHubEventScheduleText,
   withDefaultPrimaryScheduleItem
 } from "./hubEventSchedulePolicy.js";
 
@@ -223,6 +224,7 @@ export class HubEventAdminService {
     actor: HubEventAdminActor = {}
   ): Promise<AdminHubEvent> {
     const before = await this.getScheduleMutableEvent(id, input.expectedRevision);
+    this.assertScheduleMutationTitle(input);
     const { expectedRevision, id: _ignoredScheduleItemId, ...scheduleInput } = input;
     const existingItems = this.scheduleWriteItems(before).map((item) =>
       scheduleInput.isPrimary === true ? { ...item, isPrimary: false } : item
@@ -351,8 +353,19 @@ export class HubEventAdminService {
 
   private normalizeScheduleWrite(input: AdminHubEventWriteInput): AdminHubEventWriteInput {
     if (input.scheduleItems === undefined) return input;
-    const scheduleItems = withDefaultPrimaryScheduleItem(input.scheduleItems);
+    const scheduleItems = withDefaultPrimaryScheduleItem(
+      input.scheduleItems.map((item) => ({ ...item, ...normalizeHubEventScheduleText(item) }))
+    );
     return { ...input, scheduleItems, scheduleMode: deriveHubEventScheduleMode(scheduleItems) };
+  }
+
+  private assertScheduleMutationTitle(input: AdminHubEventScheduleItemWriteInput) {
+    if (input.title?.trim()) return;
+    throw new HubEventAdminValidationException([{
+      field: "title",
+      reason: "schedule_item_required",
+      message: "Schedule item title is required."
+    }]);
   }
 
   private withExistingScheduleProjection(
@@ -408,7 +421,9 @@ export class HubEventAdminService {
     action: Extract<HubEventAdminAction, `schedule_${string}`>,
     actor: HubEventAdminActor
   ): Promise<AdminHubEvent> {
-    const scheduleItems = withDefaultPrimaryScheduleItem(items);
+    const scheduleItems = withDefaultPrimaryScheduleItem(
+      items.map((item) => ({ ...item, ...normalizeHubEventScheduleText(item) }))
+    );
     const scheduleMode = deriveHubEventScheduleMode(scheduleItems);
     this.assertValid(
       { ...before, scheduleMode, scheduleItems },
@@ -464,6 +479,7 @@ export class HubEventAdminService {
         ...previous,
         id: previous?.id,
         kind: "main_window",
+        title: previous?.title ?? previous?.label ?? input.title ?? existing?.title ?? "행사 일정",
         label: previous?.label ?? input.title ?? existing?.title ?? "행사 일정",
         startsAt: startsAt ?? endsAt,
         endsAt: startsAt ? endsAt : null,

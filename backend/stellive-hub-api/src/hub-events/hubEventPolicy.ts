@@ -248,8 +248,20 @@ function validateScheduleItems(
     if (!kind || !allowedScheduleKinds.has(kind)) {
       addError(errors, `${field}.kind`, "schedule_item_kind_not_allowed", "Unsupported schedule item kind.");
     }
-    if (!stringField(rawItem, "label")?.trim()) {
-      addError(errors, `${field}.label`, "schedule_item_required", "Schedule item label is required.");
+    const title = stringField(rawItem, "title")?.trim();
+    const label = stringField(rawItem, "label")?.trim();
+    const description = stringField(rawItem, "description")?.trim();
+    if (!title && !label) {
+      addError(errors, `${field}.title`, "schedule_item_required", "Schedule item title or label is required.");
+    }
+    if (title && title.length > 160) {
+      addError(errors, `${field}.title`, "schedule_item_too_long", "Schedule item title must be at most 160 characters.");
+    }
+    if (label && label.length > 80) {
+      addError(errors, `${field}.label`, "schedule_item_too_long", "Schedule item label must be at most 80 characters.");
+    }
+    if (description && description.length > 2_000) {
+      addError(errors, `${field}.description`, "schedule_item_too_long", "Schedule item description must be at most 2,000 characters.");
     }
     const startsAt = stringField(rawItem, "startsAt");
     if (!startsAt || asTime(startsAt) === undefined) {

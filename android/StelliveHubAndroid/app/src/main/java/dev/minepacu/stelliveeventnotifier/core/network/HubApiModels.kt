@@ -155,6 +155,7 @@ data class HubEventDto(
 data class HubEventScheduleItemDto(
     val id: String? = null,
     val kind: String? = null,
+    val title: String? = null,
     val label: String? = null,
     val description: String? = null,
     val startsAt: String? = null,

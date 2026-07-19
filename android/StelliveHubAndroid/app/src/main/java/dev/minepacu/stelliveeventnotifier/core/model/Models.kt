@@ -106,6 +106,7 @@ enum class HubEventTimePrecision { DATE, DATETIME }
 data class HubEventScheduleItem(
     val id: String,
     val kind: HubEventScheduleKind,
+    val title: String? = null,
     val label: String,
     val description: String? = null,
     val startsAt: Instant,

@@ -12,6 +12,10 @@ import { ExternalApiCallLogRepository } from "../src/repositories/externalApiCal
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const prismaSchema = readFileSync(resolve(__dirname, "../prisma/schema.prisma"), "utf8");
+const scheduleTitleMigration = readFileSync(
+  resolve(__dirname, "../prisma/migrations/20260719150000_add_hub_event_schedule_title/migration.sql"),
+  "utf8"
+);
 
 describe("Prisma hub event admin schema", () => {
   it("defines publication state, revision, soft-delete timestamps, and audit logs", () => {
@@ -26,6 +30,14 @@ describe("Prisma hub event admin schema", () => {
     expect(prismaSchema).toContain("model HubEventAuditLog");
     expect(prismaSchema).toContain("@@index([hubEventId, createdAt])");
     expect(prismaSchema).toContain("@@index([action, createdAt])");
+  });
+
+  it("adds nullable schedule titles and backfills them from labels", () => {
+    expect(prismaSchema).toContain("title                String?");
+    expect(scheduleTitleMigration).toContain('ADD COLUMN "title" TEXT');
+    expect(scheduleTitleMigration).toContain('SET "title" = "label"');
+    expect(scheduleTitleMigration).not.toContain("DROP COLUMN");
+    expect(scheduleTitleMigration).not.toContain("NOT NULL");
   });
 });
 
@@ -841,6 +853,47 @@ describe("HubEventRepository", () => {
     ]);
   });
 
+  it("returns label as the public title when a legacy schedule record has no title", async () => {
+    const repository = new HubEventRepository({
+      hubEvent: {
+        async findFirst() {
+          return {
+            ...record,
+            publicationState: "published",
+            scheduleItems: [{
+              id: "legacy-schedule",
+              hubEventId: record.id,
+              kind: "custom",
+              title: null,
+              label: "레거시 라벨",
+              description: null,
+              startsAt: now,
+              endsAt: null,
+              timePrecision: "datetime",
+              timezone: "Asia/Seoul",
+              actionUrl: null,
+              sourceUrl: null,
+              sourceLabel: null,
+              notificationEligible: true,
+              isPrimary: true,
+              sortOrder: 0,
+              cancelledAt: null,
+              createdAt: now,
+              updatedAt: now
+            }]
+          };
+        }
+      }
+    });
+
+    const event = await repository.getPublishedById(record.id);
+    expect(event?.scheduleItems?.[0]).toMatchObject({
+      title: "레거시 라벨",
+      label: "레거시 라벨"
+    });
+    expect(event?.scheduleItems?.[0]).not.toHaveProperty("description");
+  });
+
   it("creates drafts with draft publication state and revision one", async () => {
     const calls: unknown[] = [];
     const repository = new HubEventRepository({
@@ -960,6 +1013,7 @@ describe("HubEventRepository", () => {
           id: "keep",
           kind: "sales_open",
           label: "예약 판매 시작",
+          description: "   ",
           startsAt: "2026-06-13T00:00:00.000Z",
           timePrecision: "datetime",
           timezone: "Asia/Seoul",
@@ -997,6 +1051,9 @@ describe("HubEventRepository", () => {
         data: { cancelledAt: expect.any(Date) }
       })
     ]));
+    expect(scheduleWrites[0]).toEqual(expect.objectContaining({
+      data: expect.objectContaining({ title: "예약 판매 시작", label: "예약 판매 시작", description: null })
+    }));
   });
 
   it("passes explicit null dates through update writes", async () => {
