@@ -444,6 +444,30 @@ describe("HubEventAdminService", () => {
     expect(fake.calls).toEqual([]);
   });
 
+  it("rejects a primary update for a schedule item not owned by the event", async () => {
+    const fake = createFakeRepository(adminEvent({
+      scheduleItems: [{
+        id: "owned",
+        kind: "custom",
+        title: "소유 일정",
+        label: "소유 일정",
+        startsAt: "2026-07-21T01:00:00.000Z",
+        timePrecision: "datetime",
+        timezone: "Asia/Seoul",
+        notificationEligible: true,
+        isPrimary: true,
+        sortOrder: 0
+      }]
+    }));
+
+    await expect(createService(fake.repository).updateScheduleItem(
+      "event-1",
+      "foreign-schedule",
+      { expectedRevision: 1, isPrimary: true }
+    )).rejects.toThrow("hub_event_schedule_item_not_found");
+    expect(fake.calls).toEqual([]);
+  });
+
   it("hard deletes a safe draft schedule item and distinguishes the result", async () => {
     const scheduleItems: NonNullable<AdminHubEventWriteInput["scheduleItems"]> = [{
       id: "draft-item",
@@ -498,6 +522,103 @@ describe("HubEventAdminService", () => {
 
     expect(updated.scheduleItems?.find((item) => item.id === "primary")?.isPrimary).toBe(false);
     expect(updated.scheduleItems?.find((item) => item.id === "replacement")?.isPrimary).toBe(true);
+    expect(updated.startsAt).toBe("2026-07-21T01:00:00.000Z");
+    expect(fake.audits.at(-1)?.action).toBe("schedule_update");
+  });
+
+  it("rejects a cancelled schedule as primary and rejects duplicate primaries in bulk", async () => {
+    const cancelled = {
+      id: "cancelled",
+      kind: "deadline" as const,
+      label: "마감",
+      startsAt: "2026-07-21T01:00:00.000Z",
+      timePrecision: "datetime" as const,
+      timezone: "Asia/Seoul",
+      isPrimary: false,
+      sortOrder: 1,
+      cancelledAt: "2026-07-20T01:00:00.000Z"
+    };
+    const fake = createFakeRepository(adminEvent({ scheduleMode: "timeline", scheduleItems: [cancelled] }));
+    const service = createService(fake.repository);
+
+    await expect(service.updateScheduleItem("event-1", "cancelled", {
+      expectedRevision: 1,
+      isPrimary: true
+    })).rejects.toMatchObject({
+      message: "hub_event_validation_failed",
+      errors: [expect.objectContaining({ field: "isPrimary", reason: "schedule_item_invalid" })]
+    });
+
+    await expect(service.update("event-1", {
+      scheduleItems: [
+        { ...cancelled, id: "first", cancelledAt: null, isPrimary: true },
+        { ...cancelled, id: "second", cancelledAt: null, isPrimary: true }
+      ]
+    })).rejects.toMatchObject({
+      message: "hub_event_validation_failed",
+      errors: [expect.objectContaining({ field: "scheduleItems", reason: "schedule_primary_duplicate" })]
+    });
+  });
+
+  it("validates parent and schedule links independently", () => {
+    const fake = createFakeRepository();
+    const service = createService(fake.repository);
+    const result = service.validate({
+      ...adminEvent(),
+      links: [
+        { kind: "custom", url: "https://example.com/a", sortOrder: 0 },
+        { kind: "source", url: "https://example.com/a", sortOrder: 1 }
+      ],
+      scheduleMode: "timeline",
+      scheduleItems: [{
+        id: "schedule-1",
+        kind: "custom",
+        title: "일정",
+        label: "일정",
+        startsAt: "2026-07-21T01:00:00.000Z",
+        timePrecision: "datetime",
+        timezone: "Asia/Seoul",
+        notificationEligible: true,
+        isPrimary: true,
+        sortOrder: 0,
+        links: [{ kind: "content", url: "http://example.com", sortOrder: -1 }]
+      }]
+    }, "draft");
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: "links.0.label", reason: "link_label_required" }),
+      expect.objectContaining({ field: "links.1.url", reason: "link_url_duplicate" }),
+      expect.objectContaining({ field: "scheduleItems.0.links.0.url", reason: "url_not_https" }),
+      expect.objectContaining({ field: "scheduleItems.0.links.0.sortOrder", reason: "link_sort_order_invalid" })
+    ]));
+  });
+
+  it("enforces independent parent and schedule link count limits", () => {
+    const service = createService(createFakeRepository().repository);
+    const link = (index: number) => ({ kind: "content" as const, url: `https://example.com/${index}`, sortOrder: index });
+    const result = service.validate({
+      ...adminEvent(),
+      links: Array.from({ length: 21 }, (_, index) => link(index)),
+      scheduleItems: [{
+        id: "schedule-1",
+        kind: "custom",
+        title: "일정",
+        label: "일정",
+        startsAt: "2026-07-21T01:00:00.000Z",
+        timePrecision: "datetime",
+        timezone: "Asia/Seoul",
+        notificationEligible: true,
+        isPrimary: true,
+        sortOrder: 0,
+        links: Array.from({ length: 11 }, (_, index) => link(index + 100))
+      }]
+    }, "draft");
+
+    expect(result.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: "links", reason: "links_too_many" }),
+      expect.objectContaining({ field: "scheduleItems.0.links", reason: "links_too_many" })
+    ]));
   });
 
   it("increments the parent revision and audits a title-only schedule update", async () => {

@@ -394,13 +394,36 @@ private extension HubEventResponse {
                     actionUrl: item.actionUrl,
                     sourceUrl: item.sourceUrl,
                     sourceLabel: item.sourceLabel,
+                    links: (item.links ?? []).enumerated().map { index, link in
+                        HubEventLink(
+                            id: link.id ?? "schedule:\(item.id):link:\(index)",
+                            kind: link.kind,
+                            label: link.label,
+                            url: link.url,
+                            sortOrder: link.sortOrder,
+                            createdAt: link.createdAt.flatMap(Self.parseDate),
+                            updatedAt: link.updatedAt.flatMap(Self.parseDate)
+                        )
+                    },
                     notificationEligible: item.notificationEligible,
                     isPrimary: item.isPrimary,
                     sortOrder: item.sortOrder,
-                    cancelledAt: item.cancelledAt.flatMap(Self.parseDate)
+                    cancelledAt: item.cancelledAt.flatMap(Self.parseDate),
+                    createdAt: item.createdAt.flatMap(Self.parseDate)
                 )
             }.sorted { left, right in
                 left.startsAt == right.startsAt ? left.sortOrder < right.sortOrder : left.startsAt < right.startsAt
+            },
+            links: (links ?? []).enumerated().map { index, link in
+                HubEventLink(
+                    id: link.id ?? "event:\(id):link:\(index)",
+                    kind: link.kind,
+                    label: link.label,
+                    url: link.url,
+                    sortOrder: link.sortOrder,
+                    createdAt: link.createdAt.flatMap(Self.parseDate),
+                    updatedAt: link.updatedAt.flatMap(Self.parseDate)
+                )
             },
             announcedAt: announcedAt.flatMap(Self.parseDate),
             startsAt: startsAt.flatMap(Self.parseDate),

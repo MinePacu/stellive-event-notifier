@@ -27,10 +27,27 @@ enum HubEventScheduleScrollPolicy {
     }
 }
 
+enum HubEventScheduleExpansionPolicy {
+    static func resolvedIDs(
+        previousEventID: String?,
+        eventID: String,
+        currentIDs: Set<String>,
+        highlightedID: String?
+    ) -> Set<String> {
+        var result = previousEventID == eventID ? currentIDs : []
+        if let highlightedID { result.insert(highlightedID) }
+        return result
+    }
+}
+
 struct HubEventDetailView: View {
     let event: HubEvent
     var highlightedScheduleItemId: String? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var lastScrolledScheduleItemId: String? = nil
+    @State private var expandedScheduleItemIds = Set<String>()
+    @State private var expandedScheduleEventId: String?
+    @State private var presentedLinks: HubEventLinksSheetContext?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -52,13 +69,33 @@ struct HubEventDetailView: View {
                     .frame(width: UIScreen.main.bounds.width)
                 }
                 .ignoresSafeArea(edges: .top)
-                .onAppear { scrollToHighlightedSchedule(using: proxy) }
-                .onChange(of: highlightedScheduleItemId) { _ in scrollToHighlightedSchedule(using: proxy) }
+                .onAppear {
+                    expandHighlightedSchedule()
+                    scrollToHighlightedSchedule(using: proxy)
+                }
+                .onChange(of: highlightedScheduleItemId) { _ in
+                    expandHighlightedSchedule()
+                    scrollToHighlightedSchedule(using: proxy)
+                }
+                .onChange(of: event.id) { _ in expandHighlightedSchedule() }
             }
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .sheet(item: $presentedLinks) { context in
+            HubEventLinksSheet(context: context)
+        }
+    }
+
+    private func expandHighlightedSchedule() {
+        expandedScheduleItemIds = HubEventScheduleExpansionPolicy.resolvedIDs(
+            previousEventID: expandedScheduleEventId,
+            eventID: event.id,
+            currentIDs: expandedScheduleItemIds,
+            highlightedID: highlightedScheduleItemId
+        )
+        expandedScheduleEventId = event.id
     }
 
     private func scrollToHighlightedSchedule(using proxy: ScrollViewProxy) {
@@ -168,12 +205,25 @@ struct HubEventDetailView: View {
     }
 
     private var ctaRow: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+        let links = HubEventLinkPolicy.resolvedEventLinks(event)
+        let ctaMode = HubEventLinkPolicy.eventCTAMode(event)
+        let columns = Array(
+            repeating: GridItem(.flexible(), spacing: 10),
+            count: links.isEmpty ? 1 : 2
+        )
+        return LazyVGrid(columns: columns, spacing: 10) {
             Button("캘린더 추가") {}
                 .buttonStyle(HubEventCTAButtonStyle(primary: true))
-            if let actionUrl = url(from: event.ticketUrl) ?? url(from: event.purchaseUrl) ?? url(from: event.sourceUrl) {
-                Link(HubEventDetailFormatting.linkActionLabel(for: event.category), destination: actionUrl)
+            if ctaMode == .direct, let actionURL = url(from: links[0].url) {
+                Link(HubEventLinkPolicy.displayLabel(links[0]), destination: actionURL)
                     .buttonStyle(HubEventCTAButtonStyle(primary: false))
+                    .accessibilityLabel("\(HubEventLinkPolicy.displayLabel(links[0])), 외부 링크 열기")
+            } else if ctaMode == .sheet {
+                Button("관련 링크 \(links.count)개") {
+                    presentedLinks = HubEventLinksSheetContext(title: "관련 링크", links: links)
+                }
+                .buttonStyle(HubEventCTAButtonStyle(primary: false))
+                .accessibilityLabel("관련 링크 \(links.count)개, 목록 열기")
             }
         }
         .padding(.top, 5)
@@ -203,11 +253,23 @@ struct HubEventDetailView: View {
     }
 
     private var timelineCards: some View {
-        VStack(spacing: 10) {
+        let effectivePrimaryID = HubEventLinkPolicy.effectivePrimaryScheduleItemID(event)
+        return VStack(spacing: 10) {
             ForEach(HubEventDetailFormatting.timeline(for: event), id: \.schedule.id) { item in
                 HubEventScheduleCard(
                     item: item,
-                    highlighted: item.schedule.id == highlightedScheduleItemId
+                    highlighted: item.schedule.id == highlightedScheduleItemId,
+                    isEffectivePrimary: item.schedule.id == effectivePrimaryID,
+                    expanded: expandedScheduleItemIds.contains(item.schedule.id),
+                    onToggle: {
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                            if expandedScheduleItemIds.contains(item.schedule.id) {
+                                expandedScheduleItemIds.remove(item.schedule.id)
+                            } else {
+                                expandedScheduleItemIds.insert(item.schedule.id)
+                            }
+                        }
+                    }
                 )
                 .id(item.schedule.id)
             }
@@ -234,51 +296,88 @@ struct HubEventDetailView: View {
 private struct HubEventScheduleCard: View {
     let item: HubEventScheduleTimelineItem
     let highlighted: Bool
+    let isEffectivePrimary: Bool
+    let expanded: Bool
+    let onToggle: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 7) {
-                scheduleBadge(item.stateText)
-                scheduleBadge(HubEventDetailFormatting.scheduleKindLabel(item.schedule.kind))
-                if item.schedule.isPrimary { scheduleBadge("대표 일정") }
-                Spacer(minLength: 0)
+        let links = HubEventLinkPolicy.resolvedScheduleLinks(item.schedule)
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: onToggle) {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 6) {
+                        scheduleBadge(item.stateText)
+                        scheduleBadge(HubEventDetailFormatting.scheduleKindLabel(item.schedule.kind))
+                        if isEffectivePrimary { scheduleBadge("대표 일정") }
+                        if highlighted { scheduleBadge("선택한 일정") }
+                        Spacer(minLength: 0)
+                    }
+                    HStack(alignment: .center, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(HubEventDetailFormatting.displayTitle(item.schedule))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(HubEventDetailColors.text)
+                            Text(item.timingText)
+                                .font(.footnote)
+                                .foregroundStyle(HubEventDetailColors.muted)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.down")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(HubEventDetailColors.muted)
+                            .rotationEffect(.degrees(expanded ? 180 : 0))
+                    }
+                }
+                .contentShape(Rectangle())
             }
-            Text(HubEventDetailFormatting.displayTitle(item.schedule))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(HubEventDetailColors.text)
-            Text(item.timingText)
-                .font(.footnote)
-                .foregroundStyle(HubEventDetailColors.muted)
-            if let description = HubEventDetailFormatting.scheduleDescription(item.schedule) {
-                Text(description)
-                    .font(.footnote)
-                    .foregroundStyle(HubEventDetailColors.text)
-            }
-            if let source = item.schedule.sourceLabel, !source.isEmpty {
-                Text("출처 · \(source)")
-                    .font(.caption)
-                    .foregroundStyle(HubEventDetailColors.muted)
-            }
-            if let actionURL = HubEventDetailFormatting.scheduleActionURL(item.schedule) {
-                Link(HubEventDetailFormatting.scheduleActionLabel(item.schedule.kind), destination: actionURL)
-                    .font(.footnote.weight(.semibold))
-                    .accessibilityLabel("\(HubEventDetailFormatting.scheduleActionLabel(item.schedule.kind)), 외부 링크 열기")
-                    .padding(.top, 2)
+            .buttonStyle(.plain)
+            .accessibilityLabel([
+                HubEventDetailFormatting.displayTitle(item.schedule),
+                item.stateText,
+                isEffectivePrimary ? "대표 일정" : nil,
+                highlighted ? "선택한 일정" : nil,
+            ].compactMap { $0 }.joined(separator: ", "))
+            .accessibilityValue(expanded ? "펼쳐짐" : "접힘")
+            .accessibilityHint(expanded ? "두 번 탭하여 세부 내용을 접습니다." : "두 번 탭하여 세부 내용을 펼칩니다.")
+
+            if expanded {
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("정확한 일정 · \(item.timingText)")
+                        .font(.caption)
+                        .foregroundStyle(HubEventDetailColors.muted)
+                    Text("\(item.schedule.timePrecision == .date ? "날짜만" : "날짜와 시간") · \(item.schedule.timezone)")
+                        .font(.caption)
+                        .foregroundStyle(HubEventDetailColors.muted)
+                    if let description = HubEventDetailFormatting.scheduleDescription(item.schedule) {
+                        Text(description)
+                            .font(.footnote)
+                            .foregroundStyle(HubEventDetailColors.text)
+                    }
+                    if let source = item.schedule.sourceLabel, !source.isEmpty {
+                        Text("출처 · \(source)")
+                            .font(.caption)
+                            .foregroundStyle(HubEventDetailColors.muted)
+                    }
+                    ForEach(links) { link in
+                        if let destination = url(from: link.url) {
+                            Link(HubEventLinkPolicy.displayLabel(link), destination: destination)
+                                .font(.footnote.weight(.semibold))
+                                .accessibilityLabel("\(HubEventLinkPolicy.displayLabel(link)), 외부 링크 열기")
+                        }
+                    }
+                }
+                .padding(.top, 10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .background(highlighted ? Color.teal.opacity(0.1) : HubEventDetailColors.card)
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(highlighted ? Color.teal : HubEventDetailColors.line, lineWidth: highlighted ? 2 : 1)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            highlighted
-                ? "\(HubEventDetailFormatting.displayTitle(item.schedule)), 선택한 일정"
-                : HubEventDetailFormatting.displayTitle(item.schedule)
-        )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .opacity(item.schedule.cancelledAt == nil ? 1 : 0.58)
     }
@@ -290,6 +389,70 @@ private struct HubEventScheduleCard: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
+    }
+
+    private func url(from rawValue: String) -> URL? {
+        guard let url = URL(string: rawValue), url.scheme?.lowercased() == "https", url.host != nil else { return nil }
+        return url
+    }
+}
+
+private struct HubEventLinksSheetContext: Identifiable {
+    let id = UUID()
+    let title: String
+    let links: [HubEventLink]
+}
+
+private struct HubEventLinksSheet: View {
+    let context: HubEventLinksSheetContext
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(context.links) { link in
+                if let destination = URL(string: link.url), destination.scheme?.lowercased() == "https", destination.host != nil {
+                    Link(destination: destination) {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(HubEventLinkPolicy.displayLabel(link))
+                                    .font(.body.weight(.semibold))
+                                Text(link.kind.displayName)
+                                    .font(.caption)
+                                    .foregroundStyle(HubEventDetailColors.muted)
+                            }
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(HubEventDetailColors.muted)
+                        }
+                    }
+                    .accessibilityLabel("\(HubEventLinkPolicy.displayLabel(link)), 외부 링크 열기")
+                }
+            }
+            .navigationTitle(context.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("닫기") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+private extension HubEventLinkKind {
+    var displayName: String {
+        switch self {
+        case .source: "출처"
+        case .purchase: "구매"
+        case .ticket: "티켓"
+        case .reservation: "예약"
+        case .content: "콘텐츠"
+        case .video: "영상"
+        case .map: "지도"
+        case .custom: "관련 링크"
+        }
     }
 }
 

@@ -314,6 +314,26 @@ export type HubEventScheduleKind =
 
 export type HubEventTimePrecision = "date" | "datetime";
 
+export type HubEventLinkKind =
+  | "source"
+  | "purchase"
+  | "ticket"
+  | "reservation"
+  | "content"
+  | "video"
+  | "map"
+  | "custom";
+
+export interface HubEventLink {
+  id?: string;
+  kind: HubEventLinkKind;
+  label?: string;
+  url: string;
+  sortOrder: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface HubEventScheduleItem {
   id: string;
   kind: HubEventScheduleKind;
@@ -327,6 +347,7 @@ export interface HubEventScheduleItem {
   actionUrl?: string;
   sourceUrl?: string;
   sourceLabel?: string;
+  links?: HubEventLink[];
   notificationEligible: boolean;
   isPrimary: boolean;
   sortOrder: number;
@@ -385,6 +406,7 @@ export interface HubEvent {
   sourceType: HubEventSourceType;
   scheduleMode?: HubEventScheduleMode;
   scheduleItems?: HubEventScheduleItem[];
+  links?: HubEventLink[];
   announcedAt?: string;
   startsAt?: string;
   endsAt?: string;

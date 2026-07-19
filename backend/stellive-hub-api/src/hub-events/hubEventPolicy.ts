@@ -2,6 +2,7 @@ import type { CatalogService } from "../catalog/catalog.js";
 import type {
   HubEvent,
   HubEventCategory,
+  HubEventLinkKind,
   HubEventScheduleKind,
   HubEventScheduleMode,
   HubEventSourceType,
@@ -13,6 +14,7 @@ import type {
   HubEventValidationError,
   HubEventValidationReason
 } from "./hubEventAdminTypes.js";
+import { hubEventLinkKinds } from "./hubEventLinkPolicy.js";
 
 const allowedSourceTypes = new Set<HubEventSourceType>(["official", "member", "official_collab"]);
 const allowedCategories = new Set<HubEventCategory>([
@@ -37,6 +39,7 @@ const allowedScheduleKinds = new Set<HubEventScheduleKind>([
   "custom"
 ]);
 const allowedTimePrecisions = new Set<HubEventTimePrecision>(["date", "datetime"]);
+const allowedLinkKinds = new Set<HubEventLinkKind>(hubEventLinkKinds);
 
 export function canDisplayHubEventImage(image: HubEvent["image"]): boolean {
   if (!image?.url || !displayableImagePolicyStates.has(image.policyState)) {
@@ -105,6 +108,53 @@ function addHttpsUrlErrorIfNeeded(errors: HubEventValidationError[], input: Reco
   if (!hasHttpsUrl(value)) {
     addError(errors, field, "url_not_https", `${field} must be an HTTPS URL.`);
   }
+}
+
+function validateLinks(
+  errors: HubEventValidationError[],
+  rawLinks: unknown,
+  field: string,
+  maximum: number
+) {
+  if (rawLinks === undefined) return;
+  if (!Array.isArray(rawLinks)) {
+    addError(errors, field, "link_invalid", "links must be an array.");
+    return;
+  }
+  if (rawLinks.length > maximum) {
+    addError(errors, field, "links_too_many", `At most ${maximum} links are allowed.`);
+  }
+  const urls = new Set<string>();
+  rawLinks.forEach((rawLink, index) => {
+    const linkField = `${field}.${index}`;
+    if (!isRecord(rawLink)) {
+      addError(errors, linkField, "link_invalid", "Link must be an object.");
+      return;
+    }
+    const kind = stringField(rawLink, "kind") as HubEventLinkKind | undefined;
+    if (!kind || !allowedLinkKinds.has(kind)) {
+      addError(errors, `${linkField}.kind`, "link_kind_not_allowed", "Unsupported link kind.");
+    }
+    const label = stringField(rawLink, "label")?.trim();
+    if (kind === "custom" && !label) {
+      addError(errors, `${linkField}.label`, "link_label_required", "Custom links require a label.");
+    }
+    if (label && label.length > 80) {
+      addError(errors, `${linkField}.label`, "link_label_too_long", "Link label must be at most 80 characters.");
+    }
+    const url = stringField(rawLink, "url")?.trim();
+    if (!url || !hasHttpsUrl(url)) {
+      addError(errors, `${linkField}.url`, "url_not_https", "Link URL must be an HTTPS URL.");
+    } else if (urls.has(url)) {
+      addError(errors, `${linkField}.url`, "link_url_duplicate", "Link URLs must be unique within their owner.");
+    } else {
+      urls.add(url);
+    }
+    const sortOrder = rawLink.sortOrder;
+    if (!Number.isInteger(sortOrder) || Number(sortOrder) < 0) {
+      addError(errors, `${linkField}.sortOrder`, "link_sort_order_invalid", "sortOrder must be a non-negative integer.");
+    }
+  });
 }
 
 function validateHubEventImageForAdmin(errors: HubEventValidationError[], input: Record<string, unknown>) {
@@ -292,6 +342,7 @@ function validateScheduleItems(
         addError(errors, `${field}.${urlField}`, "url_not_https", `${urlField} must be an HTTPS URL.`);
       }
     }
+    validateLinks(errors, rawItem.links, `${field}.links`, 10);
   });
 
   if (primaryCount > 1) {
@@ -413,6 +464,7 @@ export function validateHubEventForAdmin(
   addHttpsUrlErrorIfNeeded(errors, input, "sourceUrl");
   addHttpsUrlErrorIfNeeded(errors, input, "purchaseUrl");
   addHttpsUrlErrorIfNeeded(errors, input, "ticketUrl");
+  validateLinks(errors, input.links, "links", 20);
   validateHubEventImageForAdmin(errors, input);
   validateScheduleItems(errors, input, mode);
 

@@ -16,6 +16,10 @@ const scheduleTitleMigration = readFileSync(
   resolve(__dirname, "../prisma/migrations/20260719150000_add_hub_event_schedule_title/migration.sql"),
   "utf8"
 );
+const hubEventLinksMigration = readFileSync(
+  resolve(__dirname, "../prisma/migrations/20260719180000_add_hub_event_links_and_primary_uniqueness/migration.sql"),
+  "utf8"
+);
 
 describe("Prisma hub event admin schema", () => {
   it("defines publication state, revision, soft-delete timestamps, and audit logs", () => {
@@ -38,6 +42,19 @@ describe("Prisma hub event admin schema", () => {
     expect(scheduleTitleMigration).toContain('SET "title" = "label"');
     expect(scheduleTitleMigration).not.toContain("DROP COLUMN");
     expect(scheduleTitleMigration).not.toContain("NOT NULL");
+  });
+
+  it("deduplicates active primaries and adds link ownership constraints and backfills", () => {
+    expect(hubEventLinksMigration).toContain('ROW_NUMBER() OVER');
+    expect(hubEventLinksMigration).toContain('ORDER BY "sortOrder" ASC, "startsAt" ASC, "createdAt" ASC, "id" ASC');
+    expect(hubEventLinksMigration).toContain('CREATE UNIQUE INDEX "HubEventScheduleItem_one_active_primary"');
+    expect(hubEventLinksMigration).toContain('WHERE "isPrimary" = TRUE AND "cancelledAt" IS NULL');
+    expect(hubEventLinksMigration).toContain('CONSTRAINT "HubEventExternalLink_exactly_one_owner" CHECK');
+    expect(hubEventLinksMigration).toContain('CREATE UNIQUE INDEX "HubEventExternalLink_hubEventId_url_key"');
+    expect(hubEventLinksMigration).toContain('CREATE UNIQUE INDEX "HubEventExternalLink_scheduleItemId_url_key"');
+    expect(hubEventLinksMigration).toContain('legacy_parent_purchase_');
+    expect(hubEventLinksMigration).toContain('legacy_schedule_action_');
+    expect(prismaSchema).toContain('model HubEventExternalLink');
   });
 });
 
@@ -848,7 +865,13 @@ describe("HubEventRepository", () => {
           publicationState: "published",
           deletedAt: null
         },
-        include: { scheduleItems: { orderBy: [{ sortOrder: "asc" }, { startsAt: "asc" }, { id: "asc" }] } }
+        include: {
+          links: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
+          scheduleItems: {
+            include: { links: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] } },
+            orderBy: [{ sortOrder: "asc" }, { startsAt: "asc" }, { id: "asc" }]
+          }
+        }
       }
     ]);
   });
@@ -1039,6 +1062,7 @@ describe("HubEventRepository", () => {
       "transaction:start",
       "parent:update",
       "schedule:list",
+      "schedule:cancel",
       "schedule:update",
       "schedule:create",
       "schedule:cancel",
@@ -1051,9 +1075,59 @@ describe("HubEventRepository", () => {
         data: { cancelledAt: expect.any(Date) }
       })
     ]));
-    expect(scheduleWrites[0]).toEqual(expect.objectContaining({
+    expect(scheduleWrites[0]).toEqual({
+      where: { hubEventId: "event-1", isPrimary: true, cancelledAt: null },
+      data: { isPrimary: false }
+    });
+    expect(scheduleWrites[1]).toEqual(expect.objectContaining({
       data: expect.objectContaining({ title: "예약 판매 시작", label: "예약 판매 시작", description: null })
     }));
+  });
+
+  it("synchronizes parent links by owner without accepting foreign link ids", async () => {
+    const writes: unknown[] = [];
+    const linkRecord = {
+      id: "link-1",
+      hubEventId: "event-1",
+      scheduleItemId: null,
+      kind: "purchase",
+      label: null,
+      url: "https://example.com/old",
+      sortOrder: 0,
+      createdAt: new Date("2026-06-12T00:00:00.000Z"),
+      updatedAt: new Date("2026-06-12T00:00:00.000Z")
+    };
+    const client = {
+      hubEvent: {
+        async update() { return { ...record, links: [linkRecord] }; },
+        async findFirst() { return { ...record, links: [linkRecord] }; }
+      },
+      hubEventExternalLink: {
+        async findMany() { return [linkRecord]; },
+        async update(args: unknown) { writes.push({ method: "update", args }); return linkRecord; },
+        async create(args: unknown) { writes.push({ method: "create", args }); return { ...linkRecord, id: "link-2" }; },
+        async deleteMany(args: unknown) { writes.push({ method: "deleteMany", args }); return { count: 0 }; }
+      }
+    };
+    const repository = new HubEventRepository(client as never);
+
+    await repository.update("event-1", {
+      links: [
+        { id: "link-1", kind: "purchase", url: "https://example.com/new", sortOrder: 0 },
+        { kind: "ticket", url: "https://example.com/ticket", sortOrder: 1 }
+      ]
+    });
+
+    expect(writes).toEqual([
+      expect.objectContaining({ method: "update", args: expect.objectContaining({ where: { id: "link-1" } }) }),
+      expect.objectContaining({ method: "create", args: expect.objectContaining({
+        data: expect.objectContaining({ hubEventId: "event-1", scheduleItemId: null, kind: "ticket" })
+      }) })
+    ]);
+
+    await expect(repository.update("event-1", {
+      links: [{ id: "foreign-link", kind: "source", url: "https://example.com/source", sortOrder: 0 }]
+    })).rejects.toThrow("hub_event_link_not_found");
   });
 
   it("passes explicit null dates through update writes", async () => {

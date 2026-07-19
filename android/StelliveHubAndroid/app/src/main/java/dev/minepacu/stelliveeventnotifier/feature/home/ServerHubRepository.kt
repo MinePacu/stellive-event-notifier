@@ -12,6 +12,8 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventImage
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventImagePolicyState
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleItem
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventLink
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventLinkKind
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleKind
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventSourceType
@@ -384,12 +386,39 @@ class ServerHubRepository(
                     actionUrl = item.actionUrl,
                     sourceUrl = item.sourceUrl,
                     sourceLabel = item.sourceLabel,
+                    links = item.links.mapNotNull { link ->
+                        val kind = link.kind?.toEnum<HubEventLinkKind>() ?: return@mapNotNull null
+                        val url = link.url?.trim()?.takeIf(String::isNotEmpty) ?: return@mapNotNull null
+                        HubEventLink(
+                            id = link.id ?: "legacy:${itemId}:${link.sortOrder}:$url",
+                            kind = kind,
+                            label = link.label?.trim()?.takeIf(String::isNotEmpty),
+                            url = url,
+                            sortOrder = link.sortOrder,
+                            createdAt = parseScheduleInstantOrNull(link.createdAt),
+                            updatedAt = parseScheduleInstantOrNull(link.updatedAt),
+                        )
+                    },
                     notificationEligible = item.notificationEligible,
                     isPrimary = item.isPrimary,
                     sortOrder = item.sortOrder,
                     cancelledAt = parseScheduleInstantOrNull(item.cancelledAt),
+                    createdAt = parseScheduleInstantOrNull(item.createdAt),
                 )
             }.sortedWith(compareBy<HubEventScheduleItem> { it.startsAt }.thenBy { it.sortOrder }),
+            links = links.mapNotNull { link ->
+                val kind = link.kind?.toEnum<HubEventLinkKind>() ?: return@mapNotNull null
+                val url = link.url?.trim()?.takeIf(String::isNotEmpty) ?: return@mapNotNull null
+                HubEventLink(
+                    id = link.id ?: "legacy:$id:${link.sortOrder}:$url",
+                    kind = kind,
+                    label = link.label?.trim()?.takeIf(String::isNotEmpty),
+                    url = url,
+                    sortOrder = link.sortOrder,
+                    createdAt = parseScheduleInstantOrNull(link.createdAt),
+                    updatedAt = parseScheduleInstantOrNull(link.updatedAt),
+                )
+            },
             announcedAt = announcedAt?.let(::parseInstantOrNull),
             startsAt = startsAt?.let(::parseInstantOrNull),
             endsAt = endsAt?.let(::parseInstantOrNull),

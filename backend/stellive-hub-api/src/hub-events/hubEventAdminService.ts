@@ -21,10 +21,12 @@ import {
   type HubEventAuditLogInput
 } from "./hubEventRepository.js";
 import { validateHubEventForAdmin } from "./hubEventPolicy.js";
+import { normalizeHubEventLinks } from "./hubEventLinkPolicy.js";
 import {
   deriveHubEventScheduleMode,
   normalizeHubEventScheduleText,
-  withDefaultPrimaryScheduleItem
+  withDefaultPrimaryScheduleItem,
+  withPrimaryScheduleItem
 } from "./hubEventSchedulePolicy.js";
 
 export interface HubEventAdminActor {
@@ -116,7 +118,7 @@ export class HubEventAdminService {
   }
 
   async createDraft(input: AdminHubEventWriteInput, actor: HubEventAdminActor = {}): Promise<AdminHubEvent> {
-    const singleWindowNormalized = this.normalizeSingleWindowWrite(input);
+    const singleWindowNormalized = this.normalizeSingleWindowWrite(this.normalizeLinkWrite(input));
     const normalized = this.normalizeScheduleWrite({
       ...singleWindowNormalized,
       scheduleItems: singleWindowNormalized.scheduleItems ?? []
@@ -131,7 +133,7 @@ export class HubEventAdminService {
     const before = await this.getExisting(id);
     this.assertMutable(before);
     const normalized = this.withExistingScheduleProjection(
-      this.normalizeScheduleWrite(this.normalizeSingleWindowWrite(input, before)),
+      this.normalizeScheduleWrite(this.normalizeSingleWindowWrite(this.normalizeLinkWrite(input), before)),
       before
     );
     this.assertValid({ ...before, ...normalized }, before.publicationState === "published" ? "publish" : "draft");
@@ -225,16 +227,17 @@ export class HubEventAdminService {
   ): Promise<AdminHubEvent> {
     const before = await this.getScheduleMutableEvent(id, input.expectedRevision);
     this.assertScheduleMutationTitle(input);
-    const { expectedRevision, id: _ignoredScheduleItemId, ...scheduleInput } = input;
-    const existingItems = this.scheduleWriteItems(before).map((item) =>
-      scheduleInput.isPrimary === true ? { ...item, isPrimary: false } : item
-    );
-    const items = [...existingItems, {
+    const { expectedRevision, id: _ignoredScheduleItemId, ...rawScheduleInput } = input;
+    const scheduleInput = { ...rawScheduleInput, links: normalizeHubEventLinks(rawScheduleInput.links) };
+    const items = [...this.scheduleWriteItems(before), {
       ...scheduleInput,
       sortOrder: scheduleInput.sortOrder ?? before.scheduleItems?.length ?? 0,
       cancelledAt: null
     }];
-    return this.persistScheduleMutation(before, items, expectedRevision, "schedule_create", actor);
+    const normalizedItems = scheduleInput.isPrimary === true
+      ? withPrimaryScheduleItem(items, items.length - 1)
+      : items;
+    return this.persistScheduleMutation(before, normalizedItems, expectedRevision, "schedule_create", actor);
   }
 
   async updateScheduleItem(
@@ -245,13 +248,21 @@ export class HubEventAdminService {
   ): Promise<AdminHubEvent> {
     const before = await this.getScheduleMutableEvent(id, input.expectedRevision);
     const existing = this.requireOwnedScheduleItem(before, scheduleItemId);
-    const { expectedRevision, ...patch } = input;
+    const { expectedRevision, ...rawPatch } = input;
+    const patch = { ...rawPatch, links: normalizeHubEventLinks(rawPatch.links) };
+    if (patch.isPrimary === true && existing.cancelledAt) {
+      throw new HubEventAdminValidationException([{
+        field: "isPrimary",
+        reason: "schedule_item_invalid",
+        message: "A cancelled schedule item cannot be primary."
+      }]);
+    }
     const items = this.scheduleWriteItems(before).map((item) =>
-      item.id === scheduleItemId
-        ? { ...existing, ...patch, id: scheduleItemId }
-        : patch.isPrimary === true ? { ...item, isPrimary: false } : item
+      item.id === scheduleItemId ? { ...existing, ...patch, id: scheduleItemId } : item
     );
-    return this.persistScheduleMutation(before, items, expectedRevision, "schedule_update", actor);
+    const targetIndex = items.findIndex((item) => item.id === scheduleItemId);
+    const normalizedItems = patch.isPrimary === true ? withPrimaryScheduleItem(items, targetIndex) : items;
+    return this.persistScheduleMutation(before, normalizedItems, expectedRevision, "schedule_update", actor);
   }
 
   async deleteScheduleItem(
@@ -305,7 +316,7 @@ export class HubEventAdminService {
     const existing = this.requireOwnedScheduleItem(before, scheduleItemId);
     if (!existing.cancelledAt) return before;
     const items = this.scheduleWriteItems(before).map((item) =>
-      item.id === scheduleItemId ? { ...item, cancelledAt: null } : item
+      item.id === scheduleItemId ? { ...item, cancelledAt: null, isPrimary: false } : item
     );
     return this.persistScheduleMutation(before, items, expectedRevision, "schedule_restore", actor);
   }
@@ -354,9 +365,17 @@ export class HubEventAdminService {
   private normalizeScheduleWrite(input: AdminHubEventWriteInput): AdminHubEventWriteInput {
     if (input.scheduleItems === undefined) return input;
     const scheduleItems = withDefaultPrimaryScheduleItem(
-      input.scheduleItems.map((item) => ({ ...item, ...normalizeHubEventScheduleText(item) }))
+      input.scheduleItems.map((item) => ({
+        ...item,
+        ...normalizeHubEventScheduleText(item),
+        links: normalizeHubEventLinks(item.links)
+      }))
     );
     return { ...input, scheduleItems, scheduleMode: deriveHubEventScheduleMode(scheduleItems) };
+  }
+
+  private normalizeLinkWrite(input: AdminHubEventWriteInput): AdminHubEventWriteInput {
+    return { ...input, links: normalizeHubEventLinks(input.links) };
   }
 
   private assertScheduleMutationTitle(input: AdminHubEventScheduleItemWriteInput) {

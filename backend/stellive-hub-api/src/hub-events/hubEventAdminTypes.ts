@@ -53,6 +53,13 @@ export type HubEventValidationReason =
   | "schedule_item_timezone_invalid"
   | "schedule_primary_required"
   | "schedule_primary_duplicate"
+  | "links_too_many"
+  | "link_invalid"
+  | "link_kind_not_allowed"
+  | "link_label_required"
+  | "link_label_too_long"
+  | "link_url_duplicate"
+  | "link_sort_order_invalid"
   | "url_not_https"
   | "official_youtube_live_excluded"
   | "routine_platform_activity_excluded";

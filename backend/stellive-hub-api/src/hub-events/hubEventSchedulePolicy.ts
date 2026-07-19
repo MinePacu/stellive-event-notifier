@@ -55,3 +55,9 @@ export function withDefaultPrimaryScheduleItem<T extends ScheduleItemLike>(items
     .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))[0];
   return items.map((item) => item === firstActive ? { ...item, isPrimary: true } as T : item);
 }
+
+export function withPrimaryScheduleItem<T extends ScheduleItemLike>(items: T[], targetIndex: number): T[] {
+  const target = items[targetIndex];
+  if (!target || target.cancelledAt) return items;
+  return items.map((item, index) => ({ ...item, isPrimary: index === targetIndex }));
+}

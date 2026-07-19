@@ -2,6 +2,7 @@ import { getPrismaClient } from "../storage/prisma.js";
 import type {
   HubEvent,
   HubEventImage,
+  HubEventLink,
   HubEventScheduleItem,
   HubEventsSummary,
   HubEventStatus,
@@ -11,6 +12,14 @@ import type { AdminHubEvent, HubEventAdminAction, HubEventPublicationState } fro
 import type { HubEventFilters, HubEventListResult } from "./hubEventService.js";
 import { koreaDateKey, resolveEffectiveHubEventStatus, withEffectiveHubEventStatus } from "./hubEventStatus.js";
 import { deriveHubEventScheduleMode, normalizeHubEventScheduleText } from "./hubEventSchedulePolicy.js";
+import {
+  firstEventLegacyProjection,
+  firstScheduleLegacyProjection,
+  normalizeHubEventLinks,
+  resolvedEventLinks,
+  resolvedScheduleLinks,
+  type HubEventLinkInput
+} from "./hubEventLinkPolicy.js";
 
 interface HubEventRecord {
   id: string;
@@ -45,6 +54,7 @@ interface HubEventRecord {
   createdAt: Date;
   updatedAt: Date;
   scheduleItems?: HubEventScheduleItemRecord[];
+  links?: HubEventExternalLinkRecord[];
 }
 
 interface HubEventScheduleItemRecord {
@@ -65,6 +75,19 @@ interface HubEventScheduleItemRecord {
   isPrimary: boolean;
   sortOrder: number;
   cancelledAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  links?: HubEventExternalLinkRecord[];
+}
+
+interface HubEventExternalLinkRecord {
+  id: string;
+  hubEventId: string | null;
+  scheduleItemId: string | null;
+  kind: string;
+  label: string | null;
+  url: string;
+  sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -97,6 +120,12 @@ interface HubEventDelegate {
     updateMany?(args: { where: Record<string, unknown>; data: Record<string, unknown> }): Promise<{ count: number }>;
     delete?(args: { where: { id: string } }): Promise<HubEventScheduleItemRecord>;
   };
+  hubEventExternalLink?: {
+    findMany?(args: unknown): Promise<HubEventExternalLinkRecord[]>;
+    create?(args: { data: Record<string, unknown> }): Promise<HubEventExternalLinkRecord>;
+    update?(args: { where: { id: string }; data: Record<string, unknown> }): Promise<HubEventExternalLinkRecord>;
+    deleteMany?(args: { where: Record<string, unknown> }): Promise<{ count: number }>;
+  };
   hubEventAuditLog?: {
     create?(args: { data: Record<string, unknown> }): Promise<unknown>;
     findMany?(args: unknown): Promise<HubEventAuditLogRecord[]>;
@@ -116,25 +145,29 @@ export interface AdminHubEventListResult {
 
 type NullableDateInput = string | Date | null | undefined;
 
+export type AdminHubEventLinkWriteInput = HubEventLinkInput;
+
 export type AdminHubEventScheduleItemWriteInput = Omit<
   Partial<HubEventScheduleItem>,
-  "id" | "description" | "startsAt" | "endsAt" | "cancelledAt" | "createdAt" | "updatedAt"
+  "id" | "description" | "startsAt" | "endsAt" | "cancelledAt" | "createdAt" | "updatedAt" | "links"
 > & {
   id?: string;
   description?: string | null;
   startsAt?: NullableDateInput;
   endsAt?: NullableDateInput;
   cancelledAt?: NullableDateInput;
+  links?: AdminHubEventLinkWriteInput[];
 };
 
 export type AdminHubEventWriteInput = Omit<
   Partial<HubEvent>,
-  "announcedAt" | "startsAt" | "endsAt" | "scheduleItems"
+  "announcedAt" | "startsAt" | "endsAt" | "scheduleItems" | "links"
 > & {
   announcedAt?: NullableDateInput;
   startsAt?: NullableDateInput;
   endsAt?: NullableDateInput;
   scheduleItems?: AdminHubEventScheduleItemWriteInput[];
+  links?: AdminHubEventLinkWriteInput[];
   actorId?: string;
   expectedRevision?: number;
 };
@@ -222,7 +255,7 @@ function normalizeHubEventImage(value: unknown): HubEventImage | undefined {
 
 function toScheduleItem(record: HubEventScheduleItemRecord): HubEventScheduleItem {
   const text = normalizeHubEventScheduleText(record);
-  return stripUndefined({
+  const item = stripUndefined({
     id: record.id,
     kind: record.kind,
     title: text.title,
@@ -235,6 +268,7 @@ function toScheduleItem(record: HubEventScheduleItemRecord): HubEventScheduleIte
     actionUrl: record.actionUrl ?? undefined,
     sourceUrl: record.sourceUrl ?? undefined,
     sourceLabel: record.sourceLabel ?? undefined,
+    links: (record.links ?? []).map(toLink),
     notificationEligible: record.notificationEligible,
     isPrimary: record.isPrimary,
     sortOrder: record.sortOrder,
@@ -242,16 +276,30 @@ function toScheduleItem(record: HubEventScheduleItemRecord): HubEventScheduleIte
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString()
   }) as unknown as HubEventScheduleItem;
+  return { ...item, links: resolvedScheduleLinks(item) };
+}
+
+function toLink(record: HubEventExternalLinkRecord): HubEventLink {
+  return stripUndefined({
+    id: record.id,
+    kind: record.kind,
+    label: record.label ?? undefined,
+    url: record.url,
+    sortOrder: record.sortOrder,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString()
+  }) as unknown as HubEventLink;
 }
 
 function toPublicHubEvent(record: HubEventRecord): HubEvent {
-  return stripUndefined({
+  const event = stripUndefined({
     id: record.id,
     category: record.category,
     participationMode: record.participationMode,
     status: record.status,
     scheduleMode: record.scheduleMode ?? "single_window",
     scheduleItems: (record.scheduleItems ?? []).map(toScheduleItem),
+    links: (record.links ?? []).map(toLink),
     title: record.title,
     summary: record.summary ?? undefined,
     memberId: record.memberId ?? undefined,
@@ -271,6 +319,7 @@ function toPublicHubEvent(record: HubEventRecord): HubEvent {
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString()
   }) as unknown as HubEvent;
+  return { ...event, links: resolvedEventLinks(event) };
 }
 
 function toAdminHubEvent(record: HubEventRecord): AdminHubEvent {
@@ -337,6 +386,7 @@ function toWriteData(input: AdminHubEventWriteInput): Record<string, unknown> {
   const projectedSchedule = activeSchedules.find((item) => item.isPrimary);
   const hasScheduleWrite = input.scheduleItems !== undefined;
   const projectedTimezone = projectedSchedule?.timezone ?? "Asia/Seoul";
+  const legacyLinks = firstEventLegacyProjection(input.links);
   return stripUndefined({
     category: input.category,
     participationMode: input.participationMode,
@@ -356,8 +406,8 @@ function toWriteData(input: AdminHubEventWriteInput): Record<string, unknown> {
     endsAt: hasScheduleWrite
       ? toScheduleDate(projectedSchedule?.endsAt ?? null, projectedSchedule?.timePrecision, projectedTimezone)
       : toDate(input.endsAt),
-    purchaseUrl: input.purchaseUrl,
-    ticketUrl: input.ticketUrl,
+    purchaseUrl: legacyLinks.purchaseUrl ?? input.purchaseUrl,
+    ticketUrl: legacyLinks.ticketUrl ?? input.ticketUrl,
     venueName: input.venueName,
     venueAddress: input.venueAddress,
     image: input.image,
@@ -371,6 +421,7 @@ function toScheduleWriteData(
 ): Record<string, unknown> {
   const timezone = item.timezone ?? "Asia/Seoul";
   const text = normalizeHubEventScheduleText(item);
+  const legacyLinks = firstScheduleLegacyProjection(item.links);
   return stripUndefined({
     id: item.id,
     hubEventId,
@@ -382,9 +433,9 @@ function toScheduleWriteData(
     endsAt: toScheduleDate(item.endsAt, item.timePrecision, timezone),
     timePrecision: item.timePrecision,
     timezone,
-    actionUrl: item.actionUrl,
-    sourceUrl: item.sourceUrl,
-    sourceLabel: item.sourceLabel,
+    actionUrl: legacyLinks.actionUrl ?? item.actionUrl,
+    sourceUrl: legacyLinks.sourceUrl ?? item.sourceUrl,
+    sourceLabel: legacyLinks.sourceLabel ?? item.sourceLabel,
     notificationEligible: item.notificationEligible ?? true,
     isPrimary: item.isPrimary ?? false,
     sortOrder: item.sortOrder ?? 0,
@@ -392,7 +443,28 @@ function toScheduleWriteData(
   });
 }
 
-const scheduleItemsInclude = { scheduleItems: { orderBy: [{ sortOrder: "asc" }, { startsAt: "asc" }, { id: "asc" }] } };
+function toLinkWriteData(link: AdminHubEventLinkWriteInput): Record<string, unknown> {
+  return stripUndefined({
+    kind: link.kind,
+    label: link.label?.trim() || null,
+    url: link.url?.trim(),
+    sortOrder: link.sortOrder ?? 0
+  });
+}
+
+function nestedLinksCreate(links: AdminHubEventLinkWriteInput[] | undefined): Record<string, unknown> | undefined {
+  const normalized = normalizeHubEventLinks(links);
+  return normalized?.length ? { create: normalized.map(toLinkWriteData) } : undefined;
+}
+
+const linksInclude = { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] };
+const scheduleItemsInclude = {
+  links: linksInclude,
+  scheduleItems: {
+    include: { links: linksInclude },
+    orderBy: [{ sortOrder: "asc" }, { startsAt: "asc" }, { id: "asc" }]
+  }
+};
 
 function addHubEventFilters(where: Record<string, unknown>, filters: HubEventFilters, options: { includeStatus?: boolean } = {}) {
   if (filters.category) where.category = filters.category;
@@ -621,10 +693,12 @@ export class HubEventRepository {
     const record = await create({
       data: {
         ...toWriteData(input),
+        links: nestedLinksCreate(input.links),
         scheduleItems: input.scheduleItems?.length
           ? { create: input.scheduleItems.map((item) => {
               const data = toScheduleWriteData(item, "");
               delete data.hubEventId;
+              data.links = nestedLinksCreate(item.links);
               return data;
             }) }
           : undefined,
@@ -659,8 +733,15 @@ export class HubEventRepository {
         record = await update({ where: { id }, data: updateData, include: scheduleItemsInclude });
       }
 
+      if (input.links !== undefined) {
+        await this.syncOwnedLinks(client, { hubEventId: id, scheduleItemId: null }, input.links);
+      }
+
       if (input.scheduleItems === undefined || !client.hubEventScheduleItem) {
-        return toAdminHubEvent(record);
+        if (input.links === undefined) return toAdminHubEvent(record);
+        const findFirst = requireMethod(client.hubEvent?.findFirst?.bind(client.hubEvent), "hub_event_find_first");
+        const refreshed = await findFirst({ where: { id }, include: scheduleItemsInclude });
+        return toAdminHubEvent(refreshed ?? record);
       }
 
       const findMany = requireMethod(
@@ -683,16 +764,27 @@ export class HubEventRepository {
       const existingIds = new Set(existing.map((item) => item.id));
       const retainedIds = new Set<string>();
 
+      await updateMany({
+        where: { hubEventId: id, isPrimary: true, cancelledAt: null },
+        data: { isPrimary: false }
+      });
+
       for (const item of input.scheduleItems) {
         const data = toScheduleWriteData(item, id);
+        let scheduleItemId: string;
         if (item.id && existingIds.has(item.id)) {
           retainedIds.add(item.id);
+          scheduleItemId = item.id;
           delete data.id;
           delete data.hubEventId;
           await updateSchedule({ where: { id: item.id }, data });
         } else {
           const created = await create({ data });
           retainedIds.add(created.id);
+          scheduleItemId = created.id;
+        }
+        if (item.links !== undefined) {
+          await this.syncOwnedLinks(client, { hubEventId: null, scheduleItemId }, item.links);
         }
       }
 
@@ -710,6 +802,39 @@ export class HubEventRepository {
     };
 
     return this.prisma.$transaction ? this.prisma.$transaction(run) : run(this.prisma);
+  }
+
+  private async syncOwnedLinks(
+    client: HubEventDelegate,
+    owner: { hubEventId: string | null; scheduleItemId: string | null },
+    links: AdminHubEventLinkWriteInput[]
+  ): Promise<void> {
+    const delegate = client.hubEventExternalLink;
+    const findMany = requireMethod(delegate?.findMany?.bind(delegate), "hub_event_external_link_find_many");
+    const create = requireMethod(delegate?.create?.bind(delegate), "hub_event_external_link_create");
+    const update = requireMethod(delegate?.update?.bind(delegate), "hub_event_external_link_update");
+    const deleteMany = requireMethod(delegate?.deleteMany?.bind(delegate), "hub_event_external_link_delete_many");
+    const existing = await findMany({ where: owner });
+    const existingIds = new Set(existing.map((link) => link.id));
+    const retainedIds = new Set<string>();
+    const normalized = normalizeHubEventLinks(links) ?? [];
+
+    for (const link of normalized) {
+      const data = toLinkWriteData(link);
+      if (link.id) {
+        if (!existingIds.has(link.id)) throw new Error("hub_event_link_not_found");
+        retainedIds.add(link.id);
+        await update({ where: { id: link.id }, data });
+      } else {
+        const created = await create({ data: { ...data, ...owner } });
+        retainedIds.add(created.id);
+      }
+    }
+
+    const removedIds = [...existingIds].filter((linkId) => !retainedIds.has(linkId));
+    if (removedIds.length > 0) {
+      await deleteMany({ where: { id: { in: removedIds }, ...owner } });
+    }
   }
 
   async hardDeleteScheduleItem(

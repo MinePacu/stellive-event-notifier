@@ -23,6 +23,8 @@ import android.provider.CalendarContract
 import android.text.Editable
 import android.text.TextUtils
 import android.text.TextWatcher
+import android.transition.AutoTransition
+import android.transition.TransitionManager
 import android.util.Log
 import android.util.LruCache
 import android.view.DragEvent
@@ -114,6 +116,9 @@ import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenTarget
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailFormatting
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventHeroTagTone
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventImagePolicy
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventLinkPolicy
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventLinkCtaMode
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventLinksBottomSheet
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.GoodsEventSelectionMode
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventsPanePolicy
 import dev.minepacu.stelliveeventnotifier.feature.announcements.AnnouncementDeepLinkPolicy
@@ -298,6 +303,8 @@ private var homeRecentSongs: List<SongCatalogItem>? = null
 private var isLoadingHomeRecentSongs = false
 private var selectedHubEventId: String? = null
 private var selectedHubEventScheduleItemId: String? = null
+private var expandedHubEventScheduleEventId: String? = null
+private val expandedHubEventScheduleItemIds = mutableSetOf<String>()
 private var selectedAnnouncementId: String? = null
 private var announcementsSummary = AnnouncementsSummary()
 private var announcementItems: List<ServiceAnnouncement> = emptyList()
@@ -1806,6 +1813,15 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
             ?: repository.hubEvents.firstOrNull { it.id == selectedHubEventId }
 
     private fun renderHubEventDetailInto(container: LinearLayout, event: HubEvent, fullScreen: Boolean) {
+        val resolvedExpandedIds = HubEventLinkPolicy.resolvedExpandedScheduleItemIds(
+            previousEventId = expandedHubEventScheduleEventId,
+            eventId = event.id,
+            currentIds = expandedHubEventScheduleItemIds,
+            highlightedScheduleItemId = selectedHubEventScheduleItemId,
+        )
+        expandedHubEventScheduleItemIds.clear()
+        expandedHubEventScheduleItemIds.addAll(resolvedExpandedIds)
+        expandedHubEventScheduleEventId = event.id
         container.addView(hubEventDetailHero(event).apply {
             if (!fullScreen) {
                 layoutParams = LinearLayout.LayoutParams(
@@ -1828,9 +1844,15 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
         val timeline = HubEventDetailFormatting.timeline(event)
         if (HubEventDetailFormatting.hasTimelineSchedule(event) && timeline.isNotEmpty()) {
             container.addView(sectionLabel("세부 일정").let { if (fullScreen) it.withDetailHorizontalMargins() else it })
+            val effectivePrimaryId = HubEventLinkPolicy.effectivePrimaryScheduleItemId(event)
             timeline.forEach { item ->
                 val highlighted = item.schedule.id == selectedHubEventScheduleItemId
-                val card = hubEventScheduleCard(item, highlighted)
+                val card = hubEventScheduleCard(
+                    item = item,
+                    highlighted = highlighted,
+                    isEffectivePrimary = item.schedule.id == effectivePrimaryId,
+                    initiallyExpanded = item.schedule.id in expandedHubEventScheduleItemIds,
+                )
                     .let { if (fullScreen) it.withDetailHorizontalMargins() else it }
                 container.addView(card)
             }
@@ -1849,16 +1871,15 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
     private fun hubEventScheduleCard(
         item: dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventScheduleTimelineItem,
         highlighted: Boolean,
+        isEffectivePrimary: Boolean,
+        initiallyExpanded: Boolean,
     ): MaterialCardView = baseCard(HubCardStyle.COMPACT).apply {
+        val scheduleCard = this
         val displayTitle = HubEventDetailFormatting.displayTitle(item.schedule)
+        val links = HubEventLinkPolicy.resolvedScheduleLinks(item.schedule)
+        var expanded = initiallyExpanded
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = dp(10)
-        }
-        contentDescription = buildString {
-            append(displayTitle)
-            append(", ")
-            append(item.timingText)
-            if (highlighted) append(", 선택한 일정")
         }
         if (highlighted) {
             strokeWidth = dp(2)
@@ -1867,53 +1888,136 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
         }
         alpha = if (item.schedule.cancelledAt != null) 0.58f else 1f
         val content = LinearLayout(context).apply {
+            val detailContainer = this
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(13), dp(14), dp(13))
-            addView(pillRow(buildList {
+            setPadding(dp(14), dp(10), dp(14), dp(12))
+            addView(scheduleBadgeRow(buildList {
                 add(item.stateText)
                 add(HubEventDetailFormatting.scheduleKindLabel(item.schedule.kind))
-                if (item.schedule.isPrimary) add("대표 일정")
+                if (isEffectivePrimary) add("대표 일정")
                 if (highlighted) add("선택한 일정")
             }))
-            addView(TextView(context).apply {
-                text = displayTitle
-                setTextColor(color(R.color.hub_text))
-                textSize = 15f
-                typeface = Typeface.DEFAULT_BOLD
-                setPadding(0, dp(8), 0, 0)
-            })
-            addView(TextView(context).apply {
-                text = item.timingText
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 12f
-                setPadding(0, dp(5), 0, 0)
-            })
-            HubEventDetailFormatting.scheduleDescription(item.schedule)?.let { description ->
-                addView(TextView(context).apply {
-                    text = description
-                    setTextColor(color(R.color.hub_text))
-                    textSize = 12f
-                    setPadding(0, dp(5), 0, 0)
-                })
+            val heading = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(7), 0, 0)
             }
-            item.schedule.sourceLabel?.takeIf { it.isNotBlank() }?.let { source ->
+            heading.addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
                 addView(TextView(context).apply {
-                    text = "출처 · $source"
+                    text = displayTitle
+                    setTextColor(color(R.color.hub_text))
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                    includeFontPadding = false
+                })
+                addView(TextView(context).apply {
+                    text = item.timingText
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 12f
+                    includeFontPadding = false
+                    setPadding(0, dp(4), 0, 0)
+                })
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            val chevron = TextView(context).apply {
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 18f
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                setPadding(dp(12), 0, 0, 0)
+            }
+            heading.addView(chevron, LinearLayout.LayoutParams(dp(36), dp(44)))
+            addView(heading)
+
+            val details = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                isVisible = expanded
+                addView(TextView(context).apply {
+                    text = "정확한 일정 · ${item.timingText}"
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 11f
+                    setPadding(0, dp(9), 0, 0)
+                })
+                addView(TextView(context).apply {
+                    val precision = if (item.schedule.timePrecision.name == "DATE") "날짜만" else "날짜와 시간"
+                    text = "$precision · ${item.schedule.timezone}"
                     setTextColor(color(R.color.hub_text_muted))
                     textSize = 11f
                     setPadding(0, dp(5), 0, 0)
                 })
+                HubEventDetailFormatting.scheduleDescription(item.schedule)?.let { description ->
+                    addView(TextView(context).apply {
+                        text = description
+                        setTextColor(color(R.color.hub_text))
+                        textSize = 12f
+                        setPadding(0, dp(7), 0, 0)
+                    })
+                }
+                item.schedule.sourceLabel?.takeIf { it.isNotBlank() }?.let { source ->
+                    addView(TextView(context).apply {
+                        text = "출처 · $source"
+                        setTextColor(color(R.color.hub_text_muted))
+                        textSize = 11f
+                        setPadding(0, dp(6), 0, 0)
+                    })
+                }
+                links.forEach { link ->
+                    val label = HubEventLinkPolicy.displayLinkLabel(link)
+                    addView(detailActionButton(label, primary = false) { openExternalUrl(link.url) }.apply {
+                        contentDescription = "$label, 외부 링크 열기"
+                    }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44)).apply {
+                        topMargin = dp(9)
+                    })
+                }
             }
-            HubEventDetailFormatting.scheduleActionUrl(item.schedule)?.let { url ->
-                val label = HubEventDetailFormatting.scheduleActionLabel(item.schedule.kind)
-                addView(detailActionButton(label, primary = false) { openExternalUrl(url) }.apply {
-                    contentDescription = "$label, 외부 링크 열기"
-                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44)).apply {
-                    topMargin = dp(10)
-                })
+            addView(details)
+
+            fun updateExpansionPresentation() {
+                chevron.text = if (expanded) "⌃" else "⌄"
+                details.isVisible = expanded
+                scheduleCard.contentDescription = buildString {
+                    append(displayTitle)
+                    append(", ")
+                    append(item.stateText)
+                    if (isEffectivePrimary) append(", 대표 일정")
+                    append(", ")
+                    append(item.timingText)
+                    if (highlighted) append(", 선택한 일정")
+                    append(if (expanded) ", 펼쳐짐, 세부 정보 접기" else ", 접힘, 세부 정보 펼치기")
+                }
+            }
+            updateExpansionPresentation()
+            scheduleCard.isClickable = true
+            scheduleCard.isFocusable = true
+            scheduleCard.setOnClickListener {
+                expanded = !expanded
+                if (expanded) expandedHubEventScheduleItemIds.add(item.schedule.id)
+                else expandedHubEventScheduleItemIds.remove(item.schedule.id)
+                TransitionManager.beginDelayedTransition(detailContainer, AutoTransition().apply { duration = 160 })
+                updateExpansionPresentation()
             }
         }
         addView(content)
+    }
+
+    private fun scheduleBadgeRow(labels: List<String>): ChipGroup = ChipGroup(this).apply {
+        isSingleLine = false
+        chipSpacingHorizontal = dp(5)
+        chipSpacingVertical = dp(4)
+        labels.forEach { label ->
+            addView(Chip(context).apply {
+                text = label
+                textSize = 10f
+                includeFontPadding = false
+                isClickable = false
+                isCheckable = false
+                isFocusable = false
+                setEnsureMinTouchTargetSize(false)
+                chipMinHeight = dp(23).toFloat()
+                minHeight = dp(23)
+                setPadding(0, 0, 0, 0)
+            })
+        }
     }
 
     private fun renderLive() {
@@ -4582,6 +4686,7 @@ private fun hubEventDetailHero(event: dev.minepacu.stelliveeventnotifier.core.mo
         }
 
     private fun hubEventDetailActions(event: HubEvent): LinearLayout = LinearLayout(this).apply {
+        val links = HubEventLinkPolicy.resolvedEventLinks(event)
         orientation = LinearLayout.HORIZONTAL
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
@@ -4592,22 +4697,26 @@ private fun hubEventDetailHero(event: dev.minepacu.stelliveeventnotifier.core.mo
             bottomMargin = dp(12)
         }
 
-        addView(
-            detailActionButton("캘린더 추가", primary = true) {
-                openCalendarInsert(event)
-            },
-            LinearLayout.LayoutParams(0, dp(50), 1f).apply {
-                marginEnd = dp(5)
+        val calendarParams = LinearLayout.LayoutParams(0, dp(50), 1f)
+        if (links.isNotEmpty()) calendarParams.marginEnd = dp(5)
+        addView(detailActionButton("캘린더 추가", primary = true) { openCalendarInsert(event) }, calendarParams)
+        if (links.isNotEmpty()) {
+            val ctaMode = HubEventLinkPolicy.eventCtaMode(event)
+            val label = if (ctaMode == HubEventLinkCtaMode.DIRECT) {
+                HubEventLinkPolicy.displayLinkLabel(links.single())
+            } else {
+                "관련 링크 ${links.size}개"
             }
-        )
-        addView(
-            detailActionButton(HubEventDetailFormatting.linkActionLabel(event.category), primary = false) {
-                openExternalUrl(event.ticketUrl ?: event.purchaseUrl ?: event.sourceUrl)
-            },
-            LinearLayout.LayoutParams(0, dp(50), 1f).apply {
-                marginStart = dp(5)
-            }
-        )
+            addView(
+                detailActionButton(label, primary = false) {
+                    if (ctaMode == HubEventLinkCtaMode.DIRECT) openExternalUrl(links.single().url)
+                    else HubEventLinksBottomSheet(this@MainActivity, ::openExternalUrl).show("관련 링크", links)
+                }.apply {
+                    contentDescription = if (ctaMode == HubEventLinkCtaMode.DIRECT) "$label, 외부 링크 열기" else "$label, 목록 열기"
+                },
+                LinearLayout.LayoutParams(0, dp(50), 1f).apply { marginStart = dp(5) }
+            )
+        }
     }
 
     private fun detailActionButton(label: String, primary: Boolean, onClick: () -> Unit): TextView =

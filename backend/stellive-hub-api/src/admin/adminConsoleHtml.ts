@@ -1244,6 +1244,13 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     .hub-event-schedule-dialog-body { display: grid; gap: 12px; padding: 18px; }
     .hub-event-schedule-dialog-head, .hub-event-schedule-dialog-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .hub-event-schedule-dialog details { border-top: 1px solid var(--admin-border); padding-top: 10px; }
+    .hub-event-link-editor { display: grid; gap: 8px; }
+    .hub-event-link-row { display: grid; grid-template-columns: minmax(110px, .6fr) minmax(130px, .8fr) minmax(220px, 1.8fr) auto; gap: 8px; align-items: end; }
+    .hub-event-link-row .field { min-width: 0; }
+    .hub-event-link-remove { min-height: 38px; }
+    .hub-event-link-actions { display: flex; gap: 6px; }
+    .hub-event-link-actions button { min-width: 38px; min-height: 38px; }
+    .hub-event-primary-choice { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--admin-muted); }
 
     .hub-events-section-body {
       display: grid;
@@ -1919,8 +1926,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
             <div class="form-section hub-events-section">
               <h3 class="form-section-title hub-events-section-title">Links and venue</h3>
               <div class="hub-events-section-body">
-                <div class="field"><label for="hub-event-purchase-url">Purchase URL</label><input id="hub-event-purchase-url" name="purchaseUrl" type="url" autocomplete="off"></div>
-                <div class="field"><label for="hub-event-ticket-url">Ticket URL</label><input id="hub-event-ticket-url" name="ticketUrl" type="url" autocomplete="off"></div>
+                <div class="section-head"><div><strong><span>Related links</span> (<span id="hub-event-link-count">0</span>)</strong><p class="subtle">Add purchase, ticket, source, content, video, or map links independently.</p></div><button id="hub-event-link-add" type="button">Add link</button></div>
+                <div id="hub-event-links" class="hub-event-link-editor"></div>
                 <div class="field"><label for="hub-event-venue-name">Venue name</label><input id="hub-event-venue-name" name="venueName" autocomplete="off"></div>
                 <div class="field"><label for="hub-event-venue-address">Venue address</label><input id="hub-event-venue-address" name="venueAddress" autocomplete="off"></div>
                 <label class="switch-control"><input id="hub-event-notification-eligible" name="notificationEligible" type="checkbox" checked> Notification eligible</label>
@@ -1929,7 +1936,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
           </form>
           <section id="hub-event-timeline-fields" class="hub-events-section panel" data-hub-event-tab-panel="schedule" hidden>
             <div class="section-head">
-              <div><h3>Detailed schedule</h3><p class="subtle">Manage each milestone independently.</p></div>
+              <div><h3>Detailed schedule</h3><p class="subtle"><span>Manage each milestone independently.</span> <span>Selecting a new primary schedule replaces the current primary.</span></p></div>
               <button id="hub-event-schedule-add" type="button">Add schedule item</button>
             </div>
             <div class="hub-events-section-body"><div id="hub-event-schedule-items" class="hub-event-schedule-list"></div></div>
@@ -1947,18 +1954,21 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
                 <div class="field"><label for="hub-event-schedule-title">Title</label><input id="hub-event-schedule-title" autocomplete="off" required maxlength="160"></div>
               </div>
               <div class="hub-events-two">
-                <div class="field"><label for="hub-event-schedule-starts-at">Starts at</label><input id="hub-event-schedule-starts-at" type="datetime-local" required></div>
-                <div class="field"><label for="hub-event-schedule-ends-at">Ends at</label><input id="hub-event-schedule-ends-at" type="datetime-local"></div>
+                <div class="field"><label for="hub-event-schedule-timing">Timing</label><select id="hub-event-schedule-timing"><option value="point">Single point</option><option value="period">Period</option></select></div>
+                <div class="field"><label for="hub-event-schedule-precision">Time precision</label><select id="hub-event-schedule-precision"><option value="datetime">Date and time</option><option value="date">Date only</option></select></div>
               </div>
-              <div class="hub-event-schedule-flags"><label class="switch-control"><input id="hub-event-schedule-primary" type="checkbox"> Primary</label><label class="switch-control"><input id="hub-event-schedule-notification" type="checkbox" checked> Notification eligible</label></div>
+              <div class="hub-events-two">
+                <div class="field"><label id="hub-event-schedule-starts-at-label" for="hub-event-schedule-starts-at">Occurs at</label><input id="hub-event-schedule-starts-at" type="datetime-local" required></div>
+                <div id="hub-event-schedule-ends-at-field" class="field hub-event-schedule-hidden"><label for="hub-event-schedule-ends-at">Ends at</label><input id="hub-event-schedule-ends-at" type="datetime-local" disabled></div>
+              </div>
+              <div class="hub-event-schedule-flags"><label class="switch-control"><input id="hub-event-schedule-primary" type="radio" name="hub-event-dialog-primary"> Set as primary</label><label class="switch-control"><input id="hub-event-schedule-notification" type="checkbox" checked> Notification eligible</label></div>
               <details><summary>Additional information</summary>
                 <div class="hub-events-section-body">
                   <div class="field"><label for="hub-event-schedule-description">Description (optional)</label><textarea id="hub-event-schedule-description" rows="3" maxlength="2000"></textarea></div>
                   <div class="field"><label for="hub-event-schedule-label">Short label (optional)</label><input id="hub-event-schedule-label" autocomplete="off" maxlength="80"><span class="subtle">Uses the title when empty</span></div>
-                  <div class="hub-events-two"><div class="field"><label for="hub-event-schedule-precision">Time precision</label><select id="hub-event-schedule-precision"><option value="datetime">Date and time</option><option value="date">Date only</option></select></div><div class="field"><label for="hub-event-schedule-timezone">Timezone</label><input id="hub-event-schedule-timezone" value="Asia/Seoul"></div></div>
-                  <div class="field"><label for="hub-event-schedule-action-url">Action URL</label><input id="hub-event-schedule-action-url" type="url"></div>
-                  <div class="field"><label for="hub-event-schedule-source-url">Schedule source URL</label><input id="hub-event-schedule-source-url" type="url"></div>
-                  <div class="field"><label for="hub-event-schedule-source-label">Schedule source label</label><input id="hub-event-schedule-source-label"></div>
+                  <div class="field"><label for="hub-event-schedule-timezone">Timezone</label><input id="hub-event-schedule-timezone" value="Asia/Seoul"></div>
+                  <div class="section-head"><div><strong><span>Schedule links</span> (<span id="hub-event-schedule-link-count">0</span>)</strong><p class="subtle">These links belong only to this schedule item.</p></div><button id="hub-event-schedule-link-add" type="button">Add link</button></div>
+                  <div id="hub-event-schedule-links" class="hub-event-link-editor"></div>
                 </div>
               </details>
               <div class="hub-event-schedule-dialog-actions"><span></span><button id="hub-event-schedule-save" type="submit">Save schedule</button></div>
@@ -3267,8 +3277,6 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       scheduleMode: document.getElementById("hub-event-schedule-mode"),
       startsAt: document.getElementById("hub-event-starts-at"),
       endsAt: document.getElementById("hub-event-ends-at"),
-      purchaseUrl: document.getElementById("hub-event-purchase-url"),
-      ticketUrl: document.getElementById("hub-event-ticket-url"),
       venueName: document.getElementById("hub-event-venue-name"),
       venueAddress: document.getElementById("hub-event-venue-address"),
       notificationEligible: document.getElementById("hub-event-notification-eligible")
@@ -3282,6 +3290,10 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     const hubEventScheduleTab = document.getElementById("hub-event-schedule-tab");
     const hubEventScheduleDialog = document.getElementById("hub-event-schedule-dialog");
     const hubEventScheduleForm = document.getElementById("hub-event-schedule-form");
+    const hubEventLinksRoot = document.getElementById("hub-event-links");
+    const hubEventScheduleLinksRoot = document.getElementById("hub-event-schedule-links");
+    const hubEventLinkCount = document.getElementById("hub-event-link-count");
+    const hubEventScheduleLinkCount = document.getElementById("hub-event-schedule-link-count");
     const hubEventStateFilter = document.getElementById("hub-event-state-filter");
     const hubEventStatusFilter = document.getElementById("hub-event-status-filter");
     const hubEventCategoryFilter = document.getElementById("hub-event-category-filter");
@@ -3348,6 +3360,115 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       return "schedule-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
     }
 
+    function linkKindOptions(selected) {
+      return [
+        ["source", t("hubEvent.linkKindSource")], ["purchase", t("hubEvent.linkKindPurchase")], ["ticket", t("hubEvent.linkKindTicket")],
+        ["reservation", t("hubEvent.linkKindReservation")], ["content", t("hubEvent.linkKindContent")], ["video", t("hubEvent.linkKindVideo")],
+        ["map", t("hubEvent.linkKindMap")], ["custom", t("hubEvent.linkKindCustom")]
+      ].map(function (entry) {
+        return '<option value="' + entry[0] + '"' + (entry[0] === selected ? " selected" : "") + ">" + entry[1] + "</option>";
+      }).join("");
+    }
+
+    function createLinkEditorRow(link) {
+      const value = link || {};
+      const row = document.createElement("div");
+      row.className = "hub-event-link-row";
+      if (value.id) row.dataset.linkId = value.id;
+
+      const kindField = document.createElement("div"); kindField.className = "field";
+      const kindLabel = document.createElement("label"); kindLabel.textContent = t("hubEvent.linkKind");
+      const kind = document.createElement("select"); kind.dataset.linkField = "kind"; kind.innerHTML = linkKindOptions(value.kind || "source");
+      kindField.append(kindLabel, kind);
+
+      const labelField = document.createElement("div"); labelField.className = "field";
+      const labelLabel = document.createElement("label"); labelLabel.textContent = t("hubEvent.linkLabel");
+      const label = document.createElement("input"); label.dataset.linkField = "label"; label.maxLength = 80; label.value = value.label || ""; label.placeholder = t("hubEvent.linkOptional");
+      labelField.append(labelLabel, label);
+
+      const urlField = document.createElement("div"); urlField.className = "field";
+      const urlLabel = document.createElement("label"); urlLabel.textContent = t("hubEvent.linkHttpsUrl");
+      const url = document.createElement("input"); url.dataset.linkField = "url"; url.type = "url"; url.required = true; url.pattern = "https://.*"; url.value = value.url || "";
+      urlField.append(urlLabel, url);
+
+      const actions = document.createElement("div"); actions.className = "hub-event-link-actions";
+      const up = document.createElement("button"); up.type = "button"; up.textContent = "↑"; up.setAttribute("aria-label", t("hubEvent.linkMoveUp"));
+      const down = document.createElement("button"); down.type = "button"; down.textContent = "↓"; down.setAttribute("aria-label", t("hubEvent.linkMoveDown"));
+      const remove = document.createElement("button"); remove.type = "button"; remove.className = "hub-event-link-remove"; remove.textContent = t("hubEvent.linkRemove");
+      up.addEventListener("click", function () { moveLinkEditorRow(row, -1); });
+      down.addEventListener("click", function () { moveLinkEditorRow(row, 1); });
+      remove.addEventListener("click", function () {
+        const isParentLink = row.parentElement === hubEventLinksRoot;
+        row.remove();
+        updateLinkEditorCount(isParentLink ? hubEventLinksRoot : hubEventScheduleLinksRoot);
+        if (isParentLink) parentDirty = true;
+        else scheduleDirty = true;
+      });
+      actions.append(up, down, remove);
+      function syncCustomLabel() { label.required = kind.value === "custom"; label.placeholder = label.required ? t("hubEvent.linkCustomLabelRequired") : t("hubEvent.linkOptional"); }
+      kind.addEventListener("change", syncCustomLabel);
+      syncCustomLabel();
+      row.append(kindField, labelField, urlField, actions);
+      return row;
+    }
+
+    function updateLinkEditorCount(root) {
+      const count = root.querySelectorAll(".hub-event-link-row").length;
+      (root === hubEventLinksRoot ? hubEventLinkCount : hubEventScheduleLinkCount).textContent = String(count);
+    }
+
+    function moveLinkEditorRow(row, delta) {
+      const root = row.parentElement;
+      if (!root) return;
+      const rows = Array.from(root.querySelectorAll(".hub-event-link-row"));
+      const index = rows.indexOf(row);
+      const nextIndex = index + delta;
+      if (index < 0 || nextIndex < 0 || nextIndex >= rows.length) return;
+      if (delta < 0) root.insertBefore(row, rows[nextIndex]);
+      else root.insertBefore(rows[nextIndex], row);
+      if (root === hubEventLinksRoot) parentDirty = true;
+      else scheduleDirty = true;
+    }
+
+    function renderLinkEditor(root, links) {
+      root.replaceChildren();
+      (links || []).forEach(function (link) { root.appendChild(createLinkEditorRow(link)); });
+      updateLinkEditorCount(root);
+    }
+
+    function collectLinkEditor(root) {
+      return Array.from(root.querySelectorAll(".hub-event-link-row")).map(function (row, index) {
+        const result = {
+          kind: row.querySelector('[data-link-field="kind"]').value,
+          url: row.querySelector('[data-link-field="url"]').value.trim(),
+          sortOrder: index
+        };
+        const id = row.dataset.linkId;
+        const label = row.querySelector('[data-link-field="label"]').value.trim();
+        if (id) result.id = id;
+        if (label) result.label = label;
+        return result;
+      });
+    }
+
+    function parentEditorLinks(event) {
+      if (Array.isArray(event.links) && event.links.length) return event.links;
+      return [
+        event.purchaseUrl ? { kind: "purchase", url: event.purchaseUrl, sortOrder: 0 } : null,
+        event.ticketUrl ? { kind: "ticket", url: event.ticketUrl, sortOrder: 1 } : null,
+        event.sourceUrl ? { kind: "source", label: event.sourceLabel, url: event.sourceUrl, sortOrder: 2 } : null
+      ].filter(Boolean);
+    }
+
+    function scheduleEditorLinks(item) {
+      if (Array.isArray(item.links) && item.links.length) return item.links;
+      const actionKinds = { sales_open: "purchase", ticket_open: "ticket", deadline: "reservation", main_window: "reservation", announcement: "source" };
+      return [
+        item.actionUrl ? { kind: actionKinds[item.kind] || "content", url: item.actionUrl, sortOrder: 0 } : null,
+        item.sourceUrl ? { kind: "source", label: item.sourceLabel, url: item.sourceUrl, sortOrder: 1 } : null
+      ].filter(Boolean);
+    }
+
     function scheduleKindOptions(selected) {
       return [
         ["main_window", "Main window"], ["announcement", "Announcement"], ["sales_open", "Sales open"],
@@ -3380,7 +3501,19 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       });
     }
 
-    function createScheduleRow(item) {
+    function setScheduleTimingUi(timing) {
+      const period = timing === "period";
+      const endsAtField = document.getElementById("hub-event-schedule-ends-at-field");
+      const endsAtInput = document.getElementById("hub-event-schedule-ends-at");
+      endsAtField.classList.toggle("hub-event-schedule-hidden", !period);
+      endsAtInput.disabled = !period;
+      endsAtInput.required = period;
+      document.getElementById("hub-event-schedule-starts-at-label").textContent = period
+        ? t("hubEvent.startsAt")
+        : t("hubEvent.occursAt");
+    }
+
+    function createScheduleRow(item, effectivePrimaryId) {
       const value = item || {};
       const row = document.createElement("div");
       row.className = "hub-event-schedule-row";
@@ -3397,7 +3530,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       timing.textContent = [value.startsAt ? formatLastCheckedAt(value.startsAt) : "-", value.endsAt ? formatLastCheckedAt(value.endsAt) : ""].filter(Boolean).join(" - ");
       const meta = document.createElement("div");
       meta.className = "hub-event-schedule-meta";
-      [scheduleKindLabel(value.kind), value.cancelledAt ? t("hubEvent.scheduleCancelled") : t("hubEvent.scheduleActive"), value.isPrimary ? t("hubEvent.schedulePrimary") : "", value.notificationEligible ? t("hubEvent.scheduleNotified") : "", (value.actionUrl || value.sourceUrl) ? t("hubEvent.scheduleLinked") : "", value.label && String(value.label).trim() !== displayTitle ? t("hubEvent.scheduleShortLabelMeta", { label: String(value.label).trim() }) : ""].filter(Boolean).forEach(function (label) {
+      const linkCount = scheduleEditorLinks(value).length;
+      [scheduleKindLabel(value.kind), value.endsAt ? t("hubEvent.schedulePeriod") : t("hubEvent.schedulePoint"), value.cancelledAt ? t("hubEvent.scheduleCancelled") : t("hubEvent.scheduleActive"), value.id === effectivePrimaryId ? t("hubEvent.schedulePrimary") : "", value.notificationEligible ? t("hubEvent.scheduleNotified") : "", linkCount ? t("hubEvent.scheduleLinkCount", { count: linkCount }) : "", value.label && String(value.label).trim() !== displayTitle ? t("hubEvent.scheduleShortLabelMeta", { label: String(value.label).trim() }) : ""].filter(Boolean).forEach(function (label) {
         const pill = document.createElement("span"); pill.textContent = label; meta.appendChild(pill);
       });
       summary.appendChild(title);
@@ -3410,8 +3544,13 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       summary.append(timing, meta);
       const actions = document.createElement("div");
       actions.className = "hub-event-schedule-row-actions";
+      const primaryChoice = document.createElement("label"); primaryChoice.className = "hub-event-primary-choice";
+      const primary = document.createElement("input"); primary.type = "radio"; primary.name = "hub-event-primary-schedule"; primary.checked = value.id === effectivePrimaryId; primary.disabled = Boolean(value.cancelledAt);
+      primary.setAttribute("aria-label", t("hubEvent.setPrimaryAria", { title: displayTitle || t("hubEvent.untitled") }));
+      primary.addEventListener("change", function () { if (primary.checked) runHubEventUiAction(t("hubEvent.schedulePrimary"), function () { return setPrimaryScheduleItem(value.id); }); });
+      primaryChoice.append(primary, document.createTextNode(t("hubEvent.schedulePrimary")));
       const edit = document.createElement("button"); edit.type = "button"; edit.textContent = t("common.edit");
-      edit.addEventListener("click", function () { openScheduleDialog(value); });
+      edit.addEventListener("click", function () { openScheduleDialog({ ...value, isPrimary: value.id === effectivePrimaryId }); });
       const up = document.createElement("button"); up.type = "button"; up.textContent = "↑"; up.setAttribute("aria-label", t("hubEvent.moveUp"));
       up.addEventListener("click", function () { return runHubEventUiAction(t("hubEvent.moveUp"), function () { return reorderScheduleItem(value.id, -1); }); });
       const down = document.createElement("button"); down.type = "button"; down.textContent = "↓"; down.setAttribute("aria-label", t("hubEvent.moveDown"));
@@ -3421,7 +3560,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       lifecycle.addEventListener("click", function () {
         return runHubEventUiAction(lifecycle.textContent, function () { return value.cancelledAt ? restoreScheduleItem(value.id) : cancelScheduleItem(value.id); });
       });
-      actions.append(edit, up, down, lifecycle);
+      actions.append(primaryChoice, edit, up, down, lifecycle);
       row.append(summary, actions);
       return row;
     }
@@ -3429,10 +3568,20 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     function renderScheduleItems(items) {
       hubEventScheduleItems = (items || []).slice();
       hubEventScheduleItemsRoot.replaceChildren();
+      const primaryItems = hubEventScheduleItems.filter(function (item) { return item.isPrimary && !item.cancelledAt; }).sort(function (left, right) {
+        return (left.sortOrder || 0) - (right.sortOrder || 0)
+          || new Date(left.startsAt || 0).getTime() - new Date(right.startsAt || 0).getTime()
+          || new Date(left.createdAt || 0).getTime() - new Date(right.createdAt || 0).getTime()
+          || String(left.id || "").localeCompare(String(right.id || ""));
+      });
+      const effectivePrimaryId = primaryItems[0]?.id || "";
+      if (primaryItems.length > 1) {
+        const warning = document.createElement("p"); warning.className = "message error"; warning.textContent = t("hubEvent.duplicatePrimaryWarning"); hubEventScheduleItemsRoot.appendChild(warning);
+      }
       if (hubEventScheduleItems.length === 0) {
         const empty = document.createElement("p"); empty.className = "subtle"; empty.textContent = t("hubEvent.scheduleEmpty"); hubEventScheduleItemsRoot.appendChild(empty);
       } else {
-        hubEventScheduleItems.forEach(function (item) { hubEventScheduleItemsRoot.appendChild(createScheduleRow(item)); });
+        hubEventScheduleItems.forEach(function (item) { hubEventScheduleItemsRoot.appendChild(createScheduleRow(item, effectivePrimaryId)); });
       }
       hubEventScheduleTab.textContent = t("hubEvent.scheduleTab", { count: hubEventScheduleItems.length });
     }
@@ -3452,6 +3601,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     function openScheduleDialog(item) {
       const value = item || {};
       const precision = value.timePrecision || "datetime";
+      const timing = value.endsAt ? "period" : "point";
       document.getElementById("hub-event-schedule-dialog-title").textContent = value.id ? t("hubEvent.scheduleEdit") : t("hubEvent.scheduleCreate");
       document.getElementById("hub-event-schedule-edit-id").value = value.id || "";
       document.getElementById("hub-event-schedule-kind").value = value.kind || "custom";
@@ -3459,22 +3609,23 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       document.getElementById("hub-event-schedule-title").value = title;
       document.getElementById("hub-event-schedule-label").value = value.label && String(value.label).trim() !== title ? String(value.label).trim() : "";
       document.getElementById("hub-event-schedule-description").value = value.description || "";
+      document.getElementById("hub-event-schedule-timing").value = timing;
       document.getElementById("hub-event-schedule-precision").value = precision;
       setScheduleDateInputType(precision);
       document.getElementById("hub-event-schedule-starts-at").value = precision === "date" ? toScheduleDate(value.startsAt, value.timezone) : toLocalDateTime(value.startsAt);
       document.getElementById("hub-event-schedule-ends-at").value = precision === "date" ? toScheduleDate(value.endsAt, value.timezone) : toLocalDateTime(value.endsAt);
       document.getElementById("hub-event-schedule-timezone").value = value.timezone || "Asia/Seoul";
-      document.getElementById("hub-event-schedule-action-url").value = value.actionUrl || "";
-      document.getElementById("hub-event-schedule-source-url").value = value.sourceUrl || "";
-      document.getElementById("hub-event-schedule-source-label").value = value.sourceLabel || "";
+      renderLinkEditor(hubEventScheduleLinksRoot, scheduleEditorLinks(value));
       document.getElementById("hub-event-schedule-notification").checked = value.notificationEligible !== false;
       document.getElementById("hub-event-schedule-primary").checked = value.isPrimary === true || (!value.id && !hubEventScheduleItems.some(function (item) { return !item.cancelledAt; }));
+      setScheduleTimingUi(timing);
       hubEventScheduleDialog.showModal();
     }
 
     function collectScheduleDialogInput() {
       const value = function (id) { return document.getElementById(id).value.trim(); };
       const precision = value("hub-event-schedule-precision");
+      const timing = value("hub-event-schedule-timing");
       const startsValue = value("hub-event-schedule-starts-at");
       const endsValue = value("hub-event-schedule-ends-at");
       const title = value("hub-event-schedule-title");
@@ -3484,12 +3635,12 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         label: value("hub-event-schedule-label") || title,
         description: value("hub-event-schedule-description") || null,
         startsAt: precision === "date" ? startsValue : (toIsoFromLocal(startsValue) || null),
-        endsAt: precision === "date" ? (endsValue || null) : (toIsoFromLocal(endsValue) || null),
+        endsAt: timing === "period"
+          ? (precision === "date" ? (endsValue || null) : (toIsoFromLocal(endsValue) || null))
+          : null,
         timePrecision: precision,
         timezone: value("hub-event-schedule-timezone") || "Asia/Seoul",
-        actionUrl: value("hub-event-schedule-action-url") || null,
-        sourceUrl: value("hub-event-schedule-source-url") || null,
-        sourceLabel: value("hub-event-schedule-source-label") || null,
+        links: collectLinkEditor(hubEventScheduleLinksRoot),
         notificationEligible: document.getElementById("hub-event-schedule-notification").checked,
         isPrimary: document.getElementById("hub-event-schedule-primary").checked,
         expectedRevision: currentHubEvent?.revision
@@ -3536,6 +3687,16 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       const updated = await adminApi(endpoints.hubEvents + "/" + encodeURIComponent(currentHubEvent.id) + "/schedule-items/" + encodeURIComponent(scheduleItemIdValue) + "/restore", {
         method: "POST",
         body: JSON.stringify({ expectedRevision: currentHubEvent.revision })
+      });
+      acceptScheduleMutation(updated);
+      await loadHubEventAuditLog(updated.id);
+    }
+
+    async function setPrimaryScheduleItem(scheduleItemIdValue) {
+      if (!currentHubEvent?.id) return;
+      const updated = await adminApi(endpoints.hubEvents + "/" + encodeURIComponent(currentHubEvent.id) + "/schedule-items/" + encodeURIComponent(scheduleItemIdValue), {
+        method: "PATCH",
+        body: JSON.stringify({ expectedRevision: currentHubEvent.revision, isPrimary: true })
       });
       acceptScheduleMutation(updated);
       await loadHubEventAuditLog(updated.id);
@@ -3608,6 +3769,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         if (imageSourceUrl) image.sourceUrl = imageSourceUrl;
         input.image = image;
       }
+      input.links = collectLinkEditor(hubEventLinksRoot);
       return input;
     }
 
@@ -3682,8 +3844,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       hubEventFields.scheduleMode.value = event.scheduleMode || "single_window";
       hubEventFields.startsAt.value = toLocalDateTime(event.startsAt);
       hubEventFields.endsAt.value = toLocalDateTime(event.endsAt);
-      hubEventFields.purchaseUrl.value = event.purchaseUrl || "";
-      hubEventFields.ticketUrl.value = event.ticketUrl || "";
+      renderLinkEditor(hubEventLinksRoot, parentEditorLinks(event));
       hubEventFields.venueName.value = event.venueName || "";
       hubEventFields.venueAddress.value = event.venueAddress || "";
       hubEventFields.notificationEligible.checked = event.notificationEligible !== false;
@@ -4050,12 +4211,23 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       });
     });
     document.getElementById("hub-event-form").addEventListener("input", function () { parentDirty = true; });
+    document.getElementById("hub-event-link-add").addEventListener("click", function () {
+      hubEventLinksRoot.appendChild(createLinkEditorRow({ kind: "source" }));
+      updateLinkEditorCount(hubEventLinksRoot);
+      parentDirty = true;
+    });
     document.getElementById("hub-event-schedule-add").addEventListener("click", function () {
       return runHubEventUiAction(t("hubEvent.scheduleCreate"), addScheduleItem);
+    });
+    document.getElementById("hub-event-schedule-link-add").addEventListener("click", function () {
+      hubEventScheduleLinksRoot.appendChild(createLinkEditorRow({ kind: "source" }));
+      updateLinkEditorCount(hubEventScheduleLinksRoot);
+      scheduleDirty = true;
     });
     document.getElementById("hub-event-schedule-dialog-close").addEventListener("click", function () { hubEventScheduleDialog.close(); });
     document.getElementById("hub-event-schedule-title").addEventListener("invalid", function (event) { event.target.setCustomValidity(t("hubEvent.scheduleTitleRequired")); });
     document.getElementById("hub-event-schedule-title").addEventListener("input", function (event) { event.target.setCustomValidity(""); });
+    document.getElementById("hub-event-schedule-timing").addEventListener("change", function (event) { setScheduleTimingUi(event.target.value); });
     document.getElementById("hub-event-schedule-precision").addEventListener("change", function (event) { setScheduleDateInputType(event.target.value); });
     hubEventScheduleForm.addEventListener("input", function () { scheduleDirty = true; });
     hubEventScheduleForm.addEventListener("submit", function (event) {

@@ -103,6 +103,27 @@ enum class HubEventScheduleKind {
 
 enum class HubEventTimePrecision { DATE, DATETIME }
 
+enum class HubEventLinkKind {
+    SOURCE,
+    PURCHASE,
+    TICKET,
+    RESERVATION,
+    CONTENT,
+    VIDEO,
+    MAP,
+    CUSTOM,
+}
+
+data class HubEventLink(
+    val id: String,
+    val kind: HubEventLinkKind,
+    val label: String? = null,
+    val url: String,
+    val sortOrder: Int = 0,
+    val createdAt: Instant? = null,
+    val updatedAt: Instant? = null,
+)
+
 data class HubEventScheduleItem(
     val id: String,
     val kind: HubEventScheduleKind,
@@ -116,10 +137,12 @@ data class HubEventScheduleItem(
     val actionUrl: String? = null,
     val sourceUrl: String? = null,
     val sourceLabel: String? = null,
+    val links: List<HubEventLink> = emptyList(),
     val notificationEligible: Boolean = true,
     val isPrimary: Boolean = false,
     val sortOrder: Int = 0,
     val cancelledAt: Instant? = null,
+    val createdAt: Instant? = null,
 )
 
 enum class HubEventImagePolicyState(val apiValue: String) {
@@ -216,6 +239,7 @@ data class HubEvent(
     val sourceType: HubEventSourceType,
     val scheduleMode: HubEventScheduleMode = HubEventScheduleMode.SINGLE_WINDOW,
     val scheduleItems: List<HubEventScheduleItem> = emptyList(),
+    val links: List<HubEventLink> = emptyList(),
     val announcedAt: Instant? = null,
     val startsAt: Instant? = null,
     val endsAt: Instant? = null,

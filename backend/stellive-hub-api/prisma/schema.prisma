@@ -468,6 +468,7 @@ model HubEvent {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   scheduleItems         HubEventScheduleItem[]
+  links                 HubEventExternalLink[] @relation("HubEventLinks")
 
   @@index([publicationState, deletedAt])
   @@index([status])
@@ -502,11 +503,30 @@ model HubEventScheduleItem {
   updatedAt            DateTime @updatedAt
 
   hubEvent HubEvent @relation(fields: [hubEventId], references: [id], onDelete: Cascade)
+  links    HubEventExternalLink[] @relation("HubEventScheduleItemLinks")
 
   @@index([hubEventId, sortOrder])
   @@index([hubEventId, startsAt])
   @@index([startsAt])
   @@index([cancelledAt])
+}
+
+model HubEventExternalLink {
+  id             String   @id @default(cuid(2))
+  hubEventId     String?
+  scheduleItemId String?
+  kind           String
+  label          String?
+  url            String
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  hubEvent     HubEvent?             @relation("HubEventLinks", fields: [hubEventId], references: [id], onDelete: Cascade)
+  scheduleItem HubEventScheduleItem? @relation("HubEventScheduleItemLinks", fields: [scheduleItemId], references: [id], onDelete: Cascade)
+
+  @@index([hubEventId, sortOrder])
+  @@index([scheduleItemId, sortOrder])
 }
 
 model HubCalendarSpecialDayOccurrence {

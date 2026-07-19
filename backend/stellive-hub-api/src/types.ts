@@ -14,6 +14,8 @@ export type {
   HubEventCategory,
   HubEventImage,
   HubEventImagePolicyState,
+  HubEventLink,
+  HubEventLinkKind,
   HubEventParticipationMode,
   HubEventScheduleItem,
   HubEventScheduleKind,

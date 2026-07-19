@@ -94,7 +94,7 @@ describe("admin hub event routes", () => {
       ["hub-event-source-url", "hub-event-source-label", "hub-event-image-url"],
       ["hub-event-image-url", "hub-event-image-source-label", "hub-event-image-source-url"],
       ["hub-event-announced-at", "hub-event-starts-at", "hub-event-ends-at"],
-      ["hub-event-purchase-url", "hub-event-ticket-url", "hub-event-venue-name", "hub-event-venue-address"],
+      ["hub-event-link-add", "hub-event-links", "hub-event-venue-name", "hub-event-venue-address"],
     ]) {
       const positions = anchors.map((anchor) => html.indexOf(`id="${anchor}"`));
       expect(positions.every((position) => position >= 0)).toBe(true);
@@ -123,8 +123,10 @@ describe("admin hub event routes", () => {
       "hub-event-announced-at",
       "hub-event-starts-at",
       "hub-event-ends-at",
-      "hub-event-purchase-url",
-      "hub-event-ticket-url",
+      "hub-event-link-add",
+      "hub-event-links",
+      "hub-event-schedule-link-add",
+      "hub-event-schedule-links",
       "hub-event-venue-name",
       "hub-event-venue-address",
       "hub-event-notification-eligible",
@@ -134,6 +136,23 @@ describe("admin hub event routes", () => {
     ]) {
       expect(html).toContain(`id="${id}"`);
     }
+  });
+
+  it("renders repeated event and schedule link editors with a primary schedule radio", () => {
+    const html = renderAdminConsoleHtml();
+
+    expect(html).toContain('row.className = "hub-event-link-row"');
+    expect(html).toContain('kind.dataset.linkField = "kind"');
+    expect(html).toContain('label.dataset.linkField = "label"');
+    expect(html).toContain('url.dataset.linkField = "url"');
+    expect(html).toContain('primary.name = "hub-event-primary-schedule"');
+    expect(html).toContain("setPrimaryScheduleItem");
+    expect(html).toContain("collectLinkEditor(hubEventLinksRoot)");
+    expect(html).toContain("collectLinkEditor(hubEventScheduleLinksRoot)");
+    expect(html).toContain("moveLinkEditorRow(row, -1)");
+    expect(html).toContain("moveLinkEditorRow(row, 1)");
+    expect(html).toContain("updateLinkEditorCount(root)");
+    expect(html).toContain('t("hubEvent.scheduleLinkCount", { count: linkCount })');
   });
 
   it("defaults the hub event status filter to open while keeping all statuses and ended available", () => {
@@ -425,6 +444,12 @@ describe("admin hub event routes", () => {
     expect(html).toContain('id="hub-event-schedule-save"');
     expect(html).toContain('id="hub-event-schedule-title" autocomplete="off" required maxlength="160"');
     expect(html).toContain('id="hub-event-schedule-description" rows="3" maxlength="2000"');
+    expect(html).toContain('id="hub-event-schedule-timing"');
+    expect(html).toContain('<option value="point">Single point</option>');
+    expect(html).toContain('<option value="period">Period</option>');
+    expect(html).toContain('id="hub-event-schedule-ends-at" type="datetime-local" disabled');
+    expect(html).toContain('function setScheduleTimingUi(timing)');
+    expect(html).toContain('endsAt: timing === "period"');
     expect(html).toContain('id="hub-event-schedule-label" autocomplete="off" maxlength="80"');
     expect(html).toContain('label: value("hub-event-schedule-label") || title');
     expect(html).not.toContain('input.scheduleItems = collectScheduleItems()');
@@ -437,6 +462,8 @@ describe("admin hub event routes", () => {
     expect(html).toContain(">설명 (선택 사항)<");
     expect(html).toContain(">짧은 라벨 (선택 사항)<");
     expect(html).toContain(">비우면 제목을 사용합니다<");
+    expect(html).toContain('<option value="point">단일 시점</option>');
+    expect(html).toContain('<option value="period">기간</option>');
     expect(html).toContain('t("hubEvent.scheduleTitleRequired")');
   });
 

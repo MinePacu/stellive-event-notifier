@@ -3,7 +3,8 @@ import {
   activeHubEventScheduleItems,
   deriveHubEventScheduleMode,
   normalizeHubEventScheduleText,
-  withDefaultPrimaryScheduleItem
+  withDefaultPrimaryScheduleItem,
+  withPrimaryScheduleItem
 } from "../src/hub-events/hubEventSchedulePolicy.js";
 import type { AdminHubEventScheduleItemWriteInput } from "../src/hub-events/hubEventRepository.js";
 
@@ -39,6 +40,14 @@ describe("hub event schedule policy", () => {
     ]);
     expect(items.find((candidate) => candidate.id === "cancelled")?.isPrimary).not.toBe(true);
     expect(items.find((candidate) => candidate.id === "active")?.isPrimary).toBe(true);
+  });
+
+  it("replaces the active primary with exactly one target", () => {
+    const items = withPrimaryScheduleItem([
+      item({ id: "old", isPrimary: true }),
+      item({ id: "next", isPrimary: false })
+    ], 1);
+    expect(items.filter((candidate) => candidate.isPrimary).map((candidate) => candidate.id)).toEqual(["next"]);
   });
 
   it("normalizes title, label, and optional description with compatibility fallbacks", () => {

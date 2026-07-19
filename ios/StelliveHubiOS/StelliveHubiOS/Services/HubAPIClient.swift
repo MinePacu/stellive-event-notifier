@@ -154,6 +154,7 @@ struct HubEventResponse: Codable, Equatable {
     let sourceType: HubEventSourceType
     let scheduleMode: HubEventScheduleMode?
     let scheduleItems: [HubEventScheduleItemResponse]?
+    let links: [HubEventLinkResponse]?
     let announcedAt: String?
     let startsAt: String?
     let endsAt: String?
@@ -179,10 +180,22 @@ struct HubEventScheduleItemResponse: Codable, Equatable {
     let actionUrl: String?
     let sourceUrl: String?
     let sourceLabel: String?
+    let links: [HubEventLinkResponse]?
     let notificationEligible: Bool
     let isPrimary: Bool
     let sortOrder: Int
     let cancelledAt: String?
+    let createdAt: String?
+}
+
+struct HubEventLinkResponse: Codable, Equatable {
+    let id: String?
+    let kind: HubEventLinkKind
+    let label: String?
+    let url: String
+    let sortOrder: Int
+    let createdAt: String?
+    let updatedAt: String?
 }
 
 struct RegisterDeviceRequest: Codable, Equatable {

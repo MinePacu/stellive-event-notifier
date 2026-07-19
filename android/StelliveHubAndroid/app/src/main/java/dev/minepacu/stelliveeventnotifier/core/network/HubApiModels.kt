@@ -140,6 +140,7 @@ data class HubEventDto(
     val sourceType: String? = null,
     val scheduleMode: String = "single_window",
     val scheduleItems: List<HubEventScheduleItemDto> = emptyList(),
+    val links: List<HubEventLinkDto> = emptyList(),
     val announcedAt: String? = null,
     val startsAt: String? = null,
     val endsAt: String? = null,
@@ -165,10 +166,22 @@ data class HubEventScheduleItemDto(
     val actionUrl: String? = null,
     val sourceUrl: String? = null,
     val sourceLabel: String? = null,
+    val links: List<HubEventLinkDto> = emptyList(),
     val notificationEligible: Boolean = true,
     val isPrimary: Boolean = false,
     val sortOrder: Int = 0,
     val cancelledAt: String? = null,
+    val createdAt: String? = null,
+)
+
+data class HubEventLinkDto(
+    val id: String? = null,
+    val kind: String? = null,
+    val label: String? = null,
+    val url: String? = null,
+    val sortOrder: Int = 0,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
 )
 
 data class HubEventImageDto(
