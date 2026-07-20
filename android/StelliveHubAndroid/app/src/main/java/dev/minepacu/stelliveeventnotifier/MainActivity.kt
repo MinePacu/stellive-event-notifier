@@ -1,6 +1,7 @@
 package dev.minepacu.stelliveeventnotifier
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -4811,13 +4812,17 @@ private fun hubEventDetailHero(event: dev.minepacu.stelliveeventnotifier.core.mo
     }
 
     private fun openExternalUrl(url: String?) {
-        val target = url?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: return
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(target))
-        if (intent.resolveActivity(packageManager) == null) {
-            Toast.makeText(this, "링크를 열 수 있는 앱이 없습니다.", Toast.LENGTH_SHORT).show()
-            return
+        val target = url?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        val uri = Uri.parse(target)
+        val isSupportedScheme = uri.scheme.equals("http", ignoreCase = true) ||
+            uri.scheme.equals("https", ignoreCase = true)
+        if (!isSupportedScheme || uri.host.isNullOrBlank()) return
+
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.external_link_no_handler, Toast.LENGTH_SHORT).show()
         }
-        startActivity(intent)
     }
 
 private fun compactEventCard(title: String, body: String, pills: List<String>, thumbnailUrl: String? = null): MaterialCardView =
