@@ -269,6 +269,7 @@ data class HubCalendarEntry(
     val scheduleKind: HubEventScheduleKind? = null,
     val scheduleLabel: String? = null,
     val title: String,
+    val displayTitle: String? = null,
     val category: HubEventCategory,
     val status: HubEventStatus,
     val participationMode: HubEventParticipationMode,

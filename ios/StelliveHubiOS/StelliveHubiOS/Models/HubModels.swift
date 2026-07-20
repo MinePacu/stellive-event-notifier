@@ -491,6 +491,7 @@ struct HubCalendarEntry: Identifiable, Codable, Equatable {
     var scheduleKind: HubEventScheduleKind? = nil
     var scheduleLabel: String? = nil
     let title: String
+    var displayTitle: String? = nil
     let category: HubEventCategory
     let status: HubEventStatus
     let participationMode: HubEventParticipationMode
@@ -503,6 +504,13 @@ struct HubCalendarEntry: Identifiable, Codable, Equatable {
     let sourceLabel: String
     let appDeepLink: String
     let platformUrl: String?
+
+    var resolvedDisplayTitle: String {
+        let candidates = [displayTitle, scheduleLabel, title]
+        return candidates
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? title
+    }
 }
 
 struct HubCalendarDay: Identifiable, Codable, Equatable {

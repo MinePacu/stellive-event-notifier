@@ -646,7 +646,7 @@ private struct CalendarEntryRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 5) {
-                Text(entry.title)
+                Text(entry.resolvedDisplayTitle)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(2)

@@ -54,20 +54,60 @@ describe("hub event timeline calendar", () => {
 
   it("projects four separated milestones only on their actual dates", () => {
     const event = timeline([
-      schedule("sales", "2026-06-03T01:00:00.000Z", { kind: "sales_open", label: "예약 판매 시작", isPrimary: true }),
-      schedule("tracks", "2026-06-08T01:00:00.000Z", { kind: "content_reveal", label: "트랙 리스트 공개" }),
+      schedule("sales", "2026-06-03T01:00:00.000Z", { kind: "sales_open", title: "예약 판매", label: "예약 판매 시작", isPrimary: true }),
+      schedule("tracks", "2026-06-08T01:00:00.000Z", { kind: "content_reveal", title: "트랙 리스트", label: "트랙 리스트 공개" }),
       schedule("medley", "2026-06-15T01:00:00.000Z", { kind: "content_reveal", label: "하이라이트 메들리 공개" }),
       schedule("release", "2026-06-22T01:00:00.000Z", { kind: "release", label: "앨범 발매" })
     ]);
 
     const response = buildHubCalendarResponse([event], options);
+    const entries = response.days.flatMap((day) => day.entries);
     expect(response.days.map((day) => day.date)).toEqual(["2026-06-03", "2026-06-08", "2026-06-15", "2026-06-22"]);
-    expect(response.days.flatMap((day) => day.entries).map((entry) => entry.scheduleLabel)).toEqual([
+    expect(entries.map((entry) => entry.scheduleLabel)).toEqual([
       "예약 판매 시작",
       "트랙 리스트 공개",
       "하이라이트 메들리 공개",
       "앨범 발매"
     ]);
+    expect(entries.map((entry) => entry.title)).toEqual(Array(4).fill("앨범 출시 일정"));
+    expect(entries.map((entry) => entry.displayTitle)).toEqual([
+      "예약 판매",
+      "트랙 리스트",
+      "하이라이트 메들리 공개",
+      "앨범 발매"
+    ]);
+  });
+
+  it("falls back from schedule title to label and then to the parent title", () => {
+    const event = timeline([
+      schedule("title", "2026-06-03T01:00:00.000Z", { title: "상세 제목", label: "상세 레이블", isPrimary: true }),
+      schedule("label", "2026-06-08T01:00:00.000Z", { title: undefined, label: "레이블 제목" }),
+      schedule("parent", "2026-06-15T01:00:00.000Z", { title: " ", label: " " })
+    ]);
+
+    const entries = buildHubCalendarResponse([event], options).days.flatMap((day) => day.entries);
+    expect(entries.map((entry) => entry.displayTitle)).toEqual(["상세 제목", "레이블 제목", "앨범 출시 일정"]);
+  });
+
+  it("keeps timeline status and time fields scoped to each schedule row", () => {
+    const event = timeline([
+      schedule("period", "2026-06-03T01:00:00.000Z", {
+        title: "예약 기간",
+        endsAt: "2026-06-05T01:00:00.000Z",
+        isPrimary: true
+      }),
+      schedule("point", "2026-06-08T01:00:00.000Z", { title: "트랙 공개" })
+    ]);
+
+    const entries = buildHubCalendarResponse([event], options).days.flatMap((day) => day.entries);
+    const point = entries.find((entry) => entry.scheduleItemId === "point");
+    expect(point).toMatchObject({
+      startsAt: "2026-06-08T01:00:00.000Z",
+      displayTimeText: "point · 10:00 시작",
+      status: "upcoming"
+    });
+    expect(point).not.toHaveProperty("endsAt");
+    expect(entries.filter((entry) => entry.scheduleItemId === "period")).toHaveLength(3);
   });
 
   it("keeps same-day milestones distinct and expands only schedule items with an end", () => {

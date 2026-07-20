@@ -665,6 +665,23 @@ final class ServerHubStoreTests: XCTestCase {
 
     func testRefreshCalendarUsesServerCalendarDays() async {
         let store = makeStore { request in
+            if request.url?.path == "/v1/hub-events/event-1" {
+                return jsonResponse(statusCode: 200, body: """
+                    {
+                      "id": "event-1",
+                      "category": "online_goods",
+                      "participationMode": "online",
+                      "status": "open",
+                      "title": "서버 굿즈",
+                      "generationId": "official",
+                      "sourceUrl": "https://example.com/event-1",
+                      "sourceLabel": "공식 공지",
+                      "sourceType": "official",
+                      "notificationEligible": true,
+                      "updatedAt": "2026-06-18T00:00:00.000Z"
+                    }
+                    """)
+            }
             XCTAssertEqual(request.url?.path, "/v1/hub-events/calendar")
             return jsonResponse(statusCode: 200, body: """
                 {
@@ -696,6 +713,7 @@ final class ServerHubStoreTests: XCTestCase {
         await store.refreshCalendar(from: Date(timeIntervalSince1970: 1_781_740_800), to: Date(timeIntervalSince1970: 1_782_777_599), timezone: TimeZone(identifier: "Asia/Seoul")!)
 
         XCTAssertEqual(store.serverCalendarDays.first?.entries.first?.eventId, "event-1")
+        XCTAssertEqual(store.cachedHubEvent(id: "event-1")?.title, "서버 굿즈")
     }
 
     func testRefreshSongsUsesServerResponses() async {

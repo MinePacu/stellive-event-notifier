@@ -112,8 +112,8 @@ function displayTimeText(
   timezone: string,
   scheduleItem?: HubEventScheduleItem
 ): string {
-  const startsAt = asDate(scheduleItem?.startsAt ?? event.startsAt);
-  const endsAt = asDate(scheduleItem?.endsAt ?? event.endsAt);
+  const startsAt = asDate(scheduleItem ? scheduleItem.startsAt : event.startsAt);
+  const endsAt = asDate(scheduleItem ? scheduleItem.endsAt : event.endsAt);
   const label = scheduleItem?.label;
   if (scheduleItem?.timePrecision === "date") return label ? `${label} · 종일` : "종일";
   let timing = "종일";
@@ -140,6 +140,7 @@ function toSpecialDayOccurrenceEntry(occurrence: SpecialDayOccurrence, now: Date
     specialDayKind: occurrence.kind,
     specialDayLabel: occurrence.specialDayLabel,
     title: occurrence.title,
+    displayTitle: occurrence.title,
     category: "online_goods",
     status: specialDayOccurrenceStatus(occurrence, now),
     participationMode: "online",
@@ -212,6 +213,11 @@ function toEntry(
   timezone: string,
   scheduleItem?: HubEventScheduleItem
 ): HubCalendarEntry {
+  const displayTitle = scheduleItem
+    ? scheduleItem.title?.trim() || scheduleItem.label.trim() || event.title
+    : event.title;
+  const startsAt = scheduleItem ? scheduleItem.startsAt : event.startsAt;
+  const endsAt = scheduleItem ? scheduleItem.endsAt : event.endsAt;
   return {
     id: scheduleItem ? `${event.id}:${scheduleItem.id}:${date}` : `${event.id}:${date}`,
     eventId: event.id,
@@ -220,13 +226,14 @@ function toEntry(
     scheduleKind: scheduleItem?.kind,
     scheduleLabel: scheduleItem?.label,
     title: event.title,
+    displayTitle,
     category: event.category,
     status,
     participationMode: event.participationMode,
     generationId: event.generationId,
     memberId: event.memberId,
-    startsAt: scheduleItem?.startsAt ?? event.startsAt,
-    endsAt: scheduleItem?.endsAt ?? event.endsAt,
+    ...(startsAt ? { startsAt } : {}),
+    ...(endsAt ? { endsAt } : {}),
     displayDate: date,
     displayTimeText: displayTimeText(event, date, scheduleItem?.timezone ?? timezone, scheduleItem),
     sourceLabel: scheduleItem?.sourceLabel ?? event.sourceLabel,

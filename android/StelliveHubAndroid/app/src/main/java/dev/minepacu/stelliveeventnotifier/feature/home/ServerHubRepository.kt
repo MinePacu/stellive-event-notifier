@@ -555,6 +555,7 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
             scheduleKind = scheduleKind?.toEnum<HubEventScheduleKind>(),
             scheduleLabel = scheduleLabel,
             title = title,
+            displayTitle = displayTitle,
             category = category?.toEnum<HubEventCategory>() ?: HubEventCategory.ONLINE_GOODS,
             status = status?.toEnum<HubEventStatus>() ?: HubEventStatus.ANNOUNCED,
             participationMode = participationMode?.toEnum<HubEventParticipationMode>() ?: HubEventParticipationMode.ONLINE,

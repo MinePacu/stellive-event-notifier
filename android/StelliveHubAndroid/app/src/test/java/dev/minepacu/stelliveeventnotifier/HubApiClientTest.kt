@@ -246,6 +246,7 @@ class HubApiClientTest {
                       "eventId": "server-event",
                       "entryKind": "hub_event",
                       "title": "서버 행사",
+                      "displayTitle": "서버 행사 세부 일정",
                       "category": "offline_concert",
                       "status": "upcoming",
                       "participationMode": "offline",
@@ -268,6 +269,7 @@ class HubApiClientTest {
 
         assertEquals("Asia/Seoul", decoded?.timezone)
         assertEquals("server-event", decoded?.days?.single()?.entries?.single()?.eventId)
+        assertEquals("서버 행사 세부 일정", decoded?.days?.single()?.entries?.single()?.displayTitle)
     }
 
     @Test

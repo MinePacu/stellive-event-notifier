@@ -83,7 +83,7 @@ struct HubEventsView: View {
                             if row.entry.entryKind == .hubEvent {
                                 if let event = serverStore.cachedHubEvent(id: row.entry.eventId) {
                                     if HubCalendarDeepLinkPolicy.canNavigateToDetail(row.entry) {
-                                        HubEventNavigationRow(event: event, scheduleItemId: row.entry.scheduleItemId)
+                                        HubEventNavigationRow(event: event)
                                     } else {
                                         HubEventRow(event: event)
                                     }
@@ -167,14 +167,33 @@ struct HubEventsView: View {
     }
 
     private func calendarDayHeaderTitle(for row: HubEventsFeedRow) -> String {
-        guard let periodTitle = calendarEntryPeriodTitle(for: row.entry) else {
+        let periodTitle: String?
+        if row.entry.entryKind == .hubEvent,
+           let event = serverStore.cachedHubEvent(id: row.entry.eventId) {
+            periodTitle = calendarEventDateTitle(startsAt: event.startsAt, endsAt: event.endsAt)
+        } else {
+            periodTitle = calendarPeriodTitle(startsAt: row.entry.startsAt, endsAt: row.entry.endsAt)
+        }
+        guard let periodTitle else {
             return row.day.date
         }
         return periodTitle
     }
 
-    private func calendarEntryPeriodTitle(for entry: HubCalendarEntry) -> String? {
-        guard let startsAt = entry.startsAt, let endsAt = entry.endsAt else {
+    private func calendarEventDateTitle(startsAt: Date?, endsAt: Date?) -> String? {
+        guard let start = startsAt ?? endsAt else { return nil }
+        let startDate = Self.feedCalendar.startOfDay(for: start)
+        if let endsAt {
+            let endDate = Self.feedCalendar.startOfDay(for: endsAt)
+            if endDate > startDate {
+                return "\(Self.feedPeriodDateFormatter.string(from: startDate))~\(Self.feedPeriodDateFormatter.string(from: endDate))"
+            }
+        }
+        return Self.feedPeriodDateFormatter.string(from: startDate)
+    }
+
+    private func calendarPeriodTitle(startsAt: Date?, endsAt: Date?) -> String? {
+        guard let startsAt, let endsAt else {
             return nil
         }
         let startDate = Self.feedCalendar.startOfDay(for: startsAt)
@@ -224,7 +243,10 @@ struct HubEventsFeedRow: Identifiable {
     let day: HubCalendarDay
     let entry: HubCalendarEntry
 
-    var id: String { entry.scheduleItemId.map { "\(entry.eventId):\($0)" } ?? entry.eventId }
+    var id: String {
+        guard entry.entryKind != .hubEvent else { return entry.eventId }
+        return entry.scheduleItemId.map { "\(entry.eventId):\($0)" } ?? entry.eventId
+    }
 }
 
 struct HubEventsFeedSection: Identifiable {
@@ -285,7 +307,7 @@ enum HubEventsFeedPolicy {
         return FeedSortKey(
             primaryDate: primaryDate,
             endDate: endDate,
-            title: row.entry.title,
+            title: row.entry.resolvedDisplayTitle,
             eventId: row.entry.eventId
         )
     }
@@ -346,6 +368,10 @@ struct HubEventRow: View {
     let event: HubEvent
     var showsChevron = false
 
+    private var presentation: HubEventFeedCardPresentation {
+        HubEventFeedCardPresentation(event: event)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let thumbnailURL = HubEventImagePolicy.displayURL(for: event.image) {
@@ -379,7 +405,7 @@ struct HubEventRow: View {
 
                 Spacer(minLength: 8)
 
-                HubEventStatusBadge(status: event.status)
+                HubEventStatusBadge(status: presentation.status)
 
                 if showsChevron {
                     Image(systemName: "chevron.right")
@@ -390,26 +416,53 @@ struct HubEventRow: View {
             }
         }
         .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(presentation.accessibilityLabel)
     }
 }
 
 private struct HubEventNavigationRow: View {
     let event: HubEvent
-    let scheduleItemId: String?
 
     var body: some View {
         HubEventRow(event: event, showsChevron: true)
             .contentShape(Rectangle())
             .overlay {
                 NavigationLink {
-                    HubEventDetailContainerView(initialEvent: event, highlightedScheduleItemId: scheduleItemId)
+                    HubEventDetailContainerView(initialEvent: event, highlightedScheduleItemId: nil)
                 } label: {
                     Color.clear
                 }
                 .opacity(0)
                 .accessibilityHidden(true)
             }
+    }
+}
+
+struct HubEventFeedCardPresentation: Equatable {
+    let parentTitle: String
+    let summary: String?
+    let status: HubEventStatus
+    let accessibilityLabel: String
+
+    init(event: HubEvent) {
+        parentTitle = event.title
+        summary = event.summary
+        status = event.status
+        accessibilityLabel = [
+            event.title,
+            status.displayName,
+            summary
+        ]
+        .compactMap { $0?.nilIfBlank }
+        .joined(separator: ", ")
+    }
+}
+
+private extension String {
+    var nilIfBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
@@ -437,7 +490,7 @@ private struct HubCalendarRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(entry.title)
+                Text(entry.resolvedDisplayTitle)
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .lineLimit(2)

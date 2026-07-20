@@ -486,6 +486,7 @@ export interface HubCalendarEntry {
   scheduleKind?: HubEventScheduleKind;
   scheduleLabel?: string;
   title: string;
+  displayTitle?: string;
   category: HubEventCategory;
   status: HubEventStatus;
   participationMode: HubEventParticipationMode;

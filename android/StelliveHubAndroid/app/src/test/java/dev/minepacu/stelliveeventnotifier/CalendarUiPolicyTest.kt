@@ -190,6 +190,55 @@ class CalendarUiPolicyTest {
     }
 
     @Test
+    fun feedEntriesCollapseDateExpansionForOneScheduleButKeepSiblingSchedules() {
+        val tracks = calendarEntry("album").copy(
+            id = "album:tracks:2026-06-20",
+            scheduleItemId = "tracks",
+            displayDate = "2026-06-20",
+        )
+        val nextDay = tracks.copy(id = "album:tracks:2026-06-21", displayDate = "2026-06-21")
+        val release = tracks.copy(id = "album:release:2026-06-22", scheduleItemId = "release", displayDate = "2026-06-22")
+
+        val rows = CalendarUiPolicy.feedEntriesForMonth(
+            days = listOf(
+                HubCalendarDay("2026-06-20", listOf(tracks)),
+                HubCalendarDay("2026-06-21", listOf(nextDay)),
+                HubCalendarDay("2026-06-22", listOf(release)),
+            ),
+            month = YearMonth.of(2026, 6),
+        )
+
+        assertEquals(listOf("tracks", "release"), rows.map { it.entry.scheduleItemId })
+    }
+
+    @Test
+    fun resolvesDisplayTitleFromServerThenScheduleLabelThenParentTitle() {
+        val entry = calendarEntry("album").copy(
+            title = "부모 제목",
+            scheduleLabel = "일정 레이블",
+        )
+
+        assertEquals("서버 표시 제목", CalendarUiPolicy.displayTitle(entry.copy(displayTitle = "서버 표시 제목")))
+        assertEquals("일정 레이블", CalendarUiPolicy.displayTitle(entry.copy(displayTitle = null)))
+        assertEquals("부모 제목", CalendarUiPolicy.displayTitle(entry.copy(displayTitle = null, scheduleLabel = null)))
+    }
+
+    @Test
+    fun rootFeedSelectionOmitsScheduleItemContext() {
+        val selection = CalendarUiPolicy.feedSelection("album")
+
+        assertEquals("album", selection.eventId)
+        assertEquals("goods-event:album", selection.transitionKey)
+    }
+
+    @Test
+    fun singleEventsAndSpecialDaysKeepLegacyPresentation() {
+        val birthday = birthdayEntry("birthday")
+
+        assertEquals(birthday.title, CalendarUiPolicy.displayTitle(birthday))
+    }
+
+    @Test
     fun feedRenderRowsKeepsSpecialDaysWithoutCanonicalHubEvent() {
         val birthday = birthdayEntry("birthday:sakihane-huya").copy(
             id = "birthday:sakihane-huya:2026-07-07",
@@ -215,6 +264,33 @@ class CalendarUiPolicyTest {
         assertEquals(listOf("birthday:sakihane-huya", "goods-event"), rows.map { it.entry.eventId })
         assertNull(rows.first { it.entry.eventId == "birthday:sakihane-huya" }.canonicalEvent)
         assertEquals(canonicalEvent, rows.first { it.entry.eventId == "goods-event" }.canonicalEvent)
+    }
+
+    @Test
+    fun feedRenderRowsCollapseSiblingSchedulesIntoOneRootEvent() {
+        val tracks = calendarEntry("album").copy(
+            id = "album:tracks:2026-07-07",
+            scheduleItemId = "tracks",
+            displayDate = "2026-07-07",
+        )
+        val release = tracks.copy(
+            id = "album:release:2026-07-08",
+            scheduleItemId = "release",
+            displayDate = "2026-07-08",
+        )
+        val canonicalEvent = hubEvent(id = "album", title = "앨범 행사")
+
+        val rows = CalendarUiPolicy.feedRenderRowsForMonth(
+            days = listOf(
+                HubCalendarDay("2026-07-07", listOf(tracks)),
+                HubCalendarDay("2026-07-08", listOf(release)),
+            ),
+            month = YearMonth.of(2026, 7),
+            events = listOf(canonicalEvent),
+        )
+
+        assertEquals(listOf("album"), rows.map { it.entry.eventId })
+        assertEquals(canonicalEvent, rows.single().canonicalEvent)
     }
 
     @Test

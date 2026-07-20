@@ -40,7 +40,7 @@ class HubCalendarWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_calendar_title, CalendarWidgetTextFormatter.emptyText())
             views.setTextViewText(R.id.widget_calendar_subtitle, "")
         } else {
-            views.setTextViewText(R.id.widget_calendar_title, entry.title)
+            views.setTextViewText(R.id.widget_calendar_title, CalendarUiPolicy.displayTitle(entry))
             views.setTextViewText(R.id.widget_calendar_subtitle, CalendarWidgetTextFormatter.subtitle(entry))
         }
         return views

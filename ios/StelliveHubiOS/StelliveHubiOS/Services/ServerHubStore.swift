@@ -163,6 +163,15 @@ final class ServerHubStore: ObservableObject {
                 timezone: timezone.identifier
             )
             serverCalendarDays = response.days
+            let missingEventIDs = Set(
+                response.days
+                    .flatMap(\.entries)
+                    .filter { $0.entryKind == .hubEvent && cachedHubEvent(id: $0.eventId) == nil }
+                    .map(\.eventId)
+            )
+            for eventID in missingEventIDs.sorted() {
+                _ = await loadHubEventDetail(id: eventID)
+            }
         } catch {
             if serverCalendarDays.isEmpty {
                 serverCalendarDays = fallback.calendarDays(for: "all")

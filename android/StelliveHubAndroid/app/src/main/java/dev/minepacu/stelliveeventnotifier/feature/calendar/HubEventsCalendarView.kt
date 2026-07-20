@@ -39,7 +39,7 @@ class HubEventsCalendarView(
     private val showCollapseControl: Boolean = false,
     initiallyExpanded: Boolean = true,
     private val onExpandedChanged: (Boolean) -> Unit = {},
-    private val onEntryClick: (String) -> Unit = {},
+    private val onEntryClick: (HubCalendarEntry) -> Unit = {},
 ) : MaterialCardView(context) {
     private val viewModel = HubEventsCalendarViewModel(days, clock, initialMonth)
     private var isExpanded = initiallyExpanded
@@ -501,14 +501,14 @@ class HubEventsCalendarView(
         background = rounded(color(R.color.hub_surface), dp(14), color(R.color.hub_line))
         setPadding(dp(12), dp(10), dp(12), dp(10))
         if (canNavigate) {
-            setOnClickListener { onEntryClick(entry.eventId) }
+            setOnClickListener { onEntryClick(entry) }
         }
         layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
             topMargin = dp(8)
         }
 
         addView(TextView(context).apply {
-            text = entry.title
+            text = CalendarUiPolicy.displayTitle(entry)
             setTextColor(color(R.color.hub_text))
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD

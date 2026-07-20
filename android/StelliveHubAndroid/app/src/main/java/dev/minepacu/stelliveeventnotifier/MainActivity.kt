@@ -76,6 +76,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.CatalogRole
 import dev.minepacu.stelliveeventnotifier.core.model.DeliveryMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarDay
 import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarEntry
+import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarEntryKind
 import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
 import dev.minepacu.stelliveeventnotifier.core.model.HubMember
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationEventType
@@ -1552,7 +1553,18 @@ private fun startScreen(screenId: String, title: String, role: String) {
             val from = today.minusMonths(1)
             val to = today.plusMonths(3)
             val days = serverRepository.hubCalendarDays(from, to, "Asia/Seoul")
-            val events = serverRepository.hubEvents("all", from, to)
+            val listedEvents = serverRepository.hubEvents("all", from, to)
+            val listedEventIds = listedEvents.mapTo(mutableSetOf()) { it.id }
+            val missingEventIds = days
+                .flatMap { it.entries }
+                .asSequence()
+                .filter { it.entryKind == HubCalendarEntryKind.HUB_EVENT }
+                .map { it.eventId }
+                .filterNot(listedEventIds::contains)
+                .distinct()
+                .toList()
+            val resolvedMissingEvents = missingEventIds.mapNotNull { serverRepository.hubEventDetail(it) }
+            val events = (listedEvents + resolvedMissingEvents).distinctBy { it.id }
             goodsEventsSelectedMonth = YearMonth.from(today)
             goodsEventsDays = days
             goodsEvents = events
@@ -1678,7 +1690,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
                         renderServerGoodsEvents(goodsEventsDays, goodsEvents)
                     }
                 },
-            ) { eventId -> onGoodsEventSelected(eventId) }
+            ) { entry -> onGoodsEventSelected(entry.eventId) }
         )
         val feedRows = CalendarUiPolicy.feedRenderRowsForMonth(
             days = monthDays,
@@ -1693,21 +1705,22 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 previousHeader = header
             }
             row.canonicalEvent?.let { event ->
-                container.addView(hubEventCard(event))
+                container.addView(hubEventCard(event = event))
             } ?: container.addView(localCalendarEntryRow(row.entry))
         }
     }
 
     private fun onGoodsEventSelected(eventId: String) {
+        val selection = CalendarUiPolicy.feedSelection(eventId)
         when (HubEventsPanePolicy.selectionMode(currentAdaptiveSpec)) {
-            GoodsEventSelectionMode.UPDATE_INLINE_DETAIL -> crossFadeTwoPaneSelection("goods-event:$eventId") {
-                selectedHubEventId = eventId
+            GoodsEventSelectionMode.UPDATE_INLINE_DETAIL -> crossFadeTwoPaneSelection(selection.transitionKey) {
+                selectedHubEventId = selection.eventId
                 selectedHubEventScheduleItemId = null
                 serverHubEventDetailLoadedId = null
                 renderServerGoodsEvents(goodsEventsDays, goodsEvents)
             }
             GoodsEventSelectionMode.NAVIGATE_TO_DETAIL -> {
-                selectedHubEventId = eventId
+                selectedHubEventId = selection.eventId
                 selectedHubEventScheduleItemId = null
                 serverHubEventDetailLoadedId = null
                 pushScreen(HubScreen.GOODS_EVENT_DETAIL)
@@ -1760,7 +1773,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
 
     private fun localCalendarEntryRow(entry: HubCalendarEntry): MaterialCardView =
         compactEventCard(
-            title = entry.title,
+            title = CalendarUiPolicy.displayTitle(entry),
             body = listOf(CalendarUiPolicy.entryPeriodDateText(entry), entry.displayTimeText)
                 .filter { it.isNotBlank() }
                 .joinToString(" · "),
@@ -4895,12 +4908,16 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
             }
         }
 
-    private fun hubEventCard(event: dev.minepacu.stelliveeventnotifier.core.model.HubEvent): MaterialCardView =
-        compactEventCard(
+    private fun hubEventCard(event: dev.minepacu.stelliveeventnotifier.core.model.HubEvent): MaterialCardView {
+        val body = listOfNotNull(
+            listOfNotNull(event.status.displayName, event.sourceLabel, event.venueName).joinToString(" · "),
+            event.summary?.takeIf { it.isNotBlank() },
+        ).joinToString("\n")
+        return compactEventCard(
             title = event.title,
-            body = listOfNotNull(event.status.displayName, event.sourceLabel, event.venueName).joinToString(" · "),
+            body = body,
             pills = listOf(event.category.displayName, event.participationMode.displayName),
-            thumbnailUrl = event.image?.takeIf(HubEventImagePolicy::canDisplay)?.url
+            thumbnailUrl = event.image?.takeIf(HubEventImagePolicy::canDisplay)?.url,
         ).apply {
             isClickable = true
             isFocusable = true
@@ -4908,6 +4925,7 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
                 onGoodsEventSelected(event.id)
             }
         }
+    }
 
     private fun historyEventCard(item: NotificationHistoryItem, member: HubMember?): MaterialCardView =
         baseCard().apply {

@@ -158,7 +158,7 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(rows.first?.day.date, "2026-06-19")
     }
 
-    func testFeedRowsKeepDifferentScheduleItemsFromSameParentEvent() {
+    func testFeedRowsCollapseDifferentScheduleItemsIntoOneRootEvent() {
         let rows = HubEventsFeedPolicy.rowsForMonth(
             days: [day("2026-06-20", entries: [
                 entry(id: "album:tracks", eventId: "album", scheduleItemId: "tracks"),
@@ -168,7 +168,54 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
             calendar: calendar
         )
 
-        XCTAssertEqual(rows.map(\.entry.scheduleItemId), ["release", "tracks"])
+        XCTAssertEqual(rows.map(\.entry.eventId), ["album"])
+    }
+
+    func testFeedRowsCollapseDateExpansionAndSiblingSchedulesIntoOneRootEvent() {
+        let rows = HubEventsFeedPolicy.rowsForMonth(
+            days: [
+                day("2026-06-20", entries: [entry(id: "album:tracks:20", eventId: "album", scheduleItemId: "tracks")]),
+                day("2026-06-21", entries: [entry(id: "album:tracks:21", eventId: "album", scheduleItemId: "tracks")]),
+                day("2026-06-22", entries: [entry(id: "album:release", eventId: "album", scheduleItemId: "release")])
+            ],
+            selectedMonth: date("2026-06-01"),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(rows.map(\.entry.eventId), ["album"])
+    }
+
+    func testCalendarEntryDecodesLegacyResponseWithoutDisplayTitle() throws {
+        let data = Data(#"{"id":"album:tracks","eventId":"album","entryKind":"hub_event","scheduleItemId":"tracks","scheduleLabel":"트랙 리스트 공개","title":"부모 앨범","category":"online_goods","status":"upcoming","participationMode":"online","generationId":"official","displayDate":"2026-06-20","displayTimeText":"18:00 시작","sourceLabel":"공식","appDeepLink":"stellivehub://hub-events/album?scheduleItemId=tracks"}"#.utf8)
+
+        let decoded = try JSONDecoder().decode(HubCalendarEntry.self, from: data)
+
+        XCTAssertNil(decoded.displayTitle)
+        XCTAssertEqual(decoded.resolvedDisplayTitle, "트랙 리스트 공개")
+    }
+
+    func testCalendarEntryDecodesDisplayTitleWhenPresent() throws {
+        let data = Data(#"{"id":"album:tracks","eventId":"album","entryKind":"hub_event","scheduleItemId":"tracks","scheduleLabel":"레거시 레이블","title":"부모 앨범","displayTitle":"트랙 리스트 공개","category":"online_goods","status":"upcoming","participationMode":"online","generationId":"official","displayDate":"2026-06-20","displayTimeText":"18:00 시작","sourceLabel":"공식","appDeepLink":"stellivehub://hub-events/album?scheduleItemId=tracks"}"#.utf8)
+
+        let decoded = try JSONDecoder().decode(HubCalendarEntry.self, from: data)
+
+        XCTAssertEqual(decoded.displayTitle, "트랙 리스트 공개")
+        XCTAssertEqual(decoded.resolvedDisplayTitle, "트랙 리스트 공개")
+    }
+
+    func testSpecialDayPresentationRemainsCompatible() {
+        let birthday = entry(id: "birthday", eventId: "birthday", title: "멤버 생일", entryKind: .memberBirthday)
+
+        XCTAssertEqual(birthday.resolvedDisplayTitle, "멤버 생일")
+    }
+
+    func testRootFeedCardOmitsSchedulePresentationAndSelection() {
+        let event = detailEvent()
+        let presentation = HubEventFeedCardPresentation(event: event)
+
+        XCTAssertEqual(presentation.parentTitle, event.title)
+        XCTAssertEqual(presentation.status, event.status)
+        XCTAssertFalse(presentation.accessibilityLabel.contains("트랙 리스트"))
     }
 
     func testRangeMiddleMarkerDistinguishesDatesWithAndWithoutEntries() {
@@ -795,16 +842,23 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         participationMode: HubEventParticipationMode = .online,
         status: HubEventStatus = .open,
         startsAt: Date? = nil,
-        endsAt: Date? = nil
+        endsAt: Date? = nil,
+        title: String? = nil,
+        displayTitle: String? = nil,
+        scheduleLabel: String? = nil,
+        displayTimeText: String = "종일",
+        entryKind: HubCalendarEntryKind = .hubEvent
     ) -> HubCalendarEntry {
         HubCalendarEntry(
             id: id,
             eventId: eventId ?? id,
-            entryKind: .hubEvent,
+            entryKind: entryKind,
             specialDayKind: nil,
             specialDayLabel: nil,
             scheduleItemId: scheduleItemId,
-            title: id,
+            scheduleLabel: scheduleLabel,
+            title: title ?? id,
+            displayTitle: displayTitle,
             category: category,
             status: status,
             participationMode: participationMode,
@@ -813,7 +867,7 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
             startsAt: startsAt,
             endsAt: endsAt,
             displayDate: "2026.06.13",
-            displayTimeText: "종일",
+            displayTimeText: displayTimeText,
             sourceLabel: "Stellive Official",
             appDeepLink: "stellivehub://hub-events/\(id)",
             platformUrl: "https://example.com/events/\(id)"

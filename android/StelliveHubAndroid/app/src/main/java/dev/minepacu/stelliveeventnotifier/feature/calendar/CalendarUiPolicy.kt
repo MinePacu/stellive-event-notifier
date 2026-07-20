@@ -76,6 +76,11 @@ data class CalendarFeedRenderRow(
     val canonicalEvent: HubEvent?,
 )
 
+data class GoodsEventFeedSelection(
+    val eventId: String,
+    val transitionKey: String,
+)
+
 object CalendarUiPolicy {
     const val staleWidgetText = "최근 동기화 필요"
     const val emptyWidgetText = "예정된 일정 없음"
@@ -108,6 +113,17 @@ object CalendarUiPolicy {
         HubEventStatus.CANCELLED -> "취소"
     }
 
+    fun displayTitle(entry: HubCalendarEntry): String =
+        entry.displayTitle?.trim()?.takeIf { it.isNotEmpty() }
+            ?: entry.scheduleLabel?.trim()?.takeIf { it.isNotEmpty() }
+            ?: entry.title
+
+    fun feedSelection(eventId: String): GoodsEventFeedSelection =
+        GoodsEventFeedSelection(
+            eventId = eventId,
+            transitionKey = "goods-event:$eventId",
+        )
+
     fun entryLabel(entry: HubCalendarEntry): String =
         entry.specialDayLabel ?: statusLabel(entry.status)
 
@@ -132,10 +148,25 @@ object CalendarUiPolicy {
         return "${periodDateFormatter.format(startDate)}~${periodDateFormatter.format(endDate)}"
     }
 
-    fun feedRowHeaderText(row: CalendarFeedRenderRow): String =
-        entryPeriodDateText(row.entry)
+    fun feedRowHeaderText(row: CalendarFeedRenderRow): String {
+        row.canonicalEvent?.let { event ->
+            val startDate = (event.startsAt ?: event.endsAt)
+                ?.atZone(feedSortZoneId)
+                ?.toLocalDate()
+                ?: return row.day.date
+            val endDate = event.endsAt
+                ?.atZone(feedSortZoneId)
+                ?.toLocalDate()
+            return if (endDate != null && endDate > startDate) {
+                "${periodDateFormatter.format(startDate)}~${periodDateFormatter.format(endDate)}"
+            } else {
+                periodDateFormatter.format(startDate)
+            }
+        }
+        return entryPeriodDateText(row.entry, feedSortZoneId)
             .takeIf { it != row.entry.displayDate }
             ?: row.day.date
+    }
 
     fun isWidgetSnapshotStale(snapshot: HubCalendarWidgetSnapshot, now: Instant): Boolean =
         !snapshot.staleAfter.isAfter(now)
@@ -443,6 +474,7 @@ object CalendarUiPolicy {
         events: List<HubEvent>,
     ): List<CalendarFeedRenderRow> {
         val eventsById = events.associateBy { it.id }
+        val seenRootEventIds = linkedSetOf<String>()
         return feedEntriesForMonth(days, month)
             .mapNotNull { row ->
                 val canonicalEvent = eventsById[row.entry.eventId]
@@ -455,6 +487,10 @@ object CalendarUiPolicy {
                         canonicalEvent = canonicalEvent,
                     )
                 }
+            }
+            .filter { row ->
+                row.entry.entryKind != HubCalendarEntryKind.HUB_EVENT ||
+                    seenRootEventIds.add(row.entry.eventId)
             }
     }
 

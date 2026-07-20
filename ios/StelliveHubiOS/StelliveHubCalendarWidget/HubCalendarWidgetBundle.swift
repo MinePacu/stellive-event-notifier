@@ -55,7 +55,7 @@ struct HubCalendarWidgetView: View {
                 .foregroundStyle(.secondary)
 
             if let first = entry.snapshot?.entries.first {
-                Text(first.title)
+                Text(first.resolvedDisplayTitle)
                     .font(.headline)
                     .lineLimit(2)
                     Text("\(HubCalendarPolicy.entryLabel(first)) · \(first.displayDate) · \(first.displayTimeText)")
