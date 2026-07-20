@@ -1919,12 +1919,10 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
                     setPadding(0, dp(4), 0, 0)
                 })
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            val chevron = TextView(context).apply {
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 18f
-                gravity = Gravity.CENTER
-                includeFontPadding = false
-                setPadding(dp(12), 0, 0, 0)
+            val chevron = ImageView(context).apply {
+                setImageResource(R.drawable.ic_chevron_down_24)
+                imageTintList = ColorStateList.valueOf(color(R.color.hub_text_muted))
+                scaleType = ImageView.ScaleType.CENTER
             }
             heading.addView(chevron, LinearLayout.LayoutParams(dp(36), dp(44)))
             addView(heading)
@@ -1972,9 +1970,17 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
             }
             addView(details)
 
-            fun updateExpansionPresentation() {
-                chevron.text = if (expanded) "⌃" else "⌄"
+            fun updateExpansionPresentation(animate: Boolean) {
                 details.isVisible = expanded
+                val targetRotation = if (expanded) 180f else 0f
+                if (animate) {
+                    chevron.animate()
+                        .rotation(targetRotation)
+                        .setDuration(220L)
+                        .start()
+                } else {
+                    chevron.rotation = targetRotation
+                }
                 scheduleCard.contentDescription = buildString {
                     append(displayTitle)
                     append(", ")
@@ -1986,15 +1992,19 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
                     append(if (expanded) ", 펼쳐짐, 세부 정보 접기" else ", 접힘, 세부 정보 펼치기")
                 }
             }
-            updateExpansionPresentation()
+            updateExpansionPresentation(animate = false)
             scheduleCard.isClickable = true
             scheduleCard.isFocusable = true
             scheduleCard.setOnClickListener {
                 expanded = !expanded
                 if (expanded) expandedHubEventScheduleItemIds.add(item.schedule.id)
                 else expandedHubEventScheduleItemIds.remove(item.schedule.id)
-                TransitionManager.beginDelayedTransition(detailContainer, AutoTransition().apply { duration = 160 })
-                updateExpansionPresentation()
+                val transitionRoot = (scheduleCard.parent as? ViewGroup) ?: detailContainer
+                TransitionManager.beginDelayedTransition(
+                    transitionRoot,
+                    AutoTransition().apply { duration = 220L },
+                )
+                updateExpansionPresentation(animate = true)
             }
         }
         addView(content)
