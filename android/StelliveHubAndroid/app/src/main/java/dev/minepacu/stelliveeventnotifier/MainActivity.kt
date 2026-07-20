@@ -214,6 +214,21 @@ private data class PendingScreenRefresh(
 
 private enum class SongScrollSlot { SONGS_SINGLE, SONGS_TWO_PANE, SONG_SEARCH }
 
+private enum class ScheduleBadgeTone {
+    UPCOMING,
+    IN_PROGRESS,
+    COMPLETED,
+    CANCELLED,
+    KIND,
+    PRIMARY,
+    SELECTED,
+}
+
+private data class ScheduleBadgePresentation(
+    val label: String,
+    val tone: ScheduleBadgeTone,
+)
+
 internal class SongBrowseSessionViewModel : ViewModel() {
     var generationId = "all"
     var type = "all"
@@ -1892,10 +1907,15 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(10), dp(14), dp(12))
             addView(scheduleBadgeRow(buildList {
-                add(item.stateText)
-                add(HubEventDetailFormatting.scheduleKindLabel(item.schedule.kind))
-                if (isEffectivePrimary) add("대표 일정")
-                if (highlighted) add("선택한 일정")
+                add(ScheduleBadgePresentation(item.stateText, scheduleStateBadgeTone(item.stateText)))
+                add(
+                    ScheduleBadgePresentation(
+                        HubEventDetailFormatting.scheduleKindLabel(item.schedule.kind),
+                        ScheduleBadgeTone.KIND,
+                    )
+                )
+                if (isEffectivePrimary) add(ScheduleBadgePresentation("대표 일정", ScheduleBadgeTone.PRIMARY))
+                if (highlighted) add(ScheduleBadgePresentation("선택한 일정", ScheduleBadgeTone.SELECTED))
             }))
             val heading = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -2010,17 +2030,38 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
         addView(content)
     }
 
-    private fun scheduleBadgeRow(labels: List<String>): ChipGroup = ChipGroup(this).apply {
+    private fun scheduleStateBadgeTone(stateText: String): ScheduleBadgeTone = when (stateText) {
+        "예정" -> ScheduleBadgeTone.UPCOMING
+        "진행" -> ScheduleBadgeTone.IN_PROGRESS
+        "취소" -> ScheduleBadgeTone.CANCELLED
+        else -> ScheduleBadgeTone.COMPLETED
+    }
+
+    private fun scheduleBadgeColors(tone: ScheduleBadgeTone): Pair<Int, Int> = when (tone) {
+        ScheduleBadgeTone.UPCOMING -> R.color.hub_schedule_tag_upcoming to R.color.hub_schedule_tag_upcoming_soft
+        ScheduleBadgeTone.IN_PROGRESS -> R.color.hub_schedule_tag_progress to R.color.hub_schedule_tag_progress_soft
+        ScheduleBadgeTone.COMPLETED -> R.color.hub_schedule_tag_completed to R.color.hub_schedule_tag_completed_soft
+        ScheduleBadgeTone.CANCELLED -> R.color.hub_schedule_tag_cancelled to R.color.hub_schedule_tag_cancelled_soft
+        ScheduleBadgeTone.KIND -> R.color.hub_schedule_tag_kind to R.color.hub_schedule_tag_kind_soft
+        ScheduleBadgeTone.PRIMARY -> R.color.hub_schedule_tag_primary to R.color.hub_schedule_tag_primary_soft
+        ScheduleBadgeTone.SELECTED -> R.color.hub_schedule_tag_selected to R.color.hub_schedule_tag_selected_soft
+    }
+
+    private fun scheduleBadgeRow(badges: List<ScheduleBadgePresentation>): ChipGroup = ChipGroup(this).apply {
         isSingleLine = false
         chipSpacingHorizontal = dp(5)
         chipSpacingVertical = dp(4)
-        labels.forEach { label ->
+        badges.forEach { badge ->
+            val (textColorRes, backgroundColorRes) = scheduleBadgeColors(badge.tone)
             addView(Chip(context).apply {
-                text = label
+                text = badge.label
                 textSize = 10f
                 includeFontPadding = false
                 gravity = Gravity.CENTER
                 textAlignment = View.TEXT_ALIGNMENT_CENTER
+                setTextColor(color(textColorRes))
+                chipBackgroundColor = ColorStateList.valueOf(color(backgroundColorRes))
+                chipStrokeWidth = 0f
                 isClickable = false
                 isCheckable = false
                 isFocusable = false

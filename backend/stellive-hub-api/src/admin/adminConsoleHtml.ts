@@ -1225,6 +1225,9 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     .hub-event-form-wide .form-section:first-of-type {
       grid-column: 1 / -1;
     }
+    .hub-events-links-venue-section {
+      grid-column: 1 / -1;
+    }
     .hub-event-editor-tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--admin-border); margin-bottom: 14px; }
     .hub-event-editor-tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 2px; background: transparent; color: var(--admin-muted); }
     .hub-event-editor-tab[aria-selected="true"] { border-bottom-color: var(--admin-primary); color: var(--admin-text); }
@@ -1538,6 +1541,19 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       }
       .field {
         grid-column: 1 / -1;
+      }
+      .hub-event-link-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .hub-event-link-row .field {
+        grid-column: auto;
+      }
+      .hub-event-link-row .field:nth-child(3),
+      .hub-event-link-actions {
+        grid-column: 1 / -1;
+      }
+      .hub-event-link-actions {
+        flex-wrap: wrap;
       }
     }
     @media (max-width: 640px) {
@@ -1923,7 +1939,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
                 </div>
               </div>
             </div>
-            <div class="form-section hub-events-section">
+            <div class="form-section hub-events-section hub-events-links-venue-section">
               <h3 class="form-section-title hub-events-section-title">Links and venue</h3>
               <div class="hub-events-section-body">
                 <div class="section-head"><div><strong><span>Related links</span> (<span id="hub-event-link-count">0</span>)</strong><p class="subtle">Add purchase, ticket, source, content, video, or map links independently.</p></div><button id="hub-event-link-add" type="button">Add link</button></div>

@@ -87,6 +87,9 @@ describe("admin hub event routes", () => {
     expect(html).toContain("Source and thumbnail");
     expect(html).toContain("Schedule");
     expect(html).toContain("Links and venue");
+    expect(html).toContain('class="form-section hub-events-section hub-events-links-venue-section"');
+    expect(html).toContain(".hub-events-links-venue-section {");
+    expect(html).toContain(".hub-event-link-row .field:nth-child(3)");
 
     for (const anchors of [
       ["hub-event-generation", "hub-event-member", "hub-event-source-type"],

@@ -294,6 +294,32 @@ struct HubEventDetailView: View {
 }
 
 private struct HubEventScheduleCard: View {
+    private enum BadgeTone: Equatable {
+        case upcoming
+        case inProgress
+        case completed
+        case cancelled
+        case kind
+        case primary
+        case selected
+
+        var foreground: Color {
+            switch self {
+            case .upcoming: Color(.systemBlue)
+            case .inProgress: Color(.systemGreen)
+            case .completed: Color(.secondaryLabel)
+            case .cancelled: Color(.systemRed)
+            case .kind: Color(.systemPurple)
+            case .primary: Color(.systemOrange)
+            case .selected: Color(.systemTeal)
+            }
+        }
+
+        var background: Color {
+            foreground.opacity(self == .completed ? 0.12 : 0.14)
+        }
+    }
+
     let item: HubEventScheduleTimelineItem
     let highlighted: Bool
     let isEffectivePrimary: Bool
@@ -306,10 +332,10 @@ private struct HubEventScheduleCard: View {
             Button(action: onToggle) {
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(spacing: 6) {
-                        scheduleBadge(item.stateText)
-                        scheduleBadge(HubEventDetailFormatting.scheduleKindLabel(item.schedule.kind))
-                        if isEffectivePrimary { scheduleBadge("대표 일정") }
-                        if highlighted { scheduleBadge("선택한 일정") }
+                        scheduleBadge(item.stateText, tone: stateBadgeTone)
+                        scheduleBadge(HubEventDetailFormatting.scheduleKindLabel(item.schedule.kind), tone: .kind)
+                        if isEffectivePrimary { scheduleBadge("대표 일정", tone: .primary) }
+                        if highlighted { scheduleBadge("선택한 일정", tone: .selected) }
                         Spacer(minLength: 0)
                     }
                     HStack(alignment: .center, spacing: 10) {
@@ -382,13 +408,22 @@ private struct HubEventScheduleCard: View {
         .opacity(item.schedule.cancelledAt == nil ? 1 : 0.58)
     }
 
-    private func scheduleBadge(_ label: String) -> some View {
+    private var stateBadgeTone: BadgeTone {
+        switch item.stateText {
+        case "예정": .upcoming
+        case "진행": .inProgress
+        case "취소": .cancelled
+        default: .completed
+        }
+    }
+
+    private func scheduleBadge(_ label: String, tone: BadgeTone) -> some View {
         Text(label)
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(HubEventDetailColors.muted)
+            .foregroundStyle(tone.foreground)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
+            .background(tone.background, in: Capsule())
     }
 
     private func url(from rawValue: String) -> URL? {

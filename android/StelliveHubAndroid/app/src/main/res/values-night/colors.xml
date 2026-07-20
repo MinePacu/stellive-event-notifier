@@ -22,4 +22,18 @@
     <color name="hub_success_soft">#18362A</color>
     <color name="hub_warning">#E6C978</color>
     <color name="hub_warning_soft">#39311D</color>
+    <color name="hub_schedule_tag_upcoming">#9CC6FF</color>
+    <color name="hub_schedule_tag_upcoming_soft">#1E3048</color>
+    <color name="hub_schedule_tag_progress">#83D8B2</color>
+    <color name="hub_schedule_tag_progress_soft">#18362A</color>
+    <color name="hub_schedule_tag_completed">#AAB8BA</color>
+    <color name="hub_schedule_tag_completed_soft">#232525</color>
+    <color name="hub_schedule_tag_cancelled">#FFAAA6</color>
+    <color name="hub_schedule_tag_cancelled_soft">#481F21</color>
+    <color name="hub_schedule_tag_kind">#D1B5FF</color>
+    <color name="hub_schedule_tag_kind_soft">#34284A</color>
+    <color name="hub_schedule_tag_primary">#E3C476</color>
+    <color name="hub_schedule_tag_primary_soft">#3A301A</color>
+    <color name="hub_schedule_tag_selected">#9FCED1</color>
+    <color name="hub_schedule_tag_selected_soft">#203A3B</color>
 </resources>
