@@ -38,6 +38,7 @@ function normalizedText(values: Array<string | null | undefined>): string {
   return values
     .filter((value): value is string => Boolean(value))
     .join(" ")
+    .normalize("NFKC")
     .toLowerCase();
 }
 

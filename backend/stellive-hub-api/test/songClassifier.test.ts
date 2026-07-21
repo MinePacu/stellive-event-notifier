@@ -42,6 +42,18 @@ describe("song classifier", () => {
       specialFlags: ["playlist_compilation"],
     });
 
+    expect(classifySongUpload({
+      title: "𝐏𝐥𝐚𝐲𝐥𝐢𝐬𝐭 힘들고 지칠 때 듣고 싶은 유즈하 리코 새벽 감성 방종곡",
+      duration: "PT39M34S",
+      privacyStatus: "public",
+      broadcastState: "none",
+      isOfficialMemberChannel: true,
+    })).toMatchObject({
+      type: "cover",
+      reason: "member_channel_playlist_compilation",
+      specialFlags: ["playlist_compilation"],
+    });
+
     for (const title of ["새벽 플레이리스트", "새벽 플리 모음"]) {
       expect(classifySongUpload({
         title,
