@@ -36,6 +36,7 @@ export interface MusicVideoClassificationInput {
   description?: string | null;
   duration?: string | null;
   privacyStatus?: string | null;
+  specialFlags?: string[] | null;
 }
 
 export interface MusicVideoClassificationResult {
@@ -111,7 +112,10 @@ export function classifyVideo(input: MusicVideoClassificationInput): MusicVideoC
   const type = mergeMusicItemTypes(sourceTypes);
   const durationSeconds = parseDurationToSeconds(input.duration);
   const exclusion = detectExcludeCandidate(input.title, input.description);
-  const specialFlags = detectSpecialFlags(input.title, input.description);
+  const specialFlags = [...new Set([
+    ...(input.specialFlags ?? []),
+    ...detectSpecialFlags(input.title, input.description),
+  ])];
   const isInstrumental = detectInstrumental(input.title);
   const isAvailable = !input.privacyStatus || ["public", "unlisted"].includes(input.privacyStatus.toLocaleLowerCase("en-US"));
 
@@ -122,13 +126,17 @@ export function classifyVideo(input: MusicVideoClassificationInput): MusicVideoC
     specialFlags.push("live_or_long_form");
   }
 
+  const isPlaylistCompilation = specialFlags.includes("playlist_compilation");
+  const hasReviewSpecialFlag = specialFlags.some((flag) => !(
+    isPlaylistCompilation && (flag === "playlist_compilation" || flag === "live_or_long_form")
+  ));
   const needsReview =
     sourceTypes.length > 1 ||
     !isAvailable ||
     isInstrumental ||
     exclusion.isExcluded ||
     (durationSeconds !== null && durationSeconds < 60) ||
-    specialFlags.length > 0;
+    hasReviewSpecialFlag;
 
   return {
     type,

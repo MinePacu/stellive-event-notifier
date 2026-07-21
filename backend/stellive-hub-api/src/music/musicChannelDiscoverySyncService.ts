@@ -6,8 +6,11 @@ import type {
   YoutubeVideoDetail,
 } from "../adapters/youtube/youtubeDataApiClient.js";
 import type { MusicItemMemberInput, MusicItemUpsertInput } from "../repositories/musicRepository.js";
-import { classifySongUpload } from "../songs/songClassifier.js";
-import { classifyYoutubePremiere } from "../adapters/youtube/youtubePremiereClassifier.js";
+import { classifySongUpload, type SongBroadcastState } from "../songs/songClassifier.js";
+import {
+  classifyYoutubeBroadcastState,
+  classifyYoutubePremiere,
+} from "../adapters/youtube/youtubePremiereClassifier.js";
 import { classifyVideo, normalizeTitle } from "./musicClassifier.js";
 import type { MusicSyncLock } from "./musicLocks.js";
 import { matchMusicMembers, type MusicMemberAliasInput } from "./musicMemberMatcher.js";
@@ -99,6 +102,12 @@ function shouldRefreshVideo(existing: Record<string, unknown> | undefined, now: 
   return !fetchedAt || now.getTime() - new Date(fetchedAt).getTime() >= 24 * 60 * 60 * 1_000;
 }
 
+function broadcastStateFromExisting(existing: Record<string, unknown> | undefined): SongBroadcastState {
+  const state = existing?.youtubePremiereState;
+  if (state === "scheduled" || state === "live" || state === "completed" || state === "unknown") return state;
+  return existing?.youtubePresentationType === "regular" ? "none" : "unknown";
+}
+
 function detailFromExisting(existing: Record<string, unknown>): YoutubeVideoDetail {
   return {
     videoId: String(existing.youtubeVideoId),
@@ -110,11 +119,6 @@ function detailFromExisting(existing: Record<string, unknown>): YoutubeVideoDeta
     tags: Array.isArray(existing.tags) ? existing.tags.filter((tag): tag is string => typeof tag === "string") : [],
     duration: typeof existing.duration === "string" ? existing.duration : undefined,
     privacyStatus: typeof existing.privacyStatus === "string" ? existing.privacyStatus : undefined,
-    liveBroadcastContent: existing.youtubePremiereState === "scheduled"
-      ? "upcoming"
-      : existing.youtubePremiereState === "live"
-        ? "live"
-        : "none",
     scheduledStartTime: dateString(existing.youtubeScheduledStartAt),
     actualStartTime: dateString(existing.youtubeActualStartAt),
     actualEndTime: dateString(existing.youtubeActualEndAt),
@@ -195,13 +199,24 @@ export class MusicChannelDiscoverySyncService {
         }),
         ...details.map((detail) => [detail.videoId, detail] as const),
       ]);
+      const fetchedDetailsById = new Map(details.map((detail) => [detail.videoId, detail] as const));
 
       for (const [videoId, discovered] of candidates) {
         const detail = detailsById.get(videoId);
+        const fetchedDetail = fetchedDetailsById.get(videoId);
+        const broadcastState = fetchedDetail
+          ? classifyYoutubeBroadcastState(fetchedDetail)
+          : existingById.has(videoId)
+            ? broadcastStateFromExisting(existingById.get(videoId))
+            : classifyYoutubeBroadcastState(discovered.candidate);
         const songClassification = classifySongUpload({
           title: detail?.title ?? discovered.candidate.title,
           description: detail?.description,
           tags: detail?.tags,
+          duration: detail?.duration ?? discovered.candidate.duration,
+          privacyStatus: detail?.privacyStatus ?? discovered.candidate.privacyStatus,
+          broadcastState,
+          isOfficialMemberChannel: Boolean(discovered.target.memberId),
         });
         if (songClassification.type !== "cover" && songClassification.type !== "original") continue;
 
@@ -225,6 +240,7 @@ export class MusicChannelDiscoverySyncService {
           description: detail?.description,
           duration: detail?.duration ?? discovered.candidate.duration,
           privacyStatus: detail?.privacyStatus ?? discovered.candidate.privacyStatus,
+          specialFlags: songClassification.specialFlags,
         });
         const matched = matchMusicMembers({
           title: detail?.title ?? discovered.candidate.title,

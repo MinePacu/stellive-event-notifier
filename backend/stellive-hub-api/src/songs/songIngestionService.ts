@@ -2,7 +2,10 @@ import type { MobileSongType, SongCatalogGenerationId } from "../../../../shared
 import type { YoutubeUploadCandidate } from "../adapters/youtube/youtubeAtomParser.js";
 import type { YoutubeSongUpsertInput } from "../repositories/songRepository.js";
 import { classifySongUpload } from "./songClassifier.js";
-import { classifyYoutubePremiere } from "../adapters/youtube/youtubePremiereClassifier.js";
+import {
+  classifyYoutubeBroadcastState,
+  classifyYoutubePremiere,
+} from "../adapters/youtube/youtubePremiereClassifier.js";
 
 interface SongCatalogTarget {
   memberId: string;
@@ -50,6 +53,10 @@ export class SongIngestionService {
       title: candidate.title,
       description: candidate.description,
       tags: candidate.tags,
+      duration: candidate.duration,
+      privacyStatus: candidate.privacyStatus,
+      broadcastState: classifyYoutubeBroadcastState(candidate),
+      isOfficialMemberChannel: true,
     });
     if (!isMobileSongType(classification.type)) return { ingested: false, reason: "unknown_song_type" };
     const premiere = classifyYoutubePremiere({

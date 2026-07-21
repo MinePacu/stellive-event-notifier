@@ -387,6 +387,11 @@ function createDefaultMusicSyncService(
   });
   const discoveryReclassificationService = new MusicChannelDiscoveryReclassificationService({
     repository,
+    memberChannelIds: new Set(
+      discoveryTargets
+        .filter((target) => Boolean(target.memberId))
+        .map((target) => target.channelId),
+    ),
   });
   const sourceTypeRepairService = new MusicSourceTypeRepairService({
     repository,

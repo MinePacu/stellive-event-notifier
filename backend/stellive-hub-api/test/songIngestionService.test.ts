@@ -105,6 +105,44 @@ describe("SongIngestionService", () => {
     })).resolves.toEqual({ ingested: false, reason: "unknown_song_type" });
   });
 
+  it("uses the same Playlist metadata rule for legacy Song ingestion", async () => {
+    const upserts: Array<Record<string, unknown>> = [];
+    const service = new SongIngestionService({
+      catalog: {
+        findByYoutubeChannelId: () => ({
+          memberId: "akane-lize",
+          memberName: "아카네 리제",
+          generationId: "gen2",
+          generationName: "2기생",
+        }),
+      },
+      songs: {
+        upsertSongFromYoutubeUpload: async (input) => {
+          upserts.push(input as unknown as Record<string, unknown>);
+          return { id: "playlist-song" };
+        },
+      },
+    });
+
+    await expect(service.ingestYoutubeUpload({
+      videoId: "X7pjwim9NHE",
+      channelId: "UC123",
+      title: "[Playlist] 새벽 감성 노래 모음",
+      sourceUrl: "https://www.youtube.com/watch?v=X7pjwim9NHE",
+      publishedAt: "2026-06-21T12:00:00.000Z",
+      updatedAt: "2026-06-21T12:01:00.000Z",
+      duration: "PT39M12S",
+      privacyStatus: "public",
+      liveBroadcastContent: "none",
+    })).resolves.toEqual({ ingested: true, songId: "playlist-song" });
+
+    expect(upserts).toEqual([expect.objectContaining({
+      youtubeVideoId: "X7pjwim9NHE",
+      songType: "cover",
+      classificationConfidence: 0.65,
+    })]);
+  });
+
   it("does not clear stored premiere state when a WebSub candidate has no broadcast detail", async () => {
     const upserts: Array<Record<string, unknown>> = [];
     const service = new SongIngestionService({

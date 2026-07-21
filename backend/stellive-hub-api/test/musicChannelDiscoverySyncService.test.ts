@@ -107,6 +107,7 @@ describe("MusicChannelDiscoverySyncService", () => {
     expect(fetchVideos).not.toHaveBeenCalled();
     expect(upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
       youtubePremiereState: "completed",
+      youtubePresentationType: "premiere_assumed",
       youtubeActualEndAt: "2026-06-25T00:03:00.000Z",
     }));
   });
@@ -243,6 +244,55 @@ describe("MusicChannelDiscoverySyncService", () => {
     expect(result).toMatchObject({ uniqueVideos: 1, inserted: 0, updated: 0 });
   });
 
+  it("auto-classifies a long Playlist upload from a registered member channel", async () => {
+    const playlistCandidate = {
+      ...candidate,
+      videoId: "X7pjwim9NHE",
+      title: "[Playlist] 새벽 감성 노래 모음",
+    };
+    const upsertMusicItem = vi.fn(async (input) => ({ id: "music-playlist", ...input }));
+    const replaceMusicItemMembers = vi.fn(async () => undefined);
+    const service = new MusicChannelDiscoverySyncService({
+      youtube: {
+        getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
+        listUploads: async () => ({ status: "ok", candidates: [playlistCandidate], pagesFetched: 1, quotaUnits: 1 }),
+        fetchVideos: async () => [{
+          videoId: "X7pjwim9NHE",
+          channelId: "channel-1",
+          title: "[Playlist] 새벽 감성 노래 모음",
+          description: "여러 커버곡을 모았습니다.",
+          tags: ["music"],
+          duration: "PT39M12S",
+          privacyStatus: "public",
+          liveBroadcastContent: "none",
+        }],
+      },
+      repository: {
+        getMusicItemByVideoId: async () => null,
+        getOverrideByVideoId: async () => null,
+        upsertMusicItem,
+        replaceMusicItemMembers,
+      },
+      locks: new InMemoryMusicSyncLock(),
+      members: [{ id: "member-1", aliases: ["Member One"], youtubeChannelId: "channel-1" }],
+      targets: [{ memberId: "member-1", channelId: "channel-1" }],
+    });
+
+    const result = await service.discover();
+
+    expect(upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
+      youtubeVideoId: "X7pjwim9NHE",
+      type: "cover",
+      classificationStatus: "AUTO_CLASSIFIED",
+      isExcluded: false,
+      specialFlags: ["playlist_compilation", "live_or_long_form"],
+    }));
+    expect(replaceMusicItemMembers).toHaveBeenCalledWith("music-playlist", [
+      expect.objectContaining({ memberId: "member-1", source: "CHANNEL_ID" }),
+    ]);
+    expect(result).toMatchObject({ inserted: 1, needsReview: 0 });
+  });
+
   it("preserves source-backed original type when channel discovery sees the same upload", async () => {
     const upsertMusicItem = vi.fn(async (input) => ({ id: "music-original", ...input }));
     const service = new MusicChannelDiscoverySyncService({
@@ -358,6 +408,7 @@ describe("MusicChannelDiscoveryReclassificationService", () => {
         }],
         updateMusicItemClassification,
       },
+      memberChannelIds: new Set(),
     });
 
     await expect(service.reclassify()).resolves.toEqual({
@@ -372,6 +423,62 @@ describe("MusicChannelDiscoveryReclassificationService", () => {
       isExcluded: true,
       exclusionReason: "non_music_upload",
     }));
+  });
+
+  it("reclassifies only member-channel Playlists and preserves manual rows", async () => {
+    const updateMusicItemClassification = vi.fn(async () => undefined);
+    const baseRow = {
+      title: "[Playlist] 새벽 감성 노래 모음",
+      description: "여러 커버곡을 모았습니다.",
+      type: "unknown" as const,
+      duration: "PT39M12S",
+      privacyStatus: "public",
+      tags: ["music"],
+      classificationStatus: "NEEDS_REVIEW",
+      youtubePresentationType: "regular",
+      youtubePremiereState: null,
+    };
+    const service = new MusicChannelDiscoveryReclassificationService({
+      repository: {
+        listDiscoveredMusicItemsForReclassification: async () => [
+          { ...baseRow, id: "member-playlist", youtubeVideoId: "member-video", channelId: "member-channel" },
+          { ...baseRow, id: "external-playlist", youtubeVideoId: "external-video", channelId: "external-channel" },
+          { ...baseRow, id: "scheduled-playlist", youtubeVideoId: "scheduled-video", channelId: "member-channel", youtubePresentationType: "premiere_assumed", youtubePremiereState: "scheduled" },
+          { ...baseRow, id: "live-playlist", youtubeVideoId: "live-video", channelId: "member-channel", youtubePresentationType: "premiere_assumed", youtubePremiereState: "live" },
+          { ...baseRow, id: "manual-playlist", youtubeVideoId: "manual-video", channelId: "member-channel", classificationStatus: "MANUAL_EXCLUDED" },
+        ],
+        updateMusicItemClassification,
+      },
+      memberChannelIds: new Set(["member-channel"]),
+    });
+
+    await expect(service.reclassify()).resolves.toEqual({
+      status: "ok",
+      checked: 5,
+      hidden: 3,
+      kept: 1,
+      manualSkipped: 1,
+    });
+    expect(updateMusicItemClassification).toHaveBeenCalledWith("member-playlist", expect.objectContaining({
+      type: "cover",
+      classificationStatus: "AUTO_CLASSIFIED",
+      isExcluded: false,
+      specialFlags: ["playlist_compilation", "live_or_long_form"],
+    }));
+    expect(updateMusicItemClassification).toHaveBeenCalledWith("external-playlist", expect.objectContaining({
+      classificationStatus: "NEEDS_REVIEW",
+      isExcluded: true,
+      exclusionReason: "non_music_upload",
+    }));
+    expect(updateMusicItemClassification).toHaveBeenCalledWith("scheduled-playlist", expect.objectContaining({
+      classificationStatus: "NEEDS_REVIEW",
+      isExcluded: true,
+    }));
+    expect(updateMusicItemClassification).toHaveBeenCalledWith("live-playlist", expect.objectContaining({
+      classificationStatus: "NEEDS_REVIEW",
+      isExcluded: true,
+    }));
+    expect(updateMusicItemClassification).not.toHaveBeenCalledWith("manual-playlist", expect.anything());
   });
 });
 

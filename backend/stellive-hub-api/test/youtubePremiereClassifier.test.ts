@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { classifyYoutubePremiere } from "../src/adapters/youtube/youtubePremiereClassifier.js";
+import {
+  classifyYoutubeBroadcastState,
+  classifyYoutubePremiere,
+} from "../src/adapters/youtube/youtubePremiereClassifier.js";
 
 describe("classifyYoutubePremiere", () => {
+  it("normalizes provider metadata into the song broadcast domain state", () => {
+    expect(classifyYoutubeBroadcastState({ liveBroadcastContent: "none" })).toBe("none");
+    expect(classifyYoutubeBroadcastState({ liveBroadcastContent: "upcoming" })).toBe("scheduled");
+    expect(classifyYoutubeBroadcastState({ liveBroadcastContent: "live" })).toBe("live");
+    expect(classifyYoutubeBroadcastState({ liveBroadcastContent: "none", actualEndTime: "2026-07-01T12:04:00.000Z" })).toBe("completed");
+    expect(classifyYoutubeBroadcastState({})).toBe("unknown");
+  });
+
   it("marks an upcoming cover as an assumed scheduled premiere", () => {
     expect(classifyYoutubePremiere({
       musicType: "cover",

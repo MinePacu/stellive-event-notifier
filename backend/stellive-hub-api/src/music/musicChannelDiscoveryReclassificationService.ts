@@ -1,5 +1,5 @@
 import type { MusicItemType } from "../../../../shared/schemas/domain.js";
-import { classifySongUpload } from "../songs/songClassifier.js";
+import { classifySongUpload, type SongBroadcastState } from "../songs/songClassifier.js";
 import { classifyVideo } from "./musicClassifier.js";
 import type {
   MusicItemClassificationUpdateInput,
@@ -13,6 +13,7 @@ interface ReclassificationRepository {
 
 export interface MusicChannelDiscoveryReclassificationServiceOptions {
   repository: ReclassificationRepository;
+  memberChannelIds: ReadonlySet<string>;
   now?: () => Date;
 }
 
@@ -22,6 +23,12 @@ function stringTags(value: unknown): string[] {
 
 function isManualStatus(status: string | null | undefined): boolean {
   return status === "MANUAL_CONFIRMED" || status === "MANUAL_EXCLUDED";
+}
+
+function storedBroadcastState(row: MusicItemReclassificationRecord): SongBroadcastState {
+  const state = row.youtubePremiereState;
+  if (state === "scheduled" || state === "live" || state === "completed" || state === "unknown") return state;
+  return row.youtubePresentationType === "regular" ? "none" : "unknown";
 }
 
 export class MusicChannelDiscoveryReclassificationService {
@@ -47,6 +54,10 @@ export class MusicChannelDiscoveryReclassificationService {
         title: row.title,
         description: row.description,
         tags: stringTags(row.tags),
+        duration: row.duration,
+        privacyStatus: row.privacyStatus,
+        broadcastState: storedBroadcastState(row),
+        isOfficialMemberChannel: Boolean(row.channelId && this.options.memberChannelIds.has(row.channelId)),
       });
       if (songClassification.type !== "cover" && songClassification.type !== "original") {
         await this.options.repository.updateMusicItemClassification(row.id, {
@@ -67,6 +78,7 @@ export class MusicChannelDiscoveryReclassificationService {
         description: row.description,
         duration: row.duration,
         privacyStatus: row.privacyStatus,
+        specialFlags: songClassification.specialFlags,
       });
       const update: MusicItemClassificationUpdateInput = {
         type: songClassification.type as MusicItemType,

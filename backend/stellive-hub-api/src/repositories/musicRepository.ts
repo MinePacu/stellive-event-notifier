@@ -126,6 +126,7 @@ export interface MusicItemClassificationUpdateInput {
 export interface MusicItemReclassificationRecord {
   id: string;
   youtubeVideoId: string;
+  channelId?: string | null;
   title: string;
   description?: string | null;
   type: MusicItemType;
@@ -555,6 +556,7 @@ export class PrismaMusicRepository {
       select: {
         id: true,
         youtubeVideoId: true,
+        channelId: true,
         title: true,
         description: true,
         type: true,
@@ -562,6 +564,8 @@ export class PrismaMusicRepository {
         privacyStatus: true,
         tags: true,
         classificationStatus: true,
+        youtubePresentationType: true,
+        youtubePremiereState: true,
       },
     } as unknown) as unknown as MusicItemReclassificationRecord[];
   }

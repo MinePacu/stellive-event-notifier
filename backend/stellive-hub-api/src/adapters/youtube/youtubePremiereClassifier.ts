@@ -1,4 +1,5 @@
 import type { MusicItemType } from "../../../../../shared/schemas/domain.js";
+import type { SongBroadcastState } from "../../songs/songClassifier.js";
 
 export type YoutubePresentationType = "regular" | "premiere_assumed";
 export type YoutubePremiereState = "scheduled" | "live" | "completed" | "unknown";
@@ -18,6 +19,16 @@ export interface YoutubePremiereClassification {
   actualStartAt: string | null;
   actualEndAt: string | null;
   listingPriority: number;
+}
+
+export function classifyYoutubeBroadcastState(
+  input: Omit<YoutubePremiereClassificationInput, "musicType">,
+): SongBroadcastState {
+  if (input.actualEndTime) return "completed";
+  if (input.liveBroadcastContent === "live" || input.actualStartTime) return "live";
+  if (input.liveBroadcastContent === "upcoming") return "scheduled";
+  if (input.liveBroadcastContent === "none") return "none";
+  return "unknown";
 }
 
 const regular: YoutubePremiereClassification = {

@@ -67,4 +67,56 @@ describe("music classifier", () => {
       specialFlags: ["short_or_preview"],
     });
   });
+
+  it("auto-classifies long Playlist compilations while retaining both flags", () => {
+    expect(classifyVideo({
+      sourceTypes: ["cover"],
+      title: "[Playlist] 새벽 노래 모음",
+      duration: "PT39M12S",
+      privacyStatus: "public",
+      specialFlags: ["playlist_compilation", "playlist_compilation"],
+    })).toEqual({
+      type: "cover",
+      classificationStatus: "AUTO_CLASSIFIED",
+      durationSeconds: 2352,
+      isAvailable: true,
+      isExcluded: false,
+      exclusionReason: null,
+      isInstrumental: false,
+      specialFlags: ["playlist_compilation", "live_or_long_form"],
+    });
+  });
+
+  it("keeps ordinary long covers and unsafe Playlist candidates in review", () => {
+    expect(classifyVideo({
+      sourceTypes: ["cover"],
+      title: "긴 커버 모음",
+      duration: "PT39M",
+      privacyStatus: "public",
+    }).classificationStatus).toBe("NEEDS_REVIEW");
+
+    expect(classifyVideo({
+      sourceTypes: ["cover"],
+      title: "[Playlist] 비공개 모음",
+      duration: "PT39M",
+      privacyStatus: "private",
+      specialFlags: ["playlist_compilation"],
+    })).toMatchObject({ classificationStatus: "NEEDS_REVIEW", isAvailable: false });
+
+    expect(classifyVideo({
+      sourceTypes: ["cover"],
+      title: "[Playlist] Heart Score (Instrumental)",
+      duration: "PT39M",
+      privacyStatus: "public",
+      specialFlags: ["playlist_compilation"],
+    })).toMatchObject({ classificationStatus: "NEEDS_REVIEW", isInstrumental: true });
+
+    expect(classifyVideo({
+      sourceTypes: ["cover"],
+      title: "[Playlist] teaser",
+      duration: "PT39M",
+      privacyStatus: "public",
+      specialFlags: ["playlist_compilation"],
+    })).toMatchObject({ classificationStatus: "NEEDS_REVIEW", isExcluded: true, exclusionReason: "teaser" });
+  });
 });
