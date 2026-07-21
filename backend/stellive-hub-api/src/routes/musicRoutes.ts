@@ -2,9 +2,13 @@ import type { FastifyInstance } from "fastify";
 import type { MusicCatalogDetail, MusicCatalogItem, MusicPublicTypeFilter } from "../../../../shared/schemas/domain.js";
 import { ResponseCache, type ResponseCachePolicy } from "../cache/responseCache.js";
 import { toMusicCatalogDetailDto, toMusicCatalogDto } from "../music/musicDto.js";
-import { PrismaMusicRepository } from "../repositories/musicRepository.js";
+import {
+  isMusicCursorValidForSort,
+  PrismaMusicRepository,
+  type MusicSort,
+} from "../repositories/musicRepository.js";
 
-type MusicSort = "publishedAt_desc" | "publishedAtDesc" | "playlistOrder";
+type NormalizedMusicSort = "publishedAt_desc" | "playlistOrder";
 
 export interface MusicRoutesRepository {
   listMusicItems(filters: {
@@ -12,7 +16,7 @@ export interface MusicRoutesRepository {
     memberId?: string;
     cursor?: string;
     limit?: number;
-    sort?: MusicSort;
+    sort?: NormalizedMusicSort;
     includeGraduated?: boolean;
     includeInstrumental?: boolean;
     includeExcluded?: boolean;
@@ -84,15 +88,19 @@ export default async function registerMusicRoutes(app: FastifyInstance, options:
 }
 
 function parseMusicListQuery(query: Record<string, unknown>, memberId?: string):
-| { ok: true; filters: { type?: MusicPublicTypeFilter; memberId?: string; cursor?: string; limit?: number; sort?: MusicSort; includeGraduated?: boolean; includeInstrumental?: boolean; includeExcluded?: boolean } }
+| { ok: true; filters: { type?: MusicPublicTypeFilter; memberId?: string; cursor?: string; limit?: number; sort?: NormalizedMusicSort; includeGraduated?: boolean; includeInstrumental?: boolean; includeExcluded?: boolean } }
 | { ok: false } {
   const type = typeof query.type === "string" ? query.type : "all";
-  const sort = typeof query.sort === "string" ? query.sort : "publishedAt_desc";
+  const requestedSort = typeof query.sort === "string" ? query.sort : "publishedAt_desc";
   const limit = typeof query.limit === "string" ? Number(query.limit) : undefined;
   const cursor = typeof query.cursor === "string" ? query.cursor : undefined;
 
   if (!validTypes.has(type)) return { ok: false };
-  if (sort !== "publishedAt_desc" && sort !== "publishedAtDesc" && sort !== "playlistOrder") return { ok: false };
+  if (requestedSort !== "publishedAt_desc" && requestedSort !== "publishedAtDesc" && requestedSort !== "playlistOrder") {
+    return { ok: false };
+  }
+  const sort: NormalizedMusicSort = requestedSort === "playlistOrder" ? "playlistOrder" : "publishedAt_desc";
+  if (!isMusicCursorValidForSort(cursor, sort)) return { ok: false };
   if (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 100)) return { ok: false };
   const includeGraduated = parseBooleanQuery(query.includeGraduated);
   const includeInstrumental = parseBooleanQuery(query.includeInstrumental);
@@ -104,14 +112,14 @@ function parseMusicListQuery(query: Record<string, unknown>, memberId?: string):
     filters: removeUndefined({
       type: type as MusicPublicTypeFilter,
       memberId,
-    cursor,
-    limit,
-    sort,
-    includeGraduated,
-    includeInstrumental,
-    includeExcluded,
-  }),
-};
+      cursor,
+      limit,
+      sort,
+      includeGraduated,
+      includeInstrumental,
+      includeExcluded,
+    }),
+  };
 }
 
 function parseBooleanQuery(value: unknown): boolean | undefined | "invalid" {

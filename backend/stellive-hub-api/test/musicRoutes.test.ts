@@ -78,6 +78,61 @@ describe("music routes", () => {
     });
   });
 
+  it("normalizes the default and publishedAtDesc alias into one repository sort and cache entry", async () => {
+    const { app, repository } = await buildRouteApp();
+    const cursor = Buffer.from(JSON.stringify({
+      v: 3,
+      sort: "publishedAt_desc",
+      publishedAt: "2026-07-01T00:00:00.000Z",
+      id: "music-1",
+    })).toString("base64url");
+
+    const defaultResponse = await app.inject({ method: "GET", url: `/v1/music?cursor=${cursor}` });
+    const aliasResponse = await app.inject({ method: "GET", url: `/v1/music?sort=publishedAtDesc&cursor=${cursor}` });
+    const canonicalResponse = await app.inject({ method: "GET", url: `/v1/music?sort=publishedAt_desc&cursor=${cursor}` });
+    await app.close();
+
+    expect(defaultResponse.statusCode).toBe(200);
+    expect(aliasResponse.json()).toEqual(defaultResponse.json());
+    expect(canonicalResponse.json()).toEqual(defaultResponse.json());
+    expect(repository.listMusicItems).toHaveBeenCalledTimes(1);
+    expect(repository.listMusicItems).toHaveBeenCalledWith({
+      type: "all",
+      cursor,
+      sort: "publishedAt_desc",
+    });
+  });
+
+  it("keeps playlistOrder in a separate cache entry", async () => {
+    const { app, repository } = await buildRouteApp();
+
+    await app.inject({ method: "GET", url: "/v1/music" });
+    await app.inject({ method: "GET", url: "/v1/music?sort=playlistOrder" });
+    await app.close();
+
+    expect(repository.listMusicItems).toHaveBeenCalledTimes(2);
+    expect(repository.listMusicItems).toHaveBeenNthCalledWith(1, { type: "all", sort: "publishedAt_desc" });
+    expect(repository.listMusicItems).toHaveBeenNthCalledWith(2, { type: "all", sort: "playlistOrder" });
+  });
+
+  it("rejects a cursor issued for a different sort", async () => {
+    const { app, repository } = await buildRouteApp();
+    const cursor = Buffer.from(JSON.stringify({
+      v: 3,
+      sort: "playlistOrder",
+      playlistPosition: 1,
+      publishedAt: "2026-07-01T00:00:00.000Z",
+      id: "music-1",
+    })).toString("base64url");
+
+    const response = await app.inject({ method: "GET", url: `/v1/music?sort=publishedAt_desc&cursor=${cursor}` });
+    await app.close();
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "invalid_music_query" });
+    expect(repository.listMusicItems).not.toHaveBeenCalled();
+  });
+
   it("GET /v1/music accepts official playlist sort and include filters", async () => {
     const { app, repository } = await buildRouteApp();
 
@@ -109,10 +164,14 @@ describe("music routes", () => {
   it("rejects invalid list query values", async () => {
     const { app } = await buildRouteApp();
     const response = await app.inject({ method: "GET", url: "/v1/music?type=live&limit=300" });
+    const invalidSort = await app.inject({ method: "GET", url: "/v1/music?sort=newest" });
+    const rawCursor = await app.inject({ method: "GET", url: "/v1/music?cursor=music-legacy-id" });
     await app.close();
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: "invalid_music_query" });
+    expect(invalidSort.statusCode).toBe(400);
+    expect(rawCursor.statusCode).toBe(400);
   });
 
   it("GET /v1/music/:id returns detail or 404", async () => {

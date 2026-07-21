@@ -9,6 +9,7 @@ import { getPrismaClient } from "../storage/prisma.js";
 
 export type SourcePlaylistRawCategoryHint = "COVER" | "SINGLE" | "EP" | "ORIGINAL" | "OTHERS";
 export type MusicSort = "publishedAt_desc" | "publishedAtDesc" | "playlistOrder";
+type NormalizedMusicSort = "publishedAt_desc" | "playlistOrder";
 
 export interface MusicMemberUpsertInput {
   id: string;
@@ -303,52 +304,120 @@ function toMusicSourcePlaylists(record: MusicItemRecord): MusicSourcePlaylistSum
   });
 }
 
-interface MusicCursorPayload {
-  v: 2;
-  sort: MusicSort;
+interface PublishedAtCursorV3 {
+  v: 3;
+  sort: "publishedAt_desc";
+  publishedAt: string | null;
   id: string;
-  listingPriority: number;
-  scheduledStartAt?: string | null;
-  publishedAt?: string | null;
-  playlistPosition?: number | null;
 }
 
-function normalizedMusicSort(sort: MusicSort | undefined): MusicSort {
+interface PlaylistOrderCursorV3 {
+  v: 3;
+  sort: "playlistOrder";
+  playlistPosition: number | null;
+  publishedAt: string | null;
+  id: string;
+}
+
+type MusicCursorPayload = PublishedAtCursorV3 | PlaylistOrderCursorV3;
+
+interface MusicCursorJson {
+  v?: unknown;
+  sort?: unknown;
+  id?: unknown;
+  listingPriority?: unknown;
+  scheduledStartAt?: unknown;
+  publishedAt?: unknown;
+  playlistPosition?: unknown;
+}
+
+function normalizedMusicSort(sort: MusicSort | undefined): NormalizedMusicSort {
   return sort === "playlistOrder" ? "playlistOrder" : "publishedAt_desc";
 }
 
-function encodeMusicCursor(record: MusicItemRecord, sort: MusicSort): string {
-  const payload: MusicCursorPayload = {
-    v: 2,
-    sort,
-    id: record.id,
-    listingPriority: record.listingPriority ?? 2,
-    scheduledStartAt: record.youtubeScheduledStartAt?.toISOString() ?? null,
-    publishedAt: record.publishedAt?.toISOString() ?? null,
-    playlistPosition: record.playlistPosition ?? null,
-  };
+function encodeMusicCursor(record: MusicItemRecord, sort: NormalizedMusicSort): string {
+  const payload: MusicCursorPayload = sort === "playlistOrder"
+    ? {
+        v: 3,
+        sort,
+        playlistPosition: record.playlistPosition ?? null,
+        publishedAt: record.publishedAt?.toISOString() ?? null,
+        id: record.id,
+      }
+    : {
+        v: 3,
+        sort,
+        publishedAt: record.publishedAt?.toISOString() ?? null,
+        id: record.id,
+      };
   return Buffer.from(JSON.stringify(payload)).toString("base64url");
 }
 
-function decodeMusicCursor(cursor: string | undefined): MusicCursorPayload | { legacyId: string } | null {
-  if (!cursor) return null;
-  try {
-    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<MusicCursorPayload>;
-    if (parsed.v === 2 && typeof parsed.id === "string" && typeof parsed.listingPriority === "number") {
-      return parsed as MusicCursorPayload;
-    }
-  } catch {
-    return { legacyId: cursor };
-  }
-  return { legacyId: cursor };
+function isNullableDateString(value: unknown): value is string | null {
+  return value === null || (typeof value === "string" && !Number.isNaN(new Date(value).getTime()));
 }
 
-function appendCursorWhere(where: Record<string, unknown>, cursor: MusicCursorPayload | { legacyId: string } | null): void {
-  if (!cursor) return;
-  if ("legacyId" in cursor) {
-    where.id = { gt: cursor.legacyId };
-    return;
+function decodeMusicCursor(cursor: string | undefined, requestedSort: NormalizedMusicSort): MusicCursorPayload | null {
+  if (!cursor) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as MusicCursorJson;
+    if (typeof parsed.id !== "string" || parsed.id.length === 0) return null;
+
+    if (parsed.v === 3) {
+      if (parsed.sort !== requestedSort || !isNullableDateString(parsed.publishedAt)) return null;
+      if (parsed.sort === "playlistOrder") {
+        if (parsed.playlistPosition !== null && typeof parsed.playlistPosition !== "number") return null;
+        return {
+          v: 3,
+          sort: "playlistOrder",
+          playlistPosition: parsed.playlistPosition,
+          publishedAt: parsed.publishedAt,
+          id: parsed.id,
+        };
+      }
+      return {
+        v: 3,
+        sort: "publishedAt_desc",
+        publishedAt: parsed.publishedAt,
+        id: parsed.id,
+      };
+    }
+
+    if (
+      parsed.v !== 2
+      || (parsed.sort !== "publishedAt_desc" && parsed.sort !== "publishedAtDesc" && parsed.sort !== "playlistOrder")
+      || normalizedMusicSort(parsed.sort) !== requestedSort
+      || !isNullableDateString(parsed.publishedAt)
+    ) {
+      return null;
+    }
+    if (requestedSort === "playlistOrder") {
+      if (parsed.playlistPosition !== null && typeof parsed.playlistPosition !== "number") return null;
+      return {
+        v: 3,
+        sort: "playlistOrder",
+        playlistPosition: parsed.playlistPosition,
+        publishedAt: parsed.publishedAt,
+        id: parsed.id,
+      };
+    }
+    return {
+      v: 3,
+      sort: "publishedAt_desc",
+      publishedAt: parsed.publishedAt,
+      id: parsed.id,
+    };
+  } catch {
+    return null;
   }
+}
+
+export function isMusicCursorValidForSort(cursor: string | undefined, sort: MusicSort | undefined): boolean {
+  return cursor === undefined || decodeMusicCursor(cursor, normalizedMusicSort(sort)) !== null;
+}
+
+function appendCursorWhere(where: Record<string, unknown>, cursor: MusicCursorPayload | null): void {
+  if (!cursor) return;
   const publishedAt = cursor.publishedAt ? new Date(cursor.publishedAt) : null;
   if (cursor.sort === "playlistOrder") {
     const playlistPosition = cursor.playlistPosition ?? null;
@@ -366,26 +435,15 @@ function appendCursorWhere(where: Record<string, unknown>, cursor: MusicCursorPa
     ];
     return;
   }
-  const scheduledStartAt = cursor.scheduledStartAt ? new Date(cursor.scheduledStartAt) : null;
-  if (cursor.listingPriority < 2) {
-    where.OR = [
-      { listingPriority: { gt: cursor.listingPriority } },
-      ...(scheduledStartAt
-        ? [
-            { listingPriority: cursor.listingPriority, youtubeScheduledStartAt: { gt: scheduledStartAt } },
-            { listingPriority: cursor.listingPriority, youtubeScheduledStartAt: scheduledStartAt, id: { gt: cursor.id } },
-          ]
-        : [
-            { listingPriority: cursor.listingPriority, youtubeScheduledStartAt: { not: null } },
-            { listingPriority: cursor.listingPriority, youtubeScheduledStartAt: null, id: { gt: cursor.id } },
-          ]),
-    ];
+  if (!publishedAt) {
+    where.publishedAt = null;
+    where.id = { gt: cursor.id };
     return;
   }
   where.OR = [
-    { listingPriority: { gt: cursor.listingPriority } },
-    { listingPriority: cursor.listingPriority, publishedAt: { lt: publishedAt ?? new Date(0) } },
-    { listingPriority: cursor.listingPriority, publishedAt, id: { gt: cursor.id } },
+    { publishedAt: { lt: publishedAt } },
+    { publishedAt, id: { gt: cursor.id } },
+    { publishedAt: null },
   ];
 }
 
@@ -638,11 +696,13 @@ export class PrismaMusicRepository {
       where.members = { some: { member: { isGraduated: false } } };
     }
     const sort = normalizedMusicSort(filters.sort);
-    appendCursorWhere(where, decodeMusicCursor(filters.cursor));
+    const cursor = decodeMusicCursor(filters.cursor, sort);
+    if (filters.cursor && !cursor) throw new Error("invalid_music_cursor");
+    appendCursorWhere(where, cursor);
 
     const orderBy = sort === "playlistOrder"
       ? [{ playlistPosition: "asc" }, { publishedAt: "desc" }, { id: "asc" }]
-      : [{ listingPriority: "asc" }, { youtubeScheduledStartAt: "asc" }, { publishedAt: "desc" }, { id: "asc" }];
+      : [{ publishedAt: { sort: "desc", nulls: "last" } }, { id: "asc" }];
 
     const rows = await this.prisma.musicItem!.findMany!({
       where,
