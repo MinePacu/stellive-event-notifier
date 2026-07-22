@@ -177,7 +177,10 @@ import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenTransitionReason
 import dev.minepacu.stelliveeventnotifier.feature.reservations.data.RoomReservationRepository
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationActionPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraft
-import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDisplayPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDetailLink
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDetailPresentation
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDetailPresentationPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDetailRow
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkRoute
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEventSnapshot
@@ -1996,35 +1999,216 @@ private fun startScreen(
             binding.contentList.addView(compactEventCard("내역을 찾을 수 없음", "목록에서 다시 선택해 주세요.", listOf("로컬 기록")))
             return
         }
-        binding.contentList.addView(compactEventCard(record.displayTitle, buildList {
-            add(ReservationPresentationPolicy.statusLabel(record.kind, record.status))
-            record.effectiveStartsAt?.let { add(reservationDateFormatter.format(it)) }
-            record.effectiveVenue?.let(::add)
-            record.optionText?.let { add("옵션 · $it") }
-            record.quantity?.let { add("수량 · $it") }
-            record.referenceNumber?.let { add("${ReservationPresentationPolicy.referenceNumberLabel(record.kind)} · $it") }
-            record.note?.let(::add)
-        }.joinToString("\n"), listOf(ReservationPresentationPolicy.kindLabel(record.kind))))
         val latestEvent = record.eventId?.let { eventId -> goodsEvents.firstOrNull { it.id == eventId } }
-        if (ReservationDisplayPolicy.officialEventChanged(record, latestEvent?.title, latestEvent?.startsAt)) {
+        val presentation = ReservationDetailPresentationPolicy.presentation(
+            record = record,
+            formatDateTime = reservationDateFormatter::format,
+            officialEventAvailable = latestEvent != null,
+            latestOfficialTitle = latestEvent?.title,
+            latestOfficialStartsAt = latestEvent?.startsAt,
+            officialEventCancelled = latestEvent?.status == dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus.CANCELLED,
+        )
+
+        binding.contentList.addView(reservationDetailSummaryCard(presentation))
+        binding.contentList.addView(sectionLabel("빠른 동작"))
+        binding.contentList.addView(reservationDetailActionRow(presentation.links.firstOrNull()?.url))
+
+        if (presentation.informationRows.isNotEmpty()) {
+            binding.contentList.addView(sectionLabel("내역 정보"))
+            binding.contentList.addView(reservationDetailRowsCard(presentation.informationRows))
+        }
+        if (presentation.links.isNotEmpty()) {
+            binding.contentList.addView(sectionLabel("관련 링크"))
+            presentation.links.forEach { link ->
+                binding.contentList.addView(reservationDetailLinkCard(link))
+            }
+        }
+        presentation.note?.let { note ->
+            binding.contentList.addView(sectionLabel("메모"))
+            binding.contentList.addView(reservationDetailTextCard(note))
+        }
+        if (presentation.canOpenOfficialEvent && latestEvent != null) {
+            binding.contentList.addView(sectionLabel("연결된 공식 행사"))
+            binding.contentList.addView(hubEventCard(latestEvent).apply {
+                setOnClickListener { openLinkedOfficialEvent(latestEvent.id) }
+                contentDescription = "${latestEvent.title}, 연결된 공식 행사 열기"
+            })
+        }
+        if (presentation.officialEventChanged) {
             binding.contentList.addView(compactEventCard(
                 "공식 일정 변경됨",
                 "저장 당시 정보와 현재 공식 행사 정보가 다릅니다. 사용자 수정값과 내역 상태는 자동으로 바꾸지 않습니다.",
                 listOf("확인 필요"),
             ))
         }
-        if (latestEvent?.status == dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus.CANCELLED) {
+        if (presentation.officialEventCancelled) {
             binding.contentList.addView(compactEventCard(
                 "공식 행사 취소 안내",
                 "공식 행사가 취소되었습니다. 사용자의 내역 상태는 자동으로 취소하지 않습니다.",
                 listOf("공식 정보"),
             ))
         }
-        record.preferredOpenUrl?.let { url ->
-            binding.contentList.addView(detailActionButton("상세 내역 열기", true) { openExternalUrl(url) }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)))
+        binding.contentList.addView(sectionLabel("기록 정보"))
+        binding.contentList.addView(reservationDetailRowsCard(presentation.recordRows))
+        binding.contentList.addView(sectionLabel("위험 동작"))
+        binding.contentList.addView(reservationDetailDeleteButton(record))
+    }
+
+    private fun reservationDetailSummaryCard(presentation: ReservationDetailPresentation): MaterialCardView =
+        baseCard(HubCardStyle.STANDARD).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(6) }
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(16), dp(15), dp(16), dp(16))
+                presentation.imageUrl?.let { addView(hubEventThumbnail(it)) }
+                addView(TextView(context).apply {
+                    text = presentation.title
+                    textSize = 20f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(color(R.color.hub_text))
+                    setLineSpacing(0f, 1.08f)
+                })
+                addView(pillRow(listOf(presentation.statusLabel, presentation.kindLabel)))
+                presentation.dateTimeLabel?.let { dateTime ->
+                    addView(TextView(context).apply {
+                        text = dateTime
+                        textSize = 13f
+                        typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(color(R.color.hub_text))
+                        setPadding(0, dp(10), 0, 0)
+                    })
+                }
+                addView(TextView(context).apply {
+                    text = "출처 · ${presentation.sourceLabel}"
+                    textSize = 12f
+                    setTextColor(color(R.color.hub_text_muted))
+                    setPadding(0, dp(5), 0, 0)
+                })
+            })
         }
-        binding.contentList.addView(detailActionButton("수정", false) { pushScreen(HubScreen.RESERVATION_EDIT) }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(10) })
-        binding.contentList.addView(detailActionButton("내역 삭제", false) {
+
+    private fun reservationDetailActionRow(primaryUrl: String?): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(6) }
+            if (primaryUrl != null) {
+                addView(detailActionButton("상세 내역 열기", true) { openExternalUrl(primaryUrl) }, LinearLayout.LayoutParams(0, dp(50), 1f).apply {
+                    marginEnd = dp(5)
+                })
+                addView(detailActionButton("내역 수정", false) { pushScreen(HubScreen.RESERVATION_EDIT) }, LinearLayout.LayoutParams(0, dp(50), 1f).apply {
+                    marginStart = dp(5)
+                })
+            } else {
+                addView(detailActionButton("내역 수정", true) { pushScreen(HubScreen.RESERVATION_EDIT) }, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(50),
+                ))
+            }
+        }
+
+    private fun reservationDetailRowsCard(rows: List<ReservationDetailRow>): MaterialCardView =
+        baseCard(HubCardStyle.COMPACT).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(8) }
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(15), dp(4), dp(15), dp(4))
+                rows.forEachIndexed { index, row ->
+                    if (index > 0) addView(divider())
+                    addView(LinearLayout(context).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.TOP
+                        setPadding(0, dp(11), 0, dp(11))
+                        addView(TextView(context).apply {
+                            text = row.label
+                            textSize = 12f
+                            typeface = Typeface.DEFAULT_BOLD
+                            setTextColor(color(R.color.hub_text_muted))
+                        }, LinearLayout.LayoutParams(dp(88), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                            marginEnd = dp(10)
+                        })
+                        addView(TextView(context).apply {
+                            text = row.value
+                            textSize = 14f
+                            setTextColor(color(R.color.hub_text))
+                            setLineSpacing(0f, 1.1f)
+                        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                    })
+                }
+            })
+        }
+
+    private fun reservationDetailLinkCard(link: ReservationDetailLink): MaterialCardView =
+        baseCard(HubCardStyle.INTERACTIVE).apply {
+            isClickable = true
+            isFocusable = true
+            contentDescription = "${link.label}, ${link.host}, 외부 링크 열기"
+            setOnClickListener { openExternalUrl(link.url) }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(8) }
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(15), dp(12), dp(13), dp(12))
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(TextView(context).apply {
+                        text = link.label
+                        textSize = 14f
+                        typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(color(R.color.hub_text))
+                    })
+                    addView(TextView(context).apply {
+                        text = link.host
+                        textSize = 12f
+                        setTextColor(color(R.color.hub_text_muted))
+                        setPadding(0, dp(3), 0, 0)
+                    })
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                addView(TextView(context).apply {
+                    text = "↗"
+                    textSize = 18f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(color(R.color.hub_primary))
+                    contentDescription = null
+                })
+            })
+        }
+
+    private fun reservationDetailTextCard(body: String): MaterialCardView =
+        baseCard(HubCardStyle.COMPACT).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(8) }
+            addView(TextView(context).apply {
+                text = body
+                textSize = 14f
+                setTextColor(color(R.color.hub_text))
+                setLineSpacing(0f, 1.15f)
+                setPadding(dp(15), dp(13), dp(15), dp(13))
+            })
+        }
+
+    private fun openLinkedOfficialEvent(eventId: String) {
+        selectedHubEventId = eventId
+        selectedHubEventScheduleItemId = null
+        serverHubEventDetailLoadedId = null
+        pushScreen(HubScreen.GOODS_EVENT_DETAIL)
+    }
+
+    private fun reservationDetailDeleteButton(record: ReservationRecord): TextView =
+        detailActionButton("내역 삭제", false) {
             AlertDialog.Builder(this).setTitle("내역 삭제").setMessage("이 기기에서 이 내역을 삭제할까요?")
                 .setNegativeButton("취소", null)
                 .setPositiveButton("삭제") { _, _ ->
@@ -2039,8 +2223,18 @@ private fun startScreen(
                     }
                 }
                 .show()
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(10) })
-    }
+        }.apply {
+            setTextColor(color(R.color.hub_schedule_tag_cancelled))
+            background = rounded(
+                fill = color(R.color.hub_schedule_tag_cancelled_soft),
+                radius = dp(14),
+                stroke = color(R.color.hub_schedule_tag_cancelled),
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(50),
+            ).apply { bottomMargin = dp(14) }
+        }
 
     private fun renderReservationEdit() {
         val record = reservationRecords.firstOrNull { it.id == selectedReservationId }
