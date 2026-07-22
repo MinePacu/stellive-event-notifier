@@ -9,8 +9,8 @@ enum ReservationStoreError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .sharedContainerUnavailable: "예약 저장 공간을 열 수 없습니다."
-        case .draftNotFound: "앱에서 예매 링크를 먼저 열어 주세요."
+        case .sharedContainerUnavailable: "내역 저장 공간을 열 수 없습니다."
+        case .draftNotFound: "앱에서 티켓·구매·예약 링크를 먼저 열어 주세요."
         case .invalidURL: "호스트가 있는 HTTPS 링크를 입력해 주세요."
         case .sensitiveURLRequiresConfirmation: "인증 정보가 포함될 수 있는 링크입니다. 저장 여부를 확인해 주세요."
         }
@@ -196,7 +196,7 @@ final class ReservationStore: ObservableObject {
     func clearErrorMessage() { lastErrorMessage = nil }
 
     func reportBestEffortError() {
-        lastErrorMessage = "예약 진행 정보는 저장하지 못했지만 외부 링크는 정상적으로 열었습니다."
+        lastErrorMessage = "진행 내역은 저장하지 못했지만 외부 링크는 정상적으로 열었습니다."
     }
 
     func clearDeletedRecord() { lastDeletedRecord = nil }
@@ -217,6 +217,7 @@ enum ReservationActivityCoordinator {
         let attributes = ReservationActivityAttributes(sessionID: draft.sessionID)
         let state = ReservationActivityAttributes.ContentState(
             title: draft.eventSnapshot.title,
+            kind: draft.kind,
             providerHost: draft.providerHost,
             openedAt: draft.openedAt,
             draftCount: draftCount

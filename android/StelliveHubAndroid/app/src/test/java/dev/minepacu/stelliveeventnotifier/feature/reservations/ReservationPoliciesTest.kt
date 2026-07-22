@@ -8,6 +8,8 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEventSnapshot
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationExternalLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationKind
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationPresentationPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationStatus
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkRoute
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptDecision
@@ -69,10 +71,49 @@ class ReservationPoliciesTest {
         assertNull(ReservationDeepLinkPolicy.route("https://example.com/reservations/$id"))
     }
 
-    @Test fun tilePresentationIsDerivedFromActiveDraftCount() {
-        assertEquals(ReservationTileState.UNAVAILABLE, ReservationTileStatePolicy.presentation(0).state)
-        assertEquals("예약 완료로 추가", ReservationTileStatePolicy.presentation(1).label)
-        assertEquals("예약 3건 확인", ReservationTileStatePolicy.presentation(3).label)
+    @Test fun presentationPolicyCoversEveryKindAndStatus() {
+        val expected = mapOf(
+            ReservationKind.TICKET to listOf("확인 필요", "예매 완료", "예매 취소", "환불 완료", "이용 완료"),
+            ReservationKind.PURCHASE to listOf("확인 필요", "구매 완료", "구매 취소", "환불 완료", "처리 완료"),
+            ReservationKind.RESERVATION to listOf("확인 필요", "예약 완료", "예약 취소", "환불 완료", "이용 완료"),
+        )
+        ReservationKind.entries.forEach { kind ->
+            assertEquals(expected.getValue(kind), ReservationStatus.entries.map { ReservationPresentationPolicy.statusLabel(kind, it) })
+        }
+        assertFalse(ReservationPresentationPolicy.statusLabel(ReservationKind.PURCHASE, ReservationStatus.COMPLETED) in setOf("이용 완료", "배송 완료"))
+    }
+
+    @Test fun presentationPolicyUsesKindSpecificActionsAndFields() {
+        assertEquals("예매 내역에 추가", ReservationPresentationPolicy.addActionLabel(ReservationKind.TICKET))
+        assertEquals("구매 내역에 추가", ReservationPresentationPolicy.addActionLabel(ReservationKind.PURCHASE))
+        assertEquals("예약 내역에 추가", ReservationPresentationPolicy.addActionLabel(ReservationKind.RESERVATION))
+        assertEquals("예매 상세 링크", ReservationPresentationPolicy.detailLinkLabel(ReservationKind.TICKET))
+        assertEquals("구매 상세 링크", ReservationPresentationPolicy.detailLinkLabel(ReservationKind.PURCHASE))
+        assertEquals("예약 상세 링크", ReservationPresentationPolicy.detailLinkLabel(ReservationKind.RESERVATION))
+        assertEquals("예매번호", ReservationPresentationPolicy.referenceNumberLabel(ReservationKind.TICKET))
+        assertEquals("주문번호", ReservationPresentationPolicy.referenceNumberLabel(ReservationKind.PURCHASE))
+        assertEquals("예약번호", ReservationPresentationPolicy.referenceNumberLabel(ReservationKind.RESERVATION))
+    }
+
+    @Test fun tilePresentationIsDerivedFromActiveDraftKinds() {
+        val now = Instant.parse("2026-07-22T00:00:00Z")
+        val ticket = draft("ticket", now.plusSeconds(60))
+        val purchase = ticket.copy(sessionId = UUID.randomUUID(), eventId = "purchase", kind = ReservationKind.PURCHASE)
+        val reservation = ticket.copy(sessionId = UUID.randomUUID(), eventId = "reservation", kind = ReservationKind.RESERVATION)
+        assertEquals(ReservationTileState.UNAVAILABLE, ReservationTileStatePolicy.presentation(emptyList()).state)
+        assertEquals("진행 중인 내역 없음", ReservationTileStatePolicy.presentation(emptyList()).label)
+        assertEquals("예매 내역 추가", ReservationTileStatePolicy.presentation(listOf(ticket)).label)
+        assertEquals("구매 내역 추가", ReservationTileStatePolicy.presentation(listOf(purchase)).label)
+        assertEquals("예약 내역 추가", ReservationTileStatePolicy.presentation(listOf(reservation)).label)
+        assertEquals("진행 내역 3건 확인", ReservationTileStatePolicy.presentation(listOf(ticket, purchase, reservation)).label)
+    }
+
+    @Test fun persistedEnumNamesRemainStable() {
+        assertEquals(listOf("TICKET", "PURCHASE", "RESERVATION"), ReservationKind.entries.map(Enum<*>::name))
+        assertEquals(
+            listOf("PENDING_CONFIRMATION", "CONFIRMED", "CANCELLED", "REFUNDED", "COMPLETED"),
+            ReservationStatus.entries.map(Enum<*>::name),
+        )
     }
 
     @Test fun returnPromptRequiresTenSecondsAndPromptsEachSessionOnce() {

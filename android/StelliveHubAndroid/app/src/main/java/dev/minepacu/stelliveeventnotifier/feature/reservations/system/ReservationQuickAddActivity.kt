@@ -20,6 +20,7 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftSelection
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationLinkSource
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLPolicy
 import java.util.UUID
 import javax.inject.Inject
@@ -35,7 +36,7 @@ class ReservationQuickAddActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        title = "예약 완료로 추가"
+        title = "내역에 추가"
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(20), dp(20), dp(24))
@@ -56,14 +57,16 @@ class ReservationQuickAddActivity : AppCompatActivity() {
     }
 
     private fun showEmpty() {
+        title = "내역에 추가"
         content.removeAllViews()
-        content.addView(titleText("진행 중인 예약이 없습니다."))
+        content.addView(titleText("진행 중인 예약·구매 내역이 없습니다."))
         content.addView(bodyText("앱에서 티켓·구매·예약 링크를 먼저 열어 주세요."))
     }
 
     private fun showDraftPicker(drafts: List<ReservationDraft>) {
+        title = "내역에 추가"
         content.removeAllViews()
-        content.addView(titleText("완료할 예약을 선택해 주세요"))
+        content.addView(titleText("추가할 내역을 선택해 주세요"))
         drafts.forEach { draft ->
             content.addView(Button(this).apply {
                 text = draft.eventSnapshot.title
@@ -75,11 +78,12 @@ class ReservationQuickAddActivity : AppCompatActivity() {
 
     private fun showForm(draft: ReservationDraft) {
         selectedDraft = draft
+        title = ReservationPresentationPolicy.addActionLabel(draft.kind)
         content.removeAllViews()
-        content.addView(titleText("예약 완료로 추가"))
-        content.addView(bodyText("행사\n${draft.eventSnapshot.title}"))
+        content.addView(titleText(ReservationPresentationPolicy.addActionLabel(draft.kind)))
+        content.addView(bodyText("${ReservationPresentationPolicy.inProgressLabel(draft.kind)}\n${draft.eventSnapshot.title}"))
         detailUrlInput = EditText(this).apply {
-            hint = "예약 상세 링크 (선택)"
+            hint = "${ReservationPresentationPolicy.detailLinkLabel(draft.kind)} (선택)"
             setText(intent.getStringExtra(EXTRA_DETAIL_URL).orEmpty())
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
         }
@@ -98,7 +102,7 @@ class ReservationQuickAddActivity : AppCompatActivity() {
                 setOnClickListener { confirm(null, allowSensitive = false) }
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(Button(context).apply {
-                text = "예약에 추가"
+                text = ReservationPresentationPolicy.addActionLabel(draft.kind)
                 isAllCaps = false
                 setOnClickListener { validateAndConfirm() }
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -116,7 +120,7 @@ class ReservationQuickAddActivity : AppCompatActivity() {
             if (repository.hasReservationDetailUrl(normalizedUrl)) {
                 AlertDialog.Builder(this@ReservationQuickAddActivity)
                     .setTitle("이미 저장된 링크")
-                    .setMessage("같은 예약 상세 링크가 저장되어 있습니다. 그래도 추가할까요?")
+                    .setMessage("같은 상세 링크가 다른 내역에 저장되어 있습니다. 그래도 추가할까요?")
                     .setNegativeButton("취소", null)
                     .setPositiveButton("그래도 추가") { _, _ -> confirmAfterSensitivity(validation) }
                     .show()
@@ -168,10 +172,14 @@ class ReservationQuickAddActivity : AppCompatActivity() {
                 )
             }.onSuccess {
                 ReservationTileService.requestRefresh(this@ReservationQuickAddActivity)
-                Toast.makeText(this@ReservationQuickAddActivity, "내 예약·구매에 추가했습니다.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    this@ReservationQuickAddActivity,
+                    "${ReservationPresentationPolicy.addActionLabel(draft.kind)}했습니다.",
+                    Toast.LENGTH_SHORT,
+                ).show()
                 finish()
             }.onFailure {
-                Toast.makeText(this@ReservationQuickAddActivity, "예약을 저장하지 못했습니다.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@ReservationQuickAddActivity, "내역을 저장하지 못했습니다.", Toast.LENGTH_SHORT).show()
             }
         }
     }

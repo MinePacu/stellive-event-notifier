@@ -207,14 +207,14 @@ private struct ReservationReturnBannerView: View {
     private var title: String {
         switch banner {
         case .single: "예매·구매를 마치셨나요? 완료 내역을 직접 추가할 수 있습니다."
-        case .multiple: "확인이 필요한 예약이 여러 건 있습니다. 내 예약·구매에서 선택해 주세요."
+        case .multiple: "확인이 필요한 내역이 여러 건 있습니다. 내 예약·구매에서 선택해 주세요."
         case .error(let message): message
         }
     }
 
     private var actionTitle: String {
         switch banner {
-        case .single: "예약 완료로 추가"
+        case .single: "내역에 추가"
         case .multiple: "내역 보기"
         case .error: "확인"
         }

@@ -3,7 +3,6 @@ import SwiftUI
 struct HubEventsView: View {
     @EnvironmentObject private var store: MockHubStore
     @EnvironmentObject private var serverStore: ServerHubStore
-    @EnvironmentObject private var reservationStore: ReservationStore
     @State private var selectedFilter = "all"
     @State private var selectedCalendarMonth = Date()
     @SceneStorage("hubEvents.calendarExpanded") private var isCalendarExpanded = true
@@ -122,24 +121,6 @@ struct HubEventsView: View {
         }
         .onChange(of: selectedFilter) { _ in
             Task { await refreshServerHubEvents() }
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                NavigationLink(value: ReservationRoute.list) {
-                    Image(systemName: "ticket")
-                        .overlay(alignment: .topTrailing) {
-                            if reservationStore.pendingCount > 0 {
-                                Text("\(min(reservationStore.pendingCount, 99))")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .padding(3)
-                                    .background(Color.red, in: Capsule())
-                                    .offset(x: 8, y: -7)
-                            }
-                        }
-                }
-                .accessibilityLabel("내 예약 및 구매, 확인 필요 \(reservationStore.pendingCount)개")
-            }
         }
     }
 

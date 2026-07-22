@@ -21,8 +21,8 @@ object ReservationSystemShortcutCoordinator {
         }
         preferences.edit().putBoolean(TILE_PROMPTED, true).apply()
         AlertDialog.Builder(activity)
-            .setTitle("예약 추가 버튼")
-            .setMessage("예매 완료 후 빠르게 기록할 수 있도록 빠른 설정에 ‘예약 추가’ 버튼을 추가할까요?")
+            .setTitle("내역 추가 버튼")
+            .setMessage("예매·구매·예약 후 빠르게 기록할 수 있도록 빠른 설정에 ‘내역에 추가’ 버튼을 추가할까요?")
             .setNegativeButton("나중에") { _, _ -> afterPrompt() }
             .setPositiveButton("추가") { _, _ -> requestTile(activity, afterPrompt) }
             .setOnCancelListener { afterPrompt() }
@@ -31,14 +31,14 @@ object ReservationSystemShortcutCoordinator {
 
     fun requestTile(activity: Activity, onComplete: () -> Unit = {}) {
         if (Build.VERSION.SDK_INT < 33) {
-            Toast.makeText(activity, "빠른 설정 편집에서 ‘예약 완료로 추가’ 타일을 직접 추가해 주세요.", Toast.LENGTH_LONG).show()
+            Toast.makeText(activity, "빠른 설정 편집에서 ‘내역에 추가’ 타일을 직접 추가해 주세요.", Toast.LENGTH_LONG).show()
             onComplete()
             return
         }
         val statusBarManager = activity.getSystemService(StatusBarManager::class.java)
         statusBarManager.requestAddTileService(
             ComponentName(activity, ReservationTileService::class.java),
-            "예약 완료로 추가",
+            "내역에 추가",
             Icon.createWithResource(activity, R.drawable.ic_reservation_ticket),
             activity.mainExecutor,
         ) { onComplete() }

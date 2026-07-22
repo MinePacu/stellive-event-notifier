@@ -13,7 +13,7 @@ struct ReservationLiveActivityWidget: Widget {
                     .foregroundStyle(.teal)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(context.state.title).font(.headline).lineLimit(1)
-                    Text("예약 진행 중 · \(context.state.providerHost)")
+                    Text("\(ReservationPresentationPolicy.inProgressLabel(context.state.kind)) · \(context.state.providerHost)")
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     Text(context.state.openedAt, style: .timer)
                         .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
@@ -28,7 +28,7 @@ struct ReservationLiveActivityWidget: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Label("예약 진행 중", systemImage: "ticket").font(.caption.weight(.semibold))
+                    Label(ReservationPresentationPolicy.inProgressLabel(context.state.kind), systemImage: "ticket").font(.caption.weight(.semibold))
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Text(context.state.openedAt, style: .timer).font(.caption.monospacedDigit())
@@ -40,7 +40,7 @@ struct ReservationLiveActivityWidget: Widget {
                         HStack(spacing: 10) {
                             if #available(iOSApplicationExtension 17.0, *) {
                                 Button(intent: CompleteReservationIntent(sessionID: context.attributes.sessionID)) {
-                                    Label("완료만 기록", systemImage: "checkmark.circle")
+                                    Label(ReservationPresentationPolicy.recordActionLabel(context.state.kind), systemImage: "checkmark.circle")
                                 }
                             }
                             Link(destination: deepLink(sessionID: context.attributes.sessionID)) {
@@ -77,8 +77,8 @@ struct ReservationControlWidget: ControlWidget {
                 Label(value.label, systemImage: value.draftCount == 0 ? "ticket" : "ticket.fill")
             }
         }
-        .displayName("최근 예약 완료로 추가")
-        .description("앱에서 연 예매·구매 링크의 완료 내역을 추가합니다.")
+        .displayName("최근 예약·구매 내역 추가")
+        .description("앱에서 연 예매·구매·예약 링크의 내역을 추가합니다.")
     }
 }
 
@@ -86,13 +86,10 @@ struct ReservationControlWidget: ControlWidget {
 private struct ReservationControlValue: Codable, Hashable, Sendable {
     let sessionID: UUID?
     let draftCount: Int
+    let kind: ReservationKind?
 
     var label: String {
-        switch draftCount {
-        case 0: "진행 중인 예약 없음"
-        case 1: "예약 완료로 추가"
-        default: "예약 \(draftCount)건 확인"
-        }
+        ReservationPresentationPolicy.systemShortcutLabel(draftCount: draftCount, kind: kind)
     }
 
     var deepLink: URL {
@@ -105,7 +102,7 @@ private struct ReservationControlValue: Codable, Hashable, Sendable {
 
 @available(iOSApplicationExtension 18.0, *)
 private struct ReservationControlValueProvider: ControlValueProvider {
-    var previewValue: ReservationControlValue { .init(sessionID: nil, draftCount: 0) }
+    var previewValue: ReservationControlValue { .init(sessionID: nil, draftCount: 0, kind: nil) }
 
     func currentValue() async throws -> ReservationControlValue {
         guard let store = try? ReservationSharedStore() else { return previewValue }
@@ -113,7 +110,8 @@ private struct ReservationControlValueProvider: ControlValueProvider {
         let active = drafts.filter { $0.expiresAt > Date() }.sorted { $0.openedAt > $1.openedAt }
         return ReservationControlValue(
             sessionID: active.count == 1 ? active[0].sessionID : nil,
-            draftCount: active.count
+            draftCount: active.count,
+            kind: active.count == 1 ? active[0].kind : nil
         )
     }
 }

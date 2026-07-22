@@ -30,7 +30,7 @@ class ReservationTileService : TileService() {
         scope.launch {
             repository.cleanupExpired()
             val drafts = ReservationDraftPolicy.active(repository.drafts.first())
-            val presentation = ReservationTileStatePolicy.presentation(drafts.size)
+            val presentation = ReservationTileStatePolicy.presentation(drafts)
             qsTile?.apply {
                 state = if (presentation.state == ReservationTileState.ACTIVE) Tile.STATE_ACTIVE else Tile.STATE_UNAVAILABLE
                 label = presentation.label

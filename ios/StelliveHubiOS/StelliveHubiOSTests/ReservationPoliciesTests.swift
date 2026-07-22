@@ -53,6 +53,53 @@ final class ReservationPoliciesTests: XCTestCase {
         XCTAssertEqual(record.displayTitle, "내 예약")
     }
 
+    func testPresentationPolicyCoversEveryKindAndStatus() {
+        let expected: [ReservationKind: [String]] = [
+            .ticket: ["확인 필요", "예매 완료", "예매 취소", "환불 완료", "이용 완료"],
+            .purchase: ["확인 필요", "구매 완료", "구매 취소", "환불 완료", "처리 완료"],
+            .reservation: ["확인 필요", "예약 완료", "예약 취소", "환불 완료", "이용 완료"]
+        ]
+        for kind in ReservationKind.allCases {
+            XCTAssertEqual(
+                ReservationStatus.allCases.map { ReservationPresentationPolicy.statusLabel(kind: kind, status: $0) },
+                expected[kind]
+            )
+        }
+        XCTAssertNotEqual(ReservationPresentationPolicy.statusLabel(kind: .purchase, status: .completed), "이용 완료")
+        XCTAssertNotEqual(ReservationPresentationPolicy.statusLabel(kind: .purchase, status: .completed), "배송 완료")
+    }
+
+    func testPresentationPolicyUsesKindSpecificActionsAndFields() {
+        XCTAssertEqual(ReservationPresentationPolicy.addActionLabel(.ticket), "예매 내역에 추가")
+        XCTAssertEqual(ReservationPresentationPolicy.addActionLabel(.purchase), "구매 내역에 추가")
+        XCTAssertEqual(ReservationPresentationPolicy.addActionLabel(.reservation), "예약 내역에 추가")
+        XCTAssertEqual(ReservationPresentationPolicy.detailLinkLabel(.ticket), "예매 상세 링크")
+        XCTAssertEqual(ReservationPresentationPolicy.detailLinkLabel(.purchase), "구매 상세 링크")
+        XCTAssertEqual(ReservationPresentationPolicy.detailLinkLabel(.reservation), "예약 상세 링크")
+        XCTAssertEqual(ReservationPresentationPolicy.referenceNumberLabel(.ticket), "예매번호")
+        XCTAssertEqual(ReservationPresentationPolicy.referenceNumberLabel(.purchase), "주문번호")
+        XCTAssertEqual(ReservationPresentationPolicy.referenceNumberLabel(.reservation), "예약번호")
+    }
+
+    func testSystemShortcutLabelsUseDraftCountAndKind() {
+        let ticket = makeDraft(id: UUID(), openedAt: .distantPast, kind: .ticket)
+        let purchase = makeDraft(id: UUID(), openedAt: .distantPast, kind: .purchase)
+        let reservation = makeDraft(id: UUID(), openedAt: .distantPast, kind: .reservation)
+        XCTAssertEqual(ReservationPresentationPolicy.systemShortcutLabel([]), "진행 중인 내역 없음")
+        XCTAssertEqual(ReservationPresentationPolicy.systemShortcutLabel([ticket]), "예매 내역 추가")
+        XCTAssertEqual(ReservationPresentationPolicy.systemShortcutLabel([purchase]), "구매 내역 추가")
+        XCTAssertEqual(ReservationPresentationPolicy.systemShortcutLabel([reservation]), "예약 내역 추가")
+        XCTAssertEqual(ReservationPresentationPolicy.systemShortcutLabel([ticket, purchase, reservation]), "진행 내역 3건 확인")
+    }
+
+    func testPersistedEnumRawValuesRemainStable() {
+        XCTAssertEqual(ReservationKind.allCases.map(\.rawValue), ["ticket", "purchase", "reservation"])
+        XCTAssertEqual(
+            ReservationStatus.allCases.map(\.rawValue),
+            ["pendingConfirmation", "confirmed", "cancelled", "refunded", "completed"]
+        )
+    }
+
     func testExternalLinkPolicyOpensBeforeBestEffortRecordingFailure() {
         var calls: [String] = []
         ReservationExternalLinkPolicy.openFailOpen(
@@ -201,12 +248,17 @@ final class ReservationPoliciesTests: XCTestCase {
         XCTAssertEqual(appStore.records, [record])
     }
 
-    private func makeDraft(id: UUID, openedAt: Date, eventID: String = "event") -> ReservationDraft {
+    private func makeDraft(
+        id: UUID,
+        openedAt: Date,
+        eventID: String = "event",
+        kind: ReservationKind = .ticket
+    ) -> ReservationDraft {
         ReservationDraft(
             sessionID: id,
             eventID: eventID,
             scheduleItemID: nil,
-            kind: .ticket,
+            kind: kind,
             eventSnapshot: ReservationEventSnapshot(
                 title: "행사", category: "ticketing", startsAt: nil, endsAt: nil,
                 venueName: nil, venueAddress: nil, sourceLabel: "공식", imageURL: nil

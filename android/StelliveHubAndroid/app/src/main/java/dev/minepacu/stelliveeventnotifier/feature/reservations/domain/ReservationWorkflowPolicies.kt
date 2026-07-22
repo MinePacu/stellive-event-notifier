@@ -62,12 +62,73 @@ enum class ReservationTileState { UNAVAILABLE, ACTIVE }
 
 data class ReservationTilePresentation(val state: ReservationTileState, val label: String)
 
-object ReservationTileStatePolicy {
-    fun presentation(activeDraftCount: Int): ReservationTilePresentation = when (activeDraftCount) {
-        0 -> ReservationTilePresentation(ReservationTileState.UNAVAILABLE, "진행 중인 예약 없음")
-        1 -> ReservationTilePresentation(ReservationTileState.ACTIVE, "예약 완료로 추가")
-        else -> ReservationTilePresentation(ReservationTileState.ACTIVE, "예약 ${activeDraftCount}건 확인")
+object ReservationPresentationPolicy {
+    fun kindLabel(kind: ReservationKind): String = when (kind) {
+        ReservationKind.TICKET -> "티켓 예매"
+        ReservationKind.PURCHASE -> "상품 구매"
+        ReservationKind.RESERVATION -> "일반 예약"
     }
+
+    fun inProgressLabel(kind: ReservationKind): String = when (kind) {
+        ReservationKind.TICKET -> "티켓 예매 진행 중"
+        ReservationKind.PURCHASE -> "상품 구매 진행 중"
+        ReservationKind.RESERVATION -> "예약 진행 중"
+    }
+
+    fun addActionLabel(kind: ReservationKind): String = when (kind) {
+        ReservationKind.TICKET -> "예매 내역에 추가"
+        ReservationKind.PURCHASE -> "구매 내역에 추가"
+        ReservationKind.RESERVATION -> "예약 내역에 추가"
+    }
+
+    fun detailLinkLabel(kind: ReservationKind): String = when (kind) {
+        ReservationKind.TICKET -> "예매 상세 링크"
+        ReservationKind.PURCHASE -> "구매 상세 링크"
+        ReservationKind.RESERVATION -> "예약 상세 링크"
+    }
+
+    fun referenceNumberLabel(kind: ReservationKind): String = when (kind) {
+        ReservationKind.TICKET -> "예매번호"
+        ReservationKind.PURCHASE -> "주문번호"
+        ReservationKind.RESERVATION -> "예약번호"
+    }
+
+    fun statusLabel(kind: ReservationKind, status: ReservationStatus): String = when (status) {
+        ReservationStatus.PENDING_CONFIRMATION -> "확인 필요"
+        ReservationStatus.REFUNDED -> "환불 완료"
+        ReservationStatus.CONFIRMED -> when (kind) {
+            ReservationKind.TICKET -> "예매 완료"
+            ReservationKind.PURCHASE -> "구매 완료"
+            ReservationKind.RESERVATION -> "예약 완료"
+        }
+        ReservationStatus.CANCELLED -> when (kind) {
+            ReservationKind.TICKET -> "예매 취소"
+            ReservationKind.PURCHASE -> "구매 취소"
+            ReservationKind.RESERVATION -> "예약 취소"
+        }
+        ReservationStatus.COMPLETED -> when (kind) {
+            ReservationKind.PURCHASE -> "처리 완료"
+            ReservationKind.TICKET, ReservationKind.RESERVATION -> "이용 완료"
+        }
+    }
+
+    fun systemShortcutLabel(drafts: List<ReservationDraft>): String = when (drafts.size) {
+        0 -> "진행 중인 내역 없음"
+        1 -> when (drafts.single().kind) {
+            ReservationKind.TICKET -> "예매 내역 추가"
+            ReservationKind.PURCHASE -> "구매 내역 추가"
+            ReservationKind.RESERVATION -> "예약 내역 추가"
+        }
+        else -> "진행 내역 ${drafts.size}건 확인"
+    }
+}
+
+object ReservationTileStatePolicy {
+    fun presentation(activeDrafts: List<ReservationDraft>): ReservationTilePresentation =
+        ReservationTilePresentation(
+            state = if (activeDrafts.isEmpty()) ReservationTileState.UNAVAILABLE else ReservationTileState.ACTIVE,
+            label = ReservationPresentationPolicy.systemShortcutLabel(activeDrafts),
+        )
 }
 
 data class ReservationListSections(

@@ -58,18 +58,18 @@ final class ShareViewController: UIViewController {
             guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
             drafts = ReservationDraftPolicy.active(try sharedStore.loadState().drafts)
         } catch {
-            presentMessage(title: "예약을 불러올 수 없습니다", message: error.localizedDescription)
+            presentMessage(title: "내역을 불러올 수 없습니다", message: error.localizedDescription)
             return
         }
         guard !drafts.isEmpty else {
-            presentMessage(title: "진행 중인 예약이 없습니다", message: "먼저 앱에서 예매·구매 링크를 열어 주세요.")
+            presentMessage(title: "진행 중인 예약·구매 내역이 없습니다", message: "먼저 앱에서 티켓·구매·예약 링크를 열어 주세요.")
             return
         }
         if drafts.count == 1 {
             confirm(draft: drafts[0])
             return
         }
-        let alert = UIAlertController(title: "예약 대상 선택", message: "공유한 링크를 저장할 예약을 선택해 주세요.", preferredStyle: .actionSheet)
+        let alert = UIAlertController(title: "추가할 내역 선택", message: "공유한 링크를 저장할 내역을 선택해 주세요.", preferredStyle: .actionSheet)
         drafts.forEach { draft in
             alert.addAction(UIAlertAction(title: draft.eventSnapshot.title, style: .default) { [weak self] _ in
                 self?.confirm(draft: draft)
@@ -108,7 +108,7 @@ final class ShareViewController: UIViewController {
            state.records.contains(where: { $0.reservationDetailURL == sharedURL }) {
             let alert = UIAlertController(
                 title: "같은 링크가 이미 있습니다",
-                message: "다른 예약에 같은 상세 링크가 연결되어 있습니다. 그래도 저장할까요?",
+                message: "다른 내역에 같은 상세 링크가 연결되어 있습니다. 그래도 저장할까요?",
                 preferredStyle: .alert
             )
             alert.addAction(UIAlertAction(title: "그래도 저장", style: .default) { [weak self] _ in
@@ -126,7 +126,10 @@ final class ShareViewController: UIViewController {
                 linkSource: .browserShare,
                 now: Date()
             )
-            presentMessage(title: "예약에 추가했습니다", message: draft.eventSnapshot.title)
+            presentMessage(
+                title: "\(ReservationPresentationPolicy.addActionLabel(draft.kind))했습니다",
+                message: draft.eventSnapshot.title
+            )
         } catch {
             presentMessage(title: "추가할 수 없습니다", message: error.localizedDescription)
         }

@@ -222,8 +222,8 @@ object MainUiPolicy {
         "goods_events" -> "굿즈/행사"
         "goods_event_detail" -> ""
         "reservations" -> "내 예약·구매"
-        "reservation_detail" -> "예약 상세"
-        "reservation_edit" -> "예약 수정"
+        "reservation_detail" -> "내역 상세"
+        "reservation_edit" -> "내역 수정"
         else -> "홈"
     }
 
@@ -246,8 +246,8 @@ object MainUiPolicy {
         "goods_events" -> "공식 출처의 기간성 굿즈와 행사"
         "goods_event_detail" -> ""
         "reservations" -> "기기에 저장된 예약과 구매 내역"
-        "reservation_detail" -> "예약 정보와 관련 링크"
-        "reservation_edit" -> "로컬 예약 정보 편집"
+        "reservation_detail" -> "예약·예매·구매 정보와 관련 링크"
+        "reservation_edit" -> "로컬 내역 정보 편집"
         else -> "라이브 현황과 최근 알림"
     }
 

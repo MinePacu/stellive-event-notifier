@@ -57,7 +57,7 @@
             android:name=".feature.reservations.system.ReservationTileService"
             android:exported="true"
             android:icon="@drawable/ic_reservation_ticket"
-            android:label="예약 완료로 추가"
+            android:label="내역에 추가"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
