@@ -96,6 +96,9 @@ class RoomReservationRepository @Inject constructor(
 
     suspend fun getRecord(id: UUID): ReservationRecord? = database.reservationDao().get(id.toString())?.toDomain()
 
+    suspend fun hasReservationDetailUrl(url: String, excludingId: UUID? = null): Boolean =
+        database.reservationDao().countByDetailUrl(url, excludingId?.toString().orEmpty()) > 0
+
     suspend fun update(record: ReservationRecord) {
         database.reservationDao().upsert(record.toEntity())
     }

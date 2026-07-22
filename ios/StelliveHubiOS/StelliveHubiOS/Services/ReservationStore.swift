@@ -17,84 +17,43 @@ enum ReservationStoreError: LocalizedError {
     }
 }
 
-struct ReservationSharedStore {
-    static let appGroupIdentifier = "group.dev.minepacu.stelliveeventnotifier"
-    private let directoryURL: URL
-    private let coordinator = NSFileCoordinator(filePresenter: nil)
-    private let encoder: JSONEncoder
-    private let decoder: JSONDecoder
-
-    init(directoryURL: URL? = FileManager.default.containerURL(
-        forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier
-    )) throws {
-        guard let directoryURL else { throw ReservationStoreError.sharedContainerUnavailable }
-        self.directoryURL = directoryURL
-        encoder = JSONEncoder()
-        decoder = JSONDecoder()
-        encoder.dateEncodingStrategy = .iso8601
-        decoder.dateDecodingStrategy = .iso8601
-        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-        try excludeFromBackup(directoryURL)
-    }
-
-    func loadRecords() -> [ReservationRecord] { load([ReservationRecord].self, from: recordsURL) ?? [] }
-    func loadDrafts() -> [ReservationDraft] { load([ReservationDraft].self, from: draftsURL) ?? [] }
-    func saveRecords(_ records: [ReservationRecord]) throws { try save(records, to: recordsURL) }
-    func saveDrafts(_ drafts: [ReservationDraft]) throws { try save(drafts, to: draftsURL) }
-
-    private var recordsURL: URL { directoryURL.appendingPathComponent("reservations-v1.json") }
-    private var draftsURL: URL { directoryURL.appendingPathComponent("reservation-drafts-v1.json") }
-
-    private func load<Value: Decodable>(_ type: Value.Type, from url: URL) -> Value? {
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        var coordinationError: NSError?
-        var value: Value?
-        coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
-            guard let data = try? Data(contentsOf: coordinatedURL) else { return }
-            value = try? decoder.decode(type, from: data)
-        }
-        return value
-    }
-
-    private func save<Value: Encodable>(_ value: Value, to url: URL) throws {
-        let data = try encoder.encode(value)
-        var coordinationError: NSError?
-        var writeError: Error?
-        coordinator.coordinate(writingItemAt: url, options: .forReplacing, error: &coordinationError) { coordinatedURL in
-            do {
-                try data.write(to: coordinatedURL, options: .atomic)
-                try excludeFromBackup(coordinatedURL)
-            } catch {
-                writeError = error
-            }
-        }
-        if let coordinationError { throw coordinationError }
-        if let writeError { throw writeError }
-    }
-
-    private func excludeFromBackup(_ url: URL) throws {
-        var mutableURL = url
-        var values = URLResourceValues()
-        values.isExcludedFromBackup = true
-        try mutableURL.setResourceValues(values)
-    }
-}
-
 @MainActor
 final class ReservationStore: ObservableObject {
     @Published private(set) var records: [ReservationRecord]
     @Published private(set) var drafts: [ReservationDraft]
     @Published private(set) var lastErrorMessage: String?
+    @Published private(set) var externallyOpenedSessionIDs = Set<UUID>()
+    @Published private(set) var lastDeletedRecord: ReservationRecord?
 
     private let sharedStore: ReservationSharedStore?
     private let now: () -> Date
 
-    init(sharedStore: ReservationSharedStore? = try? ReservationSharedStore(), now: @escaping () -> Date = Date.init) {
-        self.sharedStore = sharedStore
+    init(sharedStore: ReservationSharedStore? = nil, now: @escaping () -> Date = Date.init) {
+        let resolvedStore: ReservationSharedStore?
+        var initialState = ReservationStateV1()
+        var initialError: String?
+        if let sharedStore {
+            resolvedStore = sharedStore
+        } else {
+            do {
+                resolvedStore = try ReservationSharedStore()
+            } catch {
+                resolvedStore = nil
+                initialError = error.localizedDescription
+            }
+        }
+        if let resolvedStore {
+            do {
+                initialState = try resolvedStore.pruneExpiredDrafts(now: now())
+            } catch {
+                initialError = error.localizedDescription
+            }
+        }
+        self.sharedStore = resolvedStore
         self.now = now
-        records = sharedStore?.loadRecords() ?? []
-        drafts = ReservationDraftPolicy.active(sharedStore?.loadDrafts() ?? [], now: now())
-        persistDrafts()
+        records = initialState.records
+        drafts = ReservationDraftPolicy.active(initialState.drafts, now: now())
+        lastErrorMessage = initialError
     }
 
     var activeDrafts: [ReservationDraft] { ReservationDraftPolicy.active(drafts, now: now()) }
@@ -113,11 +72,17 @@ final class ReservationStore: ObservableObject {
 
     func reload() {
         let previousSessionIDs = Set(drafts.map(\.sessionID))
-        records = sharedStore?.loadRecords() ?? records
-        drafts = ReservationDraftPolicy.active(sharedStore?.loadDrafts() ?? drafts, now: now())
+        do {
+            guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+            let state = try sharedStore.pruneExpiredDrafts(now: now())
+            records = state.records
+            drafts = ReservationDraftPolicy.active(state.drafts, now: now())
+            lastErrorMessage = nil
+        } catch {
+            lastErrorMessage = error.localizedDescription
+        }
         let remainingSessionIDs = Set(drafts.map(\.sessionID))
         previousSessionIDs.subtracting(remainingSessionIDs).forEach(ReservationActivityCoordinator.end)
-        persistDrafts()
     }
 
     @discardableResult
@@ -130,16 +95,7 @@ final class ReservationStore: ObservableObject {
             throw ReservationStoreError.invalidURL
         }
         let current = now()
-        if let index = drafts.firstIndex(where: {
-            $0.eventID == event.id && $0.scheduleItemID == scheduleItem?.id && $0.originalActionURL == actionURL.absoluteString
-        }) {
-            drafts[index].openedAt = current
-            drafts[index].expiresAt = current.addingTimeInterval(2 * 60 * 60)
-            drafts[index].attemptCount += 1
-            persistDrafts()
-            return drafts[index]
-        }
-        let draft = ReservationDraft(
+        let candidate = ReservationDraft(
             sessionID: UUID(),
             eventID: event.id,
             scheduleItemID: scheduleItem?.id,
@@ -160,8 +116,13 @@ final class ReservationStore: ObservableObject {
             expiresAt: current.addingTimeInterval(2 * 60 * 60),
             attemptCount: 1
         )
-        drafts.append(draft)
-        persistDrafts()
+        guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+        let draft = try sharedStore.upsertDraft(candidate)
+        let state = try sharedStore.loadState()
+        records = state.records
+        drafts = ReservationDraftPolicy.active(state.drafts, now: current)
+        lastErrorMessage = nil
+        externallyOpenedSessionIDs.insert(draft.sessionID)
         return draft
     }
 
@@ -172,10 +133,6 @@ final class ReservationStore: ObservableObject {
         linkSource: ReservationLinkSource,
         allowsSensitiveURL: Bool = false
     ) throws -> ReservationRecord {
-        if let existing = records.first(where: { $0.sourceSessionID == sessionID }) { return existing }
-        guard let draft = drafts.first(where: { $0.sessionID == sessionID }) else {
-            throw ReservationStoreError.draftNotFound
-        }
         let normalizedURL: String?
         if let value = ReservationTextPolicy.nonEmpty(detailURL) {
             guard let url = ReservationURLPolicy.validatedURL(value) else { throw ReservationStoreError.invalidURL }
@@ -186,35 +143,43 @@ final class ReservationStore: ObservableObject {
         } else {
             normalizedURL = nil
         }
-        let current = now()
-        let record = ReservationRecord(
-            id: UUID(), sourceSessionID: draft.sessionID, eventID: draft.eventID,
-            scheduleItemID: draft.scheduleItemID, kind: draft.kind, status: .confirmed,
-            eventSnapshot: draft.eventSnapshot, originalActionURL: draft.originalActionURL,
-            reservationDetailURL: normalizedURL, providerHistoryURL: nil, linkSource: linkSource,
-            displayTitleOverride: nil, startsAtOverride: nil, endsAtOverride: nil,
-            venueOverride: nil, optionText: nil, quantity: nil, referenceNumber: nil, note: nil,
-            openedAt: draft.openedAt, confirmedAt: current, createdAt: current, updatedAt: current,
-            schemaVersion: 1
+        guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+        let record = try sharedStore.confirm(
+            sessionID: sessionID,
+            detailURL: normalizedURL,
+            linkSource: linkSource,
+            now: now()
         )
-        records.append(record)
-        drafts.removeAll { $0.sessionID == sessionID }
-        persistAll()
+        let state = try sharedStore.loadState()
+        records = state.records
+        drafts = ReservationDraftPolicy.active(state.drafts, now: now())
+        lastErrorMessage = nil
         ReservationActivityCoordinator.end(sessionID: sessionID)
         return record
     }
 
-    func update(_ record: ReservationRecord) {
-        guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
+    func update(_ record: ReservationRecord) throws {
         var updated = record
         updated.updatedAt = now()
-        records[index] = updated
-        persistRecords()
+        guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+        try sharedStore.updateRecord(updated)
+        try reloadOrThrow()
     }
 
-    func delete(id: UUID) {
-        records.removeAll { $0.id == id }
-        persistRecords()
+    @discardableResult
+    func delete(id: UUID) throws -> ReservationRecord? {
+        guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+        let deleted = try sharedStore.deleteRecord(id: id)
+        try reloadOrThrow()
+        lastDeletedRecord = deleted
+        return deleted
+    }
+
+    func restore(_ record: ReservationRecord) throws {
+        guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+        try sharedStore.restoreRecord(record)
+        try reloadOrThrow()
+        if lastDeletedRecord?.id == record.id { lastDeletedRecord = nil }
     }
 
     func record(id: UUID) -> ReservationRecord? { records.first { $0.id == id } }
@@ -223,18 +188,31 @@ final class ReservationStore: ObservableObject {
         return activeDrafts.first { $0.sessionID == sessionID }
     }
 
-    private func persistAll() { persistRecords(); persistDrafts() }
-    private func persistRecords() {
-        do { try sharedStore?.saveRecords(records) } catch { lastErrorMessage = error.localizedDescription }
+    func duplicateDetailURL(_ rawValue: String?, excluding id: UUID? = nil) -> ReservationRecord? {
+        guard let normalized = ReservationURLPolicy.validatedURL(rawValue)?.absoluteString else { return nil }
+        return records.first { $0.id != id && $0.reservationDetailURL == normalized }
     }
-    private func persistDrafts() {
-        do { try sharedStore?.saveDrafts(drafts) } catch { lastErrorMessage = error.localizedDescription }
+
+    func clearErrorMessage() { lastErrorMessage = nil }
+
+    func reportBestEffortError() {
+        lastErrorMessage = "예약 진행 정보는 저장하지 못했지만 외부 링크는 정상적으로 열었습니다."
+    }
+
+    func clearDeletedRecord() { lastDeletedRecord = nil }
+
+    private func reloadOrThrow() throws {
+        guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+        let state = try sharedStore.loadState()
+        records = state.records
+        drafts = ReservationDraftPolicy.active(state.drafts, now: now())
+        lastErrorMessage = nil
     }
 }
 
 enum ReservationActivityCoordinator {
     @MainActor
-    static func start(for draft: ReservationDraft, draftCount: Int) {
+    static func start(for draft: ReservationDraft, draftCount: Int) throws {
         guard #available(iOS 16.1, *), ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         let attributes = ReservationActivityAttributes(sessionID: draft.sessionID)
         let state = ReservationActivityAttributes.ContentState(
@@ -243,7 +221,7 @@ enum ReservationActivityCoordinator {
             openedAt: draft.openedAt,
             draftCount: draftCount
         )
-        _ = try? Activity.request(attributes: attributes, contentState: state, pushType: nil)
+        _ = try Activity.request(attributes: attributes, contentState: state, pushType: nil)
     }
 
     static func end(sessionID: UUID) {

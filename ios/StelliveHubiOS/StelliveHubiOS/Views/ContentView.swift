@@ -66,11 +66,15 @@ struct IOSPrimaryNavigationPolicy {
 }
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var reservationStore: ReservationStore
     @State private var selectedTab = "home"
     @State private var pendingHubEventId: String?
     @State private var pendingHubEventScheduleItemId: String?
     @State private var pendingAnnouncementId: String?
     @State private var pendingReservationRoute: ReservationRoute?
+    @State private var reservationReturnBanner: ReservationReturnBanner?
+    @State private var promptedReservationSessionIDs = Set<UUID>()
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -107,6 +111,118 @@ struct ContentView: View {
             pendingHubEventId = eventId
             pendingHubEventScheduleItemId = HubCalendarDeepLinkPolicy.scheduleItemId(from: url)
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let banner = reservationReturnBanner {
+                ReservationReturnBannerView(
+                    banner: banner,
+                    onConfirm: { openReservationReturnAction(banner) },
+                    onDismiss: { dismissReservationReturnBanner(banner) }
+                )
+                .padding(.horizontal, 12)
+                .padding(.top, 4)
+            }
+        }
+        .onChange(of: scenePhase) { phase in
+            guard phase == .active else { return }
+            reservationStore.reload()
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                evaluateReservationReturnBanner()
+            }
+        }
+    }
+
+    private func evaluateReservationReturnBanner() {
+        if let message = reservationStore.lastErrorMessage {
+            reservationReturnBanner = .error(message)
+            return
+        }
+        let decision = ReservationReturnPromptPolicy.decision(
+            drafts: reservationStore.activeDrafts,
+            externallyOpenedSessionIDs: reservationStore.externallyOpenedSessionIDs,
+            promptedSessionIDs: promptedReservationSessionIDs,
+            now: Date()
+        )
+        switch decision {
+        case .none:
+            break
+        case .single(let sessionID):
+            promptedReservationSessionIDs.insert(sessionID)
+            reservationReturnBanner = .single(sessionID)
+        case .multiple(let sessionIDs):
+            promptedReservationSessionIDs.formUnion(sessionIDs)
+            reservationReturnBanner = .multiple
+        }
+    }
+
+    private func openReservationReturnAction(_ banner: ReservationReturnBanner) {
+        selectedTab = "hubEvents"
+        switch banner {
+        case .single(let sessionID): pendingReservationRoute = .quickAdd(sessionID: sessionID)
+        case .multiple: pendingReservationRoute = .list
+        case .error: reservationStore.clearErrorMessage()
+        }
+        reservationReturnBanner = nil
+    }
+
+    private func dismissReservationReturnBanner(_ banner: ReservationReturnBanner) {
+        if case .error = banner { reservationStore.clearErrorMessage() }
+        reservationReturnBanner = nil
+    }
+}
+
+private enum ReservationReturnBanner: Equatable {
+    case single(UUID)
+    case multiple
+    case error(String)
+}
+
+private struct ReservationReturnBannerView: View {
+    let banner: ReservationReturnBanner
+    let onConfirm: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: icon)
+                .font(.subheadline.weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
+            HStack(spacing: 12) {
+                Spacer()
+                Button("아직 아니에요", action: onDismiss)
+                    .frame(minHeight: 44)
+                Button(actionTitle, action: onConfirm)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.teal)
+                    .frame(minHeight: 44)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var title: String {
+        switch banner {
+        case .single: "예매·구매를 마치셨나요? 완료 내역을 직접 추가할 수 있습니다."
+        case .multiple: "확인이 필요한 예약이 여러 건 있습니다. 내 예약·구매에서 선택해 주세요."
+        case .error(let message): message
+        }
+    }
+
+    private var actionTitle: String {
+        switch banner {
+        case .single: "예약 완료로 추가"
+        case .multiple: "내역 보기"
+        case .error: "확인"
+        }
+    }
+
+    private var icon: String {
+        if case .error = banner { return "exclamationmark.triangle" }
+        return "ticket"
     }
 }
 

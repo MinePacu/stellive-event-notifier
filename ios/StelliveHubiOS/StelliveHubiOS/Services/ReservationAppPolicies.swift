@@ -35,3 +35,46 @@ enum ReservationDisplayPolicy {
             latestEvent.venueName != record.eventSnapshot.venueName
     }
 }
+
+enum ReservationExternalLinkPolicy {
+    static func openFailOpen(
+        openExternal: () -> Void,
+        recordBestEffort: () throws -> Void,
+        onRecordingFailure: () -> Void
+    ) {
+        openExternal()
+        do {
+            try recordBestEffort()
+        } catch {
+            onRecordingFailure()
+        }
+    }
+}
+
+enum ReservationReturnPromptDecision: Equatable {
+    case none
+    case single(UUID)
+    case multiple(Set<UUID>)
+}
+
+enum ReservationReturnPromptPolicy {
+    static let minimumExternalDuration: TimeInterval = 10
+
+    static func decision(
+        drafts: [ReservationDraft],
+        externallyOpenedSessionIDs: Set<UUID>,
+        promptedSessionIDs: Set<UUID>,
+        now: Date
+    ) -> ReservationReturnPromptDecision {
+        let eligible = ReservationDraftPolicy.active(drafts, now: now).filter {
+            externallyOpenedSessionIDs.contains($0.sessionID) &&
+                !promptedSessionIDs.contains($0.sessionID) &&
+                now.timeIntervalSince($0.openedAt) >= minimumExternalDuration
+        }
+        switch eligible.count {
+        case 0: return .none
+        case 1: return .single(eligible[0].sessionID)
+        default: return .multiple(Set(eligible.map(\.sessionID)))
+        }
+    }
+}

@@ -10,6 +10,8 @@ import android.service.quicksettings.TileService
 import dagger.hilt.android.AndroidEntryPoint
 import dev.minepacu.stelliveeventnotifier.feature.reservations.data.RoomReservationRepository
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationTileState
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationTileStatePolicy
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,9 +30,10 @@ class ReservationTileService : TileService() {
         scope.launch {
             repository.cleanupExpired()
             val drafts = ReservationDraftPolicy.active(repository.drafts.first())
+            val presentation = ReservationTileStatePolicy.presentation(drafts.size)
             qsTile?.apply {
-                state = if (drafts.isEmpty()) Tile.STATE_UNAVAILABLE else Tile.STATE_ACTIVE
-                label = if (drafts.isEmpty()) "진행 중인 예약 없음" else if (drafts.size == 1) "예약 완료로 추가" else "예약 ${drafts.size}건 확인"
+                state = if (presentation.state == ReservationTileState.ACTIVE) Tile.STATE_ACTIVE else Tile.STATE_UNAVAILABLE
+                label = presentation.label
                 updateTile()
             }
         }

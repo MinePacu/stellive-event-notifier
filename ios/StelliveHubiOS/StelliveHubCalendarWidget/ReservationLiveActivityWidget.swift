@@ -108,13 +108,8 @@ private struct ReservationControlValueProvider: ControlValueProvider {
     var previewValue: ReservationControlValue { .init(sessionID: nil, draftCount: 0) }
 
     func currentValue() async throws -> ReservationControlValue {
-        guard let directory = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.dev.minepacu.stelliveeventnotifier"
-        ) else { return previewValue }
-        let url = directory.appendingPathComponent("reservation-drafts-v1.json")
-        guard let data = try? Data(contentsOf: url) else { return previewValue }
-        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
-        let drafts = (try? decoder.decode([ReservationDraft].self, from: data)) ?? []
+        guard let store = try? ReservationSharedStore() else { return previewValue }
+        let drafts = (try? store.loadState().drafts) ?? []
         let active = drafts.filter { $0.expiresAt > Date() }.sorted { $0.openedAt > $1.openedAt }
         return ReservationControlValue(
             sessionID: active.count == 1 ? active[0].sessionID : nil,

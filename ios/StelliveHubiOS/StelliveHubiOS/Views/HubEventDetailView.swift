@@ -50,7 +50,6 @@ struct HubEventDetailView: View {
     @State private var expandedScheduleItemIds = Set<String>()
     @State private var expandedScheduleEventId: String?
     @State private var presentedLinks: HubEventLinksSheetContext?
-    @State private var linkErrorMessage: String?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -92,9 +91,6 @@ struct HubEventDetailView: View {
                 openHubEventLink(link, scheduleItem: nil)
             }
         }
-        .alert("링크를 열 수 없습니다", isPresented: Binding(
-            get: { linkErrorMessage != nil }, set: { if !$0 { linkErrorMessage = nil } }
-        )) { Button("확인") {} } message: { Text(linkErrorMessage ?? "") }
     }
 
     private func expandHighlightedSchedule() {
@@ -306,14 +302,17 @@ struct HubEventDetailView: View {
 
     private func openHubEventLink(_ link: HubEventLink, scheduleItem: HubEventScheduleItem?) {
         guard let destination = url(from: link.url) else { return }
-        do {
+        ReservationExternalLinkPolicy.openFailOpen(
+            openExternal: { openURL(destination) },
+            recordBestEffort: {
             if let draft = try reservationStore.begin(event: event, scheduleItem: scheduleItem, link: link) {
-                ReservationActivityCoordinator.start(for: draft, draftCount: reservationStore.pendingCount)
+                    try ReservationActivityCoordinator.start(for: draft, draftCount: reservationStore.pendingCount)
+                }
+            },
+            onRecordingFailure: {
+                reservationStore.reportBestEffortError()
             }
-            openURL(destination)
-        } catch {
-            linkErrorMessage = error.localizedDescription
-        }
+        )
     }
 }
 

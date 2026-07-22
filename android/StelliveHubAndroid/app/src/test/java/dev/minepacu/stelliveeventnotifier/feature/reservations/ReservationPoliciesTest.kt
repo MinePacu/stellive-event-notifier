@@ -6,7 +6,15 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftSelection
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEventSnapshot
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationExternalLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationKind
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkRoute
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptDecision
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationShareIntentParser
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationTileState
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationTileStatePolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLPolicy
 import java.time.Instant
 import java.util.UUID
@@ -38,9 +46,51 @@ class ReservationPoliciesTest {
     @Test fun shareParserExtractsFirstValidHttpsUrl() {
         assertEquals(
             "https://example.com/complete?id=1",
-            ReservationURLPolicy.firstHttpsUrl("결제 완료 https://example.com/complete?id=1 다음"),
+            ReservationShareIntentParser.firstHttpsURL("결제 완료 https://example.com/complete?id=1 다음"),
         )
-        assertNull(ReservationURLPolicy.firstHttpsUrl("http://example.com/insecure"))
+        assertNull(ReservationShareIntentParser.firstHttpsURL("http://example.com/insecure"))
+    }
+
+    @Test fun externalLinkAlwaysOpensBeforeBestEffortRecording() {
+        val calls = mutableListOf<String>()
+        ReservationExternalLinkPolicy.openFailOpen(
+            openExternal = { calls += "open" },
+            recordBestEffort = { calls += "record"; error("disk unavailable") },
+            onRecordingFailure = { calls += "failure" },
+        )
+        assertEquals(listOf("open", "record", "failure"), calls)
+    }
+
+    @Test fun reservationDeepLinksAreParsedByDedicatedPolicy() {
+        val id = UUID.randomUUID()
+        assertEquals(ReservationDeepLinkRoute.ListRoute, ReservationDeepLinkPolicy.route("stellivehub://reservations"))
+        assertEquals(ReservationDeepLinkRoute.Edit(id), ReservationDeepLinkPolicy.route("stellivehub://reservations/$id/edit"))
+        assertEquals(ReservationDeepLinkRoute.QuickAdd(id), ReservationDeepLinkPolicy.route("stellivehub://reservations/new?sessionId=$id"))
+        assertNull(ReservationDeepLinkPolicy.route("https://example.com/reservations/$id"))
+    }
+
+    @Test fun tilePresentationIsDerivedFromActiveDraftCount() {
+        assertEquals(ReservationTileState.UNAVAILABLE, ReservationTileStatePolicy.presentation(0).state)
+        assertEquals("예약 완료로 추가", ReservationTileStatePolicy.presentation(1).label)
+        assertEquals("예약 3건 확인", ReservationTileStatePolicy.presentation(3).label)
+    }
+
+    @Test fun returnPromptRequiresTenSecondsAndPromptsEachSessionOnce() {
+        val now = Instant.parse("2026-07-22T00:00:20Z")
+        val eligible = draft("eligible", now.plusSeconds(20)).copy(openedAt = now.minusSeconds(10))
+        assertEquals(
+            ReservationReturnPromptDecision.Single(eligible.sessionId),
+            ReservationReturnPromptPolicy.decision(listOf(eligible), setOf(eligible.sessionId), emptySet(), now),
+        )
+        assertEquals(
+            ReservationReturnPromptDecision.None,
+            ReservationReturnPromptPolicy.decision(listOf(eligible), setOf(eligible.sessionId), setOf(eligible.sessionId), now),
+        )
+        val tooSoon = eligible.copy(sessionId = UUID.randomUUID(), openedAt = now.minusSeconds(9))
+        assertEquals(
+            ReservationReturnPromptDecision.None,
+            ReservationReturnPromptPolicy.decision(listOf(tooSoon), setOf(tooSoon.sessionId), emptySet(), now),
+        )
     }
 
     @Test fun draftPolicyRemovesExpiredAndRequiresChoiceForMultiple() {

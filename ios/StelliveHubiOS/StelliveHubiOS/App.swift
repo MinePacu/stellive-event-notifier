@@ -2,7 +2,6 @@ import SwiftUI
 
 @main
 struct StelliveHubApp: App {
-    @Environment(\.scenePhase) private var scenePhase
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store: MockHubStore
     @StateObject private var serverStore: ServerHubStore
@@ -46,9 +45,6 @@ struct StelliveHubApp: App {
                     _ = await serverStore.bootstrap()
                     if let summary = serverStore.announcementsSummary { announcementReadStore.initialize(summaryItems: summary.items) }
                     try? HubCalendarWidgetStore.saveToSharedContainer(store.calendarWidgetSnapshot())
-                }
-                .onChange(of: scenePhase) { phase in
-                    if phase == .active { reservationStore.reload() }
                 }
         }
     }

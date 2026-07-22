@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum ReservationRoute: Hashable {
     case list
@@ -49,6 +50,7 @@ struct ReservationSummaryCard: View {
 
 struct ReservationsView: View {
     @EnvironmentObject private var store: ReservationStore
+    @State private var errorMessage: String?
 
     var body: some View {
         List {
@@ -89,6 +91,28 @@ struct ReservationsView: View {
         }
         .navigationTitle("내 예약·구매")
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            if let deleted = store.lastDeletedRecord {
+                HStack(spacing: 12) {
+                    Text("예약을 삭제했습니다.").font(.subheadline)
+                    Spacer()
+                    Button("실행 취소") {
+                        do { try store.restore(deleted) } catch { errorMessage = error.localizedDescription }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    Button { store.clearDeletedRecord() } label: {
+                        Image(systemName: "xmark").frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("삭제 안내 닫기")
+                }
+                .padding(.leading, 16)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.horizontal, 12)
+            }
+        }
+        .alert("처리할 수 없습니다", isPresented: Binding(
+            get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
+        )) { Button("확인") {} } message: { Text(errorMessage ?? "") }
     }
 }
 
@@ -138,6 +162,9 @@ struct ReservationDetailView: View {
     @EnvironmentObject private var store: ReservationStore
     @EnvironmentObject private var serverStore: ServerHubStore
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
+    @State private var showsDeleteConfirmation = false
+    @State private var errorMessage: String?
 
     var body: some View {
         Group {
@@ -190,7 +217,7 @@ struct ReservationDetailView: View {
                     }
                     Section {
                         NavigationLink("수정", value: ReservationRoute.edit(record.id))
-                        Button("예약 삭제", role: .destructive) { store.delete(id: record.id) }
+                        Button("예약 삭제", role: .destructive) { showsDeleteConfirmation = true }
                     }
                 }
             } else {
@@ -199,6 +226,19 @@ struct ReservationDetailView: View {
         }
         .navigationTitle("예약 상세")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("예약을 삭제할까요?", isPresented: $showsDeleteConfirmation) {
+            Button("삭제", role: .destructive) {
+                do { _ = try store.delete(id: reservationID); dismiss() }
+                catch { errorMessage = error.localizedDescription }
+            }
+            Button("취소", role: .cancel) {}
+        }
+        .alert("삭제할 수 없습니다", isPresented: Binding(
+            get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
+        )) { Button("확인") {} } message: { Text(errorMessage ?? "") }
+        .onChange(of: store.records) { records in
+            if !records.contains(where: { $0.id == reservationID }) { dismiss() }
+        }
     }
 
     private func latestEvent(for record: ReservationRecord) -> HubEvent? {
@@ -219,7 +259,11 @@ struct ReservationEditView: View {
     @EnvironmentObject private var store: ReservationStore
     @Environment(\.dismiss) private var dismiss
     @State private var draft: ReservationRecord?
+    @State private var initialRecord: ReservationRecord?
     @State private var showsDeleteConfirmation = false
+    @State private var showsDiscardConfirmation = false
+    @State private var showsSensitiveConfirmation = false
+    @State private var showsDuplicateConfirmation = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -265,20 +309,49 @@ struct ReservationEditView: View {
         }
         .navigationTitle("예약 수정")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(hasUnsavedChanges)
         .toolbar {
+            if hasUnsavedChanges {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("뒤로") { showsDiscardConfirmation = true }
+                }
+            }
             ToolbarItem(placement: .confirmationAction) { Button("저장", action: save).disabled(draft == nil) }
         }
-        .onAppear { draft = store.record(id: reservationID) }
+        .onAppear {
+            let record = store.record(id: reservationID)
+            draft = record
+            initialRecord = record
+        }
         .alert("예약을 삭제할까요?", isPresented: $showsDeleteConfirmation) {
-            Button("삭제", role: .destructive) { store.delete(id: reservationID); dismiss() }
+            Button("삭제", role: .destructive) {
+                do { _ = try store.delete(id: reservationID); dismiss() }
+                catch { errorMessage = error.localizedDescription }
+            }
             Button("취소", role: .cancel) {}
         }
+        .alert("변경사항을 버릴까요?", isPresented: $showsDiscardConfirmation) {
+            Button("버리기", role: .destructive) { dismiss() }
+            Button("계속 수정", role: .cancel) {}
+        }
+        .alert("민감한 링크일 수 있습니다", isPresented: $showsSensitiveConfirmation) {
+            Button("로컬에 저장") { save(allowsSensitiveURL: true, allowsDuplicateURL: false) }
+            Button("취소", role: .cancel) {}
+        } message: { Text("인증 정보가 포함될 수 있습니다. 이 기기에만 저장하며 백업 대상에서는 제외합니다.") }
+        .alert("같은 링크가 이미 있습니다", isPresented: $showsDuplicateConfirmation) {
+            Button("그래도 저장") { save(allowsSensitiveURL: true, allowsDuplicateURL: true) }
+            Button("취소", role: .cancel) {}
+        } message: { Text("다른 예약에 같은 상세 링크가 연결되어 있습니다.") }
         .alert("저장할 수 없습니다", isPresented: Binding(
             get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
         )) { Button("확인") {} } message: { Text(errorMessage ?? "") }
     }
 
-    private func save() {
+    private var hasUnsavedChanges: Bool { draft != nil && draft != initialRecord }
+
+    private func save() { save(allowsSensitiveURL: false, allowsDuplicateURL: false) }
+
+    private func save(allowsSensitiveURL: Bool, allowsDuplicateURL: Bool) {
         guard var draft else { return }
         for value in [draft.reservationDetailURL, draft.providerHistoryURL] {
             if ReservationTextPolicy.nonEmpty(value) != nil, ReservationURLPolicy.validatedURL(value) == nil {
@@ -286,13 +359,30 @@ struct ReservationEditView: View {
                 return
             }
         }
+        if let quantity = draft.quantity, quantity <= 0 {
+            errorMessage = "수량은 1 이상으로 입력해 주세요."
+            return
+        }
+        if !allowsSensitiveURL && [draft.reservationDetailURL, draft.providerHistoryURL].contains(where: ReservationURLPolicy.containsSensitiveQuery) {
+            showsSensitiveConfirmation = true
+            return
+        }
+        if !allowsDuplicateURL, store.duplicateDetailURL(draft.reservationDetailURL, excluding: draft.id) != nil {
+            showsDuplicateConfirmation = true
+            return
+        }
         draft.displayTitleOverride = ReservationTextPolicy.nonEmpty(draft.displayTitleOverride)
         draft.venueOverride = ReservationTextPolicy.nonEmpty(draft.venueOverride)
         draft.optionText = ReservationTextPolicy.nonEmpty(draft.optionText)
         draft.referenceNumber = ReservationTextPolicy.nonEmpty(draft.referenceNumber)
         draft.note = ReservationTextPolicy.nonEmpty(draft.note)
-        store.update(draft)
-        dismiss()
+        do {
+            try store.update(draft)
+            initialRecord = draft
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func optionalText(_ binding: Binding<String?>) -> Binding<String> {
@@ -313,6 +403,7 @@ struct ReservationQuickAddView: View {
     @State private var detailURL = ""
     @State private var errorMessage: String?
     @State private var requestsSensitiveConfirmation = false
+    @State private var requestsDuplicateConfirmation = false
 
     var body: some View {
         Form {
@@ -337,6 +428,15 @@ struct ReservationQuickAddView: View {
                 Section("예약 상세 링크") {
                     TextField("https://", text: $detailURL)
                         .textInputAutocapitalization(.never).keyboardType(.URL)
+                    PasteButton(payloadType: String.self) { values in
+                        guard let pastedURL = values.lazy.compactMap({ ReservationURLPolicy.firstSharedHTTPSURL(in: $0) }).first else {
+                            errorMessage = "클립보드에서 유효한 HTTPS 링크를 찾지 못했습니다."
+                            return
+                        }
+                        detailURL = pastedURL.absoluteString
+                    }
+                    .labelStyle(.titleAndIcon)
+                    .accessibilityLabel("클립보드에서 예약 상세 링크 붙여넣기")
                     Text("결제 완료 또는 개별 예약 상세 페이지의 링크를 선택적으로 저장할 수 있습니다.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -354,19 +454,29 @@ struct ReservationQuickAddView: View {
             detailURL = initialURL ?? ""
         }
         .alert("민감한 링크일 수 있습니다", isPresented: $requestsSensitiveConfirmation) {
-            Button("로컬에 저장") { confirm(allowsSensitiveURL: true) }
+            Button("로컬에 저장") { confirm(allowsSensitiveURL: true, allowsDuplicateURL: false) }
             Button("취소", role: .cancel) {}
         } message: {
             Text("인증 정보가 포함된 링크일 수 있습니다. 이 기기에만 저장하며 백업 대상에서는 제외합니다.")
+        }
+        .alert("같은 링크가 이미 있습니다", isPresented: $requestsDuplicateConfirmation) {
+            Button("그래도 저장") { confirm(allowsSensitiveURL: true, allowsDuplicateURL: true) }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("다른 예약에 같은 상세 링크가 연결되어 있습니다.")
         }
         .alert("추가할 수 없습니다", isPresented: Binding(
             get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
         )) { Button("확인") {} } message: { Text(errorMessage ?? "") }
     }
 
-    private func confirm(allowsSensitiveURL: Bool) {
+    private func confirm(allowsSensitiveURL: Bool, allowsDuplicateURL: Bool = false) {
         guard let id = selectedSessionID else {
             errorMessage = "예약 대상을 선택해 주세요."
+            return
+        }
+        if !allowsDuplicateURL, store.duplicateDetailURL(detailURL) != nil {
+            requestsDuplicateConfirmation = true
             return
         }
         do {

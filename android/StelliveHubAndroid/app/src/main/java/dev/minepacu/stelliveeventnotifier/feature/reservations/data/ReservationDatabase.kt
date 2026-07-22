@@ -19,6 +19,9 @@ interface ReservationDao {
     @Query("SELECT * FROM reservation_records WHERE sourceSessionId = :sessionId LIMIT 1")
     suspend fun getBySourceSession(sessionId: String): ReservationRecordEntity?
 
+    @Query("SELECT COUNT(*) FROM reservation_records WHERE reservationDetailUrl = :url AND id != :excludingId")
+    suspend fun countByDetailUrl(url: String, excludingId: String): Int
+
     @Upsert suspend fun upsert(record: ReservationRecordEntity)
     @Delete suspend fun delete(record: ReservationRecordEntity)
 }

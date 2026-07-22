@@ -1,6 +1,8 @@
 package dev.minepacu.stelliveeventnotifier.feature.reservations.system
 
 import android.app.AlertDialog
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup
@@ -82,6 +84,11 @@ class ReservationQuickAddActivity : AppCompatActivity() {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
         }
         content.addView(detailUrlInput, matchWidth())
+        content.addView(Button(this).apply {
+            text = "클립보드에서 HTTPS 링크 붙여넣기"
+            isAllCaps = false
+            setOnClickListener { pasteFirstHttpsURL() }
+        }, matchWidth())
         content.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
@@ -104,6 +111,22 @@ class ReservationQuickAddActivity : AppCompatActivity() {
             detailUrlInput.error = validation.error
             return
         }
+        val normalizedUrl = validation.normalizedUrl ?: return
+        lifecycleScope.launch {
+            if (repository.hasReservationDetailUrl(normalizedUrl)) {
+                AlertDialog.Builder(this@ReservationQuickAddActivity)
+                    .setTitle("이미 저장된 링크")
+                    .setMessage("같은 예약 상세 링크가 저장되어 있습니다. 그래도 추가할까요?")
+                    .setNegativeButton("취소", null)
+                    .setPositiveButton("그래도 추가") { _, _ -> confirmAfterSensitivity(validation) }
+                    .show()
+            } else {
+                confirmAfterSensitivity(validation)
+            }
+        }
+    }
+
+    private fun confirmAfterSensitivity(validation: dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLValidation) {
         if (validation.isSensitive) {
             AlertDialog.Builder(this)
                 .setTitle("민감할 수 있는 링크")
@@ -114,6 +137,23 @@ class ReservationQuickAddActivity : AppCompatActivity() {
         } else {
             confirm(validation.normalizedUrl, allowSensitive = false)
         }
+    }
+
+    private fun pasteFirstHttpsURL() {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = clipboard.primaryClip
+        val url = (0 until (clip?.itemCount ?: 0))
+            .asSequence()
+            .mapNotNull { index -> clip?.getItemAt(index)?.coerceToText(this)?.toString() }
+            .mapNotNull(ReservationURLPolicy::firstHttpsUrl)
+            .firstOrNull()
+        if (url == null) {
+            detailUrlInput.error = "클립보드에서 HTTPS 링크를 찾지 못했습니다."
+            return
+        }
+        detailUrlInput.setText(url)
+        detailUrlInput.setSelection(url.length)
+        detailUrlInput.error = null
     }
 
     private fun confirm(detailUrl: String?, allowSensitive: Boolean) {

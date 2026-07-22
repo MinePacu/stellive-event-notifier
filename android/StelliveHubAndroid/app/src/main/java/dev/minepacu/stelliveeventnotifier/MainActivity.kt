@@ -2,6 +2,8 @@ package dev.minepacu.stelliveeventnotifier
 
 import android.Manifest
 import android.app.AlertDialog
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -65,9 +67,11 @@ import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.WindowMetricsCalculator
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.android.material.snackbar.Snackbar
 import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.AndroidEntryPoint
 import dev.minepacu.stelliveeventnotifier.core.device.DeviceIdStore
@@ -144,8 +148,10 @@ import javax.inject.Inject
 import java.net.URL
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 import kotlin.concurrent.thread
@@ -172,9 +178,15 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.data.RoomReservat
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationActionPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraft
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDisplayPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkRoute
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEventSnapshot
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationExternalLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationLinkSource
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationRecord
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptDecision
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationStatus
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationQuickAddActivity
@@ -223,6 +235,11 @@ val remainingCount: Int,
 private data class ScrollablePane(
     val scrollView: NestedScrollView,
     val content: LinearLayout,
+)
+
+private data class ReservationDateTimeInput(
+    val field: EditText,
+    var value: Instant?,
 )
 
 private data class SongPanes(val filter: ScrollablePane, val list: ScrollablePane)
@@ -342,6 +359,12 @@ private val reservationDateFormatter = DateTimeFormatter.ofPattern("yyyy. M. d. 
 private var reservationDrafts: List<ReservationDraft> = emptyList()
 private var reservationRecords: List<ReservationRecord> = emptyList()
 private var selectedReservationId: UUID? = null
+private var reservationEditHasUnsavedChanges: (() -> Boolean)? = null
+private val externallyOpenedReservationSessionIds = mutableSetOf<UUID>()
+private val promptedReservationSessionIds = mutableSetOf<UUID>()
+private var reservationExternalFlowActive = false
+private var reservationExternalFlowLeftApp = false
+private var pendingReservationRecordingFailure = false
 private var expandedHubEventScheduleEventId: String? = null
 private val expandedHubEventScheduleItemIds = mutableSetOf<String>()
 private var selectedAnnouncementId: String? = null
@@ -458,9 +481,13 @@ private var notificationPermissionRequested = false
     override fun onResume() {
         super.onResume()
         scheduleLiveClockRefresh()
+        if (reservationExternalFlowLeftApp) {
+            liveClockHandler.postDelayed(::evaluateReservationReturnPrompt, 350L)
+        }
     }
 
     override fun onPause() {
+        if (reservationExternalFlowActive) reservationExternalFlowLeftApp = true
         liveClockHandler.removeCallbacks(liveClockTicker)
         super.onPause()
     }
@@ -656,19 +683,32 @@ private var notificationPermissionRequested = false
 
     private fun handleAppDeepLink(intent: Intent?): Boolean {
         val deepLink = intent?.dataString ?: intent?.getStringExtra("appDeepLink")
-        val reservationUri = deepLink?.let { runCatching { Uri.parse(it) }.getOrNull() }
-            ?.takeIf { it.scheme == "stellivehub" && it.host == "reservations" }
-        if (reservationUri != null) {
-            val segments = reservationUri.pathSegments
-            if (segments.firstOrNull() == "new") {
+        val reservationRoute = ReservationDeepLinkPolicy.route(deepLink)
+        when (val route = reservationRoute) {
+            ReservationDeepLinkRoute.ListRoute -> {
+                selectedReservationId = null
+                navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
+                navigationHistory.select(HubScreen.RESERVATIONS)
+            }
+            is ReservationDeepLinkRoute.QuickAdd -> {
                 startActivity(Intent(this, ReservationQuickAddActivity::class.java).apply {
-                    reservationUri.getQueryParameter("sessionId")?.let { putExtra(ReservationQuickAddActivity.EXTRA_SESSION_ID, it) }
+                    route.sessionId?.let { putExtra(ReservationQuickAddActivity.EXTRA_SESSION_ID, it.toString()) }
                 })
                 return true
             }
-            selectedReservationId = segments.firstOrNull()?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-            navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
-            navigationHistory.select(if (selectedReservationId == null) HubScreen.RESERVATIONS else if (segments.getOrNull(1) == "edit") HubScreen.RESERVATION_EDIT else HubScreen.RESERVATION_DETAIL)
+            is ReservationDeepLinkRoute.Detail -> {
+                selectedReservationId = route.reservationId
+                navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
+                navigationHistory.select(HubScreen.RESERVATION_DETAIL)
+            }
+            is ReservationDeepLinkRoute.Edit -> {
+                selectedReservationId = route.reservationId
+                navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
+                navigationHistory.select(HubScreen.RESERVATION_EDIT)
+            }
+            null -> Unit
+        }
+        if (reservationRoute != null) {
             replaceScreenWithoutAnimation(navigationHistory.currentScreen)
             latestNavigationDestination = navigationHistory.currentScreen
             latestRootDestination = HubScreen.GOODS_EVENTS
@@ -788,6 +828,7 @@ private var notificationPermissionRequested = false
     }
 
     private fun popScreen(): Boolean {
+        if (confirmReservationEditDiscardIfNeeded { popScreen() }) return true
         if (screenTransitionController.isTransitionRunning) {
             screenTransitionController.runWhenIdle("deferred:pop", ::popScreenNow)
             return true
@@ -811,11 +852,30 @@ private var notificationPermissionRequested = false
     }
 
     private fun handleSystemBackPressed() {
+        if (confirmReservationEditDiscardIfNeeded(::handleSystemBackPressed)) return
         if (screenTransitionController.isTransitionRunning) {
             screenTransitionController.runWhenIdle("deferred:system_back", ::handleSystemBackPressedNow)
             return
         }
         handleSystemBackPressedNow()
+    }
+
+    private fun confirmReservationEditDiscardIfNeeded(onDiscard: () -> Unit): Boolean {
+        if (navigationHistory.currentScreen != HubScreen.RESERVATION_EDIT ||
+            reservationEditHasUnsavedChanges?.invoke() != true
+        ) {
+            return false
+        }
+        AlertDialog.Builder(this)
+            .setTitle("수정 내용을 버릴까요?")
+            .setMessage("저장하지 않은 예약 변경 내용이 있습니다.")
+            .setNegativeButton("계속 수정", null)
+            .setPositiveButton("변경사항 버리기") { _, _ ->
+                reservationEditHasUnsavedChanges = null
+                onDiscard()
+            }
+            .show()
+        return true
     }
 
     private fun handleSystemBackPressedNow() {
@@ -906,6 +966,7 @@ private var notificationPermissionRequested = false
     }
 
     private fun renderScreen(screen: HubScreen) {
+        if (screen != HubScreen.RESERVATION_EDIT) reservationEditHasUnsavedChanges = null
         if (screen != HubScreen.SONG_SEARCH) {
             pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
             pendingSongSearchRender = null
@@ -1859,11 +1920,9 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 })
             }
         }
-        val upcoming = reservationRecords.filter { it.status == ReservationStatus.CONFIRMED && (it.effectiveStartsAt?.isAfter(Instant.now()) ?: true) }
-            .sortedBy { it.effectiveStartsAt ?: Instant.MAX }
-        val past = reservationRecords.filterNot(upcoming::contains).sortedByDescending { it.effectiveStartsAt ?: it.updatedAt }
-        addReservationRecordSection("다가오는 예약", upcoming)
-        addReservationRecordSection("지난 내역", past)
+        val sections = ReservationListPolicy.sections(reservationRecords)
+        addReservationRecordSection("다가오는 예약", sections.upcoming)
+        addReservationRecordSection("지난 내역", sections.past)
         if (activeDrafts.isEmpty() && reservationRecords.isEmpty()) {
             binding.contentList.addView(compactEventCard("저장된 예약 없음", "굿즈·행사에서 티켓, 구매 또는 예약 링크를 열면 진행 중인 항목이 여기에 표시됩니다.", listOf("기기 로컬 저장")))
         }
@@ -1933,7 +1992,17 @@ private fun startScreen(screenId: String, title: String, role: String) {
         binding.contentList.addView(detailActionButton("예약 삭제", false) {
             AlertDialog.Builder(this).setTitle("예약 삭제").setMessage("이 기기에서 예약 기록을 삭제할까요?")
                 .setNegativeButton("취소", null)
-                .setPositiveButton("삭제") { _, _ -> lifecycleScope.launch { reservationRepository.delete(record); popScreen() } }
+                .setPositiveButton("삭제") { _, _ ->
+                    lifecycleScope.launch {
+                        reservationRepository.delete(record)
+                        popScreen()
+                        Snackbar.make(binding.root, "예약 기록을 삭제했습니다.", Snackbar.LENGTH_LONG)
+                            .setAction("실행 취소") {
+                                lifecycleScope.launch { reservationRepository.update(record) }
+                            }
+                            .show()
+                    }
+                }
                 .show()
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(10) })
     }
@@ -1943,13 +2012,15 @@ private fun startScreen(screenId: String, title: String, role: String) {
         startScreen("reservation_edit", "예약 수정", "민감할 수 있는 링크와 예약번호는 서버나 로그로 전송하지 않습니다.")
         if (record == null) return
         val title = reservationEditField("표시 제목", record.displayTitleOverride.orEmpty())
-        val startsAt = reservationEditField("시작 시각 (ISO-8601)", record.startsAtOverride?.toString().orEmpty())
-        val endsAt = reservationEditField("종료 시각 (ISO-8601)", record.endsAtOverride?.toString().orEmpty())
+        val startsAt = reservationDateTimeInput("시작 날짜와 시각", record.startsAtOverride)
+        val endsAt = reservationDateTimeInput("종료 날짜와 시각", record.endsAtOverride)
         val venue = reservationEditField("장소", record.venueOverride.orEmpty())
         val detailUrl = reservationEditField("예약 상세 URL", record.reservationDetailUrl.orEmpty())
         val historyUrl = reservationEditField("제공사 내역 URL", record.providerHistoryUrl.orEmpty())
         val option = reservationEditField("좌석 또는 상품 옵션", record.optionText.orEmpty())
-        val quantity = reservationEditField("수량", record.quantity?.toString().orEmpty())
+        val quantity = reservationEditField("수량", record.quantity?.toString().orEmpty()).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        }
         val reference = reservationEditField("예약번호", record.referenceNumber.orEmpty())
         val note = reservationEditField("메모", record.note.orEmpty(), multiline = true)
         var status = record.status
@@ -1961,6 +2032,19 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 show()
             }
         }
+        reservationEditHasUnsavedChanges = {
+            status != record.status ||
+                title.text.toString().trim().takeIf(String::isNotEmpty) != record.displayTitleOverride ||
+                startsAt.value != record.startsAtOverride ||
+                endsAt.value != record.endsAtOverride ||
+                venue.text.toString().trim().takeIf(String::isNotEmpty) != record.venueOverride ||
+                detailUrl.text.toString().trim().takeIf(String::isNotEmpty) != record.reservationDetailUrl ||
+                historyUrl.text.toString().trim().takeIf(String::isNotEmpty) != record.providerHistoryUrl ||
+                option.text.toString().trim().takeIf(String::isNotEmpty) != record.optionText ||
+                quantity.text.toString().trim().takeIf(String::isNotEmpty) != record.quantity?.toString() ||
+                reference.text.toString().trim().takeIf(String::isNotEmpty) != record.referenceNumber ||
+                note.text.toString().trim().takeIf(String::isNotEmpty) != record.note
+        }
         binding.contentList.addView(statusButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { bottomMargin = dp(10) })
         binding.contentList.addView(detailActionButton("저장", true) {
             val detailValidation = detailUrl.text.toString().takeIf(String::isNotBlank)?.let(ReservationURLPolicy::validate)
@@ -1969,30 +2053,104 @@ private fun startScreen(screenId: String, title: String, role: String) {
                 Toast.makeText(this, "HTTPS 링크를 확인해 주세요.", Toast.LENGTH_SHORT).show()
                 return@detailActionButton
             }
-            val save = {
+            val quantityText = quantity.text.toString().trim()
+            val parsedQuantity = quantityText.takeIf(String::isNotEmpty)?.toIntOrNull()
+            if (quantityText.isNotEmpty() && (parsedQuantity == null || parsedQuantity <= 0)) {
+                quantity.error = "수량은 1 이상의 숫자로 입력해 주세요."
+                quantity.requestFocus()
+                return@detailActionButton
+            }
+            val selectedStart = startsAt.value
+            val selectedEnd = endsAt.value
+            if (selectedStart != null && selectedEnd != null && !selectedEnd.isAfter(selectedStart)) {
+                Toast.makeText(this, "종료 시각은 시작 시각보다 뒤여야 합니다.", Toast.LENGTH_SHORT).show()
+                return@detailActionButton
+            }
+            val save: () -> Unit = {
                 lifecycleScope.launch {
-                    reservationRepository.update(record.copy(
-                        status = status,
-                        displayTitleOverride = title.text.toString().trim().takeIf(String::isNotEmpty),
-                        startsAtOverride = startsAt.text.toString().trim().takeIf(String::isNotEmpty)?.let { runCatching { Instant.parse(it) }.getOrNull() },
-                        endsAtOverride = endsAt.text.toString().trim().takeIf(String::isNotEmpty)?.let { runCatching { Instant.parse(it) }.getOrNull() },
-                        venueOverride = venue.text.toString().trim().takeIf(String::isNotEmpty),
-                        reservationDetailUrl = detailValidation?.normalizedUrl,
-                        providerHistoryUrl = historyValidation?.normalizedUrl,
-                        optionText = option.text.toString().trim().takeIf(String::isNotEmpty),
-                        quantity = quantity.text.toString().toIntOrNull()?.takeIf { it > 0 },
-                        referenceNumber = reference.text.toString().trim().takeIf(String::isNotEmpty),
-                        note = note.text.toString().trim().takeIf(String::isNotEmpty),
-                        updatedAt = Instant.now(),
-                    ))
-                    popScreen()
+                    runCatching {
+                        reservationRepository.update(record.copy(
+                            status = status,
+                            displayTitleOverride = title.text.toString().trim().takeIf(String::isNotEmpty),
+                            startsAtOverride = startsAt.value,
+                            endsAtOverride = endsAt.value,
+                            venueOverride = venue.text.toString().trim().takeIf(String::isNotEmpty),
+                            reservationDetailUrl = detailValidation?.normalizedUrl,
+                            providerHistoryUrl = historyValidation?.normalizedUrl,
+                            optionText = option.text.toString().trim().takeIf(String::isNotEmpty),
+                            quantity = parsedQuantity,
+                            referenceNumber = reference.text.toString().trim().takeIf(String::isNotEmpty),
+                            note = note.text.toString().trim().takeIf(String::isNotEmpty),
+                            updatedAt = Instant.now(),
+                        ))
+                    }.onSuccess {
+                        reservationEditHasUnsavedChanges = null
+                        popScreen()
+                    }.onFailure {
+                        Toast.makeText(this@MainActivity, "예약 변경 내용을 저장하지 못했습니다.", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
-            if (detailValidation?.isSensitive == true || historyValidation?.isSensitive == true) {
-                AlertDialog.Builder(this).setTitle("민감할 수 있는 링크").setMessage("인증 정보가 포함될 수 있습니다. 이 기기에만 저장할까요?")
-                    .setNegativeButton("취소", null).setPositiveButton("로컬 저장") { _, _ -> save() }.show()
-            } else save()
+            val confirmSensitiveAndSave = {
+                if (detailValidation?.isSensitive == true || historyValidation?.isSensitive == true) {
+                    AlertDialog.Builder(this).setTitle("민감할 수 있는 링크").setMessage("인증 정보가 포함될 수 있습니다. 이 기기에만 저장할까요?")
+                        .setNegativeButton("취소", null).setPositiveButton("로컬 저장") { _, _ -> save() }.show()
+                } else save()
+            }
+            lifecycleScope.launch {
+                val detailURL = detailValidation?.normalizedUrl
+                val duplicate = detailURL != null &&
+                    detailURL != record.reservationDetailUrl &&
+                    reservationRepository.hasReservationDetailUrl(detailURL, excludingId = record.id)
+                if (duplicate) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("이미 저장된 링크")
+                        .setMessage("같은 예약 상세 링크가 다른 기록에 있습니다. 그래도 저장할까요?")
+                        .setNegativeButton("취소", null)
+                        .setPositiveButton("그래도 저장") { _, _ -> confirmSensitiveAndSave() }
+                        .show()
+                } else {
+                    confirmSensitiveAndSave()
+                }
+            }
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(12) })
+    }
+
+    private fun reservationDateTimeInput(label: String, value: Instant?): ReservationDateTimeInput {
+        val field = EditText(this).apply {
+            hint = label
+            isFocusable = false
+            isClickable = true
+            contentDescription = "$label 선택"
+            setText(value?.let(reservationDateFormatter::format).orEmpty())
+        }
+        val input = ReservationDateTimeInput(field, value)
+        field.setOnClickListener { showReservationDateTimePicker(input) }
+        binding.contentList.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(field, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(MaterialButton(context).apply {
+                text = "지우기"
+                contentDescription = "$label 지우기"
+                setOnClickListener {
+                    input.value = null
+                    field.setText("")
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) })
+        return input
+    }
+
+    private fun showReservationDateTimePicker(input: ReservationDateTimeInput) {
+        val zone = ZoneId.of("Asia/Seoul")
+        val initial = input.value?.atZone(zone) ?: ZonedDateTime.now(zone)
+        DatePickerDialog(this, { _, year, month, day ->
+            val selectedDate = LocalDate.of(year, month + 1, day)
+            TimePickerDialog(this, { _, hour, minute ->
+                input.value = ZonedDateTime.of(selectedDate, LocalTime.of(hour, minute), zone).toInstant()
+                input.field.setText(input.value?.let(reservationDateFormatter::format))
+            }, initial.hour, initial.minute, true).show()
+        }, initial.year, initial.monthValue - 1, initial.dayOfMonth).show()
     }
 
     private fun reservationEditField(hint: String, value: String, multiline: Boolean = false): EditText = EditText(this).apply {
@@ -2020,28 +2178,91 @@ private fun startScreen(screenId: String, title: String, role: String) {
             openExternalUrl(link.url)
             return
         }
-        lifecycleScope.launch {
-            val snapshot = ReservationEventSnapshot(
-                title = event.title,
-                category = event.category.name,
-                startsAt = scheduleItem?.startsAt ?: event.startsAt,
-                endsAt = scheduleItem?.endsAt ?: event.endsAt,
-                venueName = event.venueName,
-                venueAddress = event.venueAddress,
-                sourceLabel = event.sourceLabel,
-                imageUrl = event.image?.url?.takeIf { HubEventImagePolicy.canDisplay(event.image) },
-            )
-            runCatching {
-                reservationRepository.begin(event.id, scheduleItem?.id, kind, snapshot, link.url)
-            }.onSuccess {
-                ReservationTileService.requestRefresh(this@MainActivity)
-                ReservationSystemShortcutCoordinator.promptOnce(this@MainActivity) {
-                    openExternalUrl(link.url)
+        reservationExternalFlowActive = true
+        ReservationExternalLinkPolicy.openFailOpen(
+            openExternal = { openExternalUrl(link.url) },
+            recordBestEffort = {
+                lifecycleScope.launch {
+                    val snapshot = ReservationEventSnapshot(
+                        title = event.title,
+                        category = event.category.name,
+                        startsAt = scheduleItem?.startsAt ?: event.startsAt,
+                        endsAt = scheduleItem?.endsAt ?: event.endsAt,
+                        venueName = event.venueName,
+                        venueAddress = event.venueAddress,
+                        sourceLabel = event.sourceLabel,
+                        imageUrl = event.image?.url?.takeIf { HubEventImagePolicy.canDisplay(event.image) },
+                    )
+                    runCatching {
+                        reservationRepository.begin(event.id, scheduleItem?.id, kind, snapshot, link.url)
+                    }.onSuccess { draft ->
+                        externallyOpenedReservationSessionIds += draft.sessionId
+                        ReservationTileService.requestRefresh(this@MainActivity)
+                        if (reservationExternalFlowLeftApp) {
+                            liveClockHandler.postDelayed(::evaluateReservationReturnPrompt, 350L)
+                        }
+                    }.onFailure {
+                        pendingReservationRecordingFailure = true
+                        if (reservationExternalFlowLeftApp) evaluateReservationReturnPrompt()
+                    }
                 }
-            }.onFailure {
-                Toast.makeText(this@MainActivity, "예약 진행 정보를 저장하지 못했습니다.", Toast.LENGTH_SHORT).show()
+            },
+            onRecordingFailure = { pendingReservationRecordingFailure = true },
+        )
+    }
+
+    private fun evaluateReservationReturnPrompt() {
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        if (pendingReservationRecordingFailure) {
+            pendingReservationRecordingFailure = false
+            Snackbar.make(
+                binding.root,
+                "외부 페이지는 열었지만 예약 진행 정보를 이 기기에 저장하지 못했습니다.",
+                Snackbar.LENGTH_LONG,
+            ).setAction("확인") {}.show()
+        }
+        when (val decision = ReservationReturnPromptPolicy.decision(
+            drafts = reservationDrafts,
+            externallyOpenedSessionIds = externallyOpenedReservationSessionIds,
+            promptedSessionIds = promptedReservationSessionIds,
+        )) {
+            ReservationReturnPromptDecision.None -> Unit
+            is ReservationReturnPromptDecision.Single -> {
+                promptedReservationSessionIds += decision.sessionId
+                showReservationReturnSnackbar(
+                    message = "예매·구매를 마치셨나요? 완료 내역을 직접 추가할 수 있습니다.",
+                    primaryLabel = "완료 내역 추가",
+                ) {
+                    startActivity(Intent(this, ReservationQuickAddActivity::class.java).putExtra(
+                        ReservationQuickAddActivity.EXTRA_SESSION_ID,
+                        decision.sessionId.toString(),
+                    ))
+                }
+            }
+            is ReservationReturnPromptDecision.Multiple -> {
+                promptedReservationSessionIds += decision.sessionIds
+                showReservationReturnSnackbar(
+                    message = "확인이 필요한 예약이 여러 건 있습니다.",
+                    primaryLabel = "목록 보기",
+                ) { pushScreen(HubScreen.RESERVATIONS) }
             }
         }
+    }
+
+    private fun showReservationReturnSnackbar(message: String, primaryLabel: String, onPrimary: () -> Unit) {
+        val snackbar = Snackbar.make(binding.root, message, Snackbar.LENGTH_INDEFINITE)
+            .setAction("아직 아니에요") {}
+        val content = snackbar.view.findViewById<TextView>(com.google.android.material.R.id.snackbar_text).parent as? ViewGroup
+        content?.addView(MaterialButton(this).apply {
+            text = primaryLabel
+            isAllCaps = false
+            contentDescription = primaryLabel
+            setOnClickListener {
+                snackbar.dismiss()
+                onPrimary()
+            }
+        }, (content.childCount - 1).coerceAtLeast(0))
+        snackbar.show()
     }
 
     private fun onGoodsEventSelected(eventId: String) {

@@ -4,13 +4,13 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
-import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationShareIntentParser
 
 class ReservationShareActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val shared = intent.getStringExtra(Intent.EXTRA_TEXT)
-        val url = ReservationURLPolicy.firstHttpsUrl(shared)
+        val url = ReservationShareIntentParser.firstHttpsURL(shared)
         if (url == null) {
             Toast.makeText(this, "공유 내용에서 HTTPS 링크를 찾지 못했습니다.", Toast.LENGTH_SHORT).show()
             finish()
