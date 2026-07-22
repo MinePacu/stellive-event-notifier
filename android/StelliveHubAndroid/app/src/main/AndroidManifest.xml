@@ -6,6 +6,8 @@
         android:name=".StelliveHubApplication"
         android:usesCleartextTraffic="true"
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@drawable/ic_launcher_placeholder"
         android:label="@string/app_name"
         android:supportsRtl="true"
@@ -29,11 +31,36 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".feature.reservations.system.ReservationQuickAddActivity"
+            android:exported="false"
+            android:theme="@style/Theme.StelliveHub" />
+        <activity
+            android:name=".feature.reservations.system.ReservationShareActivity"
+            android:exported="true"
+            android:theme="@style/Theme.StelliveHub">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".core.notification.StelliveFirebaseMessagingService"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".feature.reservations.system.ReservationTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_reservation_ticket"
+            android:label="예약 완료로 추가"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
         <receiver

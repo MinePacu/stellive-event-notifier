@@ -1,6 +1,7 @@
 package dev.minepacu.stelliveeventnotifier
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -139,10 +140,14 @@ import dev.minepacu.stelliveeventnotifier.ui.components.HubSingleChoiceOption
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 import java.net.URL
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.UUID
 import kotlin.concurrent.thread
 import dev.minepacu.stelliveeventnotifier.feature.home.SettingsHubRow
 import dev.minepacu.stelliveeventnotifier.feature.home.StatusSummaryItem
@@ -163,6 +168,18 @@ import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenNavigationMotion
 import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenTransitionController
 import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenTransitionPolicy
 import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenTransitionReason
+import dev.minepacu.stelliveeventnotifier.feature.reservations.data.RoomReservationRepository
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationActionPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraft
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDisplayPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEventSnapshot
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationLinkSource
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationRecord
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationStatus
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationQuickAddActivity
+import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationTileService
+import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationSystemShortcutCoordinator
 
 private const val EXIT_BACK_PRESS_INTERVAL_MS = 2_000L
 private const val NAVIGATION_RAIL_WIDTH_DP = 80
@@ -178,6 +195,7 @@ private const val CONTENT_SCROLL_Y_STATE = "content_scroll_y"
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
+@Inject lateinit var reservationRepository: RoomReservationRepository
 private data class LiveClockTextView(
     val startedAt: Instant,
     val textView: TextView,
@@ -320,6 +338,10 @@ private var homeRecentSongs: List<SongCatalogItem>? = null
 private var isLoadingHomeRecentSongs = false
 private var selectedHubEventId: String? = null
 private var selectedHubEventScheduleItemId: String? = null
+private val reservationDateFormatter = DateTimeFormatter.ofPattern("yyyy. M. d. HH:mm").withZone(ZoneId.of("Asia/Seoul"))
+private var reservationDrafts: List<ReservationDraft> = emptyList()
+private var reservationRecords: List<ReservationRecord> = emptyList()
+private var selectedReservationId: UUID? = null
 private var expandedHubEventScheduleEventId: String? = null
 private val expandedHubEventScheduleItemIds = mutableSetOf<String>()
 private var selectedAnnouncementId: String? = null
@@ -361,6 +383,28 @@ private var notificationPermissionRequested = false
         songFavoritesRepository = DataStoreSongFavoritesRepository(this)
         songDiscoveryRepository = DataStoreSongDiscoveryRepository(this)
         announcementReadStore = AnnouncementReadStore(this)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                reservationRepository.drafts.collect { drafts ->
+                    reservationDrafts = drafts
+                    ReservationTileService.requestRefresh(this@MainActivity)
+                    updateNavigationChrome()
+                    if (navigationHistory.currentScreen in setOf(HubScreen.GOODS_EVENTS, HubScreen.RESERVATIONS)) {
+                        refreshScreenWhenIdle(navigationHistory.currentScreen) { renderScreen(navigationHistory.currentScreen) }
+                    }
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                reservationRepository.records.collect { records ->
+                    reservationRecords = records
+                    if (navigationHistory.currentScreen in setOf(HubScreen.GOODS_EVENTS, HubScreen.RESERVATIONS, HubScreen.RESERVATION_DETAIL)) {
+                        refreshScreenWhenIdle(navigationHistory.currentScreen) { renderScreen(navigationHistory.currentScreen) }
+                    }
+                }
+            }
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 announcementReadStore.readKeys.collect { keys ->
@@ -612,6 +656,24 @@ private var notificationPermissionRequested = false
 
     private fun handleAppDeepLink(intent: Intent?): Boolean {
         val deepLink = intent?.dataString ?: intent?.getStringExtra("appDeepLink")
+        val reservationUri = deepLink?.let { runCatching { Uri.parse(it) }.getOrNull() }
+            ?.takeIf { it.scheme == "stellivehub" && it.host == "reservations" }
+        if (reservationUri != null) {
+            val segments = reservationUri.pathSegments
+            if (segments.firstOrNull() == "new") {
+                startActivity(Intent(this, ReservationQuickAddActivity::class.java).apply {
+                    reservationUri.getQueryParameter("sessionId")?.let { putExtra(ReservationQuickAddActivity.EXTRA_SESSION_ID, it) }
+                })
+                return true
+            }
+            selectedReservationId = segments.firstOrNull()?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+            navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
+            navigationHistory.select(if (selectedReservationId == null) HubScreen.RESERVATIONS else if (segments.getOrNull(1) == "edit") HubScreen.RESERVATION_EDIT else HubScreen.RESERVATION_DETAIL)
+            replaceScreenWithoutAnimation(navigationHistory.currentScreen)
+            latestNavigationDestination = navigationHistory.currentScreen
+            latestRootDestination = HubScreen.GOODS_EVENTS
+            return true
+        }
         val announcementId = AnnouncementDeepLinkPolicy.idFromAppDeepLink(deepLink)
         if (announcementId != null) {
             selectedAnnouncementId = announcementId
@@ -669,6 +731,7 @@ private var notificationPermissionRequested = false
     }
 
     private fun setupTopBarActions() {
+        binding.topBarReservations.setOnClickListener { pushScreen(HubScreen.RESERVATIONS) }
         binding.topBarAnnouncement.setOnClickListener { pushScreen(HubScreen.ANNOUNCEMENTS) }
         binding.topBarSettings.setOnClickListener {
             pushScreen(HubScreen.SETTINGS)
@@ -855,6 +918,9 @@ HubScreen.SONG_SEARCH -> renderSongSearch()
 HubScreen.SONG_MEMBER_FILTER -> renderSongMemberFilter()
 HubScreen.GOODS_EVENTS -> renderGoodsEvents()
             HubScreen.GOODS_EVENT_DETAIL -> renderHubEventDetail()
+            HubScreen.RESERVATIONS -> renderReservations()
+            HubScreen.RESERVATION_DETAIL -> renderReservationDetail()
+            HubScreen.RESERVATION_EDIT -> renderReservationEdit()
             HubScreen.LIVE -> renderLive()
 HubScreen.HISTORY -> renderHistory()
             HubScreen.ANNOUNCEMENTS -> renderAnnouncements()
@@ -924,6 +990,12 @@ private fun updateNavigationChrome() {
         binding.topBarTitleGroup.isVisible = spec.showTopBarTitleAtRest
         binding.topBarSettings.isVisible = spec.showSettingsAction
         binding.topBarAnnouncementContainer.isVisible = spec.showAnnouncementAction
+        val showsReservations = navigationHistory.currentScreen in setOf(HubScreen.GOODS_EVENTS, HubScreen.GOODS_EVENT_DETAIL)
+        binding.topBarReservationsContainer.isVisible = showsReservations
+        val pendingReservations = reservationDrafts.count { it.expiresAt.isAfter(Instant.now()) }
+        binding.topBarReservationsBadge.isVisible = showsReservations && pendingReservations > 0
+        binding.topBarReservationsBadge.text = pendingReservations.coerceAtMost(99).toString()
+        binding.topBarReservations.contentDescription = "내 예약 및 구매, 확인 필요 ${pendingReservations}개"
         updateAnnouncementAction()
         binding.topBarSongSearch.isVisible = spec.showSongSearchAction &&
             SongsPanePolicy.shouldShowTopBarSearchAction(currentAdaptiveSpec)
@@ -952,6 +1024,9 @@ HubScreen.SONG_SEARCH -> R.id.tab_songs
 HubScreen.SONG_MEMBER_FILTER -> R.id.tab_songs
 HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
         HubScreen.GOODS_EVENT_DETAIL -> R.id.tab_goods_events
+        HubScreen.RESERVATIONS -> R.id.tab_goods_events
+        HubScreen.RESERVATION_DETAIL -> R.id.tab_goods_events
+        HubScreen.RESERVATION_EDIT -> R.id.tab_goods_events
         HubScreen.LIVE -> R.id.tab_live
         HubScreen.HISTORY -> null
         HubScreen.ANNOUNCEMENTS -> null
@@ -1538,6 +1613,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
             title = "굿즈/행사",
             role = "공식/멤버/공식 콜라보 출처가 있는 기간성 정보만 표시합니다."
         )
+        binding.contentList.addView(reservationSummaryCard())
         binding.contentList.addView(filterPanel(MainUiPolicy.goodsEventsTopFilterGroups(selectedFilter)) { _, optionId ->
             selectedFilter = optionId
             if (goodsEventsDays.isEmpty()) renderGoodsEvents()
@@ -1671,6 +1747,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
         filteredEvents: List<HubEvent>,
         monthDays: List<HubCalendarDay>,
     ) {
+        container.addView(reservationSummaryCard())
         container.addView(filterPanel(MainUiPolicy.goodsEventsTopFilterGroups(selectedFilter)) { _, optionId ->
             selectedFilter = optionId
             renderServerGoodsEvents(goodsEventsDays, goodsEvents)
@@ -1708,6 +1785,262 @@ private fun startScreen(screenId: String, title: String, role: String) {
             row.canonicalEvent?.let { event ->
                 container.addView(hubEventCard(event = event))
             } ?: container.addView(localCalendarEntryRow(row.entry))
+        }
+    }
+
+    private fun reservationSummaryCard(): MaterialCardView = baseCard(HubCardStyle.INTERACTIVE).apply {
+        val now = Instant.now()
+        val activeDrafts = reservationDrafts.filter { it.expiresAt.isAfter(now) }
+        val upcoming = reservationRecords.filter {
+            it.status == ReservationStatus.CONFIRMED && (it.effectiveStartsAt?.isAfter(now) ?: true)
+        }.sortedBy { it.effectiveStartsAt ?: Instant.MAX }
+        isClickable = true
+        isFocusable = true
+        contentDescription = "내 예약 및 구매, 확인 필요 ${activeDrafts.size}개, 다가오는 예약 ${upcoming.size}개"
+        setOnClickListener { pushScreen(HubScreen.RESERVATIONS) }
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            addView(TextView(context).apply {
+                text = "내 예약·구매"
+                textSize = 17f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(color(R.color.hub_text))
+            })
+            addView(TextView(context).apply {
+                text = "확인 필요 ${activeDrafts.size}개 · 다가오는 예약 ${upcoming.size}개"
+                textSize = 13f
+                setTextColor(color(R.color.hub_text_muted))
+                setPadding(0, dp(5), 0, 0)
+            })
+            upcoming.firstOrNull()?.effectiveStartsAt?.let { startsAt ->
+                addView(TextView(context).apply {
+                    text = "가장 가까운 예약 · ${reservationDateFormatter.format(startsAt)}"
+                    textSize = 12f
+                    setTextColor(color(R.color.hub_primary))
+                    setPadding(0, dp(6), 0, 0)
+                })
+            }
+            addView(TextView(context).apply {
+                text = "전체 내역 보기  ›"
+                textSize = 13f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(color(R.color.hub_primary))
+                setPadding(0, dp(10), 0, 0)
+            })
+        })
+    }
+
+    private fun renderReservations() {
+        startScreen("reservations", "내 예약·구매", "외부 결제 여부를 자동 검증하지 않으며 사용자가 확인한 기록만 이 기기에 저장합니다.")
+        binding.contentList.addView(detailActionButton("빠른 설정에 예약 추가 버튼 넣기", false) {
+            ReservationSystemShortcutCoordinator.requestTile(this)
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { bottomMargin = dp(10) })
+        val activeDrafts = reservationDrafts.filter { it.expiresAt.isAfter(Instant.now()) }
+        if (activeDrafts.isNotEmpty()) {
+            binding.contentList.addView(sectionLabel("확인 필요"))
+            activeDrafts.sortedByDescending(ReservationDraft::openedAt).forEach { draft ->
+                binding.contentList.addView(baseCard(HubCardStyle.COMPACT).apply {
+                    addView(LinearLayout(context).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(dp(15), dp(13), dp(15), dp(13))
+                        addView(TextView(context).apply { text = draft.eventSnapshot.title; textSize = 15f; typeface = Typeface.DEFAULT_BOLD; setTextColor(color(R.color.hub_text)) })
+                        addView(TextView(context).apply { text = "예약 진행 중 · ${draft.providerHost}"; textSize = 12f; setTextColor(color(R.color.hub_text_muted)); setPadding(0, dp(4), 0, 0) })
+                        addView(LinearLayout(context).apply {
+                            orientation = LinearLayout.HORIZONTAL
+                            addView(detailActionButton("취소", false) {
+                                lifecycleScope.launch { reservationRepository.deleteDraft(draft) }
+                            }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(5) })
+                            addView(detailActionButton("완료로 추가", true) {
+                                startActivity(Intent(this@MainActivity, ReservationQuickAddActivity::class.java).putExtra(ReservationQuickAddActivity.EXTRA_SESSION_ID, draft.sessionId.toString()))
+                            }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(5) })
+                        }.apply { setPadding(0, dp(10), 0, 0) })
+                    })
+                })
+            }
+        }
+        val upcoming = reservationRecords.filter { it.status == ReservationStatus.CONFIRMED && (it.effectiveStartsAt?.isAfter(Instant.now()) ?: true) }
+            .sortedBy { it.effectiveStartsAt ?: Instant.MAX }
+        val past = reservationRecords.filterNot(upcoming::contains).sortedByDescending { it.effectiveStartsAt ?: it.updatedAt }
+        addReservationRecordSection("다가오는 예약", upcoming)
+        addReservationRecordSection("지난 내역", past)
+        if (activeDrafts.isEmpty() && reservationRecords.isEmpty()) {
+            binding.contentList.addView(compactEventCard("저장된 예약 없음", "굿즈·행사에서 티켓, 구매 또는 예약 링크를 열면 진행 중인 항목이 여기에 표시됩니다.", listOf("기기 로컬 저장")))
+        }
+    }
+
+    private fun addReservationRecordSection(title: String, records: List<ReservationRecord>) {
+        if (records.isEmpty()) return
+        binding.contentList.addView(sectionLabel(title))
+        records.forEach { record ->
+            binding.contentList.addView(baseCard(HubCardStyle.INTERACTIVE).apply {
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    selectedReservationId = record.id
+                    pushScreen(HubScreen.RESERVATION_DETAIL)
+                }
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(15), dp(13), dp(15), dp(13))
+                    addView(TextView(context).apply { text = record.displayTitle; textSize = 15f; typeface = Typeface.DEFAULT_BOLD; setTextColor(color(R.color.hub_text)) })
+                    addView(TextView(context).apply {
+                        text = "${reservationStatusLabel(record.status)} · ${record.eventSnapshot.sourceLabel}"
+                        textSize = 12f; setTextColor(color(R.color.hub_text_muted)); setPadding(0, dp(4), 0, 0)
+                    })
+                    record.effectiveStartsAt?.let { addView(TextView(context).apply { text = reservationDateFormatter.format(it); textSize = 12f; setTextColor(color(R.color.hub_text_muted)); setPadding(0, dp(4), 0, 0) }) }
+                    if (record.reservationDetailUrl != null) addView(TextView(context).apply { text = "예약 상세 링크 있음"; textSize = 11f; setTextColor(color(R.color.hub_primary)); setPadding(0, dp(5), 0, 0) })
+                })
+            })
+        }
+    }
+
+    private fun renderReservationDetail() {
+        val record = reservationRecords.firstOrNull { it.id == selectedReservationId }
+        startScreen("reservation_detail", "예약 상세", "예약 정보와 링크는 이 기기에만 저장됩니다.")
+        if (record == null) {
+            binding.contentList.addView(compactEventCard("예약을 찾을 수 없음", "목록에서 다시 선택해 주세요.", listOf("로컬 기록")))
+            return
+        }
+        binding.contentList.addView(compactEventCard(record.displayTitle, buildList {
+            add(reservationStatusLabel(record.status))
+            record.effectiveStartsAt?.let { add(reservationDateFormatter.format(it)) }
+            record.effectiveVenue?.let(::add)
+            record.optionText?.let { add("옵션 · $it") }
+            record.quantity?.let { add("수량 · $it") }
+            record.referenceNumber?.let { add("예약번호 · $it") }
+            record.note?.let(::add)
+        }.joinToString("\n"), listOf(record.kind.name.lowercase(), "기기 로컬 저장")))
+        val latestEvent = record.eventId?.let { eventId -> goodsEvents.firstOrNull { it.id == eventId } }
+        if (ReservationDisplayPolicy.officialEventChanged(record, latestEvent?.title, latestEvent?.startsAt)) {
+            binding.contentList.addView(compactEventCard(
+                "공식 일정 변경됨",
+                "저장 당시 정보와 현재 공식 행사 정보가 다릅니다. 사용자 수정값과 예약 상태는 자동으로 바꾸지 않습니다.",
+                listOf("확인 필요"),
+            ))
+        }
+        if (latestEvent?.status == dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus.CANCELLED) {
+            binding.contentList.addView(compactEventCard(
+                "공식 행사 취소 안내",
+                "공식 행사가 취소되었습니다. 사용자의 예약 상태는 자동으로 취소하지 않습니다.",
+                listOf("공식 정보"),
+            ))
+        }
+        record.preferredOpenUrl?.let { url ->
+            binding.contentList.addView(detailActionButton("예약 링크 열기", true) { openExternalUrl(url) }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)))
+        }
+        binding.contentList.addView(detailActionButton("수정", false) { pushScreen(HubScreen.RESERVATION_EDIT) }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(10) })
+        binding.contentList.addView(detailActionButton("예약 삭제", false) {
+            AlertDialog.Builder(this).setTitle("예약 삭제").setMessage("이 기기에서 예약 기록을 삭제할까요?")
+                .setNegativeButton("취소", null)
+                .setPositiveButton("삭제") { _, _ -> lifecycleScope.launch { reservationRepository.delete(record); popScreen() } }
+                .show()
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(10) })
+    }
+
+    private fun renderReservationEdit() {
+        val record = reservationRecords.firstOrNull { it.id == selectedReservationId }
+        startScreen("reservation_edit", "예약 수정", "민감할 수 있는 링크와 예약번호는 서버나 로그로 전송하지 않습니다.")
+        if (record == null) return
+        val title = reservationEditField("표시 제목", record.displayTitleOverride.orEmpty())
+        val startsAt = reservationEditField("시작 시각 (ISO-8601)", record.startsAtOverride?.toString().orEmpty())
+        val endsAt = reservationEditField("종료 시각 (ISO-8601)", record.endsAtOverride?.toString().orEmpty())
+        val venue = reservationEditField("장소", record.venueOverride.orEmpty())
+        val detailUrl = reservationEditField("예약 상세 URL", record.reservationDetailUrl.orEmpty())
+        val historyUrl = reservationEditField("제공사 내역 URL", record.providerHistoryUrl.orEmpty())
+        val option = reservationEditField("좌석 또는 상품 옵션", record.optionText.orEmpty())
+        val quantity = reservationEditField("수량", record.quantity?.toString().orEmpty())
+        val reference = reservationEditField("예약번호", record.referenceNumber.orEmpty())
+        val note = reservationEditField("메모", record.note.orEmpty(), multiline = true)
+        var status = record.status
+        val statusButton = detailActionButton("상태 · ${reservationStatusLabel(status)}", false) {}
+        statusButton.setOnClickListener {
+            PopupMenu(this, statusButton).apply {
+                ReservationStatus.entries.forEachIndexed { index, value -> menu.add(0, index, index, reservationStatusLabel(value)) }
+                setOnMenuItemClickListener { item -> status = ReservationStatus.entries[item.itemId]; statusButton.text = "상태 · ${reservationStatusLabel(status)}"; true }
+                show()
+            }
+        }
+        binding.contentList.addView(statusButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { bottomMargin = dp(10) })
+        binding.contentList.addView(detailActionButton("저장", true) {
+            val detailValidation = detailUrl.text.toString().takeIf(String::isNotBlank)?.let(ReservationURLPolicy::validate)
+            val historyValidation = historyUrl.text.toString().takeIf(String::isNotBlank)?.let(ReservationURLPolicy::validate)
+            if (detailValidation?.isValid == false || historyValidation?.isValid == false) {
+                Toast.makeText(this, "HTTPS 링크를 확인해 주세요.", Toast.LENGTH_SHORT).show()
+                return@detailActionButton
+            }
+            val save = {
+                lifecycleScope.launch {
+                    reservationRepository.update(record.copy(
+                        status = status,
+                        displayTitleOverride = title.text.toString().trim().takeIf(String::isNotEmpty),
+                        startsAtOverride = startsAt.text.toString().trim().takeIf(String::isNotEmpty)?.let { runCatching { Instant.parse(it) }.getOrNull() },
+                        endsAtOverride = endsAt.text.toString().trim().takeIf(String::isNotEmpty)?.let { runCatching { Instant.parse(it) }.getOrNull() },
+                        venueOverride = venue.text.toString().trim().takeIf(String::isNotEmpty),
+                        reservationDetailUrl = detailValidation?.normalizedUrl,
+                        providerHistoryUrl = historyValidation?.normalizedUrl,
+                        optionText = option.text.toString().trim().takeIf(String::isNotEmpty),
+                        quantity = quantity.text.toString().toIntOrNull()?.takeIf { it > 0 },
+                        referenceNumber = reference.text.toString().trim().takeIf(String::isNotEmpty),
+                        note = note.text.toString().trim().takeIf(String::isNotEmpty),
+                        updatedAt = Instant.now(),
+                    ))
+                    popScreen()
+                }
+            }
+            if (detailValidation?.isSensitive == true || historyValidation?.isSensitive == true) {
+                AlertDialog.Builder(this).setTitle("민감할 수 있는 링크").setMessage("인증 정보가 포함될 수 있습니다. 이 기기에만 저장할까요?")
+                    .setNegativeButton("취소", null).setPositiveButton("로컬 저장") { _, _ -> save() }.show()
+            } else save()
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(12) })
+    }
+
+    private fun reservationEditField(hint: String, value: String, multiline: Boolean = false): EditText = EditText(this).apply {
+        this.hint = hint
+        setText(value)
+        if (multiline) minLines = 3
+        binding.contentList.addView(this, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) })
+    }
+
+    private fun reservationStatusLabel(status: ReservationStatus): String = when (status) {
+        ReservationStatus.PENDING_CONFIRMATION -> "확인 필요"
+        ReservationStatus.CONFIRMED -> "예약 완료"
+        ReservationStatus.CANCELLED -> "취소"
+        ReservationStatus.REFUNDED -> "환불"
+        ReservationStatus.COMPLETED -> "이용 완료"
+    }
+
+    private fun openHubEventLink(
+        event: HubEvent,
+        scheduleItem: dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleItem?,
+        link: dev.minepacu.stelliveeventnotifier.core.model.HubEventLink,
+    ) {
+        val kind = ReservationActionPolicy.kindFor(link.kind, scheduleItem?.cancelledAt)
+        if (kind == null) {
+            openExternalUrl(link.url)
+            return
+        }
+        lifecycleScope.launch {
+            val snapshot = ReservationEventSnapshot(
+                title = event.title,
+                category = event.category.name,
+                startsAt = scheduleItem?.startsAt ?: event.startsAt,
+                endsAt = scheduleItem?.endsAt ?: event.endsAt,
+                venueName = event.venueName,
+                venueAddress = event.venueAddress,
+                sourceLabel = event.sourceLabel,
+                imageUrl = event.image?.url?.takeIf { HubEventImagePolicy.canDisplay(event.image) },
+            )
+            runCatching {
+                reservationRepository.begin(event.id, scheduleItem?.id, kind, snapshot, link.url)
+            }.onSuccess {
+                ReservationTileService.requestRefresh(this@MainActivity)
+                ReservationSystemShortcutCoordinator.promptOnce(this@MainActivity) {
+                    openExternalUrl(link.url)
+                }
+            }.onFailure {
+                Toast.makeText(this@MainActivity, "예약 진행 정보를 저장하지 못했습니다.", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -1995,7 +2328,7 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
                 }
                 links.forEach { link ->
                     val label = HubEventLinkPolicy.displayLinkLabel(link)
-                    addView(detailActionButton(label, primary = false) { openExternalUrl(link.url) }.apply {
+                    addView(detailActionButton(label, primary = false) { openHubEventLink(currentSelectedHubEvent() ?: return@detailActionButton, item.schedule, link) }.apply {
                         contentDescription = "$label, 외부 링크 열기"
                     }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44)).apply {
                         topMargin = dp(9)
@@ -4776,8 +5109,8 @@ private fun hubEventDetailHero(event: dev.minepacu.stelliveeventnotifier.core.mo
             }
             addView(
                 detailActionButton(label, primary = false) {
-                    if (ctaMode == HubEventLinkCtaMode.DIRECT) openExternalUrl(links.single().url)
-                    else HubEventLinksBottomSheet(this@MainActivity, ::openExternalUrl).show("관련 링크", links)
+                    if (ctaMode == HubEventLinkCtaMode.DIRECT) openHubEventLink(event, null, links.single())
+                    else HubEventLinksBottomSheet(this@MainActivity) { link -> openHubEventLink(event, null, link) }.show("관련 링크", links)
                 }.apply {
                     contentDescription = if (ctaMode == HubEventLinkCtaMode.DIRECT) "$label, 외부 링크 열기" else "$label, 목록 열기"
                 },

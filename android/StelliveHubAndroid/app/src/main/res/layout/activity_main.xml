@@ -448,6 +448,35 @@
                 app:tint="@color/hub_text" />
 
             <FrameLayout
+                android:id="@+id/topBarReservationsContainer"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:visibility="gone">
+                <ImageButton
+                    android:id="@+id/topBarReservations"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="@string/action_reservations"
+                    android:padding="10dp"
+                    android:src="@drawable/ic_reservation_ticket"
+                    app:tint="@color/hub_text" />
+                <TextView
+                    android:id="@+id/topBarReservationsBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="18dp"
+                    android:layout_gravity="top|end"
+                    android:background="@drawable/bg_notification_badge"
+                    android:gravity="center"
+                    android:minWidth="18dp"
+                    android:paddingHorizontal="4dp"
+                    android:textColor="@android:color/white"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <FrameLayout
                 android:id="@+id/topBarAnnouncementContainer"
                 android:layout_width="44dp"
                 android:layout_height="44dp">

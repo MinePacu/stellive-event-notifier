@@ -70,6 +70,7 @@ struct ContentView: View {
     @State private var pendingHubEventId: String?
     @State private var pendingHubEventScheduleItemId: String?
     @State private var pendingAnnouncementId: String?
+    @State private var pendingReservationRoute: ReservationRoute?
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -84,12 +85,18 @@ struct ContentView: View {
                 .tag("songs")
             HubEventsTabView(
                 deepLinkedEventId: $pendingHubEventId,
-                deepLinkedScheduleItemId: $pendingHubEventScheduleItemId
+                deepLinkedScheduleItemId: $pendingHubEventScheduleItemId,
+                pendingReservationRoute: $pendingReservationRoute
             )
                 .tabItem { Label(IOSPrimaryNavigationPolicy.bottomTabs[3].title, systemImage: IOSPrimaryNavigationPolicy.bottomTabs[3].systemImage) }
                 .tag("hubEvents")
         }
         .onOpenURL { url in
+            if let route = ReservationDeepLinkPolicy.route(from: url) {
+                selectedTab = "hubEvents"
+                pendingReservationRoute = route
+                return
+            }
             if let announcementId = AnnouncementDeepLinkPolicy.id(from: url) {
                 selectedTab = "home"
                 pendingAnnouncementId = announcementId
@@ -108,6 +115,7 @@ private struct HubEventsTabView: View {
     @EnvironmentObject private var serverStore: ServerHubStore
     @Binding var deepLinkedEventId: String?
     @Binding var deepLinkedScheduleItemId: String?
+    @Binding var pendingReservationRoute: ReservationRoute?
     @State private var path = NavigationPath()
 
     var body: some View {
@@ -120,11 +128,34 @@ private struct HubEventsTabView: View {
                         highlightedScheduleItemId: route.scheduleItemId
                     )
                 }
+                .navigationDestination(for: ReservationRoute.self) { route in
+                    switch route {
+                    case .list:
+                        ReservationsView()
+                    case .detail(let id):
+                        ReservationDetailView(reservationID: id)
+                    case .edit(let id):
+                        ReservationEditView(reservationID: id)
+                    case .quickAdd(let sessionID):
+                        ReservationQuickAddView(sessionID: sessionID)
+                    }
+                }
                 .onAppear(perform: openPendingHubEvent)
+                .onAppear(perform: openPendingReservation)
                 .onChange(of: deepLinkedEventId) { _ in
                     openPendingHubEvent()
                 }
+                .onChange(of: pendingReservationRoute) { _ in
+                    openPendingReservation()
+                }
         }
+    }
+
+    private func openPendingReservation() {
+        guard let route = pendingReservationRoute else { return }
+        path.removeLast(path.count)
+        path.append(route)
+        pendingReservationRoute = nil
     }
 
     private func openPendingHubEvent() {

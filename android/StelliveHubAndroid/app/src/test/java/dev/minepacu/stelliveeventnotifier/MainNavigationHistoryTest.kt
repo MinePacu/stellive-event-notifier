@@ -58,6 +58,19 @@ class MainNavigationHistoryTest {
     }
 
     @Test
+    fun reservationScreensRemainInGoodsEventsRoot() {
+        val history = MainNavigationHistory(HubScreen.GOODS_EVENTS)
+
+        history.select(HubScreen.RESERVATIONS)
+        history.select(HubScreen.RESERVATION_DETAIL)
+        history.select(HubScreen.RESERVATION_EDIT)
+
+        assertEquals(HubScreen.GOODS_EVENTS, history.currentRootScreen)
+        assertEquals(HubScreen.RESERVATION_DETAIL, history.goBack())
+        assertEquals(HubScreen.RESERVATIONS, history.goBack())
+    }
+
+    @Test
     fun subPageSystemBackReturnsToCurrentRoot() {
         val history = MainNavigationHistory()
 

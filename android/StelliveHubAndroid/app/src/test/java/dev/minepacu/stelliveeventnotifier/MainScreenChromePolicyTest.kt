@@ -42,10 +42,11 @@ class MainScreenChromePolicyTest {
 
     @Test
     fun goodsEventDetailKeepsExpandedHeaderWithoutStickyTitle() {
-        val spec = MainScreenChromePolicy.spec("goods_event_detail", canGoBack = true)
-
-        assertTrue(spec.showExpandedBodyHeader)
-        assertFalse(spec.keepTopBarTitleWhenScrolled)
+        listOf("goods_event_detail", "reservations", "reservation_detail", "reservation_edit").forEach { screenId ->
+            val spec = MainScreenChromePolicy.spec(screenId, canGoBack = true)
+            assertTrue(spec.showExpandedBodyHeader)
+            assertFalse(spec.keepTopBarTitleWhenScrolled)
+        }
     }
 
     @Test
