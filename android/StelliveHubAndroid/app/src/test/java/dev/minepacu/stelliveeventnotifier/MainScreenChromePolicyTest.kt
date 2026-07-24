@@ -24,6 +24,8 @@ class MainScreenChromePolicyTest {
             "history",
             "song_search",
             "song_member_filter",
+            "reservations_help",
+            "reservation_detail_help",
             "settings",
             "settings_delivery",
             "settings_targets",

@@ -53,6 +53,24 @@ final class ReservationPoliciesTests: XCTestCase {
         XCTAssertEqual(record.displayTitle, "내 예약")
     }
 
+    func testRecordedInformationUsesHumanReadableEventValuesInsteadOfInternalIDs() {
+        let record = makeRecord(scheduleItemID: "internal-schedule-id")
+
+        XCTAssertEqual(ReservationDisplayPolicy.linkedEventTitle(record: record), "행사")
+        XCTAssertEqual(
+            ReservationDisplayPolicy.linkedScheduleLabel(
+                record: record,
+                format: { "schedule:\($0.timeIntervalSince1970)" }
+            ),
+            "schedule:100.0"
+        )
+        XCTAssertNotEqual(ReservationDisplayPolicy.linkedEventTitle(record: record), record.eventID)
+        XCTAssertNotEqual(
+            ReservationDisplayPolicy.linkedScheduleLabel(record: record, format: { _ in "일정" }),
+            record.scheduleItemID
+        )
+    }
+
     func testPresentationPolicyCoversEveryKindAndStatus() {
         let expected: [ReservationKind: [String]] = [
             .ticket: ["확인 필요", "예매 완료", "예매 취소", "환불 완료", "이용 완료"],
@@ -79,6 +97,90 @@ final class ReservationPoliciesTests: XCTestCase {
         XCTAssertEqual(ReservationPresentationPolicy.referenceNumberLabel(.ticket), "예매번호")
         XCTAssertEqual(ReservationPresentationPolicy.referenceNumberLabel(.purchase), "주문번호")
         XCTAssertEqual(ReservationPresentationPolicy.referenceNumberLabel(.reservation), "예약번호")
+    }
+
+    func testPastListUsesSavedTimeWhileUpcomingUsesScheduledTime() {
+        var record = makeRecord()
+        let scheduledAt = Date(timeIntervalSince1970: 1_000)
+        record.startsAtOverride = scheduledAt
+
+        XCTAssertEqual(
+            ReservationListPresentationPolicy.timestampLabel(
+                record: record,
+                section: .upcoming,
+                format: { "scheduled:\($0.timeIntervalSince1970)" }
+            ),
+            "scheduled:1000.0"
+        )
+        XCTAssertEqual(
+            ReservationListPresentationPolicy.timestampLabel(
+                record: record,
+                section: .past,
+                format: { "saved:\($0.timeIntervalSince1970)" }
+            ),
+            "저장 시각 · saved:100.0"
+        )
+    }
+
+    func testEditPresentationPrefillsValuesFromStoredRecordAndEventSnapshot() {
+        let end = Date(timeIntervalSince1970: 200)
+        let base = makeRecord(eventEndsAt: end)
+
+        let inherited = ReservationEditPresentationPolicy.initialValues(record: base)
+        XCTAssertEqual(inherited.title, "행사")
+        XCTAssertEqual(inherited.startsAt, Date(timeIntervalSince1970: 100))
+        XCTAssertEqual(inherited.endsAt, end)
+        XCTAssertEqual(inherited.venue, "장소")
+
+        var overridden = base
+        overridden.displayTitleOverride = "내 행사"
+        overridden.startsAtOverride = Date(timeIntervalSince1970: 300)
+        overridden.endsAtOverride = Date(timeIntervalSince1970: 400)
+        overridden.venueOverride = "변경 장소"
+        XCTAssertEqual(
+            ReservationEditPresentationPolicy.initialValues(record: overridden),
+            ReservationEditInitialValues(
+                title: "내 행사",
+                startsAt: Date(timeIntervalSince1970: 300),
+                endsAt: Date(timeIntervalSince1970: 400),
+                venue: "변경 장소"
+            )
+        )
+    }
+
+    func testEditPresentationAvoidsSavingDuplicateEventOverrides() {
+        let end = Date(timeIntervalSince1970: 200)
+        let base = makeRecord(eventEndsAt: end)
+        let editable = ReservationEditPresentationPolicy.editableRecord(base)
+
+        let inherited = ReservationEditPresentationPolicy.normalizedRecord(editable)
+        XCTAssertNil(inherited.displayTitleOverride)
+        XCTAssertNil(inherited.startsAtOverride)
+        XCTAssertNil(inherited.endsAtOverride)
+        XCTAssertNil(inherited.venueOverride)
+
+        var changed = editable
+        changed.displayTitleOverride = "수정 제목"
+        changed.startsAtOverride = Date(timeIntervalSince1970: 300)
+        changed.endsAtOverride = Date(timeIntervalSince1970: 400)
+        changed.venueOverride = "수정 장소"
+        let normalized = ReservationEditPresentationPolicy.normalizedRecord(changed)
+        XCTAssertEqual(normalized.displayTitleOverride, "수정 제목")
+        XCTAssertEqual(normalized.startsAtOverride, Date(timeIntervalSince1970: 300))
+        XCTAssertEqual(normalized.endsAtOverride, Date(timeIntervalSince1970: 400))
+        XCTAssertEqual(normalized.venueOverride, "수정 장소")
+    }
+
+    func testReservationHelpContentIsContextualForListAndDetail() {
+        let list = ReservationHelpPolicy.content(.list)
+        let detail = ReservationHelpPolicy.content(.detail)
+
+        XCTAssertEqual(list.title, "내 예약·구매 도움말")
+        XCTAssertTrue(list.sections.contains { $0.title == "확인 필요" })
+        XCTAssertTrue(list.sections.contains { $0.title == "예정된 내역과 지난 내역" })
+        XCTAssertEqual(detail.title, "내역 상세 도움말")
+        XCTAssertTrue(detail.sections.contains { $0.title == "내역 링크" })
+        XCTAssertTrue(detail.sections.contains { $0.title == "내역 삭제" })
     }
 
     func testSystemShortcutLabelsUseDraftCountAndKind() {
@@ -271,13 +373,16 @@ final class ReservationPoliciesTests: XCTestCase {
         )
     }
 
-    private func makeRecord() -> ReservationRecord {
+    private func makeRecord(
+        eventEndsAt: Date? = nil,
+        scheduleItemID: String? = nil
+    ) -> ReservationRecord {
         let now = Date(timeIntervalSince1970: 100)
         return ReservationRecord(
-            id: UUID(), sourceSessionID: nil, eventID: "event", scheduleItemID: nil,
+            id: UUID(), sourceSessionID: nil, eventID: "event", scheduleItemID: scheduleItemID,
             kind: .ticket, status: .confirmed,
             eventSnapshot: ReservationEventSnapshot(
-                title: "행사", category: "ticketing", startsAt: now, endsAt: nil,
+                title: "행사", category: "ticketing", startsAt: now, endsAt: eventEndsAt,
                 venueName: "장소", venueAddress: nil, sourceLabel: "공식", imageURL: nil
             ),
             originalActionURL: "https://example.com", reservationDetailURL: nil,

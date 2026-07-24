@@ -183,10 +183,14 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDetailRow
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkRoute
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEditPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEventSnapshot
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationExternalLinkPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPage
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationLinkSource
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListSectionKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationRecord
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptDecision
@@ -709,6 +713,7 @@ private var notificationPermissionRequested = false
             is ReservationDeepLinkRoute.Detail -> {
                 selectedReservationId = route.reservationId
                 navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
+                navigationHistory.select(HubScreen.RESERVATIONS)
                 navigationHistory.select(HubScreen.RESERVATION_DETAIL)
             }
             is ReservationDeepLinkRoute.Edit -> {
@@ -847,16 +852,24 @@ private var notificationPermissionRequested = false
     }
 
     private fun popScreenNow(): Boolean {
-        val previous = navigationHistory.previousScreen ?: return false
+        val current = navigationHistory.currentScreen
+        val previous = when (current) {
+            HubScreen.RESERVATION_DETAIL -> HubScreen.RESERVATIONS
+            else -> navigationHistory.previousScreen ?: return false
+        }
         captureActiveSongScrollPosition()
         latestNavigationDestination = previous
         val motion = ScreenTransitionPolicy.motion(
-            navigationHistory.currentScreen,
+            current,
             previous,
             ScreenTransitionReason.POP,
         )
         performScreenTransition("pop:${previous.id}", previous, motion) {
-            navigationHistory.goBack()
+            if (current == HubScreen.RESERVATION_DETAIL) {
+                navigationHistory.goBackTo(HubScreen.RESERVATIONS)
+            } else {
+                navigationHistory.goBack()
+            }
         }
         return true
     }
@@ -889,6 +902,15 @@ private var notificationPermissionRequested = false
     }
 
     private fun handleSystemBackPressedNow() {
+        if (navigationHistory.currentScreen in setOf(
+                HubScreen.RESERVATION_DETAIL,
+                HubScreen.RESERVATIONS_HELP,
+                HubScreen.RESERVATION_DETAIL_HELP,
+            ) && popScreenNow()
+        ) {
+            lastRootBackPressedAt = 0L
+            return
+        }
         if (navigateBackToCurrentRootNow()) {
             lastRootBackPressedAt = 0L
             return
@@ -992,6 +1014,8 @@ HubScreen.GOODS_EVENTS -> renderGoodsEvents()
             HubScreen.RESERVATIONS -> renderReservations()
             HubScreen.RESERVATION_DETAIL -> renderReservationDetail()
             HubScreen.RESERVATION_EDIT -> renderReservationEdit()
+            HubScreen.RESERVATIONS_HELP -> renderReservationHelp(ReservationHelpPage.LIST)
+            HubScreen.RESERVATION_DETAIL_HELP -> renderReservationHelp(ReservationHelpPage.DETAIL)
             HubScreen.LIVE -> renderLive()
 HubScreen.HISTORY -> renderHistory()
             HubScreen.ANNOUNCEMENTS -> renderAnnouncements()
@@ -1098,6 +1122,8 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
         HubScreen.RESERVATIONS -> R.id.tab_goods_events
         HubScreen.RESERVATION_DETAIL -> R.id.tab_goods_events
         HubScreen.RESERVATION_EDIT -> R.id.tab_goods_events
+        HubScreen.RESERVATIONS_HELP -> R.id.tab_goods_events
+        HubScreen.RESERVATION_DETAIL_HELP -> R.id.tab_goods_events
         HubScreen.LIVE -> R.id.tab_live
         HubScreen.HISTORY -> null
         HubScreen.ANNOUNCEMENTS -> null
@@ -1927,6 +1953,9 @@ private fun startScreen(
             role = "외부 결제 여부를 자동 검증하지 않으며 사용자가 확인한 기록만 이 기기에 저장합니다.",
             showExpandedBodyHeader = false,
         )
+        binding.contentList.addView(detailActionButton("내 예약·구매 도움말", false) {
+            pushScreen(HubScreen.RESERVATIONS_HELP)
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { bottomMargin = dp(10) })
         binding.contentList.addView(detailActionButton("빠른 설정에 내역 추가 버튼 넣기", false) {
             ReservationSystemShortcutCoordinator.requestTile(this)
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { bottomMargin = dp(10) })
@@ -1954,14 +1983,18 @@ private fun startScreen(
             }
         }
         val sections = ReservationListPolicy.sections(reservationRecords)
-        addReservationRecordSection("예정된 내역", sections.upcoming)
-        addReservationRecordSection("지난 내역", sections.past)
+        addReservationRecordSection("예정된 내역", sections.upcoming, ReservationListSectionKind.UPCOMING)
+        addReservationRecordSection("지난 내역", sections.past, ReservationListSectionKind.PAST)
         if (activeDrafts.isEmpty() && reservationRecords.isEmpty()) {
             binding.contentList.addView(compactEventCard("저장된 내역 없음", "굿즈·행사에서 티켓, 구매 또는 예약 링크를 열면 진행 중인 항목이 여기에 표시됩니다.", emptyList()))
         }
     }
 
-    private fun addReservationRecordSection(title: String, records: List<ReservationRecord>) {
+    private fun addReservationRecordSection(
+        title: String,
+        records: List<ReservationRecord>,
+        section: ReservationListSectionKind,
+    ) {
         if (records.isEmpty()) return
         binding.contentList.addView(sectionLabel(title))
         records.forEach { record ->
@@ -1980,7 +2013,14 @@ private fun startScreen(
                         text = "${ReservationPresentationPolicy.statusLabel(record.kind, record.status)} · ${record.eventSnapshot.sourceLabel}"
                         textSize = 12f; setTextColor(color(R.color.hub_text_muted)); setPadding(0, dp(4), 0, 0)
                     })
-                    record.effectiveStartsAt?.let { addView(TextView(context).apply { text = reservationDateFormatter.format(it); textSize = 12f; setTextColor(color(R.color.hub_text_muted)); setPadding(0, dp(4), 0, 0) }) }
+                    ReservationListPolicy.timestampLabel(record, section, reservationDateFormatter::format)?.let { label ->
+                        addView(TextView(context).apply {
+                            text = label
+                            textSize = 12f
+                            setTextColor(color(R.color.hub_text_muted))
+                            setPadding(0, dp(4), 0, 0)
+                        })
+                    }
                     if (record.reservationDetailUrl != null) addView(TextView(context).apply { text = "${ReservationPresentationPolicy.detailLinkLabel(record.kind)} 있음"; textSize = 11f; setTextColor(color(R.color.hub_primary)); setPadding(0, dp(5), 0, 0) })
                 })
             })
@@ -2010,6 +2050,12 @@ private fun startScreen(
         )
 
         binding.contentList.addView(reservationDetailSummaryCard(presentation))
+        binding.contentList.addView(detailActionButton("내역 상세 도움말", false) {
+            pushScreen(HubScreen.RESERVATION_DETAIL_HELP)
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply {
+            topMargin = dp(4)
+            bottomMargin = dp(10)
+        })
         binding.contentList.addView(sectionLabel("빠른 동작"))
         binding.contentList.addView(reservationDetailActionRow(presentation.links.firstOrNull()?.url))
 
@@ -2052,6 +2098,31 @@ private fun startScreen(
         binding.contentList.addView(reservationDetailRowsCard(presentation.recordRows))
         binding.contentList.addView(sectionLabel("위험 동작"))
         binding.contentList.addView(reservationDetailDeleteButton(record))
+    }
+
+    private fun renderReservationHelp(page: ReservationHelpPage) {
+        val content = ReservationHelpPolicy.content(page)
+        val screenId = when (page) {
+            ReservationHelpPage.LIST -> HubScreen.RESERVATIONS_HELP.id
+            ReservationHelpPage.DETAIL -> HubScreen.RESERVATION_DETAIL_HELP.id
+        }
+        startScreen(
+            screenId = screenId,
+            title = content.title,
+            role = content.summary,
+            showExpandedBodyHeader = false,
+        )
+        binding.contentList.addView(compactEventCard("알아두기", content.summary, emptyList()))
+        content.sections.forEach { section ->
+            val body = buildString {
+                append(section.body)
+                section.points.forEach { point ->
+                    append("\n\n• ")
+                    append(point)
+                }
+            }
+            binding.contentList.addView(compactEventCard(section.title, body, emptyList()))
+        }
     }
 
     private fun reservationDetailSummaryCard(presentation: ReservationDetailPresentation): MaterialCardView =
@@ -2245,11 +2316,12 @@ private fun startScreen(
             showExpandedBodyHeader = false,
         )
         if (record == null) return
-        val titleInput = reservationEditField("표시 제목", record.displayTitleOverride.orEmpty())
+        val initialValues = ReservationEditPresentationPolicy.initialValues(record)
+        val titleInput = reservationEditField("표시 제목", initialValues.title)
         val title = titleInput.field
-        val startsAt = reservationDateTimeInput("시작 날짜와 시각", record.startsAtOverride)
-        val endsAt = reservationDateTimeInput("종료 날짜와 시각", record.endsAtOverride)
-        val venueInput = reservationEditField("장소", record.venueOverride.orEmpty())
+        val startsAt = reservationDateTimeInput("시작 날짜와 시각", initialValues.startsAt)
+        val endsAt = reservationDateTimeInput("종료 날짜와 시각", initialValues.endsAt)
+        val venueInput = reservationEditField("장소", initialValues.venue)
         val venue = venueInput.field
         val detailUrlInput = reservationEditField(ReservationPresentationPolicy.detailLinkLabel(record.kind), record.reservationDetailUrl.orEmpty(), placeholder = "https://")
         val detailUrl = detailUrlInput.field
@@ -2280,10 +2352,10 @@ private fun startScreen(
         }
         reservationEditHasUnsavedChanges = {
             status != record.status ||
-                title.text.toString().trim().takeIf(String::isNotEmpty) != record.displayTitleOverride ||
-                startsAt.value != record.startsAtOverride ||
-                endsAt.value != record.endsAtOverride ||
-                venue.text.toString().trim().takeIf(String::isNotEmpty) != record.venueOverride ||
+                title.text.toString().trim() != initialValues.title ||
+                startsAt.value != initialValues.startsAt ||
+                endsAt.value != initialValues.endsAt ||
+                venue.text.toString().trim() != initialValues.venue ||
                 detailUrl.text.toString().trim().takeIf(String::isNotEmpty) != record.reservationDetailUrl ||
                 historyUrl.text.toString().trim().takeIf(String::isNotEmpty) != record.providerHistoryUrl ||
                 option.text.toString().trim().takeIf(String::isNotEmpty) != record.optionText ||
@@ -2334,12 +2406,19 @@ private fun startScreen(
             val save: () -> Unit = {
                 lifecycleScope.launch {
                     runCatching {
+                        val overrides = ReservationEditPresentationPolicy.overrides(
+                            record = record,
+                            title = title.text.toString(),
+                            startsAt = startsAt.value,
+                            endsAt = endsAt.value,
+                            venue = venue.text.toString(),
+                        )
                         reservationRepository.update(record.copy(
                             status = status,
-                            displayTitleOverride = title.text.toString().trim().takeIf(String::isNotEmpty),
-                            startsAtOverride = startsAt.value,
-                            endsAtOverride = endsAt.value,
-                            venueOverride = venue.text.toString().trim().takeIf(String::isNotEmpty),
+                            displayTitleOverride = overrides.title,
+                            startsAtOverride = overrides.startsAt,
+                            endsAtOverride = overrides.endsAt,
+                            venueOverride = overrides.venue,
                             reservationDetailUrl = detailValidation?.normalizedUrl,
                             providerHistoryUrl = historyValidation?.normalizedUrl,
                             optionText = option.text.toString().trim().takeIf(String::isNotEmpty),

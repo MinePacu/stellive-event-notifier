@@ -71,6 +71,32 @@ class MainNavigationHistoryTest {
     }
 
     @Test
+    fun reservationDetailCanReturnToReservationsWhenListIsMissingFromBackStack() {
+        val history = MainNavigationHistory(HubScreen.GOODS_EVENTS)
+
+        history.select(HubScreen.RESERVATION_DETAIL)
+
+        assertEquals(HubScreen.RESERVATIONS, history.goBackTo(HubScreen.RESERVATIONS))
+        assertEquals(HubScreen.RESERVATIONS, history.currentScreen)
+        assertEquals(HubScreen.GOODS_EVENTS, history.previousScreen)
+        assertEquals(HubScreen.GOODS_EVENTS, history.goBack())
+    }
+
+    @Test
+    fun reservationHelpScreensReturnToTheirPresentingPages() {
+        val history = MainNavigationHistory(HubScreen.GOODS_EVENTS)
+
+        history.select(HubScreen.RESERVATIONS)
+        history.select(HubScreen.RESERVATIONS_HELP)
+        assertEquals(HubScreen.GOODS_EVENTS, history.currentRootScreen)
+        assertEquals(HubScreen.RESERVATIONS, history.goBack())
+
+        history.select(HubScreen.RESERVATION_DETAIL)
+        history.select(HubScreen.RESERVATION_DETAIL_HELP)
+        assertEquals(HubScreen.RESERVATION_DETAIL, history.goBack())
+    }
+
+    @Test
     fun subPageSystemBackReturnsToCurrentRoot() {
         val history = MainNavigationHistory()
 

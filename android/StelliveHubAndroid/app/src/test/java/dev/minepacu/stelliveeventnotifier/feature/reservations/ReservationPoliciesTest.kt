@@ -8,13 +8,18 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDetailPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEventSnapshot
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationExternalLinkPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPage
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationLinkSource
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListSectionKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationRecord
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationStatus
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkRoute
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEditPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptDecision
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationShareIntentParser
@@ -96,6 +101,92 @@ class ReservationPoliciesTest {
         assertEquals("예매번호", ReservationPresentationPolicy.referenceNumberLabel(ReservationKind.TICKET))
         assertEquals("주문번호", ReservationPresentationPolicy.referenceNumberLabel(ReservationKind.PURCHASE))
         assertEquals("예약번호", ReservationPresentationPolicy.referenceNumberLabel(ReservationKind.RESERVATION))
+    }
+
+    @Test fun pastListUsesSavedTimeWhileUpcomingUsesScheduledTime() {
+        val scheduledAt = Instant.parse("2026-08-01T09:00:00Z")
+        val savedAt = Instant.parse("2026-07-23T10:30:00Z")
+        val record = record().copy(
+            startsAtOverride = scheduledAt,
+            createdAt = savedAt,
+        )
+
+        assertEquals(
+            "scheduled:$scheduledAt",
+            ReservationListPolicy.timestampLabel(record, ReservationListSectionKind.UPCOMING) { "scheduled:$it" },
+        )
+        assertEquals(
+            "저장 시각 · saved:$savedAt",
+            ReservationListPolicy.timestampLabel(record, ReservationListSectionKind.PAST) { "saved:$it" },
+        )
+    }
+
+    @Test fun editPresentationPrefillsValuesFromStoredRecordAndEventSnapshot() {
+        val base = record().copy(
+            eventSnapshot = record().eventSnapshot.copy(
+                endsAt = Instant.parse("2026-08-01T10:00:00Z"),
+            ),
+        )
+
+        val inherited = ReservationEditPresentationPolicy.initialValues(base)
+        assertEquals("행사", inherited.title)
+        assertEquals(Instant.parse("2026-08-01T08:00:00Z"), inherited.startsAt)
+        assertEquals(Instant.parse("2026-08-01T10:00:00Z"), inherited.endsAt)
+        assertEquals("기본 장소", inherited.venue)
+
+        val overridden = ReservationEditPresentationPolicy.initialValues(
+            base.copy(
+                displayTitleOverride = "내 행사",
+                startsAtOverride = Instant.parse("2026-08-02T08:00:00Z"),
+                endsAtOverride = Instant.parse("2026-08-02T10:00:00Z"),
+                venueOverride = "변경 장소",
+            ),
+        )
+        assertEquals("내 행사", overridden.title)
+        assertEquals(Instant.parse("2026-08-02T08:00:00Z"), overridden.startsAt)
+        assertEquals(Instant.parse("2026-08-02T10:00:00Z"), overridden.endsAt)
+        assertEquals("변경 장소", overridden.venue)
+    }
+
+    @Test fun editPresentationAvoidsSavingDuplicateEventOverrides() {
+        val record = record()
+
+        val inherited = ReservationEditPresentationPolicy.overrides(
+            record = record,
+            title = record.eventSnapshot.title,
+            startsAt = record.eventSnapshot.startsAt,
+            endsAt = record.eventSnapshot.endsAt,
+            venue = record.eventSnapshot.venueName.orEmpty(),
+        )
+        assertNull(inherited.title)
+        assertNull(inherited.startsAt)
+        assertNull(inherited.endsAt)
+        assertNull(inherited.venue)
+
+        val changedStart = Instant.parse("2026-08-03T09:00:00Z")
+        val changed = ReservationEditPresentationPolicy.overrides(
+            record = record,
+            title = "수정 제목",
+            startsAt = changedStart,
+            endsAt = null,
+            venue = "수정 장소",
+        )
+        assertEquals("수정 제목", changed.title)
+        assertEquals(changedStart, changed.startsAt)
+        assertNull(changed.endsAt)
+        assertEquals("수정 장소", changed.venue)
+    }
+
+    @Test fun reservationHelpContentIsContextualForListAndDetail() {
+        val list = ReservationHelpPolicy.content(ReservationHelpPage.LIST)
+        val detail = ReservationHelpPolicy.content(ReservationHelpPage.DETAIL)
+
+        assertEquals("내 예약·구매 도움말", list.title)
+        assertTrue(list.sections.any { it.title == "확인 필요" })
+        assertTrue(list.sections.any { it.title == "예정된 내역과 지난 내역" })
+        assertEquals("내역 상세 도움말", detail.title)
+        assertTrue(detail.sections.any { it.title == "내역 링크" })
+        assertTrue(detail.sections.any { it.title == "내역 삭제" })
     }
 
     @Test fun tilePresentationIsDerivedFromActiveDraftKinds() {

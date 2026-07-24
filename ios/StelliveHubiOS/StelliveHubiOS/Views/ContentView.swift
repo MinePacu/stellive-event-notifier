@@ -254,6 +254,10 @@ private struct HubEventsTabView: View {
                         ReservationEditView(reservationID: id)
                     case .quickAdd(let sessionID):
                         ReservationQuickAddView(sessionID: sessionID)
+                    case .listHelp:
+                        ReservationHelpView(page: .list)
+                    case .detailHelp:
+                        ReservationHelpView(page: .detail)
                     }
                 }
                 .onAppear(perform: openPendingHubEvent)

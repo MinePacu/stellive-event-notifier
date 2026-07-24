@@ -6,6 +6,8 @@ enum ReservationRoute: Hashable {
     case detail(UUID)
     case edit(UUID)
     case quickAdd(sessionID: UUID?)
+    case listHelp
+    case detailHelp
 }
 
 struct ReservationSummaryCard: View {
@@ -67,7 +69,7 @@ struct ReservationsView: View {
                 Section("예정된 내역") {
                     ForEach(store.upcomingRecords) { record in
                         NavigationLink(value: ReservationRoute.detail(record.id)) {
-                            ReservationRecordRow(record: record)
+                            ReservationRecordRow(record: record, section: .upcoming)
                         }
                     }
                 }
@@ -76,7 +78,7 @@ struct ReservationsView: View {
                 Section("지난 내역") {
                     ForEach(store.pastRecords) { record in
                         NavigationLink(value: ReservationRoute.detail(record.id)) {
-                            ReservationRecordRow(record: record)
+                            ReservationRecordRow(record: record, section: .past)
                         }
                     }
                 }
@@ -91,6 +93,14 @@ struct ReservationsView: View {
         }
         .navigationTitle("내 예약·구매")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink(value: ReservationRoute.listHelp) {
+                    Image(systemName: "questionmark.circle")
+                }
+                .accessibilityLabel("내 예약 및 구매 도움말")
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             if let deleted = store.lastDeletedRecord {
                 HStack(spacing: 12) {
@@ -135,6 +145,7 @@ private struct ReservationDraftRow: View {
 
 private struct ReservationRecordRow: View {
     let record: ReservationRecord
+    let section: ReservationListSectionKind
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -142,8 +153,12 @@ private struct ReservationRecordRow: View {
             Text([ReservationPresentationPolicy.statusLabel(kind: record.kind, status: record.status), record.eventSnapshot.sourceLabel].joined(separator: " · "))
                 .font(.subheadline)
                 .foregroundStyle(record.status == .confirmed ? Color.teal : Color.secondary)
-            if let date = record.effectiveStartsAt {
-                Text(date.formatted(date: .abbreviated, time: .shortened))
+            if let timestampLabel = ReservationListPresentationPolicy.timestampLabel(
+                record: record,
+                section: section,
+                format: { $0.formatted(date: .abbreviated, time: .shortened) }
+            ) {
+                Text(timestampLabel)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -197,7 +212,7 @@ struct ReservationDetailView: View {
                     }
                     if record.preferredURL != nil {
                         Section {
-                            Button("상세 내역 열기", systemImage: "arrow.up.right") {
+                            Button("내역 링크 열기", systemImage: "arrow.up.right") {
                                 if let url = record.preferredURL { openURL(url) }
                             }
                         }
@@ -211,8 +226,14 @@ struct ReservationDetailView: View {
                     }
                     Section("처음 기록한 정보") {
                         detailRow("출처", record.eventSnapshot.sourceLabel)
-                        detailRow("연결 행사", record.eventID)
-                        detailRow("연결 일정", record.scheduleItemID)
+                        detailRow("연결 행사", ReservationDisplayPolicy.linkedEventTitle(record: record))
+                        detailRow(
+                            "연결 일정",
+                            ReservationDisplayPolicy.linkedScheduleLabel(
+                                record: record,
+                                format: { $0.formatted(date: .abbreviated, time: .shortened) }
+                            )
+                        )
                         detailRow("추가일", record.createdAt.formatted(date: .abbreviated, time: .shortened))
                     }
                     Section {
@@ -226,6 +247,14 @@ struct ReservationDetailView: View {
         }
         .navigationTitle("내역 상세")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink(value: ReservationRoute.detailHelp) {
+                    Image(systemName: "questionmark.circle")
+                }
+                .accessibilityLabel("내역 상세 도움말")
+            }
+        }
         .alert("내역을 삭제할까요?", isPresented: $showsDeleteConfirmation) {
             Button("삭제", role: .destructive) {
                 do { _ = try store.delete(id: reservationID); dismiss() }
@@ -254,6 +283,31 @@ struct ReservationDetailView: View {
     }
 }
 
+struct ReservationHelpView: View {
+    let page: ReservationHelpPage
+
+    var body: some View {
+        let content = ReservationHelpPolicy.content(page)
+        List {
+            Section {
+                Text(content.summary)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(Array(content.sections.enumerated()), id: \.offset) { _, section in
+                Section(section.title) {
+                    Text(section.body)
+                    ForEach(section.points, id: \.self) { point in
+                        Label(point, systemImage: "info.circle")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .navigationTitle(content.title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 struct ReservationEditView: View {
     let reservationID: UUID
     @EnvironmentObject private var store: ReservationStore
@@ -276,7 +330,10 @@ struct ReservationEditView: View {
                             Text(ReservationPresentationPolicy.statusLabel(kind: binding.wrappedValue.kind, status: $0)).tag($0)
                         }
                     }
-                    DatePicker("날짜와 시간", selection: optionalDate(binding.startsAtOverride, fallback: binding.wrappedValue.eventSnapshot.startsAt ?? Date()))
+                    DatePicker("시작 날짜와 시간", selection: optionalDate(binding.startsAtOverride, fallback: binding.wrappedValue.eventSnapshot.startsAt ?? Date()))
+                    if let end = binding.wrappedValue.effectiveEndsAt {
+                        DatePicker("종료 날짜와 시간", selection: optionalDate(binding.endsAtOverride, fallback: end))
+                    }
                     TextField("장소", text: optionalText(binding.venueOverride))
                 }
                 Section("링크") {
@@ -300,10 +357,10 @@ struct ReservationEditView: View {
                 }
                 Section {
                     Button("공식 행사 정보로 되돌리기") {
-                        draft?.displayTitleOverride = nil
-                        draft?.startsAtOverride = nil
-                        draft?.endsAtOverride = nil
-                        draft?.venueOverride = nil
+                        draft?.displayTitleOverride = draft?.eventSnapshot.title
+                        draft?.startsAtOverride = draft?.eventSnapshot.startsAt
+                        draft?.endsAtOverride = draft?.eventSnapshot.endsAt
+                        draft?.venueOverride = draft?.eventSnapshot.venueName
                     }
                     Button("내역 삭제", role: .destructive) { showsDeleteConfirmation = true }
                 }
@@ -321,7 +378,7 @@ struct ReservationEditView: View {
             ToolbarItem(placement: .confirmationAction) { Button("저장", action: save).disabled(draft == nil) }
         }
         .onAppear {
-            let record = store.record(id: reservationID)
+            let record = store.record(id: reservationID).map(ReservationEditPresentationPolicy.editableRecord)
             draft = record
             initialRecord = record
         }
@@ -365,6 +422,12 @@ struct ReservationEditView: View {
             errorMessage = "수량은 1 이상으로 입력해 주세요."
             return
         }
+        if let startsAt = draft.startsAtOverride,
+           let endsAt = draft.endsAtOverride,
+           endsAt <= startsAt {
+            errorMessage = "종료 시각은 시작 시각보다 뒤여야 합니다."
+            return
+        }
         if !allowsSensitiveURL && [draft.reservationDetailURL, draft.providerHistoryURL].contains(where: ReservationURLPolicy.containsSensitiveQuery) {
             showsSensitiveConfirmation = true
             return
@@ -373,8 +436,7 @@ struct ReservationEditView: View {
             showsDuplicateConfirmation = true
             return
         }
-        draft.displayTitleOverride = ReservationTextPolicy.nonEmpty(draft.displayTitleOverride)
-        draft.venueOverride = ReservationTextPolicy.nonEmpty(draft.venueOverride)
+        draft = ReservationEditPresentationPolicy.normalizedRecord(draft)
         draft.optionText = ReservationTextPolicy.nonEmpty(draft.optionText)
         draft.referenceNumber = ReservationTextPolicy.nonEmpty(draft.referenceNumber)
         draft.note = ReservationTextPolicy.nonEmpty(draft.note)

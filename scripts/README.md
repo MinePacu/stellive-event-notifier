@@ -8,6 +8,16 @@
 
 These helpers avoid full repository traversal, full diffs, full CI logs, and full test suites in commit/push preparation and merge-only workflows.
 
+## Mobile build cache
+
+Set the cache root with `STELLIVE_CACHE_DIR`, or put its absolute path as the only
+line in `scripts/.cache-root`. The local config file is ignored by Git. The iOS
+simulator build and install scripts use its `DerivedData-ios-simulator` subfolder;
+Android build scripts use its `gradle-user-home` subfolder. The external cache root
+must be mounted before a mobile build starts. `IOS_DERIVED_DATA_DIR` and
+`GRADLE_USER_HOME` override their respective full cache paths for one invocation.
+Build logs remain in `scripts/logs`.
+
 `commit-push-lite.sh` defaults to commit-only mode. Use `--push-github`, `--push-gitlab`, or `--push-all` for explicit push targets; use `--no-push` to state commit-only intent. It never force-pushes or pushes tags.
 
 ```bash

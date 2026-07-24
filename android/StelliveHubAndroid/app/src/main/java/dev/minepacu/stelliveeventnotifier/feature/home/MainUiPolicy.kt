@@ -224,6 +224,8 @@ object MainUiPolicy {
         "reservations" -> "내 예약·구매"
         "reservation_detail" -> "내역 상세"
         "reservation_edit" -> "내역 수정"
+        "reservations_help" -> "내 예약·구매 도움말"
+        "reservation_detail_help" -> "내역 상세 도움말"
         else -> "홈"
     }
 
@@ -248,6 +250,8 @@ object MainUiPolicy {
         "reservations" -> "기기에 저장된 예약과 구매 내역"
         "reservation_detail" -> "예약·예매·구매 정보와 관련 링크"
         "reservation_edit" -> "로컬 내역 정보 편집"
+        "reservations_help" -> "내역 추가와 분류 기준"
+        "reservation_detail_help" -> "상태, 링크와 공식 행사 연결 기준"
         else -> "라이브 현황과 최근 알림"
     }
 
