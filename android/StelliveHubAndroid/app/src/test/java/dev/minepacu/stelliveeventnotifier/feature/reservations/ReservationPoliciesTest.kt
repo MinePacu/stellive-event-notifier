@@ -10,6 +10,8 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationExternalLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPage
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpSectionId
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpTone
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationLinkSource
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListPolicy
@@ -182,11 +184,66 @@ class ReservationPoliciesTest {
         val detail = ReservationHelpPolicy.content(ReservationHelpPage.DETAIL)
 
         assertEquals("내 예약·구매 도움말", list.title)
-        assertTrue(list.sections.any { it.title == "확인 필요" })
-        assertTrue(list.sections.any { it.title == "예정된 내역과 지난 내역" })
+        assertEquals(listOf(1, 2, 3), list.steps.map { it.number })
+        assertTrue(list.steps.last().body.contains("링크 없이 추가"))
+
+        val pending = list.sections.single { it.id == ReservationHelpSectionId.PENDING_DRAFT }
+        assertEquals(ReservationHelpTone.WARNING, pending.tone)
+        assertTrue(pending.body.contains("최대 2시간"))
+        assertTrue(pending.body.contains("자동 확인하지"))
+        assertTrue(pending.points.any { it.contains("확인 필요에서 직접 추가") })
+
+        val linkless = list.sections.single { it.id == ReservationHelpSectionId.LINKLESS_ADD }
+        assertEquals(ReservationHelpTone.INFO, linkless.tone)
+        assertTrue(linkless.body.contains("링크 없이 추가"))
+
+        val storage = list.sections.single { it.id == ReservationHelpSectionId.LOCAL_STORAGE }
+        assertEquals(ReservationHelpTone.SECURITY, storage.tone)
+        assertTrue(storage.body.contains("서버로 전송되지"))
+        assertTrue(storage.body.contains("백업 대상에서 제외"))
+
         assertEquals("내역 상세 도움말", detail.title)
-        assertTrue(detail.sections.any { it.title == "내역 링크" })
-        assertTrue(detail.sections.any { it.title == "내역 삭제" })
+        val actions = detail.sections.single { it.id == ReservationHelpSectionId.DETAIL_ACTIONS }
+        assertEquals(ReservationHelpTone.INFO, actions.tone)
+        assertTrue(actions.points.any { it.contains("상태·일정·장소") })
+        assertTrue(actions.points.any { it.contains("옵션·수량") && it.contains("메모") })
+
+        val linkPriority = detail.sections.single { it.id == ReservationHelpSectionId.LINK_PRIORITY }
+        assertTrue(linkPriority.body.contains("상세 링크가 있으면"))
+        assertTrue(linkPriority.body.contains("제공사 내역 URL"))
+
+        val overrides = detail.sections.single { it.id == ReservationHelpSectionId.USER_OVERRIDES }
+        assertTrue(overrides.body.contains("우선 표시"))
+
+        val official = detail.sections.single { it.id == ReservationHelpSectionId.OFFICIAL_EVENT }
+        assertEquals(ReservationHelpTone.WARNING, official.tone)
+        assertTrue(official.body.contains("내역 상태"))
+        assertTrue(official.body.contains("자동으로 바뀌지"))
+
+        val deletion = detail.sections.single { it.id == ReservationHelpSectionId.DELETE_WARNING }
+        assertEquals(ReservationHelpTone.DANGER, deletion.tone)
+        assertTrue(deletion.body.contains("외부 서비스"))
+        assertTrue(deletion.body.contains("취소되지"))
+
+        assertEquals(
+            listOf(
+                ReservationHelpSectionId.PENDING_DRAFT,
+                ReservationHelpSectionId.LINKLESS_ADD,
+                ReservationHelpSectionId.LIST_GROUPS,
+                ReservationHelpSectionId.LOCAL_STORAGE,
+            ),
+            list.sections.map { it.id },
+        )
+        assertEquals(
+            listOf(
+                ReservationHelpSectionId.DETAIL_ACTIONS,
+                ReservationHelpSectionId.LINK_PRIORITY,
+                ReservationHelpSectionId.USER_OVERRIDES,
+                ReservationHelpSectionId.OFFICIAL_EVENT,
+                ReservationHelpSectionId.DELETE_WARNING,
+            ),
+            detail.sections.map { it.id },
+        )
     }
 
     @Test fun tilePresentationIsDerivedFromActiveDraftKinds() {

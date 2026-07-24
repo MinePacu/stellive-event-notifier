@@ -176,11 +176,55 @@ final class ReservationPoliciesTests: XCTestCase {
         let detail = ReservationHelpPolicy.content(.detail)
 
         XCTAssertEqual(list.title, "내 예약·구매 도움말")
-        XCTAssertTrue(list.sections.contains { $0.title == "확인 필요" })
-        XCTAssertTrue(list.sections.contains { $0.title == "예정된 내역과 지난 내역" })
+        XCTAssertEqual(list.steps.map(\.number), [1, 2, 3])
+        XCTAssertTrue(list.steps.last?.body.contains("링크 없이 추가") == true)
+
+        let pending = list.sections.first { $0.id == .pendingDraft }
+        XCTAssertEqual(pending?.tone, .warning)
+        XCTAssertTrue(pending?.body.contains("최대 2시간") == true)
+        XCTAssertTrue(pending?.body.contains("자동 확인하지") == true)
+        XCTAssertTrue(pending?.points.contains { $0.contains("확인 필요에서 직접 추가") } == true)
+
+        let linkless = list.sections.first { $0.id == .linklessAdd }
+        XCTAssertEqual(linkless?.tone, .info)
+        XCTAssertTrue(linkless?.body.contains("링크 없이 추가") == true)
+
+        let storage = list.sections.first { $0.id == .localStorage }
+        XCTAssertEqual(storage?.tone, .security)
+        XCTAssertTrue(storage?.body.contains("서버로 전송되지") == true)
+        XCTAssertTrue(storage?.body.contains("백업 대상에서 제외") == true)
+
         XCTAssertEqual(detail.title, "내역 상세 도움말")
-        XCTAssertTrue(detail.sections.contains { $0.title == "내역 링크" })
-        XCTAssertTrue(detail.sections.contains { $0.title == "내역 삭제" })
+        let actions = detail.sections.first { $0.id == .detailActions }
+        XCTAssertEqual(actions?.tone, .info)
+        XCTAssertTrue(actions?.points.contains { $0.contains("상태·일정·장소") } == true)
+        XCTAssertTrue(actions?.points.contains { $0.contains("옵션·수량") && $0.contains("메모") } == true)
+
+        let linkPriority = detail.sections.first { $0.id == .linkPriority }
+        XCTAssertTrue(linkPriority?.body.contains("상세 링크가 있으면") == true)
+        XCTAssertTrue(linkPriority?.body.contains("제공사 내역 URL") == true)
+
+        let overrides = detail.sections.first { $0.id == .userOverrides }
+        XCTAssertTrue(overrides?.body.contains("우선 표시") == true)
+
+        let official = detail.sections.first { $0.id == .officialEvent }
+        XCTAssertEqual(official?.tone, .warning)
+        XCTAssertTrue(official?.body.contains("내역 상태") == true)
+        XCTAssertTrue(official?.body.contains("자동으로 바뀌지") == true)
+
+        let deletion = detail.sections.first { $0.id == .deleteWarning }
+        XCTAssertEqual(deletion?.tone, .danger)
+        XCTAssertTrue(deletion?.body.contains("외부 서비스") == true)
+        XCTAssertTrue(deletion?.body.contains("취소되지") == true)
+
+        XCTAssertEqual(
+            list.sections.map(\.id),
+            [.pendingDraft, .linklessAdd, .listGroups, .localStorage]
+        )
+        XCTAssertEqual(
+            detail.sections.map(\.id),
+            [.detailActions, .linkPriority, .userOverrides, .officialEvent, .deleteWarning]
+        )
     }
 
     func testSystemShortcutLabelsUseDraftCountAndKind() {

@@ -188,6 +188,9 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationExternalLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPage
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpSection
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpStep
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpTone
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationLinkSource
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListSectionKind
@@ -787,6 +790,13 @@ private var notificationPermissionRequested = false
 
     private fun setupTopBarActions() {
         binding.topBarReservations.setOnClickListener { pushScreen(HubScreen.RESERVATIONS) }
+        binding.topBarReservationHelp.setOnClickListener {
+            when (navigationHistory.currentScreen) {
+                HubScreen.RESERVATIONS -> pushScreen(HubScreen.RESERVATIONS_HELP)
+                HubScreen.RESERVATION_DETAIL -> pushScreen(HubScreen.RESERVATION_DETAIL_HELP)
+                else -> Unit
+            }
+        }
         binding.topBarAnnouncement.setOnClickListener { pushScreen(HubScreen.ANNOUNCEMENTS) }
         binding.topBarSettings.setOnClickListener {
             pushScreen(HubScreen.SETTINGS)
@@ -1085,6 +1095,15 @@ private fun updateNavigationChrome() {
         binding.topBarTitleGroup.isVisible = spec.showTopBarTitleAtRest
         binding.topBarSettings.isVisible = spec.showSettingsAction
         binding.topBarAnnouncementContainer.isVisible = spec.showAnnouncementAction
+        val reservationHelpScreen = navigationHistory.currentScreen
+        binding.topBarReservationHelp.isVisible = reservationHelpScreen in setOf(
+            HubScreen.RESERVATIONS,
+            HubScreen.RESERVATION_DETAIL,
+        )
+        binding.topBarReservationHelp.contentDescription = when (reservationHelpScreen) {
+            HubScreen.RESERVATION_DETAIL -> "내역 상세 도움말"
+            else -> "내 예약 및 구매 도움말"
+        }
         val showsReservations = navigationHistory.currentScreen in setOf(HubScreen.GOODS_EVENTS, HubScreen.GOODS_EVENT_DETAIL)
         binding.topBarReservationsContainer.isVisible = showsReservations
         val pendingReservations = reservationDrafts.count { it.expiresAt.isAfter(Instant.now()) }
@@ -1950,12 +1969,9 @@ private fun startScreen(
         startScreen(
             screenId = "reservations",
             title = "내 예약·구매",
-            role = "외부 결제 여부를 자동 검증하지 않으며 사용자가 확인한 기록만 이 기기에 저장합니다.",
+            role = "임시 항목과 내역은 이 기기에 저장되며 외부 완료 여부를 자동 확인하지 않습니다.",
             showExpandedBodyHeader = false,
         )
-        binding.contentList.addView(detailActionButton("내 예약·구매 도움말", false) {
-            pushScreen(HubScreen.RESERVATIONS_HELP)
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { bottomMargin = dp(10) })
         binding.contentList.addView(detailActionButton("빠른 설정에 내역 추가 버튼 넣기", false) {
             ReservationSystemShortcutCoordinator.requestTile(this)
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { bottomMargin = dp(10) })
@@ -1987,6 +2003,11 @@ private fun startScreen(
         addReservationRecordSection("지난 내역", sections.past, ReservationListSectionKind.PAST)
         if (activeDrafts.isEmpty() && reservationRecords.isEmpty()) {
             binding.contentList.addView(compactEventCard("저장된 내역 없음", "굿즈·행사에서 티켓, 구매 또는 예약 링크를 열면 진행 중인 항목이 여기에 표시됩니다.", emptyList()))
+            binding.contentList.addView(detailActionButton("사용 방법 보기", false) {
+                pushScreen(HubScreen.RESERVATIONS_HELP)
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply {
+                bottomMargin = dp(10)
+            })
         }
     }
 
@@ -2050,12 +2071,6 @@ private fun startScreen(
         )
 
         binding.contentList.addView(reservationDetailSummaryCard(presentation))
-        binding.contentList.addView(detailActionButton("내역 상세 도움말", false) {
-            pushScreen(HubScreen.RESERVATION_DETAIL_HELP)
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply {
-            topMargin = dp(4)
-            bottomMargin = dp(10)
-        })
         binding.contentList.addView(sectionLabel("빠른 동작"))
         binding.contentList.addView(reservationDetailActionRow(presentation.links.firstOrNull()?.url))
 
@@ -2112,16 +2127,153 @@ private fun startScreen(
             role = content.summary,
             showExpandedBodyHeader = false,
         )
-        binding.contentList.addView(compactEventCard("알아두기", content.summary, emptyList()))
+        if (content.steps.isNotEmpty()) {
+            binding.contentList.addView(sectionLabel("처음이라면 이렇게 사용하세요"))
+            binding.contentList.addView(reservationHelpStepsCard(content.steps))
+        }
         content.sections.forEach { section ->
-            val body = buildString {
-                append(section.body)
-                section.points.forEach { point ->
-                    append("\n\n• ")
-                    append(point)
+            binding.contentList.addView(reservationHelpSectionCard(section))
+        }
+    }
+
+    private fun reservationHelpStepsCard(steps: List<ReservationHelpStep>): MaterialCardView =
+        baseCard(HubCardStyle.STANDARD).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(10) }
+            strokeWidth = dp(1)
+            strokeColor = color(R.color.hub_primary)
+            setCardBackgroundColor(color(R.color.hub_accent_soft))
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+                steps.forEachIndexed { index, step ->
+                    if (index > 0) {
+                        addView(View(context).apply {
+                            setBackgroundColor(color(R.color.hub_primary).withAlpha(45))
+                        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)).apply {
+                            marginStart = dp(42)
+                            topMargin = dp(11)
+                            bottomMargin = dp(11)
+                        })
+                    }
+                    addView(reservationHelpStepRow(step))
                 }
-            }
-            binding.contentList.addView(compactEventCard(section.title, body, emptyList()))
+            })
+        }
+
+    private fun reservationHelpStepRow(step: ReservationHelpStep): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.TOP
+            contentDescription = "${step.number}단계, ${step.title}. ${step.body}"
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            addView(TextView(context).apply {
+                text = step.number.toString()
+                gravity = Gravity.CENTER
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(color(R.color.hub_on_primary))
+                background = rounded(color(R.color.hub_primary), dp(18))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(10) })
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(context).apply {
+                    text = step.title
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(color(R.color.hub_text))
+                })
+                addView(TextView(context).apply {
+                    text = step.body
+                    textSize = 13f
+                    setTextColor(color(R.color.hub_text_muted))
+                    setLineSpacing(0f, 1.12f)
+                    setPadding(0, dp(4), 0, 0)
+                })
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
+
+    private fun reservationHelpSectionCard(section: ReservationHelpSection): MaterialCardView {
+        val accent = when (section.tone) {
+            ReservationHelpTone.NORMAL -> color(R.color.hub_text_muted)
+            ReservationHelpTone.INFO,
+            ReservationHelpTone.SECURITY -> color(R.color.hub_primary)
+            ReservationHelpTone.WARNING -> color(R.color.hub_warning)
+            ReservationHelpTone.DANGER -> color(R.color.hub_schedule_tag_cancelled)
+        }
+        val background = when (section.tone) {
+            ReservationHelpTone.NORMAL -> color(R.color.hub_card_surface)
+            ReservationHelpTone.INFO,
+            ReservationHelpTone.SECURITY -> color(R.color.hub_accent_soft)
+            ReservationHelpTone.WARNING -> color(R.color.hub_warning_soft)
+            ReservationHelpTone.DANGER -> color(R.color.hub_schedule_tag_cancelled_soft)
+        }
+        val icon = when (section.tone) {
+            ReservationHelpTone.NORMAL,
+            ReservationHelpTone.INFO -> android.R.drawable.ic_dialog_info
+            ReservationHelpTone.WARNING -> android.R.drawable.ic_dialog_alert
+            ReservationHelpTone.SECURITY -> android.R.drawable.ic_lock_lock
+            ReservationHelpTone.DANGER -> android.R.drawable.ic_menu_delete
+        }
+        val meaning = when (section.tone) {
+            ReservationHelpTone.NORMAL -> "안내"
+            ReservationHelpTone.INFO -> "사용 방법"
+            ReservationHelpTone.WARNING -> "주의"
+            ReservationHelpTone.SECURITY -> "로컬 저장 및 보안"
+            ReservationHelpTone.DANGER -> "중요 경고"
+        }
+        return baseCard(HubCardStyle.COMPACT).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(10) }
+            strokeWidth = dp(1)
+            strokeColor = accent
+            setCardBackgroundColor(background)
+            contentDescription = "$meaning, ${section.title}. ${section.body}" +
+                section.points.joinToString(separator = "", prefix = if (section.points.isEmpty()) "" else ". ") { it }
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+                setPadding(dp(14), dp(14), dp(14), dp(14))
+                addView(ImageView(context).apply {
+                    setImageResource(icon)
+                    imageTintList = ColorStateList.valueOf(accent)
+                    contentDescription = meaning
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }, LinearLayout.LayoutParams(dp(24), dp(24)).apply { marginEnd = dp(11) })
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(TextView(context).apply {
+                        text = section.title
+                        textSize = 15f
+                        typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(accent)
+                    })
+                    addView(TextView(context).apply {
+                        text = section.body
+                        textSize = 13f
+                        setTextColor(color(R.color.hub_text))
+                        setLineSpacing(0f, 1.14f)
+                        setPadding(0, dp(6), 0, 0)
+                    })
+                    section.points.forEach { point ->
+                        addView(TextView(context).apply {
+                            text = "• $point"
+                            textSize = 13f
+                            setTextColor(color(R.color.hub_text))
+                            setLineSpacing(0f, 1.14f)
+                            setPadding(0, dp(8), 0, 0)
+                        })
+                    }
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            })
         }
     }
 

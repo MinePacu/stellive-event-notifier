@@ -89,6 +89,11 @@ struct ReservationsView: View {
                     message: "굿즈·행사의 티켓, 구매 또는 예약 링크를 열면 여기에서 완료 내역을 추가할 수 있습니다."
                 )
                 .listRowBackground(Color.clear)
+                NavigationLink(value: ReservationRoute.listHelp) {
+                    Label("사용 방법 보기", systemImage: "questionmark.circle")
+                        .font(.body.weight(.semibold))
+                }
+                .accessibilityLabel("내 예약 및 구매 사용 방법 보기")
             }
         }
         .navigationTitle("내 예약·구매")
@@ -289,22 +294,134 @@ struct ReservationHelpView: View {
     var body: some View {
         let content = ReservationHelpPolicy.content(page)
         List {
-            Section {
-                Text(content.summary)
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(Array(content.sections.enumerated()), id: \.offset) { _, section in
-                Section(section.title) {
-                    Text(section.body)
-                    ForEach(section.points, id: \.self) { point in
-                        Label(point, systemImage: "info.circle")
-                            .foregroundStyle(.secondary)
+            if !content.steps.isEmpty {
+                Section {
+                    ForEach(content.steps, id: \.number) { step in
+                        ReservationHelpStepRow(step: step)
                     }
+                } header: {
+                    Text("처음이라면 이렇게 사용하세요")
+                } footer: {
+                    Text(content.summary)
+                }
+            }
+
+            ForEach(content.sections, id: \.id) { section in
+                Section {
+                    ReservationHelpSectionRow(section: section)
+                        .listRowBackground(section.tone.backgroundColor)
                 }
             }
         }
         .navigationTitle(content.title)
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct ReservationHelpStepRow: View {
+    let step: ReservationHelpStep
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(step.number)")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(Color(uiColor: .systemBackground))
+                .frame(width: 32, height: 32)
+                .background(Color.accentColor, in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(step.title)
+                    .font(.headline)
+                Text(step.body)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(step.number)단계, \(step.title). \(step.body)")
+    }
+}
+
+private struct ReservationHelpSectionRow: View {
+    let section: ReservationHelpSection
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: section.tone.systemImage)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(section.tone.foregroundColor)
+                .frame(width: 24, height: 24)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 7) {
+                Text(section.title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(section.body)
+                    .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(section.points, id: \.self) { point in
+                    HStack(alignment: .firstTextBaseline, spacing: 7) {
+                        Image(systemName: "circle.fill")
+                            .font(.system(size: 5))
+                            .accessibilityHidden(true)
+                        Text(point)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .font(.subheadline)
+                }
+            }
+        }
+        .padding(.vertical, 5)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        ([section.tone.accessibilityName, section.title, section.body] + section.points)
+            .joined(separator: ". ")
+    }
+}
+
+private extension ReservationHelpTone {
+    var systemImage: String {
+        switch self {
+        case .normal: return "info.circle"
+        case .info: return "info.circle.fill"
+        case .warning: return "exclamationmark.triangle.fill"
+        case .security: return "lock.shield.fill"
+        case .danger: return "trash.fill"
+        }
+    }
+
+    var accessibilityName: String {
+        switch self {
+        case .normal: return "안내"
+        case .info: return "사용 방법"
+        case .warning: return "주의"
+        case .security: return "로컬 저장 및 보안"
+        case .danger: return "중요 경고"
+        }
+    }
+
+    var foregroundColor: Color {
+        switch self {
+        case .normal: return .secondary
+        case .info, .security: return .accentColor
+        case .warning: return .orange
+        case .danger: return .red
+        }
+    }
+
+    var backgroundColor: Color {
+        switch self {
+        case .normal: return Color.secondary.opacity(0.07)
+        case .info, .security: return Color.accentColor.opacity(0.1)
+        case .warning: return Color.orange.opacity(0.12)
+        case .danger: return Color.red.opacity(0.12)
+        }
     }
 }
 
