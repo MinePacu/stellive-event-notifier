@@ -40,6 +40,8 @@
 	<string>$(HUB_BASE_URL)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.news</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -10,6 +10,7 @@ struct StelliveHubApp: App {
     @StateObject private var songBrowseSessionStore: SongBrowseSessionStore
     @StateObject private var songOpenPreferenceStore: SongOpenPreferenceStore
     @StateObject private var announcementReadStore: AnnouncementReadStore
+    @StateObject private var reservationStore: ReservationStore
 
     init() {
         let fallback = MockHubStore()
@@ -25,6 +26,7 @@ struct StelliveHubApp: App {
         _songBrowseSessionStore = StateObject(wrappedValue: SongBrowseSessionStore())
         _songOpenPreferenceStore = StateObject(wrappedValue: SongOpenPreferenceStore())
         _announcementReadStore = StateObject(wrappedValue: AnnouncementReadStore())
+        _reservationStore = StateObject(wrappedValue: ReservationStore())
     }
 
     var body: some Scene {
@@ -37,6 +39,7 @@ struct StelliveHubApp: App {
                 .environmentObject(songBrowseSessionStore)
                 .environmentObject(songOpenPreferenceStore)
                 .environmentObject(announcementReadStore)
+                .environmentObject(reservationStore)
                 .preferredColorScheme(store.settings.appearanceMode.preferredColorScheme)
                 .task {
                     _ = await serverStore.bootstrap()

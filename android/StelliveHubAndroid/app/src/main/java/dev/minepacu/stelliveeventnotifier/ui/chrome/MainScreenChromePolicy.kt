@@ -19,7 +19,7 @@ data class MainNavigationChromeSpec(
 
 object MainScreenChromePolicy {
     private val rootScreens = setOf("home", "live", "songs", "goods_events")
-    private val expandedBodyHeaderScreens = setOf("goods_event_detail")
+    private val expandedBodyHeaderScreens = setOf("goods_event_detail", "reservations", "reservation_detail", "reservation_edit")
     private val titleStickyWhileScrollingScreens = emptySet<String>()
 
     fun spec(screenId: String, canGoBack: Boolean = false): MainScreenChromeSpec {

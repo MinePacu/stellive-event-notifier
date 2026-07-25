@@ -78,6 +78,10 @@ class HubBottomSheetDialog(
         dialog.dismiss()
     }
 
+    fun setOnDismissListener(listener: () -> Unit) {
+        dialog.setOnDismissListener { listener() }
+    }
+
     fun actionButton(label: CharSequence, primary: Boolean, onClick: () -> Unit): MaterialButton =
         MaterialButton(context).apply {
             text = label

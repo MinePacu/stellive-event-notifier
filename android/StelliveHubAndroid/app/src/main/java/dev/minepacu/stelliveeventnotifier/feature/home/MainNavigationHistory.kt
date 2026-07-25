@@ -7,6 +7,11 @@ enum class HubScreen(val id: String) {
     SONG_MEMBER_FILTER("song_member_filter"),
     GOODS_EVENTS("goods_events"),
     GOODS_EVENT_DETAIL("goods_event_detail"),
+    RESERVATIONS("reservations"),
+    RESERVATION_DETAIL("reservation_detail"),
+    RESERVATION_EDIT("reservation_edit"),
+    RESERVATIONS_HELP("reservations_help"),
+    RESERVATION_DETAIL_HELP("reservation_detail_help"),
     LIVE("live"),
     HISTORY("history"),
     ANNOUNCEMENTS("announcements"),
@@ -60,6 +65,20 @@ class MainNavigationHistory(initialScreen: HubScreen = HubScreen.HOME) {
         return previous
     }
 
+    fun goBackTo(screen: HubScreen): HubScreen {
+        val targetIndex = previousScreens.indexOfLast { it == screen }
+        if (targetIndex >= 0) {
+            previousScreens.subList(targetIndex, previousScreens.size).clear()
+        } else {
+            previousScreens.clear()
+            val root = screen.rootScreen()
+            if (screen != root) previousScreens += root
+        }
+        currentRoot = screen.rootScreen()
+        currentScreen = screen
+        return screen
+    }
+
     fun goBackToCurrentRoot(): HubScreen? {
         if (currentScreen == currentRoot) return null
         previousScreens.clear()
@@ -87,7 +106,12 @@ fun HubScreen.rootScreen(): HubScreen = when (this) {
     HubScreen.SONG_SEARCH,
     HubScreen.SONG_MEMBER_FILTER -> HubScreen.SONGS
     HubScreen.GOODS_EVENTS,
-    HubScreen.GOODS_EVENT_DETAIL -> HubScreen.GOODS_EVENTS
+    HubScreen.GOODS_EVENT_DETAIL,
+    HubScreen.RESERVATIONS,
+    HubScreen.RESERVATION_DETAIL,
+    HubScreen.RESERVATION_EDIT,
+    HubScreen.RESERVATIONS_HELP,
+    HubScreen.RESERVATION_DETAIL_HELP -> HubScreen.GOODS_EVENTS
     HubScreen.ANNOUNCEMENTS,
     HubScreen.ANNOUNCEMENT_DETAIL -> HubScreen.HOME
     else -> HubScreen.HOME

@@ -29,6 +29,7 @@ ios/StelliveHubiOS/Config/Local.xcconfig
 .worktrees/
 qa-screenshots/
 scripts/logs/
+scripts/.cache-root
 
 # Secrets
 .env

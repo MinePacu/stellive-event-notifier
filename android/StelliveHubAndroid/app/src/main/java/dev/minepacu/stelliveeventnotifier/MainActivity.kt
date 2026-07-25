@@ -1,6 +1,9 @@
 package dev.minepacu.stelliveeventnotifier
 
 import android.Manifest
+import android.app.AlertDialog
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -14,6 +17,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -64,9 +68,11 @@ import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.WindowMetricsCalculator
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
 import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.android.material.snackbar.Snackbar
 import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.AndroidEntryPoint
 import dev.minepacu.stelliveeventnotifier.core.device.DeviceIdStore
@@ -89,6 +95,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.SongCatalogItem
 import dev.minepacu.stelliveeventnotifier.core.model.AnnouncementsSummary
 import dev.minepacu.stelliveeventnotifier.core.model.ServiceAnnouncement
 import dev.minepacu.stelliveeventnotifier.databinding.ActivityMainBinding
+import dev.minepacu.stelliveeventnotifier.databinding.ViewReservationReturnPromptBinding
 import dev.minepacu.stelliveeventnotifier.feature.calendar.HubCalendarDeepLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.calendar.CalendarUiPolicy
 import dev.minepacu.stelliveeventnotifier.feature.calendar.HubEventsCalendarView
@@ -139,10 +146,16 @@ import dev.minepacu.stelliveeventnotifier.ui.components.HubSingleChoiceOption
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 import java.net.URL
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.YearMonth
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.UUID
 import kotlin.concurrent.thread
 import dev.minepacu.stelliveeventnotifier.feature.home.SettingsHubRow
 import dev.minepacu.stelliveeventnotifier.feature.home.StatusSummaryItem
@@ -163,8 +176,54 @@ import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenNavigationMotion
 import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenTransitionController
 import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenTransitionPolicy
 import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenTransitionReason
+import dev.minepacu.stelliveeventnotifier.feature.reservations.data.RoomReservationRepository
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationActionPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraft
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftExpiryKind
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftExpiryPresentation
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftExpiryPresentationPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDetailLink
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDetailPresentation
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDetailPresentationPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDetailRow
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkRoute
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEditPresentationPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEditStatusPresentationPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEventSnapshot
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationExternalLinkPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPage
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpFaqExpansionPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpAction
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpContextPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpFaq
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpFaqId
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpSection
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpSectionId
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpStatusKind
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpStatusPresentation
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpStep
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpTone
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationLinkSource
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationKind
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListSectionKind
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationPresentationPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationRecord
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptDecision
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPresentationKind
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPresentationPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationStatus
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationQuickAddActivity
+import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationTileService
+import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationSystemShortcutCoordinator
 
 private const val EXIT_BACK_PRESS_INTERVAL_MS = 2_000L
+private const val RETURN_PROMPT_ANIMATION_DURATION_MS = 200L
 private const val NAVIGATION_RAIL_WIDTH_DP = 80
 private const val LARGE_SCREEN_CONTENT_MAX_WIDTH_DP = 760
 private const val GOODS_EVENTS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1120
@@ -175,9 +234,12 @@ private const val NAVIGATION_CURRENT_ROOT_STATE = "navigation_current_root"
 private const val NAVIGATION_CURRENT_SCREEN_STATE = "navigation_current_screen"
 private const val NAVIGATION_PREVIOUS_SCREENS_STATE = "navigation_previous_screens"
 private const val CONTENT_SCROLL_Y_STATE = "content_scroll_y"
+private const val RESERVATION_PENDING_SECTION_TAG = "reservation_pending_section"
+private const val RESERVATION_UPCOMING_SECTION_TAG = "reservation_upcoming_section"
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
+@Inject lateinit var reservationRepository: RoomReservationRepository
 private data class LiveClockTextView(
     val startedAt: Instant,
     val textView: TextView,
@@ -205,6 +267,22 @@ val remainingCount: Int,
 private data class ScrollablePane(
     val scrollView: NestedScrollView,
     val content: LinearLayout,
+)
+
+private data class ReservationDateTimeInput(
+    val field: EditText,
+    var value: Instant?,
+    val view: View,
+)
+
+private data class ReservationEditTextInput(
+    val field: EditText,
+    val view: View,
+)
+
+private data class ReservationEditStatusInput(
+    val view: View,
+    val update: (ReservationStatus) -> Unit,
 )
 
 private data class SongPanes(val filter: ScrollablePane, val list: ScrollablePane)
@@ -258,6 +336,7 @@ private lateinit var binding: ActivityMainBinding
     private var liveStatusSourceLabel = "앱 내 목업"
     private var debugModeEnabled = false
     private var systemTopInsetPx = 0
+    private var systemBottomInsetPx = 0
     private var currentFoldFeature: HubFoldFeature? = null
     private var currentAdaptiveSpec: HubAdaptiveSpec = HubAdaptivePolicy.spec(widthDp = 0)
     private val topBarScrollSourceOffsets = mutableMapOf<View, Int>()
@@ -320,6 +399,20 @@ private var homeRecentSongs: List<SongCatalogItem>? = null
 private var isLoadingHomeRecentSongs = false
 private var selectedHubEventId: String? = null
 private var selectedHubEventScheduleItemId: String? = null
+private val reservationDateFormatter = DateTimeFormatter.ofPattern("yyyy. M. d. HH:mm").withZone(ZoneId.of("Asia/Seoul"))
+private var reservationDrafts: List<ReservationDraft> = emptyList()
+private var reservationRecords: List<ReservationRecord> = emptyList()
+private var selectedReservationId: UUID? = null
+private var reservationEditHasUnsavedChanges: (() -> Boolean)? = null
+private val externallyOpenedReservationSessionIds = mutableSetOf<UUID>()
+private val promptedReservationSessionIds = mutableSetOf<UUID>()
+private var reservationExternalFlowActive = false
+private var reservationExternalFlowLeftApp = false
+private var pendingReservationRecordingFailure = false
+private var reservationReturnPromptView: View? = null
+private var pendingReservationHelpScrollAction: ReservationHelpAction? = null
+private var expandedReservationHelpFaqId: ReservationHelpFaqId? = null
+private val reservationHelpFaqUiStates = mutableMapOf<ReservationHelpFaqId, ReservationHelpFaqUiState>()
 private var expandedHubEventScheduleEventId: String? = null
 private val expandedHubEventScheduleItemIds = mutableSetOf<String>()
 private var selectedAnnouncementId: String? = null
@@ -340,6 +433,14 @@ private var notificationPermissionRequested = false
     private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
     private val cardFactory by lazy { HubCardFactory(this) }
 
+    private data class ReservationHelpFaqUiState(
+        val card: MaterialCardView,
+        val header: LinearLayout,
+        val answerContainer: LinearLayout,
+        val chevron: ImageView,
+        val question: String,
+    )
+
     override fun onCreate(savedInstanceState: Bundle?) {
         selectedAppearanceMode = readAppearanceMode()
         liveMemberPriorityIds = readLiveMemberPriorityIds()
@@ -351,6 +452,9 @@ private var notificationPermissionRequested = false
         ) ?: true
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            scheduleReservationReturnPromptPositionUpdate()
+        }
         screenTransitionController = ScreenTransitionController(
             screenBody = binding.screenBody,
             dp = { value -> dp(value).toFloat() },
@@ -361,6 +465,28 @@ private var notificationPermissionRequested = false
         songFavoritesRepository = DataStoreSongFavoritesRepository(this)
         songDiscoveryRepository = DataStoreSongDiscoveryRepository(this)
         announcementReadStore = AnnouncementReadStore(this)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                reservationRepository.drafts.collect { drafts ->
+                    reservationDrafts = drafts
+                    ReservationTileService.requestRefresh(this@MainActivity)
+                    updateNavigationChrome()
+                    if (navigationHistory.currentScreen in setOf(HubScreen.GOODS_EVENTS, HubScreen.RESERVATIONS)) {
+                        refreshScreenWhenIdle(navigationHistory.currentScreen) { renderScreen(navigationHistory.currentScreen) }
+                    }
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                reservationRepository.records.collect { records ->
+                    reservationRecords = records
+                    if (navigationHistory.currentScreen in setOf(HubScreen.GOODS_EVENTS, HubScreen.RESERVATIONS, HubScreen.RESERVATION_DETAIL)) {
+                        refreshScreenWhenIdle(navigationHistory.currentScreen) { renderScreen(navigationHistory.currentScreen) }
+                    }
+                }
+            }
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 announcementReadStore.readKeys.collect { keys ->
@@ -414,9 +540,13 @@ private var notificationPermissionRequested = false
     override fun onResume() {
         super.onResume()
         scheduleLiveClockRefresh()
+        if (reservationExternalFlowLeftApp) {
+            liveClockHandler.postDelayed(::evaluateReservationReturnPrompt, 350L)
+        }
     }
 
     override fun onPause() {
+        if (reservationExternalFlowActive) reservationExternalFlowLeftApp = true
         liveClockHandler.removeCallbacks(liveClockTicker)
         super.onPause()
     }
@@ -437,6 +567,7 @@ private var notificationPermissionRequested = false
     }
 
     override fun onDestroy() {
+        dismissReservationReturnPrompt(animated = false)
         liveClockHandler.removeCallbacks(liveClockTicker)
         pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
         liveClockTextViews.clear()
@@ -612,6 +743,44 @@ private var notificationPermissionRequested = false
 
     private fun handleAppDeepLink(intent: Intent?): Boolean {
         val deepLink = intent?.dataString ?: intent?.getStringExtra("appDeepLink")
+        if (deepLink == "stellivehub://goods-events") {
+            selectedReservationId = null
+            navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
+            replaceScreenWithoutAnimation(HubScreen.GOODS_EVENTS)
+            return true
+        }
+        val reservationRoute = ReservationDeepLinkPolicy.route(deepLink)
+        when (val route = reservationRoute) {
+            ReservationDeepLinkRoute.ListRoute -> {
+                selectedReservationId = null
+                navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
+                navigationHistory.select(HubScreen.RESERVATIONS)
+            }
+            is ReservationDeepLinkRoute.QuickAdd -> {
+                startActivity(Intent(this, ReservationQuickAddActivity::class.java).apply {
+                    route.sessionId?.let { putExtra(ReservationQuickAddActivity.EXTRA_SESSION_ID, it.toString()) }
+                })
+                return true
+            }
+            is ReservationDeepLinkRoute.Detail -> {
+                selectedReservationId = route.reservationId
+                navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
+                navigationHistory.select(HubScreen.RESERVATIONS)
+                navigationHistory.select(HubScreen.RESERVATION_DETAIL)
+            }
+            is ReservationDeepLinkRoute.Edit -> {
+                selectedReservationId = route.reservationId
+                navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
+                navigationHistory.select(HubScreen.RESERVATION_EDIT)
+            }
+            null -> Unit
+        }
+        if (reservationRoute != null) {
+            replaceScreenWithoutAnimation(navigationHistory.currentScreen)
+            latestNavigationDestination = navigationHistory.currentScreen
+            latestRootDestination = HubScreen.GOODS_EVENTS
+            return true
+        }
         val announcementId = AnnouncementDeepLinkPolicy.idFromAppDeepLink(deepLink)
         if (announcementId != null) {
             selectedAnnouncementId = announcementId
@@ -669,6 +838,14 @@ private var notificationPermissionRequested = false
     }
 
     private fun setupTopBarActions() {
+        binding.topBarReservations.setOnClickListener { pushScreen(HubScreen.RESERVATIONS) }
+        binding.topBarReservationHelp.setOnClickListener {
+            when (navigationHistory.currentScreen) {
+                HubScreen.RESERVATIONS -> pushScreen(HubScreen.RESERVATIONS_HELP)
+                HubScreen.RESERVATION_DETAIL -> pushScreen(HubScreen.RESERVATION_DETAIL_HELP)
+                else -> Unit
+            }
+        }
         binding.topBarAnnouncement.setOnClickListener { pushScreen(HubScreen.ANNOUNCEMENTS) }
         binding.topBarSettings.setOnClickListener {
             pushScreen(HubScreen.SETTINGS)
@@ -680,6 +857,7 @@ private var notificationPermissionRequested = false
 
     private fun setupBackNavigation() {
         binding.topBarBack.setOnClickListener {
+            if (dismissReservationReturnPrompt()) return@setOnClickListener
             if (!popScreen()) finish()
         }
         onBackPressedDispatcher.addCallback(
@@ -725,6 +903,7 @@ private var notificationPermissionRequested = false
     }
 
     private fun popScreen(): Boolean {
+        if (confirmReservationEditDiscardIfNeeded { popScreen() }) return true
         if (screenTransitionController.isTransitionRunning) {
             screenTransitionController.runWhenIdle("deferred:pop", ::popScreenNow)
             return true
@@ -733,21 +912,31 @@ private var notificationPermissionRequested = false
     }
 
     private fun popScreenNow(): Boolean {
-        val previous = navigationHistory.previousScreen ?: return false
+        val current = navigationHistory.currentScreen
+        val previous = when (current) {
+            HubScreen.RESERVATION_DETAIL -> HubScreen.RESERVATIONS
+            else -> navigationHistory.previousScreen ?: return false
+        }
         captureActiveSongScrollPosition()
         latestNavigationDestination = previous
         val motion = ScreenTransitionPolicy.motion(
-            navigationHistory.currentScreen,
+            current,
             previous,
             ScreenTransitionReason.POP,
         )
         performScreenTransition("pop:${previous.id}", previous, motion) {
-            navigationHistory.goBack()
+            if (current == HubScreen.RESERVATION_DETAIL) {
+                navigationHistory.goBackTo(HubScreen.RESERVATIONS)
+            } else {
+                navigationHistory.goBack()
+            }
         }
         return true
     }
 
     private fun handleSystemBackPressed() {
+        if (dismissReservationReturnPrompt()) return
+        if (confirmReservationEditDiscardIfNeeded(::handleSystemBackPressed)) return
         if (screenTransitionController.isTransitionRunning) {
             screenTransitionController.runWhenIdle("deferred:system_back", ::handleSystemBackPressedNow)
             return
@@ -755,7 +944,34 @@ private var notificationPermissionRequested = false
         handleSystemBackPressedNow()
     }
 
+    private fun confirmReservationEditDiscardIfNeeded(onDiscard: () -> Unit): Boolean {
+        if (navigationHistory.currentScreen != HubScreen.RESERVATION_EDIT ||
+            reservationEditHasUnsavedChanges?.invoke() != true
+        ) {
+            return false
+        }
+        AlertDialog.Builder(this)
+            .setTitle("수정 내용을 버릴까요?")
+            .setMessage("저장하지 않은 내역 변경 내용이 있습니다.")
+            .setNegativeButton("계속 수정", null)
+            .setPositiveButton("변경사항 버리기") { _, _ ->
+                reservationEditHasUnsavedChanges = null
+                onDiscard()
+            }
+            .show()
+        return true
+    }
+
     private fun handleSystemBackPressedNow() {
+        if (navigationHistory.currentScreen in setOf(
+                HubScreen.RESERVATION_DETAIL,
+                HubScreen.RESERVATIONS_HELP,
+                HubScreen.RESERVATION_DETAIL_HELP,
+            ) && popScreenNow()
+        ) {
+            lastRootBackPressedAt = 0L
+            return
+        }
         if (navigateBackToCurrentRootNow()) {
             lastRootBackPressedAt = 0L
             return
@@ -791,6 +1007,7 @@ private var notificationPermissionRequested = false
         motion: ScreenNavigationMotion,
         updateHistory: () -> Unit,
     ) {
+        dismissReservationReturnPrompt()
         screenTransitionController.transition(
             key = key,
             motion = motion,
@@ -843,6 +1060,7 @@ private var notificationPermissionRequested = false
     }
 
     private fun renderScreen(screen: HubScreen) {
+        if (screen != HubScreen.RESERVATION_EDIT) reservationEditHasUnsavedChanges = null
         if (screen != HubScreen.SONG_SEARCH) {
             pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
             pendingSongSearchRender = null
@@ -855,6 +1073,11 @@ HubScreen.SONG_SEARCH -> renderSongSearch()
 HubScreen.SONG_MEMBER_FILTER -> renderSongMemberFilter()
 HubScreen.GOODS_EVENTS -> renderGoodsEvents()
             HubScreen.GOODS_EVENT_DETAIL -> renderHubEventDetail()
+            HubScreen.RESERVATIONS -> renderReservations()
+            HubScreen.RESERVATION_DETAIL -> renderReservationDetail()
+            HubScreen.RESERVATION_EDIT -> renderReservationEdit()
+            HubScreen.RESERVATIONS_HELP -> renderReservationHelp(ReservationHelpPage.LIST)
+            HubScreen.RESERVATION_DETAIL_HELP -> renderReservationHelp(ReservationHelpPage.DETAIL)
             HubScreen.LIVE -> renderLive()
 HubScreen.HISTORY -> renderHistory()
             HubScreen.ANNOUNCEMENTS -> renderAnnouncements()
@@ -924,6 +1147,21 @@ private fun updateNavigationChrome() {
         binding.topBarTitleGroup.isVisible = spec.showTopBarTitleAtRest
         binding.topBarSettings.isVisible = spec.showSettingsAction
         binding.topBarAnnouncementContainer.isVisible = spec.showAnnouncementAction
+        val reservationHelpScreen = navigationHistory.currentScreen
+        binding.topBarReservationHelp.isVisible = reservationHelpScreen in setOf(
+            HubScreen.RESERVATIONS,
+            HubScreen.RESERVATION_DETAIL,
+        )
+        binding.topBarReservationHelp.contentDescription = when (reservationHelpScreen) {
+            HubScreen.RESERVATION_DETAIL -> "내역 상세 도움말"
+            else -> "내 예약 및 구매 도움말"
+        }
+        val showsReservations = navigationHistory.currentScreen in setOf(HubScreen.GOODS_EVENTS, HubScreen.GOODS_EVENT_DETAIL)
+        binding.topBarReservationsContainer.isVisible = showsReservations
+        val pendingReservations = reservationDrafts.count { it.expiresAt.isAfter(Instant.now()) }
+        binding.topBarReservationsBadge.isVisible = showsReservations && pendingReservations > 0
+        binding.topBarReservationsBadge.text = pendingReservations.coerceAtMost(99).toString()
+        binding.topBarReservations.contentDescription = "내 예약 및 구매, 확인 필요 ${pendingReservations}개"
         updateAnnouncementAction()
         binding.topBarSongSearch.isVisible = spec.showSongSearchAction &&
             SongsPanePolicy.shouldShowTopBarSearchAction(currentAdaptiveSpec)
@@ -933,6 +1171,7 @@ private fun updateNavigationChrome() {
         updateTopGlassOverlayStartMargin(navigationSpec.showNavigationRail)
         updateContentWidthConstraint(navigationSpec.constrainContentWidth)
         scheduleSongScrollToTopButtonPositionUpdate()
+        scheduleReservationReturnPromptPositionUpdate()
     }
 
     private fun screenForItem(itemId: Int): HubScreen = when (itemId) {
@@ -952,6 +1191,11 @@ HubScreen.SONG_SEARCH -> R.id.tab_songs
 HubScreen.SONG_MEMBER_FILTER -> R.id.tab_songs
 HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
         HubScreen.GOODS_EVENT_DETAIL -> R.id.tab_goods_events
+        HubScreen.RESERVATIONS -> R.id.tab_goods_events
+        HubScreen.RESERVATION_DETAIL -> R.id.tab_goods_events
+        HubScreen.RESERVATION_EDIT -> R.id.tab_goods_events
+        HubScreen.RESERVATIONS_HELP -> R.id.tab_goods_events
+        HubScreen.RESERVATION_DETAIL_HELP -> R.id.tab_goods_events
         HubScreen.LIVE -> R.id.tab_live
         HubScreen.HISTORY -> null
         HubScreen.ANNOUNCEMENTS -> null
@@ -966,7 +1210,12 @@ HubScreen.GOODS_EVENTS -> R.id.tab_goods_events
         HubScreen.SETTINGS_ABOUT -> null
     }
 
-private fun startScreen(screenId: String, title: String, role: String) {
+private fun startScreen(
+    screenId: String,
+    title: String,
+    role: String,
+    showExpandedBodyHeader: Boolean = true,
+) {
         binding.screenActionContainer.isVisible = false
         scheduleSongScrollToTopButtonPositionUpdate()
         activeTwoPaneDetailPane = null
@@ -989,7 +1238,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
         registerTopBarScrollSource(binding.contentScroll)
         clearTopFilters()
         applyContentTopPadding(underTopBar = false)
-        if (MainScreenChromePolicy.spec(screenId, navigationHistory.canGoBack).showExpandedBodyHeader) {
+        if (showExpandedBodyHeader && MainScreenChromePolicy.spec(screenId, navigationHistory.canGoBack).showExpandedBodyHeader) {
             binding.contentList.addView(screenTitle(title))
             binding.contentList.addView(screenCopy(role))
         }
@@ -1100,25 +1349,30 @@ private fun startScreen(screenId: String, title: String, role: String) {
     private fun scheduleSongScrollToTopButtonPositionUpdate() {
         if (!::songScrollToTopButton.isInitialized || !::binding.isInitialized) return
         binding.root.post {
-            val obstruction = when {
-                binding.screenActionContainer.isVisible -> binding.screenActionContainer
-                binding.bottomNavigation.isVisible -> binding.bottomNavigation
-                else -> null
-            }
-            val occupiedBottomHeight = obstruction?.let { view ->
-                val rootLocation = IntArray(2)
-                val viewLocation = IntArray(2)
-                binding.root.getLocationInWindow(rootLocation)
-                view.getLocationInWindow(viewLocation)
-                (rootLocation[1] + binding.root.height - viewLocation[1]).coerceAtLeast(0)
-            } ?: 0
+            val occupiedBottomHeight = currentBottomObstructionHeight()
             val params = songScrollToTopButton.layoutParams as? FrameLayout.LayoutParams ?: return@post
             val nextBottomMargin = occupiedBottomHeight + dp(16)
             if (params.bottomMargin != nextBottomMargin) {
                 params.bottomMargin = nextBottomMargin
                 songScrollToTopButton.layoutParams = params
             }
+            scheduleReservationReturnPromptPositionUpdate()
         }
+    }
+
+    private fun currentBottomObstructionHeight(): Int {
+        val obstruction = when {
+            binding.screenActionContainer.isVisible -> binding.screenActionContainer
+            binding.bottomNavigation.isVisible -> binding.bottomNavigation
+            else -> null
+        }
+        return obstruction?.let { view ->
+            val rootLocation = IntArray(2)
+            val viewLocation = IntArray(2)
+            binding.root.getLocationInWindow(rootLocation)
+            view.getLocationInWindow(viewLocation)
+            (rootLocation[1] + binding.root.height - viewLocation[1]).coerceAtLeast(0)
+        } ?: systemBottomInsetPx
     }
 
     private fun registerSongMemberFilterScrollToTop() {
@@ -1543,6 +1797,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
             if (goodsEventsDays.isEmpty()) renderGoodsEvents()
             else renderServerGoodsEvents(goodsEventsDays, goodsEvents)
         })
+        binding.contentList.addView(reservationSummaryCard())
         binding.contentList.addView(serverStatusStrip())
         loadServerGoodsEvents()
     }
@@ -1675,6 +1930,7 @@ private fun startScreen(screenId: String, title: String, role: String) {
             selectedFilter = optionId
             renderServerGoodsEvents(goodsEventsDays, goodsEvents)
         })
+        container.addView(reservationSummaryCard())
         container.addView(serverStatusStrip())
         container.addView(
             HubEventsCalendarView(
@@ -1708,6 +1964,1403 @@ private fun startScreen(screenId: String, title: String, role: String) {
             row.canonicalEvent?.let { event ->
                 container.addView(hubEventCard(event = event))
             } ?: container.addView(localCalendarEntryRow(row.entry))
+        }
+    }
+
+    private fun reservationSummaryCard(): MaterialCardView = baseCard(HubCardStyle.INTERACTIVE).apply {
+        val now = Instant.now()
+        val activeDrafts = reservationDrafts.filter { it.expiresAt.isAfter(now) }
+        val upcoming = reservationRecords.filter {
+            it.status == ReservationStatus.CONFIRMED && (it.effectiveStartsAt?.isAfter(now) ?: true)
+        }.sortedBy { it.effectiveStartsAt ?: Instant.MAX }
+        isClickable = true
+        isFocusable = true
+        minimumHeight = dp(86)
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            bottomMargin = dp(12)
+        }
+        contentDescription = "내 예약 및 구매, 확인 필요 ${activeDrafts.size}개, 예정된 내역 ${upcoming.size}개"
+        setOnClickListener { pushScreen(HubScreen.RESERVATIONS) }
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(13), dp(16), dp(13))
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(TextView(context).apply {
+                    text = "내 예약·구매"
+                    textSize = 16f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(color(R.color.hub_text))
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                })
+                addView(TextView(context).apply {
+                    text = "›"
+                    textSize = 22f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(color(R.color.hub_primary))
+                    includeFontPadding = false
+                    contentDescription = "내 예약 및 구매 열기"
+                })
+            })
+            addView(TextView(context).apply {
+                text = "확인 필요 ${activeDrafts.size}개 · 예정된 내역 ${upcoming.size}개"
+                textSize = 12f
+                setTextColor(color(R.color.hub_text_muted))
+                setPadding(0, dp(4), 0, 0)
+            })
+            upcoming.firstOrNull()?.effectiveStartsAt?.let { startsAt ->
+                addView(TextView(context).apply {
+                    text = "가장 가까운 내역 · ${reservationDateFormatter.format(startsAt)}"
+                    textSize = 11f
+                    setTextColor(color(R.color.hub_primary))
+                    setPadding(0, dp(5), 0, 0)
+                })
+            }
+        })
+    }
+
+    private fun renderReservations() {
+        startScreen(
+            screenId = "reservations",
+            title = "내 예약·구매",
+            role = "임시 항목과 내역은 이 기기에 저장되며 외부 완료 여부를 자동 확인하지 않습니다.",
+            showExpandedBodyHeader = false,
+        )
+        binding.contentList.addView(detailActionButton("빠른 설정에 내역 추가 버튼 넣기", false) {
+            ReservationSystemShortcutCoordinator.requestTile(this)
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { bottomMargin = dp(10) })
+        val now = Instant.now()
+        val activeDrafts = ReservationDraftPolicy.active(reservationDrafts, now)
+        if (activeDrafts.isNotEmpty()) {
+            binding.contentList.addView(sectionLabel("확인 필요").apply { tag = RESERVATION_PENDING_SECTION_TAG })
+            activeDrafts.sortedByDescending(ReservationDraft::openedAt).forEach { draft ->
+                binding.contentList.addView(baseCard(HubCardStyle.COMPACT).apply {
+                    addView(LinearLayout(context).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(dp(15), dp(13), dp(15), dp(13))
+                        addView(TextView(context).apply { text = draft.eventSnapshot.title; textSize = 15f; typeface = Typeface.DEFAULT_BOLD; setTextColor(color(R.color.hub_text)) })
+                        addView(TextView(context).apply { text = "${ReservationPresentationPolicy.inProgressLabel(draft.kind)} · ${draft.providerHost}"; textSize = 12f; setTextColor(color(R.color.hub_text_muted)); setPadding(0, dp(4), 0, 0) })
+                        ReservationDraftExpiryPresentationPolicy.presentation(draft.expiresAt, now)?.let { expiry ->
+                            addView(TextView(context).apply {
+                                text = reservationDraftExpiryText(expiry)
+                                textSize = 12f
+                                typeface = Typeface.DEFAULT_BOLD
+                                setTextColor(color(R.color.hub_warning))
+                                setPadding(0, dp(5), 0, 0)
+                            })
+                        }
+                        addView(LinearLayout(context).apply {
+                            orientation = LinearLayout.HORIZONTAL
+                            addView(detailActionButton("취소", false) {
+                                lifecycleScope.launch { reservationRepository.deleteDraft(draft) }
+                            }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(5) })
+                            addView(detailActionButton(ReservationPresentationPolicy.addActionLabel(draft.kind), true) {
+                                startActivity(Intent(this@MainActivity, ReservationQuickAddActivity::class.java).putExtra(ReservationQuickAddActivity.EXTRA_SESSION_ID, draft.sessionId.toString()))
+                            }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(5) })
+                        }.apply { setPadding(0, dp(10), 0, 0) })
+                    })
+                })
+            }
+        }
+        val sections = ReservationListPolicy.sections(reservationRecords)
+        addReservationRecordSection("예정된 내역", sections.upcoming, ReservationListSectionKind.UPCOMING)
+        addReservationRecordSection("지난 내역", sections.past, ReservationListSectionKind.PAST)
+        if (activeDrafts.isEmpty() && reservationRecords.isEmpty()) {
+            binding.contentList.addView(compactEventCard("저장된 내역 없음", "굿즈·행사에서 티켓, 구매 또는 예약 링크를 열면 진행 중인 항목이 여기에 표시됩니다.", emptyList()))
+            binding.contentList.addView(detailActionButton("사용 방법 보기", false) {
+                pushScreen(HubScreen.RESERVATIONS_HELP)
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply {
+                bottomMargin = dp(10)
+            })
+        }
+        pendingReservationHelpScrollAction?.let { action ->
+            pendingReservationHelpScrollAction = null
+            val targetTag = when (action) {
+                ReservationHelpAction.VIEW_PENDING -> RESERVATION_PENDING_SECTION_TAG
+                ReservationHelpAction.VIEW_UPCOMING -> RESERVATION_UPCOMING_SECTION_TAG
+                else -> null
+            }
+            targetTag?.let(::scrollReservationContentToTag)
+        }
+    }
+
+    private fun addReservationRecordSection(
+        title: String,
+        records: List<ReservationRecord>,
+        section: ReservationListSectionKind,
+    ) {
+        if (records.isEmpty()) return
+        binding.contentList.addView(sectionLabel(title).apply {
+            if (section == ReservationListSectionKind.UPCOMING) tag = RESERVATION_UPCOMING_SECTION_TAG
+        })
+        records.forEach { record ->
+            binding.contentList.addView(baseCard(HubCardStyle.INTERACTIVE).apply {
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    selectedReservationId = record.id
+                    pushScreen(HubScreen.RESERVATION_DETAIL)
+                }
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(15), dp(13), dp(15), dp(13))
+                    addView(TextView(context).apply { text = record.displayTitle; textSize = 15f; typeface = Typeface.DEFAULT_BOLD; setTextColor(color(R.color.hub_text)) })
+                    addView(TextView(context).apply {
+                        text = "${ReservationPresentationPolicy.statusLabel(record.kind, record.status)} · ${record.eventSnapshot.sourceLabel}"
+                        textSize = 12f; setTextColor(color(R.color.hub_text_muted)); setPadding(0, dp(4), 0, 0)
+                    })
+                    ReservationListPolicy.timestampLabel(record, section, reservationDateFormatter::format)?.let { label ->
+                        addView(TextView(context).apply {
+                            text = label
+                            textSize = 12f
+                            setTextColor(color(R.color.hub_text_muted))
+                            setPadding(0, dp(4), 0, 0)
+                        })
+                    }
+                    if (record.reservationDetailUrl != null) addView(TextView(context).apply { text = "${ReservationPresentationPolicy.detailLinkLabel(record.kind)} 있음"; textSize = 11f; setTextColor(color(R.color.hub_primary)); setPadding(0, dp(5), 0, 0) })
+                })
+            })
+        }
+    }
+
+    private fun renderReservationDetail() {
+        val record = reservationRecords.firstOrNull { it.id == selectedReservationId }
+        startScreen(
+            screenId = "reservation_detail",
+            title = "내역 상세",
+            role = "예약·예매·구매 정보와 링크는 이 기기에만 저장됩니다.",
+            showExpandedBodyHeader = record == null,
+        )
+        if (record == null) {
+            binding.contentList.addView(compactEventCard("내역을 찾을 수 없음", "목록에서 다시 선택해 주세요.", listOf("로컬 기록")))
+            return
+        }
+        val latestEvent = record.eventId?.let { eventId -> goodsEvents.firstOrNull { it.id == eventId } }
+        val presentation = ReservationDetailPresentationPolicy.presentation(
+            record = record,
+            formatDateTime = reservationDateFormatter::format,
+            officialEventAvailable = latestEvent != null,
+            latestOfficialTitle = latestEvent?.title,
+            latestOfficialStartsAt = latestEvent?.startsAt,
+            officialEventCancelled = latestEvent?.status == dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus.CANCELLED,
+        )
+
+        binding.contentList.addView(reservationDetailSummaryCard(presentation))
+        binding.contentList.addView(sectionLabel("빠른 동작"))
+        binding.contentList.addView(reservationDetailActionRow(presentation.links.firstOrNull()?.url))
+
+        if (presentation.informationRows.isNotEmpty()) {
+            binding.contentList.addView(sectionLabel("내역 정보"))
+            binding.contentList.addView(reservationDetailRowsCard(presentation.informationRows))
+        }
+        if (presentation.links.isNotEmpty()) {
+            binding.contentList.addView(sectionLabel("관련 링크"))
+            presentation.links.forEach { link ->
+                binding.contentList.addView(reservationDetailLinkCard(link))
+            }
+        }
+        presentation.note?.let { note ->
+            binding.contentList.addView(sectionLabel("메모"))
+            binding.contentList.addView(reservationDetailTextCard(note))
+        }
+        if (presentation.canOpenOfficialEvent && latestEvent != null) {
+            binding.contentList.addView(sectionLabel("연결된 공식 행사"))
+            binding.contentList.addView(hubEventCard(latestEvent).apply {
+                setOnClickListener { openLinkedOfficialEvent(latestEvent.id) }
+                contentDescription = "${latestEvent.title}, 연결된 공식 행사 열기"
+            })
+        }
+        if (presentation.officialEventChanged) {
+            binding.contentList.addView(compactEventCard(
+                "공식 일정 변경됨",
+                "저장 당시 정보와 현재 공식 행사 정보가 다릅니다. 사용자 수정값과 내역 상태는 자동으로 바꾸지 않습니다.",
+                listOf("확인 필요"),
+            ))
+        }
+        if (presentation.officialEventCancelled) {
+            binding.contentList.addView(compactEventCard(
+                "공식 행사 취소 안내",
+                "공식 행사가 취소되었습니다. 사용자의 내역 상태는 자동으로 취소하지 않습니다.",
+                listOf("공식 정보"),
+            ))
+        }
+        binding.contentList.addView(sectionLabel("기록 정보"))
+        binding.contentList.addView(reservationDetailRowsCard(presentation.recordRows))
+        binding.contentList.addView(sectionLabel("위험 동작"))
+        binding.contentList.addView(reservationDetailDeleteButton(record))
+    }
+
+    private fun renderReservationHelp(page: ReservationHelpPage) {
+        val now = Instant.now()
+        val presentation = ReservationHelpPolicy.presentation(
+            page = page,
+            context = ReservationHelpContextPolicy.context(
+                drafts = reservationDrafts,
+                records = reservationRecords,
+                currentRecordId = selectedReservationId?.takeIf { id -> reservationRecords.any { it.id == id } },
+                now = now,
+            ),
+            now = now,
+        )
+        val content = presentation.content
+        val screenId = when (page) {
+            ReservationHelpPage.LIST -> HubScreen.RESERVATIONS_HELP.id
+            ReservationHelpPage.DETAIL -> HubScreen.RESERVATION_DETAIL_HELP.id
+        }
+        startScreen(
+            screenId = screenId,
+            title = getString(content.titleRes),
+            role = getString(content.summaryRes),
+            showExpandedBodyHeader = false,
+        )
+        presentation.status
+            ?.takeUnless { it.kind == ReservationHelpStatusKind.GETTING_STARTED }
+            ?.let { binding.contentList.addView(reservationHelpStatusCard(it)) }
+        if (content.steps.isNotEmpty()) {
+            binding.contentList.addView(sectionLabel(getString(R.string.reservation_help_steps_header)))
+            binding.contentList.addView(reservationHelpStepsCard(content.steps))
+        }
+        content.sections.forEach { section ->
+            binding.contentList.addView(reservationHelpSectionCard(section))
+        }
+        if (content.faqs.isNotEmpty()) {
+            binding.contentList.addView(sectionLabel(getString(R.string.reservation_help_faq_header)))
+            reservationHelpFaqUiStates.clear()
+            content.faqs.forEach { faq ->
+                binding.contentList.addView(reservationHelpFaqCard(faq))
+            }
+        }
+    }
+
+    private fun reservationHelpStepsCard(steps: List<ReservationHelpStep>): MaterialCardView =
+        baseCard(HubCardStyle.STANDARD).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(10) }
+            strokeWidth = dp(1)
+            strokeColor = color(R.color.hub_primary)
+            setCardBackgroundColor(color(R.color.hub_accent_soft))
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+                steps.forEachIndexed { index, step ->
+                    if (index > 0) {
+                        addView(View(context).apply {
+                            setBackgroundColor(color(R.color.hub_primary).withAlpha(45))
+                        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)).apply {
+                            marginStart = dp(42)
+                            topMargin = dp(11)
+                            bottomMargin = dp(11)
+                        })
+                    }
+                    addView(reservationHelpStepRow(step))
+                }
+            })
+        }
+
+    private fun reservationHelpStepRow(step: ReservationHelpStep): LinearLayout =
+        LinearLayout(this).apply {
+            val title = getString(step.titleRes)
+            val body = getString(step.bodyRes)
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.TOP
+            contentDescription = getString(R.string.reservation_help_step_accessibility, step.number, title, body)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            addView(TextView(context).apply {
+                text = step.number.toString()
+                gravity = Gravity.CENTER
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(color(R.color.hub_on_primary))
+                background = rounded(color(R.color.hub_primary), dp(18))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(10) })
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(context).apply {
+                    text = title
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(color(R.color.hub_text))
+                })
+                addView(TextView(context).apply {
+                    text = body
+                    textSize = 13f
+                    setTextColor(color(R.color.hub_text_muted))
+                    setLineSpacing(0f, 1.12f)
+                    setPadding(0, dp(4), 0, 0)
+                })
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
+
+    private fun reservationHelpSectionCard(section: ReservationHelpSection): MaterialCardView {
+        val accent = when (section.tone) {
+            ReservationHelpTone.NORMAL -> color(R.color.hub_text_muted)
+            ReservationHelpTone.INFO,
+            ReservationHelpTone.SECURITY -> color(R.color.hub_primary)
+            ReservationHelpTone.WARNING -> color(R.color.hub_warning)
+            ReservationHelpTone.DANGER -> color(R.color.hub_schedule_tag_cancelled)
+        }
+        val background = when (section.tone) {
+            ReservationHelpTone.NORMAL -> color(R.color.hub_card_surface)
+            ReservationHelpTone.INFO,
+            ReservationHelpTone.SECURITY -> color(R.color.hub_accent_soft)
+            ReservationHelpTone.WARNING -> color(R.color.hub_warning_soft)
+            ReservationHelpTone.DANGER -> color(R.color.hub_schedule_tag_cancelled_soft)
+        }
+        val icon = when (section.tone) {
+            ReservationHelpTone.NORMAL,
+            ReservationHelpTone.INFO -> android.R.drawable.ic_dialog_info
+            ReservationHelpTone.WARNING -> android.R.drawable.ic_dialog_alert
+            ReservationHelpTone.SECURITY -> android.R.drawable.ic_lock_lock
+            ReservationHelpTone.DANGER -> android.R.drawable.ic_menu_delete
+        }
+        val meaning = when (section.tone) {
+            ReservationHelpTone.NORMAL -> getString(R.string.reservation_help_tone_normal)
+            ReservationHelpTone.INFO -> getString(R.string.reservation_help_tone_info)
+            ReservationHelpTone.WARNING -> getString(R.string.reservation_help_tone_warning)
+            ReservationHelpTone.SECURITY -> getString(R.string.reservation_help_tone_security)
+            ReservationHelpTone.DANGER -> getString(R.string.reservation_help_tone_danger)
+        }
+        val title = getString(section.titleRes)
+        val body = getString(section.bodyRes)
+        return baseCard(HubCardStyle.COMPACT).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(10) }
+            strokeWidth = dp(1)
+            strokeColor = accent
+            setCardBackgroundColor(background)
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+                setPadding(dp(14), dp(14), dp(14), dp(14))
+                addView(ImageView(context).apply {
+                    setImageResource(icon)
+                    imageTintList = ColorStateList.valueOf(accent)
+                    contentDescription = meaning
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }, LinearLayout.LayoutParams(dp(24), dp(24)).apply { marginEnd = dp(11) })
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(TextView(context).apply {
+                        text = title
+                        textSize = 15f
+                        typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(accent)
+                        contentDescription = getString(R.string.reservation_help_section_accessibility, meaning, title)
+                        ViewCompat.setAccessibilityHeading(this, true)
+                    })
+                    addView(TextView(context).apply {
+                        text = body
+                        textSize = 13f
+                        setTextColor(color(R.color.hub_text))
+                        setLineSpacing(0f, 1.14f)
+                        setPadding(0, dp(6), 0, 0)
+                    })
+                    section.pointResIds.forEach { pointRes ->
+                        addView(TextView(context).apply {
+                            val point = getString(pointRes)
+                            text = "• $point"
+                            textSize = 13f
+                            setTextColor(color(R.color.hub_text))
+                            setLineSpacing(0f, 1.14f)
+                            setPadding(0, dp(8), 0, 0)
+                            contentDescription = point
+                        })
+                    }
+                    section.action?.let { action ->
+                        addView(detailActionButton(reservationHelpActionLabel(action), false) {
+                            performReservationHelpAction(action)
+                        }, LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            dp(48),
+                        ).apply { topMargin = dp(10) })
+                    }
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            })
+        }
+    }
+
+    private fun reservationHelpStatusCard(status: ReservationHelpStatusPresentation): MaterialCardView {
+        val title = when (status.kind) {
+            ReservationHelpStatusKind.PENDING -> getString(
+                R.string.reservation_help_status_pending_title,
+                status.activeDraftCount,
+            )
+            ReservationHelpStatusKind.MANAGE_RECORDS -> getString(R.string.reservation_help_status_manage_title)
+            ReservationHelpStatusKind.GETTING_STARTED -> getString(R.string.reservation_help_steps_header)
+        }
+        val body = when (status.kind) {
+            ReservationHelpStatusKind.PENDING -> buildString {
+                append(getString(R.string.reservation_help_status_pending_body))
+                status.expiry?.let {
+                    append("\n")
+                    append(getString(R.string.reservation_help_status_expiry, reservationDraftExpiryText(it)))
+                }
+            }
+            ReservationHelpStatusKind.MANAGE_RECORDS -> getString(R.string.reservation_help_status_manage_body)
+            ReservationHelpStatusKind.GETTING_STARTED -> getString(R.string.reservation_help_list_summary)
+        }
+        return reservationHelpSectionCard(
+            ReservationHelpSection(
+                id = ReservationHelpSectionId.PENDING_DRAFT,
+                tone = status.tone,
+                titleRes = when (status.kind) {
+                    ReservationHelpStatusKind.PENDING -> R.string.reservation_help_pending_title
+                    ReservationHelpStatusKind.MANAGE_RECORDS -> R.string.reservation_help_status_manage_title
+                    ReservationHelpStatusKind.GETTING_STARTED -> R.string.reservation_help_steps_header
+                },
+                bodyRes = when (status.kind) {
+                    ReservationHelpStatusKind.PENDING -> R.string.reservation_help_status_pending_body
+                    ReservationHelpStatusKind.MANAGE_RECORDS -> R.string.reservation_help_status_manage_body
+                    ReservationHelpStatusKind.GETTING_STARTED -> R.string.reservation_help_list_summary
+                },
+                action = status.action,
+            ),
+        ).apply {
+            val content = ((getChildAt(0) as? LinearLayout)?.getChildAt(1) as? LinearLayout)
+            (content?.getChildAt(0) as? TextView)?.apply {
+                text = title
+                contentDescription = title
+            }
+            (content?.getChildAt(1) as? TextView)?.text = body
+        }
+    }
+
+    private fun reservationHelpFaqCard(faq: ReservationHelpFaq): MaterialCardView {
+        val question = getString(faq.questionRes)
+        val card = baseCard(HubCardStyle.COMPACT).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(8) }
+            strokeWidth = dp(1)
+            strokeColor = color(R.color.hub_line)
+            setCardBackgroundColor(color(R.color.hub_card_surface))
+        }
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(56)
+            setPadding(dp(14), dp(12), dp(10), dp(12))
+            isClickable = true
+            isFocusable = true
+            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            accessibilityDelegate = object : View.AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.className = android.widget.Button::class.java.name
+                    info.isClickable = true
+                }
+            }
+        }
+        header.addView(ImageView(this).apply {
+            setImageResource(reservationHelpFaqToneIcon(faq.tone))
+            imageTintList = ColorStateList.valueOf(reservationHelpFaqToneColor(faq.tone))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginEnd = dp(12) })
+        header.addView(TextView(this).apply {
+            text = question
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(color(R.color.hub_text))
+            setLineSpacing(0f, 1.12f)
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val chevron = ImageView(this).apply {
+            imageTintList = ColorStateList.valueOf(color(R.color.hub_text_muted))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        header.addView(chevron, LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginStart = dp(10) })
+
+        val answerContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            isVisible = false
+            addView(divider())
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundColor(reservationHelpFaqAnswerBackground(faq.tone))
+                setPadding(dp(14), dp(12), dp(14), dp(14))
+                addView(TextView(context).apply {
+                    text = getString(faq.answerRes)
+                    textSize = 13f
+                    setTextColor(color(R.color.hub_text))
+                    setLineSpacing(0f, 1.14f)
+                })
+                faq.action?.let { action ->
+                    addView(detailActionButton(reservationHelpActionLabel(action), false) {
+                        performReservationHelpAction(action)
+                    }, LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        dp(48),
+                    ).apply { topMargin = dp(12) })
+                }
+            })
+        }
+        content.addView(header)
+        content.addView(answerContainer)
+        card.addView(content)
+
+        val state = ReservationHelpFaqUiState(
+            card = card,
+            header = header,
+            answerContainer = answerContainer,
+            chevron = chevron,
+            question = question,
+        )
+        reservationHelpFaqUiStates[faq.id] = state
+        header.setOnClickListener { toggleReservationHelpFaq(faq.id) }
+        updateReservationHelpFaqCard(state, faq.id == expandedReservationHelpFaqId)
+        return card
+    }
+
+    private fun toggleReservationHelpFaq(faqId: ReservationHelpFaqId) {
+        val previousFaqId = expandedReservationHelpFaqId
+        val nextFaqId = ReservationHelpFaqExpansionPolicy.toggled(previousFaqId, faqId)
+        if (nextFaqId == previousFaqId) return
+        TransitionManager.beginDelayedTransition(binding.contentList, AutoTransition().apply { duration = 160 })
+        expandedReservationHelpFaqId = nextFaqId
+        listOfNotNull(previousFaqId, nextFaqId).distinct().forEach { changedFaqId ->
+            reservationHelpFaqUiStates[changedFaqId]?.let { state ->
+                updateReservationHelpFaqCard(state, changedFaqId == nextFaqId)
+            }
+        }
+    }
+
+    private fun updateReservationHelpFaqCard(state: ReservationHelpFaqUiState, expanded: Boolean) {
+        state.answerContainer.isVisible = expanded
+        state.chevron.setImageResource(if (expanded) R.drawable.ic_expand_less else R.drawable.ic_expand_more)
+        state.header.contentDescription = state.question
+        ViewCompat.setStateDescription(
+            state.header,
+            getString(if (expanded) R.string.reservation_help_faq_state_expanded else R.string.reservation_help_faq_state_collapsed),
+        )
+        state.card.strokeColor = color(R.color.hub_line)
+        state.card.setCardBackgroundColor(color(R.color.hub_card_surface))
+    }
+
+    private fun reservationHelpFaqToneIcon(tone: ReservationHelpTone): Int = when (tone) {
+        ReservationHelpTone.NORMAL,
+        ReservationHelpTone.INFO -> R.drawable.ic_help_outline
+        ReservationHelpTone.WARNING -> R.drawable.ic_help_warning_outline
+        ReservationHelpTone.SECURITY -> R.drawable.ic_help_lock_outline
+        ReservationHelpTone.DANGER -> R.drawable.ic_help_warning_outline
+    }
+
+    private fun reservationHelpFaqToneColor(tone: ReservationHelpTone): Int = when (tone) {
+        ReservationHelpTone.NORMAL -> color(R.color.hub_text_muted)
+        ReservationHelpTone.INFO,
+        ReservationHelpTone.SECURITY -> color(R.color.hub_primary)
+        ReservationHelpTone.WARNING -> color(R.color.hub_warning)
+        ReservationHelpTone.DANGER -> color(R.color.hub_schedule_tag_cancelled)
+    }
+
+    private fun reservationHelpFaqAnswerBackground(tone: ReservationHelpTone): Int = when (tone) {
+        ReservationHelpTone.NORMAL,
+        ReservationHelpTone.INFO,
+        ReservationHelpTone.SECURITY -> color(R.color.hub_accent_soft)
+        ReservationHelpTone.WARNING -> color(R.color.hub_warning_soft)
+        ReservationHelpTone.DANGER -> color(R.color.hub_schedule_tag_cancelled_soft)
+    }
+
+    private fun reservationDraftExpiryText(expiry: ReservationDraftExpiryPresentation): String = when (expiry.kind) {
+        ReservationDraftExpiryKind.HOURS -> getString(R.string.reservation_draft_expiry_hours, expiry.value)
+        ReservationDraftExpiryKind.MINUTES -> getString(R.string.reservation_draft_expiry_minutes, expiry.value)
+        ReservationDraftExpiryKind.SOON -> getString(R.string.reservation_draft_expiry_soon)
+    }
+
+    private fun reservationHelpActionLabel(action: ReservationHelpAction): String = getString(
+        when (action) {
+            ReservationHelpAction.VIEW_PENDING -> R.string.reservation_help_action_view_pending
+            ReservationHelpAction.ADD_WITHOUT_LINK -> R.string.reservation_help_action_add_without_link
+            ReservationHelpAction.VIEW_UPCOMING -> R.string.reservation_help_action_view_upcoming
+            ReservationHelpAction.EDIT_CURRENT_RECORD -> R.string.reservation_help_action_edit_record
+            ReservationHelpAction.VIEW_EXISTING_RECORD -> R.string.reservation_help_action_view_existing
+        },
+    )
+
+    private fun performReservationHelpAction(action: ReservationHelpAction) {
+        when (action) {
+            ReservationHelpAction.VIEW_PENDING,
+            ReservationHelpAction.VIEW_UPCOMING -> {
+                pendingReservationHelpScrollAction = action
+                if (!popScreen()) {
+                    navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
+                    navigationHistory.select(HubScreen.RESERVATIONS)
+                    renderScreen(HubScreen.RESERVATIONS)
+                }
+            }
+            ReservationHelpAction.ADD_WITHOUT_LINK -> {
+                val draft = ReservationDraftPolicy.active(reservationDrafts)
+                    .minByOrNull(ReservationDraft::expiresAt) ?: return
+                startActivity(Intent(this, ReservationQuickAddActivity::class.java).putExtra(
+                    ReservationQuickAddActivity.EXTRA_SESSION_ID,
+                    draft.sessionId.toString(),
+                ))
+            }
+            ReservationHelpAction.EDIT_CURRENT_RECORD -> selectedReservationId?.let { id ->
+                handleAppDeepLink(Intent().putExtra("appDeepLink", "stellivehub://reservations/$id/edit"))
+            }
+            ReservationHelpAction.VIEW_EXISTING_RECORD -> Unit
+        }
+    }
+
+    private fun scrollReservationContentToTag(targetTag: String) {
+        binding.contentList.post {
+            val target = binding.contentList.findViewWithTag<View>(targetTag) ?: return@post
+            binding.contentScroll.smoothScrollTo(0, target.top)
+            target.sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_VIEW_FOCUSED)
+        }
+    }
+
+    private fun reservationDetailSummaryCard(presentation: ReservationDetailPresentation): MaterialCardView =
+        baseCard(HubCardStyle.STANDARD).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(6) }
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(16), dp(15), dp(16), dp(16))
+                presentation.imageUrl?.let { addView(hubEventThumbnail(it)) }
+                addView(TextView(context).apply {
+                    text = presentation.title
+                    textSize = 20f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(color(R.color.hub_text))
+                    setLineSpacing(0f, 1.08f)
+                })
+                addView(pillRow(listOf(presentation.statusLabel, presentation.kindLabel)))
+                presentation.dateTimeLabel?.let { dateTime ->
+                    addView(TextView(context).apply {
+                        text = dateTime
+                        textSize = 13f
+                        typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(color(R.color.hub_text))
+                        setPadding(0, dp(10), 0, 0)
+                    })
+                }
+                addView(TextView(context).apply {
+                    text = "출처 · ${presentation.sourceLabel}"
+                    textSize = 12f
+                    setTextColor(color(R.color.hub_text_muted))
+                    setPadding(0, dp(5), 0, 0)
+                })
+            })
+        }
+
+    private fun reservationDetailActionRow(primaryUrl: String?): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(6) }
+            if (primaryUrl != null) {
+                addView(detailActionButton("상세 내역 열기", true) { openExternalUrl(primaryUrl) }, LinearLayout.LayoutParams(0, dp(50), 1f).apply {
+                    marginEnd = dp(5)
+                })
+                addView(detailActionButton("내역 수정", false) { pushScreen(HubScreen.RESERVATION_EDIT) }, LinearLayout.LayoutParams(0, dp(50), 1f).apply {
+                    marginStart = dp(5)
+                })
+            } else {
+                addView(detailActionButton("내역 수정", true) { pushScreen(HubScreen.RESERVATION_EDIT) }, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(50),
+                ))
+            }
+        }
+
+    private fun reservationDetailRowsCard(rows: List<ReservationDetailRow>): MaterialCardView =
+        baseCard(HubCardStyle.COMPACT).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(8) }
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(15), dp(4), dp(15), dp(4))
+                rows.forEachIndexed { index, row ->
+                    if (index > 0) addView(divider())
+                    addView(LinearLayout(context).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.TOP
+                        setPadding(0, dp(11), 0, dp(11))
+                        addView(TextView(context).apply {
+                            text = row.label
+                            textSize = 12f
+                            typeface = Typeface.DEFAULT_BOLD
+                            setTextColor(color(R.color.hub_text_muted))
+                        }, LinearLayout.LayoutParams(dp(88), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                            marginEnd = dp(10)
+                        })
+                        addView(TextView(context).apply {
+                            text = row.value
+                            textSize = 14f
+                            setTextColor(color(R.color.hub_text))
+                            setLineSpacing(0f, 1.1f)
+                        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                    })
+                }
+            })
+        }
+
+    private fun reservationDetailLinkCard(link: ReservationDetailLink): MaterialCardView =
+        baseCard(HubCardStyle.INTERACTIVE).apply {
+            isClickable = true
+            isFocusable = true
+            contentDescription = "${link.label}, ${link.host}, 외부 링크 열기"
+            setOnClickListener { openExternalUrl(link.url) }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(8) }
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(15), dp(12), dp(13), dp(12))
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(TextView(context).apply {
+                        text = link.label
+                        textSize = 14f
+                        typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(color(R.color.hub_text))
+                    })
+                    addView(TextView(context).apply {
+                        text = link.host
+                        textSize = 12f
+                        setTextColor(color(R.color.hub_text_muted))
+                        setPadding(0, dp(3), 0, 0)
+                    })
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                addView(TextView(context).apply {
+                    text = "↗"
+                    textSize = 18f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(color(R.color.hub_primary))
+                    contentDescription = null
+                })
+            })
+        }
+
+    private fun reservationDetailTextCard(body: String): MaterialCardView =
+        baseCard(HubCardStyle.COMPACT).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(8) }
+            addView(TextView(context).apply {
+                text = body
+                textSize = 14f
+                setTextColor(color(R.color.hub_text))
+                setLineSpacing(0f, 1.15f)
+                setPadding(dp(15), dp(13), dp(15), dp(13))
+            })
+        }
+
+    private fun openLinkedOfficialEvent(eventId: String) {
+        selectedHubEventId = eventId
+        selectedHubEventScheduleItemId = null
+        serverHubEventDetailLoadedId = null
+        pushScreen(HubScreen.GOODS_EVENT_DETAIL)
+    }
+
+    private fun reservationDetailDeleteButton(record: ReservationRecord): TextView =
+        detailActionButton("내역 삭제", false) {
+            AlertDialog.Builder(this).setTitle("내역 삭제").setMessage("이 기기에서 이 내역을 삭제할까요?")
+                .setNegativeButton("취소", null)
+                .setPositiveButton("삭제") { _, _ ->
+                    lifecycleScope.launch {
+                        reservationRepository.delete(record)
+                        popScreen()
+                        Snackbar.make(binding.root, "내역을 삭제했습니다.", Snackbar.LENGTH_LONG)
+                            .setAction("실행 취소") {
+                                lifecycleScope.launch { reservationRepository.update(record) }
+                            }
+                            .show()
+                    }
+                }
+                .show()
+        }.apply {
+            setTextColor(color(R.color.hub_schedule_tag_cancelled))
+            background = rounded(
+                fill = color(R.color.hub_schedule_tag_cancelled_soft),
+                radius = dp(14),
+                stroke = color(R.color.hub_schedule_tag_cancelled),
+            )
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(50),
+            ).apply { bottomMargin = dp(14) }
+        }
+
+    private fun renderReservationEdit() {
+        val record = reservationRecords.firstOrNull { it.id == selectedReservationId }
+        startScreen(
+            screenId = "reservation_edit",
+            title = "내역 수정",
+            role = "민감할 수 있는 링크와 예매·주문·예약번호는 서버나 로그로 전송하지 않습니다.",
+            showExpandedBodyHeader = false,
+        )
+        if (record == null) return
+        val initialValues = ReservationEditPresentationPolicy.initialValues(record)
+        val titleInput = reservationEditField("표시 제목", initialValues.title)
+        val title = titleInput.field
+        val startsAt = reservationDateTimeInput("시작 날짜와 시각", initialValues.startsAt)
+        val endsAt = reservationDateTimeInput("종료 날짜와 시각", initialValues.endsAt)
+        val venueInput = reservationEditField("장소", initialValues.venue)
+        val venue = venueInput.field
+        val detailUrlInput = reservationEditField(ReservationPresentationPolicy.detailLinkLabel(record.kind), record.reservationDetailUrl.orEmpty(), placeholder = "https://")
+        val detailUrl = detailUrlInput.field
+        val historyUrlInput = reservationEditField("제공사 내역 URL", record.providerHistoryUrl.orEmpty(), placeholder = "https://")
+        val historyUrl = historyUrlInput.field
+        val optionInput = reservationEditField("좌석 또는 상품 옵션", record.optionText.orEmpty())
+        val option = optionInput.field
+        val quantityInput = reservationEditField("수량", record.quantity?.toString().orEmpty())
+        val quantity = quantityInput.field.apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        }
+        val referenceInput = reservationEditField(ReservationPresentationPolicy.referenceNumberLabel(record.kind), record.referenceNumber.orEmpty())
+        val reference = referenceInput.field
+        val noteInput = reservationEditField("메모", record.note.orEmpty(), multiline = true)
+        val note = noteInput.field
+        var status = record.status
+        val statusInput = reservationEditStatusInput(record.kind, status) { selected -> status = selected }
+        reservationEditHasUnsavedChanges = {
+            status != record.status ||
+                title.text.toString().trim() != initialValues.title ||
+                startsAt.value != initialValues.startsAt ||
+                endsAt.value != initialValues.endsAt ||
+                venue.text.toString().trim() != initialValues.venue ||
+                detailUrl.text.toString().trim().takeIf(String::isNotEmpty) != record.reservationDetailUrl ||
+                historyUrl.text.toString().trim().takeIf(String::isNotEmpty) != record.providerHistoryUrl ||
+                option.text.toString().trim().takeIf(String::isNotEmpty) != record.optionText ||
+                quantity.text.toString().trim().takeIf(String::isNotEmpty) != record.quantity?.toString() ||
+                reference.text.toString().trim().takeIf(String::isNotEmpty) != record.referenceNumber ||
+                note.text.toString().trim().takeIf(String::isNotEmpty) != record.note
+        }
+        binding.contentList.addView(reservationEditPanel(
+            title = "기본 정보",
+            description = "화면에 표시할 이름과 현재 내역 상태를 정리합니다.",
+            children = listOf(titleInput.view, statusInput.view, venueInput.view),
+        ))
+        binding.contentList.addView(reservationEditPanel(
+            title = "일정",
+            description = "직접 설정한 일정은 저장된 행사 정보보다 우선 표시됩니다.",
+            children = listOf(startsAt.view, endsAt.view),
+        ))
+        binding.contentList.addView(reservationEditPanel(
+            title = "추가 정보",
+            description = "예매·주문·예약번호를 포함한 입력 내용은 이 기기에만 저장됩니다.",
+            children = listOf(optionInput.view, quantityInput.view, referenceInput.view, noteInput.view),
+        ))
+        binding.contentList.addView(reservationEditPanel(
+            title = "관련 링크",
+            description = "호스트가 포함된 HTTPS 주소만 저장할 수 있습니다.",
+            children = listOf(detailUrlInput.view, historyUrlInput.view),
+        ))
+        binding.contentList.addView(detailActionButton("저장", true) {
+            val detailValidation = detailUrl.text.toString().takeIf(String::isNotBlank)?.let(ReservationURLPolicy::validate)
+            val historyValidation = historyUrl.text.toString().takeIf(String::isNotBlank)?.let(ReservationURLPolicy::validate)
+            if (detailValidation?.isValid == false || historyValidation?.isValid == false) {
+                Toast.makeText(this, "HTTPS 링크를 확인해 주세요.", Toast.LENGTH_SHORT).show()
+                return@detailActionButton
+            }
+            val quantityText = quantity.text.toString().trim()
+            val parsedQuantity = quantityText.takeIf(String::isNotEmpty)?.toIntOrNull()
+            if (quantityText.isNotEmpty() && (parsedQuantity == null || parsedQuantity <= 0)) {
+                quantity.error = "수량은 1 이상의 숫자로 입력해 주세요."
+                quantity.requestFocus()
+                return@detailActionButton
+            }
+            val selectedStart = startsAt.value
+            val selectedEnd = endsAt.value
+            if (selectedStart != null && selectedEnd != null && !selectedEnd.isAfter(selectedStart)) {
+                Toast.makeText(this, "종료 시각은 시작 시각보다 뒤여야 합니다.", Toast.LENGTH_SHORT).show()
+                return@detailActionButton
+            }
+            val save: () -> Unit = {
+                lifecycleScope.launch {
+                    runCatching {
+                        val overrides = ReservationEditPresentationPolicy.overrides(
+                            record = record,
+                            title = title.text.toString(),
+                            startsAt = startsAt.value,
+                            endsAt = endsAt.value,
+                            venue = venue.text.toString(),
+                        )
+                        reservationRepository.update(record.copy(
+                            status = status,
+                            displayTitleOverride = overrides.title,
+                            startsAtOverride = overrides.startsAt,
+                            endsAtOverride = overrides.endsAt,
+                            venueOverride = overrides.venue,
+                            reservationDetailUrl = detailValidation?.normalizedUrl,
+                            providerHistoryUrl = historyValidation?.normalizedUrl,
+                            optionText = option.text.toString().trim().takeIf(String::isNotEmpty),
+                            quantity = parsedQuantity,
+                            referenceNumber = reference.text.toString().trim().takeIf(String::isNotEmpty),
+                            note = note.text.toString().trim().takeIf(String::isNotEmpty),
+                            updatedAt = Instant.now(),
+                        ))
+                    }.onSuccess {
+                        reservationEditHasUnsavedChanges = null
+                        popScreen()
+                    }.onFailure {
+                        Toast.makeText(this@MainActivity, "내역 변경 내용을 저장하지 못했습니다.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            val confirmSensitiveAndSave = {
+                if (detailValidation?.isSensitive == true || historyValidation?.isSensitive == true) {
+                    AlertDialog.Builder(this).setTitle("민감할 수 있는 링크").setMessage("인증 정보가 포함될 수 있습니다. 이 기기에만 저장할까요?")
+                        .setNegativeButton("취소", null).setPositiveButton("로컬 저장") { _, _ -> save() }.show()
+                } else save()
+            }
+            lifecycleScope.launch {
+                val detailURL = detailValidation?.normalizedUrl
+                val duplicate = detailURL != null &&
+                    detailURL != record.reservationDetailUrl &&
+                    reservationRepository.hasReservationDetailUrl(detailURL, excludingId = record.id)
+                if (duplicate) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("이미 저장된 링크")
+                        .setMessage("같은 상세 링크가 다른 내역에 있습니다. 그래도 저장할까요?")
+                        .setNegativeButton("취소", null)
+                        .setPositiveButton("그래도 저장") { _, _ -> confirmSensitiveAndSave() }
+                        .show()
+                } else {
+                    confirmSensitiveAndSave()
+                }
+            }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)).apply {
+            topMargin = dp(2)
+            bottomMargin = dp(10)
+        })
+    }
+
+    private fun reservationDateTimeInput(label: String, value: Instant?): ReservationDateTimeInput {
+        val field = EditText(this).apply {
+            hint = "선택하지 않음"
+            isFocusable = false
+            isClickable = true
+            contentDescription = "$label 선택"
+            setText(value?.let(reservationDateFormatter::format).orEmpty())
+            textSize = 14f
+            setTextColor(color(R.color.hub_text))
+            setHintTextColor(color(R.color.hub_text_subtle))
+            gravity = Gravity.CENTER_VERTICAL
+            background = null
+            setPadding(dp(14), 0, dp(8), 0)
+        }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = rounded(color(R.color.hub_surface), dp(12), color(R.color.hub_line))
+        }
+        val container = labeledReservationEditInput(label, row)
+        val input = ReservationDateTimeInput(field, value, container)
+        field.setOnClickListener { showReservationDateTimePicker(input) }
+        row.addView(field, LinearLayout.LayoutParams(0, dp(52), 1f))
+        row.addView(TextView(this).apply {
+            text = "지우기"
+            contentDescription = "$label 지우기"
+            gravity = Gravity.CENTER
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(color(R.color.hub_text_muted))
+            background = rounded(color(R.color.hub_card), dp(10))
+            setOnClickListener {
+                input.value = null
+                field.setText("")
+            }
+        }, LinearLayout.LayoutParams(dp(58), dp(40)).apply { marginEnd = dp(6) })
+        return input
+    }
+
+    private fun showReservationDateTimePicker(input: ReservationDateTimeInput) {
+        val zone = ZoneId.of("Asia/Seoul")
+        val initial = input.value?.atZone(zone) ?: ZonedDateTime.now(zone)
+        DatePickerDialog(this, { _, year, month, day ->
+            val selectedDate = LocalDate.of(year, month + 1, day)
+            TimePickerDialog(this, { _, hour, minute ->
+                input.value = ZonedDateTime.of(selectedDate, LocalTime.of(hour, minute), zone).toInstant()
+                input.field.setText(input.value?.let(reservationDateFormatter::format))
+            }, initial.hour, initial.minute, true).show()
+        }, initial.year, initial.monthValue - 1, initial.dayOfMonth).show()
+    }
+
+    private fun reservationEditField(
+        label: String,
+        value: String,
+        multiline: Boolean = false,
+        placeholder: String = "입력하지 않음",
+    ): ReservationEditTextInput {
+        val field = EditText(this).apply {
+            hint = placeholder
+            setText(value)
+            textSize = 14f
+            setTextColor(color(R.color.hub_text))
+            setHintTextColor(color(R.color.hub_text_subtle))
+            background = rounded(color(R.color.hub_surface), dp(12), color(R.color.hub_line))
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            minHeight = dp(if (multiline) 96 else 52)
+            gravity = if (multiline) Gravity.TOP or Gravity.START else Gravity.CENTER_VERTICAL
+            setSingleLine(!multiline)
+            if (multiline) minLines = 3
+        }
+        return ReservationEditTextInput(field, labeledReservationEditInput(label, field))
+    }
+
+    private fun reservationEditStatusInput(
+        kind: ReservationKind,
+        initialStatus: ReservationStatus,
+        onSelected: (ReservationStatus) -> Unit,
+    ): ReservationEditStatusInput {
+        var displayedStatus = initialStatus
+        val value = TextView(this).apply {
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            includeFontPadding = false
+            maxLines = 2
+            setLineSpacing(0f, 1.08f)
+        }
+        val description = TextView(this).apply {
+            textSize = 12f
+            includeFontPadding = false
+            setTextColor(color(R.color.hub_text_muted))
+            setLineSpacing(0f, 1.12f)
+        }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(56)
+            isClickable = true
+            isFocusable = true
+            background = RippleDrawable(
+                ColorStateList.valueOf(color(R.color.hub_line)),
+                rounded(color(R.color.hub_surface), dp(12), color(R.color.hub_line)),
+                null,
+            )
+            setPadding(dp(14), dp(12), dp(12), dp(12))
+            addView(value, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(ImageView(context).apply {
+                setImageResource(R.drawable.ic_expand_more)
+                imageTintList = ColorStateList.valueOf(color(R.color.hub_text_subtle))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(24), dp(24)).apply { marginStart = dp(8) })
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(context).apply {
+                setText(R.string.reservation_edit_status_label)
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(color(R.color.hub_text_muted))
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(6) })
+            addView(row, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ))
+            addView(description, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(6) })
+        }
+        fun update(selected: ReservationStatus) {
+            displayedStatus = selected
+            val label = ReservationPresentationPolicy.statusLabel(kind, selected)
+            value.text = label
+            value.setTextColor(color(reservationEditStatusColor(selected)))
+            description.setText(reservationEditStatusDescriptionRes(kind, selected))
+            row.contentDescription = getString(
+                R.string.reservation_edit_status_accessibility,
+                getString(R.string.reservation_edit_status_label),
+                label,
+            )
+            ViewCompat.setStateDescription(row, label)
+        }
+        row.setOnClickListener {
+            HubSingleChoiceBottomSheet(
+                context = this,
+                title = getString(R.string.reservation_edit_status_selection_title),
+                options = ReservationEditStatusPresentationPolicy.displayOrder.map { candidate ->
+                    HubSingleChoiceOption(candidate.name, ReservationPresentationPolicy.statusLabel(kind, candidate))
+                },
+                selectedId = displayedStatus.name,
+            ) { id ->
+                val selected = ReservationStatus.valueOf(id)
+                onSelected(selected)
+                update(selected)
+                row.requestFocus()
+                row.announceForAccessibility(
+                    getString(R.string.reservation_edit_status_accessibility, getString(R.string.reservation_edit_status_label), ReservationPresentationPolicy.statusLabel(kind, selected)),
+                )
+            }.show()
+        }
+        update(initialStatus)
+        return ReservationEditStatusInput(container, ::update)
+    }
+
+    private fun reservationEditStatusColor(status: ReservationStatus): Int = when (status) {
+        ReservationStatus.PENDING_CONFIRMATION, ReservationStatus.REFUNDED -> R.color.hub_warning
+        ReservationStatus.CONFIRMED -> R.color.hub_success
+        ReservationStatus.COMPLETED -> R.color.hub_text_muted
+        ReservationStatus.CANCELLED -> R.color.hub_schedule_tag_cancelled
+    }
+
+    private fun reservationEditStatusDescriptionRes(kind: ReservationKind, status: ReservationStatus): Int = when (status) {
+        ReservationStatus.PENDING_CONFIRMATION -> R.string.reservation_edit_status_pending_description
+        ReservationStatus.CONFIRMED -> when (kind) {
+            ReservationKind.TICKET -> R.string.reservation_edit_status_ticket_confirmed_description
+            ReservationKind.PURCHASE -> R.string.reservation_edit_status_purchase_confirmed_description
+            ReservationKind.RESERVATION -> R.string.reservation_edit_status_reservation_confirmed_description
+        }
+        ReservationStatus.COMPLETED -> when (kind) {
+            ReservationKind.PURCHASE -> R.string.reservation_edit_status_purchase_completed_description
+            ReservationKind.TICKET, ReservationKind.RESERVATION -> R.string.reservation_edit_status_ticket_completed_description
+        }
+        ReservationStatus.CANCELLED -> R.string.reservation_edit_status_cancelled_description
+        ReservationStatus.REFUNDED -> R.string.reservation_edit_status_refunded_description
+    }
+
+    private fun labeledReservationEditInput(label: String, input: View): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(context).apply {
+                text = label
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(color(R.color.hub_text_muted))
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(6) })
+            addView(input, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ))
+        }
+
+    private fun reservationEditPanel(
+        title: String,
+        description: String,
+        children: List<View>,
+    ): MaterialCardView = baseCard(HubCardStyle.STANDARD).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply { bottomMargin = dp(12) }
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(15), dp(14), dp(15), dp(15))
+            addView(TextView(context).apply {
+                text = title
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(color(R.color.hub_text))
+            })
+            addView(TextView(context).apply {
+                text = description
+                textSize = 12f
+                setTextColor(color(R.color.hub_text_muted))
+                setLineSpacing(0f, 1.12f)
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(4) })
+            children.forEach { child ->
+                addView(child, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = dp(12) })
+            }
+        })
+    }
+
+    private fun openHubEventLink(
+        event: HubEvent,
+        scheduleItem: dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleItem?,
+        link: dev.minepacu.stelliveeventnotifier.core.model.HubEventLink,
+    ) {
+        val kind = ReservationActionPolicy.kindFor(link.kind, scheduleItem?.cancelledAt)
+        if (kind == null) {
+            openExternalUrl(link.url)
+            return
+        }
+        reservationExternalFlowActive = true
+        ReservationExternalLinkPolicy.openFailOpen(
+            openExternal = { openExternalUrl(link.url) },
+            recordBestEffort = {
+                lifecycleScope.launch {
+                    val snapshot = ReservationEventSnapshot(
+                        title = event.title,
+                        category = event.category.name,
+                        startsAt = scheduleItem?.startsAt ?: event.startsAt,
+                        endsAt = scheduleItem?.endsAt ?: event.endsAt,
+                        venueName = event.venueName,
+                        venueAddress = event.venueAddress,
+                        sourceLabel = event.sourceLabel,
+                        imageUrl = event.image?.url?.takeIf { HubEventImagePolicy.canDisplay(event.image) },
+                    )
+                    runCatching {
+                        reservationRepository.begin(event.id, scheduleItem?.id, kind, snapshot, link.url)
+                    }.onSuccess { draft ->
+                        externallyOpenedReservationSessionIds += draft.sessionId
+                        ReservationTileService.requestRefresh(this@MainActivity)
+                        if (reservationExternalFlowLeftApp) {
+                            liveClockHandler.postDelayed(::evaluateReservationReturnPrompt, 350L)
+                        }
+                    }.onFailure {
+                        pendingReservationRecordingFailure = true
+                        if (reservationExternalFlowLeftApp) evaluateReservationReturnPrompt()
+                    }
+                }
+            },
+            onRecordingFailure = { pendingReservationRecordingFailure = true },
+        )
+    }
+
+    private fun evaluateReservationReturnPrompt() {
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        if (pendingReservationRecordingFailure) {
+            pendingReservationRecordingFailure = false
+            Snackbar.make(
+                binding.root,
+                getString(R.string.reservation_error_external_recording),
+                Snackbar.LENGTH_LONG,
+            ).setAction(R.string.reservation_action_open_history) {
+                pushScreen(HubScreen.RESERVATIONS)
+            }.show()
+        }
+        when (val decision = ReservationReturnPromptPolicy.decision(
+            drafts = reservationDrafts,
+            externallyOpenedSessionIds = externallyOpenedReservationSessionIds,
+            promptedSessionIds = promptedReservationSessionIds,
+        )) {
+            ReservationReturnPromptDecision.None -> Unit
+            is ReservationReturnPromptDecision.Single -> {
+                val draft = reservationDrafts.firstOrNull { it.sessionId == decision.sessionId } ?: return
+                promptedReservationSessionIds += decision.sessionId
+                showReservationReturnPrompt(
+                    presentationKind = ReservationReturnPromptPresentationPolicy.single(draft.kind),
+                    itemTitle = draft.eventSnapshot.title,
+                    primaryLabel = ReservationPresentationPolicy.addActionLabel(draft.kind),
+                    bodyRes = R.string.reservation_return_prompt_single_body,
+                    secondaryLabelRes = R.string.reservation_return_prompt_not_yet,
+                ) {
+                    startActivity(Intent(this, ReservationQuickAddActivity::class.java).putExtra(
+                        ReservationQuickAddActivity.EXTRA_SESSION_ID,
+                        decision.sessionId.toString(),
+                    ))
+                }
+            }
+            is ReservationReturnPromptDecision.Multiple -> {
+                promptedReservationSessionIds += decision.sessionIds
+                showReservationReturnPrompt(
+                    presentationKind = ReservationReturnPromptPresentationKind.MULTIPLE,
+                    itemTitle = null,
+                    primaryLabel = getString(R.string.reservation_help_action_view_pending),
+                    bodyRes = R.string.reservation_return_prompt_multiple_body,
+                    secondaryLabelRes = R.string.reservation_return_prompt_later,
+                ) { pushScreen(HubScreen.RESERVATIONS) }
+            }
+        }
+    }
+
+    private fun showReservationReturnPrompt(
+        presentationKind: ReservationReturnPromptPresentationKind,
+        itemTitle: String?,
+        primaryLabel: String,
+        bodyRes: Int,
+        secondaryLabelRes: Int,
+        onPrimary: () -> Unit,
+    ) {
+        dismissReservationReturnPrompt(animated = false)
+        binding.reservationReturnPromptContainer.removeAllViews()
+        val prompt = ViewReservationReturnPromptBinding.inflate(
+            layoutInflater,
+            binding.reservationReturnPromptContainer,
+            false,
+        )
+        prompt.reservationReturnPromptTitle.setText(returnPromptTitleRes(presentationKind))
+        prompt.reservationReturnPromptItemTitle.text = itemTitle.orEmpty()
+        prompt.reservationReturnPromptItemTitle.isVisible = !itemTitle.isNullOrBlank()
+        prompt.reservationReturnPromptBody.setText(bodyRes)
+        prompt.reservationReturnPromptPrimary.text = primaryLabel
+        prompt.reservationReturnPromptPrimary.setOnClickListener {
+            dismissReservationReturnPrompt(animated = false)
+            onPrimary()
+        }
+        prompt.reservationReturnPromptSecondary.setText(secondaryLabelRes)
+        prompt.reservationReturnPromptSecondary.setOnClickListener { dismissReservationReturnPrompt() }
+        val promptView = prompt.root
+        reservationReturnPromptView = promptView
+        binding.reservationReturnPromptContainer.addView(
+            promptView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM,
+            ),
+        )
+        scheduleReservationReturnPromptPositionUpdate()
+        promptView.alpha = 0f
+        promptView.translationY = dp(24).toFloat()
+        promptView.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(RETURN_PROMPT_ANIMATION_DURATION_MS)
+            .start()
+    }
+
+    private fun returnPromptTitleRes(kind: ReservationReturnPromptPresentationKind): Int = when (kind) {
+        ReservationReturnPromptPresentationKind.TICKET -> R.string.reservation_return_prompt_ticket_title
+        ReservationReturnPromptPresentationKind.PURCHASE -> R.string.reservation_return_prompt_purchase_title
+        ReservationReturnPromptPresentationKind.RESERVATION -> R.string.reservation_return_prompt_reservation_title
+        ReservationReturnPromptPresentationKind.MULTIPLE -> R.string.reservation_return_prompt_multiple_title
+    }
+
+    private fun dismissReservationReturnPrompt(animated: Boolean = true): Boolean {
+        val prompt = reservationReturnPromptView ?: return false
+        reservationReturnPromptView = null
+        val remove = { binding.reservationReturnPromptContainer.removeView(prompt) }
+        if (!animated || !prompt.isAttachedToWindow) {
+            remove()
+        } else {
+            prompt.animate()
+                .alpha(0f)
+                .translationY(dp(24).toFloat())
+                .setDuration(RETURN_PROMPT_ANIMATION_DURATION_MS)
+                .withEndAction(remove)
+                .start()
+        }
+        return true
+    }
+
+    private fun scheduleReservationReturnPromptPositionUpdate() {
+        val prompt = reservationReturnPromptView ?: return
+        binding.root.post {
+            if (reservationReturnPromptView !== prompt || binding.root.width == 0) return@post
+            val params = prompt.layoutParams as? FrameLayout.LayoutParams ?: return@post
+            val maxWidth = minOf((binding.root.width - dp(36)).coerceAtLeast(1), dp(560))
+            val songButtonSpace = if (::songScrollToTopButton.isInitialized && songScrollToTopButton.isVisible) dp(64) else 0
+            params.width = maxWidth
+            params.bottomMargin = currentBottomObstructionHeight() + songButtonSpace + dp(16)
+            params.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+            prompt.layoutParams = params
         }
     }
 
@@ -1995,7 +3648,7 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
                 }
                 links.forEach { link ->
                     val label = HubEventLinkPolicy.displayLinkLabel(link)
-                    addView(detailActionButton(label, primary = false) { openExternalUrl(link.url) }.apply {
+                    addView(detailActionButton(label, primary = false) { openHubEventLink(currentSelectedHubEvent() ?: return@detailActionButton, item.schedule, link) }.apply {
                         contentDescription = "$label, 외부 링크 열기"
                     }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44)).apply {
                         topMargin = dp(9)
@@ -4035,10 +5688,12 @@ private fun updateTopBarScrolled(scrolled: Boolean) {
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             systemTopInsetPx = bars.top
+            systemBottomInsetPx = bars.bottom
             binding.topGlassOverlay.setPadding(0, bars.top, 0, 0)
             binding.mainContent.setPadding(0, 0, 0, bars.bottom)
             binding.navigationRail.setPadding(0, bars.top + dp(8), 0, bars.bottom + dp(8))
             applyContentTopPadding(underTopBar = navigationHistory.currentScreen == HubScreen.GOODS_EVENT_DETAIL)
+            scheduleReservationReturnPromptPositionUpdate()
             insets
         }
         ViewCompat.requestApplyInsets(binding.root)
@@ -4776,8 +6431,8 @@ private fun hubEventDetailHero(event: dev.minepacu.stelliveeventnotifier.core.mo
             }
             addView(
                 detailActionButton(label, primary = false) {
-                    if (ctaMode == HubEventLinkCtaMode.DIRECT) openExternalUrl(links.single().url)
-                    else HubEventLinksBottomSheet(this@MainActivity, ::openExternalUrl).show("관련 링크", links)
+                    if (ctaMode == HubEventLinkCtaMode.DIRECT) openHubEventLink(event, null, links.single())
+                    else HubEventLinksBottomSheet(this@MainActivity) { link -> openHubEventLink(event, null, link) }.show("관련 링크", links)
                 }.apply {
                     contentDescription = if (ctaMode == HubEventLinkCtaMode.DIRECT) "$label, 외부 링크 열기" else "$label, 목록 열기"
                 },

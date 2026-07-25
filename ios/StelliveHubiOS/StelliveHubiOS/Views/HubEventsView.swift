@@ -31,6 +31,10 @@ struct HubEventsView: View {
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
 
+            Section {
+                ReservationSummaryCard()
+            }
+
             Section("필터") {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {

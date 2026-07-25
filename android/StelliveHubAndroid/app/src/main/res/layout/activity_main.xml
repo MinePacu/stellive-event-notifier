@@ -391,7 +391,7 @@
         <LinearLayout
             android:id="@+id/topBar"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="@dimen/hub_top_bar_height"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="8dp"
@@ -399,11 +399,11 @@
 
             <ImageButton
                 android:id="@+id/topBarBack"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="@dimen/hub_top_bar_action_size"
+                android:layout_height="@dimen/hub_top_bar_action_size"
                 android:background="@android:color/transparent"
                 android:contentDescription="@string/action_back"
-                android:padding="10dp"
+                android:padding="@dimen/hub_top_bar_icon_padding"
                 android:src="@drawable/ic_arrow_back"
                 android:visibility="gone" />
 
@@ -420,10 +420,9 @@
                     android:layout_height="wrap_content"
                     android:alpha="0"
                     android:ellipsize="end"
+                    android:includeFontPadding="false"
                     android:maxLines="1"
-                    android:textColor="@color/hub_text"
-                    android:textSize="15sp"
-                    android:textStyle="bold" />
+                    android:textAppearance="@style/TextAppearance.StelliveHub.TopBarTitle" />
 
                 <TextView
                     android:id="@+id/collapsedRole"
@@ -437,6 +436,16 @@
             </LinearLayout>
 
             <ImageButton
+                android:id="@+id/topBarReservationHelp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@android:color/transparent"
+                android:contentDescription="@string/action_reservation_help"
+                android:padding="12dp"
+                android:src="@drawable/ic_help_outline"
+                android:visibility="gone" />
+
+            <ImageButton
                 android:id="@+id/topBarSongSearch"
                 android:layout_width="44dp"
                 android:layout_height="44dp"
@@ -446,6 +455,35 @@
                 android:src="@drawable/ic_search"
                 android:visibility="gone"
                 app:tint="@color/hub_text" />
+
+            <FrameLayout
+                android:id="@+id/topBarReservationsContainer"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:visibility="gone">
+                <ImageButton
+                    android:id="@+id/topBarReservations"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="@string/action_reservations"
+                    android:padding="10dp"
+                    android:src="@drawable/ic_reservation_ticket"
+                    app:tint="@color/hub_text" />
+                <TextView
+                    android:id="@+id/topBarReservationsBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="18dp"
+                    android:layout_gravity="top|end"
+                    android:background="@drawable/bg_notification_badge"
+                    android:gravity="center"
+                    android:minWidth="18dp"
+                    android:paddingHorizontal="4dp"
+                    android:textColor="@android:color/white"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+            </FrameLayout>
 
             <FrameLayout
                 android:id="@+id/topBarAnnouncementContainer"
@@ -505,4 +543,10 @@
             android:visibility="gone"
             android:background="@color/hub_top_bar_divider" />
     </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/reservationReturnPromptContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no" />
 </FrameLayout>

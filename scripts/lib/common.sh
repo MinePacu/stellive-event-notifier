@@ -7,6 +7,53 @@ project_root() {
   cd "$source_dir/../.." && pwd -P
 }
 
+stellive_cache_root() {
+  if [[ -n "${STELLIVE_CACHE_DIR:-}" ]]; then
+    printf '%s\n' "$STELLIVE_CACHE_DIR"
+    return
+  fi
+
+  local root cache_root_file cache_root
+  root="$(project_root)"
+  cache_root_file="$root/scripts/.cache-root"
+  if [[ -f "$cache_root_file" ]]; then
+    IFS= read -r cache_root <"$cache_root_file" || true
+    if [[ -n "$cache_root" ]]; then
+      printf '%s\n' "$cache_root"
+      return
+    fi
+  fi
+
+  echo "error: no cache root configured." >&2
+  echo "Set STELLIVE_CACHE_DIR or add the cache path to scripts/.cache-root." >&2
+  return 1
+}
+
+ios_derived_data_dir() {
+  local cache_root
+  cache_root="$(stellive_cache_root)"
+  printf '%s/DerivedData-ios-simulator\n' "$cache_root"
+}
+
+gradle_user_home_dir() {
+  local cache_root
+  cache_root="$(stellive_cache_root)"
+  printf '%s/gradle-user-home\n' "$cache_root"
+}
+
+require_cache_root() {
+  local cache_root
+  cache_root="$(stellive_cache_root)"
+
+  if [[ -d "$cache_root" ]]; then
+    return
+  fi
+
+  echo "error: cache root is unavailable: $cache_root" >&2
+  echo "Mount the external volume or set STELLIVE_CACHE_DIR to an available directory." >&2
+  exit 1
+}
+
 require_command() {
   local command_name="$1"
   if ! command -v "$command_name" >/dev/null 2>&1; then

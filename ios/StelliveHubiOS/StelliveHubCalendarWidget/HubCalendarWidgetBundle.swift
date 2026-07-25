@@ -5,6 +5,12 @@ import WidgetKit
 struct HubCalendarWidgetBundle: WidgetBundle {
     var body: some Widget {
         HubCalendarWidget()
+        if #available(iOSApplicationExtension 16.1, *) {
+            ReservationLiveActivityWidget()
+        }
+        if #available(iOSApplicationExtension 18.0, *) {
+            ReservationControlWidget()
+        }
     }
 }
 

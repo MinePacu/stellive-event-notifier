@@ -17,7 +17,7 @@ import dev.minepacu.stelliveeventnotifier.ui.components.HubCardStyle
 
 class HubEventLinksBottomSheet(
     private val context: Context,
-    private val onOpen: (String) -> Unit,
+    private val onOpen: (HubEventLink) -> Unit,
 ) {
     fun show(title: String, links: List<HubEventLink>) {
         val sheet = HubBottomSheetDialog(context, title)
@@ -27,7 +27,7 @@ class HubEventLinksBottomSheet(
                 links.forEachIndexed { index, link ->
                     if (index > 0) addView(divider())
                     addView(linkRow(link) {
-                        onOpen(link.url)
+                        onOpen(link)
                         sheet.dismiss()
                     })
                 }
