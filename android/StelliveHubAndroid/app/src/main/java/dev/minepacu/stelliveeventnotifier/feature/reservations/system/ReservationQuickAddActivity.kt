@@ -3,6 +3,8 @@ package dev.minepacu.stelliveeventnotifier.feature.reservations.system
 import android.app.AlertDialog
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup
@@ -15,6 +17,8 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
+import dev.minepacu.stelliveeventnotifier.MainActivity
+import dev.minepacu.stelliveeventnotifier.R
 import dev.minepacu.stelliveeventnotifier.feature.reservations.data.RoomReservationRepository
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraft
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftPolicy
@@ -117,12 +121,22 @@ class ReservationQuickAddActivity : AppCompatActivity() {
         }
         val normalizedUrl = validation.normalizedUrl ?: return
         lifecycleScope.launch {
-            if (repository.hasReservationDetailUrl(normalizedUrl)) {
+            val existingRecord = repository.findReservationByDetailUrl(normalizedUrl)
+            if (existingRecord != null) {
                 AlertDialog.Builder(this@ReservationQuickAddActivity)
-                    .setTitle("이미 저장된 링크")
-                    .setMessage("같은 상세 링크가 다른 내역에 저장되어 있습니다. 그래도 추가할까요?")
-                    .setNegativeButton("취소", null)
-                    .setPositiveButton("그래도 추가") { _, _ -> confirmAfterSensitivity(validation) }
+                    .setTitle(R.string.reservation_error_duplicate_title)
+                    .setMessage(R.string.reservation_error_duplicate_message)
+                    .setNegativeButton(R.string.dialog_cancel, null)
+                    .setNeutralButton(R.string.reservation_help_action_view_existing) { _, _ ->
+                        startActivity(Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse("stellivehub://reservations/${existingRecord.id}"),
+                            this@ReservationQuickAddActivity,
+                            MainActivity::class.java,
+                        ))
+                        finish()
+                    }
+                    .setPositiveButton(R.string.reservation_action_save_anyway) { _, _ -> confirmAfterSensitivity(validation) }
                     .show()
             } else {
                 confirmAfterSensitivity(validation)
@@ -133,10 +147,10 @@ class ReservationQuickAddActivity : AppCompatActivity() {
     private fun confirmAfterSensitivity(validation: dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLValidation) {
         if (validation.isSensitive) {
             AlertDialog.Builder(this)
-                .setTitle("민감할 수 있는 링크")
-                .setMessage("인증 정보가 포함될 수 있는 주소입니다. 이 기기에만 저장할까요?")
-                .setNegativeButton("취소", null)
-                .setPositiveButton("로컬 저장") { _, _ -> confirm(validation.normalizedUrl, allowSensitive = true) }
+                .setTitle(R.string.reservation_error_sensitive_title)
+                .setMessage(R.string.reservation_error_sensitive_message)
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .setPositiveButton(R.string.reservation_action_save_locally) { _, _ -> confirm(validation.normalizedUrl, allowSensitive = true) }
                 .show()
         } else {
             confirm(validation.normalizedUrl, allowSensitive = false)
@@ -152,12 +166,26 @@ class ReservationQuickAddActivity : AppCompatActivity() {
             .mapNotNull(ReservationURLPolicy::firstHttpsUrl)
             .firstOrNull()
         if (url == null) {
-            detailUrlInput.error = "클립보드에서 HTTPS 링크를 찾지 못했습니다."
+            showInvalidClipboardLinkDialog()
             return
         }
         detailUrlInput.setText(url)
         detailUrlInput.setSelection(url.length)
         detailUrlInput.error = null
+    }
+
+    private fun showInvalidClipboardLinkDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.reservation_error_invalid_https_title)
+            .setMessage(R.string.reservation_error_invalid_https_message)
+            .setNegativeButton(R.string.dialog_close, null)
+            .setNeutralButton(R.string.reservation_help_action_add_without_link) { _, _ ->
+                confirm(null, allowSensitive = false)
+            }
+            .setPositiveButton(R.string.reservation_action_retry_paste) { _, _ ->
+                pasteFirstHttpsURL()
+            }
+            .show()
     }
 
     private fun confirm(detailUrl: String?, allowSensitive: Boolean) {
@@ -179,7 +207,7 @@ class ReservationQuickAddActivity : AppCompatActivity() {
                 ).show()
                 finish()
             }.onFailure {
-                Toast.makeText(this@ReservationQuickAddActivity, "내역을 저장하지 못했습니다.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@ReservationQuickAddActivity, R.string.reservation_error_save_failed, Toast.LENGTH_SHORT).show()
             }
         }
     }

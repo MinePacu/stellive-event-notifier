@@ -22,6 +22,9 @@ interface ReservationDao {
     @Query("SELECT COUNT(*) FROM reservation_records WHERE reservationDetailUrl = :url AND id != :excludingId")
     suspend fun countByDetailUrl(url: String, excludingId: String): Int
 
+    @Query("SELECT * FROM reservation_records WHERE reservationDetailUrl = :url AND id != :excludingId ORDER BY confirmedAtEpochMs DESC LIMIT 1")
+    suspend fun findByDetailUrl(url: String, excludingId: String): ReservationRecordEntity?
+
     @Upsert suspend fun upsert(record: ReservationRecordEntity)
     @Delete suspend fun delete(record: ReservationRecordEntity)
 }

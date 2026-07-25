@@ -64,7 +64,9 @@ class RoomReservationRepositoryTest {
         assertEquals(first.id, second.id)
         assertNull(database.reservationDraftDao().get(draft.sessionId.toString()))
         assertTrue(repository.hasReservationDetailUrl("https://example.com/detail"))
+        assertEquals(first.id, repository.findReservationByDetailUrl("https://example.com/detail")?.id)
         assertFalse(repository.hasReservationDetailUrl("https://example.com/detail", excludingId = first.id))
+        assertNull(repository.findReservationByDetailUrl("https://example.com/detail", excludingId = first.id))
     }
 
     private fun snapshot() = ReservationEventSnapshot(

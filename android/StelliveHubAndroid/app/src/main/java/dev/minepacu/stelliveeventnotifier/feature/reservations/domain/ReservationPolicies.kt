@@ -71,6 +71,35 @@ object ReservationDraftPolicy {
         }
 }
 
+enum class ReservationDraftExpiryKind {
+    HOURS,
+    MINUTES,
+    SOON,
+}
+
+data class ReservationDraftExpiryPresentation(
+    val kind: ReservationDraftExpiryKind,
+    val value: Int? = null,
+)
+
+object ReservationDraftExpiryPresentationPolicy {
+    fun presentation(expiresAt: Instant, now: Instant = Instant.now()): ReservationDraftExpiryPresentation? {
+        val remainingSeconds = expiresAt.epochSecond - now.epochSecond
+        if (remainingSeconds <= 0) return null
+        if (remainingSeconds < 120) return ReservationDraftExpiryPresentation(ReservationDraftExpiryKind.SOON)
+        val remainingMinutes = (remainingSeconds + 59) / 60
+        if (remainingMinutes < 10) {
+            return ReservationDraftExpiryPresentation(ReservationDraftExpiryKind.MINUTES, remainingMinutes.toInt())
+        }
+        if (remainingMinutes < 60) {
+            val roundedMinutes = (((remainingMinutes + 4) / 5) * 5).toInt()
+            return ReservationDraftExpiryPresentation(ReservationDraftExpiryKind.MINUTES, roundedMinutes)
+        }
+        val remainingHours = ((remainingSeconds + 3_599) / 3_600).toInt()
+        return ReservationDraftExpiryPresentation(ReservationDraftExpiryKind.HOURS, remainingHours)
+    }
+}
+
 object ReservationDisplayPolicy {
     fun officialEventChanged(record: ReservationRecord, latestTitle: String?, latestStartsAt: Instant?): Boolean =
         latestTitle != null && (

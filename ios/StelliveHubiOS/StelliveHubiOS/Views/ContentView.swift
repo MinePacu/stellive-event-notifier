@@ -160,7 +160,9 @@ struct ContentView: View {
         switch banner {
         case .single(let sessionID): pendingReservationRoute = .quickAdd(sessionID: sessionID)
         case .multiple: pendingReservationRoute = .list
-        case .error: reservationStore.clearErrorMessage()
+        case .error:
+            pendingReservationRoute = .list
+            reservationStore.clearErrorMessage()
         }
         reservationReturnBanner = nil
     }
@@ -216,7 +218,7 @@ private struct ReservationReturnBannerView: View {
         switch banner {
         case .single: "내역에 추가"
         case .multiple: "내역 보기"
-        case .error: "확인"
+        case .error: String(localized: "reservation_action_open_history")
         }
     }
 
@@ -256,8 +258,8 @@ private struct HubEventsTabView: View {
                         ReservationQuickAddView(sessionID: sessionID)
                     case .listHelp:
                         ReservationHelpView(page: .list)
-                    case .detailHelp:
-                        ReservationHelpView(page: .detail)
+                    case .detailHelp(let id):
+                        ReservationHelpView(page: .detail, currentRecordID: id)
                     }
                 }
                 .onAppear(perform: openPendingHubEvent)

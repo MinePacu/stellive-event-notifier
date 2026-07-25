@@ -175,55 +175,120 @@ final class ReservationPoliciesTests: XCTestCase {
         let list = ReservationHelpPolicy.content(.list)
         let detail = ReservationHelpPolicy.content(.detail)
 
-        XCTAssertEqual(list.title, "내 예약·구매 도움말")
         XCTAssertEqual(list.steps.map(\.number), [1, 2, 3])
-        XCTAssertTrue(list.steps.last?.body.contains("링크 없이 추가") == true)
-
-        let pending = list.sections.first { $0.id == .pendingDraft }
-        XCTAssertEqual(pending?.tone, .warning)
-        XCTAssertTrue(pending?.body.contains("최대 2시간") == true)
-        XCTAssertTrue(pending?.body.contains("자동 확인하지") == true)
-        XCTAssertTrue(pending?.points.contains { $0.contains("확인 필요에서 직접 추가") } == true)
-
-        let linkless = list.sections.first { $0.id == .linklessAdd }
-        XCTAssertEqual(linkless?.tone, .info)
-        XCTAssertTrue(linkless?.body.contains("링크 없이 추가") == true)
-
-        let storage = list.sections.first { $0.id == .localStorage }
-        XCTAssertEqual(storage?.tone, .security)
-        XCTAssertTrue(storage?.body.contains("서버로 전송되지") == true)
-        XCTAssertTrue(storage?.body.contains("백업 대상에서 제외") == true)
-
-        XCTAssertEqual(detail.title, "내역 상세 도움말")
-        let actions = detail.sections.first { $0.id == .detailActions }
-        XCTAssertEqual(actions?.tone, .info)
-        XCTAssertTrue(actions?.points.contains { $0.contains("상태·일정·장소") } == true)
-        XCTAssertTrue(actions?.points.contains { $0.contains("옵션·수량") && $0.contains("메모") } == true)
-
-        let linkPriority = detail.sections.first { $0.id == .linkPriority }
-        XCTAssertTrue(linkPriority?.body.contains("상세 링크가 있으면") == true)
-        XCTAssertTrue(linkPriority?.body.contains("제공사 내역 URL") == true)
-
-        let overrides = detail.sections.first { $0.id == .userOverrides }
-        XCTAssertTrue(overrides?.body.contains("우선 표시") == true)
-
-        let official = detail.sections.first { $0.id == .officialEvent }
-        XCTAssertEqual(official?.tone, .warning)
-        XCTAssertTrue(official?.body.contains("내역 상태") == true)
-        XCTAssertTrue(official?.body.contains("자동으로 바뀌지") == true)
-
-        let deletion = detail.sections.first { $0.id == .deleteWarning }
-        XCTAssertEqual(deletion?.tone, .danger)
-        XCTAssertTrue(deletion?.body.contains("외부 서비스") == true)
-        XCTAssertTrue(deletion?.body.contains("취소되지") == true)
-
         XCTAssertEqual(
             list.sections.map(\.id),
             [.pendingDraft, .linklessAdd, .listGroups, .localStorage]
         )
+        XCTAssertEqual(list.sections.map(\.tone), [.warning, .info, .normal, .security])
+        XCTAssertEqual(list.sections.map(\.action), [.viewPending, .addWithoutLink, .viewUpcoming, nil])
+        XCTAssertEqual(
+            list.faqs.map(\.id),
+            [.returnPromptMissing, .detailLinkMissing, .duplicateLink, .sensitiveLink, .officialEventCancelled]
+        )
+        XCTAssertEqual(list.faqs.map(\.tone), [.warning, .info, .warning, .security, .warning])
+        XCTAssertEqual(
+            list.faqs.map(\.action),
+            [.viewPending, .addWithoutLink, .viewExistingRecord, nil, nil]
+        )
         XCTAssertEqual(
             detail.sections.map(\.id),
             [.detailActions, .linkPriority, .userOverrides, .officialEvent, .deleteWarning]
+        )
+        XCTAssertEqual(detail.sections.map(\.tone), [.info, .normal, .info, .warning, .danger])
+        XCTAssertEqual(detail.sections.first?.action, .editCurrentRecord)
+        XCTAssertTrue(detail.faqs.isEmpty)
+    }
+
+    func testReservationHelpPresentationAdaptsToActiveDraftsAndCurrentRecord() {
+        let now = Date(timeIntervalSince1970: 100)
+        let emptyContext = ReservationHelpContextPolicy.context(drafts: [], records: [], now: now)
+        let empty = ReservationHelpPolicy.presentation(.list, context: emptyContext, now: now)
+        XCTAssertEqual(empty.status?.kind, .gettingStarted)
+        XCTAssertNil(empty.content.sections.first { $0.id == .pendingDraft }?.action)
+        XCTAssertNil(empty.content.sections.first { $0.id == .linklessAdd }?.action)
+
+        let draft = makeDraft(id: UUID(), openedAt: now.addingTimeInterval(-10))
+        let record = makeRecord()
+        let context = ReservationHelpContextPolicy.context(
+            drafts: [draft],
+            records: [record],
+            currentRecordID: record.id,
+            now: now
+        )
+
+        let list = ReservationHelpPolicy.presentation(.list, context: context, now: now)
+        XCTAssertEqual(list.status?.kind, .pending)
+        XCTAssertEqual(list.status?.action, .viewPending)
+        XCTAssertEqual(list.status?.expiry?.kind, .hours)
+        XCTAssertEqual(
+            list.content.sections.first { $0.id == .linklessAdd }?.action,
+            .addWithoutLink
+        )
+
+        let detail = ReservationHelpPolicy.presentation(.detail, context: context, now: now)
+        XCTAssertNil(detail.status)
+        XCTAssertEqual(
+            detail.content.sections.first { $0.id == .detailActions }?.action,
+            .editCurrentRecord
+        )
+    }
+
+    func testReservationHelpContextUsesEarliestActiveDraftAndIgnoresExpiredDrafts() {
+        let now = Date(timeIntervalSince1970: 100)
+        var expired = makeDraft(id: UUID(), openedAt: now.addingTimeInterval(-20))
+        expired.expiresAt = now.addingTimeInterval(-1)
+        var later = makeDraft(id: UUID(), openedAt: now.addingTimeInterval(-10))
+        later.expiresAt = now.addingTimeInterval(3_600)
+        var earlier = makeDraft(id: UUID(), openedAt: now.addingTimeInterval(-5))
+        earlier.expiresAt = now.addingTimeInterval(600)
+
+        let context = ReservationHelpContextPolicy.context(
+            drafts: [expired, later, earlier],
+            records: [],
+            now: now
+        )
+
+        XCTAssertEqual(context.activeDraftCount, 2)
+        XCTAssertEqual(context.firstDraftSessionID, earlier.sessionID)
+        XCTAssertEqual(context.earliestDraftExpiresAt, earlier.expiresAt)
+    }
+
+    func testReservationDraftExpiryPresentationUsesStableBoundaries() {
+        let now = Date(timeIntervalSince1970: 100)
+        XCTAssertEqual(
+            ReservationDraftExpiryPresentationPolicy.presentation(
+                expiresAt: now.addingTimeInterval(7_200),
+                now: now
+            ),
+            ReservationDraftExpiryPresentation(kind: .hours, value: 2)
+        )
+        XCTAssertEqual(
+            ReservationDraftExpiryPresentationPolicy.presentation(
+                expiresAt: now.addingTimeInterval(45 * 60),
+                now: now
+            ),
+            ReservationDraftExpiryPresentation(kind: .minutes, value: 45)
+        )
+        XCTAssertEqual(
+            ReservationDraftExpiryPresentationPolicy.presentation(
+                expiresAt: now.addingTimeInterval(8 * 60),
+                now: now
+            ),
+            ReservationDraftExpiryPresentation(kind: .minutes, value: 8)
+        )
+        XCTAssertEqual(
+            ReservationDraftExpiryPresentationPolicy.presentation(
+                expiresAt: now.addingTimeInterval(90),
+                now: now
+            ),
+            ReservationDraftExpiryPresentation(kind: .soon, value: nil)
+        )
+        XCTAssertNil(
+            ReservationDraftExpiryPresentationPolicy.presentation(
+                expiresAt: now.addingTimeInterval(-1),
+                now: now
+            )
         )
     }
 

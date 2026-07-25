@@ -1,5 +1,7 @@
 package dev.minepacu.stelliveeventnotifier.feature.reservations.domain
 
+import androidx.annotation.StringRes
+import dev.minepacu.stelliveeventnotifier.R
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -215,6 +217,14 @@ enum class ReservationHelpPage {
     DETAIL,
 }
 
+enum class ReservationHelpAction {
+    VIEW_PENDING,
+    ADD_WITHOUT_LINK,
+    VIEW_UPCOMING,
+    EDIT_CURRENT_RECORD,
+    VIEW_EXISTING_RECORD,
+}
+
 enum class ReservationHelpTone {
     NORMAL,
     INFO,
@@ -235,120 +245,278 @@ enum class ReservationHelpSectionId {
     DELETE_WARNING,
 }
 
+enum class ReservationHelpFaqId {
+    RETURN_PROMPT_MISSING,
+    DETAIL_LINK_MISSING,
+    DUPLICATE_LINK,
+    SENSITIVE_LINK,
+    OFFICIAL_EVENT_CANCELLED,
+}
+
 data class ReservationHelpStep(
     val number: Int,
-    val title: String,
-    val body: String,
+    @StringRes val titleRes: Int,
+    @StringRes val bodyRes: Int,
 )
 
 data class ReservationHelpSection(
     val id: ReservationHelpSectionId,
     val tone: ReservationHelpTone,
-    val title: String,
-    val body: String,
-    val points: List<String> = emptyList(),
+    @StringRes val titleRes: Int,
+    @StringRes val bodyRes: Int,
+    val pointResIds: List<Int> = emptyList(),
+    val action: ReservationHelpAction? = null,
+)
+
+data class ReservationHelpFaq(
+    val id: ReservationHelpFaqId,
+    val tone: ReservationHelpTone,
+    @StringRes val questionRes: Int,
+    @StringRes val answerRes: Int,
+    val action: ReservationHelpAction? = null,
 )
 
 data class ReservationHelpContent(
-    val title: String,
-    val summary: String,
+    @StringRes val titleRes: Int,
+    @StringRes val summaryRes: Int,
     val steps: List<ReservationHelpStep> = emptyList(),
     val sections: List<ReservationHelpSection>,
+    val faqs: List<ReservationHelpFaq> = emptyList(),
+)
+
+data class ReservationHelpContext(
+    val activeDraftCount: Int,
+    val earliestDraftExpiresAt: Instant?,
+    val firstDraftSessionId: UUID?,
+    val hasRecords: Boolean,
+    val hasUpcomingRecords: Boolean,
+    val currentRecordId: UUID? = null,
+    val existingRecordId: UUID? = null,
+)
+
+object ReservationHelpContextPolicy {
+    fun context(
+        drafts: List<ReservationDraft>,
+        records: List<ReservationRecord>,
+        currentRecordId: UUID? = null,
+        existingRecordId: UUID? = null,
+        now: Instant = Instant.now(),
+    ): ReservationHelpContext {
+        val activeDrafts = ReservationDraftPolicy.active(drafts, now)
+        val upcoming = ReservationListPolicy.sections(records, now).upcoming
+        val earliest = activeDrafts.minByOrNull(ReservationDraft::expiresAt)
+        return ReservationHelpContext(
+            activeDraftCount = activeDrafts.size,
+            earliestDraftExpiresAt = earliest?.expiresAt,
+            firstDraftSessionId = earliest?.sessionId,
+            hasRecords = records.isNotEmpty(),
+            hasUpcomingRecords = upcoming.isNotEmpty(),
+            currentRecordId = currentRecordId?.takeIf { id -> records.any { it.id == id } },
+            existingRecordId = existingRecordId?.takeIf { id -> records.any { it.id == id } },
+        )
+    }
+}
+
+enum class ReservationHelpStatusKind {
+    GETTING_STARTED,
+    PENDING,
+    MANAGE_RECORDS,
+}
+
+data class ReservationHelpStatusPresentation(
+    val kind: ReservationHelpStatusKind,
+    val tone: ReservationHelpTone,
+    val activeDraftCount: Int = 0,
+    val expiry: ReservationDraftExpiryPresentation? = null,
+    val action: ReservationHelpAction? = null,
+)
+
+data class ReservationHelpPresentation(
+    val content: ReservationHelpContent,
+    val status: ReservationHelpStatusPresentation?,
 )
 
 object ReservationHelpPolicy {
     fun content(page: ReservationHelpPage): ReservationHelpContent = when (page) {
         ReservationHelpPage.LIST -> ReservationHelpContent(
-            title = "내 예약·구매 도움말",
-            summary = "링크를 열 때 생기는 확인 필요 항목은 임시 기록입니다. 앱은 외부 서비스의 실제 완료 여부를 자동으로 확인하지 않으며, 내역으로 추가한 정보는 이 기기에 저장합니다.",
+            titleRes = R.string.reservation_help_list_title,
+            summaryRes = R.string.reservation_help_list_summary,
             steps = listOf(
                 ReservationHelpStep(
                     number = 1,
-                    title = "굿즈·행사에서 링크 열기",
-                    body = "티켓·구매·예약 링크를 엽니다.",
+                    titleRes = R.string.reservation_help_step_open_title,
+                    bodyRes = R.string.reservation_help_step_open_body,
                 ),
                 ReservationHelpStep(
                     number = 2,
-                    title = "외부 페이지에서 진행",
-                    body = "외부 서비스에서 예매·결제·예약을 진행합니다.",
+                    titleRes = R.string.reservation_help_step_external_title,
+                    bodyRes = R.string.reservation_help_step_external_body,
                 ),
                 ReservationHelpStep(
                     number = 3,
-                    title = "앱으로 돌아와 내역 추가",
-                    body = "확인 필요 항목을 내역에 추가합니다. 상세 링크를 찾지 못했다면 링크 없이 추가할 수 있습니다.",
+                    titleRes = R.string.reservation_help_step_add_title,
+                    bodyRes = R.string.reservation_help_step_add_body,
                 ),
             ),
             sections = listOf(
                 ReservationHelpSection(
                     id = ReservationHelpSectionId.PENDING_DRAFT,
                     tone = ReservationHelpTone.WARNING,
-                    title = "확인 필요는 임시 항목입니다",
-                    body = "링크를 열면 확인 필요 항목이 생기며 최대 2시간 동안 유지된 뒤 자동으로 정리됩니다. 앱은 외부 서비스에서 예매·결제·예약이 실제로 완료됐는지 자동 확인하지 않습니다.",
-                    points = listOf("앱 복귀 안내가 보이지 않아도 내 예약·구매의 확인 필요에서 직접 추가할 수 있습니다."),
+                    titleRes = R.string.reservation_help_pending_title,
+                    bodyRes = R.string.reservation_help_pending_body,
+                    pointResIds = listOf(R.string.reservation_help_pending_point),
+                    action = ReservationHelpAction.VIEW_PENDING,
                 ),
                 ReservationHelpSection(
                     id = ReservationHelpSectionId.LINKLESS_ADD,
                     tone = ReservationHelpTone.INFO,
-                    title = "상세 링크가 없어도 추가할 수 있습니다",
-                    body = "외부 페이지에서 상세 링크를 찾지 못했다면 링크 없이 추가를 선택해 상태와 필요한 정보를 직접 기록하세요.",
+                    titleRes = R.string.reservation_help_linkless_title,
+                    bodyRes = R.string.reservation_help_linkless_body,
+                    action = ReservationHelpAction.ADD_WITHOUT_LINK,
                 ),
                 ReservationHelpSection(
                     id = ReservationHelpSectionId.LIST_GROUPS,
                     tone = ReservationHelpTone.NORMAL,
-                    title = "예정된 내역과 지난 내역",
-                    body = "예매 완료·구매 완료·예약 완료 상태이고 일정이 남은 항목은 예정된 내역에 표시됩니다. 취소·환불·이용 완료 상태이거나 일정이 지난 항목은 지난 내역에 표시됩니다.",
-                    points = listOf("지난 내역에는 내역을 저장한 시각을 표시합니다."),
+                    titleRes = R.string.reservation_help_groups_title,
+                    bodyRes = R.string.reservation_help_groups_body,
+                    pointResIds = listOf(R.string.reservation_help_groups_point),
+                    action = ReservationHelpAction.VIEW_UPCOMING,
                 ),
                 ReservationHelpSection(
                     id = ReservationHelpSectionId.LOCAL_STORAGE,
                     tone = ReservationHelpTone.SECURITY,
-                    title = "내역은 이 기기에만 저장됩니다",
-                    body = "정식 내역은 서버로 전송되지 않고 이 기기에만 저장됩니다. 예약 데이터는 백업 대상에서 제외되므로 앱을 삭제하거나 기기를 변경하면 복구되지 않을 수 있습니다.",
-                    points = listOf("예매·주문·예약번호와 민감한 링크를 다른 사람과 공유하지 마세요."),
+                    titleRes = R.string.reservation_help_storage_title,
+                    bodyRes = R.string.reservation_help_storage_body,
+                    pointResIds = listOf(R.string.reservation_help_storage_point),
+                ),
+            ),
+            faqs = listOf(
+                ReservationHelpFaq(
+                    id = ReservationHelpFaqId.RETURN_PROMPT_MISSING,
+                    tone = ReservationHelpTone.WARNING,
+                    questionRes = R.string.reservation_help_faq_return_question,
+                    answerRes = R.string.reservation_help_faq_return_answer,
+                    action = ReservationHelpAction.VIEW_PENDING,
+                ),
+                ReservationHelpFaq(
+                    id = ReservationHelpFaqId.DETAIL_LINK_MISSING,
+                    tone = ReservationHelpTone.INFO,
+                    questionRes = R.string.reservation_help_faq_link_question,
+                    answerRes = R.string.reservation_help_faq_link_answer,
+                    action = ReservationHelpAction.ADD_WITHOUT_LINK,
+                ),
+                ReservationHelpFaq(
+                    id = ReservationHelpFaqId.DUPLICATE_LINK,
+                    tone = ReservationHelpTone.WARNING,
+                    questionRes = R.string.reservation_help_faq_duplicate_question,
+                    answerRes = R.string.reservation_help_faq_duplicate_answer,
+                    action = ReservationHelpAction.VIEW_EXISTING_RECORD,
+                ),
+                ReservationHelpFaq(
+                    id = ReservationHelpFaqId.SENSITIVE_LINK,
+                    tone = ReservationHelpTone.SECURITY,
+                    questionRes = R.string.reservation_help_faq_sensitive_question,
+                    answerRes = R.string.reservation_help_faq_sensitive_answer,
+                ),
+                ReservationHelpFaq(
+                    id = ReservationHelpFaqId.OFFICIAL_EVENT_CANCELLED,
+                    tone = ReservationHelpTone.WARNING,
+                    questionRes = R.string.reservation_help_faq_cancelled_question,
+                    answerRes = R.string.reservation_help_faq_cancelled_answer,
                 ),
             ),
         )
         ReservationHelpPage.DETAIL -> ReservationHelpContent(
-            title = "내역 상세 도움말",
-            summary = "이 화면에서 저장한 정보를 확인하고 수정하거나 내역 링크를 다시 열 수 있습니다.",
+            titleRes = R.string.reservation_help_detail_title,
+            summaryRes = R.string.reservation_help_detail_summary,
             sections = listOf(
                 ReservationHelpSection(
                     id = ReservationHelpSectionId.DETAIL_ACTIONS,
                     tone = ReservationHelpTone.INFO,
-                    title = "이 화면에서 할 수 있는 일",
-                    body = "저장한 내역을 확인하고 필요한 정보를 직접 관리할 수 있습니다.",
-                    points = listOf(
-                        "내역 링크 열기로 상세 내역 확인",
-                        "상태·일정·장소 수정",
-                        "옵션·수량·예매/주문/예약번호·메모 기록",
+                    titleRes = R.string.reservation_help_detail_actions_title,
+                    bodyRes = R.string.reservation_help_detail_actions_body,
+                    pointResIds = listOf(
+                        R.string.reservation_help_detail_actions_link,
+                        R.string.reservation_help_detail_actions_edit,
+                        R.string.reservation_help_detail_actions_notes,
                     ),
+                    action = ReservationHelpAction.EDIT_CURRENT_RECORD,
                 ),
                 ReservationHelpSection(
                     id = ReservationHelpSectionId.LINK_PRIORITY,
                     tone = ReservationHelpTone.NORMAL,
-                    title = "내역 링크 사용 순서",
-                    body = "상세 링크가 있으면 그 링크를 우선 엽니다. 상세 링크가 없으면 제공사 내역 URL 또는 처음 열었던 링크를 사용할 수 있습니다.",
+                    titleRes = R.string.reservation_help_link_priority_title,
+                    bodyRes = R.string.reservation_help_link_priority_body,
                 ),
                 ReservationHelpSection(
                     id = ReservationHelpSectionId.USER_OVERRIDES,
                     tone = ReservationHelpTone.INFO,
-                    title = "직접 수정한 정보가 먼저 표시됩니다",
-                    body = "직접 수정한 제목·일정·장소는 저장 당시 공식 정보보다 우선 표시됩니다. 옵션·수량·번호·메모도 수정해 기록할 수 있습니다.",
+                    titleRes = R.string.reservation_help_overrides_title,
+                    bodyRes = R.string.reservation_help_overrides_body,
                 ),
                 ReservationHelpSection(
                     id = ReservationHelpSectionId.OFFICIAL_EVENT,
                     tone = ReservationHelpTone.WARNING,
-                    title = "공식 정보는 내 내역을 자동 변경하지 않습니다",
-                    body = "연결된 공식 행사의 정보가 변경되거나 행사가 취소되어도 예매 완료·구매 완료·예약 완료 같은 내역 상태와 직접 수정한 값은 자동으로 바뀌지 않습니다.",
+                    titleRes = R.string.reservation_help_official_title,
+                    bodyRes = R.string.reservation_help_official_body,
                 ),
                 ReservationHelpSection(
                     id = ReservationHelpSectionId.DELETE_WARNING,
                     tone = ReservationHelpTone.DANGER,
-                    title = "내역 삭제는 외부 취소가 아닙니다",
-                    body = "앱에서 내역을 삭제해도 외부 서비스의 실제 예매·주문·예약은 취소되지 않습니다. 취소가 필요하면 해당 외부 서비스에서 별도로 진행하세요.",
+                    titleRes = R.string.reservation_help_delete_title,
+                    bodyRes = R.string.reservation_help_delete_body,
                 ),
             ),
         )
+    }
+
+    fun presentation(
+        page: ReservationHelpPage,
+        context: ReservationHelpContext,
+        now: Instant = Instant.now(),
+    ): ReservationHelpPresentation {
+        val base = content(page)
+        val filtered = base.copy(
+            sections = base.sections.map { section ->
+                section.copy(action = section.action?.takeIf { isActionAvailable(it, context) })
+            },
+            faqs = base.faqs.map { faq ->
+                faq.copy(action = faq.action?.takeIf { isActionAvailable(it, context) })
+            },
+        )
+        val status = if (page == ReservationHelpPage.LIST) {
+            when {
+                context.activeDraftCount > 0 -> ReservationHelpStatusPresentation(
+                    kind = ReservationHelpStatusKind.PENDING,
+                    tone = ReservationHelpTone.WARNING,
+                    activeDraftCount = context.activeDraftCount,
+                    expiry = context.earliestDraftExpiresAt?.let {
+                        ReservationDraftExpiryPresentationPolicy.presentation(it, now)
+                    },
+                    action = ReservationHelpAction.VIEW_PENDING,
+                )
+                context.hasRecords -> ReservationHelpStatusPresentation(
+                    kind = ReservationHelpStatusKind.MANAGE_RECORDS,
+                    tone = ReservationHelpTone.INFO,
+                    action = ReservationHelpAction.VIEW_UPCOMING.takeIf { context.hasUpcomingRecords },
+                )
+                else -> ReservationHelpStatusPresentation(
+                    kind = ReservationHelpStatusKind.GETTING_STARTED,
+                    tone = ReservationHelpTone.INFO,
+                )
+            }
+        } else {
+            null
+        }
+        return ReservationHelpPresentation(filtered, status)
+    }
+
+    fun isActionAvailable(action: ReservationHelpAction, context: ReservationHelpContext): Boolean = when (action) {
+        ReservationHelpAction.VIEW_PENDING,
+        ReservationHelpAction.ADD_WITHOUT_LINK -> context.activeDraftCount > 0 && context.firstDraftSessionId != null
+        ReservationHelpAction.VIEW_UPCOMING -> context.hasUpcomingRecords
+        ReservationHelpAction.EDIT_CURRENT_RECORD -> context.currentRecordId != null
+        ReservationHelpAction.VIEW_EXISTING_RECORD -> context.existingRecordId != null
     }
 }
 

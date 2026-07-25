@@ -3,6 +3,8 @@ package dev.minepacu.stelliveeventnotifier.feature.reservations
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventLinkKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationActionPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraft
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftExpiryKind
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftExpiryPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftSelection
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDetailPresentationPolicy
@@ -10,7 +12,12 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationExternalLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPage
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpAction
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpContext
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpContextPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpFaqId
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpSectionId
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpStatusKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpTone
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationLinkSource
@@ -183,47 +190,28 @@ class ReservationPoliciesTest {
         val list = ReservationHelpPolicy.content(ReservationHelpPage.LIST)
         val detail = ReservationHelpPolicy.content(ReservationHelpPage.DETAIL)
 
-        assertEquals("내 예약·구매 도움말", list.title)
         assertEquals(listOf(1, 2, 3), list.steps.map { it.number })
-        assertTrue(list.steps.last().body.contains("링크 없이 추가"))
 
         val pending = list.sections.single { it.id == ReservationHelpSectionId.PENDING_DRAFT }
         assertEquals(ReservationHelpTone.WARNING, pending.tone)
-        assertTrue(pending.body.contains("최대 2시간"))
-        assertTrue(pending.body.contains("자동 확인하지"))
-        assertTrue(pending.points.any { it.contains("확인 필요에서 직접 추가") })
+        assertEquals(ReservationHelpAction.VIEW_PENDING, pending.action)
 
         val linkless = list.sections.single { it.id == ReservationHelpSectionId.LINKLESS_ADD }
         assertEquals(ReservationHelpTone.INFO, linkless.tone)
-        assertTrue(linkless.body.contains("링크 없이 추가"))
+        assertEquals(ReservationHelpAction.ADD_WITHOUT_LINK, linkless.action)
 
         val storage = list.sections.single { it.id == ReservationHelpSectionId.LOCAL_STORAGE }
         assertEquals(ReservationHelpTone.SECURITY, storage.tone)
-        assertTrue(storage.body.contains("서버로 전송되지"))
-        assertTrue(storage.body.contains("백업 대상에서 제외"))
 
-        assertEquals("내역 상세 도움말", detail.title)
         val actions = detail.sections.single { it.id == ReservationHelpSectionId.DETAIL_ACTIONS }
         assertEquals(ReservationHelpTone.INFO, actions.tone)
-        assertTrue(actions.points.any { it.contains("상태·일정·장소") })
-        assertTrue(actions.points.any { it.contains("옵션·수량") && it.contains("메모") })
-
-        val linkPriority = detail.sections.single { it.id == ReservationHelpSectionId.LINK_PRIORITY }
-        assertTrue(linkPriority.body.contains("상세 링크가 있으면"))
-        assertTrue(linkPriority.body.contains("제공사 내역 URL"))
-
-        val overrides = detail.sections.single { it.id == ReservationHelpSectionId.USER_OVERRIDES }
-        assertTrue(overrides.body.contains("우선 표시"))
+        assertEquals(ReservationHelpAction.EDIT_CURRENT_RECORD, actions.action)
 
         val official = detail.sections.single { it.id == ReservationHelpSectionId.OFFICIAL_EVENT }
         assertEquals(ReservationHelpTone.WARNING, official.tone)
-        assertTrue(official.body.contains("내역 상태"))
-        assertTrue(official.body.contains("자동으로 바뀌지"))
 
         val deletion = detail.sections.single { it.id == ReservationHelpSectionId.DELETE_WARNING }
         assertEquals(ReservationHelpTone.DANGER, deletion.tone)
-        assertTrue(deletion.body.contains("외부 서비스"))
-        assertTrue(deletion.body.contains("취소되지"))
 
         assertEquals(
             listOf(
@@ -244,6 +232,101 @@ class ReservationPoliciesTest {
             ),
             detail.sections.map { it.id },
         )
+        assertEquals(
+            listOf(
+                ReservationHelpFaqId.RETURN_PROMPT_MISSING,
+                ReservationHelpFaqId.DETAIL_LINK_MISSING,
+                ReservationHelpFaqId.DUPLICATE_LINK,
+                ReservationHelpFaqId.SENSITIVE_LINK,
+                ReservationHelpFaqId.OFFICIAL_EVENT_CANCELLED,
+            ),
+            list.faqs.map { it.id },
+        )
+        assertEquals(
+            listOf(
+                ReservationHelpTone.WARNING,
+                ReservationHelpTone.INFO,
+                ReservationHelpTone.WARNING,
+                ReservationHelpTone.SECURITY,
+                ReservationHelpTone.WARNING,
+            ),
+            list.faqs.map { it.tone },
+        )
+        assertEquals(
+            listOf(
+                ReservationHelpAction.VIEW_PENDING,
+                ReservationHelpAction.ADD_WITHOUT_LINK,
+                ReservationHelpAction.VIEW_EXISTING_RECORD,
+                null,
+                null,
+            ),
+            list.faqs.map { it.action },
+        )
+    }
+
+    @Test fun helpPresentationAdaptsActionsAndStatusToCurrentState() {
+        val now = Instant.parse("2026-07-25T00:00:00Z")
+        val empty = ReservationHelpPolicy.presentation(
+            ReservationHelpPage.LIST,
+            ReservationHelpContext(0, null, null, false, false),
+            now,
+        )
+        assertEquals(ReservationHelpStatusKind.GETTING_STARTED, empty.status?.kind)
+        assertNull(empty.content.sections.single { it.id == ReservationHelpSectionId.PENDING_DRAFT }.action)
+        assertNull(empty.content.sections.single { it.id == ReservationHelpSectionId.LINKLESS_ADD }.action)
+
+        val draft = draft("soon", now.plusSeconds(2_700))
+        val context = ReservationHelpContextPolicy.context(listOf(draft), emptyList(), now = now)
+        val pending = ReservationHelpPolicy.presentation(ReservationHelpPage.LIST, context, now)
+        assertEquals(ReservationHelpStatusKind.PENDING, pending.status?.kind)
+        assertEquals(1, pending.status?.activeDraftCount)
+        assertEquals(ReservationHelpAction.VIEW_PENDING, pending.status?.action)
+        assertEquals(ReservationHelpAction.ADD_WITHOUT_LINK, pending.content.sections.single {
+            it.id == ReservationHelpSectionId.LINKLESS_ADD
+        }.action)
+
+        val current = record()
+        val detail = ReservationHelpPolicy.presentation(
+            ReservationHelpPage.DETAIL,
+            ReservationHelpContextPolicy.context(emptyList(), listOf(current), currentRecordId = current.id, now = now),
+            now,
+        )
+        assertEquals(ReservationHelpAction.EDIT_CURRENT_RECORD, detail.content.sections.single {
+            it.id == ReservationHelpSectionId.DETAIL_ACTIONS
+        }.action)
+    }
+
+    @Test fun helpContextChoosesEarliestActiveDraftAndIgnoresExpiredDrafts() {
+        val now = Instant.parse("2026-07-25T00:00:00Z")
+        val later = draft("later", now.plusSeconds(7_200))
+        val earlier = draft("earlier", now.plusSeconds(600))
+        val expired = draft("expired", now.minusSeconds(1))
+        val context = ReservationHelpContextPolicy.context(listOf(later, expired, earlier), emptyList(), now = now)
+
+        assertEquals(2, context.activeDraftCount)
+        assertEquals(earlier.expiresAt, context.earliestDraftExpiresAt)
+        assertEquals(earlier.sessionId, context.firstDraftSessionId)
+    }
+
+    @Test fun draftExpiryPresentationUsesSharedMinuteBoundaries() {
+        val now = Instant.parse("2026-07-25T00:00:00Z")
+        assertEquals(
+            ReservationDraftExpiryKind.HOURS,
+            ReservationDraftExpiryPresentationPolicy.presentation(now.plusSeconds(7_200), now)?.kind,
+        )
+        assertEquals(
+            45,
+            ReservationDraftExpiryPresentationPolicy.presentation(now.plusSeconds(45 * 60), now)?.value,
+        )
+        assertEquals(
+            8,
+            ReservationDraftExpiryPresentationPolicy.presentation(now.plusSeconds(8 * 60), now)?.value,
+        )
+        assertEquals(
+            ReservationDraftExpiryKind.SOON,
+            ReservationDraftExpiryPresentationPolicy.presentation(now.plusSeconds(90), now)?.kind,
+        )
+        assertNull(ReservationDraftExpiryPresentationPolicy.presentation(now, now))
     }
 
     @Test fun tilePresentationIsDerivedFromActiveDraftKinds() {
