@@ -533,6 +533,21 @@ sealed interface ReservationReturnPromptDecision {
     data class Multiple(val sessionIds: Set<UUID>) : ReservationReturnPromptDecision
 }
 
+enum class ReservationReturnPromptPresentationKind {
+    TICKET,
+    PURCHASE,
+    RESERVATION,
+    MULTIPLE,
+}
+
+object ReservationReturnPromptPresentationPolicy {
+    fun single(kind: ReservationKind): ReservationReturnPromptPresentationKind = when (kind) {
+        ReservationKind.TICKET -> ReservationReturnPromptPresentationKind.TICKET
+        ReservationKind.PURCHASE -> ReservationReturnPromptPresentationKind.PURCHASE
+        ReservationKind.RESERVATION -> ReservationReturnPromptPresentationKind.RESERVATION
+    }
+}
+
 object ReservationReturnPromptPolicy {
     val minimumExternalDuration: Duration = Duration.ofSeconds(10)
 

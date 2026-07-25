@@ -94,6 +94,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.SongCatalogItem
 import dev.minepacu.stelliveeventnotifier.core.model.AnnouncementsSummary
 import dev.minepacu.stelliveeventnotifier.core.model.ServiceAnnouncement
 import dev.minepacu.stelliveeventnotifier.databinding.ActivityMainBinding
+import dev.minepacu.stelliveeventnotifier.databinding.ViewReservationReturnPromptBinding
 import dev.minepacu.stelliveeventnotifier.feature.calendar.HubCalendarDeepLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.calendar.CalendarUiPolicy
 import dev.minepacu.stelliveeventnotifier.feature.calendar.HubEventsCalendarView
@@ -210,6 +211,8 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationRecord
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptDecision
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPresentationKind
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationStatus
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationQuickAddActivity
@@ -217,6 +220,7 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.system.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationSystemShortcutCoordinator
 
 private const val EXIT_BACK_PRESS_INTERVAL_MS = 2_000L
+private const val RETURN_PROMPT_ANIMATION_DURATION_MS = 200L
 private const val NAVIGATION_RAIL_WIDTH_DP = 80
 private const val LARGE_SCREEN_CONTENT_MAX_WIDTH_DP = 760
 private const val GOODS_EVENTS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1120
@@ -324,6 +328,7 @@ private lateinit var binding: ActivityMainBinding
     private var liveStatusSourceLabel = "앱 내 목업"
     private var debugModeEnabled = false
     private var systemTopInsetPx = 0
+    private var systemBottomInsetPx = 0
     private var currentFoldFeature: HubFoldFeature? = null
     private var currentAdaptiveSpec: HubAdaptiveSpec = HubAdaptivePolicy.spec(widthDp = 0)
     private val topBarScrollSourceOffsets = mutableMapOf<View, Int>()
@@ -396,6 +401,7 @@ private val promptedReservationSessionIds = mutableSetOf<UUID>()
 private var reservationExternalFlowActive = false
 private var reservationExternalFlowLeftApp = false
 private var pendingReservationRecordingFailure = false
+private var reservationReturnPromptView: View? = null
 private var pendingReservationHelpScrollAction: ReservationHelpAction? = null
 private var expandedReservationHelpFaqId: ReservationHelpFaqId? = null
 private val reservationHelpFaqUiStates = mutableMapOf<ReservationHelpFaqId, ReservationHelpFaqUiState>()
@@ -438,6 +444,9 @@ private var notificationPermissionRequested = false
         ) ?: true
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            scheduleReservationReturnPromptPositionUpdate()
+        }
         screenTransitionController = ScreenTransitionController(
             screenBody = binding.screenBody,
             dp = { value -> dp(value).toFloat() },
@@ -550,6 +559,7 @@ private var notificationPermissionRequested = false
     }
 
     override fun onDestroy() {
+        dismissReservationReturnPrompt(animated = false)
         liveClockHandler.removeCallbacks(liveClockTicker)
         pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
         liveClockTextViews.clear()
@@ -839,6 +849,7 @@ private var notificationPermissionRequested = false
 
     private fun setupBackNavigation() {
         binding.topBarBack.setOnClickListener {
+            if (dismissReservationReturnPrompt()) return@setOnClickListener
             if (!popScreen()) finish()
         }
         onBackPressedDispatcher.addCallback(
@@ -916,6 +927,7 @@ private var notificationPermissionRequested = false
     }
 
     private fun handleSystemBackPressed() {
+        if (dismissReservationReturnPrompt()) return
         if (confirmReservationEditDiscardIfNeeded(::handleSystemBackPressed)) return
         if (screenTransitionController.isTransitionRunning) {
             screenTransitionController.runWhenIdle("deferred:system_back", ::handleSystemBackPressedNow)
@@ -987,6 +999,7 @@ private var notificationPermissionRequested = false
         motion: ScreenNavigationMotion,
         updateHistory: () -> Unit,
     ) {
+        dismissReservationReturnPrompt()
         screenTransitionController.transition(
             key = key,
             motion = motion,
@@ -1150,6 +1163,7 @@ private fun updateNavigationChrome() {
         updateTopGlassOverlayStartMargin(navigationSpec.showNavigationRail)
         updateContentWidthConstraint(navigationSpec.constrainContentWidth)
         scheduleSongScrollToTopButtonPositionUpdate()
+        scheduleReservationReturnPromptPositionUpdate()
     }
 
     private fun screenForItem(itemId: Int): HubScreen = when (itemId) {
@@ -1327,25 +1341,30 @@ private fun startScreen(
     private fun scheduleSongScrollToTopButtonPositionUpdate() {
         if (!::songScrollToTopButton.isInitialized || !::binding.isInitialized) return
         binding.root.post {
-            val obstruction = when {
-                binding.screenActionContainer.isVisible -> binding.screenActionContainer
-                binding.bottomNavigation.isVisible -> binding.bottomNavigation
-                else -> null
-            }
-            val occupiedBottomHeight = obstruction?.let { view ->
-                val rootLocation = IntArray(2)
-                val viewLocation = IntArray(2)
-                binding.root.getLocationInWindow(rootLocation)
-                view.getLocationInWindow(viewLocation)
-                (rootLocation[1] + binding.root.height - viewLocation[1]).coerceAtLeast(0)
-            } ?: 0
+            val occupiedBottomHeight = currentBottomObstructionHeight()
             val params = songScrollToTopButton.layoutParams as? FrameLayout.LayoutParams ?: return@post
             val nextBottomMargin = occupiedBottomHeight + dp(16)
             if (params.bottomMargin != nextBottomMargin) {
                 params.bottomMargin = nextBottomMargin
                 songScrollToTopButton.layoutParams = params
             }
+            scheduleReservationReturnPromptPositionUpdate()
         }
+    }
+
+    private fun currentBottomObstructionHeight(): Int {
+        val obstruction = when {
+            binding.screenActionContainer.isVisible -> binding.screenActionContainer
+            binding.bottomNavigation.isVisible -> binding.bottomNavigation
+            else -> null
+        }
+        return obstruction?.let { view ->
+            val rootLocation = IntArray(2)
+            val viewLocation = IntArray(2)
+            binding.root.getLocationInWindow(rootLocation)
+            view.getLocationInWindow(viewLocation)
+            (rootLocation[1] + binding.root.height - viewLocation[1]).coerceAtLeast(0)
+        } ?: systemBottomInsetPx
     }
 
     private fun registerSongMemberFilterScrollToTop() {
@@ -3121,11 +3140,14 @@ private fun startScreen(
         )) {
             ReservationReturnPromptDecision.None -> Unit
             is ReservationReturnPromptDecision.Single -> {
+                val draft = reservationDrafts.firstOrNull { it.sessionId == decision.sessionId } ?: return
                 promptedReservationSessionIds += decision.sessionId
-                val draft = reservationDrafts.firstOrNull { it.sessionId == decision.sessionId }
-                showReservationReturnSnackbar(
-                    message = "예매·구매를 마치셨나요? 완료 내역을 직접 추가할 수 있습니다.",
-                    primaryLabel = draft?.let { ReservationPresentationPolicy.addActionLabel(it.kind) } ?: "내역에 추가",
+                showReservationReturnPrompt(
+                    presentationKind = ReservationReturnPromptPresentationPolicy.single(draft.kind),
+                    itemTitle = draft.eventSnapshot.title,
+                    primaryLabel = ReservationPresentationPolicy.addActionLabel(draft.kind),
+                    bodyRes = R.string.reservation_return_prompt_single_body,
+                    secondaryLabelRes = R.string.reservation_return_prompt_not_yet,
                 ) {
                     startActivity(Intent(this, ReservationQuickAddActivity::class.java).putExtra(
                         ReservationQuickAddActivity.EXTRA_SESSION_ID,
@@ -3135,28 +3157,99 @@ private fun startScreen(
             }
             is ReservationReturnPromptDecision.Multiple -> {
                 promptedReservationSessionIds += decision.sessionIds
-                showReservationReturnSnackbar(
-                    message = "확인이 필요한 내역이 여러 건 있습니다.",
-                    primaryLabel = "목록 보기",
+                showReservationReturnPrompt(
+                    presentationKind = ReservationReturnPromptPresentationKind.MULTIPLE,
+                    itemTitle = null,
+                    primaryLabel = getString(R.string.reservation_help_action_view_pending),
+                    bodyRes = R.string.reservation_return_prompt_multiple_body,
+                    secondaryLabelRes = R.string.reservation_return_prompt_later,
                 ) { pushScreen(HubScreen.RESERVATIONS) }
             }
         }
     }
 
-    private fun showReservationReturnSnackbar(message: String, primaryLabel: String, onPrimary: () -> Unit) {
-        val snackbar = Snackbar.make(binding.root, message, Snackbar.LENGTH_INDEFINITE)
-            .setAction("아직 아니에요") {}
-        val content = snackbar.view.findViewById<TextView>(com.google.android.material.R.id.snackbar_text).parent as? ViewGroup
-        content?.addView(MaterialButton(this).apply {
-            text = primaryLabel
-            isAllCaps = false
-            contentDescription = primaryLabel
-            setOnClickListener {
-                snackbar.dismiss()
-                onPrimary()
-            }
-        }, (content.childCount - 1).coerceAtLeast(0))
-        snackbar.show()
+    private fun showReservationReturnPrompt(
+        presentationKind: ReservationReturnPromptPresentationKind,
+        itemTitle: String?,
+        primaryLabel: String,
+        bodyRes: Int,
+        secondaryLabelRes: Int,
+        onPrimary: () -> Unit,
+    ) {
+        dismissReservationReturnPrompt(animated = false)
+        binding.reservationReturnPromptContainer.removeAllViews()
+        val prompt = ViewReservationReturnPromptBinding.inflate(
+            layoutInflater,
+            binding.reservationReturnPromptContainer,
+            false,
+        )
+        prompt.reservationReturnPromptTitle.setText(returnPromptTitleRes(presentationKind))
+        prompt.reservationReturnPromptItemTitle.text = itemTitle.orEmpty()
+        prompt.reservationReturnPromptItemTitle.isVisible = !itemTitle.isNullOrBlank()
+        prompt.reservationReturnPromptBody.setText(bodyRes)
+        prompt.reservationReturnPromptPrimary.text = primaryLabel
+        prompt.reservationReturnPromptPrimary.setOnClickListener {
+            dismissReservationReturnPrompt(animated = false)
+            onPrimary()
+        }
+        prompt.reservationReturnPromptSecondary.setText(secondaryLabelRes)
+        prompt.reservationReturnPromptSecondary.setOnClickListener { dismissReservationReturnPrompt() }
+        val promptView = prompt.root
+        reservationReturnPromptView = promptView
+        binding.reservationReturnPromptContainer.addView(
+            promptView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM,
+            ),
+        )
+        scheduleReservationReturnPromptPositionUpdate()
+        promptView.alpha = 0f
+        promptView.translationY = dp(24).toFloat()
+        promptView.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(RETURN_PROMPT_ANIMATION_DURATION_MS)
+            .start()
+    }
+
+    private fun returnPromptTitleRes(kind: ReservationReturnPromptPresentationKind): Int = when (kind) {
+        ReservationReturnPromptPresentationKind.TICKET -> R.string.reservation_return_prompt_ticket_title
+        ReservationReturnPromptPresentationKind.PURCHASE -> R.string.reservation_return_prompt_purchase_title
+        ReservationReturnPromptPresentationKind.RESERVATION -> R.string.reservation_return_prompt_reservation_title
+        ReservationReturnPromptPresentationKind.MULTIPLE -> R.string.reservation_return_prompt_multiple_title
+    }
+
+    private fun dismissReservationReturnPrompt(animated: Boolean = true): Boolean {
+        val prompt = reservationReturnPromptView ?: return false
+        reservationReturnPromptView = null
+        val remove = { binding.reservationReturnPromptContainer.removeView(prompt) }
+        if (!animated || !prompt.isAttachedToWindow) {
+            remove()
+        } else {
+            prompt.animate()
+                .alpha(0f)
+                .translationY(dp(24).toFloat())
+                .setDuration(RETURN_PROMPT_ANIMATION_DURATION_MS)
+                .withEndAction(remove)
+                .start()
+        }
+        return true
+    }
+
+    private fun scheduleReservationReturnPromptPositionUpdate() {
+        val prompt = reservationReturnPromptView ?: return
+        binding.root.post {
+            if (reservationReturnPromptView !== prompt || binding.root.width == 0) return@post
+            val params = prompt.layoutParams as? FrameLayout.LayoutParams ?: return@post
+            val maxWidth = minOf((binding.root.width - dp(36)).coerceAtLeast(1), dp(560))
+            val songButtonSpace = if (::songScrollToTopButton.isInitialized && songScrollToTopButton.isVisible) dp(64) else 0
+            params.width = maxWidth
+            params.bottomMargin = currentBottomObstructionHeight() + songButtonSpace + dp(16)
+            params.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+            prompt.layoutParams = params
+        }
     }
 
     private fun onGoodsEventSelected(eventId: String) {
@@ -5483,10 +5576,12 @@ private fun updateTopBarScrolled(scrolled: Boolean) {
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             systemTopInsetPx = bars.top
+            systemBottomInsetPx = bars.bottom
             binding.topGlassOverlay.setPadding(0, bars.top, 0, 0)
             binding.mainContent.setPadding(0, 0, 0, bars.bottom)
             binding.navigationRail.setPadding(0, bars.top + dp(8), 0, bars.bottom + dp(8))
             applyContentTopPadding(underTopBar = navigationHistory.currentScreen == HubScreen.GOODS_EVENT_DETAIL)
+            scheduleReservationReturnPromptPositionUpdate()
             insets
         }
         ViewCompat.requestApplyInsets(binding.root)

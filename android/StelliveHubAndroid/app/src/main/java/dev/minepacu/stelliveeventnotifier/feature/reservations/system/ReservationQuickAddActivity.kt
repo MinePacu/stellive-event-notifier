@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -17,6 +18,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnLayout
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
@@ -35,6 +37,7 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationQuickAddScreenTitle
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLValidation
+import dev.minepacu.stelliveeventnotifier.ui.components.HubBottomSheetDialog
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -48,6 +51,7 @@ class ReservationQuickAddActivity : AppCompatActivity() {
     private var isCheckingExistingRecord = false
     private var isSaving = false
     private var topBarScrolled: Boolean? = null
+    private var invalidClipboardSheet: HubBottomSheetDialog? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -345,15 +349,71 @@ class ReservationQuickAddActivity : AppCompatActivity() {
     }
 
     private fun showInvalidClipboardLinkDialog() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.reservation_error_invalid_https_title)
-            .setMessage(R.string.reservation_error_invalid_https_message)
-            .setNegativeButton(R.string.dialog_close, null)
-            .setNeutralButton(R.string.reservation_help_action_add_without_link) { _, _ ->
+        if (invalidClipboardSheet != null) return
+        hideKeyboardForBottomSheet()
+        var focusUrlAfterDismiss = false
+        var confirmWithoutLinkAfterDismiss = false
+        val sheet = HubBottomSheetDialog(this, getString(R.string.reservation_quick_add_invalid_clipboard_title))
+        invalidClipboardSheet = sheet
+        sheet.setOnDismissListener {
+            invalidClipboardSheet = null
+            if (focusUrlAfterDismiss && !isFinishing && !isDestroyed) focusDetailUrlInput()
+            if (confirmWithoutLinkAfterDismiss && !isFinishing && !isDestroyed) {
                 confirm(detailUrl = null, allowSensitive = false)
             }
-            .setPositiveButton(R.string.reservation_action_retry_paste) { _, _ -> pasteFirstHttpsURL() }
-            .show()
+        }
+        sheet.addContent(TextView(this).apply {
+            setText(R.string.reservation_quick_add_invalid_clipboard_body)
+            textSize = 14f
+            setTextColor(ContextCompat.getColor(context, R.color.hub_text_muted))
+            includeFontPadding = false
+        })
+        sheet.addContent(bottomSheetAction(sheet, R.string.reservation_quick_add_enter_link, primary = true) {
+            focusUrlAfterDismiss = true
+            sheet.dismiss()
+        })
+        sheet.addContent(bottomSheetAction(sheet, R.string.reservation_quick_add_add_without_link, primary = false) {
+            confirmWithoutLinkAfterDismiss = true
+            sheet.dismiss()
+        })
+        sheet.addContent(bottomSheetAction(sheet, R.string.dialog_close, primary = false) {
+            sheet.dismiss()
+        }.apply {
+            alpha = 0.82f
+        })
+        sheet.show()
+    }
+
+    private fun bottomSheetAction(
+        sheet: HubBottomSheetDialog,
+        labelRes: Int,
+        primary: Boolean,
+        onClick: () -> Unit,
+    ) = sheet.actionButton(getString(labelRes), primary, onClick).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(10) }
+    }
+
+    private fun hideKeyboardForBottomSheet() {
+        binding.quickAddDetailUrl.clearFocus()
+        WindowInsetsControllerCompat(window, binding.root).hide(WindowInsetsCompat.Type.ime())
+    }
+
+    private fun focusDetailUrlInput() {
+        binding.quickAddScroll.post {
+            binding.quickAddScroll.smoothScrollTo(0, binding.quickAddDetailUrl.top)
+            binding.quickAddDetailUrl.requestFocus()
+            (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+                .showSoftInput(binding.quickAddDetailUrl, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    override fun onDestroy() {
+        invalidClipboardSheet?.dismiss()
+        invalidClipboardSheet = null
+        super.onDestroy()
     }
 
     private fun confirm(detailUrl: String?, allowSensitive: Boolean) {

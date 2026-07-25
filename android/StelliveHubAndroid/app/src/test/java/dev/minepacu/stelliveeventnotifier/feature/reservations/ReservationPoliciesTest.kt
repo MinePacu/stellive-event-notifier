@@ -35,6 +35,8 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEditPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptDecision
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPresentationKind
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationShareIntentParser
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationTileState
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationTileStatePolicy
@@ -516,6 +518,32 @@ class ReservationPoliciesTest {
         assertEquals(
             ReservationReturnPromptDecision.None,
             ReservationReturnPromptPolicy.decision(listOf(tooSoon), setOf(tooSoon.sessionId), emptySet(), now),
+        )
+    }
+
+    @Test fun returnPromptPresentationKeepsTicketPurchaseAndReservationMeaningsDistinct() {
+        assertEquals(
+            ReservationReturnPromptPresentationKind.TICKET,
+            ReservationReturnPromptPresentationPolicy.single(ReservationKind.TICKET),
+        )
+        assertEquals(
+            ReservationReturnPromptPresentationKind.PURCHASE,
+            ReservationReturnPromptPresentationPolicy.single(ReservationKind.PURCHASE),
+        )
+        assertEquals(
+            ReservationReturnPromptPresentationKind.RESERVATION,
+            ReservationReturnPromptPresentationPolicy.single(ReservationKind.RESERVATION),
+        )
+        val now = Instant.parse("2026-07-22T00:00:20Z")
+        val first = draft("first", now.plusSeconds(40)).copy(openedAt = now.minusSeconds(10))
+        val second = draft("second", now.plusSeconds(40)).copy(openedAt = now.minusSeconds(10))
+        assertTrue(
+            ReservationReturnPromptPolicy.decision(
+                drafts = listOf(first, second),
+                externallyOpenedSessionIds = setOf(first.sessionId, second.sessionId),
+                promptedSessionIds = emptySet(),
+                now = now,
+            ) is ReservationReturnPromptDecision.Multiple,
         )
     }
 

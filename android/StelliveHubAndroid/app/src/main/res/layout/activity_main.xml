@@ -543,4 +543,10 @@
             android:visibility="gone"
             android:background="@color/hub_top_bar_divider" />
     </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/reservationReturnPromptContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no" />
 </FrameLayout>
