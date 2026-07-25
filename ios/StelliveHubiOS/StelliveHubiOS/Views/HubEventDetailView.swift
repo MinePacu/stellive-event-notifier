@@ -44,6 +44,8 @@ struct HubEventDetailView: View {
     let event: HubEvent
     var highlightedScheduleItemId: String? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
+    @EnvironmentObject private var reservationStore: ReservationStore
     @State private var lastScrolledScheduleItemId: String? = nil
     @State private var expandedScheduleItemIds = Set<String>()
     @State private var expandedScheduleEventId: String?
@@ -84,7 +86,10 @@ struct HubEventDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(item: $presentedLinks) { context in
-            HubEventLinksSheet(context: context)
+            HubEventLinksSheet(context: context) { link in
+                presentedLinks = nil
+                openHubEventLink(link, scheduleItem: nil)
+            }
         }
     }
 
@@ -214,8 +219,10 @@ struct HubEventDetailView: View {
         return LazyVGrid(columns: columns, spacing: 10) {
             Button("캘린더 추가") {}
                 .buttonStyle(HubEventCTAButtonStyle(primary: true))
-            if ctaMode == .direct, let actionURL = url(from: links[0].url) {
-                Link(HubEventLinkPolicy.displayLabel(links[0]), destination: actionURL)
+            if ctaMode == .direct, url(from: links[0].url) != nil {
+                Button(HubEventLinkPolicy.displayLabel(links[0])) {
+                    openHubEventLink(links[0], scheduleItem: nil)
+                }
                     .buttonStyle(HubEventCTAButtonStyle(primary: false))
                     .accessibilityLabel("\(HubEventLinkPolicy.displayLabel(links[0])), 외부 링크 열기")
             } else if ctaMode == .sheet {
@@ -269,7 +276,8 @@ struct HubEventDetailView: View {
                                 expandedScheduleItemIds.insert(item.schedule.id)
                             }
                         }
-                    }
+                    },
+                    onOpenLink: { link in openHubEventLink(link, scheduleItem: item.schedule) }
                 )
                 .id(item.schedule.id)
             }
@@ -290,6 +298,21 @@ struct HubEventDetailView: View {
         guard let rawValue, !rawValue.isEmpty else { return nil }
         guard let url = URL(string: rawValue), url.scheme?.lowercased() == "https", url.host != nil else { return nil }
         return url
+    }
+
+    private func openHubEventLink(_ link: HubEventLink, scheduleItem: HubEventScheduleItem?) {
+        guard let destination = url(from: link.url) else { return }
+        ReservationExternalLinkPolicy.openFailOpen(
+            openExternal: { openURL(destination) },
+            recordBestEffort: {
+            if let draft = try reservationStore.begin(event: event, scheduleItem: scheduleItem, link: link) {
+                    try ReservationActivityCoordinator.start(for: draft, draftCount: reservationStore.pendingCount)
+                }
+            },
+            onRecordingFailure: {
+                reservationStore.reportBestEffortError()
+            }
+        )
     }
 }
 
@@ -325,6 +348,7 @@ private struct HubEventScheduleCard: View {
     let isEffectivePrimary: Bool
     let expanded: Bool
     let onToggle: () -> Void
+    let onOpenLink: (HubEventLink) -> Void
 
     var body: some View {
         let links = HubEventLinkPolicy.resolvedScheduleLinks(item.schedule)
@@ -385,8 +409,8 @@ private struct HubEventScheduleCard: View {
                             .foregroundStyle(HubEventDetailColors.muted)
                     }
                     ForEach(links) { link in
-                        if let destination = url(from: link.url) {
-                            Link(HubEventLinkPolicy.displayLabel(link), destination: destination)
+                        if url(from: link.url) != nil {
+                            Button(HubEventLinkPolicy.displayLabel(link)) { onOpenLink(link) }
                                 .font(.footnote.weight(.semibold))
                                 .accessibilityLabel("\(HubEventLinkPolicy.displayLabel(link)), 외부 링크 열기")
                         }
@@ -440,13 +464,16 @@ private struct HubEventLinksSheetContext: Identifiable {
 
 private struct HubEventLinksSheet: View {
     let context: HubEventLinksSheetContext
+    let onOpenLink: (HubEventLink) -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List(context.links) { link in
                 if let destination = URL(string: link.url), destination.scheme?.lowercased() == "https", destination.host != nil {
-                    Link(destination: destination) {
+                    Button {
+                        onOpenLink(link)
+                    } label: {
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(HubEventLinkPolicy.displayLabel(link))
@@ -461,6 +488,7 @@ private struct HubEventLinksSheet: View {
                                 .foregroundStyle(HubEventDetailColors.muted)
                         }
                     }
+                    .buttonStyle(.plain)
                     .accessibilityLabel("\(HubEventLinkPolicy.displayLabel(link)), 외부 링크 열기")
                 }
             }

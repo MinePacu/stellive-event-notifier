@@ -8,10 +8,14 @@ source "$SCRIPT_DIR/lib/common.sh"
 ROOT="$(project_root)"
 IOS_SCHEME="${IOS_SCHEME:-StelliveHubiOS}"
 IOS_CONFIGURATION="${IOS_CONFIGURATION:-Debug}"
-IOS_DERIVED_DATA_DIR="${IOS_DERIVED_DATA_DIR:-$ROOT/scripts/logs/DerivedData-ios-simulator}"
+DEFAULT_IOS_DERIVED_DATA_DIR="$(ios_derived_data_dir)"
+IOS_DERIVED_DATA_DIR="${IOS_DERIVED_DATA_DIR:-$DEFAULT_IOS_DERIVED_DATA_DIR}"
 LOG_FILE="$(new_log_file "$ROOT" "ios-install-simulator")"
 
 require_command xcrun
+if [[ "$IOS_DERIVED_DATA_DIR" == "$DEFAULT_IOS_DERIVED_DATA_DIR" ]]; then
+  require_cache_root
+fi
 
 APP_PATH="$(select_ios_app "$IOS_DERIVED_DATA_DIR" "$IOS_CONFIGURATION" "$IOS_SCHEME")"
 

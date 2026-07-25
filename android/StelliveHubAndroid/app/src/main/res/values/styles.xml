@@ -6,6 +6,12 @@
         <item name="android:windowLightStatusBar">true</item>
     </style>
 
+    <style name="Theme.StelliveHub.ReservationQuickAdd" parent="Theme.StelliveHub">
+        <item name="android:statusBarColor">@color/hub_background</item>
+        <item name="android:navigationBarColor">@color/hub_card</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+
     <style name="ThemeOverlay.StelliveHub.PopupMenu" parent="">
         <item name="popupMenuStyle">@style/Widget.StelliveHub.PopupMenu</item>
         <item name="textAppearanceLargePopupMenu">@style/TextAppearance.StelliveHub.PopupMenu</item>
@@ -19,6 +25,12 @@
     <style name="TextAppearance.StelliveHub.PopupMenu" parent="TextAppearance.AppCompat.Widget.PopupMenu.Large">
         <item name="android:textColor">@color/hub_popup_menu_text</item>
         <item name="android:textSize">15sp</item>
+    </style>
+
+    <style name="TextAppearance.StelliveHub.TopBarTitle" parent="TextAppearance.MaterialComponents.Subtitle2">
+        <item name="android:textColor">@color/hub_text</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
     </style>
 
 </resources>

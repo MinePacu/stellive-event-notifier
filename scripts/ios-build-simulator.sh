@@ -10,10 +10,14 @@ IOS_PROJECT_DIR="${IOS_PROJECT_DIR:-$ROOT/ios/StelliveHubiOS}"
 IOS_SCHEME="${IOS_SCHEME:-StelliveHubiOS}"
 IOS_CONFIGURATION="${IOS_CONFIGURATION:-Debug}"
 IOS_DESTINATION="${IOS_DESTINATION:-platform=iOS Simulator,name=iPhone 16}"
-IOS_DERIVED_DATA_DIR="${IOS_DERIVED_DATA_DIR:-$ROOT/scripts/logs/DerivedData-ios-simulator}"
+DEFAULT_IOS_DERIVED_DATA_DIR="$(ios_derived_data_dir)"
+IOS_DERIVED_DATA_DIR="${IOS_DERIVED_DATA_DIR:-$DEFAULT_IOS_DERIVED_DATA_DIR}"
 LOG_FILE="$(new_log_file "$ROOT" "ios-build-simulator")"
 
 require_command xcodebuild
+if [[ "$IOS_DERIVED_DATA_DIR" == "$DEFAULT_IOS_DERIVED_DATA_DIR" ]]; then
+  require_cache_root
+fi
 mkdir -p "$IOS_DERIVED_DATA_DIR"
 
 PROJECT_ARG=()
@@ -27,8 +31,7 @@ run_logged "$LOG_FILE" \
   -scheme "$IOS_SCHEME" \
   -configuration "$IOS_CONFIGURATION" \
   -destination "$IOS_DESTINATION" \
-  -derivedDataPath "$IOS_DERIVED_DATA_DIR" \
-  CODE_SIGNING_ALLOWED=NO
+  -derivedDataPath "$IOS_DERIVED_DATA_DIR"
 
 APP_PATH="$(select_ios_app "$IOS_DERIVED_DATA_DIR" "$IOS_CONFIGURATION" "$IOS_SCHEME")"
 echo "iOS simulator build succeeded: $APP_PATH"
