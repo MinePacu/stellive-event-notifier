@@ -34,7 +34,8 @@
         <activity
             android:name=".feature.reservations.system.ReservationQuickAddActivity"
             android:exported="false"
-            android:theme="@style/Theme.StelliveHub" />
+            android:theme="@style/Theme.StelliveHub.ReservationQuickAdd"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".feature.reservations.system.ReservationShareActivity"
             android:exported="true"

@@ -76,6 +76,25 @@
     <string name="reservation_draft_expiry_minutes">약 %1$d분 후 자동 정리</string>
     <string name="reservation_draft_expiry_soon">곧 자동 정리됨</string>
 
+    <string name="reservation_quick_add_title">내역에 추가</string>
+    <string name="reservation_quick_add_picker_title">추가할 내역을 선택해 주세요</string>
+    <string name="reservation_quick_add_picker_body">최근에 연 링크만 표시됩니다. 항목은 일정 시간이 지나면 자동으로 정리됩니다.</string>
+    <string name="reservation_quick_add_picker_item_description">%1$s, %2$s, 제공사 %3$s, %4$s. 선택하려면 두 번 탭하세요.</string>
+    <string name="reservation_quick_add_provider">제공사 · %1$s</string>
+    <string name="reservation_quick_add_link_description">외부 서비스에서 확인한 상세 페이지 주소가 있다면 저장하세요.</string>
+    <string name="reservation_quick_add_link_input_description">선택 사항인 HTTPS 상세 링크 입력</string>
+    <string name="reservation_quick_add_link_hint">https://…</string>
+    <string name="reservation_quick_add_paste">클립보드에서 HTTPS 링크 붙여넣기</string>
+    <string name="reservation_quick_add_local_note_icon_description">로컬 저장 안내</string>
+    <string name="reservation_quick_add_local_note">저장한 링크와 내역은 이 기기에만 보관되며, 예약 데이터는 백업 대상에서 제외됩니다.</string>
+    <string name="reservation_quick_add_linkless">링크 없이 추가</string>
+    <string name="reservation_quick_add_empty_icon_description">티켓 아이콘</string>
+    <string name="reservation_quick_add_empty_title">진행 중인 내역이 없습니다</string>
+    <string name="reservation_quick_add_empty_body">굿즈·행사에서 티켓·구매·예약 링크를 먼저 열면 여기에 추가할 수 있습니다.</string>
+    <string name="reservation_quick_add_go_goods_events">굿즈·행사로 이동</string>
+    <string name="reservation_quick_add_success">%1$s했습니다.</string>
+    <string name="reservation_quick_add_saving">저장 중</string>
+
     <string name="reservation_help_action_view_pending">확인 필요 항목 보기</string>
     <string name="reservation_help_action_add_without_link">링크 없이 추가하기</string>
     <string name="reservation_help_action_view_upcoming">예정된 내역 보기</string>

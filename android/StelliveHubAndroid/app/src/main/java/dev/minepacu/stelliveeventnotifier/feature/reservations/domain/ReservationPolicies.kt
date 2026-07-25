@@ -100,6 +100,27 @@ object ReservationDraftExpiryPresentationPolicy {
     }
 }
 
+data class ReservationQuickAddPresentation(
+    val title: String,
+    val inProgressLabel: String,
+    val primaryActionLabel: String,
+    val detailLinkLabel: String,
+    val expiry: ReservationDraftExpiryPresentation?,
+)
+
+object ReservationQuickAddPresentationPolicy {
+    fun presentation(draft: ReservationDraft, now: Instant = Instant.now()): ReservationQuickAddPresentation =
+        ReservationQuickAddPresentation(
+            title = draft.eventSnapshot.title,
+            inProgressLabel = ReservationPresentationPolicy.inProgressLabel(draft.kind),
+            primaryActionLabel = ReservationPresentationPolicy.addActionLabel(draft.kind),
+            detailLinkLabel = ReservationPresentationPolicy.detailLinkLabel(draft.kind),
+            expiry = ReservationDraftExpiryPresentationPolicy.presentation(draft.expiresAt, now),
+        )
+
+    fun isPrimaryActionEnabled(rawUrl: String?): Boolean = ReservationURLPolicy.validate(rawUrl).isValid
+}
+
 object ReservationDisplayPolicy {
     fun officialEventChanged(record: ReservationRecord, latestTitle: String?, latestStartsAt: Instant?): Boolean =
         latestTitle != null && (
