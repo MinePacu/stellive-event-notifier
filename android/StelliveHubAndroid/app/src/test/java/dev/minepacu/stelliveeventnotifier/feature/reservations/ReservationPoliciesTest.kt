@@ -33,6 +33,7 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkRoute
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEditPresentationPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEditStatusPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptDecision
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPresentationKind
@@ -125,6 +126,29 @@ class ReservationPoliciesTest {
         assertEquals("예매번호", ReservationPresentationPolicy.referenceNumberLabel(ReservationKind.TICKET))
         assertEquals("주문번호", ReservationPresentationPolicy.referenceNumberLabel(ReservationKind.PURCHASE))
         assertEquals("예약번호", ReservationPresentationPolicy.referenceNumberLabel(ReservationKind.RESERVATION))
+    }
+
+    @Test fun editStatusPresentationUsesUserOrderWithoutChangingEnumOrder() {
+        assertEquals(
+            listOf(
+                ReservationStatus.PENDING_CONFIRMATION,
+                ReservationStatus.CONFIRMED,
+                ReservationStatus.COMPLETED,
+                ReservationStatus.CANCELLED,
+                ReservationStatus.REFUNDED,
+            ),
+            ReservationEditStatusPresentationPolicy.displayOrder,
+        )
+        assertEquals(
+            listOf(
+                ReservationStatus.PENDING_CONFIRMATION,
+                ReservationStatus.CONFIRMED,
+                ReservationStatus.CANCELLED,
+                ReservationStatus.REFUNDED,
+                ReservationStatus.COMPLETED,
+            ),
+            ReservationStatus.entries.toList(),
+        )
     }
 
     @Test fun quickAddPresentationUsesExistingKindLabelsAndRequiresAValidHttpsLink() {

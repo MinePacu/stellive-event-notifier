@@ -17,6 +17,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -189,6 +190,7 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkRoute
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEditPresentationPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEditStatusPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEventSnapshot
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationExternalLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPage
@@ -205,6 +207,7 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpStep
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpTone
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationLinkSource
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListSectionKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationPresentationPolicy
@@ -275,6 +278,11 @@ private data class ReservationDateTimeInput(
 private data class ReservationEditTextInput(
     val field: EditText,
     val view: View,
+)
+
+private data class ReservationEditStatusInput(
+    val view: View,
+    val update: (ReservationStatus) -> Unit,
 )
 
 private data class SongPanes(val filter: ScrollablePane, val list: ScrollablePane)
@@ -2826,18 +2834,7 @@ private fun startScreen(
         val noteInput = reservationEditField("메모", record.note.orEmpty(), multiline = true)
         val note = noteInput.field
         var status = record.status
-        val statusButton = detailActionButton("내역 상태  ·  ${ReservationPresentationPolicy.statusLabel(record.kind, status)}  ›", false) {}
-        statusButton.setOnClickListener {
-            PopupMenu(this, statusButton).apply {
-                ReservationStatus.entries.forEachIndexed { index, value -> menu.add(0, index, index, ReservationPresentationPolicy.statusLabel(record.kind, value)) }
-                setOnMenuItemClickListener { item ->
-                    status = ReservationStatus.entries[item.itemId]
-                    statusButton.text = "내역 상태  ·  ${ReservationPresentationPolicy.statusLabel(record.kind, status)}  ›"
-                    true
-                }
-                show()
-            }
-        }
+        val statusInput = reservationEditStatusInput(record.kind, status) { selected -> status = selected }
         reservationEditHasUnsavedChanges = {
             status != record.status ||
                 title.text.toString().trim() != initialValues.title ||
@@ -2854,7 +2851,7 @@ private fun startScreen(
         binding.contentList.addView(reservationEditPanel(
             title = "기본 정보",
             description = "화면에 표시할 이름과 현재 내역 상태를 정리합니다.",
-            children = listOf(titleInput.view, statusButton, venueInput.view),
+            children = listOf(titleInput.view, statusInput.view, venueInput.view),
         ))
         binding.contentList.addView(reservationEditPanel(
             title = "일정",
@@ -3022,6 +3019,121 @@ private fun startScreen(
             if (multiline) minLines = 3
         }
         return ReservationEditTextInput(field, labeledReservationEditInput(label, field))
+    }
+
+    private fun reservationEditStatusInput(
+        kind: ReservationKind,
+        initialStatus: ReservationStatus,
+        onSelected: (ReservationStatus) -> Unit,
+    ): ReservationEditStatusInput {
+        var displayedStatus = initialStatus
+        val value = TextView(this).apply {
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            includeFontPadding = false
+            maxLines = 2
+            setLineSpacing(0f, 1.08f)
+        }
+        val description = TextView(this).apply {
+            textSize = 12f
+            includeFontPadding = false
+            setTextColor(color(R.color.hub_text_muted))
+            setLineSpacing(0f, 1.12f)
+        }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(56)
+            isClickable = true
+            isFocusable = true
+            background = RippleDrawable(
+                ColorStateList.valueOf(color(R.color.hub_line)),
+                rounded(color(R.color.hub_surface), dp(12), color(R.color.hub_line)),
+                null,
+            )
+            setPadding(dp(14), dp(12), dp(12), dp(12))
+            addView(value, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(ImageView(context).apply {
+                setImageResource(R.drawable.ic_expand_more)
+                imageTintList = ColorStateList.valueOf(color(R.color.hub_text_subtle))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(24), dp(24)).apply { marginStart = dp(8) })
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(context).apply {
+                setText(R.string.reservation_edit_status_label)
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(color(R.color.hub_text_muted))
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(6) })
+            addView(row, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ))
+            addView(description, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(6) })
+        }
+        fun update(selected: ReservationStatus) {
+            displayedStatus = selected
+            val label = ReservationPresentationPolicy.statusLabel(kind, selected)
+            value.text = label
+            value.setTextColor(color(reservationEditStatusColor(selected)))
+            description.setText(reservationEditStatusDescriptionRes(kind, selected))
+            row.contentDescription = getString(
+                R.string.reservation_edit_status_accessibility,
+                getString(R.string.reservation_edit_status_label),
+                label,
+            )
+            ViewCompat.setStateDescription(row, label)
+        }
+        row.setOnClickListener {
+            HubSingleChoiceBottomSheet(
+                context = this,
+                title = getString(R.string.reservation_edit_status_selection_title),
+                options = ReservationEditStatusPresentationPolicy.displayOrder.map { candidate ->
+                    HubSingleChoiceOption(candidate.name, ReservationPresentationPolicy.statusLabel(kind, candidate))
+                },
+                selectedId = displayedStatus.name,
+            ) { id ->
+                val selected = ReservationStatus.valueOf(id)
+                onSelected(selected)
+                update(selected)
+                row.requestFocus()
+                row.announceForAccessibility(
+                    getString(R.string.reservation_edit_status_accessibility, getString(R.string.reservation_edit_status_label), ReservationPresentationPolicy.statusLabel(kind, selected)),
+                )
+            }.show()
+        }
+        update(initialStatus)
+        return ReservationEditStatusInput(container, ::update)
+    }
+
+    private fun reservationEditStatusColor(status: ReservationStatus): Int = when (status) {
+        ReservationStatus.PENDING_CONFIRMATION, ReservationStatus.REFUNDED -> R.color.hub_warning
+        ReservationStatus.CONFIRMED -> R.color.hub_success
+        ReservationStatus.COMPLETED -> R.color.hub_text_muted
+        ReservationStatus.CANCELLED -> R.color.hub_schedule_tag_cancelled
+    }
+
+    private fun reservationEditStatusDescriptionRes(kind: ReservationKind, status: ReservationStatus): Int = when (status) {
+        ReservationStatus.PENDING_CONFIRMATION -> R.string.reservation_edit_status_pending_description
+        ReservationStatus.CONFIRMED -> when (kind) {
+            ReservationKind.TICKET -> R.string.reservation_edit_status_ticket_confirmed_description
+            ReservationKind.PURCHASE -> R.string.reservation_edit_status_purchase_confirmed_description
+            ReservationKind.RESERVATION -> R.string.reservation_edit_status_reservation_confirmed_description
+        }
+        ReservationStatus.COMPLETED -> when (kind) {
+            ReservationKind.PURCHASE -> R.string.reservation_edit_status_purchase_completed_description
+            ReservationKind.TICKET, ReservationKind.RESERVATION -> R.string.reservation_edit_status_ticket_completed_description
+        }
+        ReservationStatus.CANCELLED -> R.string.reservation_edit_status_cancelled_description
+        ReservationStatus.REFUNDED -> R.string.reservation_edit_status_refunded_description
     }
 
     private fun labeledReservationEditInput(label: String, input: View): LinearLayout =

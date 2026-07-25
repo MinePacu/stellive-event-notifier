@@ -137,6 +137,16 @@ object ReservationQuickAddPresentationPolicy {
     fun isPrimaryActionEnabled(rawUrl: String?): Boolean = ReservationURLPolicy.validate(rawUrl).isValid
 }
 
+object ReservationEditStatusPresentationPolicy {
+    val displayOrder: List<ReservationStatus> = listOf(
+        ReservationStatus.PENDING_CONFIRMATION,
+        ReservationStatus.CONFIRMED,
+        ReservationStatus.COMPLETED,
+        ReservationStatus.CANCELLED,
+        ReservationStatus.REFUNDED,
+    )
+}
+
 object ReservationDisplayPolicy {
     fun officialEventChanged(record: ReservationRecord, latestTitle: String?, latestStartsAt: Instant?): Boolean =
         latestTitle != null && (
