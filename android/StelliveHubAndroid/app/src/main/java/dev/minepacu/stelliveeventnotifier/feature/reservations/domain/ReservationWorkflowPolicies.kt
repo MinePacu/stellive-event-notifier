@@ -276,6 +276,13 @@ data class ReservationHelpFaq(
     val action: ReservationHelpAction? = null,
 )
 
+object ReservationHelpFaqExpansionPolicy {
+    fun toggled(
+        expandedFaqId: ReservationHelpFaqId?,
+        selectedFaqId: ReservationHelpFaqId,
+    ): ReservationHelpFaqId? = selectedFaqId.takeUnless { it == expandedFaqId }
+}
+
 data class ReservationHelpContent(
     @StringRes val titleRes: Int,
     @StringRes val summaryRes: Int,

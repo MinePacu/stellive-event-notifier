@@ -1,5 +1,6 @@
 package dev.minepacu.stelliveeventnotifier.feature.reservations
 
+import dev.minepacu.stelliveeventnotifier.R
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventLinkKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationActionPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraft
@@ -16,6 +17,7 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpContext
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpContextPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpFaqId
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpFaqExpansionPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpSectionId
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpStatusKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpTone
@@ -24,6 +26,7 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListSectionKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationPresentationPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationQuickAddPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationRecord
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationStatus
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkPolicy
@@ -44,6 +47,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReservationPoliciesTest {
+    @Test fun helpFaqExpansionKeepsOnlyOneItemOpenAndTogglesTheSameItem() {
+        val first = ReservationHelpFaqId.RETURN_PROMPT_MISSING
+        val second = ReservationHelpFaqId.DETAIL_LINK_MISSING
+
+        assertEquals(first, ReservationHelpFaqExpansionPolicy.toggled(null, first))
+        assertNull(ReservationHelpFaqExpansionPolicy.toggled(first, first))
+        assertEquals(second, ReservationHelpFaqExpansionPolicy.toggled(first, second))
+    }
+
     @Test fun onlyTicketPurchaseAndReservationLinksCreateDrafts() {
         assertEquals(ReservationKind.TICKET, ReservationActionPolicy.kindFor(HubEventLinkKind.TICKET))
         assertEquals(ReservationKind.PURCHASE, ReservationActionPolicy.kindFor(HubEventLinkKind.PURCHASE))
@@ -110,6 +122,39 @@ class ReservationPoliciesTest {
         assertEquals("예매번호", ReservationPresentationPolicy.referenceNumberLabel(ReservationKind.TICKET))
         assertEquals("주문번호", ReservationPresentationPolicy.referenceNumberLabel(ReservationKind.PURCHASE))
         assertEquals("예약번호", ReservationPresentationPolicy.referenceNumberLabel(ReservationKind.RESERVATION))
+    }
+
+    @Test fun quickAddPresentationUsesExistingKindLabelsAndRequiresAValidHttpsLink() {
+        val draft = ReservationDraft(
+            sessionId = UUID.randomUUID(),
+            eventId = "event-1",
+            scheduleItemId = null,
+            kind = ReservationKind.PURCHASE,
+            eventSnapshot = ReservationEventSnapshot(
+                title = "상품",
+                category = "goods",
+                sourceLabel = "공식 판매처",
+            ),
+            originalActionUrl = "https://example.com/purchase",
+            providerHost = "example.com",
+            openedAt = Instant.parse("2026-07-25T00:00:00Z"),
+            expiresAt = Instant.parse("2026-07-25T02:00:00Z"),
+            attemptCount = 1,
+        )
+
+        val presentation = ReservationQuickAddPresentationPolicy.presentation(
+            draft,
+            now = Instant.parse("2026-07-25T00:30:00Z"),
+        )
+
+        assertEquals("상품", presentation.title)
+        assertEquals("상품 구매 진행 중", presentation.inProgressLabel)
+        assertEquals("구매 내역에 추가", presentation.primaryActionLabel)
+        assertEquals("구매 상세 링크", presentation.detailLinkLabel)
+        assertEquals(ReservationDraftExpiryKind.HOURS, presentation.expiry?.kind)
+        assertFalse(ReservationQuickAddPresentationPolicy.isPrimaryActionEnabled(null))
+        assertFalse(ReservationQuickAddPresentationPolicy.isPrimaryActionEnabled("http://example.com/order"))
+        assertTrue(ReservationQuickAddPresentationPolicy.isPrimaryActionEnabled("https://example.com/order"))
     }
 
     @Test fun pastListUsesSavedTimeWhileUpcomingUsesScheduledTime() {
@@ -241,6 +286,16 @@ class ReservationPoliciesTest {
                 ReservationHelpFaqId.OFFICIAL_EVENT_CANCELLED,
             ),
             list.faqs.map { it.id },
+        )
+        assertEquals(
+            listOf(
+                R.string.reservation_help_faq_return_question,
+                R.string.reservation_help_faq_link_question,
+                R.string.reservation_help_faq_duplicate_question,
+                R.string.reservation_help_faq_sensitive_question,
+                R.string.reservation_help_faq_cancelled_question,
+            ),
+            list.faqs.map { it.questionRes },
         )
         assertEquals(
             listOf(

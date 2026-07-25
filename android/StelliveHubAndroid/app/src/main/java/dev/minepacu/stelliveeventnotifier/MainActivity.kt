@@ -192,6 +192,7 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationExternalLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPage
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpFaqExpansionPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpAction
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpContextPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpFaq
@@ -396,7 +397,8 @@ private var reservationExternalFlowActive = false
 private var reservationExternalFlowLeftApp = false
 private var pendingReservationRecordingFailure = false
 private var pendingReservationHelpScrollAction: ReservationHelpAction? = null
-private val expandedReservationHelpFaqIds = mutableSetOf<ReservationHelpFaqId>()
+private var expandedReservationHelpFaqId: ReservationHelpFaqId? = null
+private val reservationHelpFaqUiStates = mutableMapOf<ReservationHelpFaqId, ReservationHelpFaqUiState>()
 private var expandedHubEventScheduleEventId: String? = null
 private val expandedHubEventScheduleItemIds = mutableSetOf<String>()
 private var selectedAnnouncementId: String? = null
@@ -416,6 +418,14 @@ private lateinit var announcementReadStore: AnnouncementReadStore
 private var notificationPermissionRequested = false
     private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
     private val cardFactory by lazy { HubCardFactory(this) }
+
+    private data class ReservationHelpFaqUiState(
+        val card: MaterialCardView,
+        val header: LinearLayout,
+        val answerContainer: LinearLayout,
+        val chevron: ImageView,
+        val question: String,
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         selectedAppearanceMode = readAppearanceMode()
@@ -715,6 +725,12 @@ private var notificationPermissionRequested = false
 
     private fun handleAppDeepLink(intent: Intent?): Boolean {
         val deepLink = intent?.dataString ?: intent?.getStringExtra("appDeepLink")
+        if (deepLink == "stellivehub://goods-events") {
+            selectedReservationId = null
+            navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
+            replaceScreenWithoutAnimation(HubScreen.GOODS_EVENTS)
+            return true
+        }
         val reservationRoute = ReservationDeepLinkPolicy.route(deepLink)
         when (val route = reservationRoute) {
             ReservationDeepLinkRoute.ListRoute -> {
@@ -2186,6 +2202,7 @@ private fun startScreen(
         }
         if (content.faqs.isNotEmpty()) {
             binding.contentList.addView(sectionLabel(getString(R.string.reservation_help_faq_header)))
+            reservationHelpFaqUiStates.clear()
             content.faqs.forEach { faq ->
                 binding.contentList.addView(reservationHelpFaqCard(faq))
             }
@@ -2391,86 +2408,141 @@ private fun startScreen(
         }
     }
 
-    private fun reservationHelpFaqCard(faq: ReservationHelpFaq): MaterialCardView =
-        baseCard(HubCardStyle.COMPACT).apply {
-            val expanded = faq.id in expandedReservationHelpFaqIds
-            val toneLabel = when (faq.tone) {
-                ReservationHelpTone.NORMAL -> getString(R.string.reservation_help_tone_normal)
-                ReservationHelpTone.INFO -> getString(R.string.reservation_help_tone_info)
-                ReservationHelpTone.WARNING -> getString(R.string.reservation_help_tone_warning)
-                ReservationHelpTone.SECURITY -> getString(R.string.reservation_help_tone_security)
-                ReservationHelpTone.DANGER -> getString(R.string.reservation_help_tone_danger)
-            }
-            val accent = when (faq.tone) {
-                ReservationHelpTone.NORMAL -> color(R.color.hub_text_muted)
-                ReservationHelpTone.INFO,
-                ReservationHelpTone.SECURITY -> color(R.color.hub_primary)
-                ReservationHelpTone.WARNING -> color(R.color.hub_warning)
-                ReservationHelpTone.DANGER -> color(R.color.hub_schedule_tag_cancelled)
-            }
-            val icon = when (faq.tone) {
-                ReservationHelpTone.NORMAL,
-                ReservationHelpTone.INFO -> android.R.drawable.ic_dialog_info
-                ReservationHelpTone.WARNING -> android.R.drawable.ic_dialog_alert
-                ReservationHelpTone.SECURITY -> android.R.drawable.ic_lock_lock
-                ReservationHelpTone.DANGER -> android.R.drawable.ic_menu_delete
-            }
+    private fun reservationHelpFaqCard(faq: ReservationHelpFaq): MaterialCardView {
+        val question = getString(faq.questionRes)
+        val card = baseCard(HubCardStyle.COMPACT).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { bottomMargin = dp(8) }
             strokeWidth = dp(1)
-            strokeColor = accent
+            strokeColor = color(R.color.hub_line)
+            setCardBackgroundColor(color(R.color.hub_card_surface))
+        }
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(56)
+            setPadding(dp(14), dp(12), dp(10), dp(12))
+            isClickable = true
+            isFocusable = true
+            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            accessibilityDelegate = object : View.AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.className = android.widget.Button::class.java.name
+                    info.isClickable = true
+                }
+            }
+        }
+        header.addView(ImageView(this).apply {
+            setImageResource(reservationHelpFaqToneIcon(faq.tone))
+            imageTintList = ColorStateList.valueOf(reservationHelpFaqToneColor(faq.tone))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginEnd = dp(12) })
+        header.addView(TextView(this).apply {
+            text = question
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(color(R.color.hub_text))
+            setLineSpacing(0f, 1.12f)
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val chevron = ImageView(this).apply {
+            imageTintList = ColorStateList.valueOf(color(R.color.hub_text_muted))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        header.addView(chevron, LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginStart = dp(10) })
+
+        val answerContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            isVisible = false
+            addView(divider())
             addView(LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                addView(MaterialButton(context).apply {
-                    val question = getString(faq.questionRes)
-                    text = "${if (expanded) "⌃" else "⌄"}  $question"
-                    setIconResource(icon)
-                    iconTint = ColorStateList.valueOf(accent)
-                    isAllCaps = false
-                    gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                    minHeight = dp(48)
-                    contentDescription = getString(
-                        R.string.reservation_help_section_accessibility,
-                        toneLabel,
-                        getString(
-                            if (expanded) {
-                                R.string.reservation_help_faq_expanded
-                            } else {
-                                R.string.reservation_help_faq_collapsed
-                            },
-                            question,
-                        ),
-                    )
-                    setOnClickListener {
-                        if (expanded) expandedReservationHelpFaqIds -= faq.id else expandedReservationHelpFaqIds += faq.id
-                        renderReservationHelp(ReservationHelpPage.LIST)
-                    }
-                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)))
-                if (expanded) {
-                    addView(TextView(context).apply {
-                        text = getString(faq.answerRes)
-                        textSize = 13f
-                        setTextColor(color(R.color.hub_text))
-                        setLineSpacing(0f, 1.14f)
-                        setPadding(dp(15), dp(4), dp(15), dp(12))
-                    })
-                    faq.action?.let { action ->
-                        addView(detailActionButton(reservationHelpActionLabel(action), false) {
-                            performReservationHelpAction(action)
-                        }, LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                            dp(48),
-                        ).apply {
-                            marginStart = dp(12)
-                            marginEnd = dp(12)
-                            bottomMargin = dp(12)
-                        })
-                    }
+                setBackgroundColor(reservationHelpFaqAnswerBackground(faq.tone))
+                setPadding(dp(14), dp(12), dp(14), dp(14))
+                addView(TextView(context).apply {
+                    text = getString(faq.answerRes)
+                    textSize = 13f
+                    setTextColor(color(R.color.hub_text))
+                    setLineSpacing(0f, 1.14f)
+                })
+                faq.action?.let { action ->
+                    addView(detailActionButton(reservationHelpActionLabel(action), false) {
+                        performReservationHelpAction(action)
+                    }, LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        dp(48),
+                    ).apply { topMargin = dp(12) })
                 }
             })
         }
+        content.addView(header)
+        content.addView(answerContainer)
+        card.addView(content)
+
+        val state = ReservationHelpFaqUiState(
+            card = card,
+            header = header,
+            answerContainer = answerContainer,
+            chevron = chevron,
+            question = question,
+        )
+        reservationHelpFaqUiStates[faq.id] = state
+        header.setOnClickListener { toggleReservationHelpFaq(faq.id) }
+        updateReservationHelpFaqCard(state, faq.id == expandedReservationHelpFaqId)
+        return card
+    }
+
+    private fun toggleReservationHelpFaq(faqId: ReservationHelpFaqId) {
+        val previousFaqId = expandedReservationHelpFaqId
+        val nextFaqId = ReservationHelpFaqExpansionPolicy.toggled(previousFaqId, faqId)
+        if (nextFaqId == previousFaqId) return
+        TransitionManager.beginDelayedTransition(binding.contentList, AutoTransition().apply { duration = 160 })
+        expandedReservationHelpFaqId = nextFaqId
+        listOfNotNull(previousFaqId, nextFaqId).distinct().forEach { changedFaqId ->
+            reservationHelpFaqUiStates[changedFaqId]?.let { state ->
+                updateReservationHelpFaqCard(state, changedFaqId == nextFaqId)
+            }
+        }
+    }
+
+    private fun updateReservationHelpFaqCard(state: ReservationHelpFaqUiState, expanded: Boolean) {
+        state.answerContainer.isVisible = expanded
+        state.chevron.setImageResource(if (expanded) R.drawable.ic_expand_less else R.drawable.ic_expand_more)
+        state.header.contentDescription = state.question
+        ViewCompat.setStateDescription(
+            state.header,
+            getString(if (expanded) R.string.reservation_help_faq_state_expanded else R.string.reservation_help_faq_state_collapsed),
+        )
+        state.card.strokeColor = color(R.color.hub_line)
+        state.card.setCardBackgroundColor(color(R.color.hub_card_surface))
+    }
+
+    private fun reservationHelpFaqToneIcon(tone: ReservationHelpTone): Int = when (tone) {
+        ReservationHelpTone.NORMAL,
+        ReservationHelpTone.INFO -> R.drawable.ic_help_outline
+        ReservationHelpTone.WARNING -> R.drawable.ic_help_warning_outline
+        ReservationHelpTone.SECURITY -> R.drawable.ic_help_lock_outline
+        ReservationHelpTone.DANGER -> R.drawable.ic_help_warning_outline
+    }
+
+    private fun reservationHelpFaqToneColor(tone: ReservationHelpTone): Int = when (tone) {
+        ReservationHelpTone.NORMAL -> color(R.color.hub_text_muted)
+        ReservationHelpTone.INFO,
+        ReservationHelpTone.SECURITY -> color(R.color.hub_primary)
+        ReservationHelpTone.WARNING -> color(R.color.hub_warning)
+        ReservationHelpTone.DANGER -> color(R.color.hub_schedule_tag_cancelled)
+    }
+
+    private fun reservationHelpFaqAnswerBackground(tone: ReservationHelpTone): Int = when (tone) {
+        ReservationHelpTone.NORMAL,
+        ReservationHelpTone.INFO,
+        ReservationHelpTone.SECURITY -> color(R.color.hub_accent_soft)
+        ReservationHelpTone.WARNING -> color(R.color.hub_warning_soft)
+        ReservationHelpTone.DANGER -> color(R.color.hub_schedule_tag_cancelled_soft)
+    }
 
     private fun reservationDraftExpiryText(expiry: ReservationDraftExpiryPresentation): String = when (expiry.kind) {
         ReservationDraftExpiryKind.HOURS -> getString(R.string.reservation_draft_expiry_hours, expiry.value)
