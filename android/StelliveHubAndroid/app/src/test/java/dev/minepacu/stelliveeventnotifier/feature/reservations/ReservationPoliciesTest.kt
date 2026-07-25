@@ -27,6 +27,7 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationListSectionKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationQuickAddPresentationPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationQuickAddScreenTitle
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationRecord
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationStatus
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkPolicy
@@ -148,6 +149,7 @@ class ReservationPoliciesTest {
         )
 
         assertEquals("상품", presentation.title)
+        assertEquals(ReservationQuickAddScreenTitle.PURCHASE, presentation.screenTitle)
         assertEquals("상품 구매 진행 중", presentation.inProgressLabel)
         assertEquals("구매 내역에 추가", presentation.primaryActionLabel)
         assertEquals("구매 상세 링크", presentation.detailLinkLabel)
@@ -155,6 +157,25 @@ class ReservationPoliciesTest {
         assertFalse(ReservationQuickAddPresentationPolicy.isPrimaryActionEnabled(null))
         assertFalse(ReservationQuickAddPresentationPolicy.isPrimaryActionEnabled("http://example.com/order"))
         assertTrue(ReservationQuickAddPresentationPolicy.isPrimaryActionEnabled("https://example.com/order"))
+    }
+
+    @Test fun quickAddScreenTitleMeaningMatchesEachKindAndGenericStates() {
+        assertEquals(
+            ReservationQuickAddScreenTitle.GENERIC,
+            ReservationQuickAddPresentationPolicy.screenTitle(kind = null),
+        )
+        assertEquals(
+            ReservationQuickAddScreenTitle.TICKET,
+            ReservationQuickAddPresentationPolicy.screenTitle(ReservationKind.TICKET),
+        )
+        assertEquals(
+            ReservationQuickAddScreenTitle.PURCHASE,
+            ReservationQuickAddPresentationPolicy.screenTitle(ReservationKind.PURCHASE),
+        )
+        assertEquals(
+            ReservationQuickAddScreenTitle.RESERVATION,
+            ReservationQuickAddPresentationPolicy.screenTitle(ReservationKind.RESERVATION),
+        )
     }
 
     @Test fun pastListUsesSavedTimeWhileUpcomingUsesScheduledTime() {

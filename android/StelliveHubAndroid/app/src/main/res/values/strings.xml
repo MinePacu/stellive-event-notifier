@@ -76,7 +76,10 @@
     <string name="reservation_draft_expiry_minutes">약 %1$d분 후 자동 정리</string>
     <string name="reservation_draft_expiry_soon">곧 자동 정리됨</string>
 
-    <string name="reservation_quick_add_title">내역에 추가</string>
+    <string name="reservation_quick_add_title">내역 추가</string>
+    <string name="reservation_quick_add_ticket_title">예매 내역 추가</string>
+    <string name="reservation_quick_add_purchase_title">구매 내역 추가</string>
+    <string name="reservation_quick_add_reservation_title">예약 내역 추가</string>
     <string name="reservation_quick_add_picker_title">추가할 내역을 선택해 주세요</string>
     <string name="reservation_quick_add_picker_body">최근에 연 링크만 표시됩니다. 항목은 일정 시간이 지나면 자동으로 정리됩니다.</string>
     <string name="reservation_quick_add_picker_item_description">%1$s, %2$s, 제공사 %3$s, %4$s. 선택하려면 두 번 탭하세요.</string>

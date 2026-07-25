@@ -8,33 +8,43 @@
     android:orientation="vertical">
 
     <LinearLayout
-        android:id="@+id/quick_add_top_bar"
+        android:id="@+id/quick_add_top_glass_overlay"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:background="@color/hub_card"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingEnd="16dp">
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_top_bar_glass"
+        android:elevation="8dp"
+        android:orientation="vertical">
 
-        <ImageButton
-            android:id="@+id/quick_add_back"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/action_back"
-            android:padding="12dp"
-            android:src="@drawable/ic_arrow_back" />
+        <LinearLayout
+            android:id="@+id/quick_add_top_bar"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/hub_top_bar_height"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
 
-        <TextView
-            android:id="@+id/quick_add_toolbar_title"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textAppearance="@style/TextAppearance.MaterialComponents.Headline6"
-            android:textColor="@color/hub_text" />
+            <ImageButton
+                android:id="@+id/quick_add_back"
+                android:layout_width="@dimen/hub_top_bar_action_size"
+                android:layout_height="@dimen/hub_top_bar_action_size"
+                android:background="@android:color/transparent"
+                android:contentDescription="@string/action_back"
+                android:padding="@dimen/hub_top_bar_icon_padding"
+                android:src="@drawable/ic_arrow_back"
+                android:tint="@color/hub_text" />
+
+            <TextView
+                android:id="@+id/quick_add_toolbar_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:accessibilityHeading="true"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textAppearance="@style/TextAppearance.StelliveHub.TopBarTitle" />
+        </LinearLayout>
     </LinearLayout>
 
     <ScrollView

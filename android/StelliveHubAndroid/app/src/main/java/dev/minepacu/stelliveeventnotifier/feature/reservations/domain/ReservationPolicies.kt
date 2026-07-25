@@ -102,21 +102,37 @@ object ReservationDraftExpiryPresentationPolicy {
 
 data class ReservationQuickAddPresentation(
     val title: String,
+    val screenTitle: ReservationQuickAddScreenTitle,
     val inProgressLabel: String,
     val primaryActionLabel: String,
     val detailLinkLabel: String,
     val expiry: ReservationDraftExpiryPresentation?,
 )
 
+enum class ReservationQuickAddScreenTitle {
+    GENERIC,
+    TICKET,
+    PURCHASE,
+    RESERVATION,
+}
+
 object ReservationQuickAddPresentationPolicy {
     fun presentation(draft: ReservationDraft, now: Instant = Instant.now()): ReservationQuickAddPresentation =
         ReservationQuickAddPresentation(
             title = draft.eventSnapshot.title,
+            screenTitle = screenTitle(draft.kind),
             inProgressLabel = ReservationPresentationPolicy.inProgressLabel(draft.kind),
             primaryActionLabel = ReservationPresentationPolicy.addActionLabel(draft.kind),
             detailLinkLabel = ReservationPresentationPolicy.detailLinkLabel(draft.kind),
             expiry = ReservationDraftExpiryPresentationPolicy.presentation(draft.expiresAt, now),
         )
+
+    fun screenTitle(kind: ReservationKind?): ReservationQuickAddScreenTitle = when (kind) {
+        null -> ReservationQuickAddScreenTitle.GENERIC
+        ReservationKind.TICKET -> ReservationQuickAddScreenTitle.TICKET
+        ReservationKind.PURCHASE -> ReservationQuickAddScreenTitle.PURCHASE
+        ReservationKind.RESERVATION -> ReservationQuickAddScreenTitle.RESERVATION
+    }
 
     fun isPrimaryActionEnabled(rawUrl: String?): Boolean = ReservationURLPolicy.validate(rawUrl).isValid
 }

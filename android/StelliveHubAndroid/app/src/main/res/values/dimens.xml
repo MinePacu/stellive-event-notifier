@@ -1,0 +1,5 @@
+<resources>
+    <dimen name="hub_top_bar_height">52dp</dimen>
+    <dimen name="hub_top_bar_action_size">44dp</dimen>
+    <dimen name="hub_top_bar_icon_padding">10dp</dimen>
+</resources>

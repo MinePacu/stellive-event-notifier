@@ -27,4 +27,10 @@
         <item name="android:textSize">15sp</item>
     </style>
 
+    <style name="TextAppearance.StelliveHub.TopBarTitle" parent="TextAppearance.MaterialComponents.Subtitle2">
+        <item name="android:textColor">@color/hub_text</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
 </resources>

@@ -32,6 +32,7 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftSelection
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationLinkSource
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationQuickAddPresentationPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationQuickAddScreenTitle
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLValidation
 import javax.inject.Inject
@@ -46,6 +47,7 @@ class ReservationQuickAddActivity : AppCompatActivity() {
     private var selectedDraft: ReservationDraft? = null
     private var isCheckingExistingRecord = false
     private var isSaving = false
+    private var topBarScrolled: Boolean? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,6 +55,7 @@ class ReservationQuickAddActivity : AppCompatActivity() {
         setContentView(binding.root)
         configureWindowChrome()
         configureViews()
+        updateTopBarGlass(scrolled = false)
         constrainContentWidthOnLargeScreens()
         lifecycleScope.launch { loadDrafts() }
     }
@@ -73,6 +76,9 @@ class ReservationQuickAddActivity : AppCompatActivity() {
         quickAddPaste.setOnClickListener { pasteFirstHttpsURL() }
         quickAddLinkless.setOnClickListener { confirm(detailUrl = null, allowSensitive = false) }
         quickAddPrimary.setOnClickListener { validateAndConfirm() }
+        quickAddScroll.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            updateTopBarGlass(scrolled = scrollY > dp(TOP_BAR_SCROLL_THRESHOLD_DP))
+        }
         quickAddDetailUrl.doAfterTextChanged {
             quickAddLinkError.visibility = View.GONE
             updateActionState()
@@ -88,6 +94,14 @@ class ReservationQuickAddActivity : AppCompatActivity() {
             }
             true
         }
+    }
+
+    private fun updateTopBarGlass(scrolled: Boolean) {
+        if (topBarScrolled == scrolled) return
+        topBarScrolled = scrolled
+        binding.quickAddTopGlassOverlay.setBackgroundResource(
+            if (scrolled) R.drawable.bg_top_bar_glass_scrolled else R.drawable.bg_top_bar_glass,
+        )
     }
 
     private fun constrainContentWidthOnLargeScreens() {
@@ -116,7 +130,7 @@ class ReservationQuickAddActivity : AppCompatActivity() {
     }
 
     private fun showEmpty() = with(binding) {
-        setToolbarTitle(getString(R.string.reservation_quick_add_title))
+        setToolbarTitle(screenTitle(ReservationQuickAddPresentationPolicy.screenTitle(kind = null)))
         selectedDraft = null
         quickAddEmptyState.visibility = View.VISIBLE
         quickAddPickerState.visibility = View.GONE
@@ -125,7 +139,7 @@ class ReservationQuickAddActivity : AppCompatActivity() {
     }
 
     private fun showDraftPicker(drafts: List<ReservationDraft>) = with(binding) {
-        setToolbarTitle(getString(R.string.reservation_quick_add_title))
+        setToolbarTitle(screenTitle(ReservationQuickAddPresentationPolicy.screenTitle(kind = null)))
         selectedDraft = null
         quickAddEmptyState.visibility = View.GONE
         quickAddPickerState.visibility = View.VISIBLE
@@ -138,7 +152,7 @@ class ReservationQuickAddActivity : AppCompatActivity() {
     private fun showForm(draft: ReservationDraft) = with(binding) {
         val presentation = ReservationQuickAddPresentationPolicy.presentation(draft)
         selectedDraft = draft
-        setToolbarTitle(getString(R.string.reservation_quick_add_title))
+        setToolbarTitle(screenTitle(presentation.screenTitle))
         quickAddEmptyState.visibility = View.GONE
         quickAddPickerState.visibility = View.GONE
         quickAddFormState.visibility = View.VISIBLE
@@ -384,6 +398,15 @@ class ReservationQuickAddActivity : AppCompatActivity() {
         binding.quickAddToolbarTitle.text = value
     }
 
+    private fun screenTitle(title: ReservationQuickAddScreenTitle): String = getString(
+        when (title) {
+            ReservationQuickAddScreenTitle.GENERIC -> R.string.reservation_quick_add_title
+            ReservationQuickAddScreenTitle.TICKET -> R.string.reservation_quick_add_ticket_title
+            ReservationQuickAddScreenTitle.PURCHASE -> R.string.reservation_quick_add_purchase_title
+            ReservationQuickAddScreenTitle.RESERVATION -> R.string.reservation_quick_add_reservation_title
+        },
+    )
+
     private fun expiryText(expiry: dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftExpiryPresentation): String = when (expiry.kind) {
         ReservationDraftExpiryKind.HOURS -> getString(R.string.reservation_draft_expiry_hours, expiry.value ?: 1)
         ReservationDraftExpiryKind.MINUTES -> getString(R.string.reservation_draft_expiry_minutes, expiry.value ?: 1)
@@ -399,5 +422,6 @@ class ReservationQuickAddActivity : AppCompatActivity() {
         private const val GOODS_EVENTS_DEEP_LINK = "stellivehub://goods-events"
         private const val DISABLED_ACTION_ALPHA = 0.45f
         private const val LARGE_SCREEN_CONTENT_MAX_WIDTH_DP = 760
+        private const val TOP_BAR_SCROLL_THRESHOLD_DP = 8
     }
 }
