@@ -383,6 +383,7 @@ private var visibleSongLimit: Int
     set(value) { songBrowseSession.visibleLimit = value }
 private var isLoadingMoreSongs = false
 private var activeSongScrollView: View? = null
+private var activeSongRefreshScrollSources: List<View> = emptyList()
 private var activeSongListContainer: LinearLayout? = null
 private var activeSongScrollSlot: SongScrollSlot? = null
 private var isRestoringSongScrollPosition = false
@@ -707,6 +708,20 @@ private var notificationPermissionRequested = false
 
  private fun setupPullToRefresh() {
  binding.contentRefresh.isEnabled = false
+ binding.contentRefresh.setOnChildScrollUpCallback { _, child ->
+ if (navigationHistory.currentScreen == HubScreen.SONGS && shouldUseSongsTwoPane()) {
+     SongsPanePolicy.shouldBlockTwoPanePullToRefresh(
+         buildList {
+             add(binding.contentScroll.canScrollVertically(-1))
+             activeSongRefreshScrollSources.forEach { source ->
+                 add(source.canScrollVertically(-1))
+             }
+         },
+     )
+ } else {
+     child?.canScrollVertically(-1) ?: false
+ }
+ }
  binding.contentRefresh.setOnRefreshListener {
  when (navigationHistory.currentScreen) {
      HubScreen.ANNOUNCEMENTS -> loadAnnouncements(reset = true)
@@ -1106,9 +1121,15 @@ HubScreen.HISTORY -> renderHistory()
             screen == HubScreen.GOODS_EVENTS && shouldUseGoodsEventsTwoPane() ||
                 screen == HubScreen.SONGS && shouldUseSongsTwoPane() ||
                 screen == HubScreen.SETTINGS && shouldUseSettingsTwoPane()
+        val isRefreshableScreen =
+            screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS || screen == HubScreen.ANNOUNCEMENTS
         binding.contentRefresh.isEnabled =
-            !isTwoPaneScreen && (screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS || screen == HubScreen.SONGS || screen == HubScreen.ANNOUNCEMENTS)
-        if (isTwoPaneScreen) {
+            SongsPanePolicy.shouldEnablePullToRefresh(
+                isSongsScreen = screen == HubScreen.SONGS,
+                isTwoPaneScreen = isTwoPaneScreen,
+                otherwiseRefreshable = isRefreshableScreen,
+            )
+        if (isTwoPaneScreen && screen != HubScreen.SONGS) {
             binding.contentRefresh.isRefreshing = false
         }
     }
@@ -1230,6 +1251,7 @@ private fun startScreen(
         if (screenId != "song_member_filter") selectedSongMemberFilterDraft = null
         if (screenId != "songs" && screenId != "song_search") {
             activeSongScrollView = null
+            activeSongRefreshScrollSources = emptyList()
             activeSongListContainer = null
             activeSongScrollSlot = null
             if (::songScrollToTopButton.isInitialized) songScrollToTopButton.isVisible = false
@@ -1385,6 +1407,7 @@ private fun startScreen(
     private fun registerSongMemberFilterScrollToTop() {
         val source = binding.contentScroll
         activeSongScrollView = source
+        activeSongRefreshScrollSources = listOf(source)
         activeSongListContainer = null
         activeSongScrollSlot = null
         source.setOnScrollChangeListener { view, _, scrollY, _, _ ->
@@ -1471,6 +1494,7 @@ private fun startScreen(
         slot: SongScrollSlot,
     ) {
         activeSongScrollView = source
+        activeSongRefreshScrollSources = listOf(source)
         activeSongListContainer = container
         activeSongScrollSlot = slot
         source.setOnScrollChangeListener { view, _, scrollY, _, _ ->
@@ -4016,6 +4040,7 @@ private fun renderSongs() {
             },
         )
         activeTwoPaneDetailPane = listPane.scrollView
+        activeSongRefreshScrollSources = listOf(filterPane.scrollView, listPane.scrollView)
         binding.contentList.addView(paneRow)
         return SongPanes(filterPane, listPane)
     }

@@ -23,4 +23,14 @@ object SongsPanePolicy {
         } else {
             SongMemberSelectionMode.NAVIGATE_TO_MEMBER_FILTER
         }
+
+    fun shouldEnablePullToRefresh(
+        isSongsScreen: Boolean,
+        isTwoPaneScreen: Boolean,
+        otherwiseRefreshable: Boolean,
+    ): Boolean =
+        isSongsScreen || (!isTwoPaneScreen && otherwiseRefreshable)
+
+    fun shouldBlockTwoPanePullToRefresh(canScrollUpStates: List<Boolean>): Boolean =
+        canScrollUpStates.any { it }
 }

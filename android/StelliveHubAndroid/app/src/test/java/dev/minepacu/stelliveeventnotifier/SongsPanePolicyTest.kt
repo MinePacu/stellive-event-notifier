@@ -51,4 +51,37 @@ class SongsPanePolicyTest {
         assertFalse(SongsPanePolicy.shouldShowTopBarSearchAction(spec))
         assertEquals(SongMemberSelectionMode.UPDATE_INLINE_FILTER, SongsPanePolicy.memberSelectionMode(spec))
     }
+
+    @Test
+    fun pullToRefreshStaysEnabledForSongsInTwoPaneOnly() {
+        assertTrue(
+            SongsPanePolicy.shouldEnablePullToRefresh(
+                isSongsScreen = true,
+                isTwoPaneScreen = true,
+                otherwiseRefreshable = false,
+            ),
+        )
+        assertFalse(
+            SongsPanePolicy.shouldEnablePullToRefresh(
+                isSongsScreen = false,
+                isTwoPaneScreen = true,
+                otherwiseRefreshable = true,
+            ),
+        )
+        assertTrue(
+            SongsPanePolicy.shouldEnablePullToRefresh(
+                isSongsScreen = false,
+                isTwoPaneScreen = false,
+                otherwiseRefreshable = true,
+            ),
+        )
+    }
+
+    @Test
+    fun twoPanePullToRefreshBlocksWhenAnyRelevantSourceCanScrollUp() {
+        assertFalse(SongsPanePolicy.shouldBlockTwoPanePullToRefresh(listOf(false, false, false)))
+        assertTrue(SongsPanePolicy.shouldBlockTwoPanePullToRefresh(listOf(true, false, false)))
+        assertTrue(SongsPanePolicy.shouldBlockTwoPanePullToRefresh(listOf(false, true, false)))
+        assertTrue(SongsPanePolicy.shouldBlockTwoPanePullToRefresh(listOf(false, false, true)))
+    }
 }
