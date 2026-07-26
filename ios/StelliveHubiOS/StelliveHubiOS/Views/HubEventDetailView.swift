@@ -1,6 +1,6 @@
 import SwiftUI
 
-private enum HubEventDetailColors {
+enum HubEventDetailColors {
     static let background = Color(.systemGroupedBackground)
     static let card = Color(.secondarySystemGroupedBackground)
     static let text = Color(.label)
@@ -11,13 +11,14 @@ private enum HubEventDetailColors {
 enum HubEventDetailContentSection: Hashable {
     case actions
     case summary
+    case eventSchedule
     case timeline
     case info
     case notice
 }
 
 enum HubEventDetailLayoutPolicy {
-    static let contentOrder: [HubEventDetailContentSection] = [.actions, .summary, .timeline, .info, .notice]
+    static let contentOrder: [HubEventDetailContentSection] = [.actions, .summary, .eventSchedule, .timeline, .info, .notice]
 }
 
 enum HubEventScheduleScrollPolicy {
@@ -49,6 +50,8 @@ struct HubEventDetailView: View {
     @State private var lastScrolledScheduleItemId: String? = nil
     @State private var expandedScheduleItemIds = Set<String>()
     @State private var expandedScheduleEventId: String?
+    @State private var isCalendarSelectionActive = false
+    @State private var calendarHighlightedScheduleItemIds = Set<String>()
     @State private var presentedLinks: HubEventLinksSheetContext?
 
     var body: some View {
@@ -60,7 +63,7 @@ struct HubEventDetailView: View {
                         hero
                         VStack(spacing: 14) {
                             ForEach(HubEventDetailLayoutPolicy.contentOrder, id: \.self) { section in
-                                contentSection(section)
+                                contentSection(section, scrollProxy: proxy)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -76,10 +79,16 @@ struct HubEventDetailView: View {
                     scrollToHighlightedSchedule(using: proxy)
                 }
                 .onChange(of: highlightedScheduleItemId) { _ in
+                    isCalendarSelectionActive = false
+                    calendarHighlightedScheduleItemIds.removeAll()
                     expandHighlightedSchedule()
                     scrollToHighlightedSchedule(using: proxy)
                 }
-                .onChange(of: event.id) { _ in expandHighlightedSchedule() }
+                .onChange(of: event.id) { _ in
+                    isCalendarSelectionActive = false
+                    calendarHighlightedScheduleItemIds.removeAll()
+                    expandHighlightedSchedule()
+                }
             }
         }
         .navigationTitle("")
@@ -110,12 +119,15 @@ struct HubEventDetailView: View {
         ) else { return }
         lastScrolledScheduleItemId = id
         DispatchQueue.main.async {
-            withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
+            scrollToSchedule(id, using: proxy)
         }
     }
 
     @ViewBuilder
-    private func contentSection(_ section: HubEventDetailContentSection) -> some View {
+    private func contentSection(
+        _ section: HubEventDetailContentSection,
+        scrollProxy: ScrollViewProxy
+    ) -> some View {
         switch section {
         case .actions:
             ctaRow
@@ -123,8 +135,25 @@ struct HubEventDetailView: View {
             detailSection(HubEventDetailFormatting.summaryLabel) {
                 summaryCard
             }
+        case .eventSchedule:
+            let presentation = HubEventDetailCalendarPolicy.presentation(
+                for: event,
+                highlightedScheduleItemID: highlightedScheduleItemId
+            )
+            if presentation.mode != .hidden {
+                detailSection("행사 일정") {
+                    HubEventDetailCalendarCard(
+                        event: event,
+                        presentation: presentation,
+                        onSelectDay: { day in
+                            selectCalendarDay(day, using: scrollProxy)
+                        }
+                    )
+                    .id("\(event.id):\(highlightedScheduleItemId ?? "")")
+                }
+            }
         case .timeline:
-            if HubEventDetailFormatting.hasTimelineSchedule(event), !event.scheduleItems.isEmpty {
+            if !event.scheduleItems.isEmpty {
                 detailSection("세부 일정") {
                     timelineCards
                 }
@@ -265,7 +294,9 @@ struct HubEventDetailView: View {
             ForEach(HubEventDetailFormatting.timeline(for: event), id: \.schedule.id) { item in
                 HubEventScheduleCard(
                     item: item,
-                    highlighted: item.schedule.id == highlightedScheduleItemId,
+                    highlighted: isCalendarSelectionActive
+                        ? calendarHighlightedScheduleItemIds.contains(item.schedule.id)
+                        : item.schedule.id == highlightedScheduleItemId,
                     isEffectivePrimary: item.schedule.id == effectivePrimaryID,
                     expanded: expandedScheduleItemIds.contains(item.schedule.id),
                     onToggle: {
@@ -280,6 +311,41 @@ struct HubEventDetailView: View {
                     onOpenLink: { link in openHubEventLink(link, scheduleItem: item.schedule) }
                 )
                 .id(item.schedule.id)
+            }
+        }
+    }
+
+    private func selectCalendarDay(
+        _ day: HubEventDetailCalendarDay,
+        using proxy: ScrollViewProxy
+    ) {
+        let scheduleIDs = day.schedules.map(\.id)
+        isCalendarSelectionActive = true
+        calendarHighlightedScheduleItemIds = Set(scheduleIDs)
+        guard let targetID = scheduleIDs.first else { return }
+        if scheduleIDs.count == 1 {
+            if reduceMotion {
+                expandedScheduleItemIds.insert(targetID)
+            } else {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    expandedScheduleItemIds.insert(targetID)
+                }
+            }
+        }
+        DispatchQueue.main.async {
+            scrollToSchedule(targetID, using: proxy)
+        }
+    }
+
+    private func scrollToSchedule(
+        _ id: String,
+        using proxy: ScrollViewProxy
+    ) {
+        if reduceMotion {
+            proxy.scrollTo(id, anchor: .center)
+        } else {
+            withAnimation(.easeOut(duration: 0.25)) {
+                proxy.scrollTo(id, anchor: .center)
             }
         }
     }

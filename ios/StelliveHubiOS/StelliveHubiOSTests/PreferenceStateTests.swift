@@ -168,7 +168,7 @@ final class PreferenceStateTests: XCTestCase {
     func testHubEventDetailPlacesActionsBeforeSummary() {
         XCTAssertEqual(
             HubEventDetailLayoutPolicy.contentOrder,
-            [.actions, .summary, .timeline, .info, .notice]
+            [.actions, .summary, .eventSchedule, .timeline, .info, .notice]
         )
     }
 
