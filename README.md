@@ -156,6 +156,9 @@ scripts/                      # 빌드·배포·마이그레이션 스크립트
 - [아키텍처](docs/ARCHITECTURE.md) · [API 설정](docs/API_SETUP.md) · [백엔드 확장 가이드](docs/BACKEND_SCALING.md)
 - [CHZZK 라이브 상태 설계](docs/CHZZK_LIVE_STATUS_REFRESH_DESIGN.md) · [FCM 경계 설계](docs/FIREBASE_FCM_BOUNDARY_DESIGN.md)
 
+### 📖 Wiki 문서
+- [전체 Wiki 문서](https://github.com/MinePacu/stellive-event-notifier/wiki) — 사용자 가이드, 개발자 문서, 정책 참조, 프로젝트 관리
+
 ### 테스트
 ```bash
 # Backend

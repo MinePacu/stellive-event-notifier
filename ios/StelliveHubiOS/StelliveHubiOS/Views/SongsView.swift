@@ -273,7 +273,7 @@ struct SongsView: View {
                             }
                             .onAppear { trackVisibleRow(row) }
                             .listRowInsets(IOSSongPagePolicy.songRowInsets)
-                            .listRowSeparator(.hidden)
+                            .listRowSeparator(.visible)
                     }
 
                     songLoadMoreControl
@@ -751,14 +751,6 @@ struct SongRow: View {
                 .accessibilityHint(model.videoURL == nil ? SongLinkPolicy.unavailableReason : "YouTube 또는 YouTube Music에서 열기, 공유 또는 복사")
             }
             .padding(14)
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
         }
         .alert("링크를 열 수 없습니다", isPresented: $isOpenFailurePresented) {
             Button("확인", role: .cancel) {}
