@@ -1,0 +1,73 @@
+name: Sync Docs to Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**/*.md'
+      - 'README.md'
+      - 'CONTRIBUTING.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'SECURITY.md'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  sync-wiki:
+    name: Sync documentation to Wiki
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Clone wiki repo
+        uses: actions/checkout@v4
+        with:
+          repository: MinePacu/stellive-event-notifier.wiki
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: wiki
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Copy documentation files
+        run: |
+          # Create directory structure
+          mkdir -p wiki/사용자-가이드/플랫폼별-가이드
+          mkdir -p wiki/개발자-문서/백엔드-가이드
+          mkdir -p wiki/개발자-문서/안드로이드-가이드
+          mkdir -p wiki/개발자-문서/iOS-가이드
+          mkdir -p wiki/개발자-문서/공통-스키마
+          mkdir -p wiki/정책-참조
+          mkdir -p wiki/프로젝트-관리/아키텍처-결정-기록
+
+          # Copy docs/ files
+          cp -r docs/* wiki/정책-참조/ 2>/dev/null || true
+          
+          # Copy root markdown files
+          cp README.md wiki/ 2>/dev/null || true
+          cp CONTRIBUTING.md wiki/개발자-문서/ 2>/dev/null || true
+          cp CODE_OF_CONDUCT.md wiki/개발자-문서/ 2>/dev/null || true
+          cp SECURITY.md wiki/개발자-문서/ 2>/dev/null || true
+
+          # Rename README.md to Home.md for wiki root
+          mv wiki/README.md wiki/Home.md 2>/dev/null || true
+
+      - name: Commit and push changes
+        run: |
+          cd wiki
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "docs: sync documentation from main repo [$(date +'%Y-%m-%d %H:%M:%S')]"
+            git push origin master
+          fi
