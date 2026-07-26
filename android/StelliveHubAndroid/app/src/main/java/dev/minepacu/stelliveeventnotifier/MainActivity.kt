@@ -144,7 +144,9 @@ import dev.minepacu.stelliveeventnotifier.feature.songs.SongDiscoveryStateV1
 import dev.minepacu.stelliveeventnotifier.ui.components.HubSingleChoiceBottomSheet
 import dev.minepacu.stelliveeventnotifier.ui.components.HubSingleChoiceOption
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import java.net.URL
@@ -394,6 +396,7 @@ private var pendingSongSearchRender: Runnable? = null
 private var cachedSongItems: List<SongCatalogItem> = emptyList()
 private var cachedSongType: String? = null
 private var cachedSongCatalogAuthoritative = false
+private var songRefreshJob: Job? = null
 private var songSearchResultsContainer: LinearLayout? = null
 private var homeRecentSongs: List<SongCatalogItem>? = null
 private var isLoadingHomeRecentSongs = false
@@ -705,7 +708,11 @@ private var notificationPermissionRequested = false
  private fun setupPullToRefresh() {
  binding.contentRefresh.isEnabled = false
  binding.contentRefresh.setOnRefreshListener {
- if (navigationHistory.currentScreen == HubScreen.ANNOUNCEMENTS) loadAnnouncements(reset = true) else loadServerBootstrap()
+ when (navigationHistory.currentScreen) {
+     HubScreen.ANNOUNCEMENTS -> loadAnnouncements(reset = true)
+     HubScreen.SONGS -> forceRefreshSongs()
+     else -> loadServerBootstrap()
+ }
  }
  }
 
@@ -3850,7 +3857,7 @@ private fun renderSongs() {
             binding.contentList.addView(loadingCard(MainUiPolicy.songsLoadingPresentation()))
         }
 
-        CoroutineScope(Dispatchers.Main).launch {
+        lifecycleScope.launch {
             val state = songRenderState(loadSongItemsForCurrentType())
             if (navigationHistory.currentScreen != HubScreen.SONGS) return@launch
             refreshScreenWhenIdle(HubScreen.SONGS) {
@@ -3867,6 +3874,38 @@ private fun renderSongs() {
                     renderSongListInto(binding.contentList, state, includeServerStatus = true)
                     registerSongScrollSession(binding.contentScroll, binding.contentList, state, SongScrollSlot.SONGS_SINGLE)
                 }
+            }
+        }
+    }
+
+    private fun forceRefreshSongs() {
+        if (songRefreshJob?.isActive == true) return
+        songRefreshJob = lifecycleScope.launch {
+            try {
+                val result = serverRepository.songs(
+                    generationId = "all",
+                    type = "all",
+                    forceRefresh = true,
+                )
+                songDiscoveryRepository.initialize(result.serverTime, result.items, result.isAuthoritative)
+                cachedSongItems = result.items
+                cachedSongType = "all"
+                cachedSongCatalogAuthoritative = result.isAuthoritative
+                if (navigationHistory.currentScreen == HubScreen.SONGS) {
+                    refreshScreenWhenIdle(HubScreen.SONGS, ::renderSongsFromCache)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                recordServerConnectionLog("songs refresh: ${error.javaClass.simpleName}")
+                Toast.makeText(
+                    this@MainActivity,
+                    "노래 목록을 새로고침하지 못했습니다. 기존 목록을 유지합니다.",
+                    Toast.LENGTH_SHORT,
+                ).show()
+            } finally {
+                binding.contentRefresh.isRefreshing = false
+                songRefreshJob = null
             }
         }
     }
@@ -4049,7 +4088,7 @@ private fun renderSongs() {
             return
         }
         container.addView(loadingCard(MainUiPolicy.songSearchLoadingPresentation()))
-        CoroutineScope(Dispatchers.Main).launch {
+        lifecycleScope.launch {
             val result = serverRepository.songs(generationId = "all", type = "all")
             val items = result.items
             songDiscoveryRepository.initialize(result.serverTime, items, result.isAuthoritative)
