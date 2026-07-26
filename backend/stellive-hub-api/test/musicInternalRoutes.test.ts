@@ -288,7 +288,13 @@ describe("music internal routes", () => {
       internalRoutes: {
         dependencies: createInternalDeps({
           musicSync: {
-            syncAllMusic: vi.fn(),
+            syncAllMusic: vi.fn(async () => ({
+              status: "partial",
+              sourceCount: 2,
+              failedCount: 1,
+              insertedOrUpdatedCount: 1,
+              missingCount: 0,
+            })),
             syncOfficialStelliveMusicPlaylists: vi.fn(async () => ({
               status: "ok",
               inserted: 1,
@@ -306,6 +312,12 @@ describe("music internal routes", () => {
               kept: 0,
               manualSkipped: 0,
             })),
+            repairSourceTypeMismatches: vi.fn(async () => ({
+              status: "ok",
+              checked: 1,
+              repaired: 1,
+              manualSkipped: 0,
+            })),
             ingestVideos,
             upsertOverride: vi.fn(async () => ({ videoId: "abcdefghijk", forceExcluded: true })),
           },
@@ -313,6 +325,11 @@ describe("music internal routes", () => {
       },
     });
 
+    await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/music/sync",
+      headers: authHeaders,
+    });
     await app.inject({
       method: "POST",
       url: "/v1/internal/schedulers/music/sync-official-playlists",
@@ -330,6 +347,11 @@ describe("music internal routes", () => {
     });
     await app.inject({
       method: "POST",
+      url: "/v1/internal/schedulers/music/repair-source-type-mismatches",
+      headers: authHeaders,
+    });
+    await app.inject({
+      method: "POST",
       url: "/v1/internal/music/ingest-videos",
       headers: { ...authHeaders, "content-type": "application/json" },
       payload: JSON.stringify({ videoIds: ["abcdefghijk"] }),
@@ -342,7 +364,7 @@ describe("music internal routes", () => {
     });
     await app.close();
 
-    expect(invalidatePrefix).toHaveBeenCalledTimes(10);
+    expect(invalidatePrefix).toHaveBeenCalledTimes(14);
     expect(invalidatePrefix).toHaveBeenCalledWith("/v1/music");
     expect(invalidatePrefix).toHaveBeenCalledWith("/v1/members/");
   });
@@ -357,7 +379,13 @@ describe("music internal routes", () => {
       internalRoutes: {
         dependencies: createInternalDeps({
           musicSync: {
-            syncAllMusic: vi.fn(),
+            syncAllMusic: vi.fn(async () => ({
+              status: "ok",
+              sourceCount: 2,
+              failedCount: 0,
+              insertedOrUpdatedCount: 0,
+              missingCount: 0,
+            })),
             syncOfficialStelliveMusicPlaylists: vi.fn(async () => ({
               status: "ok",
               inserted: 0,
@@ -375,6 +403,12 @@ describe("music internal routes", () => {
               checked: 2,
               hidden: 0,
               kept: 0,
+              manualSkipped: 2,
+            })),
+            repairSourceTypeMismatches: vi.fn(async () => ({
+              status: "ok",
+              checked: 2,
+              repaired: 0,
               manualSkipped: 2,
             })),
             ingestVideos: vi.fn(async () => ({
@@ -400,6 +434,11 @@ describe("music internal routes", () => {
 
     await app.inject({
       method: "POST",
+      url: "/v1/internal/schedulers/music/sync",
+      headers: authHeaders,
+    });
+    await app.inject({
+      method: "POST",
       url: "/v1/internal/schedulers/music/sync-official-playlists",
       headers: authHeaders,
     });
@@ -411,6 +450,11 @@ describe("music internal routes", () => {
     await app.inject({
       method: "POST",
       url: "/v1/internal/schedulers/music/reclassify-discovered-uploads",
+      headers: authHeaders,
+    });
+    await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/music/repair-source-type-mismatches",
       headers: authHeaders,
     });
     await app.inject({

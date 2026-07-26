@@ -60,6 +60,26 @@ describe("ResponseCache", () => {
     expect(loadFresh).toHaveBeenCalledTimes(1);
   });
 
+  it("shares a stale background refresh with a concurrent forced fresh load", async () => {
+    let nowMs = 0;
+    let finishRefresh: ((value: string) => void) | undefined;
+    const cache = new ResponseCache({ now: () => nowMs });
+    const policy = { ttlMs: 100, staleMs: 1_000 };
+    await cache.getOrLoad("music", policy, async () => "old");
+    nowMs = 200;
+    const loadFresh = vi.fn(() => new Promise<string>((resolve) => {
+      finishRefresh = resolve;
+    }));
+
+    await expect(cache.getOrLoad("music", policy, loadFresh)).resolves.toBe("old");
+    const forcedFresh = cache.getOrLoadFresh("music", policy, loadFresh);
+    expect(loadFresh).toHaveBeenCalledOnce();
+
+    finishRefresh?.("new");
+    await expect(forcedFresh).resolves.toBe("new");
+    await expect(cache.getOrLoad("music", policy, loadFresh)).resolves.toBe("new");
+  });
+
   it("preserves an existing cached value when a forced load fails", async () => {
     const cache = new ResponseCache();
     const policy = { ttlMs: 1_000, staleMs: 1_000 };

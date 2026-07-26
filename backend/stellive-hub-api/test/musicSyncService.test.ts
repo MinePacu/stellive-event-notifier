@@ -204,6 +204,38 @@ describe("MusicSyncService", () => {
       status: "partial",
       sourceCount: 2,
       failedCount: 1,
+      insertedOrUpdatedCount: 0,
+      missingCount: 0,
+    });
+  });
+
+  it("aggregates data changes across all source sync results", async () => {
+    const source2 = { ...source, id: "source-2", youtubePlaylistId: "PLoriginal", type: "original" as const };
+    const { service, repository } = createService();
+    repository.listActiveSourcePlaylists.mockResolvedValueOnce([source, source2]);
+    vi.spyOn(service, "syncSourcePlaylist")
+      .mockResolvedValueOnce({
+        status: "ok",
+        fetchedCount: 2,
+        insertedOrUpdatedCount: 2,
+        missingCount: 1,
+        quotaUnits: 3,
+      })
+      .mockResolvedValueOnce({
+        status: "failed",
+        fetchedCount: 0,
+        insertedOrUpdatedCount: 0,
+        missingCount: 0,
+        quotaUnits: 1,
+      });
+
+    await expect(service.syncAllMusic("full")).resolves.toEqual({
+      status: "partial",
+      sourceCount: 2,
+      failedCount: 1,
+      insertedOrUpdatedCount: 2,
+      missingCount: 1,
+      quotaUnits: 4,
     });
   });
 
