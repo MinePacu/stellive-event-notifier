@@ -148,6 +148,9 @@ export interface MusicMemberSummary {
   nameKo: string;
   nameEn: string;
   role: MusicMemberRole;
+  generationId?: string | null;
+  generationName?: string | null;
+  unitName?: string | null;
 }
 
 export interface MusicCatalogItem {
@@ -164,6 +167,8 @@ export interface MusicCatalogItem {
   specialFlags?: string[];
   classificationStatus?: string;
   members: MusicMemberSummary[];
+  generationId?: string | null;
+  generationName?: string | null;
   youtubeUrl: string;
   sourcePlaylistId: string | null;
   premiere?: YoutubePremiereMetadata;

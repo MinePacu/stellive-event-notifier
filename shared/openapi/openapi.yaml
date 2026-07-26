@@ -496,6 +496,12 @@ paths:
             type: string
             enum: [publishedAt_desc]
             default: publishedAt_desc
+        - name: refresh
+          in: query
+          description: Bypass the server response cache and replace the normalized cache entry.
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: Cached normalized music list.
@@ -503,7 +509,7 @@ paths:
             Cache-Control:
               schema:
                 type: string
-              description: private, max-age=300, stale-while-revalidate=600
+              description: private, max-age=300, stale-while-revalidate=600; no-store when refresh=true
           content:
             application/json:
               schema:
@@ -563,6 +569,12 @@ paths:
               - type: integer
             default: 30
             maximum: 50
+        - name: refresh
+          in: query
+          description: Bypass the server response cache and replace the normalized cache entry.
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: Cached normalized member music list.
@@ -1553,6 +1565,18 @@ components:
         role:
           type: string
           enum: [main, collaboration, group, unknown]
+        generationId:
+          type:
+            - string
+            - "null"
+        generationName:
+          type:
+            - string
+            - "null"
+        unitName:
+          type:
+            - string
+            - "null"
     MusicCatalogItem:
       type: object
       required:
@@ -1612,6 +1636,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MusicMemberSummary"
+        generationId:
+          type:
+            - string
+            - "null"
+        generationName:
+          type:
+            - string
+            - "null"
         youtubeUrl:
           type: string
           format: uri
