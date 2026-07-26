@@ -275,6 +275,9 @@ data class MusicMemberSummaryDto(
     val nameKo: String,
     val nameEn: String? = null,
     val role: String? = null,
+    val generationId: String? = null,
+    val generationName: String? = null,
+    val unitName: String? = null,
 )
 
 data class MusicSourcePlaylistDto(
@@ -290,6 +293,8 @@ data class MusicCatalogItemDto(
     val youtubeVideoId: String,
     val title: String,
     val type: String,
+    val generationId: String? = null,
+    val generationName: String? = null,
     val publishedAt: String? = null,
     val catalogAddedAt: String? = null,
     val thumbnailUrl: String? = null,

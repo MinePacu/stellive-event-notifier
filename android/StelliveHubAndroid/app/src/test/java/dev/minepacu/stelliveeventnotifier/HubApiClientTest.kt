@@ -425,13 +425,14 @@ class HubApiClientTest {
         )
         val client = HubApiClient(api = fakeApi)
 
-        val result = client.music(type = "cover", limit = 30, sort = "publishedAt_desc")
+        val result = client.music(type = "cover", limit = 30, sort = "publishedAt_desc", refresh = true)
 
         assertTrue(result is HubNetworkResult.Success)
         val response = (result as HubNetworkResult.Success).value
         assertEquals("cover", fakeApi.lastMusicType)
         assertEquals(30, fakeApi.lastMusicLimit)
         assertEquals("publishedAt_desc", fakeApi.lastMusicSort)
+        assertEquals(true, fakeApi.lastMusicRefresh)
         assertEquals(listOf("유즈하 리코", "네네코 마시로"), response.items.single().members.map { it.nameKo })
     }
 
@@ -453,6 +454,7 @@ class HubApiClientTest {
         var lastMusicType: String? = null
         var lastMusicLimit: Int? = null
         var lastMusicSort: String? = null
+        var lastMusicRefresh: Boolean? = null
 
         override suspend fun bootstrap(
             deviceId: String?,
@@ -560,11 +562,13 @@ class HubApiClientTest {
             cursor: String?,
             limit: Int?,
             sort: String?,
+            refresh: Boolean?,
         ): MusicListResponseDto {
             failure?.let { throw it }
             lastMusicType = type
             lastMusicLimit = limit
             lastMusicSort = sort
+            lastMusicRefresh = refresh
             return musicResponse
         }
 
@@ -579,11 +583,13 @@ class HubApiClientTest {
             cursor: String?,
             limit: Int?,
             sort: String?,
+            refresh: Boolean?,
         ): MusicListResponseDto {
             failure?.let { throw it }
             lastMusicType = type
             lastMusicLimit = limit
             lastMusicSort = sort
+            lastMusicRefresh = refresh
             return musicResponse
         }
     }

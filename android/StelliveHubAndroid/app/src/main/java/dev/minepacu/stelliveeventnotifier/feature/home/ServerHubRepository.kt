@@ -68,6 +68,8 @@ import java.util.Locale
 
 private val builtInHubEventFilters = setOf("all", "goods", "album", "ticketing", "offline", "closing")
 
+class SongRefreshFailedException : IllegalStateException("Unable to refresh the song catalog")
+
 class ServerHubRepository(
     private val remoteDataSource: RemoteDataSource,
     private val deviceIdStore: DeviceIdStore,
@@ -83,6 +85,7 @@ class ServerHubRepository(
     private val eventCache = linkedMapOf<String, HubEvent>()
     private var calendarCache: List<HubCalendarDay> = emptyList()
     private var songCache: SongListResult? = null
+    private var songCacheKey: Pair<String?, String?>? = null
     private val songDetailCache = linkedMapOf<String, SongCatalogItem>()
     private var songFacetCache: SongFacets? = null
 
@@ -189,20 +192,37 @@ class ServerHubRepository(
         type: String?,
         query: String?,
         cursor: String?,
+        forceRefresh: Boolean,
     ): SongListResult {
+        val normalizedMemberId = memberId?.takeUnless { it.isBlank() || it == "all" }
         val normalizedType = type?.takeUnless { it == "all" }
-        val result = fetchAllMusicPages(memberId = memberId, type = normalizedType)
+        val requestKey = normalizedMemberId to normalizedType
+        if (!forceRefresh && songCacheKey == requestKey) {
+            songCache?.let { return it }
+        }
+        val result = fetchAllMusicPages(
+            memberId = normalizedMemberId,
+            type = normalizedType,
+            forceRefresh = forceRefresh,
+        )
         if (result != null) {
             songCache = result
+            songCacheKey = requestKey
             return result
         }
-        return songCache ?: fallback.songs(generationId, memberId, type, query, cursor)
+        if (forceRefresh) throw SongRefreshFailedException()
+        return if (songCacheKey == requestKey) {
+            songCache ?: fallback.songs(generationId, memberId, type, query, cursor)
+        } else {
+            fallback.songs(generationId, memberId, type, query, cursor)
+        }
     }
 
     override suspend fun recentSongs(limit: Int): List<SongCatalogItem> {
         val result = fetchAllMusicPages(memberId = null, type = null)
         if (result != null) {
             songCache = result
+            songCacheKey = null to null
             return MainUiPolicy.recentSongs(result.items, limit)
         }
         return MainUiPolicy.recentSongs(
@@ -225,6 +245,7 @@ class ServerHubRepository(
     private suspend fun fetchAllMusicPages(
         memberId: String?,
         type: String?,
+        forceRefresh: Boolean = false,
     ): SongListResult? {
         val items = mutableListOf<SongCatalogItem>()
         val seen = linkedSetOf<String>()
@@ -238,6 +259,7 @@ class ServerHubRepository(
                     cursor = nextCursor,
                     limit = MUSIC_PAGE_LIMIT,
                     sort = "publishedAt_desc",
+                    refresh = forceRefresh,
                 )
             } else {
                 remoteDataSource.music(
@@ -245,6 +267,7 @@ class ServerHubRepository(
                     cursor = nextCursor,
                     limit = MUSIC_PAGE_LIMIT,
                     sort = "publishedAt_desc",
+                    refresh = forceRefresh,
                 )
             }
             if (response !is HubNetworkResult.Success) {
@@ -479,8 +502,13 @@ private fun MusicCatalogItemDto.toSongCatalogItemOrNull(): SongCatalogItem? {
                 nameKo = it.nameKo,
                 nameEn = it.nameEn,
                 role = it.role,
+                generationId = it.generationId,
+                generationName = it.generationName,
+                unitName = it.unitName,
             )
         },
+        generationId = generationId,
+        generationName = generationName,
         youtubeUrl = youtubeUrl,
         sourcePlaylistId = sourcePlaylistId,
         premiere = premiere.toYoutubePremiereMetadataOrNull(),
@@ -639,6 +667,7 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
         cursor: String? = null,
         limit: Int? = null,
         sort: String? = null,
+        refresh: Boolean = false,
     ): HubNetworkResult<MusicListResponseDto>
 
     suspend fun musicDetail(id: String): HubNetworkResult<MusicCatalogItemDto> = HubNetworkResult.Failure(code = "not_supported")
@@ -649,6 +678,7 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
         cursor: String? = null,
         limit: Int? = null,
         sort: String? = null,
+        refresh: Boolean = false,
     ): HubNetworkResult<MusicListResponseDto>
 
     suspend fun songFacets(
@@ -711,8 +741,9 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
         cursor: String?,
         limit: Int?,
         sort: String?,
+        refresh: Boolean,
     ): HubNetworkResult<MusicListResponseDto> =
-        client.music(type = type, cursor = cursor, limit = limit, sort = sort)
+        client.music(type = type, cursor = cursor, limit = limit, sort = sort, refresh = refresh)
 
     override suspend fun musicDetail(id: String): HubNetworkResult<MusicCatalogItemDto> = client.musicDetail(id)
 
@@ -722,8 +753,16 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
         cursor: String?,
         limit: Int?,
         sort: String?,
+        refresh: Boolean,
     ): HubNetworkResult<MusicListResponseDto> =
-        client.memberMusic(memberId = memberId, type = type, cursor = cursor, limit = limit, sort = sort)
+        client.memberMusic(
+            memberId = memberId,
+            type = type,
+            cursor = cursor,
+            limit = limit,
+            sort = sort,
+            refresh = refresh,
+        )
 
     override suspend fun songFacets(
         generationId: String?,

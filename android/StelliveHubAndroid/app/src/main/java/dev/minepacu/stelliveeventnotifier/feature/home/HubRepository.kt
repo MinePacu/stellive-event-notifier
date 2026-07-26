@@ -42,6 +42,7 @@ interface HubRepository {
         type: String? = null,
         query: String? = null,
         cursor: String? = null,
+        forceRefresh: Boolean = false,
     ): SongListResult
     suspend fun recentSongs(limit: Int = 5): List<SongCatalogItem> =
         songs().items.take(limit)

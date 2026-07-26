@@ -318,6 +318,9 @@ data class SongMemberSummary(
     val nameKo: String,
     val nameEn: String? = null,
     val role: String? = null,
+    val generationId: String? = null,
+    val generationName: String? = null,
+    val unitName: String? = null,
 )
 
 data class YoutubePremiereMetadata(

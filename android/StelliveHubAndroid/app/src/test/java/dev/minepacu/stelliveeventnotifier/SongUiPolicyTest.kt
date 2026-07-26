@@ -138,6 +138,39 @@ class SongUiPolicyTest {
     }
 
     @Test
+    fun songGenerationResolutionPrefersMemberMetadataThenCatalogThenLegacyItem() {
+        val catalog = mapOf("member-a" to "gen2")
+        val memberMetadataSong = SongCatalogItem(
+            id = "metadata",
+            youtubeVideoId = "metadata",
+            title = "Metadata",
+            type = SongType.COVER,
+            generationId = "gen1",
+            members = listOf(
+                SongMemberSummary(
+                    id = "member-a",
+                    nameKo = "멤버 A",
+                    generationId = "gen3",
+                ),
+            ),
+        )
+        val catalogSong = memberMetadataSong.copy(
+            id = "catalog",
+            youtubeVideoId = "catalog",
+            members = listOf(SongMemberSummary(id = "member-a", nameKo = "멤버 A")),
+        )
+        val legacySong = memberMetadataSong.copy(
+            id = "legacy",
+            youtubeVideoId = "legacy",
+            members = emptyList(),
+        )
+
+        assertEquals(setOf("gen3"), MainUiPolicy.resolvedSongGenerationIds(memberMetadataSong, catalog))
+        assertEquals(setOf("gen2"), MainUiPolicy.resolvedSongGenerationIds(catalogSong, catalog))
+        assertEquals(setOf("gen1"), MainUiPolicy.resolvedSongGenerationIds(legacySong, emptyMap()))
+    }
+
+    @Test
     fun songMatchesQueryByTitleOrMemberDisplayText() {
         val song = SongCatalogItem(
             id = "video-1",

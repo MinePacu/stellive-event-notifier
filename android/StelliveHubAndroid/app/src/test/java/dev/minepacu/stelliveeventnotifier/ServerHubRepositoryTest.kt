@@ -326,8 +326,13 @@ class ServerHubRepositoryTest {
                                     nameKo = "아오쿠모 린",
                                     nameEn = "Aokumo Rin",
                                     role = "MAIN",
+                                    generationId = "gen3",
+                                    generationName = "3기생",
+                                    unitName = "Cliché",
                                 ),
                             ),
+                            generationId = "gen3",
+                            generationName = "3기생",
                             youtubeUrl = "https://www.youtube.com/watch?v=video-1",
                             premiere = YoutubePremiereMetadataDto(
                                 classification = "assumed",
@@ -349,6 +354,9 @@ class ServerHubRepositoryTest {
 
         assertEquals("scheduled", song.premiere?.state)
         assertEquals("2026-06-28T08:00:00Z", song.premiere?.scheduledStartAt.toString())
+        assertEquals("gen3", song.generationId)
+        assertEquals("gen3", song.members.single().generationId)
+        assertEquals("Cliché", song.members.single().unitName)
     }
 
     @Test
@@ -371,6 +379,55 @@ class ServerHubRepositoryTest {
         assertNull(songs.nextCursor)
         assertEquals(listOf(null, "cursor-2"), remote.musicCursors)
         assertEquals(listOf(100, 100), remote.musicLimits)
+    }
+
+    @Test
+    fun forcedSongRefreshSendsRefreshOnEveryPage() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            musicResponses = ArrayDeque(listOf(
+                officialMusicResponseForTest("video-1", nextCursor = "cursor-2"),
+                officialMusicResponseForTest("video-2", nextCursor = null),
+            ))
+        }
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val songs = repository.songs(type = "cover", forceRefresh = true)
+
+        assertEquals(listOf("video-1", "video-2"), songs.items.map { it.youtubeVideoId })
+        assertEquals(listOf(true, true), remote.musicRefreshes)
+    }
+
+    @Test
+    fun normalSongLoadUsesCacheAndFailedForceRefreshKeepsIt() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            musicResponses += officialMusicResponseForTest("cached-video", nextCursor = null)
+        }
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val initial = repository.songs(type = "cover")
+        val cached = repository.songs(type = "cover")
+        remote.failMusic = true
+        var refreshFailed = false
+        try {
+            repository.songs(type = "cover", forceRefresh = true)
+        } catch (_: dev.minepacu.stelliveeventnotifier.feature.home.SongRefreshFailedException) {
+            refreshFailed = true
+        }
+        val retained = repository.songs(type = "cover")
+
+        assertTrue(refreshFailed)
+        assertEquals(listOf("cached-video"), initial.items.map { it.youtubeVideoId })
+        assertEquals(initial, cached)
+        assertEquals(initial, retained)
+        assertEquals(listOf(false, true), remote.musicRefreshes)
     }
 
     @Test
@@ -487,7 +544,9 @@ class ServerHubRepositoryTest {
         var lastMusicSort: String? = null
         val musicCursors = mutableListOf<String?>()
         val musicLimits = mutableListOf<Int?>()
+        val musicRefreshes = mutableListOf<Boolean>()
         var musicResponses = ArrayDeque<MusicListResponseDto>()
+        var failMusic = false
         var lastMemberMusicMemberId: String? = null
         var lastMemberMusicType: String? = null
         var lastUpdatePreferencesRequest: UpdatePreferencesRequestDto? = null
@@ -711,12 +770,15 @@ class ServerHubRepositoryTest {
             cursor: String?,
             limit: Int?,
             sort: String?,
+            refresh: Boolean,
         ): HubNetworkResult<MusicListResponseDto> {
             lastMusicType = type
             lastMusicCursor = cursor
             lastMusicSort = sort
             musicCursors += cursor
             musicLimits += limit
+            musicRefreshes += refresh
+            if (failMusic) return HubNetworkResult.Failure(code = "network_error")
             return HubNetworkResult.Success(musicResponses.removeFirstOrNull() ?: officialMusicResponse())
         }
 
@@ -726,9 +788,12 @@ class ServerHubRepositoryTest {
             cursor: String?,
             limit: Int?,
             sort: String?,
+            refresh: Boolean,
         ): HubNetworkResult<MusicListResponseDto> {
             lastMemberMusicMemberId = memberId
             lastMemberMusicType = type
+            musicRefreshes += refresh
+            if (failMusic) return HubNetworkResult.Failure(code = "network_error")
             return HubNetworkResult.Success(officialMusicResponse())
         }
 

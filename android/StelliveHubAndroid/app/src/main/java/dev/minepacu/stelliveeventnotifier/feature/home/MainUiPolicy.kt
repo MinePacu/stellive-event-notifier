@@ -758,7 +758,24 @@ object MainUiPolicy {
         memberGenerationById: Map<String, String>,
     ): Boolean {
         if (selectedGenerationId == "all") return true
-        return song.members.any { memberGenerationById[it.id] == selectedGenerationId }
+        return selectedGenerationId in resolvedSongGenerationIds(song, memberGenerationById)
+    }
+
+    fun resolvedSongGenerationIds(
+        song: SongCatalogItem,
+        memberGenerationById: Map<String, String>,
+    ): Set<String> {
+        val memberMetadata = song.members
+            .mapNotNull { it.generationId?.trim()?.takeIf(String::isNotEmpty) }
+            .toSet()
+        if (memberMetadata.isNotEmpty()) return memberMetadata
+
+        val catalogLookup = (song.members.map { it.id } + listOfNotNull(song.memberId))
+            .mapNotNull { memberGenerationById[it.trim()]?.trim()?.takeIf(String::isNotEmpty) }
+            .toSet()
+        if (catalogLookup.isNotEmpty()) return catalogLookup
+
+        return song.generationId?.trim()?.takeIf(String::isNotEmpty)?.let(::setOf) ?: emptySet()
     }
 
     fun songMatchesQuery(song: SongCatalogItem, query: String, catalogMembers: List<HubMember> = emptyList()): Boolean {

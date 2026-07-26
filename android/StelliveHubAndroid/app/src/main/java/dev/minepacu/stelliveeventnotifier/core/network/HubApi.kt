@@ -91,6 +91,7 @@ interface HubApi {
         @Query("cursor") cursor: String? = null,
         @Query("limit") limit: Int? = null,
         @Query("sort") sort: String? = null,
+        @Query("refresh") refresh: Boolean? = null,
     ): MusicListResponseDto
 
     @GET("v1/music/{id}")
@@ -103,5 +104,6 @@ interface HubApi {
         @Query("cursor") cursor: String? = null,
         @Query("limit") limit: Int? = null,
         @Query("sort") sort: String? = null,
+        @Query("refresh") refresh: Boolean? = null,
     ): MusicListResponseDto
 }

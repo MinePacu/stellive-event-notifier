@@ -124,8 +124,17 @@ class HubApiClient(
         cursor: String? = null,
         limit: Int? = null,
         sort: String? = "publishedAt_desc",
+        refresh: Boolean = false,
     ): HubNetworkResult<MusicListResponseDto> =
-        runCatchingNetwork { api.music(type = type, cursor = cursor, limit = limit, sort = sort) }
+        runCatchingNetwork {
+            api.music(
+                type = type,
+                cursor = cursor,
+                limit = limit,
+                sort = sort,
+                refresh = refresh.takeIf { it },
+            )
+        }
 
     suspend fun musicDetail(id: String): HubNetworkResult<MusicCatalogItemDto> =
         runCatchingNetwork { api.musicDetail(id) }
@@ -136,8 +145,18 @@ class HubApiClient(
         cursor: String? = null,
         limit: Int? = null,
         sort: String? = "publishedAt_desc",
+        refresh: Boolean = false,
     ): HubNetworkResult<MusicListResponseDto> =
-        runCatchingNetwork { api.memberMusic(memberId = memberId, type = type, cursor = cursor, limit = limit, sort = sort) }
+        runCatchingNetwork {
+            api.memberMusic(
+                memberId = memberId,
+                type = type,
+                cursor = cursor,
+                limit = limit,
+                sort = sort,
+                refresh = refresh.takeIf { it },
+            )
+        }
 
     private inline fun <T> runCatchingNetwork(block: () -> T): HubNetworkResult<T> =
         try {

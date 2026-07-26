@@ -345,6 +345,7 @@ class MockHubRepository : HubRepository {
         type: String?,
         query: String?,
         cursor: String?,
+        forceRefresh: Boolean,
     ): SongListResult {
         val filtered = songs
             .asSequence()
