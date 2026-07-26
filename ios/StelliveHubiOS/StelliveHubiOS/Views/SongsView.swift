@@ -274,6 +274,7 @@ struct SongsView: View {
                             .onAppear { trackVisibleRow(row) }
                             .listRowInsets(IOSSongPagePolicy.songRowInsets)
                             .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                     }
 
                     songLoadMoreControl
