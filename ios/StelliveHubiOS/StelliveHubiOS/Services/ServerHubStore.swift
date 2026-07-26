@@ -52,6 +52,7 @@ final class ServerHubStore: ObservableObject {
     @Published private(set) var isRefreshingHubEvents = false
     @Published private(set) var isRefreshingCalendar = false
     @Published private(set) var isRefreshingSongs = false
+    @Published private(set) var songRefreshErrorMessage: String?
     @Published private(set) var isRefreshingRecentSongs = false
     @Published private(set) var loadingHubEventDetailIds: Set<String> = []
     @Published private(set) var loadingSongDetailIds: Set<String> = []
@@ -184,26 +185,43 @@ final class ServerHubStore: ObservableObject {
         memberId: String? = nil,
         type: String? = nil,
         query: String? = nil,
-        cursor: String? = nil
+        cursor: String? = nil,
+        force: Bool = false
     ) async {
+        guard !isRefreshingSongs else { return }
+        guard force || serverSongs.isEmpty else { return }
         isRefreshingSongs = true
+        songRefreshErrorMessage = nil
         defer { isRefreshingSongs = false }
         do {
             let normalizedType = type == "all" ? nil : type
             let result = try await MusicPageCollector.collect { pageCursor, pageLimit in
                 if let memberId, !memberId.isEmpty, memberId != "all" {
-                    return try await api.memberMusic(memberId: memberId, type: normalizedType, cursor: pageCursor, limit: pageLimit)
+                    return try await api.memberMusic(
+                        memberId: memberId,
+                        type: normalizedType,
+                        cursor: pageCursor,
+                        limit: pageLimit,
+                        refresh: force
+                    )
                 }
-                return try await api.music(type: normalizedType, cursor: pageCursor, limit: pageLimit)
+                return try await api.music(
+                    type: normalizedType,
+                    cursor: pageCursor,
+                    limit: pageLimit,
+                    refresh: force
+                )
             }
             if serverSongs != result.items { serverSongs = result.items }
             if songCatalogServerTime != result.serverTime { songCatalogServerTime = result.serverTime }
             if hasAuthoritativeSongCatalog != result.complete { hasAuthoritativeSongCatalog = result.complete }
         } catch {
-            if serverSongs.isEmpty {
-                serverSongs = fallback.songs(generationId: generationId, memberId: memberId, type: type, query: query).items
-            }
+            songRefreshErrorMessage = "노래 목록을 새로고침하지 못했습니다. 기존 목록을 유지합니다."
         }
+    }
+
+    func clearSongRefreshError() {
+        songRefreshErrorMessage = nil
     }
 
     func refreshRecentSongs(limit: Int = 5) async {

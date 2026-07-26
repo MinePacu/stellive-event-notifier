@@ -146,6 +146,48 @@ final class SongUiPolicyTests: XCTestCase {
         XCTAssertFalse(IOSSongPagePolicy.matchesGeneration(song, selectedGenerationId: "gen1", memberGenerationById: memberGenerations))
     }
 
+    func testSongGenerationResolutionPrefersMemberMetadataThenCatalogThenLegacyItem() {
+        func song(memberGenerationId: String?, legacyGenerationId: String?) -> SongCatalogItem {
+            SongCatalogItem(
+                id: UUID().uuidString,
+                youtubeVideoId: UUID().uuidString,
+                title: "Generation",
+                type: .cover,
+                members: [
+                    MusicMemberSummary(
+                        id: "member-a",
+                        nameKo: "멤버 A",
+                        generationId: memberGenerationId
+                    )
+                ],
+                youtubeUrl: "https://www.youtube.com/watch?v=video",
+                generationId: legacyGenerationId
+            )
+        }
+
+        XCTAssertEqual(
+            IOSSongPagePolicy.resolvedGenerationIds(
+                for: song(memberGenerationId: "gen3", legacyGenerationId: "gen1"),
+                memberGenerationById: ["member-a": "gen2"]
+            ),
+            ["gen3"]
+        )
+        XCTAssertEqual(
+            IOSSongPagePolicy.resolvedGenerationIds(
+                for: song(memberGenerationId: nil, legacyGenerationId: "gen1"),
+                memberGenerationById: ["member-a": "gen2"]
+            ),
+            ["gen2"]
+        )
+        XCTAssertEqual(
+            IOSSongPagePolicy.resolvedGenerationIds(
+                for: song(memberGenerationId: nil, legacyGenerationId: "gen1"),
+                memberGenerationById: [:]
+            ),
+            ["gen1"]
+        )
+    }
+
     func testSongMatchesQueryByTitleOrMemberDisplayText() {
         let song = SongCatalogItem(
             id: "video-1",

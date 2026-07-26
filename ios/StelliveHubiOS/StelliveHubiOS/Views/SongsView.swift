@@ -303,12 +303,27 @@ struct SongsView: View {
                     updateTopThreshold(firstRowOffset: offset)
                 }
                 .refreshable {
-                    await refreshSongs()
+                    await refreshSongs(force: true)
                 }
                 .task {
                     if serverStore.serverSongs.isEmpty {
-                        await refreshSongs()
+                        await refreshSongs(force: false)
                     }
+                }
+                .alert(
+                    "새로고침 실패",
+                    isPresented: Binding(
+                        get: { serverStore.songRefreshErrorMessage != nil },
+                        set: { isPresented in
+                            if !isPresented { serverStore.clearSongRefreshError() }
+                        }
+                    )
+                ) {
+                    Button("확인", role: .cancel) {
+                        serverStore.clearSongRefreshError()
+                    }
+                } message: {
+                    Text(serverStore.songRefreshErrorMessage ?? "")
                 }
                 .onAppear {
                     applySessionIfNeeded()
@@ -466,11 +481,12 @@ struct SongsView: View {
         }
     }
 
-    private func refreshSongs() async {
+    private func refreshSongs(force: Bool) async {
         await serverStore.refreshSongs(
             generationId: "all",
             type: "all",
-            query: ""
+            query: "",
+            force: force
         )
         discoveryStore.initialize(
             serverTime: serverStore.songCatalogServerTime,

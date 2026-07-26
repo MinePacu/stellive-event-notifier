@@ -356,6 +356,7 @@ final class HubAPIClientTests: XCTestCase {
             XCTAssertEqual(queryItems["type"], "cover")
             XCTAssertEqual(queryItems["limit"], "30")
             XCTAssertEqual(queryItems["sort"], "publishedAt_desc")
+            XCTAssertEqual(queryItems["refresh"], "true")
             return jsonResponse(statusCode: 200, body: """
             {
               "items": [{
@@ -371,9 +372,19 @@ final class HubAPIClientTests: XCTestCase {
                 "specialFlags": [],
                 "classificationStatus": "AUTO_CLASSIFIED",
                 "members": [
-                  { "id": "yuzuha-riko", "nameKo": "유즈하 리코", "nameEn": "Yuzuha Riko", "role": "MAIN" },
+                  {
+                    "id": "yuzuha-riko",
+                    "nameKo": "유즈하 리코",
+                    "nameEn": "Yuzuha Riko",
+                    "role": "MAIN",
+                    "generationId": "gen3",
+                    "generationName": "3기생",
+                    "unitName": "Cliché"
+                  },
                   { "id": "neneko-mashiro", "nameKo": "네네코 마시로", "nameEn": "Neneko Mashiro", "role": "COLLAB" }
                 ],
+                "generationId": "gen3",
+                "generationName": "3기생",
                 "youtubeUrl": "https://www.youtube.com/watch?v=video-1",
                 "sourcePlaylistId": "playlist-cover",
                 "premiere": {
@@ -389,10 +400,13 @@ final class HubAPIClientTests: XCTestCase {
             """)
         }
 
-        let response = try await client.music(type: "cover", limit: 30, sort: "publishedAt_desc")
+        let response = try await client.music(type: "cover", limit: 30, sort: "publishedAt_desc", refresh: true)
 
         XCTAssertEqual(response.items.first?.members.map(\.nameKo), ["유즈하 리코", "네네코 마시로"])
         XCTAssertEqual(response.items.first?.youtubeUrl, "https://www.youtube.com/watch?v=video-1")
+        XCTAssertEqual(response.items.first?.generationId, "gen3")
+        XCTAssertEqual(response.items.first?.members.first?.generationId, "gen3")
+        XCTAssertEqual(response.items.first?.members.first?.unitName, "Cliché")
         XCTAssertEqual(response.items.first?.premiere?.state, "live")
         XCTAssertEqual(response.items.first?.premiere?.actualStartAt, Date(timeIntervalSince1970: 1782633602))
     }
@@ -938,6 +952,69 @@ final class ServerHubStoreTests: XCTestCase {
         XCTAssertEqual(store.serverSongs.map(\.id), ["song-1", "song-2"])
         XCTAssertEqual(store.songs(generationId: "gen2", type: "original").items.first?.title, "별빛 항로")
         XCTAssertEqual(store.songs(memberId: "ayatsuno-yuni", type: "cover").items.first?.title, "유니 커버")
+    }
+
+    func testForcedRefreshSongsSendsRefreshThroughEveryPage() async {
+        var seenRefreshValues: [String?] = []
+        let store = makeStore { request in
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+            let queryItems = Dictionary(uniqueKeysWithValues: (components?.queryItems ?? []).map { ($0.name, $0.value) })
+            seenRefreshValues.append(queryItems["refresh"] ?? nil)
+            let cursor = queryItems["cursor"] ?? nil
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "items": [{
+                    "id": "\(cursor == nil ? "video-1" : "video-2")",
+                    "youtubeVideoId": "\(cursor == nil ? "video-1" : "video-2")",
+                    "title": "Cover",
+                    "type": "cover",
+                    "members": [],
+                    "youtubeUrl": "https://www.youtube.com/watch?v=video"
+                  }],
+                  "nextCursor": \(cursor == nil ? "\"cursor-2\"" : "null")
+                }
+                """)
+        }
+
+        await store.refreshSongs(type: "all", force: true)
+
+        XCTAssertEqual(seenRefreshValues, ["true", "true"])
+        XCTAssertEqual(store.serverSongs.map(\.id), ["video-1", "video-2"])
+    }
+
+    func testFailedForcedRefreshPreservesSongsAndReportsError() async {
+        var shouldFail = false
+        var requestCount = 0
+        let store = makeStore { _ in
+            requestCount += 1
+            if shouldFail {
+                return jsonResponse(statusCode: 503, body: #"{"error":"unavailable"}"#)
+            }
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "items": [{
+                    "id": "cached-video",
+                    "youtubeVideoId": "cached-video",
+                    "title": "Cached",
+                    "type": "cover",
+                    "members": [],
+                    "youtubeUrl": "https://www.youtube.com/watch?v=cached-video"
+                  }],
+                  "nextCursor": null
+                }
+                """)
+        }
+
+        await store.refreshSongs(type: "all")
+        await store.refreshSongs(type: "all")
+        XCTAssertEqual(requestCount, 1, "A normal load should reuse the in-memory song catalog")
+
+        shouldFail = true
+        await store.refreshSongs(type: "all", force: true)
+
+        XCTAssertEqual(store.serverSongs.map(\.id), ["cached-video"])
+        XCTAssertNotNil(store.songRefreshErrorMessage)
+        XCTAssertEqual(requestCount, 2)
     }
 
     func testMusicPageCollectorFetchesAllPagesAndDedupes() async throws {

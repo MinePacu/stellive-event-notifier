@@ -422,14 +422,16 @@ final class HubAPIClient {
         type: String? = nil,
         cursor: String? = nil,
         limit: Int? = nil,
-        sort: String? = "publishedAt_desc"
+        sort: String? = "publishedAt_desc",
+        refresh: Bool = false
     ) async throws -> MusicListResponse {
         var components = URLComponents(url: baseURL.appendingPathComponent("v1/music"), resolvingAgainstBaseURL: false)!
         components.queryItems = [
             URLQueryItem(name: "type", value: type),
             URLQueryItem(name: "cursor", value: cursor),
             URLQueryItem(name: "limit", value: limit.map(String.init)),
-            URLQueryItem(name: "sort", value: sort)
+            URLQueryItem(name: "sort", value: sort),
+            URLQueryItem(name: "refresh", value: refresh ? "true" : nil)
         ].filter { $0.value != nil }
         return try await send(URLRequest(url: components.url!), responseType: MusicListResponse.self)
     }
@@ -444,14 +446,16 @@ final class HubAPIClient {
         type: String? = nil,
         cursor: String? = nil,
         limit: Int? = nil,
-        sort: String? = "publishedAt_desc"
+        sort: String? = "publishedAt_desc",
+        refresh: Bool = false
     ) async throws -> MusicListResponse {
         var components = URLComponents(url: baseURL.appendingPathComponent("v1/members/\(memberId)/music"), resolvingAgainstBaseURL: false)!
         components.queryItems = [
             URLQueryItem(name: "type", value: type),
             URLQueryItem(name: "cursor", value: cursor),
             URLQueryItem(name: "limit", value: limit.map(String.init)),
-            URLQueryItem(name: "sort", value: sort)
+            URLQueryItem(name: "sort", value: sort),
+            URLQueryItem(name: "refresh", value: refresh ? "true" : nil)
         ].filter { $0.value != nil }
         return try await send(URLRequest(url: components.url!), responseType: MusicListResponse.self)
     }

@@ -696,6 +696,27 @@ struct MusicMemberSummary: Codable, Equatable, Hashable, Identifiable {
     let nameKo: String
     let nameEn: String?
     let role: String?
+    let generationId: String?
+    let generationName: String?
+    let unitName: String?
+
+    init(
+        id: String,
+        nameKo: String,
+        nameEn: String? = nil,
+        role: String? = nil,
+        generationId: String? = nil,
+        generationName: String? = nil,
+        unitName: String? = nil
+    ) {
+        self.id = id
+        self.nameKo = nameKo
+        self.nameEn = nameEn
+        self.role = role
+        self.generationId = generationId
+        self.generationName = generationName
+        self.unitName = unitName
+    }
 }
 
 struct SongDisplayText: Equatable {
@@ -1479,7 +1500,37 @@ enum IOSSongPagePolicy {
         if selectedGenerationId == "all" {
             return true
         }
-        return song.members.contains { memberGenerationById[$0.id] == selectedGenerationId }
+        return resolvedGenerationIds(for: song, memberGenerationById: memberGenerationById)
+            .contains(selectedGenerationId)
+    }
+
+    static func resolvedGenerationIds(
+        for song: SongCatalogItem,
+        memberGenerationById: [String: String]
+    ) -> Set<String> {
+        let memberMetadata = Set(song.members.compactMap { member -> String? in
+            let value = member.generationId?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return value?.isEmpty == false ? value : nil
+        })
+        if !memberMetadata.isEmpty {
+            return memberMetadata
+        }
+
+        let participantIds = song.members.map(\.id) + [song.memberId].compactMap { $0 }
+        let catalogLookup = Set(participantIds.compactMap { id -> String? in
+            let value = memberGenerationById[id.trimmingCharacters(in: .whitespacesAndNewlines)]?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return value?.isEmpty == false ? value : nil
+        })
+        if !catalogLookup.isEmpty {
+            return catalogLookup
+        }
+
+        guard let legacy = song.generationId?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !legacy.isEmpty else {
+            return []
+        }
+        return [legacy]
     }
 
     static func matchesQuery(_ song: SongCatalogItem, query: String, catalogMembers: [HubMember] = []) -> Bool {
