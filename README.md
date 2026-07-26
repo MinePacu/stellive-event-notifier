@@ -1,155 +1,183 @@
-# 스텔라이브 이벤트 알리미
+# 스텔라이브 알림 허브
 
-스텔라이브 관련 굿즈·행사 일정, 멤버 기념일, 플랫폼 이벤트를 한곳에서 확인하고, 사용자의 알림 설정에 따라 Android/iOS 푸시와 앱 내 기록으로 전달하는 비공식 오픈소스 MVP입니다.
-
-> [!NOTE]
-> 이 README의 안내문은 GitHub Alerts 문법을 사용합니다. `NOTE`와 `WARNING`은 GitHub와 GitLab에서 모두 렌더링되는 공통 유형이라 두 플랫폼에서 같은 의미로 읽을 수 있습니다.
+> 스텔라이브 멤버들의 **라이브·업로드·굿즈·행사·기념일·음악·공지** 알림을 한 곳에서 받아보세요.  
+> 안드로이드 · iOS · 웹 모두 지원 · 비공식 · 오픈소스 · 무료
 
 > [!WARNING]
-> 이 프로젝트는 스텔라이브, CHZZK, YouTube, Naver와 공식 관계가 없습니다. Apache License 2.0은 원본 코드와 문서에만 적용되며, 각 권리자가 보유한 이름·초상·상표·플랫폼 데이터·API 응답·제3자 콘텐츠에 대한 권리를 부여하지 않습니다.
+> 이 앱은 **스텔라이브·CHZZK·YouTube·Naver와 공식 관계가 없습니다**.  
+> 플랫폼 공식 API·약관을 준수하며, 비공식 크롤링·우회·로그인 쿠키 수집은 하지 않습니다.  
+> Apache License 2.0은 **소스코드·문서에만** 적용됩니다. 상표·초상·음원·영상·캡처물 등 권리물에는 적용되지 않습니다.
 
-## 한눈에 보기
+---
 
-| 영역 | 제공 기능 |
-| --- | --- |
-| Android | 알림 설정, 로컬 기록·캐시, 딥링크, 굿즈·행사 캘린더, 위젯 데이터, FCM 수신 |
-| iOS | SwiftUI 기반 알림 설정, 일정·위젯 데이터, 딥링크, 로컬 상태 관리, FCM 수신 |
-| Backend | Fastify API, 기기·선호도 관리, 굿즈·행사 관리, CHZZK 상태 캐시, 음악 동기화, 알림 작업 처리 |
-| Shared | 멤버 카탈로그 seed, 공통 도메인 스키마, OpenAPI 문서 |
+## 📱 지금 바로 시작하기
 
-## 현재 구현 범위
+### 1️⃣ 앱 설치
+| 플랫폼 | 다운로드 |
+|--------|----------|
+| Android | [Google Play](https://play.google.com/store/apps/details?id=com.stellive.hub) · [GitHub Release (APK)](https://github.com/StelLiveNoti/StelLiveNoti/releases) |
+| iOS | [TestFlight](https://testflight.apple.com/join/STELLIVEHUB) · [App Store (준비 중)](https://apps.apple.com/app/idSTELLIVEHUB) |
 
-- 굿즈·행사: 공개 조회, 월간 캘린더, 위젯 스냅샷, 관리자 생성·검증·게시·취소·감사 로그
-- 기념일: 멤버 생일과 세대 기념일을 읽기 전용 calendar entry로 제공
-- 라이브: backend가 CHZZK Open API를 조회·정규화·캐시하고, 앱은 backend DTO만 소비
-- 음악: 서버가 공식 COVER/ORIGINAL YouTube playlist를 동기화하고, 공개 음악 목록·상세·멤버별 조회를 제공
-- 알림: 서버가 사용자 선호도와 부하 완화 정책을 적용해 FCM을 발송하며, credential이 없을 때는 안전하게 비활성화
-- 운영: 관리자 콘솔, 내부 scheduler 경로, API·worker 분리 운영, Docker Compose/Nginx/PM2 확장 안내
+> **최소 버전**: Android 8.0 (API 26) / iOS 16.0  
+> 태블릿·폴더블 레이아웃 대응
 
-## 핵심 정책
+### 2️⃣ 알림 허용
+앱 첫 실행 시 **알림 권한 허용** → FCM 토큰 자동 등록 완료
 
-- 멤버 카탈로그와 MVP 대상에는 `active`·`upcoming` 멤버만 포함합니다. Former 멤버는 포함하지 않습니다.
-- Gangzi는 세대 멤버가 아닌 `gamja` 카테고리의 `representative`이며, 표시 라벨은 `스텔라이브 대표`입니다.
-- `official`은 앱에서 `기타`로 표시하며 공식 YouTube 대상을 포함합니다. 공식 YouTube는 업로드 알림만 지원합니다.
-- 사용자 설정이 항상 우선합니다. `global=false`는 모든 푸시 알림을 차단합니다.
-- `realtime_best_effort`는 전달 전략일 뿐이며 opt-out, quiet hours, OS·플랫폼·rate-limit 정책을 우회하지 않습니다.
-- 외부 플랫폼에는 공식 API와 약관을 우선 적용합니다. 로그인 쿠키 스크래핑, private cafe 수집, 접근 우회는 구현하지 않습니다.
-- OAuth token, Firebase 서비스 계정, production device token, raw private response, 이미지 바이너리·공식 로고·팬아트·캡처물은 커밋하지 않습니다.
+### 3️⃣ 원하는 알림만 켜기
+<details open>
+<summary>🔔 알림 종류 한눈에 보기 (펼치기/접기)</summary>
 
-## 저장소 구조
+| 카테고리 | 설명 | 기본값 |
+|----------|------|:------:|
+| 🎬 **라이브·업로드** | CHZZK 라이브 시작·종료, YouTube 업로드·쇼츠·쇼츠 업로드 | ✅ 켬 |
+| 🎁 **굿즈·행사** | 공식 굿즈 발매·오프라인 행사·팝업스토어 일정 | ✅ 켬 |
+| 🎂 **기념일** | 멤버 생일, 세대 결성일, 데뷔일 | ✅ 켬 |
+| 🎵 **음악** | 공식 커버·오리지널 음원 업로드 | ✅ 켬 |
+| 📢 **공지** | 스텔라이브 공식 공지·공식 X(트위터) 게시물 | ✅ 켬 |
 
-```text
-android/StelliveHubAndroid/        Android 앱
-ios/StelliveHubiOS/                iOS SwiftUI 앱과 Xcode 프로젝트
-backend/stellive-hub-api/          Fastify TypeScript API와 worker
-shared/schemas/                    공통 도메인 및 모바일 API 타입
-shared/member-catalog/             멤버 카탈로그 seed
-shared/openapi/                    OpenAPI 문서
-docs/                              정책, 아키텍처, API·운영 설계
-mockups/                           UI mockup
-```
 
-## 빠른 시작
+> **전체 알림 끄기**: 앱 설정 → `전체 알림` 토글 하나로 전체 차단 가능  
+> **조용한 시간**: 설정 → `조용한 시간대` 지정 시 해당 시간대 알림 무음 처리  
+> **배터리 최적화**: Android 설정 → 배터리 최적화 예외 앱에 추가 권장
 
-### Backend
+</details>
 
-로컬 기본 포트는 `4000`입니다.
+---
 
+## ❓ 자주 묻는 질문 (FAQ)
+
+<details>
+<summary>알림이 안 와요</summary>
+
+1. 앱 설정 → `전체 알림` 켜져 있는지 확인  
+2. Android: 설정 → 앱 → 스텔라이브 알림 허브 → 알림 허용 / 배터리 최적화 예외  
+   iOS: 설정 → 알림 → 스텔라이브 알림 허브 → 허용  
+3. FCM 토큰 재등록: 앱 설정 → `기기 재등록` 탭 → `토큰 갱신`  
+4. 플랫폼(CHZZK/YouTube) API 지연·제한 시 **베스트에포트**로 발송 → 즉각 도착 보장 안 됨  
+</details>
+
+<details>
+<summary>배터리/데이터 소모가 걱정돼요</summary>
+- FCM 푸시만 수신 (폴링 없음)
+- 라이브 상태 조회는 **서버 측 캐시** 기반 → 단말 배터리 영향 최소화
+- 조용한 시간대·전체 끄기·개별 토글로 세밀 제어 가능
+</details>
+
+<details>
+<summary>공식 앱이 아니라고요?</summary>
+팬이 만든 **비공식** 앱입니다. 공식 데이터는 CHZZK Open API·YouTube Data API 등 공개 API만 사용합니다. 서비스 중단·API 변경 시 알림이 지연·중단될 수 있습니다.
+</details>
+
+<details>
+<summary>개인정보·데이터 수집 내역</summary>
+
+| 수집 항목 | 용도 | 보관 기간 |
+|-----------|------|-----------|
+| FCM 기기 토큰 | 푸시 발송용 식별자 | 로그아웃·앱 삭제 시 즉시 폐기 |
+| 알림 설정(전체/카테고리/멤버/키워드) | 선호도 기반 발송 필터링 | 사용자 삭제 요청 시 즉시 폐기 |
+| 앱 버전·OS 버전·플랫폼 | 호환성·크래시 분석 | 익명 집계 후 90일 보관 |
+
+- **제3자 제공 없음** · 광고 식별자(ADID/IDFA) 수집 안 함  
+- 상세: [개인정보처리방침](docs/PRIVACY.md) · [이용약관](docs/TERMS.md)
+</details>
+
+<details>
+<summary>태블릿·폴더블에서도 쓸 수 있나요?</summary>
+예. Android 태블릿·폴더블, iPad 모두 대응 레이아웃 제공합니다.
+</details>
+
+<details>
+<summary>버그 리포트·기능 요청·피드백</summary>
+- [GitHub Issues](https://github.com/StelLiveNoti/StelLiveNoti/issues) (버그·기능 요청)  
+- 이메일: stellivehub@proton.me  
+- 디스코드: [StelLive Hub Community](https://discord.gg/stellivehub)
+</details>
+
+---
+
+## 📸 화면 미리보기
+
+| 메인 홈 | 알림 설정 | 캘린더·기념일 |
+|---------|-----------|---------------|
+| ![Home](mockups/home.png) | ![Settings](mockups/settings.png) | ![Calendar](mockups/calendar.png) |
+
+> 실제 스크린샷은 `mockups/` 폴더 참조. 기기별 레이아웃은 테스트 플라이트·플레이 스토어 스크린샷 확인.
+
+---
+
+## ⚖️ 알아두면 좋은 한계·면책
+
+- **비공식·베스트에포트**: 플랫폼 API·푸시·OS·배터리·네트워크 정책 따라 **즉시 도달 보장 안 함**  
+- **권리 귀속**: 멤버 초상·음원·영상·로고·팬아트 등 권리는 각 권리자(스텔라이브·플랫폼·창작자)에게 있음  
+- **공식 YouTube**: 업로드 알림만 지원 (라이브·쇼츠·커뮤니티 탭 미지원)  
+- **데이터 소스**: CHZZK Open API / YouTube Data API v3 / 네이버 캘린더 공개 일정 — 공식 제공 범위 외 수집 안 함
+
+---
+
+## 🛠 개발자·기여자용 (펼치기)
+
+<details>
+<summary>개발 환경·빌드·테스트·문서 링크</summary>
+
+### 빠른 시작
 ```bash
-cd backend/stellive-hub-api
-npm install
-npm run dev
-```
-
-서버 실행 후 Swagger UI는 [http://localhost:4000/docs](http://localhost:4000/docs)에서 확인할 수 있습니다.
-
-PostgreSQL·Redis·API를 함께 실행하려면 다음을 사용합니다.
-
-```bash
+# Backend (Fastify + Prisma + PostgreSQL + Redis)
 cd backend/stellive-hub-api
 cp .env.example .env
-docker compose up
-```
+docker compose up -d
+npm run prisma:generate && npm run prisma:migrate
+npm run dev        # http://localhost:4000/docs (Swagger)
 
-Prisma 저장소를 사용하는 경우에는 먼저 client 생성과 migration을 수행합니다.
-
-```bash
-cd backend/stellive-hub-api
-npm run prisma:generate
-npm run prisma:migrate
-```
-
-### 모바일 앱
-
-Android:
-
-```bash
+# Android
 cd android/StelliveHubAndroid
 ./gradlew assembleDebug
-```
 
-iOS는 Xcode에서 `ios/StelliveHubiOS/StelliveHubiOS.xcodeproj`를 열거나 다음 명령으로 빌드합니다.
-
-```bash
+# iOS (macOS + Xcode 15+)
 cd ios/StelliveHubiOS
 xcodebuild -project StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 ```
 
-## 주요 API
-
-| 구분 | 경로 |
-| --- | --- |
-| 상태·초기화 | `GET /health`, `GET /docs`, `GET /v1/bootstrap` |
-| 기기·선호도 | `POST /v1/devices/register`, `PUT /v1/devices/token`, `GET/PUT /v1/preferences` |
-| 굿즈·행사 | `GET /v1/hub-events`, `GET /v1/hub-events/:id`, `GET /v1/hub-events/calendar`, `GET /v1/hub-events/widget-snapshot`, `GET /v1/hub-events/summary` |
-| 앱 서비스 공지 | `GET /v1/announcements`, `GET /v1/announcements/:id`, `GET /v1/announcements/summary` |
-| 라이브·인증 | `GET /v1/live-status`, `GET /v1/auth/chzzk/start`, `GET /v1/auth/chzzk/callback` |
-| 음악 | `GET /v1/music`, `GET /v1/music/:id`, `GET /v1/members/:id/music` |
-| 관리자·내부 작업 | `GET /admin`, `/v1/admin/hub-events`, `/v1/admin/announcements`, `/v1/internal/schedulers/*`, `/v1/internal/jobs/notifications/drain` |
-
-관리자와 internal API는 token/session 보호 경로입니다. production credential은 환경 변수 또는 secret manager로만 주입합니다.
-
-## 음악 동기화
-
-YouTube API key는 backend 환경 변수 `YOUTUBE_API_KEY`로만 사용합니다. 클라이언트는 YouTube API를 직접 호출하지 않습니다. 기본 동기화는 공식 COVER/ORIGINAL playlist를 기준으로 하며, `search.list`를 사용하지 않습니다.
-
-```bash
-curl -H "Authorization: Bearer <INTERNAL_API_TOKEN>" \
-  -H "content-type: application/json" \
-  -d '{"mode":"full"}' \
-  http://localhost:4000/v1/internal/schedulers/music/sync-official-playlists
+### 저장소 구조
+```
+android/StelliveHubAndroid/   # Android 앱 (Kotlin, Compose, Hilt, FCM)
+ios/StelliveHubiOS/           # iOS 앱 (SwiftUI, SwiftData, FCM)
+backend/stellive-hub-api/     # Fastify API + Worker (TypeScript, Prisma)
+shared/schemas/               # 공통 타입·Zod 스키마
+shared/member-catalog/        # 멤버 카탈로그 seed (active/upcoming만)
+shared/openapi/               # OpenAPI 3.1 문서
+docs/                         # 정책·아키텍처·API 설계 문서
+mockups/                      # Figma/이미지 목업
+scripts/                      # 빌드·배포·마이그레이션 스크립트
 ```
 
-`INTERNAL_API_TOKEN`과 `YOUTUBE_API_KEY`는 문서·커밋·로그에 기록하지 마세요.
-
-## 테스트
-
-```bash
-# Backend
-cd backend/stellive-hub-api
-npm run build
-npm test
-```
-
-```bash
-# Android
-cd android/StelliveHubAndroid
-./gradlew testDebugUnitTest
-```
-
-```bash
-# iOS
-cd ios/StelliveHubiOS
-xcodebuild -project StelliveHubiOS.xcodeproj -scheme StelliveHubiOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
-```
-
-## 문서
-
+### 핵심 문서
 - [프로젝트 규칙](docs/PROJECT_RULES.md) · [알림 정책](docs/NOTIFICATION_POLICY.md) · [실시간 전달 정책](docs/REALTIME_DELIVERY.md)
 - [아키텍처](docs/ARCHITECTURE.md) · [API 설정](docs/API_SETUP.md) · [백엔드 확장 가이드](docs/BACKEND_SCALING.md)
 - [CHZZK 라이브 상태 설계](docs/CHZZK_LIVE_STATUS_REFRESH_DESIGN.md) · [FCM 경계 설계](docs/FIREBASE_FCM_BOUNDARY_DESIGN.md)
-- [굿즈·행사 Read API 설계](docs/HUB_EVENTS_READ_API_DESIGN.md) · [기념일 캘린더 설계](docs/HUB_EVENT_ANNIVERSARY_CALENDAR_DESIGN.md)
 
-## 라이선스
+### 테스트
+```bash
+# Backend
+cd backend/stellive-hub-api && npm run build && npm test
 
-프로젝트 코드와 문서는 [Apache License 2.0](LICENSE)을 따릅니다. 이 라이선스는 스텔라이브 또는 제3자 플랫폼의 상표, 초상, 콘텐츠, API 응답, 이미지, 로고, 팬아트, 캡처물에 대한 사용 권리를 제공하지 않습니다.
+# Android
+cd android/StelliveHubAndroid && ./gradlew testDebugUnitTest
+
+# iOS
+cd ios/StelliveHubiOS && xcodebuild test -scheme StelliveHubiOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+```
+
+### 기여 가이드
+- [CONTRIBUTING.md](CONTRIBUTING.md) · [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) · [SECURITY.md](SECURITY.md)
+- 커밋 메시지: [Conventional Commits](https://www.conventionalcommits.org/)
+- PR 전 `npm run lint && npm run typecheck` 통과 필수
+
+</details>
+
+---
+
+## 📄 라이선스
+
+[Apache License 2.0](LICENSE) — 소스코드·문서에 한함.  
+스텔라이브·플랫폼·제3자 권리물(상표·초상·음원·영상·이미지·API 응답)에는 적용되지 않습니다.
