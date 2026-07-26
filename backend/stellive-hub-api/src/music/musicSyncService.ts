@@ -268,13 +268,19 @@ export class MusicSyncService {
     status: "ok" | "partial";
     sourceCount: number;
     failedCount: number;
+    insertedOrUpdatedCount: number;
+    missingCount: number;
     quotaUnits: number;
   }> {
     const sources = await this.options.repository.listActiveSourcePlaylists();
     let failedCount = 0;
+    let insertedOrUpdatedCount = 0;
+    let missingCount = 0;
     let quotaUnits = 0;
     for (const source of sources) {
       const result = await this.syncSourcePlaylist(source, mode);
+      insertedOrUpdatedCount += result.insertedOrUpdatedCount;
+      missingCount += result.missingCount;
       quotaUnits += result.quotaUnits;
       if (result.status !== "ok") failedCount += 1;
     }
@@ -282,6 +288,8 @@ export class MusicSyncService {
       status: failedCount === 0 ? "ok" : "partial",
       sourceCount: sources.length,
       failedCount,
+      insertedOrUpdatedCount,
+      missingCount,
       quotaUnits,
     };
   }

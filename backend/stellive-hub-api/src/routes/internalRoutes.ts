@@ -125,6 +125,8 @@ export interface InternalRouteDependencies {
       status: string;
       sourceCount?: number;
       failedCount?: number;
+      insertedOrUpdatedCount?: number;
+      missingCount?: number;
       quotaUnits?: number;
     }>;
     syncOfficialStelliveMusicPlaylists?(mode: "light" | "full" | "manual"): MaybePromise<unknown>;
@@ -193,6 +195,15 @@ function hasSuccessfulMusicChanges(
   if (mutationCounts.length > 0) return mutationCounts.some((count) => count > 0);
   return fallbackKeys.some((key) =>
     typeof result[key] === "number" && Number.isFinite(result[key]) && result[key] > 0
+  );
+}
+
+function hasSuccessfulMusicSourceChanges(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const result = value as Record<string, unknown>;
+  if (result.status !== "ok" && result.status !== "partial") return false;
+  return [result.insertedOrUpdatedCount, result.missingCount].some((count) =>
+    typeof count === "number" && Number.isFinite(count) && count > 0
   );
 }
 
@@ -475,8 +486,9 @@ app.post("/v1/internal/schedulers/music/sync", async (request, reply) => {
   if (!parsed.ok) return reply.code(400).send({ error: "music_sync_body_invalid" });
   if (!dependencies.musicSync) {
     return { status: "disabled", reason: "music_sync_not_configured" };
-    }
+  }
   const result = await dependencies.musicSync.syncAllMusic(parsed.mode);
+  if (hasSuccessfulMusicSourceChanges(result)) options.invalidateMusicCatalogCache?.();
   return { ok: true, ...result };
 });
 
@@ -612,7 +624,11 @@ app.post("/v1/internal/schedulers/music/repair-source-type-mismatches", async ()
   if (!dependencies.musicSync?.repairSourceTypeMismatches) {
     return { status: "disabled", reason: "music_source_type_repair_not_configured" };
   }
-  return dependencies.musicSync.repairSourceTypeMismatches();
+  const result = await dependencies.musicSync.repairSourceTypeMismatches();
+  if (hasSuccessfulMusicChanges(result, ["repaired"])) {
+    options.invalidateMusicCatalogCache?.();
+  }
+  return result;
 });
 
   app.post("/v1/internal/schedulers/hub-events/statuses/reconcile", async () => {
