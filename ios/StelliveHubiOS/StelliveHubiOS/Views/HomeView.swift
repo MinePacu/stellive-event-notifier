@@ -64,8 +64,7 @@ struct HomeView: View {
                                 onToggleFavorite: { favoritesStore.toggle($0) }
                             )
                                 .listRowInsets(IOSSongPagePolicy.songRowInsets)
-                                .listRowSeparator(.hidden)
-                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.visible)
                         }
                     }
 
