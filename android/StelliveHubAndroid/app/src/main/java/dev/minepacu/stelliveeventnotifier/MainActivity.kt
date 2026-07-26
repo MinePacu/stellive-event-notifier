@@ -122,6 +122,9 @@ import dev.minepacu.stelliveeventnotifier.feature.songs.SongDetailPolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenPreferenceStore
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenTarget
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarCard
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarMode
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarPolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailFormatting
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventHeroTagTone
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventImagePolicy
@@ -419,6 +422,9 @@ private var expandedReservationHelpFaqId: ReservationHelpFaqId? = null
 private val reservationHelpFaqUiStates = mutableMapOf<ReservationHelpFaqId, ReservationHelpFaqUiState>()
 private var expandedHubEventScheduleEventId: String? = null
 private val expandedHubEventScheduleItemIds = mutableSetOf<String>()
+private var detailCalendarSelectionEventId: String? = null
+private var detailCalendarSelectedDate: LocalDate? = null
+private val detailCalendarSelectedScheduleItemIds = mutableSetOf<String>()
 private var selectedAnnouncementId: String? = null
 private var announcementsSummary = AnnouncementsSummary()
 private var announcementItems: List<ServiceAnnouncement> = emptyList()
@@ -3531,6 +3537,11 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
             ?: repository.hubEvents.firstOrNull { it.id == selectedHubEventId }
 
     private fun renderHubEventDetailInto(container: LinearLayout, event: HubEvent, fullScreen: Boolean) {
+        if (detailCalendarSelectionEventId != event.id || selectedHubEventScheduleItemId != null) {
+            detailCalendarSelectionEventId = event.id
+            detailCalendarSelectedDate = null
+            detailCalendarSelectedScheduleItemIds.clear()
+        }
         val resolvedExpandedIds = HubEventLinkPolicy.resolvedExpandedScheduleItemIds(
             previousEventId = expandedHubEventScheduleEventId,
             eventId = event.id,
@@ -3560,11 +3571,61 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
             ).let { if (fullScreen) it.withDetailHorizontalMargins() else it }
         )
         val timeline = HubEventDetailFormatting.timeline(event)
-        if (HubEventDetailFormatting.hasTimelineSchedule(event) && timeline.isNotEmpty()) {
+        val scheduleCardsById = mutableMapOf<String, MaterialCardView>()
+        val initialCalendarPresentation = HubEventDetailCalendarPolicy.build(
+            event = event,
+            highlightedScheduleItemId = selectedHubEventScheduleItemId,
+        )
+        val calendarPresentation = detailCalendarSelectedDate
+            ?.takeIf { selectedHubEventScheduleItemId == null && initialCalendarPresentation.day(it) != null }
+            ?.let { selectedDate ->
+                initialCalendarPresentation.copy(
+                    selectedDate = selectedDate,
+                    displayedMonth = YearMonth.from(selectedDate),
+                )
+            }
+            ?: initialCalendarPresentation
+        if (selectedHubEventScheduleItemId == null && detailCalendarSelectedDate == null) {
+            detailCalendarSelectedDate = calendarPresentation.initialSelectedDate
+            detailCalendarSelectedScheduleItemIds.clear()
+            calendarPresentation.initialSelectedDate
+                ?.let(calendarPresentation::scheduleIdsFor)
+                ?.let(detailCalendarSelectedScheduleItemIds::addAll)
+        }
+        if (calendarPresentation.mode != HubEventDetailCalendarMode.HIDDEN) {
+            container.addView(sectionLabel("행사 일정").let { if (fullScreen) it.withDetailHorizontalMargins() else it })
+            container.addView(
+                HubEventDetailCalendarCard(
+                    context = this,
+                    event = event,
+                    presentation = calendarPresentation,
+                ) { selectedDate, scheduleIds ->
+                    detailCalendarSelectionEventId = event.id
+                    detailCalendarSelectedDate = selectedDate
+                    selectedHubEventScheduleItemId = null
+                    detailCalendarSelectedScheduleItemIds.clear()
+                    detailCalendarSelectedScheduleItemIds.addAll(scheduleIds)
+                    scheduleCardsById.forEach { (scheduleId, card) ->
+                        updateHubEventScheduleCardHighlight(
+                            card = card,
+                            highlighted = scheduleId in detailCalendarSelectedScheduleItemIds,
+                        )
+                    }
+                    val firstCard = scheduleIds.firstOrNull()?.let(scheduleCardsById::get)
+                    if (scheduleIds.size == 1 && firstCard != null && !firstCard.isActivated) {
+                        firstCard.performClick()
+                    }
+                    firstCard?.let(::scrollHubEventScheduleCardIntoView)
+                }.let { if (fullScreen) it.withDetailHorizontalMargins() else it },
+            )
+        }
+        if (timeline.isNotEmpty()) {
             container.addView(sectionLabel("세부 일정").let { if (fullScreen) it.withDetailHorizontalMargins() else it })
             val effectivePrimaryId = HubEventLinkPolicy.effectivePrimaryScheduleItemId(event)
             timeline.forEach { item ->
-                val highlighted = item.schedule.id == selectedHubEventScheduleItemId
+                val highlighted =
+                    item.schedule.id == selectedHubEventScheduleItemId ||
+                        item.schedule.id in detailCalendarSelectedScheduleItemIds
                 val card = hubEventScheduleCard(
                     item = item,
                     highlighted = highlighted,
@@ -3572,8 +3633,12 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
                     initiallyExpanded = item.schedule.id in expandedHubEventScheduleItemIds,
                 )
                     .let { if (fullScreen) it.withDetailHorizontalMargins() else it }
+                scheduleCardsById[item.schedule.id] = card as MaterialCardView
                 container.addView(card)
             }
+            selectedHubEventScheduleItemId
+                ?.let(scheduleCardsById::get)
+                ?.post { selectedHubEventScheduleItemId?.let(scheduleCardsById::get)?.let(::scrollHubEventScheduleCardIntoView) }
         }
         container.addView(sectionLabel("행사 정보").let { if (fullScreen) it.withDetailHorizontalMargins() else it })
         container.addView(
@@ -3599,11 +3664,7 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = dp(10)
         }
-        if (highlighted) {
-            strokeWidth = dp(2)
-            strokeColor = color(R.color.hub_primary)
-            setCardBackgroundColor(color(R.color.hub_accent_soft))
-        }
+        updateHubEventScheduleCardHighlight(this, highlighted)
         alpha = if (item.schedule.cancelledAt != null) 0.58f else 1f
         val content = LinearLayout(context).apply {
             val detailContainer = this
@@ -3695,6 +3756,7 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
 
             fun updateExpansionPresentation(animate: Boolean) {
                 details.isVisible = expanded
+                scheduleCard.isActivated = expanded
                 val targetRotation = if (expanded) 180f else 0f
                 if (animate) {
                     chevron.animate()
@@ -3731,6 +3793,43 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
             }
         }
         addView(content)
+    }
+
+    private fun updateHubEventScheduleCardHighlight(
+        card: MaterialCardView,
+        highlighted: Boolean,
+    ) {
+        card.isSelected = highlighted
+        card.strokeWidth = if (highlighted) dp(2) else 0
+        card.strokeColor = if (highlighted) color(R.color.hub_primary) else color(R.color.hub_line)
+        card.setCardBackgroundColor(
+            color(if (highlighted) R.color.hub_accent_soft else R.color.hub_card_surface),
+        )
+        ViewCompat.setStateDescription(card, if (highlighted) "선택한 날짜의 일정" else null)
+    }
+
+    private fun scrollHubEventScheduleCardIntoView(card: MaterialCardView) {
+        card.post {
+            var descendant: View = card
+            var targetY = 0
+            while (true) {
+                targetY += descendant.top
+                when (val parent = descendant.parent) {
+                    is NestedScrollView -> {
+                        parent.smoothScrollTo(0, (targetY - dp(16)).coerceAtLeast(0))
+                        break
+                    }
+                    is ScrollView -> {
+                        parent.smoothScrollTo(0, (targetY - dp(16)).coerceAtLeast(0))
+                        break
+                    }
+                    is View -> descendant = parent
+                    else -> break
+                }
+            }
+            card.requestFocus()
+            card.announceForAccessibility("선택한 세부 일정으로 이동")
+        }
     }
 
     private fun scheduleStateBadgeTone(stateText: String): ScheduleBadgeTone = when (stateText) {
