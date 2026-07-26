@@ -1,0 +1,57 @@
+name: Sync docs to Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Clone Wiki repo
+        run: |
+          git clone https://x-access-token:${{ secrets.WIKI_SYNC_TOKEN }}@github.com/MinePacu/stellive-event-notifier.wiki.git wiki-sync
+
+      - name: Sync docs to wiki
+        run: |
+          cd wiki-sync
+          
+          # Create directory structure
+          mkdir -p "개발자-문서/백엔드-가이드" "개발자-문서/안드로이드-가이드" "개발자-문서/iOS-가이드" "개발자-문서/공통-스키마"
+          mkdir -p "정책-참조" "프로젝트-관리/아키텍처-결정-기록" "사용자-가이드/플랫폼별-가이드"
+          
+          # Copy docs files (convert .md to wiki format if needed)
+          # Note: Wiki uses same .md format, just need to handle Korean filenames
+          cp -r ../docs/* . 2>/dev/null || true
+          
+          # Remove any files that shouldn't be in wiki
+          rm -f PRIVACY.md TERMS.md 2>/dev/null || true
+
+      - name: Commit and push to Wiki
+        run: |
+          cd wiki-sync
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "docs: sync from main repo $(date +%Y-%m-%d)"
+            git push origin master
+          fi
+        env:
+          WIKI_SYNC_TOKEN: ${{ secrets.WIKI_SYNC_TOKEN }}
