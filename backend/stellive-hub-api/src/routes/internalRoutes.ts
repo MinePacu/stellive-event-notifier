@@ -156,6 +156,7 @@ export interface InternalRouteDependencies {
 export interface InternalRouteOptions {
   env: AppEnv;
   dependencies?: Partial<InternalRouteDependencies>;
+  invalidateMusicCatalogCache?: () => void;
 }
 
 const neverCheckedAt = new Date(0).toISOString();
@@ -176,6 +177,32 @@ function parseInternalLimit(value: unknown, defaultLimit: number): number {
   if (!Number.isFinite(parsed)) return defaultLimit;
   if (parsed <= 0) return defaultLimit;
   return Math.min(100, Math.max(1, Math.trunc(parsed)));
+}
+
+function hasSuccessfulMusicChanges(
+  value: unknown,
+  mutationKeys: string[],
+  fallbackKeys: string[] = [],
+): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const result = value as Record<string, unknown>;
+  if (result.status !== undefined && result.status !== "ok") return false;
+  const mutationCounts = mutationKeys
+    .map((key) => result[key])
+    .filter((count): count is number => typeof count === "number" && Number.isFinite(count));
+  if (mutationCounts.length > 0) return mutationCounts.some((count) => count > 0);
+  return fallbackKeys.some((key) =>
+    typeof result[key] === "number" && Number.isFinite(result[key]) && result[key] > 0
+  );
+}
+
+function isSuccessfulOverrideWrite(value: unknown): boolean {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    !("error" in value),
+  );
 }
 
 function kstYear(value: Date): number {
@@ -460,6 +487,9 @@ app.post("/v1/internal/schedulers/music/sync-official-playlists", async (request
     return { status: "disabled", reason: "official_music_sync_not_configured" };
   }
   const result = await dependencies.musicSync.syncOfficialStelliveMusicPlaylists(parsed.mode);
+  if (hasSuccessfulMusicChanges(result, ["inserted", "updated"], ["uniqueVideos"])) {
+    options.invalidateMusicCatalogCache?.();
+  }
   return { ok: true, ...(typeof result === "object" && result !== null ? result : { status: result }) };
 });
 
@@ -477,6 +507,7 @@ app.patch<{ Params: { videoId: string } }>("/v1/internal/music/videos/:videoId/o
     return reply.code(400).send({ error: "music_override_body_invalid" });
   }
   const item = await dependencies.musicSync.upsertOverride(request.params.videoId, (request.body ?? {}) as Record<string, unknown>);
+  if (isSuccessfulOverrideWrite(item)) options.invalidateMusicCatalogCache?.();
   return { ok: true, item };
 });
 
@@ -497,7 +528,11 @@ app.post("/v1/internal/music/ingest-videos", async (request, reply) => {
   if (!dependencies.musicSync?.ingestVideos) {
     return reply.code(503).send({ error: "music_video_ingest_not_configured" });
   }
-  return dependencies.musicSync.ingestVideos(parsed.value);
+  const result = await dependencies.musicSync.ingestVideos(parsed.value);
+  if (!result.summary.dryRun && result.summary.inserted + result.summary.updated > 0) {
+    options.invalidateMusicCatalogCache?.();
+  }
+  return result;
 });
 
 app.get("/v1/internal/music/config-diagnostics", async () => {
@@ -555,14 +590,22 @@ app.post("/v1/internal/schedulers/music/discover-channel-uploads", async () => {
   if (!dependencies.musicSync?.discoverChannelUploads) {
     return { status: "not_available", reason: "music_channel_discovery_sync_not_configured" };
   }
-  return dependencies.musicSync.discoverChannelUploads();
+  const result = await dependencies.musicSync.discoverChannelUploads();
+  if (hasSuccessfulMusicChanges(result, ["inserted", "updated"], ["uniqueVideos"])) {
+    options.invalidateMusicCatalogCache?.();
+  }
+  return result;
 });
 
 app.post("/v1/internal/schedulers/music/reclassify-discovered-uploads", async () => {
   if (!dependencies.musicSync?.reclassifyDiscoveredUploads) {
     return { status: "disabled", reason: "music_discovery_reclassification_not_configured" };
   }
-  return dependencies.musicSync.reclassifyDiscoveredUploads();
+  const result = await dependencies.musicSync.reclassifyDiscoveredUploads();
+  if (hasSuccessfulMusicChanges(result, ["hidden", "kept"])) {
+    options.invalidateMusicCatalogCache?.();
+  }
+  return result;
 });
 
 app.post("/v1/internal/schedulers/music/repair-source-type-mismatches", async () => {

@@ -17,7 +17,17 @@ const item: MusicCatalogItem = {
   durationSeconds: 201,
   isInstrumental: false,
   specialFlags: [],
-  members: [{ id: "ayatsuno-yuni", nameKo: "아야츠노 유니", nameEn: "Ayatsuno Yuni", role: "main" }],
+  members: [{
+    id: "ayatsuno-yuni",
+    nameKo: "아야츠노 유니",
+    nameEn: "Ayatsuno Yuni",
+    role: "main",
+    generationId: "gen1",
+    generationName: "1기생",
+    unitName: "Everys",
+  }],
+  generationId: "gen1",
+  generationName: "1기생",
   youtubeUrl: "https://www.youtube.com/watch?v=video-1",
   sourcePlaylistId: "source-1",
   premiere: {
@@ -54,6 +64,11 @@ async function buildRouteApp(cachePolicy = { ttlMs: 300_000, staleMs: 600_000 })
     cache: new ResponseCache(),
     cachePolicy,
     registerMembersListRoute: true,
+    memberMetadataById: new Map([["ayatsuno-yuni", {
+      generationId: "gen1",
+      generationName: "1기생",
+      unitName: "Everys",
+    }]]),
   });
   return { app, repository };
 }
@@ -161,17 +176,47 @@ describe("music routes", () => {
     expect(response.headers["cache-control"]).toBe("private, max-age=12, stale-while-revalidate=34");
   });
 
+  it("force refreshes the normalized cache entry without passing refresh to the repository", async () => {
+    const { app, repository } = await buildRouteApp();
+    const cached = await app.inject({ method: "GET", url: "/v1/music?type=cover" });
+    repository.listMusicItems.mockResolvedValue({
+      items: [{ ...item, title: "새 제목" }],
+      nextCursor: "next",
+    });
+
+    const refreshed = await app.inject({ method: "GET", url: "/v1/music?refresh=true&type=cover" });
+    const afterRefresh = await app.inject({ method: "GET", url: "/v1/music?type=cover&refresh=false" });
+    await app.close();
+
+    expect(cached.json().items[0].title).toBe(item.title);
+    expect(refreshed.headers["cache-control"]).toBe("no-store");
+    expect(refreshed.json().items[0].title).toBe("새 제목");
+    expect(afterRefresh.json()).toEqual(refreshed.json());
+    expect(repository.listMusicItems).toHaveBeenCalledTimes(2);
+    expect(repository.listMusicItems).toHaveBeenLastCalledWith({
+      type: "cover",
+      sort: "publishedAt_desc",
+    });
+  });
+
   it("rejects invalid list query values", async () => {
     const { app } = await buildRouteApp();
     const response = await app.inject({ method: "GET", url: "/v1/music?type=live&limit=300" });
     const invalidSort = await app.inject({ method: "GET", url: "/v1/music?sort=newest" });
     const rawCursor = await app.inject({ method: "GET", url: "/v1/music?cursor=music-legacy-id" });
+    const invalidRefresh = await app.inject({ method: "GET", url: "/v1/music?refresh=1" });
+    const invalidMemberRefresh = await app.inject({
+      method: "GET",
+      url: "/v1/members/ayatsuno-yuni/music?refresh=True",
+    });
     await app.close();
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: "invalid_music_query" });
     expect(invalidSort.statusCode).toBe(400);
     expect(rawCursor.statusCode).toBe(400);
+    expect(invalidRefresh.statusCode).toBe(400);
+    expect(invalidMemberRefresh.statusCode).toBe(400);
   });
 
   it("GET /v1/music/:id returns detail or 404", async () => {
@@ -191,11 +236,18 @@ describe("music routes", () => {
 
     const members = await app.inject({ method: "GET", url: "/v1/members" });
     const memberMusic = await app.inject({ method: "GET", url: "/v1/members/ayatsuno-yuni/music?type=all" });
+    const refreshedMemberMusic = await app.inject({
+      method: "GET",
+      url: "/v1/members/ayatsuno-yuni/music?type=all&refresh=true",
+    });
     await app.close();
 
     expect(members.statusCode).toBe(200);
     expect(members.json()).toEqual({ items: [{ id: "ayatsuno-yuni", nameKo: "아야츠노 유니", nameEn: "Ayatsuno Yuni" }] });
     expect(memberMusic.statusCode).toBe(200);
+    expect(refreshedMemberMusic.statusCode).toBe(200);
+    expect(refreshedMemberMusic.headers["cache-control"]).toBe("no-store");
+    expect(repository.listMusicItems).toHaveBeenCalledTimes(2);
     expect(repository.listMusicItems).toHaveBeenLastCalledWith({
       type: "all",
       memberId: "ayatsuno-yuni",

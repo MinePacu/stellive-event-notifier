@@ -35,6 +35,7 @@ export interface AppRouteDependencies {
   announcements?: ServiceAnnouncementReadService;
   hubEvents?: HubEventReadPort;
   songs?: SongRepository;
+  musicCache?: ResponseCache;
   hubCalendarSpecialDays?: HubCalendarSpecialDay[];
   hubCalendarSpecialDayOccurrences?: {
     listRange(filters: {
@@ -285,7 +286,17 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
   });
   await registerMusicRoutes(app, {
     registerMembersListRoute: false,
-    cache: new ResponseCache({ maxEntries: options.env?.MUSIC_CACHE_MAX_ENTRIES }),
+    cache: options.dependencies?.musicCache ?? new ResponseCache({
+      maxEntries: options.env?.MUSIC_CACHE_MAX_ENTRIES,
+    }),
+    memberMetadataById: new Map(catalog.getMembers().map((member) => [
+      member.id,
+      {
+        generationId: member.generationId,
+        generationName: member.generationName,
+        unitName: member.unitName,
+      },
+    ])),
     cachePolicy: {
       ttlMs: (options.env?.MUSIC_CACHE_TTL_SECONDS ?? 300) * 1_000,
       staleMs: (options.env?.MUSIC_CACHE_STALE_SECONDS ?? 600) * 1_000,

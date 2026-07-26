@@ -46,6 +46,68 @@ describe("ResponseCache", () => {
     expect(loadFresh).toHaveBeenCalledTimes(1);
   });
 
+  it("force-loads a fresh value once and replaces a still-fresh cached value", async () => {
+    const cache = new ResponseCache();
+    const policy = { ttlMs: 1_000, staleMs: 1_000 };
+    await cache.getOrLoad("music", policy, async () => "old");
+    const loadFresh = vi.fn(async () => "new");
+
+    await expect(Promise.all([
+      cache.getOrLoadFresh("music", policy, loadFresh),
+      cache.getOrLoadFresh("music", policy, loadFresh),
+    ])).resolves.toEqual(["new", "new"]);
+    await expect(cache.getOrLoad("music", policy, loadFresh)).resolves.toBe("new");
+    expect(loadFresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves an existing cached value when a forced load fails", async () => {
+    const cache = new ResponseCache();
+    const policy = { ttlMs: 1_000, staleMs: 1_000 };
+    await cache.getOrLoad("music", policy, async () => "old");
+
+    await expect(cache.getOrLoadFresh("music", policy, async () => {
+      throw new Error("db down");
+    })).rejects.toThrow("db down");
+    await expect(cache.getOrLoad("music", policy, async () => "unexpected")).resolves.toBe("old");
+  });
+
+  it("invalidates matching prefixes without evicting unrelated entries", async () => {
+    const cache = new ResponseCache();
+    const policy = { ttlMs: 1_000, staleMs: 1_000 };
+    const music = vi.fn(async () => "music");
+    const memberMusic = vi.fn(async () => "member");
+    const other = vi.fn(async () => "other");
+    await cache.getOrLoad("/v1/music?type=all", policy, music);
+    await cache.getOrLoad("/v1/members/member-1/music", policy, memberMusic);
+    await cache.getOrLoad("/v1/songs", policy, other);
+
+    expect(cache.invalidatePrefix("/v1/music")).toBe(1);
+    await cache.getOrLoad("/v1/music?type=all", policy, music);
+    await cache.getOrLoad("/v1/members/member-1/music", policy, memberMusic);
+    await cache.getOrLoad("/v1/songs", policy, other);
+
+    expect(music).toHaveBeenCalledTimes(2);
+    expect(memberMusic).toHaveBeenCalledTimes(1);
+    expect(other).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not repopulate an invalidated key from an older in-flight load", async () => {
+    const cache = new ResponseCache();
+    const policy = { ttlMs: 1_000, staleMs: 1_000 };
+    let finishOldLoad: ((value: string) => void) | undefined;
+    const oldLoad = cache.getOrLoad("/v1/music", policy, () => new Promise<string>((resolve) => {
+      finishOldLoad = resolve;
+    }));
+    await Promise.resolve();
+    cache.invalidatePrefix("/v1/music");
+    const newLoad = vi.fn(async () => "new");
+
+    finishOldLoad?.("old");
+    await expect(oldLoad).resolves.toBe("old");
+    await expect(cache.getOrLoad("/v1/music", policy, newLoad)).resolves.toBe("new");
+    expect(newLoad).toHaveBeenCalledOnce();
+  });
+
   it("keeps serving stale value when refresh fails", async () => {
     let nowMs = 0;
     const cache = new ResponseCache({ now: () => nowMs });

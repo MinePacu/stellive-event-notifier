@@ -1,7 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import type { MusicCatalogDetail, MusicCatalogItem, MusicPublicTypeFilter } from "../../../../shared/schemas/domain.js";
 import { ResponseCache, type ResponseCachePolicy } from "../cache/responseCache.js";
-import { toMusicCatalogDetailDto, toMusicCatalogDto } from "../music/musicDto.js";
+import {
+  createMusicCatalogDtoMapper,
+  type MusicCatalogMemberMetadata,
+} from "../music/musicDto.js";
 import {
   isMusicCursorValidForSort,
   PrismaMusicRepository,
@@ -30,6 +33,7 @@ export interface MusicRoutesOptions {
   cache?: ResponseCache;
   cachePolicy?: ResponseCachePolicy;
   registerMembersListRoute?: boolean;
+  memberMetadataById?: ReadonlyMap<string, MusicCatalogMemberMetadata>;
 }
 
 const defaultCachePolicy = { ttlMs: 300_000, staleMs: 600_000 };
@@ -39,20 +43,24 @@ export default async function registerMusicRoutes(app: FastifyInstance, options:
   const repository = options.repository ?? new PrismaMusicRepository() as unknown as MusicRoutesRepository;
   const cache = options.cache ?? new ResponseCache();
   const cachePolicy = options.cachePolicy ?? defaultCachePolicy;
+  const dtoMapper = createMusicCatalogDtoMapper(options.memberMetadataById ?? new Map());
 
   app.get("/v1/music", async (request, reply) => {
     const parsed = parseMusicListQuery(request.query as Record<string, unknown>);
     if (!parsed.ok) return reply.code(400).send({ error: "invalid_music_query" });
-    setMusicCacheHeader(reply, cachePolicy);
+    setMusicCacheHeader(reply, cachePolicy, parsed.refresh);
     const key = normalizedCacheKey("/v1/music", parsed.filters);
-    return cache.getOrLoad(key, cachePolicy, async () => {
+    const loadFresh = async () => {
       const result = await repository.listMusicItems(parsed.filters);
       return {
-        items: result.items.map(toMusicCatalogDto),
+        items: result.items.map(dtoMapper.toMusicCatalogDto),
         nextCursor: result.nextCursor ?? null,
         serverTime: new Date().toISOString(),
       };
-    });
+    };
+    return parsed.refresh
+      ? cache.getOrLoadFresh(key, cachePolicy, loadFresh)
+      : cache.getOrLoad(key, cachePolicy, loadFresh);
   });
 
   app.get("/v1/music/:id", async (request, reply) => {
@@ -60,7 +68,7 @@ export default async function registerMusicRoutes(app: FastifyInstance, options:
     const found = await repository.getMusicItem?.(id);
     if (!found) return reply.code(404).send({ error: "music_not_found" });
     setMusicCacheHeader(reply, cachePolicy);
-    return toMusicCatalogDetailDto(found);
+    return dtoMapper.toMusicCatalogDetailDto(found);
   });
 
   if (options.registerMembersListRoute !== false) {
@@ -74,21 +82,24 @@ export default async function registerMusicRoutes(app: FastifyInstance, options:
     const { id } = request.params as { id: string };
     const parsed = parseMusicListQuery(request.query as Record<string, unknown>, id);
     if (!parsed.ok) return reply.code(400).send({ error: "invalid_music_query" });
-    setMusicCacheHeader(reply, cachePolicy);
+    setMusicCacheHeader(reply, cachePolicy, parsed.refresh);
     const key = normalizedCacheKey(`/v1/members/${id}/music`, parsed.filters);
-    return cache.getOrLoad(key, cachePolicy, async () => {
+    const loadFresh = async () => {
       const result = await repository.listMusicItems(parsed.filters);
       return {
-        items: result.items.map(toMusicCatalogDto),
+        items: result.items.map(dtoMapper.toMusicCatalogDto),
         nextCursor: result.nextCursor ?? null,
         serverTime: new Date().toISOString(),
       };
-    });
+    };
+    return parsed.refresh
+      ? cache.getOrLoadFresh(key, cachePolicy, loadFresh)
+      : cache.getOrLoad(key, cachePolicy, loadFresh);
   });
 }
 
 function parseMusicListQuery(query: Record<string, unknown>, memberId?: string):
-| { ok: true; filters: { type?: MusicPublicTypeFilter; memberId?: string; cursor?: string; limit?: number; sort?: NormalizedMusicSort; includeGraduated?: boolean; includeInstrumental?: boolean; includeExcluded?: boolean } }
+| { ok: true; filters: { type?: MusicPublicTypeFilter; memberId?: string; cursor?: string; limit?: number; sort?: NormalizedMusicSort; includeGraduated?: boolean; includeInstrumental?: boolean; includeExcluded?: boolean }; refresh: boolean }
 | { ok: false } {
   const type = typeof query.type === "string" ? query.type : "all";
   const requestedSort = typeof query.sort === "string" ? query.sort : "publishedAt_desc";
@@ -105,7 +116,13 @@ function parseMusicListQuery(query: Record<string, unknown>, memberId?: string):
   const includeGraduated = parseBooleanQuery(query.includeGraduated);
   const includeInstrumental = parseBooleanQuery(query.includeInstrumental);
   const includeExcluded = parseBooleanQuery(query.includeExcluded);
-  if (includeGraduated === "invalid" || includeInstrumental === "invalid" || includeExcluded === "invalid") return { ok: false };
+  const refresh = parseBooleanQuery(query.refresh);
+  if (
+    includeGraduated === "invalid" ||
+    includeInstrumental === "invalid" ||
+    includeExcluded === "invalid" ||
+    refresh === "invalid"
+  ) return { ok: false };
 
   return {
     ok: true,
@@ -119,6 +136,7 @@ function parseMusicListQuery(query: Record<string, unknown>, memberId?: string):
       includeInstrumental,
       includeExcluded,
     }),
+    refresh: refresh === true,
   };
 }
 
@@ -144,7 +162,12 @@ function removeUndefined<T extends Record<string, unknown>>(value: T): T {
 function setMusicCacheHeader(
   reply: { header(name: string, value: string): unknown },
   policy: ResponseCachePolicy,
+  forceRefresh = false,
 ) {
+  if (forceRefresh) {
+    reply.header("cache-control", "no-store");
+    return;
+  }
   const maxAgeSeconds = Math.max(0, Math.floor(policy.ttlMs / 1_000));
   const staleSeconds = Math.max(0, Math.floor(policy.staleMs / 1_000));
   reply.header("cache-control", `private, max-age=${maxAgeSeconds}, stale-while-revalidate=${staleSeconds}`);

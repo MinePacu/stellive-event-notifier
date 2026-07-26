@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import { ResponseCache } from "./cache/responseCache.js";
 import { ChzzkAuthClient } from "./adapters/chzzk/chzzkAuthClient.js";
 import ChzzkApiClient from "./adapters/chzzk/chzzkApiClient.js";
 import ChzzkOpenApiAdapter from "./adapters/chzzk/chzzkOpenApiAdapter.js";
@@ -525,6 +526,13 @@ function resolveEnvInput(options: BuildAppOptions): NodeJS.ProcessEnv | Record<s
 export async function buildApp(options: BuildAppOptions = {}) {
   const env = loadEnv(resolveEnvInput(options));
   const app = Fastify({ logger: true });
+  const musicCatalogCache = options.appRoutes?.dependencies?.musicCache ?? new ResponseCache({
+    maxEntries: env.MUSIC_CACHE_MAX_ENTRIES,
+  });
+  const invalidateMusicCatalogCache = () => {
+    musicCatalogCache.invalidatePrefix("/v1/music");
+    musicCatalogCache.invalidatePrefix("/v1/members/");
+  };
   const registerClose = (close: () => Promise<void>) => {
     app.addHook("onClose", async () => close());
   };
@@ -541,6 +549,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   const announcementReads = options.appRoutes?.dependencies?.announcements ?? new ServiceAnnouncementReadService(announcementRepository);
   const appRouteDependencies: AppRouteDependencies = {
     announcements: announcementReads,
+    musicCache: musicCatalogCache,
     ...createDefaultMemberProfileImageHydrator(
       env,
       options.appRoutes?.dependencies,
@@ -634,7 +643,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
   })) {
     app.log.warn({ code }, "music configuration warning");
   }
-  await registerInternalRoutes(app, { env, dependencies: internalRouteDependencies });
+  await registerInternalRoutes(app, {
+    env,
+    dependencies: internalRouteDependencies,
+    invalidateMusicCatalogCache,
+  });
   await registerAdminRoutes(app, { env });
   await registerAdminHubEventRoutes(app, { env, dependencies: options.adminHubEventRoutes?.dependencies });
   const announcementAdminService = options.adminServiceAnnouncementRoutes?.service ?? new ServiceAnnouncementAdminService({

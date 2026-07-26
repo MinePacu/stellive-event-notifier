@@ -16,12 +16,18 @@ interface CacheEntry<T> {
   lastAccessedAt: number;
 }
 
+interface InFlightLoad {
+  promise: Promise<unknown>;
+  revision: number;
+}
+
 export class ResponseCache {
   private readonly now: () => number;
   private readonly maxEntries: number;
   private readonly entries = new Map<string, CacheEntry<unknown>>();
-  private readonly loads = new Map<string, Promise<unknown>>();
-  private readonly refreshes = new Map<string, Promise<unknown>>();
+  private readonly loads = new Map<string, InFlightLoad>();
+  private readonly refreshes = new Map<string, InFlightLoad>();
+  private readonly revisions = new Map<string, number>();
 
   constructor(options: ResponseCacheOptions = {}) {
     this.now = options.now ?? (() => Date.now());
@@ -45,37 +51,60 @@ export class ResponseCache {
 
     if (entry) this.entries.delete(key);
 
-    const existingLoad = this.loads.get(key) as Promise<T> | undefined;
-    if (existingLoad) return existingLoad;
+    return this.getOrLoadFresh(key, policy, loadFresh);
+  }
 
-    const load = loadFresh()
+  async getOrLoadFresh<T>(key: string, policy: ResponseCachePolicy, loadFresh: () => Promise<T>): Promise<T> {
+    const revision = this.revisionFor(key);
+    const existingLoad = this.loads.get(key);
+    if (existingLoad?.revision === revision) return existingLoad.promise as Promise<T>;
+
+    let inFlight: InFlightLoad;
+    const promise = Promise.resolve()
+      .then(loadFresh)
       .then((value) => {
-        this.store(key, value, policy);
+        if (this.revisionFor(key) === revision) this.store(key, value, policy);
         return value;
       })
       .finally(() => {
-        this.loads.delete(key);
+        if (this.loads.get(key) === inFlight) this.loads.delete(key);
       });
-    this.loads.set(key, load);
-    return load;
+    inFlight = { promise, revision };
+    this.loads.set(key, inFlight);
+    return promise;
+  }
+
+  invalidatePrefix(prefix: string): number {
+    const keys = new Set([
+      ...this.entries.keys(),
+      ...this.loads.keys(),
+      ...this.refreshes.keys(),
+    ]);
+    let invalidated = 0;
+    for (const key of keys) {
+      if (!key.startsWith(prefix)) continue;
+      if (this.entries.delete(key)) invalidated += 1;
+      this.revisions.set(key, this.revisionFor(key) + 1);
+    }
+    return invalidated;
   }
 
   async waitForRefreshes(): Promise<void> {
-    await Promise.allSettled([...this.refreshes.values()]);
+    await Promise.allSettled([...this.refreshes.values()].map((refresh) => refresh.promise));
   }
 
   private startRefresh<T>(key: string, policy: ResponseCachePolicy, loadFresh: () => Promise<T>): void {
-    if (this.refreshes.has(key)) return;
-    const refresh = loadFresh()
-      .then((value) => {
-        this.store(key, value, policy);
-        return value;
-      })
+    const revision = this.revisionFor(key);
+    if (this.refreshes.get(key)?.revision === revision) return;
+
+    let inFlight: InFlightLoad;
+    const promise = this.getOrLoadFresh(key, policy, loadFresh)
       .catch(() => undefined)
       .finally(() => {
-        this.refreshes.delete(key);
+        if (this.refreshes.get(key) === inFlight) this.refreshes.delete(key);
       });
-    this.refreshes.set(key, refresh);
+    inFlight = { promise, revision };
+    this.refreshes.set(key, inFlight);
   }
 
   private store<T>(key: string, value: T, policy: ResponseCachePolicy): void {
@@ -115,5 +144,9 @@ export class ResponseCache {
       if (this.entries.size <= this.maxEntries) break;
       this.entries.delete(key);
     }
+  }
+
+  private revisionFor(key: string): number {
+    return this.revisions.get(key) ?? 0;
   }
 }

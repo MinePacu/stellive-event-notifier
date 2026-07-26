@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { buildApp } from "../src/app.js";
+import { ResponseCache } from "../src/cache/responseCache.js";
 import type { InternalRouteDependencies } from "../src/routes/internalRoutes.js";
 
 const env = {
@@ -260,6 +261,173 @@ describe("music internal routes", () => {
     expect(syncLog.json()).toEqual({ items: [{ id: "run-1" }] });
     expect(quota.json()).toEqual({ dailyEstimate: 300 });
     expect(upsertOverride).toHaveBeenCalledWith("video-1", { forceExcluded: true, exclusionReason: "manual" });
+  });
+
+  it("invalidates the app-shared music list caches after successful catalog writes", async () => {
+    const musicCache = new ResponseCache();
+    const invalidatePrefix = vi.spyOn(musicCache, "invalidatePrefix");
+    const ingestVideos = vi.fn(async (input) => ({
+      items: [],
+      summary: {
+        requested: input.requestedCount,
+        uniqueRequested: input.videoIds.length,
+        fetched: 1,
+        inserted: 1,
+        updated: 0,
+        needsReview: 0,
+        skipped: 0,
+        notFound: 0,
+        failed: 0,
+        dryRun: input.dryRun,
+      },
+    }));
+    const app = await buildApp({
+      env: { ...env, MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED: "true" },
+      useProcessEnv: false,
+      appRoutes: { dependencies: { musicCache } },
+      internalRoutes: {
+        dependencies: createInternalDeps({
+          musicSync: {
+            syncAllMusic: vi.fn(),
+            syncOfficialStelliveMusicPlaylists: vi.fn(async () => ({
+              status: "ok",
+              inserted: 1,
+              updated: 0,
+            })),
+            discoverChannelUploads: vi.fn(async () => ({
+              status: "ok",
+              inserted: 0,
+              updated: 1,
+            })),
+            reclassifyDiscoveredUploads: vi.fn(async () => ({
+              status: "ok",
+              checked: 1,
+              hidden: 1,
+              kept: 0,
+              manualSkipped: 0,
+            })),
+            ingestVideos,
+            upsertOverride: vi.fn(async () => ({ videoId: "abcdefghijk", forceExcluded: true })),
+          },
+        }),
+      },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/music/sync-official-playlists",
+      headers: authHeaders,
+    });
+    await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/music/discover-channel-uploads",
+      headers: authHeaders,
+    });
+    await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/music/reclassify-discovered-uploads",
+      headers: authHeaders,
+    });
+    await app.inject({
+      method: "POST",
+      url: "/v1/internal/music/ingest-videos",
+      headers: { ...authHeaders, "content-type": "application/json" },
+      payload: JSON.stringify({ videoIds: ["abcdefghijk"] }),
+    });
+    await app.inject({
+      method: "PATCH",
+      url: "/v1/internal/music/videos/abcdefghijk/override",
+      headers: { ...authHeaders, "content-type": "application/json" },
+      payload: JSON.stringify({ forceExcluded: true }),
+    });
+    await app.close();
+
+    expect(invalidatePrefix).toHaveBeenCalledTimes(10);
+    expect(invalidatePrefix).toHaveBeenCalledWith("/v1/music");
+    expect(invalidatePrefix).toHaveBeenCalledWith("/v1/members/");
+  });
+
+  it("does not invalidate music list caches for no-op, failed, or dry-run writes", async () => {
+    const musicCache = new ResponseCache();
+    const invalidatePrefix = vi.spyOn(musicCache, "invalidatePrefix");
+    const app = await buildApp({
+      env: { ...env, MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED: "true" },
+      useProcessEnv: false,
+      appRoutes: { dependencies: { musicCache } },
+      internalRoutes: {
+        dependencies: createInternalDeps({
+          musicSync: {
+            syncAllMusic: vi.fn(),
+            syncOfficialStelliveMusicPlaylists: vi.fn(async () => ({
+              status: "ok",
+              inserted: 0,
+              updated: 0,
+              uniqueVideos: 3,
+            })),
+            discoverChannelUploads: vi.fn(async () => ({
+              status: "ok",
+              inserted: 0,
+              updated: 0,
+              uniqueVideos: 3,
+            })),
+            reclassifyDiscoveredUploads: vi.fn(async () => ({
+              status: "ok",
+              checked: 2,
+              hidden: 0,
+              kept: 0,
+              manualSkipped: 2,
+            })),
+            ingestVideos: vi.fn(async () => ({
+              items: [],
+              summary: {
+                requested: 1,
+                uniqueRequested: 1,
+                fetched: 1,
+                inserted: 1,
+                updated: 0,
+                needsReview: 0,
+                skipped: 0,
+                notFound: 0,
+                failed: 0,
+                dryRun: true,
+              },
+            })),
+            upsertOverride: vi.fn(async () => ({ error: "music_item_not_found" })),
+          },
+        }),
+      },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/music/sync-official-playlists",
+      headers: authHeaders,
+    });
+    await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/music/discover-channel-uploads",
+      headers: authHeaders,
+    });
+    await app.inject({
+      method: "POST",
+      url: "/v1/internal/schedulers/music/reclassify-discovered-uploads",
+      headers: authHeaders,
+    });
+    await app.inject({
+      method: "POST",
+      url: "/v1/internal/music/ingest-videos",
+      headers: { ...authHeaders, "content-type": "application/json" },
+      payload: JSON.stringify({ videoIds: ["abcdefghijk"], dryRun: true }),
+    });
+    await app.inject({
+      method: "PATCH",
+      url: "/v1/internal/music/videos/abcdefghijk/override",
+      headers: { ...authHeaders, "content-type": "application/json" },
+      payload: JSON.stringify({ forceExcluded: true }),
+    });
+    await app.close();
+
+    expect(invalidatePrefix).not.toHaveBeenCalled();
   });
 
   it("rejects invalid music sync mode", async () => {
