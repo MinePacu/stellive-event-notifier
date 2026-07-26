@@ -1,6 +1,12 @@
 import type { MusicItemType } from "../../../../shared/schemas/domain.js";
 import { classifySongUpload, type SongBroadcastState } from "../songs/songClassifier.js";
 import { classifyVideo } from "./musicClassifier.js";
+import type { MusicMemberAliasInput } from "./musicMemberMatcher.js";
+import type { MusicChannelDiscoveryTarget } from "./musicChannelDiscoverySyncService.js";
+import {
+  assessMusicOriginalTitleTrust,
+  matchMusicOriginalTitle,
+} from "./musicOriginalTitleMatcher.js";
 import type {
   MusicItemClassificationUpdateInput,
   MusicItemReclassificationRecord,
@@ -13,7 +19,8 @@ interface ReclassificationRepository {
 
 export interface MusicChannelDiscoveryReclassificationServiceOptions {
   repository: ReclassificationRepository;
-  memberChannelIds: ReadonlySet<string>;
+  members: MusicMemberAliasInput[];
+  targets: readonly MusicChannelDiscoveryTarget[];
   now?: () => Date;
 }
 
@@ -50,6 +57,15 @@ export class MusicChannelDiscoveryReclassificationService {
         continue;
       }
 
+      const target = this.options.targets.find((candidate) => candidate.channelId === row.channelId);
+      const structuredOriginal = matchMusicOriginalTitle(row.title, this.options.members);
+      const structuredTrust = assessMusicOriginalTitleTrust(structuredOriginal, target);
+      if (!target || !structuredTrust.shouldPersist) {
+        await this.hide(row, "untrusted_channel", structuredTrust.specialFlags);
+        summary.hidden += 1;
+        continue;
+      }
+
       const songClassification = classifySongUpload({
         title: row.title,
         description: row.description,
@@ -57,44 +73,55 @@ export class MusicChannelDiscoveryReclassificationService {
         duration: row.duration,
         privacyStatus: row.privacyStatus,
         broadcastState: storedBroadcastState(row),
-        isOfficialMemberChannel: Boolean(row.channelId && this.options.memberChannelIds.has(row.channelId)),
+        isOfficialMemberChannel: target.kind === "member",
       });
-      if (songClassification.type !== "cover" && songClassification.type !== "original") {
-        await this.options.repository.updateMusicItemClassification(row.id, {
-          classificationStatus: "NEEDS_REVIEW",
-          isExcluded: true,
-          exclusionReason: "non_music_upload",
-          rawCategoryHint: "UNKNOWN",
-          fetchedAt: this.now(),
-          lastSeenAt: this.now(),
-        });
+      const keywordType = songClassification.reason !== "member_channel_playlist_compilation" &&
+        (songClassification.type === "cover" || songClassification.type === "original")
+        ? songClassification.type
+        : null;
+      const playlistCoverType = songClassification.reason === "member_channel_playlist_compilation"
+        ? "cover"
+        : null;
+      const itemType = structuredOriginal.classification?.type
+        ?? keywordType
+        ?? playlistCoverType
+        ?? "unknown";
+      if (itemType === "unknown" && structuredOriginal.status !== "partial") {
+        await this.hide(row, "non_music_upload", songClassification.specialFlags);
         summary.hidden += 1;
         continue;
       }
 
       const classification = classifyVideo({
-        sourceTypes: [songClassification.type],
+        sourceTypes: [itemType],
         title: row.title,
         description: row.description,
         duration: row.duration,
         privacyStatus: row.privacyStatus,
-        specialFlags: songClassification.specialFlags,
+        specialFlags: [
+          ...structuredTrust.specialFlags,
+          ...(songClassification.specialFlags ?? []),
+        ],
       });
+      const trustReview = structuredTrust.needsReview;
       const update: MusicItemClassificationUpdateInput = {
-        type: songClassification.type as MusicItemType,
+        type: itemType as MusicItemType,
         durationSeconds: classification.durationSeconds,
         isAvailable: classification.isAvailable,
-        isExcluded: classification.isExcluded,
-        exclusionReason: classification.exclusionReason,
-        classificationStatus: classification.classificationStatus,
+        isExcluded: trustReview ? true : classification.isExcluded,
+        exclusionReason: trustReview
+          ? (classification.exclusionReason ?? structuredTrust.reason)
+          : classification.exclusionReason,
+        classificationStatus: trustReview ? "NEEDS_REVIEW" : classification.classificationStatus,
         isInstrumental: classification.isInstrumental,
         specialFlags: classification.specialFlags,
-        rawCategoryHint: songClassification.type.toUpperCase(),
+        rawCategoryHint: structuredOriginal.status === "partial" ? "UNKNOWN" : itemType.toUpperCase(),
         fetchedAt: this.now(),
         lastSeenAt: this.now(),
       };
       await this.options.repository.updateMusicItemClassification(row.id, update);
-      summary.kept += 1;
+      if (update.classificationStatus === "NEEDS_REVIEW" && update.isExcluded) summary.hidden += 1;
+      else summary.kept += 1;
     }
 
     return summary;
@@ -102,6 +129,22 @@ export class MusicChannelDiscoveryReclassificationService {
 
   private now(): Date {
     return (this.options.now ?? (() => new Date()))();
+  }
+
+  private async hide(
+    row: MusicItemReclassificationRecord,
+    reason: string,
+    specialFlags: string[] | null | undefined,
+  ): Promise<void> {
+    await this.options.repository.updateMusicItemClassification(row.id, {
+      classificationStatus: "NEEDS_REVIEW",
+      isExcluded: true,
+      exclusionReason: reason,
+      specialFlags: specialFlags ?? [],
+      rawCategoryHint: "UNKNOWN",
+      fetchedAt: this.now(),
+      lastSeenAt: this.now(),
+    });
   }
 }
 

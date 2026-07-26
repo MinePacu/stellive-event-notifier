@@ -128,7 +128,9 @@ export function classifyVideo(input: MusicVideoClassificationInput): MusicVideoC
 
   const isPlaylistCompilation = specialFlags.includes("playlist_compilation");
   const hasReviewSpecialFlag = specialFlags.some((flag) => !(
-    isPlaylistCompilation && (flag === "playlist_compilation" || flag === "live_or_long_form")
+    flag === "structured_original_title" ||
+    flag === "bilingual_song_title" ||
+    (isPlaylistCompilation && (flag === "playlist_compilation" || flag === "live_or_long_form"))
   ));
   const needsReview =
     sourceTypes.length > 1 ||

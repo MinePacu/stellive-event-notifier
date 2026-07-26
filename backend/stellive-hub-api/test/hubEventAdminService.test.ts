@@ -18,6 +18,7 @@ function adminEvent(overrides: AdminHubEventOverrides = {}): AdminHubEvent {
   return {
     id: "event-1",
     category: "online_goods",
+    tags: [],
     participationMode: "online",
     status: "announced",
     title: "Official Goods",
@@ -155,6 +156,21 @@ function createService(repository: ReturnType<typeof createFakeRepository>["repo
 }
 
 describe("HubEventAdminService", () => {
+  it("normalizes album tags and rejects malformed, unsupported, or excessive tag input", async () => {
+    const fake = createFakeRepository();
+    const service = createService(fake.repository);
+    const created = await service.createDraft({ ...adminEvent(), tags: [" album ", "album"] as unknown as ["album"] });
+
+    expect(created.tags).toEqual(["album"]);
+    expect(fake.audits.at(-1)).toMatchObject({ after: expect.objectContaining({ tags: ["album"] }) });
+    expect(service.validate({ ...adminEvent(), tags: "album" }, "draft").errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: "tags", reason: "tags_not_array" })
+    ]));
+    expect(service.validate({ ...adminEvent(), tags: ["vinyl"] }, "draft").errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: "tags.0", reason: "unsupported_tag" })
+    ]));
+  });
+
   it("creates validated drafts and writes create audit logs", async () => {
     const fake = createFakeRepository();
     const service = createService(fake.repository);

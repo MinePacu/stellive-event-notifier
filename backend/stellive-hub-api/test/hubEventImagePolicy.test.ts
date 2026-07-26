@@ -15,6 +15,7 @@ function hubEvent(overrides: Partial<HubEvent> = {}): HubEvent {
   return {
     id: "image-policy-event",
     category: "online_goods",
+    tags: [],
     participationMode: "online",
     status: "announced",
     title: "공식 굿즈",
@@ -33,6 +34,7 @@ function adminInput(overrides: Record<string, unknown> = {}): Record<string, unk
   return {
     id: "image-policy-event",
     category: "online_goods",
+    tags: [],
     participationMode: "online",
     status: "announced",
     title: "공식 굿즈",

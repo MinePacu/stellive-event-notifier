@@ -15,6 +15,7 @@ const env = {
 const event: AdminHubEvent = {
   id: "event-1",
   category: "online_goods",
+  tags: [],
   participationMode: "online",
   status: "announced",
   title: "Official Goods",

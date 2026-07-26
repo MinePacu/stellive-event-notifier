@@ -26,6 +26,7 @@ function timeline(scheduleItems: HubEventScheduleItem[], overrides: Partial<HubE
   return {
     id: "timeline-event",
     category: "online_goods",
+    tags: [],
     participationMode: "online",
     status: "upcoming",
     title: "앨범 출시 일정",

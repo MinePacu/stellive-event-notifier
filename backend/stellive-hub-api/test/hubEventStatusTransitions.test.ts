@@ -10,6 +10,7 @@ function hubEvent(overrides: Partial<HubEvent> = {}): HubEvent {
   return {
     id: "event-1",
     category: "online_goods",
+    tags: [],
     participationMode: "online",
     status: "upcoming",
     title: "공식 굿즈 판매",
@@ -32,6 +33,7 @@ function hubEventRecord(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: "event-1",
     category: "online_goods",
+    tags: [],
     participationMode: "online",
     status: "upcoming",
     title: "공식 굿즈 판매",

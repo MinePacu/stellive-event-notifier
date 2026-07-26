@@ -85,6 +85,7 @@ function parseListFilters(query: Record<string, unknown>): AdminHubEventFilters 
     publicationState: typeof query.publicationState === "string" ? query.publicationState as AdminHubEventFilters["publicationState"] : undefined,
     status: typeof query.status === "string" ? query.status as AdminHubEventFilters["status"] : undefined,
     category: typeof query.category === "string" ? query.category as AdminHubEventFilters["category"] : undefined,
+    tag: typeof query.tag === "string" ? query.tag as AdminHubEventFilters["tag"] : undefined,
     participationMode: typeof query.participationMode === "string" ? query.participationMode as AdminHubEventFilters["participationMode"] : undefined,
     generationId: typeof query.generationId === "string" ? query.generationId : undefined,
     memberId: typeof query.memberId === "string" ? query.memberId : undefined,

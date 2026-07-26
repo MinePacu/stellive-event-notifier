@@ -4,6 +4,7 @@ import { resolveEffectiveHubEventStatus, withEffectiveHubEventStatus } from "./h
 import type {
   HubEvent,
   HubEventCategory,
+  HubEventTag,
   HubEventParticipationMode,
   HubEventStatus,
   HubEventsSummary,
@@ -12,6 +13,7 @@ import type {
 
 export type HubEventFilters = {
   category?: HubEventCategory;
+  tag?: HubEventTag;
   participationMode?: HubEventParticipationMode;
   status?: HubEventStatus;
   generationId?: string;
@@ -72,6 +74,7 @@ function defaultHubEvents(): HubEvent[] {
     {
       id: "official-reservation-goods",
       category: "online_goods",
+      tags: [],
       participationMode: "online",
       status: "open",
       title: "Stellive Official Reservation Goods",
@@ -89,6 +92,7 @@ function defaultHubEvents(): HubEvent[] {
     {
       id: "gen3-collab-popup",
       category: "offline_popup",
+      tags: [],
       participationMode: "offline",
       status: "upcoming",
       title: "Gen 3 Collaboration Popup",
@@ -111,7 +115,9 @@ export class HubEventService {
   private readonly events: HubEvent[];
 
   constructor(private readonly catalog: CatalogService, seedEvents: HubEvent[] = defaultHubEvents()) {
-    this.events = seedEvents.filter((event) => validateHubEvent(event, this.catalog).valid);
+    this.events = seedEvents
+      .map((event) => ({ ...event, tags: event.tags ?? [] }))
+      .filter((event) => validateHubEvent(event, this.catalog).valid);
   }
 
   private filteredEvents(filters: HubEventFilters, now: Date): HubEvent[] {
@@ -124,6 +130,7 @@ export class HubEventService {
 
     return sorted.slice(startIndex).filter((event) => {
       if (filters.category && event.category !== filters.category) return false;
+      if (filters.tag && !event.tags.includes(filters.tag)) return false;
       if (filters.participationMode && event.participationMode !== filters.participationMode) return false;
       if (filters.generationId && event.generationId !== filters.generationId) return false;
       if (filters.memberId && event.memberId !== filters.memberId) return false;

@@ -4,6 +4,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.NotificationEventType
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventTag
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationPlatform
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
 import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
@@ -43,6 +44,56 @@ class HubEventsPolicyTest {
                 category = HubEventCategory.TICKETING,
                 status = HubEventStatus.UPCOMING,
                 participationMode = HubEventParticipationMode.ONLINE,
+            ),
+        )
+    }
+
+    @Test
+    fun albumFilterUsesSupplementaryTagAcrossPrimaryCategories() {
+        listOf(HubEventCategory.ONLINE_GOODS, HubEventCategory.TICKETING).forEach { category ->
+            assertTrue(
+                MainUiPolicy.goodsEventMatchesFilter(
+                    filterId = "album",
+                    category = category,
+                    status = HubEventStatus.OPEN,
+                    participationMode = HubEventParticipationMode.ONLINE,
+                    tags = listOf(HubEventTag.ALBUM),
+                ),
+            )
+            assertFalse(
+                MainUiPolicy.goodsEventMatchesFilter(
+                    filterId = "album",
+                    category = category,
+                    status = HubEventStatus.OPEN,
+                    participationMode = HubEventParticipationMode.ONLINE,
+                    tags = emptyList(),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun albumFilterAndCardPillAreSupplementaryToExistingCategoryPresentation() {
+        val filterOptions = MainUiPolicy.goodsEventsTopFilterGroups("album").single().options
+        assertEquals(
+            listOf("all", "goods", "album", "ticketing", "offline", "closing"),
+            filterOptions.map { it.id },
+        )
+        assertEquals("음반", filterOptions.first { it.id == "album" }.label)
+        assertEquals(
+            listOf("티켓", "온라인", "음반"),
+            MainUiPolicy.goodsEventPillLabels(
+                category = HubEventCategory.TICKETING,
+                participationMode = HubEventParticipationMode.ONLINE,
+                tags = listOf(HubEventTag.ALBUM),
+            ),
+        )
+        assertEquals(
+            listOf("티켓", "온라인"),
+            MainUiPolicy.goodsEventPillLabels(
+                category = HubEventCategory.TICKETING,
+                participationMode = HubEventParticipationMode.ONLINE,
+                tags = emptyList(),
             ),
         )
     }
@@ -121,5 +172,7 @@ class HubEventsPolicyTest {
         val offlineEvents = repository.hubEventsForFilter("offline")
         assertTrue(offlineEvents.isNotEmpty())
         assertTrue(offlineEvents.all { it.participationMode.isOffline })
+
+        assertEquals(listOf("open-gen3-goods"), repository.hubEventsForFilter("album").map { it.id })
     }
 }

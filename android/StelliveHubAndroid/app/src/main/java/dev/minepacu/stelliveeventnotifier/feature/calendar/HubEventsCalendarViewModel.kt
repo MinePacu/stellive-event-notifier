@@ -2,9 +2,7 @@ package dev.minepacu.stelliveeventnotifier.feature.calendar
 
 import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarDay
 import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarEntry
-import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
-import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
-import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
+import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
 import java.time.Clock
 import java.time.LocalDate
 import java.time.YearMonth
@@ -30,6 +28,7 @@ data class HubEventsCalendarUiState(
     companion object {
         const val FILTER_ALL = "all"
         const val FILTER_GOODS = "goods"
+        const val FILTER_ALBUM = "album"
         const val FILTER_TICKETING = "ticketing"
         const val FILTER_OFFLINE = "offline"
         const val FILTER_CLOSING = "closing"
@@ -266,15 +265,12 @@ class HubEventsCalendarViewModel(
             if (entries.isEmpty()) null else day.copy(entries = entries)
         }
 
-    private fun HubCalendarEntry.matchesFilter(filterId: String): Boolean = when (filterId) {
-        HubEventsCalendarUiState.FILTER_GOODS ->
-            category == HubEventCategory.ONLINE_GOODS || category == HubEventCategory.ONLINE_COLLAB
-        HubEventsCalendarUiState.FILTER_TICKETING ->
-            category == HubEventCategory.TICKETING
-        HubEventsCalendarUiState.FILTER_OFFLINE ->
-            participationMode == HubEventParticipationMode.OFFLINE || participationMode == HubEventParticipationMode.HYBRID
-        HubEventsCalendarUiState.FILTER_CLOSING ->
-            status == HubEventStatus.CLOSING_SOON
-        else -> true
-    }
+    private fun HubCalendarEntry.matchesFilter(filterId: String): Boolean =
+        MainUiPolicy.goodsEventMatchesFilter(
+            filterId = filterId,
+            category = category,
+            status = status,
+            participationMode = participationMode,
+            tags = tags,
+        )
 }

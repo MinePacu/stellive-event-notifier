@@ -6,6 +6,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarEntryKind
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventTag
 import dev.minepacu.stelliveeventnotifier.feature.calendar.CalendarDateMarker
 import dev.minepacu.stelliveeventnotifier.feature.calendar.CalendarFeedRenderRow
 import dev.minepacu.stelliveeventnotifier.feature.calendar.CalendarUiPolicy
@@ -110,6 +111,29 @@ class HubEventsCalendarViewModelTest {
         assertEquals(listOf("ticket-deadline"), viewModel.uiState.visibleEntries.map { it.eventId })
         assertTrue(viewModel.hasEntries(LocalDate.of(2026, 6, 15)))
         assertFalse(viewModel.hasEntries(LocalDate.of(2026, 6, 16)))
+    }
+
+    @Test
+    fun albumFilterIncludesTaggedGoodsAndTicketingCalendarEntriesOnly() {
+        val day = HubCalendarDay(
+            date = "2026-06-15",
+            entries = listOf(
+                entry("album-goods", HubEventStatus.OPEN, HubEventCategory.ONLINE_GOODS)
+                    .copy(tags = listOf(HubEventTag.ALBUM)),
+                entry("album-ticket", HubEventStatus.UPCOMING, HubEventCategory.TICKETING)
+                    .copy(tags = listOf(HubEventTag.ALBUM)),
+                entry("plain-goods", HubEventStatus.OPEN, HubEventCategory.ONLINE_GOODS),
+            ),
+        )
+        val viewModel = HubEventsCalendarViewModel(listOf(day), clock)
+
+        viewModel.selectDay(LocalDate.of(2026, 6, 15))
+        viewModel.setFilter(HubEventsCalendarUiState.FILTER_ALBUM)
+
+        assertEquals(
+            listOf("album-goods", "album-ticket"),
+            viewModel.uiState.visibleEntries.map { it.eventId },
+        )
     }
 
     @Test

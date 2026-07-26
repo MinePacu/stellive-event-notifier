@@ -18,6 +18,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleKind
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventSourceType
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventTag
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventTimePrecision
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
 import dev.minepacu.stelliveeventnotifier.core.model.AnnouncementSummaryItem
@@ -65,7 +66,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val builtInHubEventFilters = setOf("all", "goods", "ticketing", "offline", "closing")
+private val builtInHubEventFilters = setOf("all", "goods", "album", "ticketing", "offline", "closing")
 
 class ServerHubRepository(
     private val remoteDataSource: RemoteDataSource,
@@ -437,6 +438,7 @@ class ServerHubRepository(
             },
             notificationEligible = notificationEligible,
             updatedAt = updatedAt,
+            tags = tags.toHubEventTags(),
         )
     }
 
@@ -568,8 +570,12 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
             sourceLabel = sourceLabel,
             appDeepLink = appDeepLink.orEmpty(),
             platformUrl = platformUrl,
+            tags = tags.toHubEventTags(),
         )
     }
+
+    private fun List<String>.toHubEventTags(): List<HubEventTag> =
+        mapNotNull(HubEventTag::fromApiValue).distinct()
 
     private inline fun <reified T : Enum<T>> String.toEnum(): T? =
         runCatching { enumValueOf<T>(replace('-', '_').uppercase(Locale.US)) }.getOrNull()

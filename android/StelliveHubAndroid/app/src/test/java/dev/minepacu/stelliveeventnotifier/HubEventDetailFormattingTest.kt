@@ -8,6 +8,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleKind
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventSourceType
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventTag
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailFormatting
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventHeroTagTone
 import org.junit.Assert.assertEquals
@@ -97,6 +98,16 @@ class HubEventDetailFormattingTest {
             tags.map { it.tone },
         )
         assertEquals(tags.size, tags.map { it.label }.toSet().size)
+    }
+
+    @Test
+    fun albumHeroTagIsSupplementaryAndPreservesPrimaryTagOrder() {
+        val tags = HubEventDetailFormatting.heroTags(
+            sampleEvent().copy(tags = listOf(HubEventTag.ALBUM)),
+        )
+
+        assertEquals(listOf("진행 중", "굿즈", "오프라인", "음반"), tags.map { it.label })
+        assertEquals(HubEventHeroTagTone.SUPPLEMENTARY, tags.last().tone)
     }
 
     @Test

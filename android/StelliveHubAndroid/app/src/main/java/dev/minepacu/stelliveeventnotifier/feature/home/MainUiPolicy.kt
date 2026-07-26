@@ -10,6 +10,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubMember
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventTag
 import dev.minepacu.stelliveeventnotifier.core.model.SongCatalogItem
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongIdentity
 import dev.minepacu.stelliveeventnotifier.core.model.SongType
@@ -372,6 +373,7 @@ object MainUiPolicy {
             options = listOf(
                 TopFilterOption("all", "전체"),
                 TopFilterOption("goods", "굿즈"),
+                TopFilterOption("album", "음반"),
                 TopFilterOption("ticketing", "티켓"),
                 TopFilterOption("offline", "오프라인"),
                 TopFilterOption("closing", "마감 임박"),
@@ -385,14 +387,23 @@ object MainUiPolicy {
         category: HubEventCategory,
         status: HubEventStatus,
         participationMode: HubEventParticipationMode,
+        tags: List<HubEventTag> = emptyList(),
     ): Boolean = when (filterId) {
         "goods" -> category == HubEventCategory.ONLINE_GOODS || category == HubEventCategory.ONLINE_COLLAB
+        "album" -> HubEventTag.ALBUM in tags
         "ticketing" -> category == HubEventCategory.TICKETING
         "offline" -> participationMode == HubEventParticipationMode.OFFLINE ||
             participationMode == HubEventParticipationMode.HYBRID
         "closing" -> status == HubEventStatus.CLOSING_SOON
         else -> true
     }
+
+    fun goodsEventPillLabels(
+        category: HubEventCategory,
+        participationMode: HubEventParticipationMode,
+        tags: List<HubEventTag>,
+    ): List<String> =
+        listOf(category.displayName, participationMode.displayName) + tags.map(HubEventTag::displayName)
 
     fun songExternalUrl(rawUrl: String?): String? {
         val trimmed = rawUrl?.trim().orEmpty()

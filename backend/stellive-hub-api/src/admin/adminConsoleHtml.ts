@@ -1902,6 +1902,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
                   <div class="field"><label for="hub-event-participation-mode">Participation mode</label><select id="hub-event-participation-mode" name="participationMode"><option value="online">Online</option><option value="offline">Offline</option><option value="hybrid">Hybrid</option></select></div>
                   <div class="field"><label for="hub-event-status">Status</label><select id="hub-event-status" name="status"><option value="announced">Announced</option><option value="upcoming">Upcoming</option><option value="open">Open</option><option value="closing_soon">Closing soon</option><option value="ended">Ended</option><option value="cancelled">Cancelled</option></select></div>
                 </div>
+                <label class="switch-control"><input id="hub-event-tag-album" type="checkbox"> Album</label>
                 <div class="field"><label for="hub-event-generation">Generation</label><input id="hub-event-generation" name="generationId" autocomplete="off" value="official" placeholder="official, gen1, gen2, gen3"><p class="subtle">Examples: official, gen1, gen2, gen3. Use the member's matching generation for member-scoped events.</p></div>
                 <div class="field"><label for="hub-event-member">Member</label><input id="hub-event-member" name="memberId" autocomplete="off" placeholder="akane-lize"><p class="subtle">Example: akane-lize. Leave blank for generation-wide or official events.</p></div>
               </div>
@@ -2042,6 +2043,10 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
                     <option value="offline">Offline</option>
                     <option value="hybrid">Hybrid</option>
                   </select>
+                </div>
+                <div class="field">
+                  <label for="hub-event-tag-filter">Tag</label>
+                  <select id="hub-event-tag-filter"><option value="">All</option><option value="album">Album</option></select>
                 </div>
               </div>
               <div class="hub-events-filter-row">
@@ -3280,6 +3285,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       category: document.getElementById("hub-event-category"),
       participationMode: document.getElementById("hub-event-participation-mode"),
       status: document.getElementById("hub-event-status"),
+      tags: document.getElementById("hub-event-tag-album"),
       generationId: document.getElementById("hub-event-generation"),
       memberId: document.getElementById("hub-event-member"),
       sourceUrl: document.getElementById("hub-event-source-url"),
@@ -3313,6 +3319,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     const hubEventStateFilter = document.getElementById("hub-event-state-filter");
     const hubEventStatusFilter = document.getElementById("hub-event-status-filter");
     const hubEventCategoryFilter = document.getElementById("hub-event-category-filter");
+    const hubEventTagFilter = document.getElementById("hub-event-tag-filter");
     const hubEventParticipationModeFilter = document.getElementById("hub-event-participation-mode-filter");
     const hubEventGenerationFilter = document.getElementById("hub-event-generation-filter");
     const hubEventMemberFilter = document.getElementById("hub-event-member-filter");
@@ -3760,6 +3767,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
           input[key] = element.checked;
           return;
         }
+        if (key === "tags") return;
       if (["announcedAt", "startsAt", "endsAt"].includes(key)) {
         const iso = toIsoFromLocal(element.value);
         input[key] = iso || null;
@@ -3768,6 +3776,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         const value = element.value.trim();
         if (value) input[key] = value;
       });
+      input.tags = hubEventFields.tags.checked ? ["album"] : [];
       const imagePolicyState = hubEventFields.imagePolicyState.value;
       const imageUrl = hubEventFields.imageUrl.value.trim();
       const imageSourceLabel = hubEventFields.imageSourceLabel.value.trim();
@@ -3847,6 +3856,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       hubEventFields.category.value = event.category || "online_goods";
       hubEventFields.participationMode.value = event.participationMode || "online";
       hubEventFields.status.value = event.status || "announced";
+      hubEventFields.tags.checked = Array.isArray(event.tags) && event.tags.includes("album");
       hubEventFields.generationId.value = event.generationId || "official";
       hubEventFields.memberId.value = event.memberId || "";
       hubEventFields.sourceUrl.value = event.sourceUrl || "";
@@ -3898,6 +3908,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         state.classList.add("status");
         main.appendChild(title);
         main.appendChild(state);
+        if (Array.isArray(event.tags) && event.tags.includes("album")) main.appendChild(createPill(t("hubEvent.album")));
 
         const meta = document.createElement("div");
         meta.className = "event-meta";
@@ -3975,6 +3986,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       if (hubEventStateFilter.value) params.set("publicationState", hubEventStateFilter.value);
       if (hubEventStatusFilter.value) params.set("status", hubEventStatusFilter.value);
       if (hubEventCategoryFilter.value) params.set("category", hubEventCategoryFilter.value);
+      if (hubEventTagFilter.value) params.set("tag", hubEventTagFilter.value);
       if (hubEventParticipationModeFilter.value) params.set("participationMode", hubEventParticipationModeFilter.value);
       if (hubEventGenerationFilter.value.trim()) params.set("generationId", hubEventGenerationFilter.value.trim());
       if (hubEventMemberFilter.value.trim()) params.set("memberId", hubEventMemberFilter.value.trim());
@@ -4262,7 +4274,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     hubEventStatusFilter.addEventListener("change", function () {
       return runHubEventUiAction("Filter hub events", function () { return refreshHubEvents({ resetPage: true }); });
     });
-    [hubEventCategoryFilter, hubEventParticipationModeFilter, hubEventIncludeDeleted, hubEventPageSize].forEach(function (filter) {
+    [hubEventCategoryFilter, hubEventTagFilter, hubEventParticipationModeFilter, hubEventIncludeDeleted, hubEventPageSize].forEach(function (filter) {
       filter.addEventListener("change", function () {
         return runHubEventUiAction("Filter hub events", function () { return refreshHubEvents({ resetPage: true }); });
       });

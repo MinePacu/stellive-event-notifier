@@ -14,11 +14,24 @@ import {
 import { classifyVideo, normalizeTitle } from "./musicClassifier.js";
 import type { MusicSyncLock } from "./musicLocks.js";
 import { matchMusicMembers, type MusicMemberAliasInput } from "./musicMemberMatcher.js";
+import {
+  assessMusicOriginalTitleTrust,
+  matchMusicOriginalTitle,
+  type MusicDiscoveryChannelKind,
+} from "./musicOriginalTitleMatcher.js";
+import type { MusicVideoProcessorResult } from "./musicVideoIngestService.js";
 
 export interface MusicChannelDiscoveryTarget {
+  kind: MusicDiscoveryChannelKind;
   memberId?: string;
   channelId: string;
   maxResults?: number;
+}
+
+export interface MusicDiscoveryVideoProcessorResult extends MusicVideoProcessorResult {
+  persistenceAction: "inserted" | "updated" | "would_insert" | "would_update" | "skipped";
+  isExcluded: boolean;
+  specialFlags: string[];
 }
 
 interface DiscoveryYoutubePort {
@@ -128,8 +141,270 @@ function detailFromExisting(existing: Record<string, unknown>): YoutubeVideoDeta
   };
 }
 
+function isTrustedTarget(target: MusicChannelDiscoveryTarget): boolean {
+  return target.kind === "stellive_official" ||
+    (target.kind === "member" && Boolean(target.memberId));
+}
+
+function skippedUntrustedResult(): MusicDiscoveryVideoProcessorResult {
+  return {
+    action: "skipped_untrusted_channel",
+    persistenceAction: "skipped",
+    classificationType: null,
+    classificationReason: "untrusted_channel",
+    structuredMatchKind: null,
+    memberIds: [],
+    reviewRequired: false,
+    isExcluded: true,
+    specialFlags: [],
+  };
+}
+
+function skippedResult(reason: string): MusicDiscoveryVideoProcessorResult {
+  return {
+    action: "skipped_untrusted_channel",
+    persistenceAction: "skipped",
+    classificationType: null,
+    classificationReason: reason,
+    structuredMatchKind: null,
+    memberIds: [],
+    reviewRequired: false,
+    isExcluded: true,
+    specialFlags: [],
+  };
+}
+
 export class MusicChannelDiscoverySyncService {
   constructor(private readonly options: MusicChannelDiscoverySyncServiceOptions) {}
+
+  async ingestVideoDetail(
+    detail: YoutubeVideoDetail,
+    options: { dryRun: boolean },
+  ): Promise<MusicDiscoveryVideoProcessorResult> {
+    const target = this.options.targets.find((candidate) =>
+      candidate.channelId === detail.channelId && isTrustedTarget(candidate)
+    );
+    if (!target) return skippedUntrustedResult();
+    return this.processVideo({
+      videoId: detail.videoId,
+      detail,
+      target,
+      dryRun: options.dryRun,
+    });
+  }
+
+  private async processVideo(input: {
+    videoId: string;
+    detail: YoutubeVideoDetail;
+    target: MusicChannelDiscoveryTarget;
+    candidate?: YoutubeUploadCandidate;
+    existing?: Record<string, unknown>;
+    broadcastState?: SongBroadcastState;
+    dryRun: boolean;
+  }): Promise<MusicDiscoveryVideoProcessorResult> {
+    const { videoId, detail, target, candidate, dryRun } = input;
+    if (!isTrustedTarget(target) || (detail.channelId && detail.channelId !== target.channelId)) {
+      return skippedUntrustedResult();
+    }
+    const title = detail.title ?? candidate?.title;
+    if (!title) return skippedResult("missing_title");
+
+    const structuredOriginal = matchMusicOriginalTitle(title, this.options.members);
+    const structuredTrust = assessMusicOriginalTitleTrust(structuredOriginal, target);
+    if (!structuredTrust.shouldPersist) return skippedUntrustedResult();
+
+    const broadcastState = input.broadcastState ?? classifyYoutubeBroadcastState(detail);
+    const songClassification = classifySongUpload({
+      title,
+      description: detail.description,
+      tags: detail.tags,
+      duration: detail.duration ?? candidate?.duration,
+      privacyStatus: detail.privacyStatus ?? candidate?.privacyStatus,
+      broadcastState,
+      isOfficialMemberChannel: target.kind === "member",
+    });
+    const existing = input.existing ??
+      record(await this.options.repository.getMusicItemByVideoId(videoId));
+    const manualOverride = overrideRecord(await this.options.repository.getOverrideByVideoId(videoId));
+    const preservedSourceType = existingSourceBackedType(existing);
+    const keywordType = songClassification.reason !== "member_channel_playlist_compilation" &&
+      (songClassification.type === "cover" || songClassification.type === "original")
+      ? songClassification.type
+      : null;
+    const playlistCoverType = songClassification.reason === "member_channel_playlist_compilation"
+      ? "cover"
+      : null;
+    const itemType = (manualOverride?.forcedType as MusicItemType | undefined)
+      ?? preservedSourceType
+      ?? structuredOriginal.classification?.type
+      ?? keywordType
+      ?? playlistCoverType
+      ?? "unknown";
+    if (itemType === "unknown" && structuredOriginal.status !== "partial") {
+      return skippedResult(songClassification.reason);
+    }
+
+    const specialFlags = [
+      ...structuredTrust.specialFlags,
+      ...(songClassification.specialFlags ?? []),
+    ];
+    const classification = classifyVideo({
+      sourceTypes: [itemType],
+      title,
+      description: detail.description,
+      duration: detail.duration ?? candidate?.duration,
+      privacyStatus: detail.privacyStatus ?? candidate?.privacyStatus,
+      specialFlags,
+    });
+    const matched = matchMusicMembers({
+      title,
+      description: detail.description ?? "",
+      channelId: detail.channelId ?? candidate?.channelId,
+      channelTitle: detail.channelTitle,
+      members: this.options.members,
+      structuredOriginal,
+    }).links;
+    const automaticLinks = matched.length > 0
+      ? matched
+      : target.kind === "member" && target.memberId
+        ? [{
+            memberId: target.memberId,
+            role: "main" as MusicMemberRole,
+            confidence: 1,
+            source: "CHANNEL_ID",
+          }]
+        : [];
+    const links = manualOverride?.forcedMemberIds
+      ? manualOverride.forcedMemberIds.map((memberId, index) => ({
+          memberId,
+          role: (index === 0 ? "main" : "collaboration") as MusicMemberRole,
+          confidence: 1,
+          source: "MANUAL",
+        }))
+      : automaticLinks;
+    const unmatchedReview = links.length === 0;
+    const trustReview = structuredTrust.needsReview;
+    const forcedReview = trustReview || unmatchedReview;
+    const isExcluded = manualOverride
+      ? (manualOverride.forceExcluded ?? classification.isExcluded)
+      : forcedReview
+        ? true
+        : classification.isExcluded;
+    const exclusionReason = manualOverride
+      ? (manualOverride.exclusionReason ?? classification.exclusionReason)
+      : trustReview
+        ? (classification.exclusionReason ?? structuredTrust.reason)
+        : unmatchedReview
+          ? "no_member_match"
+          : classification.exclusionReason;
+    const classificationStatus = manualOverride
+      ? (isExcluded ? "MANUAL_EXCLUDED" : "MANUAL_CONFIRMED")
+      : forcedReview
+        ? "NEEDS_REVIEW"
+        : classification.classificationStatus;
+    const rawCategoryHint = structuredOriginal.status === "partial"
+      ? "UNKNOWN"
+      : typeof existing.sourcePlaylistId === "string" && typeof existing.rawCategoryHint === "string"
+        ? existing.rawCategoryHint
+        : itemType.toUpperCase();
+    const premiere = classifyYoutubePremiere({
+      musicType: itemType,
+      liveBroadcastContent: detail.liveBroadcastContent,
+      scheduledStartTime: detail.scheduledStartTime,
+      actualStartTime: detail.actualStartTime,
+      actualEndTime: detail.actualEndTime,
+    });
+    const persistenceAction = typeof existing.id === "string"
+      ? (dryRun ? "would_update" : "updated")
+      : (dryRun ? "would_insert" : "inserted");
+
+    if (!dryRun) {
+      const now = (this.options.now ?? (() => new Date()))();
+      const saved = record(await this.options.repository.upsertMusicItem({
+        youtubeVideoId: videoId,
+        title,
+        normalizedTitle: normalizeTitle(title),
+        description: detail.description ?? null,
+        type: itemType,
+        sourcePlaylistId: typeof existing.sourcePlaylistId === "string" ? existing.sourcePlaylistId : null,
+        publishedAt: detail.publishedAt ?? candidate?.publishedAt,
+        thumbnailUrl: detail.thumbnailUrl ?? candidate?.thumbnailUrl ?? null,
+        thumbnailWidth: detail.thumbnailWidth ?? candidate?.thumbnailWidth ?? null,
+        thumbnailHeight: detail.thumbnailHeight ?? candidate?.thumbnailHeight ?? null,
+        duration: detail.duration ?? candidate?.duration ?? null,
+        durationSeconds: classification.durationSeconds,
+        channelId: detail.channelId ?? candidate?.channelId ?? target.channelId,
+        channelTitle: detail.channelTitle ?? candidate?.channelTitle ?? null,
+        isPublic: classification.isAvailable,
+        privacyStatus: detail.privacyStatus ?? candidate?.privacyStatus ?? null,
+        embeddable: detail.embeddable ?? null,
+        madeForKids: detail.madeForKids ?? null,
+        dimension: detail.dimension ?? null,
+        definition: detail.definition ?? null,
+        caption: detail.caption ?? null,
+        tags: detail.tags,
+        isAvailable: classification.isAvailable,
+        isExcluded,
+        exclusionReason,
+        classificationStatus,
+        isInstrumental: classification.isInstrumental,
+        specialFlags: classification.specialFlags,
+        youtubePresentationType: premiere.presentationType,
+        youtubePremiereState: premiere.state,
+        youtubeScheduledStartAt: premiere.scheduledStartAt,
+        youtubeActualStartAt: premiere.actualStartAt,
+        youtubeActualEndAt: premiere.actualEndAt,
+        youtubeMetadataFetchedAt: now,
+        listingPriority: premiere.listingPriority,
+        fetchedAt: now,
+        lastSeenAt: now,
+        rawCategoryHint,
+      }));
+      const musicItemId = typeof saved.id === "string"
+        ? saved.id
+        : typeof existing.id === "string"
+          ? existing.id
+          : videoId;
+      await this.options.repository.replaceMusicItemMembers(musicItemId, links);
+      if (target.kind === "member" && candidate) {
+        await this.options.songIngestion?.ingestYoutubeUpload({
+          ...candidate,
+          title,
+          description: detail.description,
+          tags: detail.tags,
+          channelId: detail.channelId ?? candidate.channelId,
+          channelTitle: detail.channelTitle,
+          publishedAt: detail.publishedAt ?? candidate.publishedAt,
+          thumbnailUrl: detail.thumbnailUrl ?? candidate.thumbnailUrl,
+          thumbnailWidth: detail.thumbnailWidth ?? candidate.thumbnailWidth,
+          thumbnailHeight: detail.thumbnailHeight ?? candidate.thumbnailHeight,
+          duration: detail.duration ?? candidate.duration,
+          privacyStatus: detail.privacyStatus ?? candidate.privacyStatus,
+          liveBroadcastContent: detail.liveBroadcastContent,
+          scheduledStartTime: detail.scheduledStartTime,
+          actualStartTime: detail.actualStartTime,
+          actualEndTime: detail.actualEndTime,
+        });
+      }
+    }
+
+    const reviewRequired = classificationStatus === "NEEDS_REVIEW";
+    return {
+      action: reviewRequired
+        ? "needs_review"
+        : persistenceAction,
+      persistenceAction,
+      classificationType: itemType,
+      classificationReason: structuredOriginal.status === "none"
+        ? songClassification.reason
+        : structuredTrust.reason,
+      structuredMatchKind: structuredOriginal.status === "none" ? null : structuredOriginal.kind,
+      memberIds: links.map((link) => link.memberId),
+      reviewRequired,
+      isExcluded,
+      specialFlags: classification.specialFlags,
+    };
+  }
 
   async discover() {
     const release = await this.options.locks.acquire(
@@ -202,144 +477,31 @@ export class MusicChannelDiscoverySyncService {
       const fetchedDetailsById = new Map(details.map((detail) => [detail.videoId, detail] as const));
 
       for (const [videoId, discovered] of candidates) {
-        const detail = detailsById.get(videoId);
+        const detail = detailsById.get(videoId) ?? {
+          videoId,
+          channelId: discovered.candidate.channelId,
+          title: discovered.candidate.title,
+          tags: discovered.candidate.tags ?? [],
+        };
         const fetchedDetail = fetchedDetailsById.get(videoId);
         const broadcastState = fetchedDetail
           ? classifyYoutubeBroadcastState(fetchedDetail)
           : existingById.has(videoId)
             ? broadcastStateFromExisting(existingById.get(videoId))
             : classifyYoutubeBroadcastState(discovered.candidate);
-        const songClassification = classifySongUpload({
-          title: detail?.title ?? discovered.candidate.title,
-          description: detail?.description,
-          tags: detail?.tags,
-          duration: detail?.duration ?? discovered.candidate.duration,
-          privacyStatus: detail?.privacyStatus ?? discovered.candidate.privacyStatus,
+        const result = await this.processVideo({
+          videoId,
+          detail,
+          target: discovered.target,
+          candidate: discovered.candidate,
+          existing: existingById.get(videoId),
           broadcastState,
-          isOfficialMemberChannel: Boolean(discovered.target.memberId),
+          dryRun: false,
         });
-        if (songClassification.type !== "cover" && songClassification.type !== "original") continue;
-
-        const existing = existingById.get(videoId) ?? record(await this.options.repository.getMusicItemByVideoId(videoId));
-        const manualOverride = overrideRecord(await this.options.repository.getOverrideByVideoId(videoId));
-        const preservedSourceType = existingSourceBackedType(existing);
-        const itemType = (manualOverride?.forcedType as MusicItemType | undefined) ?? preservedSourceType ?? songClassification.type;
-        const premiere = classifyYoutubePremiere({
-          musicType: itemType,
-          liveBroadcastContent: detail?.liveBroadcastContent,
-          scheduledStartTime: detail?.scheduledStartTime,
-          actualStartTime: detail?.actualStartTime,
-          actualEndTime: detail?.actualEndTime,
-        });
-        const rawCategoryHint = typeof existing.sourcePlaylistId === "string" && typeof existing.rawCategoryHint === "string"
-          ? existing.rawCategoryHint
-          : itemType.toUpperCase();
-        const classification = classifyVideo({
-          sourceTypes: [itemType],
-          title: detail?.title ?? discovered.candidate.title,
-          description: detail?.description,
-          duration: detail?.duration ?? discovered.candidate.duration,
-          privacyStatus: detail?.privacyStatus ?? discovered.candidate.privacyStatus,
-          specialFlags: songClassification.specialFlags,
-        });
-        const matched = matchMusicMembers({
-          title: detail?.title ?? discovered.candidate.title,
-          description: detail?.description ?? "",
-          channelId: detail?.channelId ?? discovered.candidate.channelId,
-          channelTitle: detail?.channelTitle,
-          members: this.options.members,
-        }).links;
-        const automaticLinks = matched.length > 0
-          ? matched
-          : discovered.target.memberId
-            ? [{
-                memberId: discovered.target.memberId,
-                role: "main" as MusicMemberRole,
-                confidence: 1,
-                source: "CHANNEL_ID",
-              }]
-            : [];
-        const links = manualOverride?.forcedMemberIds
-          ? manualOverride.forcedMemberIds.map((memberId, index) => ({
-              memberId,
-              role: (index === 0 ? "main" : "collaboration") as MusicMemberRole,
-              confidence: 1,
-              source: "MANUAL",
-            }))
-          : automaticLinks;
-        const isExcluded = manualOverride?.forceExcluded ?? classification.isExcluded;
-        const classificationStatus = manualOverride
-          ? (isExcluded ? "MANUAL_EXCLUDED" : "MANUAL_CONFIRMED")
-          : links.length === 0
-            ? "NEEDS_REVIEW"
-            : classification.classificationStatus;
-        if (classificationStatus === "NEEDS_REVIEW") summary.needsReview += 1;
-        if (isExcluded) summary.excludedCandidates += 1;
-
-        const saved = record(await this.options.repository.upsertMusicItem({
-          youtubeVideoId: videoId,
-          title: detail?.title ?? discovered.candidate.title,
-          normalizedTitle: normalizeTitle(detail?.title ?? discovered.candidate.title),
-          description: detail?.description ?? null,
-          type: itemType,
-          sourcePlaylistId: typeof existing.sourcePlaylistId === "string" ? existing.sourcePlaylistId : null,
-          publishedAt: detail?.publishedAt ?? discovered.candidate.publishedAt,
-          thumbnailUrl: detail?.thumbnailUrl ?? discovered.candidate.thumbnailUrl ?? null,
-          thumbnailWidth: detail?.thumbnailWidth ?? discovered.candidate.thumbnailWidth ?? null,
-          thumbnailHeight: detail?.thumbnailHeight ?? discovered.candidate.thumbnailHeight ?? null,
-          duration: detail?.duration ?? discovered.candidate.duration ?? null,
-          durationSeconds: classification.durationSeconds,
-          channelId: detail?.channelId ?? discovered.candidate.channelId,
-          channelTitle: detail?.channelTitle ?? null,
-          isPublic: classification.isAvailable,
-          privacyStatus: detail?.privacyStatus ?? discovered.candidate.privacyStatus ?? null,
-          embeddable: detail?.embeddable ?? null,
-          madeForKids: detail?.madeForKids ?? null,
-          dimension: detail?.dimension ?? null,
-          definition: detail?.definition ?? null,
-          caption: detail?.caption ?? null,
-          tags: detail?.tags ?? [],
-          isAvailable: classification.isAvailable,
-          isExcluded,
-          exclusionReason: manualOverride?.exclusionReason ?? classification.exclusionReason,
-          classificationStatus,
-          isInstrumental: classification.isInstrumental,
-          specialFlags: classification.specialFlags,
-          youtubePresentationType: premiere.presentationType,
-          youtubePremiereState: premiere.state,
-          youtubeScheduledStartAt: premiere.scheduledStartAt,
-          youtubeActualStartAt: premiere.actualStartAt,
-          youtubeActualEndAt: premiere.actualEndAt,
-          youtubeMetadataFetchedAt: (this.options.now ?? (() => new Date()))(),
-          listingPriority: premiere.listingPriority,
-          fetchedAt: (this.options.now ?? (() => new Date()))(),
-          lastSeenAt: (this.options.now ?? (() => new Date()))(),
-          rawCategoryHint,
-        }));
-        const musicItemId = typeof saved.id === "string" ? saved.id : typeof existing.id === "string" ? existing.id : videoId;
-        await this.options.repository.replaceMusicItemMembers(musicItemId, links);
-        if (discovered.target.memberId) {
-          await this.options.songIngestion?.ingestYoutubeUpload({
-            ...discovered.candidate,
-            title: detail?.title ?? discovered.candidate.title,
-            description: detail?.description,
-            tags: detail?.tags,
-            channelId: detail?.channelId ?? discovered.candidate.channelId,
-            channelTitle: detail?.channelTitle,
-            publishedAt: detail?.publishedAt ?? discovered.candidate.publishedAt,
-            thumbnailUrl: detail?.thumbnailUrl ?? discovered.candidate.thumbnailUrl,
-            thumbnailWidth: detail?.thumbnailWidth ?? discovered.candidate.thumbnailWidth,
-            thumbnailHeight: detail?.thumbnailHeight ?? discovered.candidate.thumbnailHeight,
-            duration: detail?.duration ?? discovered.candidate.duration,
-            privacyStatus: detail?.privacyStatus ?? discovered.candidate.privacyStatus,
-            liveBroadcastContent: detail?.liveBroadcastContent,
-            scheduledStartTime: detail?.scheduledStartTime,
-            actualStartTime: detail?.actualStartTime,
-            actualEndTime: detail?.actualEndTime,
-          });
-        }
-        if (typeof existing.id === "string") summary.updated += 1;
-        else summary.inserted += 1;
+        if (result.persistenceAction === "inserted") summary.inserted += 1;
+        if (result.persistenceAction === "updated") summary.updated += 1;
+        if (result.reviewRequired) summary.needsReview += 1;
+        if (result.isExcluded) summary.excludedCandidates += 1;
       }
       return summary;
     } finally {

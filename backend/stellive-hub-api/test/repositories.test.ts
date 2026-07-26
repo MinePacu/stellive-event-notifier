@@ -20,8 +20,16 @@ const hubEventLinksMigration = readFileSync(
   resolve(__dirname, "../prisma/migrations/20260719180000_add_hub_event_links_and_primary_uniqueness/migration.sql"),
   "utf8"
 );
+const hubEventTagsMigration = readFileSync(
+  resolve(__dirname, "../prisma/migrations/20260726000000_add_hub_event_tags/migration.sql"),
+  "utf8"
+);
 
 describe("Prisma hub event admin schema", () => {
+  it("stores HubEvent tags as a non-null empty-array default", () => {
+    expect(prismaSchema).toContain("tags                  String[] @default([])");
+    expect(hubEventTagsMigration).toContain('ADD COLUMN "tags" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]');
+  });
   it("defines publication state, revision, soft-delete timestamps, and audit logs", () => {
     expect(prismaSchema).toContain("id                    String   @id @default(cuid(2))");
     expect(prismaSchema).toContain("publicationState");
@@ -814,6 +822,18 @@ describe("HubEventRepository", () => {
         take: 5
       })
     ]);
+  });
+
+  it("uses the same album containment filter for public and admin repository lists", async () => {
+    const calls: Array<{ where: Record<string, unknown> }> = [];
+    const repository = new HubEventRepository({
+      hubEvent: { findMany: async (args: { where: Record<string, unknown> }) => { calls.push(args); return []; } }
+    });
+
+    await repository.listPublished({ tag: "album" });
+    await repository.listAdmin({ tag: "album" });
+
+    expect(calls.map((call) => call.where.tags)).toEqual([{ has: "album" }, { has: "album" }]);
   });
 
   it("returns admin list pagination cursors while preserving cursor skip", async () => {

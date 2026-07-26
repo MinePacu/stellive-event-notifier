@@ -18,7 +18,7 @@ import type {
 } from "../admin/adminTypes.js";
 import type { ChzzkLiveAdapterCounts } from "../adapters/chzzk/chzzkOpenApiAdapter.js";
 import type { NotificationWorkerDrainInput, NotificationWorkerDrainResult } from "../jobs/notificationWorker.js";
-import type { AppEnv } from "../config/env.js";
+import { isConfiguredSecret, type AppEnv } from "../config/env.js";
 import { isServiceAnnouncementScope, type ServiceAnnouncementInput } from "../push/serviceAnnouncement.js";
 import type { PushSendResult } from "../push/fcmClient.js";
 import { productionHubCalendarSpecialDays } from "../hub-events/hubCalendarSpecialDayCatalog.js";
@@ -34,6 +34,7 @@ import { ExternalApiCallLogRepository } from "../repositories/externalApiCallLog
 import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
 import { PlatformApiStateRepository } from "../repositories/platformApiStateRepository.js";
 import { WebhookSubscriptionRepository } from "../repositories/webhookSubscriptionRepository.js";
+import type { MusicVideoIngestResult } from "../music/musicVideoIngestService.js";
 
 interface LimitQuery {
   limit?: string | number;
@@ -134,6 +135,11 @@ export interface InternalRouteDependencies {
     upsertOverride?(videoId: string, input: Record<string, unknown>): MaybePromise<unknown>;
     listSyncRuns?(limit?: number): MaybePromise<unknown[]>;
     estimateQuota?(): MaybePromise<unknown>;
+    ingestVideos?(input: {
+      videoIds: string[];
+      dryRun: boolean;
+      requestedCount: number;
+    }): MaybePromise<MusicVideoIngestResult>;
   };
   chzzkLiveAdapter?: {
     pollLiveStatuses(): MaybePromise<ChzzkLiveAdapterCounts>;
@@ -212,6 +218,40 @@ function parseMusicSyncBody(body: unknown): { ok: true; mode: "light" | "full" |
     return { ok: true, mode: input.mode };
   }
   return { ok: false };
+}
+
+const youtubeVideoIdPattern = /^[A-Za-z0-9_-]{11}$/;
+
+function parseMusicVideoIngestBody(body: unknown): {
+  ok: true;
+  value: { videoIds: string[]; dryRun: boolean; requestedCount: number };
+} | { ok: false } {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return { ok: false };
+  const input = body as { videoIds?: unknown; dryRun?: unknown };
+  if (!Object.keys(input).every((key) => key === "videoIds" || key === "dryRun")) return { ok: false };
+  if (!Array.isArray(input.videoIds) || input.videoIds.length < 1 || input.videoIds.length > 50) return { ok: false };
+  if (input.dryRun !== undefined && typeof input.dryRun !== "boolean") return { ok: false };
+
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const value of input.videoIds) {
+    if (typeof value !== "string") return { ok: false };
+    const videoId = value.trim();
+    if (!youtubeVideoIdPattern.test(videoId)) return { ok: false };
+    if (!seen.has(videoId)) {
+      seen.add(videoId);
+      normalized.push(videoId);
+    }
+  }
+
+  return {
+    ok: true,
+    value: {
+      videoIds: normalized,
+      dryRun: input.dryRun === true,
+      requestedCount: input.videoIds.length,
+    },
+  };
 }
 
 function readAuthorizationHeader(value: string | string[] | undefined): string | undefined {
@@ -449,6 +489,36 @@ app.get<{ Querystring: LimitQuery }>("/v1/internal/music/sync-log", async (reque
 app.get("/v1/internal/music/quota-estimate", async () => {
   if (!dependencies.musicSync?.estimateQuota) return { dailyEstimate: 0 };
   return dependencies.musicSync.estimateQuota();
+});
+
+app.post("/v1/internal/music/ingest-videos", async (request, reply) => {
+  const parsed = parseMusicVideoIngestBody(request.body);
+  if (!parsed.ok) return reply.code(400).send({ error: "music_ingest_videos_body_invalid" });
+  if (!dependencies.musicSync?.ingestVideos) {
+    return reply.code(503).send({ error: "music_video_ingest_not_configured" });
+  }
+  return dependencies.musicSync.ingestVideos(parsed.value);
+});
+
+app.get("/v1/internal/music/config-diagnostics", async () => {
+  const youtubeApiConfigured = isConfiguredSecret(options.env.YOUTUBE_API_KEY);
+  const internalApiTokenConfigured = isConfiguredSecret(options.env.INTERNAL_API_TOKEN);
+  const musicSyncServiceConfigured = Boolean(dependencies.musicSync);
+  const channelDiscoveryServiceConfigured = Boolean(dependencies.musicSync?.discoverChannelUploads);
+  return {
+    musicSyncEnabled: options.env.MUSIC_SYNC_ENABLED,
+    channelDiscoveryEnabled: options.env.MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED,
+    youtubeApiConfigured,
+    internalApiTokenConfigured,
+    musicSyncServiceConfigured,
+    channelDiscoveryServiceConfigured,
+    workerExpectedToRun:
+      options.env.MUSIC_SYNC_ENABLED &&
+      options.env.MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED &&
+      youtubeApiConfigured &&
+      internalApiTokenConfigured &&
+      channelDiscoveryServiceConfigured,
+  };
 });
 
 app.post("/v1/internal/schedulers/chzzk/live-status", async () => {

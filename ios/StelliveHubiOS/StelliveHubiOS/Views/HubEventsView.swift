@@ -7,9 +7,10 @@ struct HubEventsView: View {
     @State private var selectedCalendarMonth = Date()
     @SceneStorage("hubEvents.calendarExpanded") private var isCalendarExpanded = true
 
-    private let filters: [(id: String, title: String)] = [
+    static let filterOptions: [(id: String, title: String)] = [
         ("all", "전체"),
         ("goods", "굿즈"),
+        ("album", "음반"),
         ("ticketing", "티켓"),
         ("offline", "오프라인"),
         ("closing", "마감 임박")
@@ -38,7 +39,7 @@ struct HubEventsView: View {
             Section("필터") {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(filters, id: \.id) { filter in
+                        ForEach(Self.filterOptions, id: \.id) { filter in
                             Button {
                                 selectedFilter = filter.id
                             } label: {
@@ -397,6 +398,8 @@ struct HubEventRow: View {
                         .lineLimit(2)
                         .minimumScaleFactor(0.82)
 
+                    HubEventSupplementaryTagChips(labels: presentation.secondaryTagLabels)
+
                     if let summary = event.summary, !summary.isEmpty {
                         Text(summary)
                             .font(.caption)
@@ -447,19 +450,41 @@ struct HubEventFeedCardPresentation: Equatable {
     let parentTitle: String
     let summary: String?
     let status: HubEventStatus
+    let secondaryTagLabels: [String]
     let accessibilityLabel: String
 
     init(event: HubEvent) {
         parentTitle = event.title
         summary = event.summary
         status = event.status
+        secondaryTagLabels = HubEventTagDisplayPolicy.secondaryLabels(for: event.tags)
         accessibilityLabel = [
             event.title,
             status.displayName,
+            secondaryTagLabels.joined(separator: ", "),
             summary
         ]
         .compactMap { $0?.nilIfBlank }
         .joined(separator: ", ")
+    }
+}
+
+struct HubEventSupplementaryTagChips: View {
+    let labels: [String]
+
+    var body: some View {
+        if !labels.isEmpty {
+            HStack(spacing: 6) {
+                ForEach(labels, id: \.self) { label in
+                    Text(label)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Color.indigo)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.indigo.opacity(0.12), in: Capsule())
+                }
+            }
+        }
     }
 }
 
@@ -506,6 +531,10 @@ private struct HubCalendarRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .minimumScaleFactor(0.82)
+
+                HubEventSupplementaryTagChips(
+                    labels: HubEventTagDisplayPolicy.secondaryLabels(for: entry.tags)
+                )
 
                 Text(entry.displayTimeText)
                     .font(.caption)

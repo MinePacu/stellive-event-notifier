@@ -15,7 +15,7 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyRequest } from "fastify";
 import { Redis } from "ioredis";
-import { loadEnv } from "./config/env.js";
+import { isConfiguredSecret, loadEnv } from "./config/env.js";
 import { HubEventRepository } from "./hub-events/hubEventRepository.js";
 import { ServiceAnnouncementRepository } from "./announcements/serviceAnnouncementRepository.js";
 import { ServiceAnnouncementReadService } from "./announcements/serviceAnnouncementReadService.js";
@@ -43,6 +43,7 @@ import { OfficialStelliveMusicSyncService } from "./music/officialStelliveMusicS
 import { MusicChannelDiscoveryReclassificationService } from "./music/musicChannelDiscoveryReclassificationService.js";
 import { MusicChannelDiscoverySyncService } from "./music/musicChannelDiscoverySyncService.js";
 import { MusicSourceTypeRepairService } from "./music/musicSourceTypeRepairService.js";
+import { MusicVideoIngestService } from "./music/musicVideoIngestService.js";
 import { officialStelliveMusicSourcePlaylistSeeds, TARGET_MUSIC_MEMBER_IDS } from "./music/musicSourcePlaylists.js";
 import { WebhookSubscriptionRepository } from "./repositories/webhookSubscriptionRepository.js";
 import SongIngestionService from "./songs/songIngestionService.js";
@@ -88,6 +89,32 @@ type BootstrapPreferencePort = Pick<PreferenceRepository, "listForDevice">;
 type BootstrapLiveStatusPort = Pick<LiveStatusRepository, "listDiagnostics">;
 type BootstrapHubEventsPort = Pick<HubEventRepository, "summary">;
 
+export type MusicConfigurationWarning =
+  | "music_sync_youtube_api_not_configured"
+  | "music_channel_discovery_requires_music_sync"
+  | "music_channel_discovery_internal_token_not_configured"
+  | "music_channel_discovery_service_not_configured";
+
+export function musicConfigurationWarnings(
+  env: AppEnv,
+  services: { channelDiscoveryServiceConfigured: boolean },
+): MusicConfigurationWarning[] {
+  const warnings: MusicConfigurationWarning[] = [];
+  if (env.MUSIC_SYNC_ENABLED && !isConfiguredSecret(env.YOUTUBE_API_KEY)) {
+    warnings.push("music_sync_youtube_api_not_configured");
+  }
+  if (env.MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED && !env.MUSIC_SYNC_ENABLED) {
+    warnings.push("music_channel_discovery_requires_music_sync");
+  }
+  if (env.MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED && !isConfiguredSecret(env.INTERNAL_API_TOKEN)) {
+    warnings.push("music_channel_discovery_internal_token_not_configured");
+  }
+  if (env.MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED && !services.channelDiscoveryServiceConfigured) {
+    warnings.push("music_channel_discovery_service_not_configured");
+  }
+  return warnings;
+}
+
 export function createMusicMemberUpsertInputs(catalog = new CatalogService()) {
   const targetIds = new Set<string>(TARGET_MUSIC_MEMBER_IDS);
   return catalog.getMembers()
@@ -114,6 +141,9 @@ export function createMusicMemberAliasInputs(catalog = new CatalogService()) {
     .filter((member) => targetIds.has(member.id))
     .map((member) => ({
       id: member.id,
+      nameKo: member.koreanName,
+      nameEn: member.englishName,
+      unitName: member.unitName,
       aliases: [
         member.koreanName,
         member.englishName,
@@ -371,6 +401,7 @@ function createDefaultMusicSyncService(
       if (!channelId) return [];
       return [{
         memberId: member.id === "stellive-official" ? undefined : member.id,
+        kind: member.id === "stellive-official" ? "stellive_official" as const : "member" as const,
         channelId,
         maxResults: member.id === "stellive-official" ? 10 : 50,
       }];
@@ -385,13 +416,14 @@ function createDefaultMusicSyncService(
     maxPages: env.MUSIC_CHANNEL_DISCOVERY_RECENT_PAGES,
     lockTtlMs: env.MUSIC_SYNC_LOCK_SECONDS * 1_000,
   });
+  const videoIngestService = new MusicVideoIngestService({
+    youtube,
+    processor: discoveryService,
+  });
   const discoveryReclassificationService = new MusicChannelDiscoveryReclassificationService({
     repository,
-    memberChannelIds: new Set(
-      discoveryTargets
-        .filter((target) => Boolean(target.memberId))
-        .map((target) => target.channelId),
-    ),
+    members,
+    targets: discoveryTargets,
   });
   const sourceTypeRepairService = new MusicSourceTypeRepairService({
     repository,
@@ -409,6 +441,7 @@ function createDefaultMusicSyncService(
       discoverChannelUploads: () => discoveryService.discover(),
       reclassifyDiscoveredUploads: () => discoveryReclassificationService.reclassify(),
       repairSourceTypeMismatches: () => sourceTypeRepairService.repair(),
+      ingestVideos: (input) => videoIngestService.ingestVideos(input),
       listReviewCandidates: ({ limit } = {}) => repository.listReviewCandidates?.({ limit }) ?? Promise.resolve([]),
       upsertOverride: async (videoId, input) => {
         const item = await repository.getMusicItemByVideoId(videoId) as { id?: string; youtubeVideoId?: string } | null;
@@ -596,6 +629,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ...createDefaultYoutubeSongBackfillScheduler(env, undefined, options.chzzkLiveApiFetch),
       ...createDefaultMusicSyncService(env, undefined, options.chzzkLiveApiFetch, registerClose, (message) => app.log.warn(message)),
     };
+  for (const code of musicConfigurationWarnings(env, {
+    channelDiscoveryServiceConfigured: Boolean(internalRouteDependencies.musicSync?.discoverChannelUploads),
+  })) {
+    app.log.warn({ code }, "music configuration warning");
+  }
   await registerInternalRoutes(app, { env, dependencies: internalRouteDependencies });
   await registerAdminRoutes(app, { env });
   await registerAdminHubEventRoutes(app, { env, dependencies: options.adminHubEventRoutes?.dependencies });

@@ -97,6 +97,7 @@ const envSchema = z
     MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR: z.coerce.number().int().min(1).max(24).default(24),
     MUSIC_CHANNEL_DISCOVERY_TIME_ZONE: ianaTimeZone("Asia/Seoul"),
     MUSIC_CHANNEL_DISCOVERY_RECENT_PAGES: z.coerce.number().int().positive().default(1),
+    MUSIC_CHANNEL_DISCOVERY_SCHEDULER_BASE_URL: optionalUrl(),
     MUSIC_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
     MUSIC_CACHE_STALE_SECONDS: z.coerce.number().int().positive().default(600),
     MUSIC_CACHE_MAX_ENTRIES: boundedInteger(256, 16, 5_000),

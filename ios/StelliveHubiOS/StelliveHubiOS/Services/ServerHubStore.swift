@@ -1,6 +1,6 @@
 import Foundation
 
-private let builtInHubEventFilters: Set<String> = ["all", "goods", "ticketing", "offline", "closing"]
+private let builtInHubEventFilters: Set<String> = ["all", "goods", "album", "ticketing", "offline", "closing"]
 
 struct MusicPageCollector {
     struct Result { let items: [SongCatalogItem]; let serverTime: String?; let complete: Bool }
@@ -306,10 +306,9 @@ final class ServerHubStore: ObservableObject {
     func calendarDays(for filter: String) -> [HubCalendarDay] {
         let days = serverCalendarDays.isEmpty ? fallback.calendarDays(for: filter) : serverCalendarDays
         guard filter != "all" else { return days }
-        let allowedEventIds = Set(hubEvents(for: filter).map(\.id))
         return days.compactMap { day in
             let entries = day.entries.filter { entry in
-                entry.entryKind != .hubEvent || allowedEventIds.contains(entry.eventId)
+                entry.entryKind != .hubEvent || HubEventFilterPolicy.matches(entry, filterId: filter)
             }
             return entries.isEmpty ? nil : HubCalendarDay(date: day.date, entries: entries)
         }
@@ -346,20 +345,7 @@ final class ServerHubStore: ObservableObject {
     }
 
     private func filteredServerHubEvents(for filter: String) -> [HubEvent] {
-        switch filter {
-        case "all":
-            return serverHubEvents
-        case "goods":
-            return serverHubEvents.filter { $0.category == .onlineGoods || $0.category == .onlineCollab }
-        case "ticketing":
-            return serverHubEvents.filter { $0.category == .ticketing }
-        case "offline":
-            return serverHubEvents.filter { $0.participationMode.isOffline }
-        case "closing":
-            return serverHubEvents.filter { $0.status == .closingSoon }
-        default:
-            return serverHubEvents.filter { $0.generationId == filter }
-        }
+        serverHubEvents.filter { HubEventFilterPolicy.matches($0, filterId: filter) }
     }
 
     private static let calendarDateFormatter: DateFormatter = {
@@ -376,6 +362,7 @@ private extension HubEventResponse {
         HubEvent(
             id: id,
             category: category,
+            tags: Set(tags.compactMap(HubEventTag.init(rawValue:))),
             participationMode: participationMode,
             status: status,
             title: title,

@@ -208,6 +208,61 @@ final class HubAPIClientTests: XCTestCase {
         XCTAssertNil(detail.scheduleItems?.first?.title)
     }
 
+    func testHubEventTagsDecodeMissingEmptyAndKnownOrUnknownStrings() async throws {
+        let client = makeClient { _ in
+            jsonResponse(statusCode: 200, body: """
+                {
+                  "items": [{
+                    "id": "missing-tags",
+                    "category": "online_goods",
+                    "participationMode": "online",
+                    "status": "open",
+                    "title": "태그 없음",
+                    "generationId": "official",
+                    "sourceUrl": "https://example.com/missing",
+                    "sourceLabel": "공식",
+                    "sourceType": "official",
+                    "notificationEligible": true,
+                    "updatedAt": "2026-06-18T00:00:00.000Z"
+                  }, {
+                    "id": "empty-tags",
+                    "category": "online_goods",
+                    "tags": [],
+                    "participationMode": "online",
+                    "status": "open",
+                    "title": "빈 태그",
+                    "generationId": "official",
+                    "sourceUrl": "https://example.com/empty",
+                    "sourceLabel": "공식",
+                    "sourceType": "official",
+                    "notificationEligible": true,
+                    "updatedAt": "2026-06-18T00:00:00.000Z"
+                  }, {
+                    "id": "album-tags",
+                    "category": "ticketing",
+                    "tags": ["album", "future_tag"],
+                    "participationMode": "online",
+                    "status": "upcoming",
+                    "title": "음반",
+                    "generationId": "official",
+                    "sourceUrl": "https://example.com/album",
+                    "sourceLabel": "공식",
+                    "sourceType": "official",
+                    "notificationEligible": true,
+                    "updatedAt": "2026-06-18T00:00:00.000Z"
+                  }],
+                  "nextCursor": null
+                }
+                """)
+        }
+
+        let response = try await client.hubEvents()
+
+        XCTAssertEqual(response.items[0].tags, [])
+        XCTAssertEqual(response.items[1].tags, [])
+        XCTAssertEqual(response.items[2].tags, ["album", "future_tag"])
+    }
+
     func testAnnouncementListAndDetailSendPlatformVersionAndDecodeResponses() async throws {
         var seenPaths: [String] = []
         let item = """
@@ -465,6 +520,136 @@ final class ServerHubStoreTests: XCTestCase {
         XCTAssertEqual(store.cachedHubEvent(id: "event-1")?.title, "서버 굿즈")
     }
 
+    func testAlbumTagConversionAndCategoryFiltersMatchListAndCalendar() async {
+        let store = makeStore { request in
+            if request.url?.path == "/v1/hub-events/calendar" {
+                return jsonResponse(statusCode: 200, body: """
+                    {
+                      "timezone": "Asia/Seoul",
+                      "from": "2026-06-01",
+                      "to": "2026-06-30",
+                      "days": [{
+                        "date": "2026-06-18",
+                        "entries": [{
+                          "id": "regular-goods:2026-06-18",
+                          "eventId": "regular-goods",
+                          "entryKind": "hub_event",
+                          "title": "일반 굿즈",
+                          "category": "online_goods",
+                          "tags": ["album"],
+                          "status": "open",
+                          "participationMode": "online",
+                          "generationId": "official",
+                          "displayDate": "2026-06-18",
+                          "displayTimeText": "종일",
+                          "sourceLabel": "공식",
+                          "appDeepLink": "stellivehub://hub-events/regular-goods"
+                        }, {
+                          "id": "album-ticket:2026-06-18",
+                          "eventId": "album-ticket",
+                          "entryKind": "hub_event",
+                          "title": "음반 티켓",
+                          "category": "ticketing",
+                          "tags": ["album", "future_tag"],
+                          "status": "upcoming",
+                          "participationMode": "online",
+                          "generationId": "official",
+                          "displayDate": "2026-06-18",
+                          "displayTimeText": "종일",
+                          "sourceLabel": "공식",
+                          "appDeepLink": "stellivehub://hub-events/album-ticket"
+                        }, {
+                          "id": "regular-ticket:2026-06-18",
+                          "eventId": "regular-ticket",
+                          "entryKind": "hub_event",
+                          "title": "일반 티켓",
+                          "category": "ticketing",
+                          "tags": [],
+                          "status": "upcoming",
+                          "participationMode": "online",
+                          "generationId": "official",
+                          "displayDate": "2026-06-18",
+                          "displayTimeText": "종일",
+                          "sourceLabel": "공식",
+                          "appDeepLink": "stellivehub://hub-events/regular-ticket"
+                        }]
+                      }]
+                    }
+                    """)
+            }
+            return jsonResponse(statusCode: 200, body: """
+                {
+                  "items": [{
+                    "id": "regular-goods",
+                    "category": "online_goods",
+                    "tags": ["album"],
+                    "participationMode": "online",
+                    "status": "open",
+                    "title": "일반 굿즈",
+                    "generationId": "official",
+                    "sourceUrl": "https://example.com/regular-goods",
+                    "sourceLabel": "공식",
+                    "sourceType": "official",
+                    "notificationEligible": true,
+                    "updatedAt": "2026-06-18T00:00:00.000Z"
+                  }, {
+                    "id": "album-ticket",
+                    "category": "ticketing",
+                    "tags": ["album", "future_tag"],
+                    "participationMode": "online",
+                    "status": "upcoming",
+                    "title": "음반 티켓",
+                    "generationId": "official",
+                    "sourceUrl": "https://example.com/album-ticket",
+                    "sourceLabel": "공식",
+                    "sourceType": "official",
+                    "notificationEligible": true,
+                    "updatedAt": "2026-06-18T00:00:00.000Z"
+                  }, {
+                    "id": "regular-ticket",
+                    "category": "ticketing",
+                    "tags": [],
+                    "participationMode": "online",
+                    "status": "upcoming",
+                    "title": "일반 티켓",
+                    "generationId": "official",
+                    "sourceUrl": "https://example.com/regular-ticket",
+                    "sourceLabel": "공식",
+                    "sourceType": "official",
+                    "notificationEligible": true,
+                    "updatedAt": "2026-06-18T00:00:00.000Z"
+                  }],
+                  "nextCursor": null
+                }
+                """)
+        }
+
+        await store.refreshHubEvents()
+        await store.refreshCalendar(
+            from: Date(timeIntervalSince1970: 1_780_272_000),
+            to: Date(timeIntervalSince1970: 1_782_864_000),
+            timezone: TimeZone(identifier: "Asia/Seoul")!
+        )
+
+        XCTAssertEqual(store.cachedHubEvent(id: "regular-goods")?.tags, [.album])
+        XCTAssertEqual(store.cachedHubEvent(id: "album-ticket")?.tags, [.album])
+        XCTAssertEqual(store.hubEvents(for: "goods").map(\.id), ["regular-goods"])
+        XCTAssertEqual(
+            store.calendarDays(for: "goods").flatMap(\.entries).map(\.eventId),
+            ["regular-goods"]
+        )
+        XCTAssertEqual(store.hubEvents(for: "album").map(\.id), ["regular-goods", "album-ticket"])
+        XCTAssertEqual(
+            store.calendarDays(for: "album").flatMap(\.entries).map(\.eventId),
+            ["regular-goods", "album-ticket"]
+        )
+        XCTAssertEqual(store.hubEvents(for: "ticketing").map(\.id), ["album-ticket", "regular-ticket"])
+        XCTAssertEqual(
+            store.calendarDays(for: "ticketing").flatMap(\.entries).map(\.eventId),
+            ["album-ticket", "regular-ticket"]
+        )
+    }
+
     func testRefreshHubEventsForwardsOptionalDateRange() async {
         let requestedFrom = DateComponents(
             calendar: Calendar(identifier: .gregorian),
@@ -508,6 +693,7 @@ final class ServerHubStoreTests: XCTestCase {
         }
 
         await store.refreshHubEvents(filter: "goods")
+        await store.refreshHubEvents(filter: "album")
     }
 
     func testRefreshRecentSongsRequestsLatestItemsWithoutTypeFilter() async {

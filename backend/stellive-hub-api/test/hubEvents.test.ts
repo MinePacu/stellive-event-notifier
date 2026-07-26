@@ -13,6 +13,7 @@ describe("HubEvent types", () => {
     const event: HubEvent = {
       id: "hub-event-1",
       category,
+      tags: [],
       participationMode: "online",
       status,
       title: "Official Online Goods Announcement",
@@ -39,6 +40,7 @@ describe("HubEventService", () => {
     return {
       id: "hub-event-1",
       category: "online_goods",
+      tags: [],
       participationMode: "online",
       status: "announced",
       title: "Official Online Goods Announcement",
@@ -131,6 +133,16 @@ describe("HubEventService", () => {
         new Date("2026-06-03T12:00:00Z")
       )
     ).toBe("upcoming");
+  });
+
+  it("filters independently by the album tag", () => {
+    const service = new HubEventService(catalog, [
+      hubEvent({ id: "goods-album", category: "online_goods", tags: ["album"] }),
+      hubEvent({ id: "ticket-album", category: "ticketing", tags: ["album"] }),
+      hubEvent({ id: "plain-goods", category: "online_goods", tags: [] })
+    ]);
+
+    expect(service.list({ tag: "album" }).items.map((event) => event.id)).toEqual(["goods-album", "ticket-album"]);
   });
 
   it("treats a regular open event as ended exactly at endsAt", () => {
@@ -311,6 +323,7 @@ describe("hub event routes", () => {
     const event: HubEvent = {
       id: "injected-public-event",
       category: "online_goods",
+      tags: [],
       participationMode: "online",
       status: "announced",
       title: "Injected Public Event",
@@ -377,6 +390,7 @@ describe("validateHubEvent", () => {
     return {
       id: "hub-event-1",
       category: "online_goods",
+      tags: [],
       participationMode: "online",
       status: "announced",
       title: "Official Online Goods Announcement",

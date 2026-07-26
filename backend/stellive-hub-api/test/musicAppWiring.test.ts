@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildApp, createMusicMemberAliasInputs, createMusicMemberUpsertInputs } from "../src/app.js";
+import {
+  buildApp,
+  createMusicMemberAliasInputs,
+  createMusicMemberUpsertInputs,
+  musicConfigurationWarnings,
+} from "../src/app.js";
 import { loadEnv } from "../src/config/env.js";
 
 const baseEnv = {
@@ -31,10 +36,16 @@ describe("music app wiring", () => {
   });
 
   it("uses the same target music members for automatic member matching", () => {
-    const ids = createMusicMemberAliasInputs().map((input) => input.id).sort();
+    const inputs = createMusicMemberAliasInputs();
+    const ids = inputs.map((input) => input.id).sort();
 
     expect(ids).toEqual(createMusicMemberUpsertInputs().map((input) => input.id).sort());
     expect(ids).not.toContain("stellive-official");
+    expect(inputs.find((input) => input.id === "yuzuha-riko")).toMatchObject({
+      nameKo: "유즈하 리코",
+      nameEn: "Yuzuha Riko",
+      unitName: "Cliche",
+    });
   });
 
   it("loadEnv parses music sync cache and official playlist defaults", () => {
@@ -52,6 +63,28 @@ describe("music app wiring", () => {
     expect(env.YOUTUBE_API_BASE_URL).toBe("https://www.googleapis.com/youtube/v3");
     expect(env.STELLIVE_MUSIC_COVER_PLAYLIST_ID).toBe("PLLjd981H8qSN9PQ8-X6wINqBF1GjGxusy");
     expect(env.STELLIVE_MUSIC_ORIGINAL_PLAYLIST_ID).toBe("PLLjd981H8qSMGC4Nir0hD2Gj9n9PDUoHX");
+    expect(env.MUSIC_CHANNEL_DISCOVERY_SCHEDULER_BASE_URL).toBeUndefined();
+  });
+
+  it("reports fixed music configuration warning codes without secret values", () => {
+    const env = loadEnv({
+      ...baseEnv,
+      MUSIC_SYNC_ENABLED: "true",
+      MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED: "true",
+      YOUTUBE_API_KEY: "replace_with_super_secret_key",
+      INTERNAL_API_TOKEN: "replace_with_super_secret_token",
+    });
+
+    const warnings = musicConfigurationWarnings(env, {
+      channelDiscoveryServiceConfigured: false,
+    });
+
+    expect(warnings).toEqual([
+      "music_sync_youtube_api_not_configured",
+      "music_channel_discovery_internal_token_not_configured",
+      "music_channel_discovery_service_not_configured",
+    ]);
+    expect(JSON.stringify(warnings)).not.toContain("super_secret");
   });
 
   it("buildApp registers public music routes without YouTube API key", async () => {
@@ -79,5 +112,76 @@ describe("music app wiring", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ status: "disabled", reason: "official_music_sync_not_configured" });
+  });
+
+  it("wires direct ingestion through the shared discovery processor", async () => {
+    const youtubeFetch = async (input: string | URL | Request) => {
+      const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+      expect(url.pathname).toBe("/youtube/v3/videos");
+      expect(url.searchParams.get("id")).toBe("abcdefghijk");
+      return new Response(JSON.stringify({
+        items: [{
+          id: "abcdefghijk",
+          snippet: {
+            title: "untrusted external upload",
+            channelId: "UC_EXTERNAL_CHANNEL",
+            tags: [],
+          },
+          contentDetails: {},
+          status: { privacyStatus: "public" },
+        }],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const app = await buildApp({
+      env: {
+        ...baseEnv,
+        MUSIC_SYNC_ENABLED: "true",
+        YOUTUBE_API_KEY: "youtube-secret-key",
+      },
+      useProcessEnv: false,
+      chzzkLiveApiFetch: youtubeFetch as typeof fetch,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/music/ingest-videos",
+      headers: {
+        authorization: "Bearer internal-test-token",
+        "content-type": "application/json",
+      },
+      payload: JSON.stringify({ videoIds: ["abcdefghijk"] }),
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).not.toContain("youtube-secret-key");
+    expect(response.json()).toEqual({
+      items: [{
+        videoId: "abcdefghijk",
+        status: "skipped",
+        action: "skipped_untrusted_channel",
+        classificationType: null,
+        classificationReason: "untrusted_channel",
+        structuredMatchKind: null,
+        memberIds: [],
+        reviewRequired: false,
+        error: null,
+      }],
+      summary: {
+        requested: 1,
+        uniqueRequested: 1,
+        fetched: 1,
+        inserted: 0,
+        updated: 0,
+        needsReview: 0,
+        skipped: 1,
+        notFound: 0,
+        failed: 0,
+        dryRun: false,
+      },
+    });
   });
 });

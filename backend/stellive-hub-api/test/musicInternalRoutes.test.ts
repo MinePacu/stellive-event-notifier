@@ -280,4 +280,154 @@ describe("music internal routes", () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ error: "music_sync_body_invalid" });
   });
+
+  it("validates, normalizes, and deduplicates direct video ingestion", async () => {
+    const ingestVideos = vi.fn(async (input) => ({
+      items: input.videoIds.map((videoId: string) => ({
+        videoId,
+        status: "ok" as const,
+        action: "would_insert" as const,
+        classificationType: "original",
+        classificationReason: "structured_title",
+        structuredMatchKind: "single",
+        memberIds: ["member-1"],
+        reviewRequired: false,
+        error: null,
+      })),
+      summary: {
+        requested: input.requestedCount,
+        uniqueRequested: input.videoIds.length,
+        fetched: input.videoIds.length,
+        inserted: 0,
+        updated: 0,
+        needsReview: 0,
+        skipped: 0,
+        notFound: 0,
+        failed: 0,
+        dryRun: input.dryRun,
+      },
+    }));
+    const app = await buildApp({
+      env,
+      useProcessEnv: false,
+      internalRoutes: {
+        dependencies: createInternalDeps({
+          musicSync: { syncAllMusic: vi.fn(), ingestVideos },
+        }),
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/music/ingest-videos",
+      headers: { ...authHeaders, "content-type": "application/json" },
+      payload: JSON.stringify({
+        videoIds: [" abcdefghijk ", "123456789_-", "abcdefghijk"],
+        dryRun: true,
+      }),
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(ingestVideos).toHaveBeenCalledWith({
+      videoIds: ["abcdefghijk", "123456789_-"],
+      dryRun: true,
+      requestedCount: 3,
+    });
+    expect(response.json().summary).toMatchObject({
+      requested: 3,
+      uniqueRequested: 2,
+      dryRun: true,
+    });
+  });
+
+  it("requires internal auth for direct video ingestion", async () => {
+    const ingestVideos = vi.fn();
+    const app = await buildApp({
+      env,
+      useProcessEnv: false,
+      internalRoutes: {
+        dependencies: createInternalDeps({
+          musicSync: { syncAllMusic: vi.fn(), ingestVideos },
+        }),
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/music/ingest-videos",
+      headers: { "content-type": "application/json" },
+      payload: JSON.stringify({ videoIds: ["abcdefghijk"] }),
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(401);
+    expect(ingestVideos).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ videoIds: [] }],
+    [{ videoIds: ["short"] }],
+    [{ videoIds: ["abcdefghijk"], dryRun: "true" }],
+    [{ videoIds: ["abcdefghijk"], unexpected: true }],
+    [{ videoIds: Array.from({ length: 51 }, (_, index) => String(index).padStart(11, "0")) }],
+  ])("rejects an invalid direct video ingestion body: %j", async (payload) => {
+    const app = await buildApp({
+      env,
+      useProcessEnv: false,
+      internalRoutes: {
+        dependencies: createInternalDeps({
+          musicSync: { syncAllMusic: vi.fn(), ingestVideos: vi.fn() },
+        }),
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/music/ingest-videos",
+      headers: { ...authHeaders, "content-type": "application/json" },
+      payload: JSON.stringify(payload),
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "music_ingest_videos_body_invalid" });
+  });
+
+  it("exposes secret-free music configuration diagnostics", async () => {
+    const app = await buildApp({
+      env: {
+        ...env,
+        MUSIC_SYNC_ENABLED: "true",
+        MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED: "true",
+        YOUTUBE_API_KEY: "replace_with_youtube_api_key",
+      },
+      useProcessEnv: false,
+      internalRoutes: {
+        dependencies: createInternalDeps({
+          musicSync: { syncAllMusic: vi.fn(), discoverChannelUploads: vi.fn() },
+        }),
+      },
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/internal/music/config-diagnostics",
+      headers: authHeaders,
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).not.toContain("internal-test-token");
+    expect(response.body).not.toContain("replace_with_youtube_api_key");
+    expect(response.json()).toEqual({
+      musicSyncEnabled: true,
+      channelDiscoveryEnabled: true,
+      youtubeApiConfigured: false,
+      internalApiTokenConfigured: true,
+      musicSyncServiceConfigured: true,
+      channelDiscoveryServiceConfigured: true,
+      workerExpectedToRun: false,
+    });
+  });
 });

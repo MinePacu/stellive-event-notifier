@@ -48,7 +48,7 @@ describe("MusicChannelDiscoverySyncService", () => {
       songIngestion: { ingestYoutubeUpload },
       locks: new InMemoryMusicSyncLock(),
       members: [],
-      targets: [{ channelId: "official-channel", maxResults: 10 }],
+      targets: [{ kind: "stellive_official", channelId: "official-channel", maxResults: 10 }],
     });
 
     const result = await service.discover();
@@ -98,7 +98,7 @@ describe("MusicChannelDiscoverySyncService", () => {
       },
       locks: new InMemoryMusicSyncLock(),
       members: [{ id: "member-1", aliases: ["Member One"] }],
-      targets: [{ memberId: "member-1", channelId: "channel-1" }],
+      targets: [{ kind: "member", memberId: "member-1", channelId: "channel-1" }],
       now: () => new Date("2026-06-28T12:00:00.000Z"),
     });
 
@@ -149,8 +149,8 @@ describe("MusicChannelDiscoverySyncService", () => {
       locks: new InMemoryMusicSyncLock(),
       members: [{ id: "member-1", aliases: ["Member One"] }],
       targets: [
-        { memberId: "member-1", channelId: "channel-1" },
-        { memberId: "member-1", channelId: "channel-1" },
+        { kind: "member", memberId: "member-1", channelId: "channel-1" },
+        { kind: "member", memberId: "member-1", channelId: "channel-1" },
       ],
       maxPages: 1,
     });
@@ -193,7 +193,7 @@ describe("MusicChannelDiscoverySyncService", () => {
       },
       locks: new InMemoryMusicSyncLock(),
       members: [],
-      targets: [{ channelId: "official-channel" }],
+      targets: [{ kind: "stellive_official", channelId: "official-channel" }],
     });
 
     const result = await service.discover();
@@ -234,7 +234,7 @@ describe("MusicChannelDiscoverySyncService", () => {
       },
       locks: new InMemoryMusicSyncLock(),
       members: [{ id: "member-1", aliases: ["Member One"], youtubeChannelId: "channel-1" }],
-      targets: [{ memberId: "member-1", channelId: "channel-1" }],
+      targets: [{ kind: "member", memberId: "member-1", channelId: "channel-1" }],
     });
 
     const result = await service.discover();
@@ -275,7 +275,7 @@ describe("MusicChannelDiscoverySyncService", () => {
       },
       locks: new InMemoryMusicSyncLock(),
       members: [{ id: "member-1", aliases: ["Member One"], youtubeChannelId: "channel-1" }],
-      targets: [{ memberId: "member-1", channelId: "channel-1" }],
+      targets: [{ kind: "member", memberId: "member-1", channelId: "channel-1" }],
     });
 
     const result = await service.discover();
@@ -327,7 +327,7 @@ describe("MusicChannelDiscoverySyncService", () => {
       },
       locks: new InMemoryMusicSyncLock(),
       members: [],
-      targets: [{ channelId: "official-channel" }],
+      targets: [{ kind: "stellive_official", channelId: "official-channel" }],
     });
 
     const result = await service.discover();
@@ -348,14 +348,18 @@ describe("MusicChannelDiscoverySyncService", () => {
         getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
         listUploads: async () => ({
           status: "ok",
-          candidates: [{ ...candidate, videoId: "manual-1", title: "Manual Cover" }],
+          candidates: [{
+            ...candidate,
+            videoId: "manual-1",
+            title: "유즈하 리코(Yuzuha Riko) | 수동 원곡 'Manual Original'",
+          }],
           pagesFetched: 1,
           quotaUnits: 1,
         }),
         fetchVideos: async () => [{
           videoId: "manual-1",
           channelId: "channel-1",
-          title: "Manual Cover",
+          title: "유즈하 리코(Yuzuha Riko) | 수동 원곡 'Manual Original'",
           description: "",
           tags: [],
           duration: "PT3M",
@@ -374,8 +378,14 @@ describe("MusicChannelDiscoverySyncService", () => {
         replaceMusicItemMembers: async () => undefined,
       },
       locks: new InMemoryMusicSyncLock(),
-      members: [],
-      targets: [{ channelId: "channel-1" }],
+      members: [{
+        id: "yuzuha-riko",
+        nameKo: "유즈하 리코",
+        nameEn: "Yuzuha Riko",
+        unitName: "Cliche",
+        aliases: ["유즈하 리코", "Yuzuha Riko"],
+      }],
+      targets: [{ kind: "stellive_official", channelId: "channel-1" }],
     });
 
     await service.discover();
@@ -387,6 +397,371 @@ describe("MusicChannelDiscoverySyncService", () => {
       rawCategoryHint: "ORIGINAL",
       classificationStatus: "MANUAL_CONFIRMED",
     }));
+  });
+
+  it("collects fixed structured-original fixtures by title, reviews partials, and ignores ordinary quoted uploads", async () => {
+    const fixtures = [
+      {
+        ...candidate,
+        videoId: "P_oxx3_VpIY",
+        title: "유즈하 리코(Yuzuha Riko) | '악당주의보'",
+      },
+      {
+        ...candidate,
+        videoId: "nsZmnwC9ukE",
+        title: "스텔라이브 (STELLIVE) Cliche | '우리의 노래'",
+      },
+      {
+        ...candidate,
+        videoId: "partial-structured",
+        title: "유즈하 리코(Yuzuha Riko) | 악당주의보",
+      },
+      {
+        ...candidate,
+        videoId: "ordinary-quoted",
+        title: "게임 방송 | '오늘의 하이라이트'",
+      },
+    ];
+    const upsertMusicItem = vi.fn(async (input) => ({ id: `music-${input.youtubeVideoId}`, ...input }));
+    const replaceMusicItemMembers = vi.fn(async () => undefined);
+    const service = new MusicChannelDiscoverySyncService({
+      youtube: {
+        getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
+        listUploads: async () => ({ status: "ok", candidates: fixtures, pagesFetched: 1, quotaUnits: 1 }),
+        fetchVideos: async (videoIds) => fixtures
+          .filter((fixture) => videoIds.includes(fixture.videoId))
+          .map((fixture) => ({
+            videoId: fixture.videoId,
+            channelId: "official-channel",
+            title: fixture.title,
+            description: "",
+            tags: [],
+            duration: "PT3M",
+            privacyStatus: "public",
+          })),
+      },
+      repository: {
+        getMusicItemByVideoId: async () => null,
+        getOverrideByVideoId: async () => null,
+        upsertMusicItem,
+        replaceMusicItemMembers,
+      },
+      locks: new InMemoryMusicSyncLock(),
+      members: [
+        {
+          id: "aokumo-rin",
+          nameKo: "아오쿠모 린",
+          nameEn: "Aokumo Rin",
+          unitName: "Cliche",
+          aliases: ["아오쿠모 린", "Aokumo Rin"],
+        },
+        {
+          id: "yuzuha-riko",
+          nameKo: "유즈하 리코",
+          nameEn: "Yuzuha Riko",
+          unitName: "Cliche",
+          aliases: ["유즈하 리코", "Yuzuha Riko"],
+        },
+      ],
+      targets: [{ kind: "stellive_official", channelId: "official-channel" }],
+    });
+
+    await expect(service.discover()).resolves.toMatchObject({
+      uniqueVideos: 4,
+      inserted: 3,
+      needsReview: 2,
+    });
+    expect(upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
+      youtubeVideoId: "P_oxx3_VpIY",
+      type: "original",
+      classificationStatus: "NEEDS_REVIEW",
+      isExcluded: true,
+      exclusionReason: "member_title_on_official_channel",
+      specialFlags: [
+        "structured_original_title",
+        "structured_original_member_on_official_channel",
+      ],
+    }));
+    expect(upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
+      youtubeVideoId: "nsZmnwC9ukE",
+      type: "original",
+      classificationStatus: "AUTO_CLASSIFIED",
+    }));
+    expect(upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
+      youtubeVideoId: "partial-structured",
+      type: "unknown",
+      classificationStatus: "NEEDS_REVIEW",
+      isExcluded: true,
+      rawCategoryHint: "UNKNOWN",
+      specialFlags: [
+        "partial_structured_original_title",
+        "structured_original_malformed_song_quotes",
+      ],
+    }));
+    expect(upsertMusicItem).not.toHaveBeenCalledWith(expect.objectContaining({
+      youtubeVideoId: "ordinary-quoted",
+    }));
+    expect(replaceMusicItemMembers).toHaveBeenCalledWith("music-P_oxx3_VpIY", [{
+      memberId: "yuzuha-riko",
+      role: "main",
+      confidence: 0.95,
+      source: "STRUCTURED_TITLE",
+    }]);
+    expect(replaceMusicItemMembers).toHaveBeenCalledWith("music-nsZmnwC9ukE", [
+      expect.objectContaining({ memberId: "aokumo-rin", role: "group", source: "STRUCTURED_TITLE" }),
+      expect.objectContaining({ memberId: "yuzuha-riko", role: "group", source: "STRUCTURED_TITLE" }),
+    ]);
+  });
+
+  it("classifies the Tenko bilingual regression from a trusted member channel without unit expansion", async () => {
+    const title =
+      "텐코 시부키(Tenko Shibuki) | 베리 베리 스트로베리 'Berry Verry Strawberry'";
+    const shibukiCandidate = {
+      ...candidate,
+      videoId: "nsZmnwC9ukE",
+      channelId: "shibuki-channel",
+      title,
+    };
+    const upsertMusicItem = vi.fn(async (input) => ({ id: "music-shibuki", ...input }));
+    const replaceMusicItemMembers = vi.fn(async () => undefined);
+    const service = new MusicChannelDiscoverySyncService({
+      youtube: {
+        getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
+        listUploads: async () => ({
+          status: "ok",
+          candidates: [shibukiCandidate],
+          pagesFetched: 1,
+          quotaUnits: 1,
+        }),
+        fetchVideos: async () => [{
+          videoId: "nsZmnwC9ukE",
+          channelId: "shibuki-channel",
+          title,
+          description: "STELLIVE Cliche 1st EP",
+          tags: [],
+          duration: "PT3M",
+          privacyStatus: "public",
+        }],
+      },
+      repository: {
+        getMusicItemByVideoId: async () => null,
+        getOverrideByVideoId: async () => null,
+        upsertMusicItem,
+        replaceMusicItemMembers,
+      },
+      locks: new InMemoryMusicSyncLock(),
+      members: [
+        {
+          id: "tenko-shibuki",
+          nameKo: "텐코 시부키",
+          nameEn: "Tenko Shibuki",
+          unitName: "Cliche",
+          aliases: ["텐코 시부키", "Tenko Shibuki"],
+          youtubeChannelId: "shibuki-channel",
+        },
+        {
+          id: "aokumo-rin",
+          nameKo: "아오쿠모 린",
+          nameEn: "Aokumo Rin",
+          unitName: "Cliche",
+          aliases: ["아오쿠모 린", "Aokumo Rin"],
+          youtubeChannelId: "rin-channel",
+        },
+      ],
+      targets: [{
+        kind: "member",
+        memberId: "tenko-shibuki",
+        channelId: "shibuki-channel",
+      }],
+    });
+
+    await expect(service.discover()).resolves.toMatchObject({
+      uniqueVideos: 1,
+      inserted: 1,
+      needsReview: 0,
+      excludedCandidates: 0,
+    });
+    expect(upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
+      youtubeVideoId: "nsZmnwC9ukE",
+      type: "original",
+      classificationStatus: "AUTO_CLASSIFIED",
+      isExcluded: false,
+      rawCategoryHint: "ORIGINAL",
+      specialFlags: ["structured_original_title", "bilingual_song_title"],
+    }));
+    expect(replaceMusicItemMembers).toHaveBeenCalledWith("music-shibuki", [{
+      memberId: "tenko-shibuki",
+      role: "main",
+      confidence: 0.95,
+      source: "STRUCTURED_TITLE",
+    }]);
+  });
+
+  it("keeps source playlist type ahead of a structured match and keeps exclusions review-only", async () => {
+    const sourceBacked = {
+      ...candidate,
+      videoId: "source-cover-structured",
+      title: "유즈하 리코(Yuzuha Riko) | 'Cover Source Wins'",
+    };
+    const excluded = {
+      ...candidate,
+      videoId: "structured-teaser",
+      title: "유즈하 리코(Yuzuha Riko) | 예고편 'Teaser'",
+    };
+    const upsertMusicItem = vi.fn(async (input) => ({ id: `music-${input.youtubeVideoId}`, ...input }));
+    const service = new MusicChannelDiscoverySyncService({
+      youtube: {
+        getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
+        listUploads: async () => ({ status: "ok", candidates: [sourceBacked, excluded], pagesFetched: 1, quotaUnits: 1 }),
+        fetchVideos: async () => [sourceBacked, excluded].map((fixture) => ({
+          videoId: fixture.videoId,
+          channelId: "official-channel",
+          title: fixture.title,
+          description: "",
+          tags: [],
+          duration: "PT3M",
+          privacyStatus: "public",
+        })),
+      },
+      repository: {
+        getMusicItemByVideoId: async (videoId) => videoId === sourceBacked.videoId
+          ? {
+              id: "existing-cover",
+              sourcePlaylistId: "official-cover",
+              type: "cover",
+              rawCategoryHint: "COVER",
+            }
+          : null,
+        getOverrideByVideoId: async () => null,
+        upsertMusicItem,
+        replaceMusicItemMembers: async () => undefined,
+      },
+      locks: new InMemoryMusicSyncLock(),
+      members: [{
+        id: "yuzuha-riko",
+        nameKo: "유즈하 리코",
+        nameEn: "Yuzuha Riko",
+        unitName: "Cliche",
+        aliases: ["유즈하 리코", "Yuzuha Riko"],
+      }],
+      targets: [{ kind: "stellive_official", channelId: "official-channel" }],
+    });
+
+    await expect(service.discover()).resolves.toMatchObject({
+      inserted: 1,
+      updated: 1,
+      needsReview: 2,
+      excludedCandidates: 2,
+    });
+    expect(upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
+      youtubeVideoId: sourceBacked.videoId,
+      type: "cover",
+      sourcePlaylistId: "official-cover",
+      rawCategoryHint: "COVER",
+    }));
+    expect(upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
+      youtubeVideoId: excluded.videoId,
+      type: "original",
+      isExcluded: true,
+      exclusionReason: "teaser",
+      classificationStatus: "NEEDS_REVIEW",
+    }));
+  });
+
+  it("reuses the trusted pipeline for direct dry-runs, uploader mismatches, and external skips", async () => {
+    const upsertMusicItem = vi.fn(async (input) => ({ id: `music-${input.youtubeVideoId}`, ...input }));
+    const replaceMusicItemMembers = vi.fn(async () => undefined);
+    const service = new MusicChannelDiscoverySyncService({
+      youtube: {
+        getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
+        listUploads: async () => ({ status: "ok", candidates: [], pagesFetched: 1, quotaUnits: 1 }),
+        fetchVideos: async () => [],
+      },
+      repository: {
+        getMusicItemByVideoId: async () => null,
+        getOverrideByVideoId: async () => null,
+        upsertMusicItem,
+        replaceMusicItemMembers,
+      },
+      locks: new InMemoryMusicSyncLock(),
+      members: [
+        {
+          id: "yuzuha-riko",
+          nameKo: "유즈하 리코",
+          nameEn: "Yuzuha Riko",
+          unitName: "Cliche",
+          aliases: ["유즈하 리코", "Yuzuha Riko"],
+          youtubeChannelId: "riko-channel",
+        },
+        {
+          id: "ayatsuno-yuni",
+          nameKo: "아야츠노 유니",
+          nameEn: "Ayatsuno Yuni",
+          unitName: "Everys",
+          aliases: ["아야츠노 유니", "Ayatsuno Yuni"],
+          youtubeChannelId: "yuni-channel",
+        },
+      ],
+      targets: [{
+        kind: "member",
+        memberId: "yuzuha-riko",
+        channelId: "riko-channel",
+      }],
+    });
+
+    await expect(service.ingestVideoDetail({
+      videoId: "dry-run-video",
+      channelId: "riko-channel",
+      title: "유즈하 리코(Yuzuha Riko) | 악당주의보 'Villain Warning'",
+      tags: [],
+      duration: "PT3M",
+      privacyStatus: "public",
+    }, { dryRun: true })).resolves.toMatchObject({
+      action: "would_insert",
+      persistenceAction: "would_insert",
+      classificationType: "original",
+      classificationReason: "trusted_member_title",
+      structuredMatchKind: "member",
+      memberIds: ["yuzuha-riko"],
+      reviewRequired: false,
+    });
+    expect(upsertMusicItem).not.toHaveBeenCalled();
+
+    await expect(service.ingestVideoDetail({
+      videoId: "mismatch-video",
+      channelId: "riko-channel",
+      title: "아야츠노 유니(Ayatsuno Yuni) | 나의 노래 'My Song'",
+      tags: [],
+      duration: "PT3M",
+      privacyStatus: "public",
+    }, { dryRun: false })).resolves.toMatchObject({
+      action: "needs_review",
+      persistenceAction: "inserted",
+      classificationReason: "member_channel_title_mismatch",
+      memberIds: ["ayatsuno-yuni"],
+      reviewRequired: true,
+      isExcluded: true,
+    });
+    expect(upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
+      youtubeVideoId: "mismatch-video",
+      classificationStatus: "NEEDS_REVIEW",
+      isExcluded: true,
+      exclusionReason: "member_channel_title_mismatch",
+    }));
+
+    await expect(service.ingestVideoDetail({
+      videoId: "external-video",
+      channelId: "external-channel",
+      title: "유즈하 리코(Yuzuha Riko) | 복사된 형식 'Copied Format'",
+      tags: [],
+      duration: "PT3M",
+      privacyStatus: "public",
+    }, { dryRun: false })).resolves.toMatchObject({
+      action: "skipped_untrusted_channel",
+      classificationReason: "untrusted_channel",
+    });
+    expect(upsertMusicItem).toHaveBeenCalledTimes(1);
+    expect(replaceMusicItemMembers).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -408,7 +783,8 @@ describe("MusicChannelDiscoveryReclassificationService", () => {
         }],
         updateMusicItemClassification,
       },
-      memberChannelIds: new Set(),
+      members: [],
+      targets: [],
     });
 
     await expect(service.reclassify()).resolves.toEqual({
@@ -421,7 +797,7 @@ describe("MusicChannelDiscoveryReclassificationService", () => {
     expect(updateMusicItemClassification).toHaveBeenCalledWith("music-1", expect.objectContaining({
       classificationStatus: "NEEDS_REVIEW",
       isExcluded: true,
-      exclusionReason: "non_music_upload",
+      exclusionReason: "untrusted_channel",
     }));
   });
 
@@ -445,11 +821,29 @@ describe("MusicChannelDiscoveryReclassificationService", () => {
           { ...baseRow, id: "external-playlist", youtubeVideoId: "external-video", channelId: "external-channel" },
           { ...baseRow, id: "scheduled-playlist", youtubeVideoId: "scheduled-video", channelId: "member-channel", youtubePresentationType: "premiere_assumed", youtubePremiereState: "scheduled" },
           { ...baseRow, id: "live-playlist", youtubeVideoId: "live-video", channelId: "member-channel", youtubePresentationType: "premiere_assumed", youtubePremiereState: "live" },
-          { ...baseRow, id: "manual-playlist", youtubeVideoId: "manual-video", channelId: "member-channel", classificationStatus: "MANUAL_EXCLUDED" },
+          {
+            ...baseRow,
+            id: "manual-playlist",
+            youtubeVideoId: "manual-video",
+            channelId: "member-channel",
+            title: "텐코 시부키(Tenko Shibuki) | 베리 베리 스트로베리 'Berry Verry Strawberry'",
+            classificationStatus: "MANUAL_EXCLUDED",
+          },
         ],
         updateMusicItemClassification,
       },
-      memberChannelIds: new Set(["member-channel"]),
+      members: [{
+        id: "member-1",
+        nameKo: "텐코 시부키",
+        nameEn: "Tenko Shibuki",
+        aliases: [],
+        youtubeChannelId: "member-channel",
+      }],
+      targets: [{
+        kind: "member",
+        memberId: "member-1",
+        channelId: "member-channel",
+      }],
     });
 
     await expect(service.reclassify()).resolves.toEqual({
@@ -468,7 +862,7 @@ describe("MusicChannelDiscoveryReclassificationService", () => {
     expect(updateMusicItemClassification).toHaveBeenCalledWith("external-playlist", expect.objectContaining({
       classificationStatus: "NEEDS_REVIEW",
       isExcluded: true,
-      exclusionReason: "non_music_upload",
+      exclusionReason: "untrusted_channel",
     }));
     expect(updateMusicItemClassification).toHaveBeenCalledWith("scheduled-playlist", expect.objectContaining({
       classificationStatus: "NEEDS_REVIEW",
@@ -479,6 +873,93 @@ describe("MusicChannelDiscoveryReclassificationService", () => {
       isExcluded: true,
     }));
     expect(updateMusicItemClassification).not.toHaveBeenCalledWith("manual-playlist", expect.anything());
+  });
+
+  it("reuses structured parsing and official-channel trust during reclassification", async () => {
+    const updateMusicItemClassification = vi.fn(async () => undefined);
+    const baseRow = {
+      description: "",
+      type: "unknown" as const,
+      duration: "PT3M",
+      privacyStatus: "public",
+      tags: [],
+      classificationStatus: "AUTO_CLASSIFIED",
+      channelId: "official-channel",
+    };
+    const members = [
+      {
+        id: "yuzuha-riko",
+        nameKo: "유즈하 리코",
+        nameEn: "Yuzuha Riko",
+        unitName: "Cliche",
+        aliases: ["유즈하 리코", "Yuzuha Riko"],
+      },
+      {
+        id: "aokumo-rin",
+        nameKo: "아오쿠모 린",
+        nameEn: "Aokumo Rin",
+        unitName: "Cliche",
+        aliases: ["아오쿠모 린", "Aokumo Rin"],
+      },
+    ];
+    const service = new MusicChannelDiscoveryReclassificationService({
+      repository: {
+        listDiscoveredMusicItemsForReclassification: async () => [
+          {
+            ...baseRow,
+            id: "unit-original",
+            youtubeVideoId: "unit-video",
+            title: "스텔라이브 (STELLIVE) Cliche | 우리의 노래 'Our Song'",
+          },
+          {
+            ...baseRow,
+            id: "personal-original",
+            youtubeVideoId: "personal-video",
+            title: "유즈하 리코(Yuzuha Riko) | '악당주의보'",
+          },
+          {
+            ...baseRow,
+            id: "partial-original",
+            youtubeVideoId: "partial-video",
+            title: "유즈하 리코(Yuzuha Riko) | 악당주의보",
+          },
+        ],
+        updateMusicItemClassification,
+      },
+      members,
+      targets: [{ kind: "stellive_official", channelId: "official-channel" }],
+    });
+
+    await expect(service.reclassify()).resolves.toEqual({
+      status: "ok",
+      checked: 3,
+      hidden: 2,
+      kept: 1,
+      manualSkipped: 0,
+    });
+    expect(updateMusicItemClassification).toHaveBeenCalledWith("unit-original", expect.objectContaining({
+      type: "original",
+      classificationStatus: "AUTO_CLASSIFIED",
+      isExcluded: false,
+      rawCategoryHint: "ORIGINAL",
+      specialFlags: ["structured_original_title", "bilingual_song_title"],
+    }));
+    expect(updateMusicItemClassification).toHaveBeenCalledWith("personal-original", expect.objectContaining({
+      type: "original",
+      classificationStatus: "NEEDS_REVIEW",
+      isExcluded: true,
+      exclusionReason: "member_title_on_official_channel",
+    }));
+    expect(updateMusicItemClassification).toHaveBeenCalledWith("partial-original", expect.objectContaining({
+      type: "unknown",
+      classificationStatus: "NEEDS_REVIEW",
+      isExcluded: true,
+      rawCategoryHint: "UNKNOWN",
+      specialFlags: [
+        "partial_structured_original_title",
+        "structured_original_malformed_song_quotes",
+      ],
+    }));
   });
 });
 

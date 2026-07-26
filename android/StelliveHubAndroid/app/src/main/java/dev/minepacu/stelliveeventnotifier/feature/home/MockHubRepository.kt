@@ -13,6 +13,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventSourceType
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventTag
 import dev.minepacu.stelliveeventnotifier.core.model.HubMember
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationEventType
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationHistoryItem
@@ -94,7 +95,8 @@ class MockHubRepository : HubRepository {
             startsAt = Instant.parse("2026-06-02T03:00:00Z"),
             endsAt = Instant.parse("2026-06-10T12:00:00Z"),
             ticketUrl = "https://stellive.example/tickets/open-gen3-goods",
-            updatedAt = Instant.parse("2026-06-03T01:00:00Z")
+            updatedAt = Instant.parse("2026-06-03T01:00:00Z"),
+            tags = listOf(HubEventTag.ALBUM),
         ),
         HubEvent(
             id = "upcoming-offline-popup",
@@ -219,14 +221,15 @@ class MockHubRepository : HubRepository {
         }
 
     fun hubEventsForFilter(filter: String): List<HubEvent> {
-        val filtered = when (filter.lowercase()) {
-            "goods" -> hubEvents.filter {
-                it.category == HubEventCategory.ONLINE_GOODS || it.category == HubEventCategory.ONLINE_COLLAB
-            }
-            "ticketing" -> hubEvents.filter { it.category == HubEventCategory.TICKETING }
-            "offline" -> hubEvents.filter { it.participationMode.isOffline }
-            "closing" -> hubEvents.filter { it.status == HubEventStatus.CLOSING_SOON }
-            else -> hubEvents
+        val filterId = filter.lowercase()
+        val filtered = hubEvents.filter { event ->
+            MainUiPolicy.goodsEventMatchesFilter(
+                filterId = filterId,
+                category = event.category,
+                status = event.status,
+                participationMode = event.participationMode,
+                tags = event.tags,
+            )
         }
 
         return filtered.sortedWith(hubEventComparator)
@@ -275,7 +278,8 @@ class MockHubRepository : HubRepository {
             displayTimeText = calendarTimeText(event),
             sourceLabel = event.sourceLabel,
             appDeepLink = HubCalendarDeepLinkPolicy.appDeepLinkForEvent(event.id),
-            platformUrl = event.purchaseUrl ?: event.ticketUrl ?: event.sourceUrl
+            platformUrl = event.purchaseUrl ?: event.ticketUrl ?: event.sourceUrl,
+            tags = event.tags,
         )
     }
 
@@ -312,9 +316,12 @@ class MockHubRepository : HubRepository {
         bootstrap()
 
     override suspend fun hubEvents(filterId: String, from: LocalDate?, to: LocalDate?): List<HubEvent> =
-        hubEvents
+        (if (filterId in setOf("all", "goods", "album", "ticketing", "offline", "closing")) {
+            hubEventsForFilter(filterId)
+        } else {
+            hubEvents.filter { it.generationId == filterId }
+        })
             .asSequence()
-            .filter { filterId == "all" || it.generationId == filterId }
             .filter { event ->
                 if (from == null || to == null) {
                     true

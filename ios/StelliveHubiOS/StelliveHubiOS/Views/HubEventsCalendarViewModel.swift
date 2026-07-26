@@ -600,19 +600,7 @@ final class HubEventsCalendarViewModel: ObservableObject {
     }
 
     private func filteredEntries(from entries: [HubCalendarEntry]) -> [HubCalendarEntry] {
-        let filtered: [HubCalendarEntry]
-        switch filterId {
-        case "goods":
-            filtered = entries.filter { $0.category == .onlineGoods || $0.category == .onlineCollab }
-        case "ticketing":
-            filtered = entries.filter { $0.category == .ticketing }
-        case "offline":
-            filtered = entries.filter { $0.participationMode.isOffline }
-        case "closing":
-            filtered = entries.filter { $0.status == .closingSoon }
-        default:
-            filtered = entries
-        }
+        let filtered = entries.filter { HubEventFilterPolicy.matches($0, filterId: filterId) }
         return filtered.sorted(by: HubCalendarPolicy.areInDisplayOrder)
     }
 

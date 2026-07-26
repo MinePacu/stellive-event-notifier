@@ -22,6 +22,7 @@ export type {
   HubEventScheduleMode,
   HubEventSourceType,
   HubEventStatus,
+  HubEventTag,
   HubEventTimePrecision,
   HubEventsSummary,
   LiveStatus,
@@ -34,3 +35,5 @@ export type {
   ResolvedNotificationPreference,
   UserNotificationPreference
 } from "../../../shared/schemas/domain.js";
+
+export { HUB_EVENT_TAGS } from "../../../shared/schemas/domain.js";

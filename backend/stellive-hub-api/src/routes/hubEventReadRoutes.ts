@@ -11,9 +11,11 @@ import type {
   HubCalendarEntryKind,
   HubCalendarSpecialDay,
   HubEventCategory,
+  HubEventTag,
   HubEventParticipationMode,
   HubEventStatus
 } from "../types.js";
+import { HUB_EVENT_TAGS } from "../types.js";
 
 const hubEventCategories = new Set<HubEventCategory>([
   "online_goods",
@@ -23,6 +25,7 @@ const hubEventCategories = new Set<HubEventCategory>([
   "offline_popup",
   "ticketing"
 ]);
+const hubEventTags = new Set<HubEventTag>(HUB_EVENT_TAGS);
 const participationModes = new Set<HubEventParticipationMode>(["online", "offline", "hybrid"]);
 const hubEventStatuses = new Set<HubEventStatus>(["announced", "upcoming", "open", "closing_soon", "ended", "cancelled"]);
 const hubCalendarEntryKinds = new Set<HubCalendarEntryKind>(["hub_event", "member_birthday", "generation_anniversary"]);
@@ -116,6 +119,9 @@ function parseHubEventListQuery(query: unknown, reply: FastifyReply): ParseResul
   const category = firstQueryValue(input.category);
   if (category && !hubEventCategories.has(category as HubEventCategory)) return invalidQuery(reply, "category");
 
+  const tag = firstQueryValue(input.tag);
+  if (tag && !hubEventTags.has(tag as HubEventTag)) return invalidQuery(reply, "tag");
+
   const participationMode = firstQueryValue(input.participationMode);
   if (participationMode && !participationModes.has(participationMode as HubEventParticipationMode)) {
     return invalidQuery(reply, "participationMode");
@@ -139,6 +145,7 @@ function parseHubEventListQuery(query: unknown, reply: FastifyReply): ParseResul
     ok: true,
     value: {
       category: category as HubEventCategory | undefined,
+      tag: tag as HubEventTag | undefined,
       participationMode: participationMode as HubEventParticipationMode | undefined,
       status: status as HubEventStatus | undefined,
       generationId: firstQueryValue(input.generationId),

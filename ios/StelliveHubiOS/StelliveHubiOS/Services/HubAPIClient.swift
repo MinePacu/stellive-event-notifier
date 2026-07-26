@@ -140,9 +140,38 @@ struct HubEventsListResponse: Codable, Equatable {
     let nextCursor: String?
 }
 
+@propertyWrapper
+struct DefaultEmptyStringArray: Codable, Equatable {
+    var wrappedValue: [String]
+
+    init(wrappedValue: [String] = []) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        wrappedValue = container.decodeNil() ? [] : try container.decode([String].self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(wrappedValue)
+    }
+}
+
+extension KeyedDecodingContainer {
+    func decode(
+        _ type: DefaultEmptyStringArray.Type,
+        forKey key: Key
+    ) throws -> DefaultEmptyStringArray {
+        try decodeIfPresent(type, forKey: key) ?? DefaultEmptyStringArray()
+    }
+}
+
 struct HubEventResponse: Codable, Equatable {
     let id: String
     let category: HubEventCategory
+    @DefaultEmptyStringArray var tags: [String] = []
     let participationMode: HubEventParticipationMode
     let status: HubEventStatus
     let title: String

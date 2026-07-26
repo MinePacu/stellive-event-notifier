@@ -12,6 +12,7 @@ import type { AdminHubEvent, HubEventAdminAction, HubEventPublicationState } fro
 import type { HubEventFilters, HubEventListResult } from "./hubEventService.js";
 import { koreaDateKey, resolveEffectiveHubEventStatus, withEffectiveHubEventStatus } from "./hubEventStatus.js";
 import { deriveHubEventScheduleMode, normalizeHubEventScheduleText } from "./hubEventSchedulePolicy.js";
+import { isHubEventTag } from "./hubEventTagPolicy.js";
 import {
   firstEventLegacyProjection,
   firstScheduleLegacyProjection,
@@ -24,6 +25,7 @@ import {
 interface HubEventRecord {
   id: string;
   category: string;
+  tags?: string[];
   participationMode: string;
   status: string;
   scheduleMode?: string;
@@ -295,6 +297,7 @@ function toPublicHubEvent(record: HubEventRecord): HubEvent {
   const event = stripUndefined({
     id: record.id,
     category: record.category,
+    tags: (record.tags ?? []).filter(isHubEventTag),
     participationMode: record.participationMode,
     status: record.status,
     scheduleMode: record.scheduleMode ?? "single_window",
@@ -389,6 +392,7 @@ function toWriteData(input: AdminHubEventWriteInput): Record<string, unknown> {
   const legacyLinks = firstEventLegacyProjection(input.links);
   return stripUndefined({
     category: input.category,
+    tags: input.tags,
     participationMode: input.participationMode,
     status: input.status,
     scheduleMode: hasScheduleWrite ? deriveHubEventScheduleMode(input.scheduleItems ?? []) : input.scheduleMode,
@@ -468,6 +472,7 @@ const scheduleItemsInclude = {
 
 function addHubEventFilters(where: Record<string, unknown>, filters: HubEventFilters, options: { includeStatus?: boolean } = {}) {
   if (filters.category) where.category = filters.category;
+  if (filters.tag) where.tags = { has: filters.tag };
   if (filters.participationMode) where.participationMode = filters.participationMode;
   if (filters.generationId) where.generationId = filters.generationId;
   if (filters.memberId) where.memberId = filters.memberId;

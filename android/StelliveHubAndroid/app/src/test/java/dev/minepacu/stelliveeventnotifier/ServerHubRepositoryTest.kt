@@ -4,6 +4,8 @@ import dev.minepacu.stelliveeventnotifier.core.device.DeviceIdStore
 import dev.minepacu.stelliveeventnotifier.core.network.BootstrapResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.BootstrapCatalogDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarResponseDto
+import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarDayDto
+import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarEntryDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventScheduleItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventsListResponseDto
@@ -22,6 +24,7 @@ import dev.minepacu.stelliveeventnotifier.core.network.RegisterDeviceResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.UpdatePreferencesRequestDto
 import dev.minepacu.stelliveeventnotifier.core.network.UpdatePreferencesResponseDto
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventTag
 import dev.minepacu.stelliveeventnotifier.core.network.SongCatalogItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.SongFacetSummaryDto
 import dev.minepacu.stelliveeventnotifier.core.network.SongFacetsResponseDto
@@ -124,7 +127,7 @@ class ServerHubRepositoryTest {
             fallback = MockHubRepository(),
         )
 
-        listOf("goods", "ticketing", "offline", "closing").forEach { filterId ->
+        listOf("goods", "album", "ticketing", "offline", "closing").forEach { filterId ->
             repository.hubEvents(filterId = filterId, from = null, to = null)
 
             assertNull(remote.lastHubEventsGenerationId)
@@ -173,6 +176,95 @@ class ServerHubRepositoryTest {
         assertEquals("상세 제목", item.title)
         assertEquals("짧은 라벨", item.label)
         assertNull(item.description)
+    }
+
+    @Test
+    fun hubEventTagMappingKeepsAlbumAndIgnoresUnknownValues() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            hubEventsResponse = HubEventsListResponseDto(
+                items = listOf(
+                    HubEventDto(
+                        id = "album-event",
+                        category = "ticketing",
+                        tags = listOf("album", "future_tag", "ALBUM"),
+                        participationMode = "online",
+                        status = "upcoming",
+                        title = "앨범 예약",
+                        generationId = "official",
+                        sourceUrl = "https://example.com/source",
+                        sourceLabel = "공식 공지",
+                        sourceType = "official",
+                        updatedAt = "2026-07-19T00:00:00.000Z",
+                    ),
+                    HubEventDto(
+                        id = "plain-event",
+                        category = "online_goods",
+                        tags = emptyList(),
+                        participationMode = "online",
+                        status = "open",
+                        title = "일반 굿즈",
+                        generationId = "official",
+                        sourceUrl = "https://example.com/plain",
+                        sourceLabel = "공식 공지",
+                        sourceType = "official",
+                        updatedAt = "2026-07-19T00:00:00.000Z",
+                    ),
+                ),
+            )
+        }
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val events = repository.hubEvents("all", null, null).associateBy { it.id }
+
+        assertEquals(listOf(HubEventTag.ALBUM), events.getValue("album-event").tags)
+        assertEquals(emptyList<HubEventTag>(), events.getValue("plain-event").tags)
+    }
+
+    @Test
+    fun hubCalendarTagMappingKeepsAlbumAndIgnoresUnknownValues() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            hubCalendarResponse = HubCalendarResponseDto(
+                timezone = "Asia/Seoul",
+                days = listOf(
+                    HubCalendarDayDto(
+                        date = "2026-07-20",
+                        entries = listOf(
+                            HubCalendarEntryDto(
+                                id = "album-event:2026-07-20",
+                                eventId = "album-event",
+                                entryKind = "hub_event",
+                                tags = listOf("future_tag", "album"),
+                                title = "앨범 예약",
+                                category = "ticketing",
+                                status = "upcoming",
+                                participationMode = "online",
+                                generationId = "official",
+                                displayDate = "2026-07-20",
+                                displayTimeText = "10:00 시작",
+                                sourceLabel = "공식 공지",
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        }
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val entries = repository.hubCalendarDays(
+            from = LocalDate.of(2026, 7, 20),
+            to = LocalDate.of(2026, 7, 20),
+            timezone = "Asia/Seoul",
+        ).single().entries
+
+        assertEquals(listOf(HubEventTag.ALBUM), entries.single().tags)
     }
 
     @Test
@@ -384,6 +476,7 @@ class ServerHubRepositoryTest {
         var lastHubEventsFrom: String? = null
         var lastHubEventsTo: String? = null
         var hubEventsResponse = HubEventsListResponseDto()
+        var hubCalendarResponse: HubCalendarResponseDto? = null
         var lastSongGenerationId: String? = null
         var lastSongMemberId: String? = null
         var lastSongType: String? = null
@@ -542,7 +635,7 @@ class ServerHubRepositoryTest {
         timezone: String,
         ): HubNetworkResult<HubCalendarResponseDto> =
             HubNetworkResult.Success(
-                HubCalendarResponseDto(
+                hubCalendarResponse ?: HubCalendarResponseDto(
                     timezone = timezone,
                     generatedAt = "2026-06-11T03:00:00.000Z",
                 ),

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { runDiscoveryCycle } from "../src/workers/musicChannelDiscoveryWorker.js";
+import {
+  discoverOnce,
+  parseRedactedDiscoverySummary,
+  runDiscoveryCycle,
+} from "../src/workers/musicChannelDiscoveryWorker.js";
 import type { MusicChannelDiscoverySchedule } from "../src/workers/musicChannelDiscoverySchedule.js";
 
 const schedule: MusicChannelDiscoverySchedule = {
@@ -11,6 +15,40 @@ const schedule: MusicChannelDiscoverySchedule = {
 };
 
 describe("music channel discovery worker", () => {
+  it("logs only allow-listed discovery counters from the scheduler response", async () => {
+    vi.stubEnv("DATABASE_URL", "postgresql://test:test@localhost:5432/test");
+    vi.stubEnv("INTERNAL_API_TOKEN", "worker-secret-token");
+    vi.stubEnv("MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED", "true");
+    vi.stubEnv("MUSIC_CHANNEL_DISCOVERY_SCHEDULER_BASE_URL", "http://scheduler.test");
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      status: "ok",
+      uniqueVideos: 3,
+      inserted: 2,
+      failed: 1,
+      apiKey: "must-not-be-logged",
+      rawResponse: { authorization: "worker-secret-token" },
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    const logInfo = vi.fn();
+
+    const summary = await discoverOnce(fetchImpl as typeof fetch, logInfo);
+
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(logInfo).toHaveBeenCalledWith("music channel discovery completed", {
+      status: "ok",
+      uniqueVideos: 3,
+      inserted: 2,
+      failed: 1,
+    });
+    expect(JSON.stringify(summary)).not.toContain("must-not-be-logged");
+    expect(JSON.stringify(summary)).not.toContain("worker-secret-token");
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects response shapes that cannot produce a safe summary", () => {
+    expect(parseRedactedDiscoverySummary(null)).toBeNull();
+    expect(parseRedactedDiscoverySummary(["secret"])).toBeNull();
+  });
+
   it("recalculates the delay after each successful attempt", async () => {
     const discover = vi.fn().mockResolvedValue(undefined);
     const firstDelay = await runDiscoveryCycle({

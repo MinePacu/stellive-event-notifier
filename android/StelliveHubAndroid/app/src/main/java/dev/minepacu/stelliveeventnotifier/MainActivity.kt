@@ -1858,6 +1858,7 @@ private fun startScreen(
                     entry.category,
                     entry.status,
                     entry.participationMode,
+                    entry.tags,
                 )
             }
             day.copy(entries = entries).takeIf { entries.isNotEmpty() }
@@ -1870,6 +1871,7 @@ private fun startScreen(
                 event.category,
                 event.status,
                 event.participationMode,
+                event.tags,
             )
         }
 
@@ -3431,8 +3433,11 @@ private fun startScreen(
             body = listOf(CalendarUiPolicy.entryPeriodDateText(entry), entry.displayTimeText)
                 .filter { it.isNotBlank() }
                 .joinToString(" · "),
-            pills = listOf(entry.category.displayName, entry.participationMode.displayName)
-                .filter { it.isNotBlank() },
+            pills = MainUiPolicy.goodsEventPillLabels(
+                entry.category,
+                entry.participationMode,
+                entry.tags,
+            ),
     )
 
     private fun calendarDayHeaderText(day: HubCalendarDay): String {
@@ -6372,8 +6377,10 @@ private fun hubEventDetailHero(event: dev.minepacu.stelliveeventnotifier.core.mo
                 LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
                     setPadding(dp(18), 0, dp(18), dp(10))
-                    addView(LinearLayout(context).apply {
-                        orientation = LinearLayout.HORIZONTAL
+                    addView(ChipGroup(context).apply {
+                        isSingleLine = false
+                        chipSpacingHorizontal = dp(10)
+                        chipSpacingVertical = dp(6)
                         HubEventDetailFormatting.heroTags(event).forEach { tag ->
                             addView(heroTagChip(tag.label, tag.tone))
                         }
@@ -6576,7 +6583,11 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
         return compactEventCard(
             title = event.title,
             body = body,
-            pills = listOf(event.category.displayName, event.participationMode.displayName),
+            pills = MainUiPolicy.goodsEventPillLabels(
+                event.category,
+                event.participationMode,
+                event.tags,
+            ),
             thumbnailUrl = event.image?.takeIf(HubEventImagePolicy::canDisplay)?.url,
         ).apply {
             isClickable = true
@@ -6758,6 +6769,7 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
                 HubEventHeroTagTone.STATUS -> R.color.hub_success
                 HubEventHeroTagTone.CATEGORY -> R.color.hub_warning
                 HubEventHeroTagTone.PARTICIPATION -> R.color.hub_primary
+                HubEventHeroTagTone.SUPPLEMENTARY -> R.color.hub_text_muted
             }
             val tagColor = color(textColorRes)
             setTextColor(tagColor)

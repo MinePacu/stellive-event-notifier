@@ -1,4 +1,9 @@
 import type { MusicMemberRole } from "../../../../shared/schemas/domain.js";
+import {
+  matchMusicOriginalTitle,
+  type MusicOriginalTitleMember,
+  type MusicOriginalTitleMatch,
+} from "./musicOriginalTitleMatcher.js";
 
 export type MusicMemberMatchSource =
   | "CHANNEL_ID"
@@ -6,10 +11,11 @@ export type MusicMemberMatchSource =
   | "DESCRIPTION"
   | "CHANNEL_TITLE"
   | "GROUP_ALIAS"
+  | "STRUCTURED_TITLE"
   | "MANUAL"
   | "UNKNOWN";
 
-export interface MusicMemberAliasInput {
+export interface MusicMemberAliasInput extends MusicOriginalTitleMember {
   id: string;
   aliases: string[];
   youtubeChannelId?: string | null;
@@ -22,6 +28,7 @@ export interface MusicMemberMatchInput {
   description?: string | null;
   channelTitle?: string | null;
   members: MusicMemberAliasInput[];
+  structuredOriginal?: MusicOriginalTitleMatch;
 }
 
 export interface MusicMemberMatchLink {
@@ -36,9 +43,23 @@ export interface MusicMemberMatchResult {
   diagnostics: string[];
 }
 
-const groupAliases = ["stellive", "스텔라이브", "universe", "cliche", "cliché", "mystic", "everys"];
+const stelliveGroupAliases = ["stellive", "스텔라이브"];
 
 export function matchMusicMembers(input: MusicMemberMatchInput): MusicMemberMatchResult {
+  const structured = input.structuredOriginal ??
+    matchMusicOriginalTitle(input.title, input.members);
+  if (structured.exact) {
+    return {
+      links: structured.memberIds.map((memberId) => ({
+        memberId,
+        role: structured.kind === "member" ? "main" : "group",
+        confidence: 0.95,
+        source: "STRUCTURED_TITLE",
+      })),
+      diagnostics: [`${structured.status}/${structured.kind}`],
+    };
+  }
+
   const links = new Map<string, Omit<MusicMemberMatchLink, "role">>();
   const addMember = (
     memberId: string | null | undefined,
@@ -60,13 +81,20 @@ export function matchMusicMembers(input: MusicMemberMatchInput): MusicMemberMatc
   matchAliases(input.description ?? "", input.members).forEach((memberId) => addMember(memberId, 0.65, "DESCRIPTION"));
   matchAliases(input.channelTitle ?? "", input.members).forEach((memberId) => addMember(memberId, 0.55, "CHANNEL_TITLE"));
 
-  const diagnostics: string[] = [];
-  if (links.size === 0 && hasGroupAlias(input.title, input.description)) {
+  const diagnostics: string[] = structured.partial
+    ? [`${structured.status}/${structured.reason ?? "unknown"}`]
+    : [];
+  const fallbackGroupMembers = matchFallbackGroupMembers(
+    input.title,
+    input.description,
+    input.members,
+  );
+  if (!structured.partial && links.size === 0 && fallbackGroupMembers.length > 0) {
     diagnostics.push("group_alias_match");
-    input.members.forEach((member) => addMember(member.id, 0.4, "GROUP_ALIAS"));
+    fallbackGroupMembers.forEach((member) => addMember(member.id, 0.4, "GROUP_ALIAS"));
   }
 
-  if (links.size === 0) return { links: [], diagnostics: ["no_member_match"] };
+  if (links.size === 0) return { links: [], diagnostics: [...diagnostics, "no_member_match"] };
 
   const group = links.size >= 3 || [...links.values()].some((link) => link.source === "GROUP_ALIAS");
   return {
@@ -86,9 +114,27 @@ function matchAliases(text: string, members: MusicMemberAliasInput[]): string[] 
     .map((member) => member.id);
 }
 
-function hasGroupAlias(title: string, description: string | null | undefined): boolean {
+function matchFallbackGroupMembers(
+  title: string,
+  description: string | null | undefined,
+  members: MusicMemberAliasInput[],
+): MusicMemberAliasInput[] {
   const haystack = normalizeText(`${title}\n${description ?? ""}`);
-  return groupAliases.some((alias) => haystack.includes(normalizeText(alias)));
+  const matchedUnits = new Set(
+    members
+      .map((member) => member.unitName?.trim())
+      .filter((unitName): unitName is string => Boolean(unitName))
+      .filter((unitName) => haystack.includes(normalizeText(unitName)))
+      .map(normalizeText),
+  );
+  if (matchedUnits.size > 0) {
+    return members.filter((member) =>
+      member.unitName && matchedUnits.has(normalizeText(member.unitName))
+    );
+  }
+  return stelliveGroupAliases.some((alias) => haystack.includes(normalizeText(alias)))
+    ? members
+    : [];
 }
 
 function roleForIndex(index: number): MusicMemberRole {

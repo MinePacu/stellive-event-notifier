@@ -10,6 +10,7 @@ function hubEvent(overrides: Partial<HubEvent> = {}): HubEvent {
   return {
     id: "calendar-event-1",
     category: "online_goods",
+    tags: [],
     participationMode: "online",
     status: "open",
     title: "공식 굿즈 판매",
@@ -43,6 +44,7 @@ describe("hub event calendar projection", () => {
       title: "공식 굿즈 판매",
       displayTitle: "공식 굿즈 판매",
       category: "online_goods",
+      tags: [],
       status: "open",
       participationMode: "online",
       generationId: "official",
@@ -56,6 +58,21 @@ describe("hub event calendar projection", () => {
     expect(JSON.stringify(response)).not.toMatch(
       /rawPayload|imageUrl|logoUrl|posterUrl|profileImageUrl|thumbnailUrl|providerResponse/
     );
+  });
+
+  it("projects parent event tags into calendar and widget entries", () => {
+    const response = buildHubCalendarResponse([hubEvent({ tags: ["album"] })], {
+      from: new Date("2026-06-01T00:00:00.000Z"),
+      to: new Date("2026-06-30T23:59:59.999Z"),
+      timezone: "Asia/Seoul",
+      now: new Date("2026-06-12T02:00:00.000Z")
+    });
+    const snapshot = buildHubCalendarWidgetSnapshot([hubEvent({ tags: ["album"] })], {
+      timezone: "Asia/Seoul", now: new Date("2026-06-12T02:00:00.000Z"), limit: 1
+    });
+
+    expect(response.days[0].entries[0].tags).toEqual(["album"]);
+    expect(snapshot.entries[0].tags).toEqual(["album"]);
   });
 
   it("uses sparse dates for long windows", () => {

@@ -659,6 +659,10 @@ private struct CalendarEntryRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
 
+                HubEventSupplementaryTagChips(
+                    labels: HubEventTagDisplayPolicy.secondaryLabels(for: entry.tags)
+                )
+
                 Text("\(HubCalendarPolicy.entryLabel(entry)) · \(periodDateText) · \(entry.displayTimeText)")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.teal)

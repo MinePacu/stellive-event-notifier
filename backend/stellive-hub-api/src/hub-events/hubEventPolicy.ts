@@ -15,6 +15,7 @@ import type {
   HubEventValidationReason
 } from "./hubEventAdminTypes.js";
 import { hubEventLinkKinds } from "./hubEventLinkPolicy.js";
+import { isHubEventTag, maxHubEventTags } from "./hubEventTagPolicy.js";
 
 const allowedSourceTypes = new Set<HubEventSourceType>(["official", "member", "official_collab"]);
 const allowedCategories = new Set<HubEventCategory>([
@@ -92,6 +93,23 @@ function hasUntrustedAssetField(input: Record<string, unknown>): boolean {
 
 function addError(errors: HubEventValidationError[], field: string, reason: HubEventValidationReason, message: string) {
   errors.push({ field, reason, message });
+}
+
+function validateTags(errors: HubEventValidationError[], rawTags: unknown) {
+  if (rawTags === undefined) return;
+  if (!Array.isArray(rawTags)) {
+    addError(errors, "tags", "tags_not_array", "tags must be an array.");
+    return;
+  }
+  if (rawTags.length > maxHubEventTags) {
+    addError(errors, "tags", "tags_too_many", `At most ${maxHubEventTags} tag is allowed.`);
+  }
+  rawTags.forEach((rawTag, index) => {
+    const tag = typeof rawTag === "string" ? rawTag.trim() : "";
+    if (!isHubEventTag(tag)) {
+      addError(errors, `tags.${index}`, "unsupported_tag", "Unsupported hub event tag.");
+    }
+  });
 }
 
 function hasHttpsUrl(value: string): boolean {
@@ -415,6 +433,8 @@ export function validateHubEventForAdmin(
     addError(errors, "body", "source_required", "Hub event input is required.");
     return { valid: false, errors };
   }
+
+  validateTags(errors, input.tags);
 
   const sourceUrl = stringField(input, "sourceUrl")?.trim();
   const sourceLabel = stringField(input, "sourceLabel")?.trim();

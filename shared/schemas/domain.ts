@@ -294,6 +294,10 @@ export type HubEventCategory =
   | "offline_popup"
   | "ticketing";
 
+export const HUB_EVENT_TAGS = ["album"] as const;
+
+export type HubEventTag = (typeof HUB_EVENT_TAGS)[number];
+
 export type HubEventParticipationMode = "online" | "offline" | "hybrid";
 
 export type HubEventStatus = "announced" | "upcoming" | "open" | "closing_soon" | "ended" | "cancelled";
@@ -395,6 +399,7 @@ export interface HubEventImage {
 export interface HubEvent {
   id: string;
   category: HubEventCategory;
+  tags: HubEventTag[];
   participationMode: HubEventParticipationMode;
   status: HubEventStatus;
   title: string;
@@ -488,6 +493,7 @@ export interface HubCalendarEntry {
   title: string;
   displayTitle?: string;
   category: HubEventCategory;
+  tags: HubEventTag[];
   status: HubEventStatus;
   participationMode: HubEventParticipationMode;
   generationId: string;

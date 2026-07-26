@@ -209,6 +209,26 @@ class HubApiClientTest {
         assertEquals("official_runtime_url", decoded?.items?.single()?.image?.policyState)
         assertEquals(null, decoded?.items?.single()?.scheduleItems?.single()?.title)
         assertEquals("레거시 라벨", decoded?.items?.single()?.scheduleItems?.single()?.label)
+        assertEquals(emptyList<String>(), decoded?.items?.single()?.tags)
+    }
+
+    @Test
+    fun hubEventDtoTagsDecodeMissingEmptyAndFutureValuesSafely() {
+        val json = """
+            {
+              "items": [
+                {"id": "missing", "title": "태그 없음"},
+                {"id": "empty", "title": "빈 태그", "tags": []},
+                {"id": "tagged", "title": "앨범", "tags": ["album", "future_tag"]}
+              ]
+            }
+        """.trimIndent()
+
+        val decoded = HubApiClient.moshi().adapter(HubEventsListResponseDto::class.java).fromJson(json)
+
+        assertEquals(emptyList<String>(), decoded?.items?.first { it.id == "missing" }?.tags)
+        assertEquals(emptyList<String>(), decoded?.items?.first { it.id == "empty" }?.tags)
+        assertEquals(listOf("album", "future_tag"), decoded?.items?.first { it.id == "tagged" }?.tags)
     }
 
     @Test
@@ -270,6 +290,7 @@ class HubApiClientTest {
         assertEquals("Asia/Seoul", decoded?.timezone)
         assertEquals("server-event", decoded?.days?.single()?.entries?.single()?.eventId)
         assertEquals("서버 행사 세부 일정", decoded?.days?.single()?.entries?.single()?.displayTitle)
+        assertEquals(emptyList<String>(), decoded?.days?.single()?.entries?.single()?.tags)
     }
 
     @Test

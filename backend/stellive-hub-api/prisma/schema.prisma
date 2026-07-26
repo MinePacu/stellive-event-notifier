@@ -438,6 +438,7 @@ model MusicSyncRun {
 model HubEvent {
   id                    String   @id @default(cuid(2))
   category              String
+  tags                  String[] @default([])
   participationMode     String
   status                String
   scheduleMode          String   @default("single_window")

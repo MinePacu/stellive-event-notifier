@@ -126,4 +126,101 @@ describe("OfficialStelliveMusicSyncService", () => {
       metadata: expect.objectContaining({ uniqueVideos: 2 }),
     }));
   });
+
+  it("reuses structured-title matching for official playlist member links and partial review", async () => {
+    const repository = {
+      upsertOfficialSourcePlaylists: vi.fn(async () => [
+        { id: "source-cover", youtubePlaylistId: OFFICIAL_STELLIVE_MUSIC_COVER_PLAYLIST_ID, title: "COVER", type: "cover" as const, rawCategoryHint: "COVER" as const, memberId: null },
+        { id: "source-original", youtubePlaylistId: OFFICIAL_STELLIVE_MUSIC_ORIGINAL_PLAYLIST_ID, title: "ORIGINAL", type: "original" as const, rawCategoryHint: "ORIGINAL" as const, memberId: null },
+      ]),
+      upsertMusicItem: vi.fn(async (input) => ({ id: `music-${input.youtubeVideoId}` })),
+      upsertMusicItemSourcePlaylist: vi.fn(async () => undefined),
+      replaceMusicItemMembers: vi.fn(async () => undefined),
+      getOverrideByVideoId: vi.fn(async () => null),
+    };
+    const exactTitle = "유즈하 리코(Yuzuha Riko) | 악당주의보 'Villain Warning'";
+    const partialTitle = "유즈하 리코(Yuzuha Riko) | 악당주의보";
+    const youtube = {
+      fetchPlaylistItems: vi.fn(async (playlistId: string) => ({
+        status: "ok" as const,
+        pagesFetched: 1,
+        quotaUnits: 1,
+        items: playlistId === OFFICIAL_STELLIVE_MUSIC_ORIGINAL_PLAYLIST_ID
+          ? [
+              { videoId: "P_oxx3_VpIY", title: exactTitle, publishedAt: "2026-06-22T00:00:00.000Z" },
+              { videoId: "partial-original", title: partialTitle, publishedAt: "2026-06-22T00:00:00.000Z" },
+            ]
+          : [],
+      })),
+      fetchVideos: vi.fn(async () => [
+        {
+          videoId: "P_oxx3_VpIY",
+          title: exactTitle,
+          duration: "PT3M",
+          privacyStatus: "public",
+        },
+        {
+          videoId: "partial-original",
+          title: partialTitle,
+          duration: "PT3M",
+          privacyStatus: "public",
+        },
+      ]),
+    };
+    const service = new OfficialStelliveMusicSyncService({
+      repository,
+      youtube,
+      syncRuns: {
+        startRun: vi.fn(async () => ({ id: "structured-run" })),
+        finishRun: vi.fn(async () => undefined),
+        failRun: vi.fn(async () => undefined),
+      },
+      locks: new InMemoryMusicSyncLock(),
+      members: [{
+        id: "yuzuha-riko",
+        nameKo: "유즈하 리코",
+        nameEn: "Yuzuha Riko",
+        unitName: "Cliche",
+        aliases: ["유즈하 리코", "Yuzuha Riko"],
+      }],
+      now: () => new Date("2026-06-23T00:00:00.000Z"),
+    });
+
+    await expect(service.syncOfficialStelliveMusicPlaylists()).resolves.toMatchObject({
+      status: "ok",
+      uniqueVideos: 2,
+      needsReview: 1,
+      excludedCandidates: 1,
+    });
+    expect(repository.upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
+      youtubeVideoId: "P_oxx3_VpIY",
+      type: "original",
+      classificationStatus: "AUTO_CLASSIFIED",
+      specialFlags: ["structured_original_title", "bilingual_song_title"],
+    }));
+    expect(repository.upsertMusicItem).toHaveBeenCalledWith(expect.objectContaining({
+      youtubeVideoId: "partial-original",
+      type: "original",
+      sourcePlaylistId: "source-original",
+      classificationStatus: "NEEDS_REVIEW",
+      isExcluded: true,
+      exclusionReason: "malformed_song_quotes",
+      rawCategoryHint: "UNKNOWN",
+      specialFlags: [
+        "partial_structured_original_title",
+        "structured_original_malformed_song_quotes",
+      ],
+    }));
+    expect(repository.upsertMusicItemSourcePlaylist).toHaveBeenCalledWith(expect.objectContaining({
+      musicItemId: "music-partial-original",
+      sourcePlaylistId: "source-original",
+      sourcePlaylistType: "original",
+    }));
+    expect(repository.replaceMusicItemMembers).toHaveBeenCalledWith("music-P_oxx3_VpIY", [{
+      memberId: "yuzuha-riko",
+      role: "main",
+      confidence: 0.95,
+      source: "STRUCTURED_TITLE",
+    }]);
+  });
 });

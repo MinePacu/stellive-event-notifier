@@ -13,6 +13,7 @@ function hubEvent(overrides: Partial<HubEvent> = {}): HubEvent {
   return {
     id: "official-goods-1",
     category: "online_goods",
+    tags: [],
     participationMode: "online",
     status: "open",
     title: "공식 굿즈 판매",
@@ -37,6 +38,7 @@ function createHubEvents(events: HubEvent[]): HubEventReadPort {
     async list(filters: HubEventFilters = {}) {
       const filtered = events.filter((event) => {
         if (filters.category && event.category !== filters.category) return false;
+        if (filters.tag && !event.tags.includes(filters.tag)) return false;
         if (filters.participationMode && event.participationMode !== filters.participationMode) return false;
         if (filters.status && event.status !== filters.status) return false;
         if (filters.generationId && event.generationId !== filters.generationId) return false;
@@ -110,6 +112,20 @@ describe("HubEvent read routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().items).toEqual([expect.objectContaining({ id: "gen3-popup-1" })]);
+  });
+
+  it("filters HubEvents by album tag and rejects unsupported tag queries", async () => {
+    const app = await buildRouteApp([
+      hubEvent({ id: "album-goods", tags: ["album"] }),
+      hubEvent({ id: "plain-goods", tags: [] })
+    ]);
+    const filtered = await app.inject({ method: "GET", url: "/v1/hub-events?tag=album" });
+    const invalid = await app.inject({ method: "GET", url: "/v1/hub-events?tag=vinyl" });
+    await app.close();
+
+    expect(filtered.json().items).toEqual([expect.objectContaining({ id: "album-goods", tags: ["album"] })]);
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toEqual({ error: "invalid_hub_event_query", field: "tag" });
   });
 
   it("returns HubEvent detail by id", async () => {
@@ -497,6 +513,7 @@ describe("HubEvent Prisma-backed public reads", () => {
     const published = {
       id: "published-prisma-event",
       category: "online_goods",
+      tags: [],
       participationMode: "online",
       status: "open",
       title: "게시된 공식 굿즈",

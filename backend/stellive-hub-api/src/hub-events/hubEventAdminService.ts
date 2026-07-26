@@ -22,6 +22,7 @@ import {
 } from "./hubEventRepository.js";
 import { validateHubEventForAdmin } from "./hubEventPolicy.js";
 import { normalizeHubEventLinks } from "./hubEventLinkPolicy.js";
+import { normalizeHubEventTags } from "./hubEventTagPolicy.js";
 import {
   deriveHubEventScheduleMode,
   normalizeHubEventScheduleText,
@@ -118,7 +119,7 @@ export class HubEventAdminService {
   }
 
   async createDraft(input: AdminHubEventWriteInput, actor: HubEventAdminActor = {}): Promise<AdminHubEvent> {
-    const singleWindowNormalized = this.normalizeSingleWindowWrite(this.normalizeLinkWrite(input));
+    const singleWindowNormalized = this.normalizeSingleWindowWrite(this.normalizeLinkWrite(this.normalizeTagWrite(input)));
     const normalized = this.normalizeScheduleWrite({
       ...singleWindowNormalized,
       scheduleItems: singleWindowNormalized.scheduleItems ?? []
@@ -133,7 +134,7 @@ export class HubEventAdminService {
     const before = await this.getExisting(id);
     this.assertMutable(before);
     const normalized = this.withExistingScheduleProjection(
-      this.normalizeScheduleWrite(this.normalizeSingleWindowWrite(this.normalizeLinkWrite(input), before)),
+      this.normalizeScheduleWrite(this.normalizeSingleWindowWrite(this.normalizeLinkWrite(this.normalizeTagWrite(input)), before)),
       before
     );
     this.assertValid({ ...before, ...normalized }, before.publicationState === "published" ? "publish" : "draft");
@@ -376,6 +377,11 @@ export class HubEventAdminService {
 
   private normalizeLinkWrite(input: AdminHubEventWriteInput): AdminHubEventWriteInput {
     return { ...input, links: normalizeHubEventLinks(input.links) };
+  }
+
+  private normalizeTagWrite(input: AdminHubEventWriteInput): AdminHubEventWriteInput {
+    if (input.tags === undefined) return input;
+    return { ...input, tags: normalizeHubEventTags(input.tags) as AdminHubEventWriteInput["tags"] };
   }
 
   private assertScheduleMutationTitle(input: AdminHubEventScheduleItemWriteInput) {

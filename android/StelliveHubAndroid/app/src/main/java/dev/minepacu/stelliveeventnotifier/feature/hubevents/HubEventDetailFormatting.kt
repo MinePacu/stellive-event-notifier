@@ -26,6 +26,7 @@ enum class HubEventHeroTagTone {
     STATUS,
     CATEGORY,
     PARTICIPATION,
+    SUPPLEMENTARY,
 }
 
 data class HubEventScheduleTimelineItem(
@@ -171,11 +172,13 @@ object HubEventDetailFormatting {
     }
 
     fun heroTags(event: HubEvent): List<HubEventHeroTag> =
-        listOf(
+        (listOf(
             HubEventHeroTag(event.status.displayName, HubEventHeroTagTone.STATUS),
             HubEventHeroTag(event.category.displayName, HubEventHeroTagTone.CATEGORY),
             HubEventHeroTag(event.participationMode.displayName, HubEventHeroTagTone.PARTICIPATION),
-        ).distinctBy { it.label }
+        ) + event.tags.map {
+            HubEventHeroTag(it.displayName, HubEventHeroTagTone.SUPPLEMENTARY)
+        }).distinctBy { it.label }
 
     fun periodText(event: HubEvent, zoneId: ZoneId = ZoneId.systemDefault()): String {
         val startsAt = event.startsAt

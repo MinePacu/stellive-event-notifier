@@ -543,6 +543,7 @@ enum HubEventHeroTagTone: Equatable {
     case status
     case category
     case participation
+    case supplementary
 }
 
 enum HubEventDetailFormatting {
@@ -708,11 +709,14 @@ enum HubEventDetailFormatting {
     }
 
     static func heroTags(for event: HubEvent) -> [HubEventHeroTag] {
-        [
+        let primaryTags = [
             HubEventHeroTag(label: event.status.displayName, tone: .status),
             HubEventHeroTag(label: event.category.displayName, tone: .category),
             HubEventHeroTag(label: event.participationMode.displayName, tone: .participation)
-        ].reduce(into: [HubEventHeroTag]()) { result, tag in
+        ]
+        let supplementaryTags = HubEventTagDisplayPolicy.secondaryLabels(for: event.tags)
+            .map { HubEventHeroTag(label: $0, tone: .supplementary) }
+        return (primaryTags + supplementaryTags).reduce(into: [HubEventHeroTag]()) { result, tag in
             if !result.contains(where: { $0.label == tag.label }) {
                 result.append(tag)
             }
@@ -836,6 +840,8 @@ private struct HubEventHeroTagView: View {
             return Color(red: 1.0, green: 0.74, blue: 0.32)
         case .participation:
             return Color(red: 0.64, green: 0.83, blue: 1.0)
+        case .supplementary:
+            return Color(red: 0.75, green: 0.68, blue: 1.0)
         }
     }
 

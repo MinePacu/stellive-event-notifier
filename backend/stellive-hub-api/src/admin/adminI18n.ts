@@ -124,6 +124,8 @@ export const enAdminMessages = {
   "hubEvent.next": "Next",
   "hubEvent.search": "Search",
   "hubEvent.category": "Category",
+  "hubEvent.album": "Album",
+  "hubEvent.tags": "Tag",
   "hubEvent.generation": "Generation",
   "hubEvent.member": "Member",
   "hubEvent.participation": "Participation mode",
@@ -376,6 +378,9 @@ export const koAdminMessages: Record<AdminMessageKey, string> = {
   "enum.allStatuses": "모든 상태", "enum.general": "일반", "enum.incident": "장애", "enum.maintenance": "점검", "enum.versionUpdate": "앱 업데이트", "enum.info": "안내", "enum.important": "중요", "enum.critical": "긴급",
   "confirm.delete": "이 항목을 삭제할까요?", "confirm.publish": "이 항목을 게시할까요?",
   "error.invalidAdminToken": "관리자 토큰이 올바르지 않습니다.", "error.internalTokenRequired": "내부 API Bearer 토큰이 필요합니다. 설정에서 추가하세요.", "error.requestFailed": "요청에 실패했습니다.", "error.unknown": "알 수 없는 오류", "common.status": "상태", "common.state": "게시 상태", "common.source": "출처", "common.name": "이름", "common.value": "값", "common.reason": "사유", "common.time": "시각", "common.duration": "소요 시간", "common.operation": "작업", "common.result": "결과", "common.actionResult": "작업 결과", "common.all": "전체", "common.none": "없음", "common.itemCount": "{count}개 항목"
+,
+  "hubEvent.album": "음반",
+  "hubEvent.tags": "태그"
 };
 
 export const adminMessages: Record<AdminLocale, Readonly<Record<AdminMessageKey, string>>> = {

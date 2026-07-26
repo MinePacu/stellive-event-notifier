@@ -198,6 +198,10 @@ paths:
           schema:
             type: string
             enum: [online_goods, online_collab, offline_concert, offline_collab, offline_popup, ticketing]
+        - name: tag
+          in: query
+          schema:
+            $ref: "#/components/schemas/HubEventTag"
         - name: participationMode
           in: query
           schema:
@@ -1126,6 +1130,7 @@ components:
         - entryKind
         - title
         - category
+        - tags
         - status
         - participationMode
         - generationId
@@ -1170,6 +1175,11 @@ components:
             - offline_collab
             - offline_popup
             - ticketing
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/HubEventTag"
+          example: [album]
         status:
           type: string
           enum:
@@ -2321,6 +2331,7 @@ components:
       required:
         - id
         - category
+        - tags
         - participationMode
         - status
         - title
@@ -2336,6 +2347,11 @@ components:
           type: string
         category:
           type: string
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/HubEventTag"
+          example: [album]
         participationMode:
           type: string
         status:
@@ -2496,6 +2512,9 @@ components:
         - published
         - inactive
         - deleted
+    HubEventTag:
+      type: string
+      enum: [album]
     AdminHubEventCreateRequest:
       type: object
       required:
@@ -2516,6 +2535,12 @@ components:
           type: string
         category:
           type: string
+        tags:
+          type: array
+          maxItems: 1
+          items:
+            $ref: "#/components/schemas/HubEventTag"
+          example: [album]
         participationMode:
           type: string
         status:

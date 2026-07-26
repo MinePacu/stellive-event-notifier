@@ -53,6 +53,15 @@ enum class HubEventCategory(val displayName: String) {
     TICKETING("티켓")
 }
 
+enum class HubEventTag(val apiValue: String, val displayName: String) {
+    ALBUM("album", "음반");
+
+    companion object {
+        fun fromApiValue(value: String): HubEventTag? =
+            entries.firstOrNull { it.apiValue.equals(value.trim(), ignoreCase = true) }
+    }
+}
+
 enum class HubCalendarEntryKind {
     HUB_EVENT,
     MEMBER_BIRTHDAY,
@@ -249,7 +258,8 @@ data class HubEvent(
     val venueAddress: String? = null,
     val image: HubEventImage? = null,
     val notificationEligible: Boolean = true,
-    val updatedAt: Instant
+    val updatedAt: Instant,
+    val tags: List<HubEventTag> = emptyList(),
 )
 
 data class HubEventsSummary(
@@ -281,7 +291,8 @@ data class HubCalendarEntry(
     val displayTimeText: String,
     val sourceLabel: String,
     val appDeepLink: String,
-    val platformUrl: String?
+    val platformUrl: String?,
+    val tags: List<HubEventTag> = emptyList(),
 )
 
 data class HubCalendarDay(

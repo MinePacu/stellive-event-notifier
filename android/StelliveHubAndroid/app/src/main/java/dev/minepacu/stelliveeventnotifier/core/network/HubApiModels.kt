@@ -151,6 +151,7 @@ data class HubEventDto(
     val image: HubEventImageDto? = null,
     val notificationEligible: Boolean = true,
     val updatedAt: String? = null,
+    val tags: List<String> = emptyList(),
 )
 
 data class HubEventScheduleItemDto(
@@ -231,6 +232,7 @@ data class HubCalendarEntryDto(
     val sourceLabel: String,
     val appDeepLink: String? = null,
     val platformUrl: String? = null,
+    val tags: List<String> = emptyList(),
 )
 
 data class SongThumbnailDto(

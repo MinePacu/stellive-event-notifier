@@ -186,16 +186,25 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
     }
 
     func testCalendarEntryDecodesLegacyResponseWithoutDisplayTitle() throws {
-        let data = Data(#"{"id":"album:tracks","eventId":"album","entryKind":"hub_event","scheduleItemId":"tracks","scheduleLabel":"트랙 리스트 공개","title":"부모 앨범","category":"online_goods","status":"upcoming","participationMode":"online","generationId":"official","displayDate":"2026-06-20","displayTimeText":"18:00 시작","sourceLabel":"공식","appDeepLink":"stellivehub://hub-events/album?scheduleItemId=tracks"}"#.utf8)
+        let data = Data(#"{"id":"album:tracks","eventId":"album","entryKind":"hub_event","scheduleItemId":"tracks","scheduleLabel":"트랙 리스트 공개","title":"부모 음반","category":"online_goods","status":"upcoming","participationMode":"online","generationId":"official","displayDate":"2026-06-20","displayTimeText":"18:00 시작","sourceLabel":"공식","appDeepLink":"stellivehub://hub-events/album?scheduleItemId=tracks"}"#.utf8)
 
         let decoded = try JSONDecoder().decode(HubCalendarEntry.self, from: data)
 
         XCTAssertNil(decoded.displayTitle)
+        XCTAssertEqual(decoded.tags, [])
         XCTAssertEqual(decoded.resolvedDisplayTitle, "트랙 리스트 공개")
     }
 
+    func testCalendarEntryDecodesAlbumAndIgnoresUnknownTags() throws {
+        let data = Data(#"{"id":"album:tracks","eventId":"album","entryKind":"hub_event","title":"부모 음반","category":"ticketing","tags":["album","future_tag"],"status":"upcoming","participationMode":"online","generationId":"official","displayDate":"2026-06-20","displayTimeText":"18:00 시작","sourceLabel":"공식","appDeepLink":"stellivehub://hub-events/album"}"#.utf8)
+
+        let decoded = try JSONDecoder().decode(HubCalendarEntry.self, from: data)
+
+        XCTAssertEqual(decoded.tags, [.album])
+    }
+
     func testCalendarEntryDecodesDisplayTitleWhenPresent() throws {
-        let data = Data(#"{"id":"album:tracks","eventId":"album","entryKind":"hub_event","scheduleItemId":"tracks","scheduleLabel":"레거시 레이블","title":"부모 앨범","displayTitle":"트랙 리스트 공개","category":"online_goods","status":"upcoming","participationMode":"online","generationId":"official","displayDate":"2026-06-20","displayTimeText":"18:00 시작","sourceLabel":"공식","appDeepLink":"stellivehub://hub-events/album?scheduleItemId=tracks"}"#.utf8)
+        let data = Data(#"{"id":"album:tracks","eventId":"album","entryKind":"hub_event","scheduleItemId":"tracks","scheduleLabel":"레거시 레이블","title":"부모 음반","displayTitle":"트랙 리스트 공개","category":"online_goods","status":"upcoming","participationMode":"online","generationId":"official","displayDate":"2026-06-20","displayTimeText":"18:00 시작","sourceLabel":"공식","appDeepLink":"stellivehub://hub-events/album?scheduleItemId=tracks"}"#.utf8)
 
         let decoded = try JSONDecoder().decode(HubCalendarEntry.self, from: data)
 
@@ -235,7 +244,8 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
     func testFilteringEntries() {
         let viewModel = makeViewModel(days: [
             day("2026-06-13", entries: [
-                entry(id: "goods", category: .onlineGoods),
+                entry(id: "goods", category: .onlineGoods, tags: [.album]),
+                entry(id: "album-ticket", category: .ticketing, tags: [.album]),
                 entry(id: "ticket", category: .ticketing),
                 entry(id: "offline", category: .offlinePopup, participationMode: .offline),
                 entry(id: "closing", category: .offlinePopup, status: .closingSoon)
@@ -245,14 +255,24 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         viewModel.setFilter("goods")
         XCTAssertEqual(viewModel.visibleEntries().map(\.id), ["goods"])
 
+        viewModel.setFilter("album")
+        XCTAssertEqual(viewModel.visibleEntries().map(\.id), ["album-ticket", "goods"])
+
         viewModel.setFilter("ticketing")
-        XCTAssertEqual(viewModel.visibleEntries().map(\.id), ["ticket"])
+        XCTAssertEqual(viewModel.visibleEntries().map(\.id), ["album-ticket", "ticket"])
 
         viewModel.setFilter("offline")
         XCTAssertEqual(viewModel.visibleEntries().map(\.id), ["offline"])
 
         viewModel.setFilter("closing")
         XCTAssertEqual(viewModel.visibleEntries().map(\.id), ["closing"])
+    }
+
+    func testTopFilterIncludesAlbumWithDiscDisplayName() {
+        XCTAssertEqual(
+            HubEventsView.filterOptions.first { $0.id == "album" }?.title,
+            "음반"
+        )
     }
 
     func testMonthNavigationChangesSelectedMonth() {
@@ -594,6 +614,19 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(Set(tags.map(\.label)).count, tags.count)
     }
 
+    func testAlbumUsesSecondaryDisplayChipWithoutReplacingStatusOrCategory() {
+        var event = detailEvent()
+        event.tags = [.album]
+
+        let card = HubEventFeedCardPresentation(event: event)
+        let heroTags = HubEventDetailFormatting.heroTags(for: event)
+
+        XCTAssertEqual(card.status, .open)
+        XCTAssertEqual(card.secondaryTagLabels, ["음반"])
+        XCTAssertEqual(heroTags.map(\.label), ["진행 중", "굿즈", "오프라인", "음반"])
+        XCTAssertEqual(heroTags.map(\.tone), [.status, .category, .participation, .supplementary])
+    }
+
     func testHubEventTimelineSortsAndComputesDisplayStates() {
         var event = detailEvent()
         event.scheduleMode = .timeline
@@ -839,6 +872,7 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         eventId: String? = nil,
         scheduleItemId: String? = nil,
         category: HubEventCategory = .onlineGoods,
+        tags: Set<HubEventTag> = [],
         participationMode: HubEventParticipationMode = .online,
         status: HubEventStatus = .open,
         startsAt: Date? = nil,
@@ -860,6 +894,7 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
             title: title ?? id,
             displayTitle: displayTitle,
             category: category,
+            tags: tags,
             status: status,
             participationMode: participationMode,
             generationId: "official",

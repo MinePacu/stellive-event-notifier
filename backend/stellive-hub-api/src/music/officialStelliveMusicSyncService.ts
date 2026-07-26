@@ -3,6 +3,10 @@ import { classifyVideo, normalizeTitle } from "./musicClassifier.js";
 import type { MusicSyncLock } from "./musicLocks.js";
 import { matchMusicMembers, type MusicMemberAliasInput } from "./musicMemberMatcher.js";
 import {
+  assessMusicOriginalTitleTrust,
+  matchMusicOriginalTitle,
+} from "./musicOriginalTitleMatcher.js";
+import {
   officialStelliveMusicSourcePlaylistSeeds,
   TARGET_MUSIC_MEMBER_IDS,
   type MusicSourcePlaylistSeed,
@@ -175,19 +179,36 @@ export class OfficialStelliveMusicSyncService {
         const sourceItems = playlistItems.filter(({ item }) => item.videoId === videoId);
         const primary = sourceItems[0];
         const detail = detailsByVideoId.get(videoId);
+        const title = detail?.title ?? primary.item.title;
+        const structuredOriginal = matchMusicOriginalTitle(title, this.members);
+        const structuredTrust = assessMusicOriginalTitleTrust(structuredOriginal, {
+          kind: "stellive_official",
+        });
+        const structuredPartial = structuredOriginal.status === "partial";
         const sourceTypes = sourceItems.map(({ source }) => source.type as MusicItemType);
         const classification = classifyVideo({
           sourceTypes,
-          title: detail?.title ?? primary.item.title,
+          title,
           description: detail?.description,
           duration: detail?.duration,
           privacyStatus: detail?.privacyStatus ?? primary.item.privacyStatus,
+          specialFlags: structuredPartial
+            ? structuredTrust.specialFlags
+            : structuredOriginal.classification?.specialFlags,
         });
         const override = normalizeOverride(await this.options.repository.getOverrideByVideoId(videoId));
         const itemType = (override?.forcedType as MusicItemType | undefined) ?? classification.type;
-        const isExcluded = override?.forceExcluded ?? classification.isExcluded;
-        const exclusionReason = override?.exclusionReason ?? classification.exclusionReason;
-        const classificationStatus = override ? (isExcluded ? "MANUAL_EXCLUDED" : "MANUAL_CONFIRMED") : classification.classificationStatus;
+        const isExcluded = override?.forceExcluded
+          ?? (structuredPartial ? true : classification.isExcluded);
+        const exclusionReason = override?.exclusionReason
+          ?? (structuredPartial
+            ? (classification.exclusionReason ?? structuredTrust.reason)
+            : classification.exclusionReason);
+        const classificationStatus = override
+          ? (isExcluded ? "MANUAL_EXCLUDED" : "MANUAL_CONFIRMED")
+          : structuredPartial
+            ? "NEEDS_REVIEW"
+            : classification.classificationStatus;
 
         if (classificationStatus === "NEEDS_REVIEW") needsReview += 1;
         if (isExcluded) excludedCandidates += 1;
@@ -195,8 +216,8 @@ export class OfficialStelliveMusicSyncService {
 
         const saved = await this.options.repository.upsertMusicItem({
           youtubeVideoId: videoId,
-          title: detail?.title ?? primary.item.title,
-          normalizedTitle: normalizeTitle(detail?.title ?? primary.item.title),
+          title,
+          normalizedTitle: normalizeTitle(title),
           description: detail?.description ?? null,
           type: itemType,
           sourcePlaylistId: primary.source.id,
@@ -225,7 +246,7 @@ export class OfficialStelliveMusicSyncService {
           fetchedAt: this.now(),
           lastSeenAt: this.now(),
           playlistPosition: primary.item.position ?? null,
-          rawCategoryHint: primary.source.rawCategoryHint,
+          rawCategoryHint: structuredPartial ? "UNKNOWN" : primary.source.rawCategoryHint,
         });
         const musicItemId = extractMusicItemId(saved);
 
@@ -249,11 +270,12 @@ export class OfficialStelliveMusicSyncService {
             source: "MANUAL",
           }))
           : matchMusicMembers({
-            title: detail?.title ?? primary.item.title,
+            title,
             description: detail?.description ?? "",
             channelId: detail?.channelId,
             channelTitle: detail?.channelTitle,
             members: this.members,
+            structuredOriginal,
           }).links;
         await this.options.repository.replaceMusicItemMembers(musicItemId, links);
       }

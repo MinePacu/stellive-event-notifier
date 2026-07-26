@@ -185,6 +185,50 @@ enum HubEventCategory: String, Codable, CaseIterable, Hashable, Identifiable {
     }
 }
 
+enum HubEventTag: String, Codable, CaseIterable, Hashable {
+    case album
+
+    var displayName: String {
+        switch self {
+        case .album:
+            return "음반"
+        }
+    }
+}
+
+@propertyWrapper
+struct DefaultEmptyHubEventTagSet: Codable, Equatable {
+    var wrappedValue: Set<HubEventTag>
+
+    init(wrappedValue: Set<HubEventTag> = []) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawTags = container.decodeNil() ? [] : try container.decode([String].self)
+        wrappedValue = Set(rawTags.compactMap(HubEventTag.init(rawValue:)))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(
+            HubEventTag.allCases
+                .filter(wrappedValue.contains)
+                .map(\.rawValue)
+        )
+    }
+}
+
+extension KeyedDecodingContainer {
+    func decode(
+        _ type: DefaultEmptyHubEventTagSet.Type,
+        forKey key: Key
+    ) throws -> DefaultEmptyHubEventTagSet {
+        try decodeIfPresent(type, forKey: key) ?? DefaultEmptyHubEventTagSet()
+    }
+}
+
 enum HubEventParticipationMode: String, Codable, Hashable {
     case online
     case offline
@@ -347,6 +391,7 @@ enum HubEventImagePolicy {
 struct HubEvent: Identifiable, Hashable {
     let id: String
     let category: HubEventCategory
+    var tags: Set<HubEventTag> = []
     let participationMode: HubEventParticipationMode
     let status: HubEventStatus
     let title: String
@@ -493,6 +538,7 @@ struct HubCalendarEntry: Identifiable, Codable, Equatable {
     let title: String
     var displayTitle: String? = nil
     let category: HubEventCategory
+    @DefaultEmptyHubEventTagSet var tags: Set<HubEventTag> = []
     let status: HubEventStatus
     let participationMode: HubEventParticipationMode
     let generationId: String
@@ -510,6 +556,64 @@ struct HubCalendarEntry: Identifiable, Codable, Equatable {
         return candidates
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty } ?? title
+    }
+}
+
+enum HubEventFilterPolicy {
+    static func matches(_ event: HubEvent, filterId: String) -> Bool {
+        matches(
+            category: event.category,
+            tags: event.tags,
+            participationMode: event.participationMode,
+            status: event.status,
+            generationId: event.generationId,
+            filterId: filterId
+        )
+    }
+
+    static func matches(_ entry: HubCalendarEntry, filterId: String) -> Bool {
+        matches(
+            category: entry.category,
+            tags: entry.tags,
+            participationMode: entry.participationMode,
+            status: entry.status,
+            generationId: entry.generationId,
+            filterId: filterId
+        )
+    }
+
+    private static func matches(
+        category: HubEventCategory,
+        tags: Set<HubEventTag>,
+        participationMode: HubEventParticipationMode,
+        status: HubEventStatus,
+        generationId: String,
+        filterId: String
+    ) -> Bool {
+        switch filterId {
+        case "all":
+            return true
+        case "goods":
+            return category == .onlineGoods || category == .onlineCollab
+        case "album":
+            return tags.contains(.album)
+        case "ticketing":
+            return category == .ticketing
+        case "offline":
+            return participationMode.isOffline
+        case "closing":
+            return status == .closingSoon
+        default:
+            return generationId == filterId
+        }
+    }
+}
+
+enum HubEventTagDisplayPolicy {
+    static func secondaryLabels(for tags: Set<HubEventTag>) -> [String] {
+        HubEventTag.allCases
+            .filter(tags.contains)
+            .map(\.displayName)
     }
 }
 

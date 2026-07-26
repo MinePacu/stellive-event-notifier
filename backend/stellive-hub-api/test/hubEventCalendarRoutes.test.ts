@@ -61,6 +61,7 @@ describe("hub event calendar routes", () => {
     const injectedEvent: HubEvent = {
       id: "injected-calendar-event",
       category: "offline_collab",
+      tags: [],
       participationMode: "offline",
       status: "upcoming",
       title: "Injected Calendar Event",

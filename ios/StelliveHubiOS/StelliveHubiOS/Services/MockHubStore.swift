@@ -406,20 +406,7 @@ final class MockHubStore: ObservableObject {
     }
 
     func hubEvents(for filter: String) -> [HubEvent] {
-        let filtered: [HubEvent]
-        switch filter {
-        case "goods":
-            filtered = hubEvents.filter { $0.category == .onlineGoods || $0.category == .onlineCollab }
-        case "ticketing":
-            filtered = hubEvents.filter { $0.category == .ticketing }
-        case "offline":
-            filtered = hubEvents.filter { $0.participationMode.isOffline }
-        case "closing":
-            filtered = hubEvents.filter { $0.status == .closingSoon }
-        default:
-            filtered = hubEvents
-        }
-
+        let filtered = hubEvents.filter { HubEventFilterPolicy.matches($0, filterId: filter) }
         return orderedHubEvents(filtered)
     }
 
@@ -461,6 +448,7 @@ final class MockHubStore: ObservableObject {
             specialDayLabel: nil,
             title: event.title,
             category: event.category,
+            tags: event.tags,
             status: event.status,
             participationMode: event.participationMode,
             generationId: event.generationId,
