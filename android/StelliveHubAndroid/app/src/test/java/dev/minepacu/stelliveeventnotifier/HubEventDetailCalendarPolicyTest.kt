@@ -9,6 +9,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventSourceType
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventTimePrecision
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarMode
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarExpansionPolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarPolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventLinkPolicy
 import org.junit.Assert.assertEquals
@@ -278,6 +279,197 @@ class HubEventDetailCalendarPolicyTest {
         val day = presentation.day(LocalDate.parse("2026-06-20"))!!
         assertTrue(day.hasDeadline)
         assertEquals("•", day.countIndicator)
+    }
+
+    @Test
+    fun expansionDefaultsOpenForFirstEvent() {
+        assertTrue(
+            HubEventDetailCalendarExpansionPolicy.resolve(
+                previousEventId = null,
+                eventId = "event",
+                currentExpanded = false,
+                highlightedScheduleItemId = null,
+            ),
+        )
+    }
+
+    @Test
+    fun expansionOpensWhenEventChanges() {
+        assertTrue(
+            HubEventDetailCalendarExpansionPolicy.resolve(
+                previousEventId = "previous",
+                eventId = "event",
+                currentExpanded = false,
+                highlightedScheduleItemId = null,
+            ),
+        )
+    }
+
+    @Test
+    fun expansionOpensForHighlightedDeepLink() {
+        assertTrue(
+            HubEventDetailCalendarExpansionPolicy.resolve(
+                previousEventId = "event",
+                eventId = "event",
+                currentExpanded = false,
+                highlightedScheduleItemId = "highlight",
+            ),
+        )
+    }
+
+    @Test
+    fun expansionPreservesCurrentStateForSameEvent() {
+        assertFalse(
+            HubEventDetailCalendarExpansionPolicy.resolve(
+                previousEventId = "event",
+                eventId = "event",
+                currentExpanded = false,
+                highlightedScheduleItemId = null,
+            ),
+        )
+        assertTrue(
+            HubEventDetailCalendarExpansionPolicy.resolve(
+                previousEventId = "event",
+                eventId = "event",
+                currentExpanded = true,
+                highlightedScheduleItemId = null,
+            ),
+        )
+    }
+
+    @Test
+    fun restoredExpansionOnlyAppliesToMatchingEvent() {
+        assertFalse(
+            HubEventDetailCalendarExpansionPolicy.resolve(
+                previousEventId = "event",
+                eventId = "event",
+                currentExpanded = false,
+                highlightedScheduleItemId = null,
+            ),
+        )
+        assertTrue(
+            HubEventDetailCalendarExpansionPolicy.resolve(
+                previousEventId = "saved-event",
+                eventId = "other-event",
+                currentExpanded = false,
+                highlightedScheduleItemId = null,
+            ),
+        )
+    }
+
+    @Test
+    fun monthHeaderCountsUniqueScheduleIdsInsteadOfProjectedCells() {
+        val presentation = build(
+            event(
+                schedules = listOf(
+                    schedule("multi", "2026-06-19T01:00:00Z", "2026-06-21T01:00:00Z"),
+                    schedule("single", "2026-06-22T01:00:00Z"),
+                ),
+            ),
+        )
+
+        val header = HubEventDetailCalendarPolicy.headerPresentation(
+            presentation = presentation,
+            displayedMonth = YearMonth.parse("2026-06"),
+            selectedDate = LocalDate.parse("2026-06-20"),
+        )!!
+
+        assertEquals("2026년 6월", header.title)
+        assertEquals("세부 일정 2개", header.summary)
+        assertEquals(2, header.scheduleCount)
+    }
+
+    @Test
+    fun compactHeaderUsesSelectedDateAndUniqueScheduleCount() {
+        val presentation = build(
+            event(
+                schedules = listOf(
+                    schedule("first", "2026-06-20T01:00:00Z"),
+                    schedule("second", "2026-06-20T08:00:00Z"),
+                ),
+            ),
+        )
+
+        val header = HubEventDetailCalendarPolicy.headerPresentation(
+            presentation = presentation,
+            displayedMonth = YearMonth.parse("2026-06"),
+            selectedDate = LocalDate.parse("2026-06-20"),
+        )!!
+
+        assertEquals("2026년 6월 20일 토요일", header.title)
+        assertEquals("세부 일정 2개", header.summary)
+        assertEquals(2, header.scheduleCount)
+    }
+
+    @Test
+    fun parentOnlyHeadersUseModeSpecificSummary() {
+        val compact = build(
+            event(
+                startsAt = "2026-06-20T01:00:00Z",
+                endsAt = "2026-06-20T08:00:00Z",
+            ),
+        )
+        val month = build(
+            event(
+                startsAt = "2026-06-20T01:00:00Z",
+                endsAt = "2026-06-22T08:00:00Z",
+            ),
+        )
+
+        assertEquals(
+            "행사 일정",
+            HubEventDetailCalendarPolicy.headerPresentation(
+                compact,
+                YearMonth.parse("2026-06"),
+                LocalDate.parse("2026-06-20"),
+            )?.summary,
+        )
+        assertEquals(
+            "행사 기간",
+            HubEventDetailCalendarPolicy.headerPresentation(
+                month,
+                YearMonth.parse("2026-06"),
+                LocalDate.parse("2026-06-20"),
+            )?.summary,
+        )
+    }
+
+    @Test
+    fun hiddenPresentationHasNoHeader() {
+        val presentation = build(event())
+
+        assertNull(
+            HubEventDetailCalendarPolicy.headerPresentation(
+                presentation,
+                YearMonth.parse("2026-06"),
+                null,
+            ),
+        )
+    }
+
+    @Test
+    fun collapsingDoesNotResetDisplayedMonthOrSelectedDateState() {
+        val selectedDate = LocalDate.parse("2026-07-02")
+        val presentation = build(
+            event(
+                startsAt = "2026-06-20T01:00:00Z",
+                endsAt = "2026-07-02T08:00:00Z",
+            ),
+        ).copy(
+            displayedMonth = YearMonth.parse("2026-07"),
+            selectedDate = selectedDate,
+        )
+
+        val expanded = HubEventDetailCalendarExpansionPolicy.resolve(
+            previousEventId = "event",
+            eventId = "event",
+            currentExpanded = false,
+            highlightedScheduleItemId = null,
+        )
+
+        assertFalse(expanded)
+        assertEquals(YearMonth.parse("2026-07"), presentation.displayedMonth)
+        assertEquals(selectedDate, presentation.selectedDate)
     }
 
     private fun build(event: HubEvent, highlightedId: String? = null) =

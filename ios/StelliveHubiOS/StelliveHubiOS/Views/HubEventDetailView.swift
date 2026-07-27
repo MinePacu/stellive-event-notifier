@@ -50,6 +50,8 @@ struct HubEventDetailView: View {
     @State private var lastScrolledScheduleItemId: String? = nil
     @State private var expandedScheduleItemIds = Set<String>()
     @State private var expandedScheduleEventId: String?
+    @State private var isEventScheduleExpanded = true
+    @State private var eventScheduleExpansionEventID: String?
     @State private var isCalendarSelectionActive = false
     @State private var calendarHighlightedScheduleItemIds = Set<String>()
     @State private var presentedLinks: HubEventLinksSheetContext?
@@ -75,16 +77,19 @@ struct HubEventDetailView: View {
                 }
                 .ignoresSafeArea(edges: .top)
                 .onAppear {
+                    resolveEventScheduleExpansion(highlightedScheduleItemID: highlightedScheduleItemId)
                     expandHighlightedSchedule()
                     scrollToHighlightedSchedule(using: proxy)
                 }
-                .onChange(of: highlightedScheduleItemId) { _ in
+                .onChange(of: highlightedScheduleItemId) { highlightedID in
+                    resolveEventScheduleExpansion(highlightedScheduleItemID: highlightedID)
                     isCalendarSelectionActive = false
                     calendarHighlightedScheduleItemIds.removeAll()
                     expandHighlightedSchedule()
                     scrollToHighlightedSchedule(using: proxy)
                 }
                 .onChange(of: event.id) { _ in
+                    resolveEventScheduleExpansion(highlightedScheduleItemID: highlightedScheduleItemId)
                     isCalendarSelectionActive = false
                     calendarHighlightedScheduleItemIds.removeAll()
                     expandHighlightedSchedule()
@@ -110,6 +115,16 @@ struct HubEventDetailView: View {
             highlightedID: highlightedScheduleItemId
         )
         expandedScheduleEventId = event.id
+    }
+
+    private func resolveEventScheduleExpansion(highlightedScheduleItemID: String?) {
+        isEventScheduleExpanded = HubEventDetailCalendarExpansionPolicy.resolvedIsExpanded(
+            previousEventID: eventScheduleExpansionEventID,
+            eventID: event.id,
+            currentValue: isEventScheduleExpanded,
+            highlightedScheduleItemID: highlightedScheduleItemID
+        )
+        eventScheduleExpansionEventID = event.id
     }
 
     private func scrollToHighlightedSchedule(using proxy: ScrollViewProxy) {
@@ -145,6 +160,7 @@ struct HubEventDetailView: View {
                     HubEventDetailCalendarCard(
                         event: event,
                         presentation: presentation,
+                        isExpanded: $isEventScheduleExpanded,
                         onSelectDay: { day in
                             selectCalendarDay(day, using: scrollProxy)
                         }

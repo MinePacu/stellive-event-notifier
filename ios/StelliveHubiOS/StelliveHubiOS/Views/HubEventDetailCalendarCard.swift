@@ -4,6 +4,7 @@ struct HubEventDetailCalendarCard: View {
     let event: HubEvent
     let presentation: HubEventDetailCalendarPresentation
     let onSelectDay: (HubEventDetailCalendarDay) -> Void
+    @Binding var isExpanded: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var displayedMonth: HubEventDetailCalendarMonth
@@ -13,11 +14,13 @@ struct HubEventDetailCalendarCard: View {
     init(
         event: HubEvent,
         presentation: HubEventDetailCalendarPresentation,
+        isExpanded: Binding<Bool>,
         onSelectDay: @escaping (HubEventDetailCalendarDay) -> Void
     ) {
         self.event = event
         self.presentation = presentation
         self.onSelectDay = onSelectDay
+        _isExpanded = isExpanded
         let fallbackDate = presentation.initialSelectedDate
             ?? HubEventDetailCalendarPolicy.localDate(Date(), timeZone: HubEventDetailCalendarPolicy.fallbackTimeZone)
         _selectedDate = State(initialValue: fallbackDate)
@@ -25,14 +28,14 @@ struct HubEventDetailCalendarCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            switch presentation.mode {
-            case .hidden:
-                EmptyView()
-            case .compactDate:
-                compactContent
-            case .monthCalendar:
-                monthContent
+        VStack(alignment: .leading, spacing: 0) {
+            cardHeader
+            if isExpanded {
+                calendarBody
+                    .padding(.top, 14)
+                    .allowsHitTesting(isExpanded)
+                    .accessibilityHidden(!isExpanded)
+                    .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -41,6 +44,73 @@ struct HubEventDetailCalendarCard: View {
             HubEventDetailColors.card,
             in: RoundedRectangle(cornerRadius: 20, style: .continuous)
         )
+        .animation(expansionAnimation, value: isExpanded)
+    }
+
+    private var cardHeader: some View {
+        let header = HubEventDetailCalendarPolicy.headerPresentation(
+            for: presentation,
+            displayedMonth: displayedMonth,
+            selectedDate: selectedDate
+        )
+        return Button {
+            if reduceMotion {
+                isExpanded.toggle()
+            } else {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    isExpanded.toggle()
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(header?.title ?? "행사 일정")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(HubEventDetailColors.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(header?.summary ?? "행사 일정")
+                        .font(.caption)
+                        .foregroundStyle(HubEventDetailColors.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .layoutPriority(1)
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.down")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(HubEventDetailColors.muted)
+                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    .frame(width: 44, height: 44)
+                    .accessibilityHidden(true)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([
+            header?.title,
+            header?.summary,
+        ].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityValue(isExpanded ? "펼침" : "접힘")
+        .accessibilityHint(isExpanded ? "두 번 탭하여 행사 일정을 접습니다." : "두 번 탭하여 행사 일정을 펼칩니다.")
+    }
+
+    @ViewBuilder
+    private var calendarBody: some View {
+        switch presentation.mode {
+        case .hidden:
+            EmptyView()
+        case .compactDate:
+            compactContent
+        case .monthCalendar:
+            monthContent
+        }
+    }
+
+    private var expansionAnimation: Animation? {
+        reduceMotion ? nil : .easeInOut(duration: 0.18)
     }
 
     private var compactContent: some View {
@@ -89,7 +159,7 @@ struct HubEventDetailCalendarCard: View {
 
     private var monthContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            monthHeader
+            monthNavigation
             weekdayHeader
             monthGrid
             Divider()
@@ -97,15 +167,10 @@ struct HubEventDetailCalendarCard: View {
         }
     }
 
-    private var monthHeader: some View {
-        HStack(spacing: 8) {
+    private var monthNavigation: some View {
+        HStack {
             monthNavigationButton(direction: -1)
-            Spacer(minLength: 8)
-            Text(monthText(displayedMonth))
-                .font(.headline)
-                .foregroundStyle(HubEventDetailColors.text)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 8)
+            Spacer()
             monthNavigationButton(direction: 1)
         }
     }

@@ -1,13 +1,23 @@
 package dev.minepacu.stelliveeventnotifier.feature.hubevents
 
+import android.animation.ValueAnimator
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.transition.AutoTransition
+import android.transition.TransitionManager
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import com.google.android.material.card.MaterialCardView
 import dev.minepacu.stelliveeventnotifier.R
 import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
@@ -25,16 +35,49 @@ class HubEventDetailCalendarCard(
     private val presentation: HubEventDetailCalendarPresentation,
     now: Instant = Instant.now(),
     private val today: LocalDate = LocalDate.now(HubEventDetailCalendarPolicy.DefaultZoneId),
+    initiallyExpanded: Boolean = true,
+    private val onExpandedChanged: (Boolean) -> Unit = {},
     private val onDateSelected: (LocalDate, List<String>) -> Unit,
 ) : MaterialCardView(context) {
     private var displayedMonth =
         presentation.displayedMonth ?: YearMonth.from(presentation.initialSelectedDate ?: today)
     private var selectedDate = presentation.selectedDate
+    private var isExpanded = initiallyExpanded
     private val timelineById = HubEventDetailFormatting.timeline(event, now).associateBy { it.schedule.id }
     private val content = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(14), dp(14), dp(14), dp(14))
     }
+    private val calendarBody = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        )
+    }
+    private val headerTitle = TextView(context).apply {
+        setTextColor(color(R.color.hub_text))
+        textSize = 16f
+        typeface = Typeface.DEFAULT_BOLD
+        includeFontPadding = false
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+    private val headerSummary = TextView(context).apply {
+        setTextColor(color(R.color.hub_text_muted))
+        textSize = 12f
+        includeFontPadding = false
+        setPadding(0, dp(4), 0, 0)
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+    private val collapseIcon = ImageView(context).apply {
+        setImageResource(R.drawable.ic_chevron_down_24)
+        imageTintList = ColorStateList.valueOf(color(R.color.hub_text))
+        scaleType = ImageView.ScaleType.CENTER
+        isClickable = false
+        isFocusable = false
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+    private val headerControl = buildHeader()
 
     init {
         radius = dp(18).toFloat()
@@ -49,45 +92,129 @@ class HubEventDetailCalendarCard(
             bottomMargin = dp(12)
         }
         addView(content)
-        render()
+        content.addView(headerControl)
+        content.addView(calendarBody)
+        renderBody()
+        calendarBody.visibility = if (isExpanded) View.VISIBLE else View.GONE
+        updateCollapseControl(animate = false)
     }
 
-    private fun render() {
-        content.removeAllViews()
+    private fun renderBody() {
+        calendarBody.removeAllViews()
+        calendarBody.setOnClickListener(null)
+        calendarBody.isClickable = false
+        calendarBody.isFocusable = false
+        calendarBody.contentDescription = null
         when (presentation.mode) {
             HubEventDetailCalendarMode.HIDDEN -> Unit
             HubEventDetailCalendarMode.COMPACT_DATE -> renderCompactDate()
             HubEventDetailCalendarMode.MONTH_CALENDAR -> renderMonthCalendar()
         }
+        updateHeaderPresentation()
+    }
+
+    private fun buildHeader(): View = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        minimumHeight = dp(48)
+        isClickable = true
+        isFocusable = true
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        val selectableBackground = TypedValue()
+        if (context.theme.resolveAttribute(
+                android.R.attr.selectableItemBackground,
+                selectableBackground,
+                true,
+            )
+        ) {
+            background = context.getDrawable(selectableBackground.resourceId)
+        }
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            addView(headerTitle)
+            addView(headerSummary)
+        }, LinearLayout.LayoutParams(
+            0,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            1f,
+        ))
+        addView(collapseIcon, LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+            marginStart = dp(8)
+        })
+        setOnClickListener { setCalendarExpanded(!isExpanded) }
+    }
+
+    private fun setCalendarExpanded(expanded: Boolean) {
+        if (isExpanded == expanded) return
+        val shouldAnimate = ValueAnimator.areAnimatorsEnabled() && isLaidOut
+        if (shouldAnimate) {
+            val transitionRoot = (parent as? ViewGroup) ?: this
+            TransitionManager.endTransitions(transitionRoot)
+            TransitionManager.beginDelayedTransition(
+                transitionRoot,
+                AutoTransition().apply {
+                    duration = EXPANSION_DURATION_MS
+                    interpolator = DecelerateInterpolator()
+                },
+            )
+        }
+        isExpanded = expanded
+        calendarBody.visibility = if (expanded) View.VISIBLE else View.GONE
+        updateCollapseControl(animate = shouldAnimate)
+        onExpandedChanged(expanded)
+    }
+
+    private fun updateHeaderPresentation() {
+        val header = HubEventDetailCalendarPolicy.headerPresentation(
+            presentation = presentation,
+            displayedMonth = displayedMonth,
+            selectedDate = selectedDate,
+        ) ?: return
+        headerTitle.text = header.title
+        headerSummary.text = header.summary
+        headerControl.contentDescription = "행사 일정, ${header.title}, ${header.summary}"
+        updateCollapseAccessibility()
+    }
+
+    private fun updateCollapseControl(animate: Boolean) {
+        val targetRotation = if (isExpanded) 180f else 0f
+        collapseIcon.animate().cancel()
+        if (animate) {
+            collapseIcon.animate()
+                .rotation(targetRotation)
+                .setDuration(EXPANSION_DURATION_MS)
+                .setInterpolator(DecelerateInterpolator())
+                .start()
+        } else {
+            collapseIcon.rotation = targetRotation
+        }
+        updateCollapseAccessibility()
+    }
+
+    private fun updateCollapseAccessibility() {
+        ViewCompat.setStateDescription(headerControl, if (isExpanded) "펼침" else "접힘")
+        ViewCompat.replaceAccessibilityAction(
+            headerControl,
+            AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_CLICK,
+            if (isExpanded) "두 번 탭하여 접기" else "두 번 탭하여 펼치기",
+            null,
+        )
     }
 
     private fun renderCompactDate() {
         val date = presentation.initialSelectedDate ?: return
         val day = presentation.day(date)
         val schedules = day?.schedules.orEmpty()
-        content.addView(TextView(context).apply {
-            text = fullDateFormatter.format(date)
-            setTextColor(color(R.color.hub_text))
-            textSize = 17f
-            typeface = Typeface.DEFAULT_BOLD
-            includeFontPadding = false
-        })
-        content.addView(TextView(context).apply {
+        calendarBody.addView(TextView(context).apply {
             text = compactTimingText(schedules)
             setTextColor(color(R.color.hub_text_muted))
             textSize = 12f
             includeFontPadding = false
-            setPadding(0, dp(6), 0, 0)
+            setPadding(0, dp(10), 0, 0)
         })
-        content.addView(TextView(context).apply {
-            text = "${schedules.size}개의 세부 일정"
-            setTextColor(color(R.color.hub_text))
-            textSize = 14f
-            typeface = Typeface.DEFAULT_BOLD
-            includeFontPadding = false
-            setPadding(0, dp(12), 0, 0)
-        })
-        content.addView(TextView(context).apply {
+        calendarBody.addView(TextView(context).apply {
             text = compactStatusText(schedules)
             setTextColor(color(R.color.hub_text_muted))
             textSize = 12f
@@ -95,7 +222,7 @@ class HubEventDetailCalendarCard(
             setPadding(0, dp(5), 0, 0)
         })
         event.venueName?.takeIf(String::isNotBlank)?.let { venue ->
-            content.addView(TextView(context).apply {
+            calendarBody.addView(TextView(context).apply {
                 text = "장소 · $venue"
                 setTextColor(color(R.color.hub_text_muted))
                 textSize = 12f
@@ -103,10 +230,10 @@ class HubEventDetailCalendarCard(
                 setPadding(0, dp(7), 0, 0)
             })
         }
-        isClickable = schedules.isNotEmpty()
-        isFocusable = schedules.isNotEmpty()
-        minimumHeight = dp(48)
-        contentDescription = buildString {
+        calendarBody.isClickable = schedules.isNotEmpty()
+        calendarBody.isFocusable = schedules.isNotEmpty()
+        calendarBody.minimumHeight = dp(48)
+        calendarBody.contentDescription = buildString {
             append(fullDateFormatter.format(date))
             append(", 세부 일정 ${schedules.size}개")
             if (day?.isInParentEventRange == true) append(", 행사 진행 기간")
@@ -114,16 +241,16 @@ class HubEventDetailCalendarCard(
             if (schedules.isNotEmpty()) append(", 두 번 탭하여 세부 일정으로 이동")
         }
         if (schedules.isNotEmpty()) {
-            setOnClickListener { selectDate(date) }
+            calendarBody.setOnClickListener { selectDate(date) }
         }
     }
 
     private fun renderMonthCalendar() {
-        content.addView(monthControl())
-        content.addView(weekdayHeader())
-        content.addView(monthGrid())
+        calendarBody.addView(monthControl())
+        calendarBody.addView(weekdayHeader())
+        calendarBody.addView(monthGrid())
         selectedDate?.let { date ->
-            content.addView(selectedDateSummary(date))
+            calendarBody.addView(selectedDateSummary(date))
         }
     }
 
@@ -178,7 +305,7 @@ class HubEventDetailCalendarCard(
             if (enabled) {
                 setOnClickListener {
                     displayedMonth = targetMonth
-                    render()
+                    renderBody()
                     announceForAccessibility("${monthFormatter.format(targetMonth)} 표시")
                 }
             }
@@ -297,7 +424,7 @@ class HubEventDetailCalendarCard(
         val targetMonth = YearMonth.from(date)
         val range = presentation.availableMonthRange
         if (range != null && targetMonth in range) displayedMonth = targetMonth
-        render()
+        renderBody()
         val scheduleIds = presentation.scheduleIdsFor(date)
         onDateSelected(date, scheduleIds)
         announceForAccessibility(
@@ -450,6 +577,7 @@ class HubEventDetailCalendarCard(
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private companion object {
+        const val EXPANSION_DURATION_MS = 220L
         val monthFormatter: DateTimeFormatter =
             DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREAN)
         val fullDateFormatter: DateTimeFormatter =

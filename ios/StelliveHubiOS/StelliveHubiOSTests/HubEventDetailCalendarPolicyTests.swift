@@ -235,6 +235,142 @@ final class HubEventDetailCalendarPolicyTests: XCTestCase {
         )
     }
 
+    func testCalendarExpansionStartsExpandedAndResetsForChangedEvent() {
+        XCTAssertTrue(
+            HubEventDetailCalendarExpansionPolicy.resolvedIsExpanded(
+                previousEventID: nil,
+                eventID: "event",
+                currentValue: false,
+                highlightedScheduleItemID: nil
+            )
+        )
+        XCTAssertTrue(
+            HubEventDetailCalendarExpansionPolicy.resolvedIsExpanded(
+                previousEventID: "event",
+                eventID: "other",
+                currentValue: false,
+                highlightedScheduleItemID: nil
+            )
+        )
+    }
+
+    func testCalendarExpansionOpensForHighlightedSchedule() {
+        XCTAssertTrue(
+            HubEventDetailCalendarExpansionPolicy.resolvedIsExpanded(
+                previousEventID: "event",
+                eventID: "event",
+                currentValue: false,
+                highlightedScheduleItemID: "deep-link"
+            )
+        )
+    }
+
+    func testCalendarExpansionPreservesCurrentValueForSameEventWithoutHighlight() {
+        XCTAssertFalse(
+            HubEventDetailCalendarExpansionPolicy.resolvedIsExpanded(
+                previousEventID: "event",
+                eventID: "event",
+                currentValue: false,
+                highlightedScheduleItemID: nil
+            )
+        )
+        XCTAssertTrue(
+            HubEventDetailCalendarExpansionPolicy.resolvedIsExpanded(
+                previousEventID: "event",
+                eventID: "event",
+                currentValue: true,
+                highlightedScheduleItemID: nil
+            )
+        )
+    }
+
+    func testHiddenCalendarHasNoHeaderPresentation() {
+        let presentation = makePresentation(event())
+
+        XCTAssertNil(
+            HubEventDetailCalendarPolicy.headerPresentation(
+                for: presentation,
+                displayedMonth: HubEventDetailCalendarMonth(year: 2026, month: 6),
+                selectedDate: june1
+            )
+        )
+    }
+
+    func testMonthHeaderCountsUniqueScheduleIDsAndTracksNavigatedMonth() {
+        let presentation = makePresentation(
+            event(scheduleItems: [
+                schedule(
+                    "multi-day",
+                    startsAt: "2026-06-29T01:00:00Z",
+                    endsAt: "2026-07-02T01:00:00Z"
+                ),
+                schedule("june-only", startsAt: "2026-06-10T01:00:00Z"),
+            ])
+        )
+
+        XCTAssertEqual(
+            HubEventDetailCalendarPolicy.headerPresentation(
+                for: presentation,
+                displayedMonth: HubEventDetailCalendarMonth(year: 2026, month: 6),
+                selectedDate: june1
+            ),
+            HubEventDetailCalendarHeaderPresentation(
+                title: "2026년 6월",
+                summary: "세부 일정 2개"
+            )
+        )
+        XCTAssertEqual(
+            HubEventDetailCalendarPolicy.headerPresentation(
+                for: presentation,
+                displayedMonth: HubEventDetailCalendarMonth(year: 2026, month: 7),
+                selectedDate: june1
+            ),
+            HubEventDetailCalendarHeaderPresentation(
+                title: "2026년 7월",
+                summary: "세부 일정 1개"
+            )
+        )
+    }
+
+    func testCompactParentOnlyHeaderUsesSelectedDateAndEventScheduleFallback() {
+        let presentation = makePresentation(
+            event(startsAt: "2026-06-01T00:00:00Z")
+        )
+
+        XCTAssertEqual(
+            HubEventDetailCalendarPolicy.headerPresentation(
+                for: presentation,
+                displayedMonth: HubEventDetailCalendarMonth(year: 2026, month: 6),
+                selectedDate: june1
+            ),
+            HubEventDetailCalendarHeaderPresentation(
+                title: "2026년 6월 1일",
+                summary: "행사 일정"
+            )
+        )
+    }
+
+    func testMonthParentOnlyHeaderUsesEventPeriodFallback() {
+        let presentation = makePresentation(
+            event(
+                startsAt: "2026-06-01T00:00:00Z",
+                endsAt: "2026-06-03T00:00:00Z"
+            )
+        )
+
+        XCTAssertEqual(
+            HubEventDetailCalendarPolicy.headerPresentation(
+                for: presentation,
+                displayedMonth: HubEventDetailCalendarMonth(year: 2026, month: 6),
+                selectedDate: june1
+            ),
+            HubEventDetailCalendarHeaderPresentation(
+                title: "2026년 6월",
+                summary: "행사 기간"
+            )
+        )
+    }
+
     private func makePresentation(
         _ event: HubEvent,
         highlightedID: String? = nil
