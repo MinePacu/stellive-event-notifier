@@ -123,6 +123,7 @@ import dev.minepacu.stelliveeventnotifier.feature.songs.SongLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenPreferenceStore
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenTarget
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarCard
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarExpansionPolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarMode
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarPolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailFormatting
@@ -235,6 +236,8 @@ private const val GOODS_EVENTS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1120
 private const val SONGS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1080
 private const val SETTINGS_TWO_PANE_CONTENT_MAX_WIDTH_DP = 1080
 private const val GOODS_EVENTS_CALENDAR_EXPANDED_STATE = "goods_events_calendar_expanded"
+private const val DETAIL_CALENDAR_EXPANSION_EVENT_ID_STATE = "detail_calendar_expansion_event_id"
+private const val DETAIL_CALENDAR_EXPANDED_STATE = "detail_calendar_expanded"
 private const val NAVIGATION_CURRENT_ROOT_STATE = "navigation_current_root"
 private const val NAVIGATION_CURRENT_SCREEN_STATE = "navigation_current_screen"
 private const val NAVIGATION_PREVIOUS_SCREENS_STATE = "navigation_previous_screens"
@@ -425,6 +428,8 @@ private val expandedHubEventScheduleItemIds = mutableSetOf<String>()
 private var detailCalendarSelectionEventId: String? = null
 private var detailCalendarSelectedDate: LocalDate? = null
 private val detailCalendarSelectedScheduleItemIds = mutableSetOf<String>()
+private var detailCalendarExpansionEventId: String? = null
+private var detailCalendarExpanded = true
 private var selectedAnnouncementId: String? = null
 private var announcementsSummary = AnnouncementsSummary()
 private var announcementItems: List<ServiceAnnouncement> = emptyList()
@@ -458,6 +463,12 @@ private var notificationPermissionRequested = false
         super.onCreate(savedInstanceState)
         goodsEventsCalendarExpanded = savedInstanceState?.getBoolean(
             GOODS_EVENTS_CALENDAR_EXPANDED_STATE,
+            true,
+        ) ?: true
+        detailCalendarExpansionEventId =
+            savedInstanceState?.getString(DETAIL_CALENDAR_EXPANSION_EVENT_ID_STATE)
+        detailCalendarExpanded = savedInstanceState?.getBoolean(
+            DETAIL_CALENDAR_EXPANDED_STATE,
             true,
         ) ?: true
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -563,6 +574,8 @@ private var notificationPermissionRequested = false
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean(GOODS_EVENTS_CALENDAR_EXPANDED_STATE, goodsEventsCalendarExpanded)
+        outState.putString(DETAIL_CALENDAR_EXPANSION_EVENT_ID_STATE, detailCalendarExpansionEventId)
+        outState.putBoolean(DETAIL_CALENDAR_EXPANDED_STATE, detailCalendarExpanded)
         val navigation = navigationHistory.snapshot()
         outState.putString(NAVIGATION_CURRENT_ROOT_STATE, navigation.currentRoot.id)
         outState.putString(NAVIGATION_CURRENT_SCREEN_STATE, navigation.currentScreen.id)
@@ -3593,12 +3606,24 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
                 ?.let(detailCalendarSelectedScheduleItemIds::addAll)
         }
         if (calendarPresentation.mode != HubEventDetailCalendarMode.HIDDEN) {
+            detailCalendarExpanded = HubEventDetailCalendarExpansionPolicy.resolve(
+                previousEventId = detailCalendarExpansionEventId,
+                eventId = event.id,
+                currentExpanded = detailCalendarExpanded,
+                highlightedScheduleItemId = selectedHubEventScheduleItemId,
+            )
+            detailCalendarExpansionEventId = event.id
             container.addView(sectionLabel("행사 일정").let { if (fullScreen) it.withDetailHorizontalMargins() else it })
             container.addView(
                 HubEventDetailCalendarCard(
                     context = this,
                     event = event,
                     presentation = calendarPresentation,
+                    initiallyExpanded = detailCalendarExpanded,
+                    onExpandedChanged = { expanded ->
+                        detailCalendarExpansionEventId = event.id
+                        detailCalendarExpanded = expanded
+                    },
                 ) { selectedDate, scheduleIds ->
                     detailCalendarSelectionEventId = event.id
                     detailCalendarSelectedDate = selectedDate

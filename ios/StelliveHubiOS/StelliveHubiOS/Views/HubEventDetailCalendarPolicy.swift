@@ -6,6 +6,24 @@ enum HubEventDetailCalendarMode: Equatable {
     case monthCalendar
 }
 
+struct HubEventDetailCalendarHeaderPresentation: Equatable {
+    let title: String
+    let summary: String
+}
+
+enum HubEventDetailCalendarExpansionPolicy {
+    static func resolvedIsExpanded(
+        previousEventID: String?,
+        eventID: String,
+        currentValue: Bool,
+        highlightedScheduleItemID: String?
+    ) -> Bool {
+        if previousEventID != eventID { return true }
+        if highlightedScheduleItemID != nil { return true }
+        return currentValue
+    }
+}
+
 struct HubEventDetailCalendarDate: Hashable, Comparable {
     let year: Int
     let month: Int
@@ -206,6 +224,41 @@ enum HubEventDetailCalendarPolicy {
             earliestDate: earliestDate,
             latestDate: latestDate
         )
+    }
+
+    static func headerPresentation(
+        for presentation: HubEventDetailCalendarPresentation,
+        displayedMonth: HubEventDetailCalendarMonth,
+        selectedDate: HubEventDetailCalendarDate
+    ) -> HubEventDetailCalendarHeaderPresentation? {
+        switch presentation.mode {
+        case .hidden:
+            return nil
+        case .compactDate:
+            let scheduleCount = Set(presentation.day(for: selectedDate).schedules.map(\.id)).count
+            return HubEventDetailCalendarHeaderPresentation(
+                title: "\(selectedDate.year)년 \(selectedDate.month)월 \(selectedDate.day)일",
+                summary: scheduleCount > 0 ? "세부 일정 \(scheduleCount)개" : "행사 일정"
+            )
+        case .monthCalendar:
+            let monthDays = presentation.days.values.filter {
+                $0.date.calendarMonth == displayedMonth
+            }
+            let scheduleCount = Set(monthDays.flatMap { $0.schedules.map(\.id) }).count
+            let hasParentEventRange = monthDays.contains(where: \.isInParentEventRange)
+            let summary: String
+            if scheduleCount > 0 {
+                summary = "세부 일정 \(scheduleCount)개"
+            } else if hasParentEventRange {
+                summary = "행사 기간"
+            } else {
+                summary = "행사 일정"
+            }
+            return HubEventDetailCalendarHeaderPresentation(
+                title: "\(displayedMonth.year)년 \(displayedMonth.month)월",
+                summary: summary
+            )
+        }
     }
 
     static func calendar(timeZone: TimeZone) -> Calendar {

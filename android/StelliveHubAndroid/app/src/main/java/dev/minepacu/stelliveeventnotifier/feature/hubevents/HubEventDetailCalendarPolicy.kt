@@ -6,6 +6,8 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleKind
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 enum class HubEventDetailCalendarMode {
     HIDDEN,
@@ -47,8 +49,65 @@ data class HubEventDetailCalendarPresentation(
         day(date)?.schedules.orEmpty().map(HubEventScheduleItem::id)
 }
 
+data class HubEventDetailCalendarHeaderPresentation(
+    val title: String,
+    val summary: String,
+    val scheduleCount: Int,
+)
+
+object HubEventDetailCalendarExpansionPolicy {
+    fun resolve(
+        previousEventId: String?,
+        eventId: String,
+        currentExpanded: Boolean,
+        highlightedScheduleItemId: String?,
+    ): Boolean = when {
+        previousEventId != eventId -> true
+        highlightedScheduleItemId != null -> true
+        else -> currentExpanded
+    }
+}
+
 object HubEventDetailCalendarPolicy {
     val DefaultZoneId: ZoneId = ZoneId.of("Asia/Seoul")
+
+    fun headerPresentation(
+        presentation: HubEventDetailCalendarPresentation,
+        displayedMonth: YearMonth,
+        selectedDate: LocalDate?,
+    ): HubEventDetailCalendarHeaderPresentation? {
+        if (presentation.mode == HubEventDetailCalendarMode.HIDDEN) return null
+        val compactDate = selectedDate ?: presentation.initialSelectedDate
+        val relevantDays = when (presentation.mode) {
+            HubEventDetailCalendarMode.HIDDEN -> emptyList()
+            HubEventDetailCalendarMode.COMPACT_DATE ->
+                presentation.days.filter { it.date == compactDate }
+            HubEventDetailCalendarMode.MONTH_CALENDAR ->
+                presentation.days.filter { YearMonth.from(it.date) == displayedMonth }
+        }
+        val scheduleCount = relevantDays
+            .flatMap(HubEventDetailCalendarDay::schedules)
+            .distinctBy(HubEventScheduleItem::id)
+            .size
+        val hasParentRange = relevantDays.any(HubEventDetailCalendarDay::isInParentEventRange)
+        val title = when (presentation.mode) {
+            HubEventDetailCalendarMode.HIDDEN -> return null
+            HubEventDetailCalendarMode.COMPACT_DATE ->
+                detailDateFormatter.format(compactDate ?: return null)
+            HubEventDetailCalendarMode.MONTH_CALENDAR -> monthFormatter.format(displayedMonth)
+        }
+        val summary = when {
+            scheduleCount > 0 -> "세부 일정 ${scheduleCount}개"
+            presentation.mode == HubEventDetailCalendarMode.COMPACT_DATE -> "행사 일정"
+            hasParentRange -> "행사 기간"
+            else -> "세부 일정 0개"
+        }
+        return HubEventDetailCalendarHeaderPresentation(
+            title = title,
+            summary = summary,
+            scheduleCount = scheduleCount,
+        )
+    }
 
     fun build(
         event: HubEvent,
@@ -161,4 +220,9 @@ object HubEventDetailCalendarPolicy {
         val schedule: HubEventScheduleItem,
         val dates: List<LocalDate>,
     )
+
+    private val monthFormatter: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREAN)
+    private val detailDateFormatter: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("yyyy년 M월 d일 EEEE", Locale.KOREAN)
 }
