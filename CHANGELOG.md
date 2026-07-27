@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+### 2026-07-27
+
+#### Added
+- 허브 이벤트 상세 화면의 캘린더 카드를 기본 접힌 상태로 제공하고, 펼치기/접기 토글과 애니메이션을 추가했습니다 (Android·iOS).
+
+#### Changed
+- Android `HubEventDetailCalendarCard`, `HubEventDetailCalendarPolicy`에 접힘/펼침 상태 관리와 애니메이션을 적용했습니다.
+- iOS `HubEventDetailCalendarCard`, `HubEventDetailCalendarPolicy`에 접힘/펼침 상태 관리와 애니메이션을 적용했습니다.
+- `HubEventDetailView`(Android·iOS)에서 접을 수 있는 캘린더 카드를 연동했습니다.
+
+#### Tests
+- Android `HubEventDetailCalendarPolicyTest`: 캘린더 카드 접힘/펼침 동작 검증 테스트 추가
+- iOS `HubEventDetailCalendarPolicyTests`: 캘린더 카드 상태 관리 테스트 추가
+
 ### 2026-07-26
 
 #### Added
