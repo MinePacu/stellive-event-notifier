@@ -32,6 +32,10 @@ interface DeliveryAttemptTrendRecord {
   status: string;
 }
 
+interface DeliveryAttemptDeviceRecord {
+  deviceId: string | null;
+}
+
 interface DeliveryAttemptDiagnosticSelect {
   id: true;
   eventId: true;
@@ -54,7 +58,9 @@ interface DeliveryAttemptDelegate {
   deliveryAttempt: {
     create?(args: { data: Record<string, unknown> }): Promise<unknown>;
     createMany?(args: { data: Record<string, unknown>[] }): Promise<unknown>;
-    findMany?(args: unknown): Promise<Array<DeliveryAttemptRecord | DeliveryAttemptStatusRecord | DeliveryAttemptTrendRecord>>;
+    findMany?(args: unknown): Promise<Array<
+      DeliveryAttemptRecord | DeliveryAttemptStatusRecord | DeliveryAttemptTrendRecord | DeliveryAttemptDeviceRecord
+    >>;
   };
 }
 
@@ -94,6 +100,11 @@ export interface CreateDeliveryAttemptInput {
   tapActionUsed?: string;
   title?: string;
   body?: string;
+}
+
+export interface ListSentDeviceIdsInput {
+  eventId: string;
+  deviceIds: string[];
 }
 
 const deliveryAttemptDiagnosticSelect: DeliveryAttemptDiagnosticSelect = {
@@ -199,7 +210,7 @@ export function emptyDailyDeliveryQueueTrend(days = 14, now = new Date()): Daily
 }
 
 function isDiagnosticRecord(
-  record: DeliveryAttemptRecord | DeliveryAttemptStatusRecord | DeliveryAttemptTrendRecord
+  record: DeliveryAttemptRecord | DeliveryAttemptStatusRecord | DeliveryAttemptTrendRecord | DeliveryAttemptDeviceRecord
 ): record is DeliveryAttemptRecord {
   return "eventId" in record;
 }
@@ -221,6 +232,23 @@ export class DeliveryAttemptRepository {
       return;
     }
     await this.prisma.deliveryAttempt.createMany({ data: inputs.map((input) => this.toRecord(input)) });
+  }
+
+  async listSentDeviceIds(input: ListSentDeviceIdsInput): Promise<Set<string>> {
+    if (input.deviceIds.length === 0) return new Set();
+    if (!this.prisma.deliveryAttempt.findMany) throw new Error("delivery_attempt_lookup_unavailable");
+    const records = await this.prisma.deliveryAttempt.findMany({
+      where: {
+        eventId: input.eventId,
+        status: "sent",
+        deviceId: { in: input.deviceIds }
+      },
+      select: { deviceId: true },
+      distinct: ["deviceId"]
+    });
+    return new Set(
+      records.flatMap((record) => "deviceId" in record && record.deviceId ? [record.deviceId] : [])
+    );
   }
 
   private toRecord(input: CreateDeliveryAttemptInput): Record<string, unknown> {
@@ -267,6 +295,7 @@ export class DeliveryAttemptRepository {
     });
     const summary = emptySummary();
     for (const record of records) {
+      if (!("status" in record)) continue;
       const status = record.status;
       if (status === "sent" || status === "queued" || status === "skipped" || status === "failed") {
         summary[status] += 1;

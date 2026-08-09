@@ -88,6 +88,7 @@ function createWorker(options: {
   deliveryAttemptBatchSize?: number;
   withoutCreateMany?: boolean;
   scheduleCurrent?: boolean;
+  previousAttempts?: Array<{ deviceId: string; status: "queued" | "sent" | "failed" | "skipped" }>;
 }) {
   const calls = {
     completed: [] as string[],
@@ -97,9 +98,25 @@ function createWorker(options: {
     batches: [] as Array<{ devices: PushTargetDevice[]; payload: MinimalPushPayload }>,
     invalidated: [] as unknown[],
     preferenceDeviceIds: [] as string[][],
-    attemptBatches: [] as unknown[][]
+    attemptBatches: [] as unknown[][],
+    sentLookups: [] as Array<{ eventId: string; deviceIds: string[] }>
   };
   const pushTargets = options.devices ?? [device()];
+  const sentDeviceIds = new Set(
+    options.previousAttempts?.filter((attempt) => attempt.status === "sent").map((attempt) => attempt.deviceId) ?? []
+  );
+  const persistSentAttempt = (input: unknown) => {
+    if (
+      typeof input === "object" &&
+      input !== null &&
+      "status" in input &&
+      input.status === "sent" &&
+      "deviceId" in input &&
+      typeof input.deviceId === "string"
+    ) {
+      sentDeviceIds.add(input.deviceId);
+    }
+  };
   const worker = new NotificationWorker({
     notificationJobs: {
       async claimReady() {
@@ -149,12 +166,18 @@ function createWorker(options: {
     deliveryAttempts: {
       async create(input: unknown) {
         calls.attempts.push(input);
+        persistSentAttempt(input);
+      },
+      async listSentDeviceIds(input: { eventId: string; deviceIds: string[] }) {
+        calls.sentLookups.push(input);
+        return new Set(input.deviceIds.filter((deviceId) => sentDeviceIds.has(deviceId)));
       },
       ...(!options.withoutCreateMany
         ? {
             async createMany(inputs: unknown[]) {
               calls.attemptBatches.push(inputs);
               calls.attempts.push(...inputs);
+              inputs.forEach(persistSentAttempt);
             }
           }
         : {})
@@ -306,6 +329,102 @@ describe("NotificationWorker", () => {
     ]);
   });
 
+  it("stops retrying at the attempt limit even when the provider supplies retryAfterMs", async () => {
+    const { worker, calls } = createWorker({
+      jobs: [job({ attempts: 4 })],
+      send: async () => ({ status: "transient_failure", retryAfterMs: 125_000, reason: "quota_exceeded" })
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ claimed: 1, completed: 0, failed: 1, queued: 0, status: "partial" });
+    expect(calls.failed).toEqual([
+      expect.objectContaining({ jobId: "job-1", attempts: 4, terminal: true, retryAt: undefined })
+    ]);
+    expect(calls.attempts).toEqual([
+      expect.objectContaining({ deviceId: "device-1", status: "failed", retryCount: 4 })
+    ]);
+  });
+
+  it("retries only transient recipients after a partial send", async () => {
+    const claimedJob = job();
+    const devices = [
+      device({ deviceId: "sent-device", pushToken: "sent-token" }),
+      device({ deviceId: "retry-device", pushToken: "retry-token" })
+    ];
+    let round = 0;
+    const { worker, calls } = createWorker({
+      jobs: [claimedJob],
+      devices,
+      sendBatch: async ({ devices: batch }) => {
+        round += 1;
+        return batch.map((target) =>
+          round === 1 && target.deviceId === "retry-device"
+            ? { status: "transient_failure", reason: "fcm_transient" }
+            : { status: "sent", providerMessageId: `message-${target.deviceId}-${round}` }
+        );
+      }
+    });
+
+    const first = await worker.drain({ now });
+    claimedJob.attempts = 1;
+    const second = await worker.drain({ now });
+
+    expect(first).toMatchObject({ sent: 1, skipped: 0, queued: 1, failed: 0 });
+    expect(second).toMatchObject({ sent: 1, skipped: 1, completed: 1, queued: 0, failed: 0 });
+    expect(calls.batches.map((batch) => batch.devices.map((target) => target.deviceId))).toEqual([
+      ["sent-device", "retry-device"],
+      ["retry-device"]
+    ]);
+    expect(calls.attempts).toEqual([
+      expect.objectContaining({ deviceId: "sent-device", status: "sent", retryCount: 0 }),
+      expect.objectContaining({ deviceId: "retry-device", status: "failed", retryCount: 0 }),
+      expect.objectContaining({ deviceId: "retry-device", status: "sent", retryCount: 1 })
+    ]);
+  });
+
+  it("completes without sending when every recipient already has a sent attempt", async () => {
+    const devices = [device({ deviceId: "device-1" }), device({ deviceId: "device-2", pushToken: "token-2" })];
+    const { worker, calls } = createWorker({
+      devices,
+      previousAttempts: devices.map((target) => ({ deviceId: target.deviceId, status: "sent" }))
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ completed: 1, sent: 0, skipped: 2, queued: 0, failed: 0 });
+    expect(calls.sent).toEqual([]);
+    expect(calls.batches).toEqual([]);
+    expect(calls.attempts).toEqual([]);
+    expect(calls.preferenceDeviceIds).toEqual([]);
+  });
+
+  it("reprocesses recipients whose previous attempts were not sent", async () => {
+    const devices = [
+      device({ deviceId: "failed-device" }),
+      device({ deviceId: "queued-device", pushToken: "queued-token" }),
+      device({ deviceId: "skipped-device", pushToken: "skipped-token" })
+    ];
+    const { worker, calls } = createWorker({
+      devices,
+      previousAttempts: [
+        { deviceId: "failed-device", status: "failed" },
+        { deviceId: "queued-device", status: "queued" },
+        { deviceId: "skipped-device", status: "skipped" }
+      ],
+      sendBatch: async ({ devices: batch }) => batch.map(() => ({ status: "sent" }))
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ completed: 1, sent: 3, skipped: 0 });
+    expect(calls.batches[0].devices.map((target) => target.deviceId)).toEqual([
+      "failed-device",
+      "queued-device",
+      "skipped-device"
+    ]);
+  });
+
   it("records multicast partial success and invalid tokens per device while preserving image payloads", async () => {
     const devices = [
       device({ deviceId: "device-1", pushToken: "token-1" }),
@@ -366,10 +485,11 @@ describe("NotificationWorker", () => {
     expect(calls.completed).toEqual(["job-1"]);
   });
 
-  it("processes push targets in pages and flushes delivery attempts per page", async () => {
+  it("filters sent recipients independently in each push-target page", async () => {
     const devices = Array.from({ length: 1201 }, (_, index) => device({ deviceId: `device-${index}` }));
     const { worker, calls } = createWorker({
       devices,
+      previousAttempts: [0, 500, 1000].map((index) => ({ deviceId: `device-${index}`, status: "sent" })),
       sendBatch: async ({ devices: batch }) => batch.map(() => ({ status: "sent" })),
       deviceBatchSize: 500,
       preferenceBatchSize: 500,
@@ -378,10 +498,11 @@ describe("NotificationWorker", () => {
 
     const result = await worker.drain({ now });
 
-    expect(result).toMatchObject({ sent: 1201, completed: 1 });
-    expect(calls.preferenceDeviceIds.map((ids) => ids.length)).toEqual([500, 500, 201]);
-    expect(calls.batches.map((batch) => batch.devices.length)).toEqual([500, 500, 201]);
-    expect(calls.attemptBatches.map((batch) => batch.length)).toEqual([500, 500, 201]);
+    expect(result).toMatchObject({ sent: 1198, skipped: 3, completed: 1 });
+    expect(calls.sentLookups.map((lookup) => lookup.deviceIds.length)).toEqual([500, 500, 201]);
+    expect(calls.preferenceDeviceIds.map((ids) => ids.length)).toEqual([499, 499, 200]);
+    expect(calls.batches.map((batch) => batch.devices.length)).toEqual([499, 499, 200]);
+    expect(calls.attemptBatches.map((batch) => batch.length)).toEqual([499, 499, 200]);
   });
 
   it("falls back to listPushTargets when listPushTargetsPage is unavailable", async () => {

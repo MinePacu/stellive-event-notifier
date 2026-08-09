@@ -89,6 +89,7 @@ model DeliveryAttempt {
 
   @@index([attemptedAt])
   @@index([status, attemptedAt])
+  @@index([eventId, status, deviceId])
 }
 
 model LiveStatus {

@@ -501,6 +501,44 @@ describe("DeliveryAttemptRepository worker writes", () => {
     ]);
   });
 
+  it("lists distinct sent device ids for an event and candidate device set", async () => {
+    const findMany = vi.fn(async () => [
+      { deviceId: "device-1" },
+      { deviceId: "device-1" },
+      { deviceId: "device-3" },
+      { deviceId: null }
+    ]);
+    const repository = new DeliveryAttemptRepository({
+      deliveryAttempt: { findMany }
+    } as never);
+
+    const result = await repository.listSentDeviceIds({
+      eventId: "event-1",
+      deviceIds: ["device-1", "device-2", "device-3"]
+    });
+
+    expect(result).toEqual(new Set(["device-1", "device-3"]));
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        eventId: "event-1",
+        status: "sent",
+        deviceId: { in: ["device-1", "device-2", "device-3"] }
+      },
+      select: { deviceId: true },
+      distinct: ["deviceId"]
+    });
+  });
+
+  it("does not query sent attempts when the candidate device set is empty", async () => {
+    const findMany = vi.fn();
+    const repository = new DeliveryAttemptRepository({
+      deliveryAttempt: { findMany }
+    } as never);
+
+    await expect(repository.listSentDeviceIds({ eventId: "event-1", deviceIds: [] })).resolves.toEqual(new Set());
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
   it("summarizes daily delivery attempts in KST buckets with empty days", async () => {
     let sql = "";
     const queryRaw = vi.fn(async (strings: TemplateStringsArray) => {
