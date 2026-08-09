@@ -107,6 +107,12 @@ export interface ListSentDeviceIdsInput {
   deviceIds: string[];
 }
 
+export interface CountSentByDeviceInWindowInput {
+  deviceIds: string[];
+  since: Date;
+  until: Date;
+}
+
 const deliveryAttemptDiagnosticSelect: DeliveryAttemptDiagnosticSelect = {
   id: true,
   eventId: true,
@@ -249,6 +255,28 @@ export class DeliveryAttemptRepository {
     return new Set(
       records.flatMap((record) => "deviceId" in record && record.deviceId ? [record.deviceId] : [])
     );
+  }
+
+  async countSentByDeviceInWindow(input: CountSentByDeviceInWindowInput): Promise<Map<string, number>> {
+    if (input.deviceIds.length === 0) return new Map();
+    if (!this.prisma.deliveryAttempt.findMany) throw new Error("delivery_attempt_lookup_unavailable");
+    const records = await this.prisma.deliveryAttempt.findMany({
+      where: {
+        status: "sent",
+        deviceId: { in: input.deviceIds },
+        attemptedAt: {
+          gte: input.since,
+          lte: input.until
+        }
+      },
+      select: { deviceId: true }
+    });
+    const counts = new Map<string, number>();
+    for (const record of records) {
+      if (!("deviceId" in record) || !record.deviceId) continue;
+      counts.set(record.deviceId, (counts.get(record.deviceId) ?? 0) + 1);
+    }
+    return counts;
   }
 
   private toRecord(input: CreateDeliveryAttemptInput): Record<string, unknown> {

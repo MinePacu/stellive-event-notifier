@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calculateRetryDelayMs, NotificationWorker } from "../src/jobs/notificationWorker.js";
 import type { ClaimedNotificationJob } from "../src/jobs/notificationJobRepository.js";
+import { PreferenceResolutionService } from "../src/preferences/preferenceResolution.js";
 import type { PushSendResult } from "../src/push/fcmClient.js";
 import type { MinimalPushPayload } from "../src/push/pushPayloadFactory.js";
 import type { PushTargetDevice } from "../src/push/pushSender.js";
@@ -79,7 +80,13 @@ function createWorker(options: {
   jobs?: ClaimedNotificationJob[];
   event?: PlatformEvent | undefined;
   devices?: PushTargetDevice[];
-  resolve?: (input: { event: PlatformEvent; deviceId: string }) => ResolvedNotificationPreference;
+  preferences?: UserNotificationPreference[];
+  resolve?: (input: {
+    event: PlatformEvent;
+    deviceId: string;
+    preferences: UserNotificationPreference[];
+    recentNotificationsInLastMinute: number;
+  }) => ResolvedNotificationPreference;
   send?: (input: { device: PushTargetDevice; payload: MinimalPushPayload }) => Promise<PushSendResult>;
   sendBatch?: (input: { devices: PushTargetDevice[]; payload: MinimalPushPayload }) => Promise<PushSendResult[]>;
   useListFallback?: boolean;
@@ -89,6 +96,7 @@ function createWorker(options: {
   withoutCreateMany?: boolean;
   scheduleCurrent?: boolean;
   previousAttempts?: Array<{ deviceId: string; status: "queued" | "sent" | "failed" | "skipped" }>;
+  recentSentCounts?: Record<string, number>;
 }) {
   const calls = {
     completed: [] as string[],
@@ -99,9 +107,12 @@ function createWorker(options: {
     invalidated: [] as unknown[],
     preferenceDeviceIds: [] as string[][],
     attemptBatches: [] as unknown[][],
-    sentLookups: [] as Array<{ eventId: string; deviceIds: string[] }>
+    sentLookups: [] as Array<{ eventId: string; deviceIds: string[] }>,
+    recentSentLookups: [] as Array<{ deviceIds: string[]; since: Date; until: Date }>,
+    resolveContexts: [] as Array<{ deviceId: string; recentNotificationsInLastMinute: number }>
   };
   const pushTargets = options.devices ?? [device()];
+  const preferences = options.preferences ?? [];
   const sentDeviceIds = new Set(
     options.previousAttempts?.filter((attempt) => attempt.status === "sent").map((attempt) => attempt.deviceId) ?? []
   );
@@ -160,7 +171,7 @@ function createWorker(options: {
     preferences: {
       async listForDevices(deviceIds: string[]) {
         calls.preferenceDeviceIds.push(deviceIds);
-        return [] as UserNotificationPreference[];
+        return preferences;
       }
     },
     deliveryAttempts: {
@@ -171,6 +182,14 @@ function createWorker(options: {
       async listSentDeviceIds(input: { eventId: string; deviceIds: string[] }) {
         calls.sentLookups.push(input);
         return new Set(input.deviceIds.filter((deviceId) => sentDeviceIds.has(deviceId)));
+      },
+      async countSentByDeviceInWindow(input: { deviceIds: string[]; since: Date; until: Date }) {
+        calls.recentSentLookups.push(input);
+        return new Map(
+          input.deviceIds.flatMap((deviceId) =>
+            options.recentSentCounts?.[deviceId] !== undefined ? [[deviceId, options.recentSentCounts[deviceId] as number]] : []
+          )
+        );
       },
       ...(!options.withoutCreateMany
         ? {
@@ -183,8 +202,22 @@ function createWorker(options: {
         : {})
     },
     preferenceResolution: {
-      resolve(eventInput: PlatformEvent, deviceId: string) {
-        return options.resolve?.({ event: eventInput, deviceId }) ?? resolution({ deviceId });
+      resolve(
+        eventInput: PlatformEvent,
+        deviceId: string,
+        preferenceRules: UserNotificationPreference[],
+        context: { recentNotificationsInLastMinute?: number } = {}
+      ) {
+        const recentNotificationsInLastMinute = context.recentNotificationsInLastMinute ?? 0;
+        calls.resolveContexts.push({ deviceId, recentNotificationsInLastMinute });
+        return (
+          options.resolve?.({
+            event: eventInput,
+            deviceId,
+            preferences: preferenceRules,
+            recentNotificationsInLastMinute
+          }) ?? resolution({ deviceId })
+        );
       }
     },
     pushSender: {
@@ -503,6 +536,106 @@ describe("NotificationWorker", () => {
     expect(calls.preferenceDeviceIds.map((ids) => ids.length)).toEqual([499, 499, 200]);
     expect(calls.batches.map((batch) => batch.devices.length)).toEqual([499, 499, 200]);
     expect(calls.attemptBatches.map((batch) => batch.length)).toEqual([499, 499, 200]);
+  });
+
+  it("passes recent sent counts into single-device preference resolution and rate-limits matching devices", async () => {
+    const preferenceResolution = new PreferenceResolutionService();
+    const limitedPreference: UserNotificationPreference = {
+      deviceId: "device-1",
+      scope: "global",
+      enabled: true,
+      explicitOverride: false,
+      tapAction: "open_app",
+      deliveryMode: "standard",
+      maxNotificationsPerMinute: 1,
+      updatedAt: "2026-06-12T00:00:00.000Z"
+    };
+    const { worker, calls } = createWorker({
+      preferences: [limitedPreference],
+      recentSentCounts: { "device-1": 1 },
+      resolve: ({ event, deviceId, preferences, recentNotificationsInLastMinute }) =>
+        preferenceResolution.resolve(event, deviceId, preferences, { recentNotificationsInLastMinute })
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ completed: 1, sent: 0, skipped: 1, queued: 0, failed: 0 });
+    expect(calls.sent).toEqual([]);
+    expect(calls.recentSentLookups).toEqual([
+      {
+        deviceIds: ["device-1"],
+        since: new Date("2026-06-11T23:59:00.000Z"),
+        until: now
+      }
+    ]);
+    expect(calls.resolveContexts).toEqual([
+      { deviceId: "device-1", recentNotificationsInLastMinute: 1 }
+    ]);
+    expect(calls.attempts).toEqual([
+      expect.objectContaining({
+        deviceId: "device-1",
+        status: "skipped",
+        reason: "rate_limited",
+        deliveryLevel: "in_app_history_only"
+      })
+    ]);
+  });
+
+  it("passes recent sent counts into multicast preference resolution and skips only rate-limited recipients", async () => {
+    const preferenceResolution = new PreferenceResolutionService();
+    const devices = [
+      device({ deviceId: "allowed-device", pushToken: "allowed-token" }),
+      device({ deviceId: "limited-device", pushToken: "limited-token" })
+    ];
+    const sharedPreference = (deviceId: string): UserNotificationPreference => ({
+      deviceId,
+      scope: "global",
+      enabled: true,
+      explicitOverride: false,
+      tapAction: "open_app",
+      deliveryMode: "standard",
+      maxNotificationsPerMinute: 1,
+      updatedAt: "2026-06-12T00:00:00.000Z"
+    });
+    const { worker, calls } = createWorker({
+      devices,
+      preferences: [sharedPreference("allowed-device"), sharedPreference("limited-device")],
+      recentSentCounts: { "allowed-device": 0, "limited-device": 1 },
+      sendBatch: async ({ devices: batch }) => batch.map((target) => ({ status: "sent", providerMessageId: `message-${target.deviceId}` })),
+      resolve: ({ event, deviceId, preferences, recentNotificationsInLastMinute }) =>
+        preferenceResolution.resolve(event, deviceId, preferences, { recentNotificationsInLastMinute })
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ completed: 1, sent: 1, skipped: 1, queued: 0, failed: 0 });
+    expect(calls.batches).toHaveLength(1);
+    expect(calls.batches[0].devices.map((target) => target.deviceId)).toEqual(["allowed-device"]);
+    expect(calls.recentSentLookups).toEqual([
+      {
+        deviceIds: ["allowed-device", "limited-device"],
+        since: new Date("2026-06-11T23:59:00.000Z"),
+        until: now
+      }
+    ]);
+    expect(calls.resolveContexts).toEqual([
+      { deviceId: "allowed-device", recentNotificationsInLastMinute: 0 },
+      { deviceId: "limited-device", recentNotificationsInLastMinute: 1 }
+    ]);
+    expect(calls.attempts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          deviceId: "allowed-device",
+          status: "sent"
+        }),
+        expect.objectContaining({
+          deviceId: "limited-device",
+          status: "skipped",
+          reason: "rate_limited",
+          deliveryLevel: "in_app_history_only"
+        })
+      ])
+    );
   });
 
   it("falls back to listPushTargets when listPushTargetsPage is unavailable", async () => {

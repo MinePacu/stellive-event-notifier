@@ -53,6 +53,7 @@ interface NotificationWorkerDependencies {
     create(input: CreateDeliveryAttemptInput): Promise<void>;
     createMany?(inputs: CreateDeliveryAttemptInput[]): Promise<void>;
     listSentDeviceIds(input: { eventId: string; deviceIds: string[] }): Promise<Set<string>>;
+    countSentByDeviceInWindow(input: { deviceIds: string[]; since: Date; until: Date }): Promise<Map<string, number>>;
   };
   preferenceResolution: Pick<PreferenceResolutionService, "resolve">;
   pushSender: PushSender;
@@ -180,11 +181,24 @@ export class NotificationWorker {
       const preferenceBatchSize = batchSize(this.dependencies.preferenceBatchSize);
       for (let offset = 0; offset < pendingDevices.length; offset += preferenceBatchSize) {
         const deviceBatch = pendingDevices.slice(offset, offset + preferenceBatchSize);
+        const recentSentCounts = await this.dependencies.deliveryAttempts.countSentByDeviceInWindow({
+          deviceIds: deviceBatch.map((device) => device.deviceId),
+          since: new Date(now.getTime() - 60_000),
+          until: now
+        });
         const preferences = await listPreferences(
           this.dependencies.preferences,
           deviceBatch.map((device) => device.deviceId)
         );
-        const result = await this.processDeviceBatch({ event, devices: deviceBatch, preferences, job, now, attemptBuffer });
+        const result = await this.processDeviceBatch({
+          event,
+          devices: deviceBatch,
+          preferences,
+          recentSentCounts,
+          job,
+          now,
+          attemptBuffer
+        });
         totals.sent += result.sent;
         totals.skipped += result.skipped;
         hadTransientFailure ||= result.hadTransientFailure;
@@ -226,6 +240,7 @@ export class NotificationWorker {
     event: PlatformEvent;
     devices: PushTargetDevice[];
     preferences: UserNotificationPreference[];
+    recentSentCounts: Map<string, number>;
     job: ClaimedNotificationJob;
     now: Date;
     attemptBuffer: CreateDeliveryAttemptInput[];
@@ -243,7 +258,9 @@ export class NotificationWorker {
       }>>();
 
       for (const device of input.devices) {
-        const resolution = this.dependencies.preferenceResolution.resolve(input.event, device.deviceId, input.preferences);
+        const resolution = this.dependencies.preferenceResolution.resolve(input.event, device.deviceId, input.preferences, {
+          recentNotificationsInLastMinute: input.recentSentCounts.get(device.deviceId) ?? 0
+        });
         const delivery = resolveNotificationDelivery(input.event, resolution);
         if (!resolution.shouldNotify || !delivery.shouldEnqueuePush) {
           this.recordAttempt(input.attemptBuffer, {
@@ -309,6 +326,7 @@ export class NotificationWorker {
     event: PlatformEvent;
     device: PushTargetDevice;
     preferences: UserNotificationPreference[];
+    recentSentCounts: Map<string, number>;
     job: ClaimedNotificationJob;
     now: Date;
     attemptBuffer: CreateDeliveryAttemptInput[];
@@ -316,7 +334,10 @@ export class NotificationWorker {
     const resolution = this.dependencies.preferenceResolution.resolve(
       input.event,
       input.device.deviceId,
-      input.preferences
+      input.preferences,
+      {
+        recentNotificationsInLastMinute: input.recentSentCounts.get(input.device.deviceId) ?? 0
+      }
     );
     const delivery = resolveNotificationDelivery(input.event, resolution);
 

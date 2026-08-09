@@ -36,3 +36,4 @@ scripts/.cache-root
 !.env.example
 .dual-graph/
 .dual-graph-context/
+wiki-local

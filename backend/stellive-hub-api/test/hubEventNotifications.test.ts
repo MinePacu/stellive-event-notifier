@@ -387,6 +387,9 @@ describe("HubEvent notification job delivery flow", () => {
         async create(input) {
           attempts.push(input);
         },
+        async countSentByDeviceInWindow() {
+          return new Map<string, number>();
+        },
         async listSentDeviceIds() {
           return new Set<string>();
         }

@@ -539,6 +539,58 @@ describe("DeliveryAttemptRepository worker writes", () => {
     expect(findMany).not.toHaveBeenCalled();
   });
 
+  it("counts sent attempts per device within an inclusive rolling window", async () => {
+    const since = new Date("2026-06-12T00:00:00.000Z");
+    const until = new Date("2026-06-12T00:01:00.000Z");
+    const findMany = vi.fn(async () => [
+      { deviceId: "device-1" },
+      { deviceId: "device-1" },
+      { deviceId: "device-2" },
+      { deviceId: null }
+    ]);
+    const repository = new DeliveryAttemptRepository({
+      deliveryAttempt: { findMany }
+    } as never);
+
+    const result = await repository.countSentByDeviceInWindow({
+      deviceIds: ["device-1", "device-2", "device-3"],
+      since,
+      until
+    });
+
+    expect(result).toEqual(new Map([
+      ["device-1", 2],
+      ["device-2", 1]
+    ]));
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        status: "sent",
+        deviceId: { in: ["device-1", "device-2", "device-3"] },
+        attemptedAt: {
+          gte: since,
+          lte: until
+        }
+      },
+      select: { deviceId: true }
+    });
+  });
+
+  it("does not query rolling sent counts when the candidate device set is empty", async () => {
+    const findMany = vi.fn();
+    const repository = new DeliveryAttemptRepository({
+      deliveryAttempt: { findMany }
+    } as never);
+
+    await expect(
+      repository.countSentByDeviceInWindow({
+        deviceIds: [],
+        since: new Date("2026-06-12T00:00:00.000Z"),
+        until: new Date("2026-06-12T00:01:00.000Z")
+      })
+    ).resolves.toEqual(new Map());
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
   it("summarizes daily delivery attempts in KST buckets with empty days", async () => {
     let sql = "";
     const queryRaw = vi.fn(async (strings: TemplateStringsArray) => {
