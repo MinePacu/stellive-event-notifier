@@ -126,7 +126,7 @@ export class NotificationWorker {
   constructor(private readonly dependencies: NotificationWorkerDependencies) {}
 
   async drain(input: NotificationWorkerDrainInput = {}): Promise<NotificationWorkerDrainResult> {
-    const now = input.now ?? this.dependencies.now?.() ?? new Date();
+    const now = input.now ?? this.currentTime();
     const limit = clampDrainLimit(input.limit);
     const lockedBy = input.lockedBy ?? `worker-${process.pid}`;
     const jobs = await this.dependencies.notificationJobs.claimReady({
@@ -137,14 +137,19 @@ export class NotificationWorker {
     const totals = emptyDrainResult(jobs.length);
 
     for (const claimedJob of jobs) {
-      await this.processJob(claimedJob, totals, now);
+      await this.processJob(claimedJob, totals, now, input.now);
     }
 
     if (totals.queued > 0 || totals.failed > 0) totals.status = "partial";
     return totals;
   }
 
-  private async processJob(job: ClaimedNotificationJob, totals: MutableDrainTotals, now: Date): Promise<void> {
+  private async processJob(
+    job: ClaimedNotificationJob,
+    totals: MutableDrainTotals,
+    now: Date,
+    evaluatedAtOverride?: Date
+  ): Promise<void> {
     const event = await this.dependencies.platformEvents.findById(job.eventId);
     if (!event) {
       await this.dependencies.notificationJobs.fail({
@@ -197,6 +202,7 @@ export class NotificationWorker {
           recentSentCounts,
           job,
           now,
+          evaluatedAtOverride,
           attemptBuffer
         });
         totals.sent += result.sent;
@@ -243,6 +249,7 @@ export class NotificationWorker {
     recentSentCounts: Map<string, number>;
     job: ClaimedNotificationJob;
     now: Date;
+    evaluatedAtOverride?: Date;
     attemptBuffer: CreateDeliveryAttemptInput[];
   }): Promise<{ sent: number; skipped: number; hadTransientFailure: boolean; providerRetryAfterMs?: number }> {
     let sent = 0;
@@ -258,7 +265,9 @@ export class NotificationWorker {
       }>>();
 
       for (const device of input.devices) {
+        const evaluatedAt = input.evaluatedAtOverride ?? this.currentTime();
         const resolution = this.dependencies.preferenceResolution.resolve(input.event, device.deviceId, input.preferences, {
+          evaluatedAt,
           recentNotificationsInLastMinute: input.recentSentCounts.get(device.deviceId) ?? 0
         });
         const delivery = resolveNotificationDelivery(input.event, resolution);
@@ -329,13 +338,16 @@ export class NotificationWorker {
     recentSentCounts: Map<string, number>;
     job: ClaimedNotificationJob;
     now: Date;
+    evaluatedAtOverride?: Date;
     attemptBuffer: CreateDeliveryAttemptInput[];
   }): Promise<DeviceProcessResult> {
+    const evaluatedAt = input.evaluatedAtOverride ?? this.currentTime();
     const resolution = this.dependencies.preferenceResolution.resolve(
       input.event,
       input.device.deviceId,
       input.preferences,
       {
+        evaluatedAt,
         recentNotificationsInLastMinute: input.recentSentCounts.get(input.device.deviceId) ?? 0
       }
     );
@@ -486,6 +498,10 @@ export class NotificationWorker {
     };
     await this.dependencies.notificationJobs.fail(input);
     return terminal;
+  }
+
+  private currentTime(): Date {
+    return this.dependencies.now?.() ?? new Date();
   }
 }
 

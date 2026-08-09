@@ -235,7 +235,12 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
       source: query.source as PlatformSource | undefined,
       type: query.eventType as PlatformEventType | undefined
     });
-    return preferenceResolution.resolve(event, query.deviceId ?? "dev-device", preferences.get(query.deviceId ?? "dev-device") ?? []);
+    return preferenceResolution.resolve(
+      event,
+      query.deviceId ?? "dev-device",
+      preferences.get(query.deviceId ?? "dev-device") ?? [],
+      { evaluatedAt: new Date() }
+    );
   });
 
   app.get("/v1/live-status", async () => {
@@ -323,11 +328,13 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
     if (!catalog.isSupportedEventForMember(event.memberId, event.type)) {
       return reply.code(202).send({ dropped: true, reason: "unsupported_event_for_member" });
     }
-    const oneMinuteAgo = Date.now() - 60_000;
+    const evaluatedAt = new Date();
+    const oneMinuteAgo = evaluatedAt.getTime() - 60_000;
     const recentNotificationsInLastMinute = deliveryAttempts.filter((attempt) => {
       return attempt.deviceId === devDeviceId && attempt.status === "sent" && new Date(attempt.attemptedAt).getTime() >= oneMinuteAgo;
     }).length;
     const resolution = preferenceResolution.resolve(event, devDeviceId, preferences.get(devDeviceId) ?? [], {
+      evaluatedAt,
       recentNotificationsInLastMinute
     });
     const deliveryDecision = resolveNotificationDelivery(event, resolution, {
@@ -361,6 +368,8 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
   app.post("/v1/dev/resolve-preference", async (request, reply) => {
     const body = request.body as { event?: Partial<PlatformEvent>; deviceId?: string; preferences?: UserNotificationPreference[] };
     if (!isSupportedPlatformEventInput(body.event ?? {})) return reply.badRequest("unsupported platform event");
-    return preferenceResolution.resolve(sampleEvent(body.event), body.deviceId ?? "dev-device", body.preferences ?? []);
+    return preferenceResolution.resolve(sampleEvent(body.event), body.deviceId ?? "dev-device", body.preferences ?? [], {
+      evaluatedAt: new Date()
+    });
   });
 }

@@ -7,6 +7,7 @@ import type {
 } from "../types.js";
 
 export interface PreferenceResolutionContext {
+  evaluatedAt: Date;
   recentNotificationsInLastMinute?: number;
 }
 
@@ -57,8 +58,7 @@ function parseClockTime(value: string): number | undefined {
   return hours * 60 + minutes;
 }
 
-function zonedMinutes(isoDate: string, timezone: string): number | undefined {
-  const date = new Date(isoDate);
+function zonedMinutes(date: Date, timezone: string): number | undefined {
   if (Number.isNaN(date.getTime())) return undefined;
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
@@ -76,12 +76,12 @@ function zonedMinutes(isoDate: string, timezone: string): number | undefined {
   }
 }
 
-function isWithinQuietHours(event: PlatformEvent, rule: UserNotificationPreference): boolean {
+function isWithinQuietHours(evaluatedAt: Date, rule: UserNotificationPreference): boolean {
   const quietHours = rule.quietHours;
   if (!quietHours?.enabled) return false;
   const start = parseClockTime(quietHours.start);
   const end = parseClockTime(quietHours.end);
-  const current = zonedMinutes(event.receivedAt, quietHours.timezone);
+  const current = zonedMinutes(evaluatedAt, quietHours.timezone);
   if (start === undefined || end === undefined || current === undefined) return false;
   if (start === end) return true;
   if (start < end) return current >= start && current < end;
@@ -97,7 +97,7 @@ export class PreferenceResolutionService {
     event: PlatformEvent,
     deviceId: string,
     preferences: UserNotificationPreference[],
-    context: PreferenceResolutionContext = {}
+    context: PreferenceResolutionContext
   ): ResolvedNotificationPreference {
     const matchedRules: string[] = [];
     const deviceRules = preferences.filter((rule) => rule.deviceId === deviceId);
@@ -184,7 +184,7 @@ export class PreferenceResolutionService {
       memberEvent
     ]);
 
-    if (applicableRules.some((rule) => isWithinQuietHours(event, rule))) {
+    if (applicableRules.some((rule) => isWithinQuietHours(context.evaluatedAt, rule))) {
       return this.blocked(event, deviceId, "quiet_hours", [...matchedRules, "quiet_hours:on"], tapAction, "standard");
     }
 

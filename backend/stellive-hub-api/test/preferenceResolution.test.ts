@@ -5,7 +5,18 @@ import { PreferenceResolutionService } from "../src/preferences/preferenceResolu
 import type { PlatformEvent, UserNotificationPreference } from "../src/types.js";
 
 const now = "2026-06-01T00:00:00.000Z";
-const service = new PreferenceResolutionService();
+const preferenceResolution = new PreferenceResolutionService();
+const service = {
+  resolve(
+    event: PlatformEvent,
+    deviceId: string,
+    preferences: UserNotificationPreference[],
+    context: { evaluatedAt?: Date; recentNotificationsInLastMinute?: number } = {}
+  ) {
+    const { evaluatedAt = new Date(now), ...rateLimitContext } = context;
+    return preferenceResolution.resolve(event, deviceId, preferences, { evaluatedAt, ...rateLimitContext });
+  }
+};
 
 function event(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
   return {
@@ -144,12 +155,87 @@ describe("PreferenceResolutionService", () => {
     expect(allowed.shouldNotify).toBe(true);
   });
 
-  it("quiet hours block notifications after preference resolution", () => {
+  it("quiet hours use dispatch evaluation time rather than event timestamps", () => {
     const result = service.resolve(event({ receivedAt: "2026-06-01T12:00:00.000Z" }), "device-1", [
       pref({ quietHours: { enabled: true, start: "00:00", end: "23:59", timezone: "UTC" } })
     ]);
     expect(result.shouldNotify).toBe(false);
     expect(result.reason).toBe("quiet_hours");
+  });
+
+  it("allows an event received during quiet hours when evaluated outside them", () => {
+    const result = service.resolve(
+      event({
+        occurredAt: "2026-06-01T23:15:00.000Z",
+        receivedAt: "2026-06-01T23:30:00.000Z"
+      }),
+      "device-1",
+      [pref({ quietHours: { enabled: true, start: "22:00", end: "06:00", timezone: "UTC" } })],
+      { evaluatedAt: new Date("2026-06-02T12:00:00.000Z") }
+    );
+
+    expect(result.shouldNotify).toBe(true);
+    expect(result.reason).toBe("allowed");
+  });
+
+  it("blocks an event received outside quiet hours when evaluated during them", () => {
+    const result = service.resolve(
+      event({
+        occurredAt: "2026-06-01T11:45:00.000Z",
+        receivedAt: "2026-06-01T12:00:00.000Z"
+      }),
+      "device-1",
+      [pref({ quietHours: { enabled: true, start: "22:00", end: "06:00", timezone: "UTC" } })],
+      { evaluatedAt: new Date("2026-06-01T23:00:00.000Z") }
+    );
+
+    expect(result.shouldNotify).toBe(false);
+    expect(result.reason).toBe("quiet_hours");
+  });
+
+  it("keeps quiet-hour start inclusive and end exclusive across same-day and overnight windows", () => {
+    const sameDay = pref({ quietHours: { enabled: true, start: "09:00", end: "17:00", timezone: "UTC" } });
+    const overnight = pref({ quietHours: { enabled: true, start: "22:00", end: "06:00", timezone: "UTC" } });
+
+    expect(service.resolve(event(), "device-1", [sameDay], { evaluatedAt: new Date("2026-06-01T09:00:00.000Z") }).reason).toBe(
+      "quiet_hours"
+    );
+    expect(service.resolve(event(), "device-1", [sameDay], { evaluatedAt: new Date("2026-06-01T17:00:00.000Z") }).reason).toBe(
+      "allowed"
+    );
+    expect(service.resolve(event(), "device-1", [overnight], { evaluatedAt: new Date("2026-06-01T22:00:00.000Z") }).reason).toBe(
+      "quiet_hours"
+    );
+    expect(service.resolve(event(), "device-1", [overnight], { evaluatedAt: new Date("2026-06-02T06:00:00.000Z") }).reason).toBe(
+      "allowed"
+    );
+  });
+
+  it("keeps equal quiet-hour bounds always active and invalid values inactive", () => {
+    expect(
+      service.resolve(
+        event(),
+        "device-1",
+        [pref({ quietHours: { enabled: true, start: "08:00", end: "08:00", timezone: "UTC" } })],
+        { evaluatedAt: new Date("2026-06-01T12:00:00.000Z") }
+      ).reason
+    ).toBe("quiet_hours");
+    expect(
+      service.resolve(
+        event(),
+        "device-1",
+        [pref({ quietHours: { enabled: true, start: "25:00", end: "08:00", timezone: "UTC" } })],
+        { evaluatedAt: new Date("2026-06-01T12:00:00.000Z") }
+      ).reason
+    ).toBe("allowed");
+    expect(
+      service.resolve(
+        event(),
+        "device-1",
+        [pref({ quietHours: { enabled: true, start: "08:00", end: "09:00", timezone: "Invalid/Timezone" } })],
+        { evaluatedAt: new Date("2026-06-01T08:30:00.000Z") }
+      ).reason
+    ).toBe("allowed");
   });
 
   it("keyword blocklist and allowlist apply after preference resolution", () => {

@@ -38,6 +38,8 @@ Hub event worker delivery treats `event_sales_open`, `event_deadline_soon`, `eve
 
 Global off blocks all notifications. Member explicit overrides can override generation/category settings. Platform and event-type settings apply to the event. More specific member/generation platform and event-type rules can override broader platform/event-type rules. Quiet hours, keyword block, and rate limit always apply last.
 
+Quiet hours are evaluated against the wall-clock time when the worker makes the dispatch decision for each recipient, never against the event's `occurredAt` or `receivedAt`. The start is inclusive and the end is exclusive; overnight windows cross midnight, equal start and end values mean always quiet, and invalid times, timezones, or evaluation dates do not activate quiet hours. A retry performs preference resolution again using its new dispatch-decision time. If that retry falls within quiet hours, the recipient is skipped and the job completes normally; quiet-hour blocks are terminal for that delivery decision and are not automatically rescheduled until the window ends.
+
 Service-wide announcements are enabled by default and use only the allowlisted `service_all`, `service_incident`, `service_maintenance`, and `service_version_update` topics. `global=false` or `serviceAnnouncementsEnabled=false` unsubscribes the device from all four topics. The backend synchronizes membership after token and preference updates; mobile clients must not subscribe to arbitrary topics directly.
 
 ## Load Reduction
