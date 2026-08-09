@@ -129,6 +129,139 @@ describe("PreferenceResolutionService", () => {
     expect(result.pushPriority).toBe("normal");
   });
 
+  describe("default-off preferences", () => {
+    const updatedEvent = (overrides: Partial<PlatformEvent> = {}) =>
+      event({
+        source: "hub_event",
+        type: "event_updated",
+        memberId: "stellive-official",
+        generationId: "official",
+        realtimeEligible: false,
+        ...overrides
+      });
+
+    it("allows default-on and unknown generations without stored preferences", () => {
+      expect(service.resolve(event({ generationId: "gen3" }), "device-1", []).reason).toBe("allowed");
+      expect(service.resolve(event({ generationId: "unknown-generation" }), "device-1", []).reason).toBe("allowed");
+    });
+
+    it.each([
+      { label: "no preferences", preferences: [] },
+      { label: "global on", preferences: [pref({ scope: "global", enabled: true })] },
+      { label: "platform on", preferences: [pref({ scope: "platform", source: "youtube", enabled: true })] },
+      { label: "event type on", preferences: [pref({ scope: "event_type", eventType: "youtube_upload", enabled: true })] }
+    ])("keeps gen4-upcoming off with $label", ({ preferences }) => {
+      const result = service.resolve(event({ generationId: "gen4-upcoming" }), "device-1", preferences);
+
+      expect(result.shouldNotify).toBe(false);
+      expect(result.reason).toBe("preference_default_off");
+      expect(result.matchedRules.at(-1)).toBe("generation:default_off");
+    });
+
+    it.each([
+      { label: "no preferences", preferences: [] },
+      { label: "global on", preferences: [pref({ scope: "global", enabled: true })] },
+      { label: "generation on", preferences: [pref({ scope: "generation", generationId: "official", enabled: true })] },
+      {
+        label: "member on",
+        preferences: [pref({ scope: "member", memberId: "stellive-official", enabled: true, explicitOverride: true })]
+      },
+      { label: "platform on", preferences: [pref({ scope: "platform", source: "hub_event", enabled: true })] }
+    ])("keeps event_updated off with $label", ({ preferences }) => {
+      const result = service.resolve(updatedEvent(), "device-1", preferences);
+
+      expect(result.shouldNotify).toBe(false);
+      expect(result.reason).toBe("preference_default_off");
+      expect(result.matchedRules.at(-1)).toBe("event_type:default_off");
+    });
+
+    it("allows each default-off axis only through a matching opt-in", () => {
+      const generationAllowed = service.resolve(event({ generationId: "gen4-upcoming" }), "device-1", [
+        pref({ scope: "generation", generationId: "gen4-upcoming", enabled: true })
+      ]);
+      const eventTypeAllowed = service.resolve(updatedEvent(), "device-1", [
+        pref({ scope: "event_type", eventType: "event_updated", enabled: true })
+      ]);
+
+      expect(generationAllowed.reason).toBe("allowed");
+      expect(eventTypeAllowed.reason).toBe("allowed");
+    });
+
+    it("requires both opt-ins when generation and event type default to off", () => {
+      const combinedEvent = updatedEvent({ generationId: "gen4-upcoming", memberId: "upcoming-member" });
+      const noOptIn = service.resolve(combinedEvent, "device-1", []);
+      const generationOnly = service.resolve(combinedEvent, "device-1", [
+        pref({ scope: "generation", generationId: "gen4-upcoming", enabled: true })
+      ]);
+      const eventTypeOnly = service.resolve(combinedEvent, "device-1", [
+        pref({ scope: "event_type", eventType: "event_updated", enabled: true })
+      ]);
+      const both = service.resolve(combinedEvent, "device-1", [
+        pref({ scope: "generation", generationId: "gen4-upcoming", enabled: true }),
+        pref({ scope: "event_type", eventType: "event_updated", enabled: true })
+      ]);
+
+      expect(noOptIn.matchedRules).toEqual(["generation:default_off", "event_type:default_off"]);
+      expect(generationOnly).toMatchObject({ shouldNotify: false, reason: "preference_default_off" });
+      expect(generationOnly.matchedRules.at(-1)).toBe("event_type:default_off");
+      expect(eventTypeOnly).toMatchObject({ shouldNotify: false, reason: "preference_default_off" });
+      expect(eventTypeOnly.matchedRules.at(-1)).toBe("generation:default_off");
+      expect(both.reason).toBe("allowed");
+    });
+
+    it("lets exact generation and member event opt-ins satisfy both default-off axes", () => {
+      const combinedEvent = updatedEvent({ generationId: "gen4-upcoming", memberId: "upcoming-member" });
+      const generationEvent = service.resolve(combinedEvent, "device-1", [
+        pref({
+          scope: "generation_event_type",
+          generationId: "gen4-upcoming",
+          eventType: "event_updated",
+          enabled: true
+        })
+      ]);
+      const memberEvent = service.resolve(combinedEvent, "device-1", [
+        pref({
+          scope: "member_event_type",
+          memberId: "upcoming-member",
+          eventType: "event_updated",
+          enabled: true,
+          explicitOverride: true
+        })
+      ]);
+      const implicitMemberEvent = service.resolve(combinedEvent, "device-1", [
+        pref({
+          scope: "member_event_type",
+          memberId: "upcoming-member",
+          eventType: "event_updated",
+          enabled: true,
+          explicitOverride: false
+        })
+      ]);
+
+      expect(generationEvent.reason).toBe("allowed");
+      expect(memberEvent.reason).toBe("allowed");
+      expect(implicitMemberEvent).toMatchObject({ shouldNotify: false, reason: "preference_default_off" });
+      expect(implicitMemberEvent.matchedRules).toEqual(["generation:default_off", "event_type:default_off"]);
+    });
+
+    it("preserves global and explicit off reasons ahead of default-off gates", () => {
+      const combinedEvent = updatedEvent({ generationId: "gen4-upcoming", memberId: "upcoming-member" });
+      const globalOff = service.resolve(combinedEvent, "device-1", [pref({ scope: "global", enabled: false })]);
+      const explicitOff = service.resolve(combinedEvent, "device-1", [
+        pref({
+          scope: "generation_event_type",
+          generationId: "gen4-upcoming",
+          eventType: "event_updated",
+          enabled: false
+        })
+      ]);
+
+      expect(globalOff).toMatchObject({ shouldNotify: false, reason: "global_off", matchedRules: ["global:off"] });
+      expect(explicitOff).toMatchObject({ shouldNotify: false, reason: "preference_off" });
+      expect(explicitOff.matchedRules).toEqual(["generation_event_type:off"]);
+    });
+  });
+
   it("chzzk chat is off by default", () => {
     const result = service.resolve(event({ type: "chzzk_chat", source: "chzzk" }), "device-1", []);
     expect(result.shouldNotify).toBe(false);

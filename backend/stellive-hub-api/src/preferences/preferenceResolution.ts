@@ -1,3 +1,4 @@
+import generationsSeed from "../../../../shared/member-catalog/generations.seed.json" with { type: "json" };
 import type {
   DeliveryMode,
   PlatformEvent,
@@ -16,6 +17,11 @@ const realtimeEligibleTypes = new Set<PlatformEventType>([
   "youtube_upload",
   "official_youtube_upload"
 ]);
+
+const generationNotificationDefaults = new Map(
+  generationsSeed.map((generation) => [generation.id, generation.notificationDefaultEnabled])
+);
+const defaultDisabledEventTypes = new Set<PlatformEventType>(["event_updated"]);
 
 function latestRule(preferences: UserNotificationPreference[], predicate: (rule: UserNotificationPreference) => boolean) {
   return preferences.filter(predicate).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
@@ -170,6 +176,37 @@ export class PreferenceResolutionService {
 
     if (!shouldNotify) {
       return this.blocked(event, deviceId, "preference_off", matchedRules, tapAction, "standard");
+    }
+
+    const failedDefaultOffAxes: string[] = [];
+    const generationDefaultsToOff = generationNotificationDefaults.get(event.generationId) === false;
+    const generationExplicitlyEnabled = [
+      generation,
+      member,
+      generationPlatform,
+      generationEvent,
+      memberPlatform,
+      memberEvent
+    ].some((rule) => rule?.enabled);
+    if (generationDefaultsToOff && !generationExplicitlyEnabled) {
+      failedDefaultOffAxes.push("generation:default_off");
+    }
+
+    const eventTypeDefaultsToOff = defaultDisabledEventTypes.has(event.type);
+    const eventTypeExplicitlyEnabled = [eventType, generationEvent, memberEvent].some((rule) => rule?.enabled);
+    if (eventTypeDefaultsToOff && !eventTypeExplicitlyEnabled) {
+      failedDefaultOffAxes.push("event_type:default_off");
+    }
+
+    if (failedDefaultOffAxes.length > 0) {
+      return this.blocked(
+        event,
+        deviceId,
+        "preference_default_off",
+        [...matchedRules, ...failedDefaultOffAxes],
+        tapAction,
+        "standard"
+      );
     }
 
     const applicableRules = definedRules([

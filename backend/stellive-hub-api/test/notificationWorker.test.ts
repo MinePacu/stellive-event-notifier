@@ -333,6 +333,73 @@ describe("NotificationWorker", () => {
     expect(calls.completed).toEqual(["job-1"]);
   });
 
+  it("skips default-off events until an exact opt-in enables both axes", async () => {
+    const preferenceResolution = new PreferenceResolutionService();
+    const defaultOffEvent = event({
+      type: "event_updated",
+      generationId: "gen4-upcoming",
+      memberId: "upcoming-member",
+      title: "4기 일정 변경"
+    });
+    const resolveWithService = ({
+      event: eventInput,
+      deviceId,
+      preferences,
+      evaluatedAt,
+      recentNotificationsInLastMinute
+    }: {
+      event: PlatformEvent;
+      deviceId: string;
+      preferences: UserNotificationPreference[];
+      evaluatedAt: Date;
+      recentNotificationsInLastMinute: number;
+    }) => preferenceResolution.resolve(eventInput, deviceId, preferences, { evaluatedAt, recentNotificationsInLastMinute });
+
+    const blocked = createWorker({ event: defaultOffEvent, resolve: resolveWithService });
+    const blockedResult = await blocked.worker.drain({ now });
+
+    expect(blockedResult).toMatchObject({ completed: 1, sent: 0, skipped: 1, queued: 0, failed: 0 });
+    expect(blocked.calls.sent).toEqual([]);
+    expect(blocked.calls.attempts).toEqual([
+      expect.objectContaining({
+        deviceId: "device-1",
+        status: "skipped",
+        reason: "preference_default_off",
+        deliveryLevel: "in_app_history_only"
+      })
+    ]);
+
+    const allowed = createWorker({
+      event: defaultOffEvent,
+      preferences: [
+        {
+          deviceId: "device-1",
+          scope: "generation_event_type",
+          generationId: "gen4-upcoming",
+          eventType: "event_updated",
+          enabled: true,
+          explicitOverride: false,
+          tapAction: "open_app",
+          deliveryMode: "standard",
+          updatedAt: "2026-06-12T00:00:00.000Z"
+        }
+      ],
+      resolve: resolveWithService
+    });
+    const allowedResult = await allowed.worker.drain({ now });
+
+    expect(allowedResult).toMatchObject({ completed: 1, sent: 0, skipped: 1, queued: 0, failed: 0 });
+    expect(allowed.calls.sent).toEqual([]);
+    expect(allowed.calls.attempts).toEqual([
+      expect.objectContaining({
+        deviceId: "device-1",
+        status: "skipped",
+        reason: "push_not_enqueued",
+        deliveryLevel: "summary_push"
+      })
+    ]);
+  });
+
   it("requeues jobs when a transient provider failure occurs", async () => {
     const { worker, calls } = createWorker({
       send: async () => ({

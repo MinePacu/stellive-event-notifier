@@ -26,6 +26,8 @@ Generations/categories include `gen1`, `gen2`, `gen3`, `gamja`, `official`, and 
 - Official YouTube upload: on
 - Official YouTube live events: unsupported and not generated
 
+The backend applies these defaults even when a device has no stored preferences or only partial preferences. A broad `global`, `platform`, or unrelated event-type opt-in does not implicitly enable a default-off generation or event type. Unknown generation IDs remain enabled by default for backward compatibility.
+
 ## Hub Event Notifications
 
 Hub event notification types are `event_announced`, `event_sales_open`, `event_deadline_soon`, `event_milestone_due`, `event_updated`, and `event_cancelled`. The MVP enables announced, sales-open, deadline-soon, milestone-due, and cancelled by default, while updated starts disabled.
@@ -36,7 +38,11 @@ Hub event worker delivery treats `event_sales_open`, `event_deadline_soon`, `eve
 
 ## Resolution
 
-Global off blocks all notifications. Member explicit overrides can override generation/category settings. Platform and event-type settings apply to the event. More specific member/generation platform and event-type rules can override broader platform/event-type rules. Quiet hours, keyword block, and rate limit always apply last.
+Global off blocks all notifications. Member explicit overrides can override generation/category settings. Platform and event-type settings apply to the event. More specific member/generation platform and event-type rules can override broader platform/event-type rules.
+
+After explicit preference rules resolve, the backend independently enforces generation and event-type defaults. `gen4-upcoming` requires an enabled matching generation/member rule or a matching generation/member platform/event-type rule. `event_updated` requires an enabled matching event-type, generation-event-type, or explicit member-event-type rule. When an event is both `gen4-upcoming` and `event_updated`, both opt-ins are required; one exact enabled `generation_event_type` or explicit `member_event_type` rule satisfies both axes. A missing opt-in resolves as `preference_default_off`, while an explicit disabled rule remains `preference_off`.
+
+Quiet hours, keyword block, and rate limit apply after preference and default resolution.
 
 Quiet hours are evaluated against the wall-clock time when the worker makes the dispatch decision for each recipient, never against the event's `occurredAt` or `receivedAt`. The start is inclusive and the end is exclusive; overnight windows cross midnight, equal start and end values mean always quiet, and invalid times, timezones, or evaluation dates do not activate quiet hours. A retry performs preference resolution again using its new dispatch-decision time. If that retry falls within quiet hours, the recipient is skipped and the job completes normally; quiet-hour blocks are terminal for that delivery decision and are not automatically rescheduled until the window ends.
 
