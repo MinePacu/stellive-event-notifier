@@ -41,6 +41,10 @@ function createFakeDependencies(overrides: Partial<InternalRouteDependencies> = 
       })
     },
     notificationJobs: { listDiagnostics: async () => [] },
+    summaryNotifications: {
+      summarize: async () => ({ queued: 0, locked: 0, completed: 0, skipped: 0, failed: 0 }),
+      listDiagnostics: async () => []
+    },
     webhookSubscriptions: { listDiagnostics: async () => [] },
     liveStatus: { listDiagnostics: async () => [] },
     deliveryAttempts: { listRecent: async () => [] },
@@ -562,7 +566,17 @@ describe("internal admin routes", () => {
       sent: 0,
       queued: 0,
       status: "disabled",
-      reason: "notification_worker_not_configured"
+      reason: "notification_worker_not_configured",
+      summaries: {
+        claimed: 0,
+        completed: 0,
+        failed: 0,
+        skipped: 0,
+        sent: 0,
+        queued: 0,
+        status: "disabled",
+        reason: "summary_notification_worker_not_configured"
+      }
     });
   });
 
@@ -1355,6 +1369,7 @@ describe("admin console routes", () => {
 describe("notification worker drain route", () => {
   it("calls an injected notification worker with the clamped body limit", async () => {
     const drainCalls: unknown[] = [];
+    const summaryDrainCalls: unknown[] = [];
     const app = await buildTestApp({
       notificationWorker: {
         async drain(input: unknown) {
@@ -1368,6 +1383,12 @@ describe("notification worker drain route", () => {
             queued: 1,
             status: "partial" as const
           };
+        }
+      },
+      summaryNotificationWorker: {
+        async drain(input: unknown) {
+          summaryDrainCalls.push(input);
+          return { claimed: 2, completed: 1, failed: 0, skipped: 1, sent: 1, queued: 0, status: "ok" as const };
         }
       }
     });
@@ -1389,8 +1410,18 @@ describe("notification worker drain route", () => {
       skipped: 3,
       sent: 4,
       queued: 1,
-      status: "partial"
+      status: "partial",
+      summaries: {
+        claimed: 2,
+        completed: 1,
+        failed: 0,
+        skipped: 1,
+        sent: 1,
+        queued: 0,
+        status: "ok"
+      }
     });
     expect(drainCalls).toEqual([{ limit: 100 }]);
+    expect(summaryDrainCalls).toEqual([{ limit: 100 }]);
   });
 });

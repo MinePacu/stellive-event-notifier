@@ -183,6 +183,44 @@ model NotificationJob {
   @@index([eventId])
 }
 
+model NotificationSummaryBucket {
+  id                String   @id @default(cuid(2))
+  deviceId          String
+  topicKey          String
+  windowStart       DateTime
+  deliverAfter      DateTime
+  status            String   @default("queued")
+  attempts          Int      @default(0)
+  lockedAt          DateTime?
+  lockedBy          String?
+  lastError         String?
+  providerMessageId String?
+  completedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  items             NotificationSummaryItem[]
+
+  @@unique([deviceId, topicKey, windowStart])
+  @@index([status, deliverAfter])
+  @@index([lockedAt])
+}
+
+model NotificationSummaryItem {
+  id        String   @id @default(cuid(2))
+  bucketId  String
+  deviceId  String
+  eventId   String
+  status    String   @default("queued")
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  bucket    NotificationSummaryBucket @relation(fields: [bucketId], references: [id], onDelete: Cascade)
+
+  @@unique([bucketId, eventId])
+  @@unique([deviceId, eventId])
+  @@index([bucketId, status])
+}
+
 model WebhookSubscription {
   id             String   @id @default(cuid(2))
   source         String

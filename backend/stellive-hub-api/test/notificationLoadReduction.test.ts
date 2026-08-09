@@ -44,21 +44,21 @@ describe("notification load reduction", () => {
 
     expect(decision.deliveryLevel).toBe("in_app_history_only");
     expect(decision.loadReductionReason).toBe("global_off");
-    expect(decision.shouldEnqueuePush).toBe(false);
+    expect(decision.action).toBe("history_only");
   });
 
   it("keeps CHZZK live started as immediate push by default", () => {
     const decision = resolveNotificationDelivery(event({ type: "chzzk_live_started" }), resolution());
 
     expect(decision.deliveryLevel).toBe("immediate_push");
-    expect(decision.shouldEnqueuePush).toBe(true);
+    expect(decision.action).toBe("send_immediate");
   });
 
   it("keeps CHZZK live ended as standard summary delivery by default", () => {
     const decision = resolveNotificationDelivery(event({ type: "chzzk_live_ended" }), resolution());
 
     expect(decision.deliveryLevel).toBe("summary_push");
-    expect(decision.shouldEnqueuePush).toBe(false);
+    expect(decision.action).toBe("enqueue_summary");
   });
 
   it("does not turn blocked CHZZK chat into push delivery", () => {
@@ -69,14 +69,14 @@ describe("notification load reduction", () => {
 
     expect(decision.deliveryLevel).toBe("in_app_history_only");
     expect(decision.loadReductionReason).toBe("chzzk_chat_default_off");
-    expect(decision.shouldEnqueuePush).toBe(false);
+    expect(decision.action).toBe("history_only");
   });
 
   it("treats post and upload events as summary candidates by default", () => {
     const decision = resolveNotificationDelivery(event({ source: "youtube", type: "official_youtube_upload" }), resolution());
 
     expect(decision.deliveryLevel).toBe("summary_push");
-    expect(decision.shouldEnqueuePush).toBe(false);
+    expect(decision.action).toBe("enqueue_summary");
   });
 
   it("does not downgrade when spike handling is disabled", () => {
@@ -101,7 +101,7 @@ describe("notification load reduction", () => {
 
     expect(decision.deliveryLevel).toBe("summary_push");
     expect(decision.loadReductionReason).toBe("spike_downgraded_to_summary_push");
-    expect(decision.shouldEnqueuePush).toBe(false);
+    expect(decision.action).toBe("enqueue_summary");
   });
 });
 
@@ -121,7 +121,7 @@ describe("HubEvent notification delivery levels", () => {
       );
 
       expect(decision.deliveryLevel).toBe("immediate_push");
-      expect(decision.shouldEnqueuePush).toBe(true);
+      expect(decision.action).toBe("send_immediate");
     }
   );
 
@@ -140,7 +140,7 @@ describe("HubEvent notification delivery levels", () => {
       );
 
       expect(decision.deliveryLevel).toBe("summary_push");
-      expect(decision.shouldEnqueuePush).toBe(false);
+      expect(decision.action).toBe("enqueue_summary");
     }
   );
 
@@ -157,7 +157,7 @@ describe("HubEvent notification delivery levels", () => {
     );
 
     expect(decision.deliveryLevel).toBe("in_app_history_only");
-    expect(decision.shouldEnqueuePush).toBe(false);
+    expect(decision.action).toBe("history_only");
   });
 });
 

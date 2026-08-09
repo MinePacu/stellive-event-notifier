@@ -24,6 +24,8 @@ import { ServiceAnnouncementAdminService } from "./announcements/serviceAnnounce
 import { createHubCalendarSpecialDayOccurrenceRepositoryIfAvailable } from "./hub-events/hubCalendarSpecialDayOccurrenceRepository.js";
 import NotificationJobRepository from "./jobs/notificationJobRepository.js";
 import NotificationWorker from "./jobs/notificationWorker.js";
+import SummaryNotificationRepository from "./jobs/summaryNotificationRepository.js";
+import SummaryNotificationWorker from "./jobs/summaryNotificationWorker.js";
 import BootstrapService from "./mobile/bootstrapService.js";
 import { PreferenceResolutionService } from "./preferences/preferenceResolution.js";
 import { createFcmClient, type FcmClient } from "./push/fcmClient.js";
@@ -170,7 +172,11 @@ function createDefaultFcmClient(env: AppEnv): FcmClient {
   });
 }
 
-function createDefaultNotificationWorker(env: AppEnv, fcmClient = createDefaultFcmClient(env)): NotificationWorker {
+function createDefaultNotificationWorker(
+  env: AppEnv,
+  fcmClient = createDefaultFcmClient(env),
+  summaries = new SummaryNotificationRepository()
+): NotificationWorker {
   return new NotificationWorker({
     notificationJobs: new NotificationJobRepository(),
     platformEvents: new PlatformEventRepository(),
@@ -178,12 +184,31 @@ function createDefaultNotificationWorker(env: AppEnv, fcmClient = createDefaultF
     devices: new DeviceRepository(),
     preferences: new PreferenceRepository(),
     deliveryAttempts: new DeliveryAttemptRepository(),
+    summaryNotifications: summaries,
     preferenceResolution: new PreferenceResolutionService(),
     pushSender: new FcmPushSender(fcmClient),
     random: Math.random,
     deviceBatchSize: env.NOTIFICATION_DEVICE_BATCH_SIZE,
     preferenceBatchSize: env.NOTIFICATION_PREFERENCE_BATCH_SIZE,
     deliveryAttemptBatchSize: env.DELIVERY_ATTEMPT_BATCH_SIZE
+  });
+}
+
+function createDefaultSummaryNotificationWorker(
+  env: AppEnv,
+  fcmClient = createDefaultFcmClient(env),
+  summaries = new SummaryNotificationRepository()
+): SummaryNotificationWorker {
+  return new SummaryNotificationWorker({
+    summaries,
+    platformEvents: new PlatformEventRepository(),
+    hubEventSchedules: new HubEventRepository(),
+    devices: new DeviceRepository(),
+    preferences: new PreferenceRepository(),
+    deliveryAttempts: new DeliveryAttemptRepository(),
+    preferenceResolution: new PreferenceResolutionService(),
+    pushSender: new FcmPushSender(fcmClient),
+    random: Math.random
   });
 }
 
@@ -630,14 +655,18 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ...createDefaultMusicSyncService(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch, registerClose, (message) => app.log.warn(message)),
       ...options.internalRoutes.dependencies
     }
-    : {
-      notificationWorker: createDefaultNotificationWorker(env, sharedFcmClient),
-      serviceAnnouncements: createDefaultServiceAnnouncementSender(env, sharedFcmClient),
-      ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch),
-      ...createDefaultYoutubeSubscriptionScheduler(env, undefined, options.chzzkLiveApiFetch),
-      ...createDefaultYoutubeSongBackfillScheduler(env, undefined, options.chzzkLiveApiFetch),
-      ...createDefaultMusicSyncService(env, undefined, options.chzzkLiveApiFetch, registerClose, (message) => app.log.warn(message)),
-    };
+    : (() => {
+      const summaries = new SummaryNotificationRepository();
+      return {
+        notificationWorker: createDefaultNotificationWorker(env, sharedFcmClient, summaries),
+        summaryNotificationWorker: createDefaultSummaryNotificationWorker(env, sharedFcmClient, summaries),
+        serviceAnnouncements: createDefaultServiceAnnouncementSender(env, sharedFcmClient),
+        ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch),
+        ...createDefaultYoutubeSubscriptionScheduler(env, undefined, options.chzzkLiveApiFetch),
+        ...createDefaultYoutubeSongBackfillScheduler(env, undefined, options.chzzkLiveApiFetch),
+        ...createDefaultMusicSyncService(env, undefined, options.chzzkLiveApiFetch, registerClose, (message) => app.log.warn(message)),
+      };
+    })();
   for (const code of musicConfigurationWarnings(env, {
     channelDiscoveryServiceConfigured: Boolean(internalRouteDependencies.musicSync?.discoverChannelUploads),
   })) {

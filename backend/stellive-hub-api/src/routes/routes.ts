@@ -341,14 +341,23 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
       recentPushCandidatesInWindow: recentNotificationsInLastMinute
     });
     realtime.enqueue(event, resolution, deliveryDecision.deliveryLevel);
+    const attemptStatus =
+      deliveryDecision.action === "send_immediate"
+        ? "sent"
+        : deliveryDecision.action === "enqueue_summary"
+          ? "queued"
+          : "skipped";
     deliveryAttempts.push({
       id: `attempt_${Date.now()}`,
       eventId: event.id,
       deviceId: devDeviceId,
       attemptedAt: new Date().toISOString(),
-      deliveredAt: deliveryDecision.shouldEnqueuePush ? new Date().toISOString() : undefined,
-      status: resolution.shouldNotify ? (deliveryDecision.shouldEnqueuePush ? "sent" : "queued") : "skipped",
-      reason: deliveryDecision.loadReductionReason ?? resolution.reason,
+      deliveredAt: deliveryDecision.action === "send_immediate" ? new Date().toISOString() : undefined,
+      status: attemptStatus,
+      reason:
+        deliveryDecision.action === "enqueue_summary"
+          ? "summary_queued"
+          : deliveryDecision.loadReductionReason ?? resolution.reason,
       tapActionUsed: resolution.tapAction,
       title: event.title,
       body: event.body,

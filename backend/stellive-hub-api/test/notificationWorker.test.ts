@@ -98,6 +98,11 @@ function createWorker(options: {
   scheduleCurrent?: boolean;
   previousAttempts?: Array<{ deviceId: string; status: "queued" | "sent" | "failed" | "skipped" }>;
   recentSentCounts?: Record<string, number>;
+  enqueueSummary?: (input: { event: PlatformEvent; deviceId: string; evaluatedAt: Date }) => Promise<{
+    bucketId: string;
+    topicKey: string;
+    created: boolean;
+  }>;
   clock?: () => Date;
 }) {
   const calls = {
@@ -111,6 +116,7 @@ function createWorker(options: {
     attemptBatches: [] as unknown[][],
     sentLookups: [] as Array<{ eventId: string; deviceIds: string[] }>,
     recentSentLookups: [] as Array<{ deviceIds: string[]; since: Date; until: Date }>,
+    summaries: [] as Array<{ event: PlatformEvent; deviceId: string; evaluatedAt: Date }>,
     resolveContexts: [] as Array<{ deviceId: string; evaluatedAt: Date; recentNotificationsInLastMinute: number }>
   };
   const pushTargets = options.devices ?? [device()];
@@ -202,6 +208,12 @@ function createWorker(options: {
             }
           }
         : {})
+    },
+    summaryNotifications: {
+      async enqueue(input) {
+        calls.summaries.push(input);
+        return options.enqueueSummary?.(input) ?? { bucketId: "summary-bucket-1", topicKey: "hub_event", created: true };
+      }
     },
     preferenceResolution: {
       resolve(
@@ -388,13 +400,13 @@ describe("NotificationWorker", () => {
     });
     const allowedResult = await allowed.worker.drain({ now });
 
-    expect(allowedResult).toMatchObject({ completed: 1, sent: 0, skipped: 1, queued: 0, failed: 0 });
+    expect(allowedResult).toMatchObject({ completed: 1, sent: 0, skipped: 0, queued: 1, failed: 0 });
     expect(allowed.calls.sent).toEqual([]);
     expect(allowed.calls.attempts).toEqual([
       expect.objectContaining({
         deviceId: "device-1",
-        status: "skipped",
-        reason: "push_not_enqueued",
+        status: "queued",
+        reason: "summary_queued",
         deliveryLevel: "summary_push"
       })
     ]);

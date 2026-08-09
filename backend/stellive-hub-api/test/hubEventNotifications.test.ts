@@ -394,6 +394,11 @@ describe("HubEvent notification job delivery flow", () => {
           return new Set<string>();
         }
       },
+      summaryNotifications: {
+        async enqueue() {
+          return { bucketId: "summary-bucket-1", topicKey: "hub_event", created: true };
+        }
+      },
       preferenceResolution: {
         resolve(event, deviceId) {
           return deviceId === "global-off-device"
@@ -420,8 +425,8 @@ describe("HubEvent notification job delivery flow", () => {
       completed: 2,
       failed: 0,
       sent: 1,
-      skipped: 3,
-      queued: 0,
+      skipped: 2,
+      queued: 1,
       status: "ok"
     });
     expect(completed).toEqual(["job-1", "job-2"]);
@@ -431,8 +436,8 @@ describe("HubEvent notification job delivery flow", () => {
         expect.objectContaining({
           eventId: expect.stringContaining("event_announced"),
           deviceId: "allowed-device",
-          status: "skipped",
-          reason: "push_not_enqueued",
+          status: "queued",
+          reason: "summary_queued",
           deliveryLevel: "summary_push"
         }),
         expect.objectContaining({

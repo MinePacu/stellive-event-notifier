@@ -8,6 +8,7 @@ import type {
   FailNotificationJobInput,
   NotificationJobRepository
 } from "./notificationJobRepository.js";
+import type { SummaryNotificationRepository } from "./summaryNotificationRepository.js";
 import type { CreateDeliveryAttemptInput, DeliveryAttemptRepository } from "../repositories/deliveryAttemptRepository.js";
 import type DeviceRepository from "../repositories/deviceRepository.js";
 import type PlatformEventRepository from "../repositories/platformEventRepository.js";
@@ -55,6 +56,7 @@ interface NotificationWorkerDependencies {
     listSentDeviceIds(input: { eventId: string; deviceIds: string[] }): Promise<Set<string>>;
     countSentByDeviceInWindow(input: { deviceIds: string[]; since: Date; until: Date }): Promise<Map<string, number>>;
   };
+  summaryNotifications: Pick<SummaryNotificationRepository, "enqueue">;
   preferenceResolution: Pick<PreferenceResolutionService, "resolve">;
   pushSender: PushSender;
   now?: () => Date;
@@ -69,6 +71,8 @@ interface MutableDrainTotals extends NotificationWorkerDrainResult {}
 interface DeviceProcessResult {
   sent?: boolean;
   skipped?: boolean;
+  queued?: boolean;
+  summaryEnqueueFailure?: boolean;
   transientFailure?: boolean;
   retryAfterMs?: number;
 }
@@ -140,7 +144,7 @@ export class NotificationWorker {
       await this.processJob(claimedJob, totals, now, input.now);
     }
 
-    if (totals.queued > 0 || totals.failed > 0) totals.status = "partial";
+    if (totals.failed > 0) totals.status = "partial";
     return totals;
   }
 
@@ -173,6 +177,7 @@ export class NotificationWorker {
     }
 
     let hadTransientFailure = false;
+    let hadSummaryEnqueueFailure = false;
     let providerRetryAfterMs: number | undefined;
 
     const processPage = async (devices: PushTargetDevice[]) => {
@@ -207,7 +212,9 @@ export class NotificationWorker {
         });
         totals.sent += result.sent;
         totals.skipped += result.skipped;
+        totals.queued += result.queued;
         hadTransientFailure ||= result.hadTransientFailure;
+        hadSummaryEnqueueFailure ||= result.hadSummaryEnqueueFailure;
         if (result.providerRetryAfterMs !== undefined) {
           providerRetryAfterMs = Math.max(providerRetryAfterMs ?? 0, result.providerRetryAfterMs);
         }
@@ -232,9 +239,15 @@ export class NotificationWorker {
     }
 
     if (hadTransientFailure) {
-      const terminal = await this.retryOrFailJob(job, "transient_push_failure", now, providerRetryAfterMs);
+      const terminal = await this.retryOrFailJob(
+        job,
+        hadSummaryEnqueueFailure ? "summary_enqueue_failure" : "transient_push_failure",
+        now,
+        providerRetryAfterMs
+      );
       if (terminal) totals.failed += 1;
       else totals.queued += 1;
+      totals.status = "partial";
       return;
     }
 
@@ -251,10 +264,19 @@ export class NotificationWorker {
     now: Date;
     evaluatedAtOverride?: Date;
     attemptBuffer: CreateDeliveryAttemptInput[];
-  }): Promise<{ sent: number; skipped: number; hadTransientFailure: boolean; providerRetryAfterMs?: number }> {
+  }): Promise<{
+    sent: number;
+    skipped: number;
+    queued: number;
+    hadTransientFailure: boolean;
+    hadSummaryEnqueueFailure: boolean;
+    providerRetryAfterMs?: number;
+  }> {
     let sent = 0;
     let skipped = 0;
+    let queued = 0;
     let hadTransientFailure = false;
+    let hadSummaryEnqueueFailure = false;
     let providerRetryAfterMs: number | undefined;
     if (this.dependencies.pushSender.sendToDevices) {
       const groups = new Map<string, Array<{
@@ -271,18 +293,32 @@ export class NotificationWorker {
           recentNotificationsInLastMinute: input.recentSentCounts.get(device.deviceId) ?? 0
         });
         const delivery = resolveNotificationDelivery(input.event, resolution);
-        if (!resolution.shouldNotify || !delivery.shouldEnqueuePush) {
+        if (delivery.action === "history_only") {
           this.recordAttempt(input.attemptBuffer, {
             event: input.event,
             device,
             resolution,
             deliveryLevel: delivery.deliveryLevel,
             status: "skipped",
-            reason: resolution.shouldNotify ? "push_not_enqueued" : resolution.reason,
+            reason: resolution.shouldNotify ? (delivery.loadReductionReason ?? "history_only") : resolution.reason,
             now: input.now,
             retryCount: input.job.attempts
           });
           skipped += 1;
+          continue;
+        }
+        if (delivery.action === "enqueue_summary") {
+          const result = await this.enqueueSummary(input.attemptBuffer, {
+            event: input.event,
+            device,
+            resolution,
+            evaluatedAt,
+            now: input.now,
+            retryCount: input.job.attempts
+          });
+          if (result.queued) queued += 1;
+          if (result.transientFailure) hadTransientFailure = true;
+          if (result.summaryEnqueueFailure) hadSummaryEnqueueFailure = true;
           continue;
         }
         const payload = buildPushPayload({ event: input.event, resolution, deliveryLevel: delivery.deliveryLevel });
@@ -322,13 +358,15 @@ export class NotificationWorker {
         const result = await this.processDevice({ ...input, device });
         if (result.sent) sent += 1;
         if (result.skipped) skipped += 1;
+        if (result.queued) queued += 1;
         if (result.transientFailure) hadTransientFailure = true;
+        if (result.summaryEnqueueFailure) hadSummaryEnqueueFailure = true;
         if (result.retryAfterMs !== undefined) {
           providerRetryAfterMs = Math.max(providerRetryAfterMs ?? 0, result.retryAfterMs);
         }
       }
     }
-    return { sent, skipped, hadTransientFailure, providerRetryAfterMs };
+    return { sent, skipped, queued, hadTransientFailure, hadSummaryEnqueueFailure, providerRetryAfterMs };
   }
 
   private async processDevice(input: {
@@ -353,18 +391,29 @@ export class NotificationWorker {
     );
     const delivery = resolveNotificationDelivery(input.event, resolution);
 
-    if (!resolution.shouldNotify || !delivery.shouldEnqueuePush) {
+    if (delivery.action === "history_only") {
       this.recordAttempt(input.attemptBuffer, {
         event: input.event,
         device: input.device,
         resolution,
         deliveryLevel: delivery.deliveryLevel,
         status: "skipped",
-        reason: resolution.shouldNotify ? "push_not_enqueued" : resolution.reason,
+        reason: resolution.shouldNotify ? (delivery.loadReductionReason ?? "history_only") : resolution.reason,
         now: input.now,
         retryCount: input.job.attempts
       });
       return { skipped: true };
+    }
+
+    if (delivery.action === "enqueue_summary") {
+      return this.enqueueSummary(input.attemptBuffer, {
+        event: input.event,
+        device: input.device,
+        resolution,
+        evaluatedAt,
+        now: input.now,
+        retryCount: input.job.attempts
+      });
     }
 
     const payload = buildPushPayload({
@@ -432,6 +481,38 @@ export class NotificationWorker {
     return input.sendResult.status === "transient_failure"
       ? { transientFailure: true, retryAfterMs: input.sendResult.retryAfterMs }
       : { skipped: true };
+  }
+
+  private async enqueueSummary(attemptBuffer: CreateDeliveryAttemptInput[], input: {
+    event: PlatformEvent;
+    device: PushTargetDevice;
+    resolution: ResolvedNotificationPreference;
+    evaluatedAt: Date;
+    now: Date;
+    retryCount: number;
+  }): Promise<DeviceProcessResult> {
+    try {
+      await this.dependencies.summaryNotifications.enqueue({
+        event: input.event,
+        deviceId: input.device.deviceId,
+        evaluatedAt: input.evaluatedAt
+      });
+      this.recordAttempt(attemptBuffer, {
+        ...input,
+        deliveryLevel: "summary_push",
+        status: "queued",
+        reason: "summary_queued"
+      });
+      return { queued: true };
+    } catch {
+      this.recordAttempt(attemptBuffer, {
+        ...input,
+        deliveryLevel: "summary_push",
+        status: "failed",
+        reason: "summary_enqueue_failed"
+      });
+      return { transientFailure: true, summaryEnqueueFailure: true };
+    }
   }
 
   private recordAttempt(attemptBuffer: CreateDeliveryAttemptInput[], input: {

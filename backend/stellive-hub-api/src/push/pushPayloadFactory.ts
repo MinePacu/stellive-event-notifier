@@ -14,6 +14,13 @@ export interface PushPayloadInput {
   deliveryLevel: NotificationDeliveryLevel;
 }
 
+export interface SummaryPushPayloadInput {
+  bucketId: string;
+  topicKey: string;
+  events: PlatformEvent[];
+  resolution: ResolvedNotificationPreference;
+}
+
 export interface MinimalPushPayload {
   notification: {
     title: string;
@@ -56,6 +63,8 @@ export interface MinimalPushPayload {
     };
   };
 }
+
+export const SUMMARY_DATA_BUDGET_BYTES = 3_584;
 
 const titleByType: Partial<Record<PlatformEvent["type"], string>> = {
   event_announced: "굿즈/행사 일정이 공개됐어요",
@@ -145,5 +154,70 @@ export function buildPushPayload(input: PushPayloadInput): MinimalPushPayload {
       },
       ...(imageUrl ? { fcmOptions: { imageUrl } } : {})
     }
+  };
+}
+
+function summaryText(events: PlatformEvent[]): { title: string; body: string } {
+  const latest = events[0];
+  if (events.length === 1) return { title: pushTitle(latest), body: pushBody(latest) };
+  const recentTitles = events.slice(0, 2).map((event) => event.title.trim()).filter(Boolean);
+  const remainder = Math.max(0, events.length - recentTitles.length);
+  const body = `${recentTitles.join(", ")}${remainder > 0 ? ` 외 ${remainder}건` : ""}`;
+  if (events.every((event) => event.source === "hub_event")) {
+    return { title: `굿즈/행사 업데이트 ${events.length}건`, body };
+  }
+  if (events.every((event) => event.generationId === "official" || event.memberId === "stellive-official")) {
+    return { title: `공식 채널 새 소식 ${events.length}건`, body };
+  }
+  return { title: `새 알림 ${events.length}건`, body };
+}
+
+function dataSize(data: MinimalPushPayload["data"]): number {
+  return Buffer.byteLength(JSON.stringify(data), "utf8");
+}
+
+function trimLastCodePoint(value: string): string {
+  return Array.from(value).slice(0, -1).join("");
+}
+
+export function buildSummaryPushPayload(input: SummaryPushPayloadInput): MinimalPushPayload {
+  if (input.events.length === 0) throw new Error("summary_push_events_required");
+  const events = [...input.events].sort(
+    (left, right) => new Date(right.receivedAt).getTime() - new Date(left.receivedAt).getTime()
+  );
+  const representative = events[0];
+  const text = summaryText(events);
+  const supersedes = events.slice(0, 10).map((event) => event.id);
+  const data: MinimalPushPayload["data"] = {
+    eventId: `summary:${input.bucketId}`,
+    source: representative.source,
+    eventType: representative.type,
+    generationId: representative.generationId,
+    memberId: representative.memberId,
+    title: text.title,
+    body: text.body,
+    deliveryLevel: "summary_push",
+    summaryGroupId: input.topicKey,
+    supersedesEventIds: supersedes.join(","),
+    tapAction: input.resolution.tapAction,
+    appDeepLink: representative.appDeepLink ?? "",
+    platformUrl: representative.platformUrl ?? ""
+  };
+
+  while (dataSize(data) > SUMMARY_DATA_BUDGET_BYTES && supersedes.length > 1) {
+    supersedes.pop();
+    data.supersedesEventIds = supersedes.join(",");
+  }
+  while (dataSize(data) > SUMMARY_DATA_BUDGET_BYTES && data.body.length > 0) data.body = trimLastCodePoint(data.body);
+  while (dataSize(data) > SUMMARY_DATA_BUDGET_BYTES && data.platformUrl.length > 0) data.platformUrl = trimLastCodePoint(data.platformUrl);
+  while (dataSize(data) > SUMMARY_DATA_BUDGET_BYTES && data.appDeepLink.length > 0) data.appDeepLink = trimLastCodePoint(data.appDeepLink);
+  while (dataSize(data) > SUMMARY_DATA_BUDGET_BYTES && data.title.length > 0) data.title = trimLastCodePoint(data.title);
+  if (dataSize(data) > SUMMARY_DATA_BUDGET_BYTES) throw new Error("summary_push_data_budget_exceeded");
+
+  return {
+    notification: { title: data.title, body: data.body },
+    data,
+    android: { priority: "normal", notification: { channelId: androidChannelId(representative) } },
+    apns: { headers: { "apns-priority": "5" }, payload: { aps: {} } }
   };
 }

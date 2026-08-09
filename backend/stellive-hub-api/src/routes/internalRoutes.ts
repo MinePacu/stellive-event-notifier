@@ -29,6 +29,8 @@ import {
 } from "../hub-events/hubCalendarSpecialDayOccurrenceRepository.js";
 import { HubEventRepository, type HubEventStatusReconcileResult } from "../hub-events/hubEventRepository.js";
 import { NotificationJobRepository } from "../jobs/notificationJobRepository.js";
+import { SummaryNotificationRepository, type SummaryNotificationDiagnostic, type SummaryNotificationStatus } from "../jobs/summaryNotificationRepository.js";
+import type { SummaryNotificationWorkerDrainResult } from "../jobs/summaryNotificationWorker.js";
 import { DeliveryAttemptRepository } from "../repositories/deliveryAttemptRepository.js";
 import { ExternalApiCallLogRepository } from "../repositories/externalApiCallLogRepository.js";
 import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
@@ -59,6 +61,10 @@ export interface InternalRouteDependencies {
   notificationJobs: {
     listDiagnostics(limit: number): MaybePromise<NotificationJobDiagnostic[]>;
   };
+  summaryNotifications: {
+    listDiagnostics(limit: number): MaybePromise<SummaryNotificationDiagnostic[]>;
+    summarize(now?: Date): MaybePromise<SummaryNotificationStatus>;
+  };
   webhookSubscriptions: {
     listDiagnostics(limit: number): MaybePromise<WebhookSubscriptionDiagnostic[]>;
   };
@@ -84,6 +90,9 @@ export interface InternalRouteDependencies {
   };
   notificationWorker?: {
     drain(input: NotificationWorkerDrainInput): MaybePromise<NotificationWorkerDrainResult>;
+  };
+  summaryNotificationWorker?: {
+    drain(input: NotificationWorkerDrainInput): MaybePromise<SummaryNotificationWorkerDrainResult>;
   };
   serviceAnnouncements?: {
     send(input: ServiceAnnouncementInput): MaybePromise<PushSendResult>;
@@ -315,6 +324,7 @@ function defaultDependencies(env: AppEnv): InternalRouteDependencies {
   return {
     adminHealthService: new AdminHealthService(env),
     notificationJobs: new NotificationJobRepository(),
+    summaryNotifications: new SummaryNotificationRepository(),
     webhookSubscriptions: new WebhookSubscriptionRepository(),
     liveStatus: new LiveStatusRepository(),
     deliveryAttempts: new DeliveryAttemptRepository(),
@@ -385,6 +395,15 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
     return dependencies.notificationJobs.listDiagnostics(limit);
   });
 
+  app.get<{ Querystring: LimitQuery }>("/v1/internal/jobs/notification-summaries", async (request) => {
+    const limit = parseInternalLimit(request.query.limit, 25);
+    const [status, items] = await Promise.all([
+      dependencies.summaryNotifications.summarize(),
+      dependencies.summaryNotifications.listDiagnostics(limit)
+    ]);
+    return { status, items };
+  });
+
   app.get<{ Querystring: LimitQuery }>("/v1/internal/webhooks/subscriptions", async (request) => {
     const limit = parseInternalLimit(request.query.limit, 25);
     return dependencies.webhookSubscriptions.listDiagnostics(limit);
@@ -397,11 +416,9 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
     }
     const requestedLimit = parseInternalLimit(body?.limit ?? (request.query as LimitQuery).limit, 25);
 
-    if (dependencies.notificationWorker) {
-      return dependencies.notificationWorker.drain({ limit: requestedLimit });
-    }
-
-    return {
+    const normal = dependencies.notificationWorker
+      ? await dependencies.notificationWorker.drain({ limit: requestedLimit })
+      : {
       claimed: 0,
       completed: 0,
       failed: 0,
@@ -411,6 +428,19 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
       status: "disabled",
       reason: "notification_worker_not_configured"
     };
+    const summaries = dependencies.summaryNotificationWorker
+      ? await dependencies.summaryNotificationWorker.drain({ limit: requestedLimit })
+      : {
+          claimed: 0,
+          completed: 0,
+          failed: 0,
+          skipped: 0,
+          sent: 0,
+          queued: 0,
+          status: "disabled" as const,
+          reason: "summary_notification_worker_not_configured"
+        };
+    return { ...normal, summaries };
   });
 
   app.post("/v1/internal/notifications/service-announcements", async (request, reply) => {

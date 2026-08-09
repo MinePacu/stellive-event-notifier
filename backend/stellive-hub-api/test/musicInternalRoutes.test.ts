@@ -41,6 +41,10 @@ function createInternalDeps(overrides: Partial<InternalRouteDependencies> = {}):
       }),
     },
     notificationJobs: { listDiagnostics: async () => [] },
+    summaryNotifications: {
+      summarize: async () => ({ queued: 0, locked: 0, completed: 0, skipped: 0, failed: 0 }),
+      listDiagnostics: async () => []
+    },
     webhookSubscriptions: { listDiagnostics: async () => [] },
     liveStatus: { listDiagnostics: async () => [] },
     deliveryAttempts: { listRecent: async () => [] },

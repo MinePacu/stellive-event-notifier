@@ -9,6 +9,7 @@ import { getPrismaClient } from "../storage/prisma.js";
 interface DeliveryAttemptRecord {
   id: string;
   eventId: string;
+  deviceId: string | null;
   attemptedAt: Date;
   deliveredAt: Date | null;
   status: string;
@@ -111,6 +112,12 @@ export interface CountSentByDeviceInWindowInput {
   deviceIds: string[];
   since: Date;
   until: Date;
+}
+
+export interface SkippedSummaryCandidate {
+  eventId: string;
+  deviceId: string;
+  attemptedAt: Date;
 }
 
 const deliveryAttemptDiagnosticSelect: DeliveryAttemptDiagnosticSelect = {
@@ -277,6 +284,33 @@ export class DeliveryAttemptRepository {
       counts.set(record.deviceId, (counts.get(record.deviceId) ?? 0) + 1);
     }
     return counts;
+  }
+
+  async listRecentSkippedSummaryCandidates(input: {
+    since: Date;
+    until: Date;
+    limit?: number;
+  }): Promise<SkippedSummaryCandidate[]> {
+    if (!this.prisma.deliveryAttempt.findMany) throw new Error("delivery_attempt_lookup_unavailable");
+    const safeSince = new Date(Math.max(input.since.getTime(), input.until.getTime() - 10 * 60_000));
+    const records = await this.prisma.deliveryAttempt.findMany({
+      where: {
+        status: "skipped",
+        deliveryLevel: "summary_push",
+        reason: "push_not_enqueued",
+        attemptedAt: { gte: safeSince, lte: input.until },
+        deviceId: { not: null }
+      },
+      orderBy: { attemptedAt: "desc" },
+      take: Math.min(Math.max(Math.trunc(input.limit ?? 500), 1), 1_000),
+      distinct: ["deviceId", "eventId"],
+      select: { eventId: true, deviceId: true, attemptedAt: true }
+    });
+    return records.flatMap((record) =>
+      "eventId" in record && "deviceId" in record && record.deviceId && "attemptedAt" in record
+        ? [{ eventId: record.eventId, deviceId: record.deviceId, attemptedAt: record.attemptedAt }]
+        : []
+    );
   }
 
   private toRecord(input: CreateDeliveryAttemptInput): Record<string, unknown> {

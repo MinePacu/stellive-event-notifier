@@ -15,8 +15,10 @@ export interface NotificationDeliveryDecision {
   deviceId: string;
   deliveryLevel: NotificationDeliveryLevel;
   loadReductionReason?: string;
-  shouldEnqueuePush: boolean;
+  action: NotificationDeliveryAction;
 }
+
+export type NotificationDeliveryAction = "send_immediate" | "enqueue_summary" | "history_only";
 
 const immediateEventTypes = new Set<PlatformEvent["type"]>([
   "chzzk_live_started",
@@ -44,7 +46,7 @@ export function resolveNotificationDelivery(
       deviceId: resolution.deviceId,
       deliveryLevel: "in_app_history_only",
       loadReductionReason: resolution.reason,
-      shouldEnqueuePush: false
+      action: "history_only"
     };
   }
 
@@ -56,6 +58,11 @@ export function resolveNotificationDelivery(
     deviceId: resolution.deviceId,
     deliveryLevel: downgraded.deliveryLevel,
     loadReductionReason: downgraded.reason,
-    shouldEnqueuePush: downgraded.deliveryLevel === "immediate_push"
+    action:
+      downgraded.deliveryLevel === "immediate_push"
+        ? "send_immediate"
+        : downgraded.deliveryLevel === "summary_push"
+          ? "enqueue_summary"
+          : "history_only"
   };
 }
