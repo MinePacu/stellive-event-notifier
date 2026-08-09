@@ -65,12 +65,20 @@ describe("admin i18n", () => {
   it("renders localized login and console output while preserving machine identifiers", () => {
     const english = renderAdminConsoleHtml();
     const korean = renderAdminConsoleHtml("ko");
+    const englishLogin = renderAdminLoginHtml();
+    const koreanLogin = renderAdminLoginHtml("ko");
     expect(english).toContain('<html lang="en">');
     expect(english).toContain("Announcement management");
     expect(korean).toContain('<html lang="ko">');
     expect(korean).toContain("공지 관리");
     expect(korean).toContain("대시보드");
-    expect(renderAdminLoginHtml("ko")).toContain("관리자 콘솔 토큰");
+    expect(englishLogin).toContain("Enter your admin console token to continue.");
+    expect(englishLogin).toContain("Authorized administrators only.");
+    expect(koreanLogin).toContain("관리자 콘솔 토큰을 입력해 계속하세요.");
+    expect(koreanLogin).toContain("승인된 관리자만 사용할 수 있습니다.");
+    expect(koreanLogin).toContain("관리자 콘솔 토큰");
+    expect(englishLogin).not.toContain("Internal API bearer token");
+    expect(koreanLogin).not.toContain("내부 API Bearer 토큰");
     expect(korean).toContain('t("announcement.deleteConfirm"');
     expect(korean).toContain('t("announcement.publishConfirm"');
 

@@ -154,6 +154,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import java.net.URL
+import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -227,6 +228,15 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationQuickAddActivity
 import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationTileService
 import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationSystemShortcutCoordinator
+import dev.minepacu.stelliveeventnotifier.feature.update.AndroidApkInspector
+import dev.minepacu.stelliveeventnotifier.feature.update.AndroidUpdateCandidate
+import dev.minepacu.stelliveeventnotifier.feature.update.AndroidUpdateDownloadArtifact
+import dev.minepacu.stelliveeventnotifier.feature.update.AndroidUpdateDownloader
+import dev.minepacu.stelliveeventnotifier.feature.update.AndroidUpdateInstaller
+import dev.minepacu.stelliveeventnotifier.feature.update.AndroidUpdatePolicy
+import dev.minepacu.stelliveeventnotifier.feature.update.AndroidUpdateRepository
+import dev.minepacu.stelliveeventnotifier.feature.update.GitHubReleaseAndroidUpdateRepository
+import dev.minepacu.stelliveeventnotifier.feature.update.UpdatePreferenceStore
 
 private const val EXIT_BACK_PRESS_INTERVAL_MS = 2_000L
 private const val RETURN_PROMPT_ANIMATION_DURATION_MS = 200L
@@ -446,6 +456,27 @@ private lateinit var announcementReadStore: AnnouncementReadStore
     private val targetNotificationEnabledOverrides = mutableMapOf<String, Boolean>()
 private var notificationPermissionRequested = false
     private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    private val updateRepository: AndroidUpdateRepository by lazy {
+        GitHubReleaseAndroidUpdateRepository.create()
+    }
+    private val updatePreferenceStore by lazy { UpdatePreferenceStore(this) }
+    private val updateDownloader by lazy { AndroidUpdateDownloader(this) }
+    private val updateApkInspector by lazy { AndroidApkInspector(this) }
+    private val updateInstaller by lazy { AndroidUpdateInstaller(this) }
+    private var updateCheckInProgress = false
+    private var updateStatusTextView: TextView? = null
+    private var pendingUpdateInstallFile: File? = null
+    private val requestUnknownSources = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        val file = pendingUpdateInstallFile ?: return@registerForActivityResult
+        if (updateInstaller.canRequestPackageInstalls()) {
+            pendingUpdateInstallFile = null
+            installValidatedUpdate(file)
+        } else {
+            updateStatus("알 수 없는 앱 설치 권한이 필요합니다.")
+        }
+    }
     private val cardFactory by lazy { HubCardFactory(this) }
 
     private data class ReservationHelpFaqUiState(
@@ -1597,6 +1628,11 @@ private fun startScreen(
             title = getString(R.string.home_title),
             role = "지금 라이브, 최근 알림, 마감 임박 굿즈/행사를 확인합니다."
         )
+        binding.root.post {
+            if (navigationHistory.currentScreen == HubScreen.HOME) {
+                checkForAndroidUpdate(manual = false)
+            }
+        }
         val homeAnnouncement = AnnouncementPolicy.homeAnnouncement(
             (announcementItems + listOfNotNull(announcementsSummary.pinned)).distinctBy { it.id }
         )
@@ -5450,6 +5486,9 @@ private fun songFilterRow(
             )
         )
 
+        container.addView(sectionLabel("업데이트"))
+        container.addView(updateCheckCard())
+
         container.addView(sectionLabel("오픈 소스"))
         container.addView(
             linkCard(
@@ -5470,6 +5509,152 @@ private fun songFilterRow(
                 )
             )
         )
+    }
+
+    private fun updateCheckCard(): MaterialCardView =
+        baseCard(HubCardStyle.INTERACTIVE).apply {
+            layoutParams = settingsCardLayoutParams()
+            val content = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                applySettingsCardContentPadding()
+            }
+            content.addView(TextView(context).apply {
+                text = "GitHub Release 업데이트"
+                setTextColor(color(R.color.hub_text))
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            val status = TextView(context).apply {
+                text = if (updateCheckInProgress) "업데이트를 확인하는 중입니다." else "새 버전을 직접 확인할 수 있습니다."
+                setTextColor(color(R.color.hub_text_muted))
+                textSize = 12f
+                setPadding(0, dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp), 0, dp(10))
+            }
+            updateStatusTextView = status
+            content.addView(status)
+            content.addView(MaterialButton(context).apply {
+                text = if (updateCheckInProgress) "확인 중" else "업데이트 확인"
+                isEnabled = !updateCheckInProgress
+                setOnClickListener { checkForAndroidUpdate(manual = true) }
+            })
+            addView(content)
+        }
+
+    private fun checkForAndroidUpdate(manual: Boolean) {
+        if (updateCheckInProgress) return
+        updateCheckInProgress = true
+        if (manual) updateStatus("업데이트를 확인하는 중입니다.")
+        lifecycleScope.launch {
+            try {
+                val now = System.currentTimeMillis()
+                if (!manual && !updatePreferenceStore.shouldRunAutomaticCheck(now)) return@launch
+                if (!manual) updatePreferenceStore.markAutomaticCheck(now)
+                val candidate = updateRepository.latestUpdate(
+                    installedPackageName = packageName,
+                    installedVersionCode = BuildConfig.VERSION_CODE.toLong(),
+                )
+                when {
+                    candidate == null && manual -> updateStatus("현재 최신 버전을 사용하고 있습니다.")
+                    candidate == null -> Unit
+                    !manual &&
+                        !AndroidUpdatePolicy.isMandatory(
+                            candidate.manifest,
+                            BuildConfig.VERSION_CODE.toLong(),
+                        ) &&
+                        updatePreferenceStore.isDismissed(candidate.manifest.versionCode) -> Unit
+                    else -> {
+                        updateStatus("새 버전 ${candidate.manifest.versionName}을 사용할 수 있습니다.")
+                        showAndroidUpdateDialog(candidate)
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (throwable: Throwable) {
+                if (manual) updateStatus("업데이트 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
+                Log.w("AndroidUpdate", "Release update check failed", throwable)
+            } finally {
+                updateCheckInProgress = false
+            }
+        }
+    }
+
+    private fun showAndroidUpdateDialog(candidate: AndroidUpdateCandidate) {
+        val mandatory = AndroidUpdatePolicy.isMandatory(
+            candidate.manifest,
+            BuildConfig.VERSION_CODE.toLong(),
+        )
+        val builder = AlertDialog.Builder(this)
+            .setTitle(if (mandatory) "필수 업데이트가 있습니다" else "새 업데이트가 있습니다")
+            .setMessage(
+                "버전 ${candidate.manifest.versionName} (${candidate.manifest.versionCode})을 다운로드할 수 있습니다." +
+                    if (mandatory) "\n현재 버전은 더 이상 지원되지 않습니다." else "",
+            )
+            .setPositiveButton("다운로드") { _, _ -> downloadAndInstallUpdate(candidate) }
+            .setNeutralButton("릴리스 보기") { _, _ ->
+                openExternalUrl(candidate.releaseHtmlUrl)
+            }
+        if (!mandatory) {
+            builder.setNegativeButton("나중에") { _, _ ->
+                lifecycleScope.launch {
+                    updatePreferenceStore.dismiss(candidate.manifest.versionCode)
+                }
+            }
+        }
+        builder.show()
+    }
+
+    private fun downloadAndInstallUpdate(candidate: AndroidUpdateCandidate) {
+        updateStatus("업데이트 파일을 다운로드하는 중입니다.")
+        lifecycleScope.launch {
+            var artifact: AndroidUpdateDownloadArtifact? = null
+            runCatching {
+                artifact = updateDownloader.downloadToTemporary(candidate)
+                val validation = updateApkInspector.validate(
+                    checkNotNull(artifact).temporaryFile,
+                    candidate.manifest,
+                )
+                check(validation.isValid) {
+                    "apk_validation_failed_${validation.errors.joinToString("_")}"
+                }
+                updateDownloader.promoteValidated(checkNotNull(artifact))
+            }.onSuccess { file ->
+                updateStatus("다운로드 검증을 마쳤습니다. 시스템 설치 화면을 엽니다.")
+                requestUpdateInstall(file)
+            }.onFailure {
+                artifact?.let(updateDownloader::discard)
+                updateStatus("업데이트 파일을 검증하거나 열지 못했습니다.")
+                Log.w("AndroidUpdate", "Release update download/install failed", it)
+            }
+        }
+    }
+
+    private fun requestUpdateInstall(file: File) {
+        if (updateInstaller.canRequestPackageInstalls()) {
+            installValidatedUpdate(file)
+            return
+        }
+        pendingUpdateInstallFile = file
+        runCatching {
+            requestUnknownSources.launch(updateInstaller.unknownSourcesSettingsIntent())
+        }.onFailure {
+            pendingUpdateInstallFile = null
+            updateStatus("알 수 없는 앱 설치 설정을 열 수 없습니다.")
+        }
+    }
+
+    private fun installValidatedUpdate(file: File) {
+        runCatching { updateInstaller.install(file) }
+            .onFailure {
+                updateStatus("시스템 패키지 설치 화면을 열 수 없습니다.")
+                Log.w("AndroidUpdate", "Package installer launch failed", it)
+            }
+    }
+
+    private fun updateStatus(message: String) {
+        updateStatusTextView?.text = message
+        if (navigationHistory.currentScreen != HubScreen.SETTINGS_ABOUT) {
+            Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG).show()
+        }
     }
 
     private fun httpsLinkRow(title: String, url: String?): SettingRow? {

@@ -233,9 +233,19 @@ export function renderAdminLoginHtml(locale: AdminLocale = "en", errorMessage?: 
     <style>
       ${renderAdminThemeStyle()}
       :root {
+        --login-action-bg: #243b73;
+        --login-action-text: #ffffff;
         font-family: ui-sans-serif, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
         background: var(--admin-bg);
         color: var(--admin-text);
+      }
+      :root[data-theme="dark"] {
+        --login-action-bg: #c7d2fe;
+        --login-action-text: #111827;
+      }
+      :root[data-theme="black"] {
+        --login-action-bg: #86efac;
+        --login-action-text: #020617;
       }
       * {
         box-sizing: border-box;
@@ -245,140 +255,42 @@ export function renderAdminLoginHtml(locale: AdminLocale = "en", errorMessage?: 
         min-height: 100vh;
         display: grid;
         place-items: center;
-        background: linear-gradient(180deg, var(--admin-bg), color-mix(in srgb, var(--admin-bg) 90%, var(--admin-primary) 10%));
+        padding: 24px;
+        background: var(--admin-bg);
         color: var(--admin-text);
       }
       .login-shell {
-        width: min(100% - 32px, 1280px);
-        min-height: min(720px, calc(100vh - 32px));
-        display: grid;
-        grid-template-columns: minmax(0, 1.16fr) minmax(400px, 0.84fr);
-        border: 1px solid color-mix(in srgb, var(--admin-border) 72%, transparent);
-        border-radius: 26px;
-        background: color-mix(in srgb, var(--admin-surface) 76%, transparent);
-        box-shadow: 0 24px 70px rgba(34, 48, 78, 0.12);
-        overflow: hidden;
-      }
-      .login-copy {
-        display: grid;
-        grid-template-rows: auto minmax(0, 1fr);
-        gap: 24px;
-        padding: 42px;
-        background:
-          radial-gradient(circle at 14% 16%, color-mix(in srgb, var(--admin-accent) 28%, transparent), transparent 34%),
-          radial-gradient(circle at 84% 80%, color-mix(in srgb, var(--admin-primary) 16%, transparent), transparent 32%),
-          linear-gradient(160deg, color-mix(in srgb, var(--admin-surface) 96%, white), color-mix(in srgb, var(--admin-bg) 86%, white));
-      }
-      :root[data-theme="dark"] .login-shell {
-        background: rgba(17, 25, 42, 0.78);
-        border-color: rgba(170, 184, 255, 0.10);
-        box-shadow: 0 32px 88px rgba(2, 6, 23, 0.48);
-      }
-      :root[data-theme="dark"] .login-copy {
-        background:
-          radial-gradient(circle at 14% 16%, rgba(112, 214, 190, 0.18), transparent 34%),
-          radial-gradient(circle at 84% 80%, rgba(170, 184, 255, 0.20), transparent 32%),
-          linear-gradient(160deg, #17233a, #111a2c);
-      }
-      .login-panel {
-        display: grid;
-        align-items: center;
-        padding: 34px;
-        background: color-mix(in srgb, var(--admin-surface) 86%, transparent);
-      }
-      .login-brand {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-      .login-brand-mark {
-        width: 36px;
-        height: 36px;
-        border: 1px solid color-mix(in srgb, var(--admin-primary) 30%, var(--admin-border) 70%);
-        border-radius: 12px;
-        background: color-mix(in srgb, var(--admin-accent) 18%, var(--admin-surface) 82%);
+        width: min(100%, 460px);
       }
       .login-brand-title {
-        font-size: 1.05rem;
-        font-weight: 850;
+        font-size: 0.95rem;
+        font-weight: 800;
         color: var(--admin-text);
-      }
-      .login-hero {
-        display: grid;
-        align-content: center;
-        gap: 18px;
-        max-width: 620px;
-      }
-      .login-badge,
-      .private-badge {
-        display: inline-flex;
-        width: fit-content;
-        align-items: center;
-        min-height: 24px;
-        padding: 0 9px;
-        border: 1px solid color-mix(in srgb, var(--admin-primary) 24%, var(--admin-border) 76%);
-        border-radius: 999px;
-        color: var(--admin-primary);
-        background: color-mix(in srgb, var(--admin-primary) 7%, transparent);
-        font-size: 12px;
-        font-weight: 750;
       }
       .login-card {
         display: grid;
         width: 100%;
-        max-width: 420px;
-        margin: 0 auto;
-        gap: 16px;
-        padding: 26px;
+        gap: 18px;
+        padding: 28px;
         border: 1px solid var(--admin-border);
-        border-radius: 26px;
-        background: color-mix(in srgb, var(--admin-surface) 92%, transparent);
-        box-shadow: 0 12px 28px rgba(34, 48, 78, 0.08);
-      }
-      .login-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
+        border-radius: 12px;
+        background: var(--admin-surface);
       }
       h1 {
         margin: 0;
-        font-size: 1.45rem;
-      }
-      .login-copy h2 {
-        margin: 0;
-        max-width: 520px;
-        font-size: clamp(2rem, 5vw, 3.6rem);
-        line-height: 1;
-        letter-spacing: -0.02em;
-      }
-      .login-copy p,
-      .login-flow p,
-      .login-note {
-        margin: 0;
-        color: var(--admin-muted);
-        line-height: 1.6;
-      }
-      .login-flow {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
-        max-width: 560px;
-      }
-      .login-flow-item {
-        padding: 14px;
-        border: 1px solid var(--admin-border);
-        border-radius: 16px;
-        background: color-mix(in srgb, var(--admin-surface) 72%, transparent);
-      }
-      .login-flow-item strong {
-        display: block;
-        margin-bottom: 4px;
-        color: var(--admin-text);
+        font-size: 1.55rem;
+        letter-spacing: -0.01em;
       }
       .login-card-title {
         display: grid;
-        gap: 4px;
+        gap: 6px;
+      }
+      .login-description,
+      .login-session-note {
+        margin: 0;
+        color: var(--admin-muted);
+        font-size: 0.9rem;
+        line-height: 1.5;
       }
       label {
         display: grid;
@@ -389,40 +301,42 @@ export function renderAdminLoginHtml(locale: AdminLocale = "en", errorMessage?: 
       input {
         width: 100%;
         border: 1px solid var(--admin-input-border);
-        border-radius: 15px;
-        padding: 11px 13px;
+        border-radius: 10px;
+        padding: 12px 13px;
         font: inherit;
         background: var(--admin-surface);
         color: var(--admin-text);
       }
       .password-wrap {
+        display: block;
         position: relative;
       }
       .password-icon {
         position: absolute;
         left: 12px;
         top: 50%;
+        width: 18px;
+        height: 18px;
         transform: translateY(-50%);
         color: var(--admin-muted);
-        font-size: 14px;
         pointer-events: none;
       }
       .password-wrap input {
-        padding-left: 36px;
+        padding-left: 42px;
       }
       input:focus-visible,
       button:focus-visible {
-        outline: 2px solid var(--admin-primary);
+        outline: 2px solid var(--login-action-bg);
         outline-offset: 2px;
       }
       .login-button {
         border: 0;
-        border-radius: 15px;
-        padding: 11px 12px;
+        border-radius: 10px;
+        padding: 12px;
         font: inherit;
         font-weight: 700;
-        color: var(--admin-primary-text);
-        background: var(--admin-primary);
+        color: var(--login-action-text);
+        background: var(--login-action-bg);
         cursor: pointer;
       }
       .error {
@@ -430,14 +344,23 @@ export function renderAdminLoginHtml(locale: AdminLocale = "en", errorMessage?: 
         color: var(--admin-danger);
         font-weight: 600;
       }
+      .login-session-note {
+        text-align: center;
+      }
+      .login-utility {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding-top: 2px;
+      }
       .language-control {
         display: flex;
-        justify-content: center;
         gap: 6px;
-        margin-top: 14px;
       }
       .language-control a {
-        border-radius: 8px;
+        border-radius: 6px;
         padding: 6px 8px;
         color: var(--admin-muted);
         font-size: 12px;
@@ -448,90 +371,46 @@ export function renderAdminLoginHtml(locale: AdminLocale = "en", errorMessage?: 
         background: var(--admin-surface-hover);
         color: var(--admin-text);
       }
-      @media (max-width: 920px) {
-        .login-shell {
-          grid-template-columns: 1fr;
-          align-items: stretch;
-          min-height: auto;
-        }
-        .login-copy,
-        .login-panel {
-          padding: 28px;
-        }
-        .login-hero {
-          align-content: start;
-        }
-      }
       @media (max-width: 520px) {
         body {
-          place-items: stretch;
-          padding: 0;
+          place-items: start center;
+          padding: 16px;
         }
-        .login-shell {
-          width: 100%;
-          min-height: 100vh;
-          border-radius: 0;
-          border-left: 0;
-          border-right: 0;
-        }
-        .login-copy,
-        .login-panel {
+        .login-card {
+          gap: 16px;
           padding: 22px;
         }
-        .login-flow {
-          grid-template-columns: 1fr;
-        }
-        .login-header {
-          display: grid;
-          gap: 12px;
+        .login-utility {
+          justify-content: center;
         }
       }
     </style>
   </head>
   <body>
     <main class="login-shell" aria-label="${escapeHtml(t("login.mainAria"))}">
-      <section class="login-copy" aria-label="${escapeHtml(t("login.overviewAria"))}">
-        <div class="login-brand">
-          <div class="login-brand-mark" aria-hidden="true"></div>
-          <div class="login-brand-title">Stellive Hub Admin</div>
-        </div>
-        <div class="login-hero">
-          <span class="login-badge">${escapeHtml(t("login.console"))}</span>
-          <h2>${escapeHtml(t("login.hero"))}</h2>
-          <p>${escapeHtml(t("login.description"))}</p>
-          <div class="login-flow">
-            <div class="login-flow-item">
-              <strong>${escapeHtml(t("login.sessionFirst"))}</strong>
-              <p>${escapeHtml(t("login.sessionDescription"))}</p>
-            </div>
-            <div class="login-flow-item">
-              <strong>${escapeHtml(t("login.internalLater"))}</strong>
-              <p>${escapeHtml(t("login.internalDescription"))}</p>
-            </div>
-          </div>
-        </div>
-      </section>
-      <section class="login-panel">
       <form method="post" action="/admin/login" class="login-card" autocomplete="off">
-        <div class="login-header">
-          <div class="login-card-title">
-            <h1>${escapeHtml(t("login.signIn"))}</h1>
-            <p class="login-note">${escapeHtml(t("login.sessionOnly"))}</p>
-          </div>
-          ${renderAdminThemeControl(themeLabels)}
+        <div class="login-brand-title">Stellive Hub Admin</div>
+        <div class="login-card-title">
+          <h1>${escapeHtml(t("login.signIn"))}</h1>
+          <p class="login-description">${escapeHtml(t("login.description"))}</p>
         </div>
         ${errorHtml}
         <label>
-          <span>${escapeHtml(t("login.token"))} <span class="private-badge">${escapeHtml(t("common.private"))}</span></span>
+          <span>${escapeHtml(t("login.token"))}</span>
           <span class="password-wrap">
-            <span class="password-icon" aria-hidden="true">lock</span>
+            <svg class="password-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+              <path d="M7 10V7a5 5 0 0 1 10 0v3M6 10h12a1 1 0 0 1 1 1v9H5v-9a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
             <input name="token" type="password" required autofocus autocomplete="current-password" spellcheck="false" placeholder="${escapeHtml(t("login.tokenPlaceholder"))}">
           </span>
         </label>
         <button class="login-button" type="submit">${escapeHtml(t("login.signIn"))}</button>
+        <p class="login-session-note">${escapeHtml(t("login.sessionOnly"))}</p>
+        <footer class="login-utility">
+          ${renderAdminThemeControl(themeLabels)}
+          ${renderAdminLanguageHtml(locale, "/admin/login")}
+        </footer>
       </form>
-      ${renderAdminLanguageHtml(locale, "/admin/login")}
-      </section>
     </main>
     ${renderAdminThemeBehaviorScript()}
   </body>
