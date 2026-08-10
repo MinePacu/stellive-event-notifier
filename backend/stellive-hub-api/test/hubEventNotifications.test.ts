@@ -358,8 +358,12 @@ describe("HubEvent notification job delivery flow", () => {
         async claimReady() {
           return claimedJobs;
         },
-        async complete(jobId) {
-          completed.push(jobId);
+        async renewLock() {
+          return true;
+        },
+        async complete(input) {
+          completed.push(input.jobId);
+          return true;
         },
         async fail(input) {
           throw new Error(`unexpected fail ${JSON.stringify(input)}`);

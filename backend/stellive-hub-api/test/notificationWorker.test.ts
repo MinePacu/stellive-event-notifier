@@ -104,8 +104,20 @@ function createWorker(options: {
     created: boolean;
   }>;
   clock?: () => Date;
+  renewLock?: (input: { jobId: string; lockedBy: string; now: Date }) => Promise<boolean>;
+  complete?: (input: { jobId: string; lockedBy: string }) => Promise<boolean>;
+  fail?: (input: {
+    jobId: string;
+    lockedBy: string;
+    attempts: number;
+    reason: string;
+    retryAt?: Date;
+    terminal: boolean;
+  }) => Promise<boolean>;
 }) {
   const calls = {
+    claims: [] as Array<{ limit: number; lockedBy: string; now: Date; staleLockMs?: number }>,
+    renewals: [] as Array<{ jobId: string; lockedBy: string; now: Date }>,
     completed: [] as string[],
     failed: [] as unknown[],
     attempts: [] as unknown[],
@@ -138,14 +150,22 @@ function createWorker(options: {
   };
   const worker = new NotificationWorker({
     notificationJobs: {
-      async claimReady() {
+      async claimReady(input) {
+        calls.claims.push(input);
         return options.jobs ?? [job()];
       },
-      async complete(jobId: string) {
-        calls.completed.push(jobId);
+      async renewLock(input) {
+        calls.renewals.push(input);
+        return options.renewLock?.(input) ?? true;
+      },
+      async complete(input) {
+        const completed = await (options.complete?.(input) ?? Promise.resolve(true));
+        if (completed) calls.completed.push(input.jobId);
+        return completed;
       },
       async fail(input: unknown) {
         calls.failed.push(input);
+        return options.fail?.(input as never) ?? true;
       }
     },
     platformEvents: {
@@ -264,22 +284,19 @@ describe("NotificationWorker", () => {
   });
 
   it("captures a fresh evaluation time immediately before each recipient when drain time is not fixed", async () => {
-    const times = [
-      new Date("2026-06-12T00:00:00.000Z"),
-      new Date("2026-06-12T00:00:01.000Z"),
-      new Date("2026-06-12T00:00:02.000Z")
-    ];
+    let tick = 0;
     const { worker, calls } = createWorker({
       devices: [device({ deviceId: "device-1" }), device({ deviceId: "device-2", pushToken: "token-2" })],
-      clock: () => times.shift() ?? new Date("2026-06-12T00:00:03.000Z")
+      clock: () => new Date(Date.UTC(2026, 5, 12, 0, 0, tick++))
     });
 
     await worker.drain();
 
-    expect(calls.resolveContexts).toEqual([
-      { deviceId: "device-1", evaluatedAt: new Date("2026-06-12T00:00:01.000Z"), recentNotificationsInLastMinute: 0 },
-      { deviceId: "device-2", evaluatedAt: new Date("2026-06-12T00:00:02.000Z"), recentNotificationsInLastMinute: 0 }
-    ]);
+    expect(calls.resolveContexts).toHaveLength(2);
+    expect(calls.resolveContexts.map(({ deviceId }) => deviceId)).toEqual(["device-1", "device-2"]);
+    expect(calls.resolveContexts[0].recentNotificationsInLastMinute).toBe(0);
+    expect(calls.resolveContexts[1].recentNotificationsInLastMinute).toBe(0);
+    expect(calls.resolveContexts[1].evaluatedAt.getTime()).toBeGreaterThan(calls.resolveContexts[0].evaluatedAt.getTime());
   });
 
   it("completes stale rescheduled or cancelled schedule jobs without sending", async () => {
@@ -291,6 +308,21 @@ describe("NotificationWorker", () => {
     expect(calls.completed).toEqual(["job-1"]);
     expect(calls.sent).toEqual([]);
     expect(calls.attempts).toEqual([]);
+  });
+
+  it("claims jobs with the configured stale lock window and explicit owner", async () => {
+    const { worker, calls } = createWorker({});
+
+    await worker.drain({ limit: 5, lockedBy: "test-worker", now });
+
+    expect(calls.claims).toEqual([
+      {
+        limit: 5,
+        lockedBy: "test-worker",
+        now,
+        staleLockMs: 300_000
+      }
+    ]);
   });
   it("sends allowed HubEvent pushes and skips blocked devices with delivery attempts", async () => {
     const allowedDevice = device({ deviceId: "allowed-device" });
@@ -444,6 +476,7 @@ describe("NotificationWorker", () => {
     expect(calls.failed).toEqual([
       expect.objectContaining({
         jobId: "job-1",
+        lockedBy: "test-worker",
         attempts: 0,
         reason: "transient_push_failure",
         terminal: false,
@@ -460,7 +493,7 @@ describe("NotificationWorker", () => {
     await worker.drain({ now });
 
     expect(calls.failed).toEqual([
-      expect.objectContaining({ retryAt: new Date("2026-06-12T00:02:05.000Z"), terminal: false })
+      expect.objectContaining({ lockedBy: "test-worker", retryAt: new Date("2026-06-12T00:02:05.000Z"), terminal: false })
     ]);
   });
 
@@ -474,7 +507,7 @@ describe("NotificationWorker", () => {
 
     expect(result).toMatchObject({ claimed: 1, completed: 0, failed: 1, queued: 0, status: "partial" });
     expect(calls.failed).toEqual([
-      expect.objectContaining({ jobId: "job-1", attempts: 4, terminal: true, retryAt: undefined })
+      expect.objectContaining({ jobId: "job-1", lockedBy: "test-worker", attempts: 4, terminal: true, retryAt: undefined })
     ]);
     expect(calls.attempts).toEqual([
       expect.objectContaining({ deviceId: "device-1", status: "failed", retryCount: 4 })
@@ -796,5 +829,70 @@ describe("NotificationWorker", () => {
 
     expect(calls.attempts).toHaveLength(1);
     expect(calls.attemptBatches).toHaveLength(0);
+  });
+
+  it("renews the lease at job start and before each page and preference batch", async () => {
+    const times = [
+      new Date("2026-06-12T00:00:00.000Z"),
+      new Date("2026-06-12T00:00:01.000Z"),
+      new Date("2026-06-12T00:00:02.000Z"),
+      new Date("2026-06-12T00:00:03.000Z"),
+      new Date("2026-06-12T00:00:04.000Z")
+    ];
+    const { worker, calls } = createWorker({
+      sendBatch: async ({ devices: batch }) => batch.map(() => ({ status: "sent", providerMessageId: "message-1" })),
+      clock: () => times.shift() ?? new Date("2026-06-12T00:00:05.000Z")
+    });
+
+    await worker.drain({ lockedBy: "test-worker", now });
+
+    expect(calls.renewals).toEqual([
+      { jobId: "job-1", lockedBy: "test-worker", now: new Date("2026-06-12T00:00:00.000Z") },
+      { jobId: "job-1", lockedBy: "test-worker", now: new Date("2026-06-12T00:00:01.000Z") },
+      { jobId: "job-1", lockedBy: "test-worker", now: new Date("2026-06-12T00:00:02.000Z") },
+      { jobId: "job-1", lockedBy: "test-worker", now: new Date("2026-06-12T00:00:03.000Z") },
+      { jobId: "job-1", lockedBy: "test-worker", now: new Date("2026-06-12T00:00:04.000Z") }
+    ]);
+  });
+
+  it("flushes buffered attempts, marks lock loss, and stops before later claimed jobs after pre-send lease loss", async () => {
+    const devices = [device({ deviceId: "device-1" }), device({ deviceId: "device-2", pushToken: "token-2" })];
+    const jobs = [job({ id: "job-1", eventId: "event-1" }), job({ id: "job-2", eventId: "event-2" })];
+    let renewals = 0;
+    const { worker, calls } = createWorker({
+      jobs,
+      devices,
+      sendBatch: async ({ devices: batch }) =>
+        batch.map((target) => ({ status: "sent", providerMessageId: `message-${target.deviceId}` })),
+      resolve: ({ deviceId }) =>
+        deviceId === "device-1"
+          ? resolution({ deviceId, shouldNotify: false, reason: "global_off" })
+          : resolution({ deviceId }),
+      renewLock: async ({ jobId }) => {
+        renewals += 1;
+        return !(jobId === "job-1" && renewals === 5);
+      }
+    });
+
+    const result = await worker.drain({ lockedBy: "test-worker", now });
+
+    expect(result).toMatchObject({
+      claimed: 2,
+      completed: 0,
+      failed: 0,
+      sent: 0,
+      skipped: 1,
+      queued: 0,
+      status: "partial",
+      reason: "notification_job_lock_lost"
+    });
+    expect(calls.attemptBatches).toEqual([
+      expect.arrayContaining([
+        expect.objectContaining({ deviceId: "device-1", status: "skipped", reason: "global_off" })
+      ])
+    ]);
+    expect(calls.completed).toEqual([]);
+    expect(calls.failed).toEqual([]);
+    expect(calls.sentLookups).toHaveLength(1);
   });
 });

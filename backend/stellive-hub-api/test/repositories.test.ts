@@ -24,6 +24,10 @@ const hubEventTagsMigration = readFileSync(
   resolve(__dirname, "../prisma/migrations/20260726000000_add_hub_event_tags/migration.sql"),
   "utf8"
 );
+const notificationJobLeaseMigration = readFileSync(
+  resolve(__dirname, "../prisma/migrations/20260809120000_add_notification_job_status_locked_at_index/migration.sql"),
+  "utf8"
+);
 
 describe("Prisma hub event admin schema", () => {
   it("stores HubEvent tags as a non-null empty-array default", () => {
@@ -669,6 +673,14 @@ describe("NotificationJobRepository", () => {
       }
     ]);
   });
+
+  it("adds the status/lockedAt index without altering notification job columns", () => {
+    expect(prismaSchema).toContain("@@index([status, lockedAt])");
+    expect(notificationJobLeaseMigration).toContain('CREATE INDEX "NotificationJob_status_lockedAt_idx"');
+    expect(notificationJobLeaseMigration).toContain('ON "NotificationJob"("status", "lockedAt")');
+    expect(notificationJobLeaseMigration).not.toContain("ADD COLUMN");
+    expect(notificationJobLeaseMigration).not.toContain("DROP COLUMN");
+  });
 });
 
 describe("NotificationJobRepository worker operations", () => {
@@ -721,7 +733,12 @@ describe("NotificationJobRepository worker operations", () => {
       {
         method: "findMany",
         args: {
-          where: { status: "queued", runAfter: { lte: lockedAt } },
+          where: {
+            OR: [
+              { status: "queued", runAfter: { lte: lockedAt } },
+              { status: "locked", lockedAt: { lte: new Date("2026-06-11T23:55:00.000Z") } }
+            ]
+          },
           orderBy: [{ priority: "asc" }, { runAfter: "asc" }, { createdAt: "asc" }],
           take: 10
         }
@@ -729,10 +746,67 @@ describe("NotificationJobRepository worker operations", () => {
       {
         method: "updateMany",
         args: {
-          where: { id: { in: ["job-1"] }, status: "queued" },
+          where: {
+            id: "job-1",
+            OR: [
+              { status: "queued", runAfter: { lte: lockedAt } },
+              { status: "locked", lockedAt: { lte: new Date("2026-06-11T23:55:00.000Z") } }
+            ]
+          },
           data: { status: "locked", lockedAt, lockedBy: "worker-1" }
         }
       }
+    ]);
+  });
+
+  it("claims stale locked jobs at the stale boundary but excludes fresh locks", async () => {
+    const repository = new NotificationJobRepository({
+      notificationJob: {
+        async findMany() {
+          return [
+            {
+              id: "stale-job",
+              eventId: "event-1",
+              priority: 1,
+              status: "locked",
+              runAfter,
+              lockedAt: new Date("2026-06-11T23:55:00.000Z"),
+              lockedBy: "worker-a",
+              attempts: 1,
+              lastError: "previous",
+              createdAt: runAfter,
+              updatedAt: runAfter
+            },
+            {
+              id: "fresh-job",
+              eventId: "event-2",
+              priority: 2,
+              status: "locked",
+              runAfter,
+              lockedAt: new Date("2026-06-11T23:58:00.000Z"),
+              lockedBy: "worker-b",
+              attempts: 0,
+              lastError: null,
+              createdAt: runAfter,
+              updatedAt: runAfter
+            }
+          ];
+        },
+        async updateMany(args: { where: { id: string } }) {
+          return { count: args.where.id === "stale-job" ? 1 : 0 };
+        }
+      }
+    });
+
+    const jobs = await repository.claimReady({ limit: 10, lockedBy: "worker-1", now: lockedAt });
+
+    expect(jobs).toEqual([
+      expect.objectContaining({
+        id: "stale-job",
+        attempts: 1,
+        lockedBy: "worker-1",
+        lockedAt
+      })
     ]);
   });
 
@@ -766,41 +840,111 @@ describe("NotificationJobRepository worker operations", () => {
     expect(jobs).toEqual([]);
   });
 
-  it("completes locked jobs", async () => {
-    const calls: unknown[] = [];
+  it("returns only per-candidate CAS successes during partial claims", async () => {
     const repository = new NotificationJobRepository({
       notificationJob: {
-        async update(args: unknown) {
-          calls.push(args);
-          return {};
+        async findMany() {
+          return [
+            {
+              id: "job-1",
+              eventId: "event-1",
+              priority: 1,
+              status: "queued",
+              runAfter,
+              lockedAt: null,
+              attempts: 0,
+              lastError: null,
+              createdAt: runAfter,
+              updatedAt: runAfter
+            },
+            {
+              id: "job-2",
+              eventId: "event-2",
+              priority: 2,
+              status: "queued",
+              runAfter,
+              lockedAt: null,
+              attempts: 0,
+              lastError: null,
+              createdAt: runAfter,
+              updatedAt: runAfter
+            }
+          ];
+        },
+        async updateMany(args: { where: { id: string } }) {
+          return { count: args.where.id === "job-1" ? 1 : 0 };
         }
       }
     });
 
-    await repository.complete("job-1");
+    const jobs = await repository.claimReady({ limit: 10, lockedBy: "worker-1", now: lockedAt });
+
+    expect(jobs.map((claimed) => claimed.id)).toEqual(["job-1"]);
+  });
+
+  it("renews only the current owner's lock", async () => {
+    const calls: unknown[] = [];
+    const repository = new NotificationJobRepository({
+      notificationJob: {
+        async updateMany(args: unknown) {
+          calls.push(args);
+          return { count: 1 };
+        }
+      }
+    });
+
+    await expect(
+      repository.renewLock({ jobId: "job-1", lockedBy: "worker-1", now: lockedAt })
+    ).resolves.toBe(true);
 
     expect(calls).toEqual([
       {
-        where: { id: "job-1" },
-        data: { status: "completed", lockedAt: null, lockedBy: null }
+        where: { id: "job-1", status: "locked", lockedBy: "worker-1" },
+        data: { lockedAt }
       }
     ]);
   });
 
-  it("requeues transient failures with retry time", async () => {
+  it("completes locked jobs only for the current owner", async () => {
+    const calls: unknown[] = [];
+    const repository = new NotificationJobRepository({
+      notificationJob: {
+        async updateMany(args: unknown) {
+          calls.push(args);
+          return { count: 1 };
+        }
+      }
+    });
+
+    await expect(repository.complete({ jobId: "job-1", lockedBy: "worker-1" })).resolves.toBe(true);
+
+    expect(calls).toEqual([
+      {
+        where: { id: "job-1", status: "locked", lockedBy: "worker-1" },
+        data: {
+          status: "completed",
+          lockedAt: null,
+          lockedBy: null
+        }
+      }
+    ]);
+  });
+
+  it("requeues transient failures with retry time only for the current owner", async () => {
     const calls: unknown[] = [];
     const retryAt = new Date("2026-06-12T00:01:00.000Z");
     const repository = new NotificationJobRepository({
       notificationJob: {
-        async update(args: unknown) {
+        async updateMany(args: unknown) {
           calls.push(args);
-          return {};
+          return { count: 1 };
         }
       }
     });
 
     await repository.fail({
       jobId: "job-1",
+      lockedBy: "worker-1",
       attempts: 0,
       reason: "transient_push_failure",
       retryAt,
@@ -809,7 +953,7 @@ describe("NotificationJobRepository worker operations", () => {
 
     expect(calls).toEqual([
       {
-        where: { id: "job-1" },
+        where: { id: "job-1", status: "locked", lockedBy: "worker-1" },
         data: {
           status: "queued",
           lockedAt: null,
@@ -822,19 +966,20 @@ describe("NotificationJobRepository worker operations", () => {
     ]);
   });
 
-  it("marks terminal failures as failed", async () => {
+  it("marks terminal failures as failed only for the current owner", async () => {
     const calls: unknown[] = [];
     const repository = new NotificationJobRepository({
       notificationJob: {
-        async update(args: unknown) {
+        async updateMany(args: unknown) {
           calls.push(args);
-          return {};
+          return { count: 1 };
         }
       }
     });
 
     await repository.fail({
       jobId: "job-1",
+      lockedBy: "worker-1",
       attempts: 4,
       reason: "max_attempts_exceeded",
       terminal: true
@@ -842,7 +987,7 @@ describe("NotificationJobRepository worker operations", () => {
 
     expect(calls).toEqual([
       {
-        where: { id: "job-1" },
+        where: { id: "job-1", status: "locked", lockedBy: "worker-1" },
         data: {
           status: "failed",
           lockedAt: null,

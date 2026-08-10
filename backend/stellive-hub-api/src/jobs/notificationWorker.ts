@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { resolveNotificationDelivery } from "../notification/loadReductionPolicy.js";
 import { buildPushPayload } from "../push/pushPayloadFactory.js";
 import type { PushSendResult } from "../push/fcmClient.js";
@@ -39,7 +40,7 @@ export interface NotificationWorkerDrainResult {
 }
 
 interface NotificationWorkerDependencies {
-  notificationJobs: Pick<NotificationJobRepository, "claimReady" | "complete" | "fail">;
+  notificationJobs: Pick<NotificationJobRepository, "claimReady" | "renewLock" | "complete" | "fail">;
   platformEvents: Pick<PlatformEventRepository, "findById">;
   hubEventSchedules?: {
     isScheduleNotificationCurrent(event: PlatformEvent, now: Date): Promise<boolean>;
@@ -75,9 +76,11 @@ interface DeviceProcessResult {
   summaryEnqueueFailure?: boolean;
   transientFailure?: boolean;
   retryAfterMs?: number;
+  leaseLost?: boolean;
 }
 
 const retryDelaysMs = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000];
+const notificationJobStaleLockMs = 300_000;
 
 function clampDrainLimit(limit: number | undefined): number {
   if (limit === undefined || !Number.isFinite(limit)) return 25;
@@ -132,16 +135,18 @@ export class NotificationWorker {
   async drain(input: NotificationWorkerDrainInput = {}): Promise<NotificationWorkerDrainResult> {
     const now = input.now ?? this.currentTime();
     const limit = clampDrainLimit(input.limit);
-    const lockedBy = input.lockedBy ?? `worker-${process.pid}`;
+    const lockedBy = input.lockedBy ?? `worker-${process.pid}-${randomUUID()}`;
     const jobs = await this.dependencies.notificationJobs.claimReady({
       limit,
       lockedBy,
-      now
+      now,
+      staleLockMs: notificationJobStaleLockMs
     } satisfies ClaimNotificationJobsInput);
     const totals = emptyDrainResult(jobs.length);
 
     for (const claimedJob of jobs) {
-      await this.processJob(claimedJob, totals, now, input.now);
+      const completed = await this.processJob(claimedJob, totals, now, input.now);
+      if (!completed && totals.reason === "notification_job_lock_lost") break;
     }
 
     if (totals.failed > 0) totals.status = "partial";
@@ -153,34 +158,50 @@ export class NotificationWorker {
     totals: MutableDrainTotals,
     now: Date,
     evaluatedAtOverride?: Date
-  ): Promise<void> {
+  ): Promise<boolean> {
+    if (!(await this.renewJobLock(job, totals))) return false;
+
     const event = await this.dependencies.platformEvents.findById(job.eventId);
     if (!event) {
-      await this.dependencies.notificationJobs.fail({
+      const failed = await this.dependencies.notificationJobs.fail({
         jobId: job.id,
+        lockedBy: job.lockedBy,
         attempts: job.attempts,
         reason: "platform_event_missing",
         terminal: true
       });
+      if (!failed) {
+        this.markLockLost(totals);
+        return false;
+      }
       totals.failed += 1;
-      return;
+      return true;
     }
 
     if (
       this.dependencies.hubEventSchedules &&
       !(await this.dependencies.hubEventSchedules.isScheduleNotificationCurrent(event, now))
     ) {
-      await this.dependencies.notificationJobs.complete(job.id);
+      const completed = await this.dependencies.notificationJobs.complete({
+        jobId: job.id,
+        lockedBy: job.lockedBy
+      });
+      if (!completed) {
+        this.markLockLost(totals);
+        return false;
+      }
       totals.completed += 1;
       totals.skipped += 1;
-      return;
+      return true;
     }
 
     let hadTransientFailure = false;
     let hadSummaryEnqueueFailure = false;
     let providerRetryAfterMs: number | undefined;
+    let leaseLost = false;
 
     const processPage = async (devices: PushTargetDevice[]) => {
+      if (!(await this.renewJobLock(job, totals))) return false;
       const sentDeviceIds = await this.dependencies.deliveryAttempts.listSentDeviceIds({
         eventId: event.id,
         deviceIds: devices.map((device) => device.deviceId)
@@ -190,6 +211,7 @@ export class NotificationWorker {
       const attemptBuffer: CreateDeliveryAttemptInput[] = [];
       const preferenceBatchSize = batchSize(this.dependencies.preferenceBatchSize);
       for (let offset = 0; offset < pendingDevices.length; offset += preferenceBatchSize) {
+        if (!(await this.renewJobLock(job, totals, attemptBuffer))) return false;
         const deviceBatch = pendingDevices.slice(offset, offset + preferenceBatchSize);
         const recentSentCounts = await this.dependencies.deliveryAttempts.countSentByDeviceInWindow({
           deviceIds: deviceBatch.map((device) => device.deviceId),
@@ -200,12 +222,13 @@ export class NotificationWorker {
           this.dependencies.preferences,
           deviceBatch.map((device) => device.deviceId)
         );
-        const result = await this.processDeviceBatch({
+      const result = await this.processDeviceBatch({
           event,
           devices: deviceBatch,
           preferences,
           recentSentCounts,
           job,
+          totals,
           now,
           evaluatedAtOverride,
           attemptBuffer
@@ -218,41 +241,60 @@ export class NotificationWorker {
         if (result.providerRetryAfterMs !== undefined) {
           providerRetryAfterMs = Math.max(providerRetryAfterMs ?? 0, result.providerRetryAfterMs);
         }
+        if (result.leaseLost) return false;
       }
       await this.flushAttempts(attemptBuffer);
+      return true;
     };
 
     if (this.dependencies.devices.listPushTargetsPage) {
       let cursor: string | undefined;
       do {
+        if (!(await this.renewJobLock(job, totals))) return false;
         const page = await this.dependencies.devices.listPushTargetsPage({
           cursor,
           limit: batchSize(this.dependencies.deviceBatchSize)
         });
-        await processPage(page.items);
+        if (!(await processPage(page.items))) {
+          leaseLost = true;
+          break;
+        }
         cursor = page.nextCursor ?? undefined;
       } while (cursor);
     } else if (this.dependencies.devices.listPushTargets) {
-      await processPage(await this.dependencies.devices.listPushTargets());
+      if (!(await this.renewJobLock(job, totals))) return false;
+      const devices = await this.dependencies.devices.listPushTargets();
+      if (!(await processPage(devices))) leaseLost = true;
     } else {
       throw new Error("device_push_target_listing_unavailable");
     }
+    if (leaseLost) return false;
 
     if (hadTransientFailure) {
       const terminal = await this.retryOrFailJob(
         job,
         hadSummaryEnqueueFailure ? "summary_enqueue_failure" : "transient_push_failure",
         now,
-        providerRetryAfterMs
+        providerRetryAfterMs,
+        totals
       );
+      if (terminal === undefined) return false;
       if (terminal) totals.failed += 1;
       else totals.queued += 1;
       totals.status = "partial";
-      return;
+      return true;
     }
 
-    await this.dependencies.notificationJobs.complete(job.id);
+    const completed = await this.dependencies.notificationJobs.complete({
+      jobId: job.id,
+      lockedBy: job.lockedBy
+    });
+    if (!completed) {
+      this.markLockLost(totals);
+      return false;
+    }
     totals.completed += 1;
+    return true;
   }
 
   private async processDeviceBatch(input: {
@@ -261,6 +303,7 @@ export class NotificationWorker {
     preferences: UserNotificationPreference[];
     recentSentCounts: Map<string, number>;
     job: ClaimedNotificationJob;
+    totals: MutableDrainTotals;
     now: Date;
     evaluatedAtOverride?: Date;
     attemptBuffer: CreateDeliveryAttemptInput[];
@@ -271,6 +314,7 @@ export class NotificationWorker {
     hadTransientFailure: boolean;
     hadSummaryEnqueueFailure: boolean;
     providerRetryAfterMs?: number;
+    leaseLost?: boolean;
   }> {
     let sent = 0;
     let skipped = 0;
@@ -329,6 +373,9 @@ export class NotificationWorker {
       }
 
       for (const group of groups.values()) {
+        if (!(await this.renewJobLock(input.job, input.totals, input.attemptBuffer))) {
+          return { sent, skipped, queued, hadTransientFailure, hadSummaryEnqueueFailure, providerRetryAfterMs, leaseLost: true };
+        }
         const results = await this.dependencies.pushSender.sendToDevices({
           devices: group.map((item) => item.device),
           payload: group[0].payload
@@ -364,6 +411,7 @@ export class NotificationWorker {
         if (result.retryAfterMs !== undefined) {
           providerRetryAfterMs = Math.max(providerRetryAfterMs ?? 0, result.retryAfterMs);
         }
+        if (result.leaseLost) return { sent, skipped, queued, hadTransientFailure, hadSummaryEnqueueFailure, providerRetryAfterMs, leaseLost: true };
       }
     }
     return { sent, skipped, queued, hadTransientFailure, hadSummaryEnqueueFailure, providerRetryAfterMs };
@@ -375,6 +423,7 @@ export class NotificationWorker {
     preferences: UserNotificationPreference[];
     recentSentCounts: Map<string, number>;
     job: ClaimedNotificationJob;
+    totals: MutableDrainTotals;
     now: Date;
     evaluatedAtOverride?: Date;
     attemptBuffer: CreateDeliveryAttemptInput[];
@@ -421,6 +470,7 @@ export class NotificationWorker {
       resolution,
       deliveryLevel: delivery.deliveryLevel
     });
+    if (!(await this.renewJobLock(input.job, input.totals, input.attemptBuffer))) return { leaseLost: true };
     const sendResult = await this.dependencies.pushSender.sendToDevice({
       device: input.device,
       payload
@@ -566,19 +616,46 @@ export class NotificationWorker {
     job: ClaimedNotificationJob,
     reason: string,
     now: Date,
-    retryAfterMs?: number
-  ): Promise<boolean> {
+    retryAfterMs: number | undefined,
+    totals: MutableDrainTotals
+  ): Promise<boolean | undefined> {
     const nextRun = retryAt(job.attempts, now, retryAfterMs, this.dependencies.random);
     const terminal = nextRun === undefined;
     const input: FailNotificationJobInput = {
       jobId: job.id,
+      lockedBy: job.lockedBy,
       attempts: job.attempts,
       reason,
       terminal,
       retryAt: nextRun
     };
-    await this.dependencies.notificationJobs.fail(input);
+    const failed = await this.dependencies.notificationJobs.fail(input);
+    if (!failed) {
+      this.markLockLost(totals);
+      return undefined;
+    }
     return terminal;
+  }
+
+  private async renewJobLock(
+    job: ClaimedNotificationJob,
+    totals?: MutableDrainTotals,
+    attemptBuffer?: CreateDeliveryAttemptInput[]
+  ): Promise<boolean> {
+    const renewed = await this.dependencies.notificationJobs.renewLock({
+      jobId: job.id,
+      lockedBy: job.lockedBy,
+      now: this.currentTime()
+    });
+    if (renewed) return true;
+    if (attemptBuffer && attemptBuffer.length > 0) await this.flushAttempts(attemptBuffer);
+    if (totals) this.markLockLost(totals);
+    return false;
+  }
+
+  private markLockLost(totals: MutableDrainTotals): void {
+    totals.status = "partial";
+    totals.reason = "notification_job_lock_lost";
   }
 
   private currentTime(): Date {

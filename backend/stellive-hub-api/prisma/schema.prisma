@@ -180,6 +180,7 @@ model NotificationJob {
   updatedAt DateTime @updatedAt
 
   @@index([status, runAfter, priority])
+  @@index([status, lockedAt])
   @@index([eventId])
 }
 

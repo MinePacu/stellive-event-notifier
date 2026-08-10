@@ -66,14 +66,27 @@ export interface ClaimNotificationJobsInput {
   limit: number;
   lockedBy: string;
   now: Date;
+  staleLockMs?: number;
 }
 
 export interface FailNotificationJobInput {
   jobId: string;
+  lockedBy: string;
   attempts: number;
   reason: string;
   retryAt?: Date;
   terminal: boolean;
+}
+
+export interface CompleteNotificationJobInput {
+  jobId: string;
+  lockedBy: string;
+}
+
+export interface RenewNotificationJobLockInput {
+  jobId: string;
+  lockedBy: string;
+  now: Date;
 }
 
 const notificationJobDiagnosticSelect: NotificationJobDiagnosticSelect = {
@@ -125,6 +138,15 @@ function toClaimed(record: NotificationJobRecord, lockedAt: Date, lockedBy: stri
   };
 }
 
+function claimableWhere(now: Date, staleAt: Date): Record<string, unknown> {
+  return {
+    OR: [
+      { status: "queued", runAfter: { lte: now } },
+      { status: "locked", lockedAt: { lte: staleAt } }
+    ]
+  };
+}
+
 export class NotificationJobRepository {
   constructor(private readonly prisma: NotificationJobDelegate = getPrismaClient() as unknown as NotificationJobDelegate) {}
 
@@ -145,33 +167,47 @@ export class NotificationJobRepository {
       throw new Error("notification_job_claim_unavailable");
     }
     const limit = clampLimit(input.limit, 25);
+    const staleAt = new Date(input.now.getTime() - Math.max(0, input.staleLockMs ?? 5 * 60_000));
+    const where = claimableWhere(input.now, staleAt);
     const records = await this.prisma.notificationJob.findMany({
-      where: { status: "queued", runAfter: { lte: input.now } },
+      where,
       orderBy: [{ priority: "asc" }, { runAfter: "asc" }, { createdAt: "asc" }],
       take: limit
     });
     if (records.length === 0) return [];
 
-    const ids = records.map((record) => record.id);
-    const updated = await this.prisma.notificationJob.updateMany({
-      where: { id: { in: ids }, status: "queued" },
-      data: { status: "locked", lockedAt: input.now, lockedBy: input.lockedBy }
-    });
-    if (updated.count !== records.length) return [];
-
-    return records.map((record) => toClaimed(record, input.now, input.lockedBy));
+    const claimed: ClaimedNotificationJob[] = [];
+    for (const record of records) {
+      const updated = await this.prisma.notificationJob.updateMany({
+        where: { id: record.id, ...where },
+        data: { status: "locked", lockedAt: input.now, lockedBy: input.lockedBy }
+      });
+      if (updated.count !== 1) continue;
+      claimed.push(toClaimed(record, input.now, input.lockedBy));
+    }
+    return claimed;
   }
 
-  async complete(jobId: string): Promise<void> {
-    if (!this.prisma.notificationJob.update) throw new Error("notification_job_update_unavailable");
-    await this.prisma.notificationJob.update({
-      where: { id: jobId },
+  async renewLock(input: RenewNotificationJobLockInput): Promise<boolean> {
+    if (!this.prisma.notificationJob.updateMany) throw new Error("notification_job_update_unavailable");
+    const updated = await this.prisma.notificationJob.updateMany({
+      where: { id: input.jobId, status: "locked", lockedBy: input.lockedBy },
+      data: { lockedAt: input.now }
+    });
+    return updated.count === 1;
+  }
+
+  async complete(input: CompleteNotificationJobInput): Promise<boolean> {
+    if (!this.prisma.notificationJob.updateMany) throw new Error("notification_job_update_unavailable");
+    const updated = await this.prisma.notificationJob.updateMany({
+      where: { id: input.jobId, status: "locked", lockedBy: input.lockedBy },
       data: { status: "completed", lockedAt: null, lockedBy: null }
     });
+    return updated.count === 1;
   }
 
-  async fail(input: FailNotificationJobInput): Promise<void> {
-    if (!this.prisma.notificationJob.update) throw new Error("notification_job_update_unavailable");
+  async fail(input: FailNotificationJobInput): Promise<boolean> {
+    if (!this.prisma.notificationJob.updateMany) throw new Error("notification_job_update_unavailable");
     const data: Record<string, unknown> = {
       status: input.terminal ? "failed" : "queued",
       lockedAt: null,
@@ -180,10 +216,11 @@ export class NotificationJobRepository {
       lastError: input.reason
     };
     if (!input.terminal) data.runAfter = input.retryAt;
-    await this.prisma.notificationJob.update({
-      where: { id: input.jobId },
+    const updated = await this.prisma.notificationJob.updateMany({
+      where: { id: input.jobId, status: "locked", lockedBy: input.lockedBy },
       data
     });
+    return updated.count === 1;
   }
 
   async summarize(): Promise<NotificationJobSummary> {
