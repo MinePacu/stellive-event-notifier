@@ -56,6 +56,7 @@ final class ServerHubStore: ObservableObject {
     @Published private(set) var isRefreshingRecentSongs = false
     @Published private(set) var loadingHubEventDetailIds: Set<String> = []
     @Published private(set) var loadingSongDetailIds: Set<String> = []
+    @Published private(set) var preferenceSyncErrorMessage: String?
     @Published private(set) var announcementsSummary: AnnouncementsSummaryResponse?
     @Published private(set) var serviceAnnouncements: [ServiceAnnouncement] = []
     @Published private(set) var announcementNextCursor: String?
@@ -103,30 +104,58 @@ final class ServerHubStore: ObservableObject {
 
     func updatePreferences(_ settings: NotificationSettingsState) async {
         guard let deviceId = deviceIDStore.loadDeviceID() else { return }
+        preferenceSyncErrorMessage = nil
         do {
-            let current = try await api.preferences(deviceId: deviceId)
-            let updatedAt = ISO8601DateFormatter().string(from: Date())
-            let preserved = current.preferences.filter { $0.scope != "global" }
-            let global = PreferenceResponse(
-                deviceId: deviceId,
-                scope: "global",
-                enabled: settings.globalEnabled,
-                explicitOverride: true,
-                tapAction: settings.tapAction == .openApp ? "open_app" : "open_platform",
-                deliveryMode: settings.realtimeEnabled ? "realtime_best_effort" : "standard",
-                serviceAnnouncementsEnabled: settings.serviceAnnouncementsEnabled,
-                updatedAt: updatedAt
-            )
-            _ = try await api.updatePreferences(
-                UpdatePreferencesRequest(
-                    deviceId: deviceId,
-                    preferences: preserved + [global],
-                    clientUpdatedAt: updatedAt
-                )
-            )
+            var current = try await api.preferences(deviceId: deviceId)
+            for attempt in 0..<2 {
+                do {
+                    _ = try await api.updatePreferences(
+                        preferenceUpdateRequest(deviceId: deviceId, settings: settings, current: current)
+                    )
+                    return
+                } catch HubAPIError.httpStatus(409) where attempt == 0 {
+                    current = try await api.preferences(deviceId: deviceId)
+                } catch HubAPIError.httpStatus(409) {
+                    preferenceSyncErrorMessage = "설정 동기화가 충돌했습니다. 다시 시도해 주세요."
+                    return
+                }
+            }
         } catch {
             // Local settings remain usable while the next change retries server synchronization.
         }
+    }
+
+    private func preferenceUpdateRequest(
+        deviceId: String,
+        settings: NotificationSettingsState,
+        current: PreferencesResponse
+    ) -> UpdatePreferencesRequest {
+        let updatedAt = ISO8601DateFormatter().string(from: Date())
+        let preserved = current.preferences.filter { $0.scope != "global" }
+        let global = PreferenceResponse(
+            deviceId: deviceId,
+            scope: "global",
+            generationId: nil,
+            memberId: nil,
+            source: nil,
+            eventType: nil,
+            enabled: settings.globalEnabled,
+            explicitOverride: true,
+            tapAction: settings.tapAction == .openApp ? "open_app" : "open_platform",
+            deliveryMode: settings.realtimeEnabled ? "realtime_best_effort" : "standard",
+            realtimePreference: nil,
+            quietHours: nil,
+            keywordsAllowlist: nil,
+            keywordsBlocklist: nil,
+            maxNotificationsPerMinute: nil,
+            serviceAnnouncementsEnabled: settings.serviceAnnouncementsEnabled,
+            updatedAt: updatedAt
+        )
+        return UpdatePreferencesRequest(
+            deviceId: deviceId,
+            preferences: preserved + [global],
+            expectedRevision: current.revision
+        )
     }
 
     func refreshHubEvents(filter: String = "all", from: Date? = nil, to: Date? = nil) async {

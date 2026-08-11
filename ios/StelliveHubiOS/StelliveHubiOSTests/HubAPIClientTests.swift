@@ -469,12 +469,12 @@ final class ServerHubStoreTests: XCTestCase {
             requests.append(request)
             if request.httpMethod == "GET" {
                 return jsonResponse(statusCode: 200, body: """
-                    {"deviceId":"device-1","preferences":[{"deviceId":"device-1","scope":"member","enabled":true,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","serviceAnnouncementsEnabled":null,"updatedAt":"2026-07-06T00:00:00Z"}],"updatedAt":"2026-07-06T00:00:00Z","conflict":null}
+                    {"deviceId":"device-1","preferences":[{"deviceId":"device-1","scope":"member","memberId":"akane-lize","enabled":true,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","serviceAnnouncementsEnabled":null,"updatedAt":"2026-07-06T00:00:00Z"}],"updatedAt":"2026-07-06T00:00:00Z","revision":7}
                     """)
             }
             updateBody = request.httpBody ?? request.httpBodyStream.flatMap(Self.readAll)
             return jsonResponse(statusCode: 200, body: """
-                {"deviceId":"device-1","preferences":[],"updatedAt":"2026-07-06T00:00:00Z","conflict":null}
+                {"deviceId":"device-1","preferences":[],"updatedAt":"2026-07-06T00:00:00Z","revision":8}
                 """)
         }
 
@@ -487,8 +487,90 @@ final class ServerHubStoreTests: XCTestCase {
         let body = try XCTUnwrap(updateBody)
         let request = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: body)
         XCTAssertEqual(request.preferences.map(\.scope), ["member", "global"])
+        XCTAssertEqual(request.preferences.first?.memberId, "akane-lize")
         XCTAssertEqual(request.preferences.last?.enabled, false)
         XCTAssertEqual(request.preferences.last?.serviceAnnouncementsEnabled, false)
+        XCTAssertEqual(request.expectedRevision, 7)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertNil(json["clientUpdatedAt"])
+        XCTAssertEqual(json["expectedRevision"] as? Int, 7)
+    }
+
+    func testUpdatePreferencesRefetchesAndRebasesGlobalChangeOnceAfterConflict() async throws {
+        var getCount = 0
+        var putBodies: [Data] = []
+        let store = makeStore { request in
+            if request.httpMethod == "GET" {
+                getCount += 1
+                if getCount == 1 {
+                    return jsonResponse(statusCode: 200, body: """
+                        {"deviceId":"device-1","preferences":[{"deviceId":"device-1","scope":"member","memberId":"akane-lize","enabled":true,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","updatedAt":"2026-07-06T00:00:00Z"}],"updatedAt":"2026-07-06T00:00:00Z","revision":7}
+                        """)
+                }
+                return jsonResponse(statusCode: 200, body: """
+                    {"deviceId":"device-1","preferences":[{"deviceId":"device-1","scope":"generation","generationId":"gen3","enabled":true,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","keywordsBlocklist":["spoiler"],"quietHours":{"enabled":true,"start":"23:00","end":"07:00","timezone":"Asia/Seoul"},"updatedAt":"2026-07-06T00:00:01Z"}],"updatedAt":"2026-07-06T00:00:01Z","revision":8}
+                    """)
+            }
+            putBodies.append(request.httpBody ?? request.httpBodyStream.flatMap(Self.readAll) ?? Data())
+            if putBodies.count == 1 {
+                return jsonResponse(statusCode: 409, body: #"{"error":"preference_conflict"}"#)
+            }
+            return jsonResponse(statusCode: 200, body: """
+                {"deviceId":"device-1","preferences":[],"updatedAt":"2026-07-06T00:00:02Z","revision":9}
+                """)
+        }
+
+        var settings = NotificationSettingsState()
+        settings.globalEnabled = false
+        await store.updatePreferences(settings)
+
+        XCTAssertEqual(getCount, 2)
+        XCTAssertEqual(putBodies.count, 2)
+        let first = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: putBodies[0])
+        let second = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: putBodies[1])
+        XCTAssertEqual(first.expectedRevision, 7)
+        XCTAssertEqual(first.preferences.map(\.scope), ["member", "global"])
+        XCTAssertEqual(second.expectedRevision, 8)
+        XCTAssertEqual(second.preferences.map(\.scope), ["generation", "global"])
+        XCTAssertEqual(second.preferences.first?.generationId, "gen3")
+        XCTAssertEqual(second.preferences.first?.keywordsBlocklist, ["spoiler"])
+        XCTAssertEqual(second.preferences.first?.quietHours?.timezone, "Asia/Seoul")
+        XCTAssertEqual(second.preferences.last?.enabled, false)
+        XCTAssertNil(store.preferenceSyncErrorMessage)
+    }
+
+    func testUpdatePreferencesExposesFailureAfterSecondConflictAndClearsItOnSuccess() async {
+        var getCount = 0
+        var putCount = 0
+        var shouldConflict = true
+        let store = makeStore { request in
+            if request.httpMethod == "GET" {
+                getCount += 1
+                return jsonResponse(statusCode: 200, body: """
+                    {"deviceId":"device-1","preferences":[],"updatedAt":"2026-07-06T00:00:00Z","revision":\(getCount)}
+                    """)
+            }
+            putCount += 1
+            if shouldConflict {
+                return jsonResponse(statusCode: 409, body: #"{"error":"preference_conflict"}"#)
+            }
+            return jsonResponse(statusCode: 200, body: """
+                {"deviceId":"device-1","preferences":[],"updatedAt":"2026-07-06T00:00:01Z","revision":99}
+                """)
+        }
+
+        await store.updatePreferences(NotificationSettingsState())
+
+        XCTAssertEqual(getCount, 2)
+        XCTAssertEqual(putCount, 2)
+        XCTAssertNotNil(store.preferenceSyncErrorMessage)
+
+        shouldConflict = false
+        await store.updatePreferences(NotificationSettingsState())
+
+        XCTAssertEqual(getCount, 3)
+        XCTAssertEqual(putCount, 3)
+        XCTAssertNil(store.preferenceSyncErrorMessage)
     }
 
     private static func readAll(from stream: InputStream) -> Data? {

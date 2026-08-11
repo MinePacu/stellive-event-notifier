@@ -9,6 +9,7 @@ import { resolveNotificationDelivery } from "../notification/loadReductionPolicy
 import { PreferenceResolutionService } from "../preferences/preferenceResolution.js";
 import { RealtimeDeliveryService } from "../realtime/realtimeDeliveryService.js";
 import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
+import type { PreferenceSnapshot } from "../repositories/preferenceRepository.js";
 import { registerAppRoutes } from "./appRoutes.js";
 import { registerServiceAnnouncementRoutes } from "./serviceAnnouncementRoutes.js";
 import type { ServiceAnnouncementReadService } from "../announcements/serviceAnnouncementReadService.js";
@@ -79,11 +80,12 @@ export interface AppRouteDependencies {
   };
   preferences?: {
     listForDevice?(deviceId: string): Promise<UserNotificationPreference[]>;
+    getSnapshotForDevice?(deviceId: string): Promise<PreferenceSnapshot>;
     replaceForDevice?(input: {
       deviceId: string;
       preferences: UserNotificationPreference[];
-      clientUpdatedAt: string;
-    }): Promise<{ preferences: UserNotificationPreference[]; updatedAt: string }>;
+      expectedRevision: number;
+    }): Promise<PreferenceSnapshot>;
   };
   serviceTopicSubscriptions?: {
     syncToken?(input: { token: string; preferences: UserNotificationPreference[] }): Promise<unknown>;

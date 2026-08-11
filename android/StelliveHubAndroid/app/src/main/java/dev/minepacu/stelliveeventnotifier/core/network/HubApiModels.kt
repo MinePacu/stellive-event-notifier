@@ -56,8 +56,19 @@ data class PreferenceDto(
     val tapAction: String,
     val deliveryMode: String,
     val realtimePreference: String? = null,
+    val quietHours: PreferenceQuietHoursDto? = null,
+    val keywordsAllowlist: List<String>? = null,
+    val keywordsBlocklist: List<String>? = null,
+    val maxNotificationsPerMinute: Int? = null,
     val serviceAnnouncementsEnabled: Boolean? = null,
     val updatedAt: String,
+)
+
+data class PreferenceQuietHoursDto(
+    val enabled: Boolean,
+    val start: String,
+    val end: String,
+    val timezone: String,
 )
 
 data class LiveStatusDto(
@@ -394,18 +405,18 @@ data class PreferencesResponseDto(
     val deviceId: String,
     val preferences: List<PreferenceDto>,
     val updatedAt: String,
-    val conflict: String? = null,
+    val revision: Int,
 )
 
 data class UpdatePreferencesRequestDto(
     val deviceId: String,
     val preferences: List<PreferenceDto>,
-    val clientUpdatedAt: String,
+    val expectedRevision: Int,
 )
 
 data class UpdatePreferencesResponseDto(
     val deviceId: String,
     val preferences: List<PreferenceDto>,
     val updatedAt: String,
-    val conflict: String? = null,
+    val revision: Int,
 )

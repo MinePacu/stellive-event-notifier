@@ -1,7 +1,7 @@
 import type { LiveStatusDiagnostic } from "../admin/adminTypes.js";
 import { getPrismaClient } from "../storage/prisma.js";
 
-interface LiveStatusRecord {
+export interface LiveStatusRecord {
   memberId: string;
   generationId: string;
   isLive: boolean;

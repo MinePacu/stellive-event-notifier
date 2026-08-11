@@ -114,7 +114,7 @@ export class AdminHealthService {
     try {
       return await this.jobs.summarize();
     } catch {
-      return { queued: 0, locked: 0, completed: 0, failed: 0 };
+      return { queued: 0, locked: 0, completed: 0, failed: 0, missingJobCount: 0 };
     }
   }
 

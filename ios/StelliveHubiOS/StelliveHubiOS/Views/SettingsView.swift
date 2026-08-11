@@ -241,6 +241,15 @@ struct SettingsContentView: View {
         )
 
         Form {
+            if let message = serverStore.preferenceSyncErrorMessage {
+                Section {
+                    Label(message, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                        .accessibilityIdentifier("preference-sync-error")
+                }
+            }
+
             Section("알림 기본 설정") {
                 Toggle("전체 알림", isOn: persistedToggle(\.globalEnabled))
                 Toggle("서비스 공지", isOn: persistedToggle(\.serviceAnnouncementsEnabled))

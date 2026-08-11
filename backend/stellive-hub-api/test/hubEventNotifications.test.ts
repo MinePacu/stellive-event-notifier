@@ -270,6 +270,107 @@ describe("hub event notification candidates", () => {
     expect(jobs[1]).toEqual({ eventId: platformEvents[1].id, priority: 5, runAfter: new Date("2026-06-13T00:00:00.000Z") });
     expect(platformEvents.every((event) => event.rawPayload && typeof event.rawPayload === "object")).toBe(true);
   });
+
+  it("repairs an existing platform event that is missing its notification job", async () => {
+    const fake = createRepository(adminEvent());
+    const jobs: Array<{ eventId: string; priority: number; runAfter?: Date }> = [];
+    const service = new HubEventAdminService({
+      catalog: new CatalogService(),
+      repository: fake.repository,
+      platformEvents: {
+        async createIfNotExists(event) {
+          return { created: false, eventId: event.id };
+        }
+      },
+      notificationJobs: {
+        async enqueue(input) {
+          jobs.push(input);
+        }
+      },
+      now: () => now
+    });
+
+    await service.publish("event-1", { actorId: "admin" });
+
+    expect(jobs).toEqual([
+      { eventId: "hub_event:event-1:event_announced:2", priority: 5 },
+      {
+        eventId: "hub_event:event-1:schedule:schedule-sales-open:event_sales_open:2026-06-13T00:00:00.000Z:r2",
+        priority: 5,
+        runAfter: new Date("2026-06-13T00:00:00.000Z")
+      }
+    ]);
+  });
+
+  it("rolls back the HubEvent, audit, platform events, and jobs when a later candidate fails", async () => {
+    const before = adminEvent();
+    const fake = createRepository(before);
+    let persistedEvent = before;
+    const persistedAudits: HubEventAuditLogInput[] = [];
+    const persistedPlatformEvents: PlatformEvent[] = [];
+    const persistedJobs: Array<{ eventId: string; priority: number; runAfter?: Date }> = [];
+    let transactionRuns = 0;
+
+    const service = new HubEventAdminService({
+      catalog: new CatalogService(),
+      repository: fake.repository,
+      platformEvents: { async createIfNotExists() { return { created: false }; } },
+      notificationJobs: { async enqueue() { return undefined; } },
+      unitOfWork: {
+        async run(work) {
+          transactionRuns += 1;
+          let transactionEvent = persistedEvent;
+          const transactionAudits: HubEventAuditLogInput[] = [];
+          const transactionPlatformEvents: PlatformEvent[] = [];
+          const transactionJobs: Array<{ eventId: string; priority: number; runAfter?: Date }> = [];
+          const result = await work({
+            hubEvents: {
+              ...fake.repository,
+              async setPublicationState(input) {
+                transactionEvent = adminEvent({
+                  ...transactionEvent,
+                  publicationState: input.publicationState,
+                  publishedAt: input.publishedAt?.toISOString(),
+                  revision: transactionEvent.revision + 1
+                });
+                return transactionEvent;
+              },
+              async writeAuditLog(input) {
+                transactionAudits.push(input);
+              }
+            },
+            platformEvents: {
+              async createIfNotExists(event) {
+                transactionPlatformEvents.push(event);
+                return { created: true, eventId: event.id };
+              }
+            },
+            notificationJobs: {
+              async enqueue(input) {
+                transactionJobs.push(input);
+                if (transactionJobs.length === 2) throw new Error("second_candidate_failed");
+                return { created: true };
+              }
+            }
+          });
+          persistedEvent = transactionEvent;
+          persistedAudits.push(...transactionAudits);
+          persistedPlatformEvents.push(...transactionPlatformEvents);
+          persistedJobs.push(...transactionJobs);
+          return result;
+        }
+      },
+      now: () => now
+    });
+
+    await expect(service.publish("event-1", { actorId: "admin" })).rejects.toThrow("second_candidate_failed");
+
+    expect(transactionRuns).toBe(1);
+    expect(persistedEvent).toBe(before);
+    expect(persistedAudits).toEqual([]);
+    expect(persistedPlatformEvents).toEqual([]);
+    expect(persistedJobs).toEqual([]);
+  });
 });
 
 describe("HubEvent notification job delivery flow", () => {

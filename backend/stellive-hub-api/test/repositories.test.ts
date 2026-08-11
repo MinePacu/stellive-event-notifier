@@ -9,6 +9,7 @@ import { HubEventRepository } from "../src/hub-events/hubEventRepository.js";
 import { NotificationJobRepository } from "../src/jobs/notificationJobRepository.js";
 import { PlatformApiStateRepository } from "../src/repositories/platformApiStateRepository.js";
 import { ExternalApiCallLogRepository } from "../src/repositories/externalApiCallLogRepository.js";
+import type { PlatformEvent } from "../src/types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const prismaSchema = readFileSync(resolve(__dirname, "../prisma/schema.prisma"), "utf8");
@@ -26,6 +27,10 @@ const hubEventTagsMigration = readFileSync(
 );
 const notificationJobLeaseMigration = readFileSync(
   resolve(__dirname, "../prisma/migrations/20260809120000_add_notification_job_status_locked_at_index/migration.sql"),
+  "utf8"
+);
+const notificationJobUniquenessMigration = readFileSync(
+  resolve(__dirname, "../prisma/migrations/20260810090000_make_notification_job_event_id_unique/migration.sql"),
   "utf8"
 );
 
@@ -243,6 +248,40 @@ describe("Prisma external API call log schema", () => {
 });
 
 describe("PlatformEventRepository", () => {
+  it("uses conflict-safe insertion and returns the stored id for a dedupe-key duplicate", async () => {
+    const createMany = vi.fn(async () => ({ count: 0 }));
+    const findFirst = vi.fn(async () => ({ id: "stored-event" }));
+    const repository = new PlatformEventRepository({
+      platformEvent: { createMany, findFirst }
+    });
+    const candidate: PlatformEvent = {
+      id: "incoming-event",
+      source: "chzzk",
+      type: "chzzk_live_started",
+      memberId: "ayatsuno-yuni",
+      generationId: "gen1",
+      title: "Live",
+      body: "Started",
+      platformUrl: "https://chzzk.naver.com/live/channel",
+      appDeepLink: "stellivehub://members/ayatsuno-yuni",
+      occurredAt: "2026-06-11T03:00:00.000Z",
+      receivedAt: "2026-06-11T03:05:00.000Z",
+      dedupeKey: "chzzk:chzzk_live_started:channel:2026-06-11T03:00:00.000Z",
+      realtimeEligible: true,
+      deliveryMode: "realtime_best_effort"
+    };
+
+    await expect(repository.createIfNotExists(candidate)).resolves.toEqual({
+      created: false,
+      eventId: "stored-event"
+    });
+    expect(createMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }));
+    expect(findFirst).toHaveBeenCalledWith({
+      where: { OR: [{ id: candidate.id }, { dedupeKey: candidate.dedupeKey }] },
+      select: { id: true }
+    });
+  });
+
   it("loads a normalized platform event by id", async () => {
     const prisma = {
       platformEvent: {
@@ -652,9 +691,9 @@ describe("NotificationJobRepository", () => {
     const calls: unknown[] = [];
     const prisma = {
       notificationJob: {
-        create: async (args: unknown) => {
+        createMany: async (args: unknown) => {
           calls.push(args);
-          return args;
+          return { count: 1 };
         }
       }
     };
@@ -669,9 +708,22 @@ describe("NotificationJobRepository", () => {
           eventId: "event-1",
           priority: 3,
           status: "queued"
-        }
+        },
+        skipDuplicates: true
       }
     ]);
+  });
+
+  it.each(["completed", "failed"])("does not overwrite an existing %s job", async (status) => {
+    const existing = { eventId: "event-1", status, attempts: 3, lastError: "preserved" };
+    const createMany = vi.fn(async () => ({ count: 0 }));
+    const repository = new NotificationJobRepository({ notificationJob: { createMany } });
+
+    await expect(repository.enqueue({ eventId: "event-1", priority: 1 })).resolves.toEqual({ created: false });
+
+    expect(existing).toEqual({ eventId: "event-1", status, attempts: 3, lastError: "preserved" });
+    expect(createMany).toHaveBeenCalledOnce();
+    expect(createMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }));
   });
 
   it("adds the status/lockedAt index without altering notification job columns", () => {
@@ -680,6 +732,50 @@ describe("NotificationJobRepository", () => {
     expect(notificationJobLeaseMigration).toContain('ON "NotificationJob"("status", "lockedAt")');
     expect(notificationJobLeaseMigration).not.toContain("ADD COLUMN");
     expect(notificationJobLeaseMigration).not.toContain("DROP COLUMN");
+  });
+
+  it("deduplicates jobs deterministically, recovers only safe orphans, and makes eventId unique", () => {
+    expect(prismaSchema).toContain("eventId   String   @unique");
+    expect(notificationJobUniquenessMigration).toContain('PARTITION BY "eventId"');
+    expect(notificationJobUniquenessMigration).toMatch(/WHEN 'completed' THEN 0[\s\S]*WHEN 'locked' THEN 1[\s\S]*WHEN 'queued' THEN 2[\s\S]*WHEN 'failed' THEN 3/);
+    expect(notificationJobUniquenessMigration).toMatch(/"attempts" DESC,[\s\S]*"runAfter" ASC,[\s\S]*"createdAt" ASC,[\s\S]*"id" ASC/);
+    expect(notificationJobUniquenessMigration).toContain("CURRENT_TIMESTAMP - INTERVAL '15 minutes'");
+    expect(notificationJobUniquenessMigration).toContain('event."receivedAt" <= CURRENT_TIMESTAMP');
+    expect(notificationJobUniquenessMigration).toContain('event."occurredAt" > CURRENT_TIMESTAMP');
+    expect(notificationJobUniquenessMigration).toContain("event.\"metadata\" ? 'scheduleItemId'");
+    expect(notificationJobUniquenessMigration).toContain('CASE WHEN event."realtimeEligible" THEN 1 ELSE 5 END');
+    expect(notificationJobUniquenessMigration).toContain('CREATE UNIQUE INDEX "NotificationJob_eventId_key"');
+  });
+
+  it("reports platform events that are missing notification jobs", async () => {
+    const oldestMissingJobReceivedAt = new Date("2026-06-10T00:00:00.000Z");
+    let diagnosticQuery = "";
+    const repository = new NotificationJobRepository({
+      async $queryRawUnsafe(query: string) {
+        diagnosticQuery = query;
+        return [{ missingJobCount: 3n, oldestMissingJobReceivedAt }];
+      },
+      notificationJob: {
+        async groupBy() {
+          return [{ status: "queued", _count: { status: 2 } }];
+        },
+        async findFirst() {
+          return { runAfter: new Date("2026-06-11T00:00:00.000Z") };
+        }
+      }
+    });
+
+    await expect(repository.summarize()).resolves.toEqual({
+      queued: 2,
+      locked: 0,
+      completed: 0,
+      failed: 0,
+      oldestQueuedAt: "2026-06-11T00:00:00.000Z",
+      missingJobCount: 3,
+      oldestMissingJobReceivedAt: "2026-06-10T00:00:00.000Z"
+    });
+    expect(diagnosticQuery).toContain('LEFT JOIN "NotificationJob"');
+    expect(diagnosticQuery).toContain('WHERE job."id" IS NULL');
   });
 });
 

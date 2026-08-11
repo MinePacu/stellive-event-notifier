@@ -26,12 +26,50 @@ interface PreferenceRecord {
   updatedAt: Date | string;
 }
 
-interface PreferenceDelegate {
+interface PreferenceSnapshotRecord {
+  deviceId: string;
+  revision: number;
+  updatedAt: Date | string;
+}
+
+interface PreferenceTransactionClient {
   notificationPreference: {
     findMany(args: unknown): Promise<PreferenceRecord[]>;
     deleteMany(args: { where: { deviceId: string } }): Promise<unknown>;
     createMany(args: { data: PreferenceRecord[] }): Promise<unknown>;
   };
+  notificationPreferenceSnapshot: {
+    findUnique(args: {
+      where: { deviceId: string };
+    }): Promise<PreferenceSnapshotRecord | null>;
+    updateMany(args: {
+      where: { deviceId: string; revision: number };
+      data: { revision: { increment: number }; updatedAt: Date };
+    }): Promise<{ count: number }>;
+    create(args: {
+      data: { deviceId: string; revision: number; updatedAt: Date };
+    }): Promise<PreferenceSnapshotRecord>;
+  };
+}
+
+interface PreferenceDelegate extends PreferenceTransactionClient {
+  $transaction<T>(
+    operation: (transaction: PreferenceTransactionClient) => Promise<T>,
+    options: { isolationLevel: "RepeatableRead" | "Serializable" },
+  ): Promise<T>;
+}
+
+export interface PreferenceSnapshot {
+  preferences: UserNotificationPreference[];
+  revision: number;
+  updatedAt: string;
+}
+
+export class PreferenceConflictError extends Error {
+  constructor() {
+    super("preference snapshot revision conflict");
+    this.name = "PreferenceConflictError";
+  }
 }
 
 function definedPreferenceData(
@@ -60,6 +98,20 @@ function definedPreferenceData(
 
 function toIsoString(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value;
+}
+
+function errorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object" || !("code" in error)) return undefined;
+  return typeof error.code === "string" ? error.code : undefined;
+}
+
+function latestUpdatedAt(records: PreferenceRecord[]): string {
+  return (
+    records
+      .map((record) => toIsoString(record.updatedAt))
+      .sort()
+      .at(-1) ?? new Date(0).toISOString()
+  );
 }
 
 function toPreferenceData(value: unknown): PreferenceData {
@@ -124,6 +176,27 @@ export default class PreferenceRepository {
     return records.map(toPreference);
   }
 
+  async getSnapshotForDevice(deviceId: string): Promise<PreferenceSnapshot> {
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const snapshot = await transaction.notificationPreferenceSnapshot.findUnique({
+          where: { deviceId },
+        });
+        const records = await transaction.notificationPreference.findMany({
+          where: { deviceId },
+          orderBy: { updatedAt: "desc" },
+        });
+
+        return {
+          preferences: records.map(toPreference),
+          revision: snapshot?.revision ?? 0,
+          updatedAt: snapshot ? toIsoString(snapshot.updatedAt) : latestUpdatedAt(records),
+        };
+      },
+      { isolationLevel: "RepeatableRead" },
+    );
+  }
+
   async listForDevices(deviceIds: string[]): Promise<UserNotificationPreference[]> {
     if (deviceIds.length === 0) return [];
     const records = await this.prisma.notificationPreference.findMany({
@@ -136,23 +209,69 @@ export default class PreferenceRepository {
   async replaceForDevice(input: {
     deviceId: string;
     preferences: UserNotificationPreference[];
-    clientUpdatedAt: string;
-  }): Promise<{ preferences: UserNotificationPreference[]; updatedAt: string }> {
-    const updatedAt = this.now();
-    const records = input.preferences.map((preference) =>
-      toRecord(input.deviceId, preference, updatedAt),
-    );
+    expectedRevision: number;
+  }): Promise<PreferenceSnapshot> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(
+          async (transaction) => {
+            const updatedAt = this.now();
+            const records = input.preferences.map((preference) =>
+              toRecord(input.deviceId, preference, updatedAt),
+            );
 
-    await this.prisma.notificationPreference.deleteMany({
-      where: { deviceId: input.deviceId },
-    });
-    if (records.length > 0) {
-      await this.prisma.notificationPreference.createMany({ data: records });
+            const advanced = await transaction.notificationPreferenceSnapshot.updateMany({
+              where: {
+                deviceId: input.deviceId,
+                revision: input.expectedRevision,
+              },
+              data: {
+                revision: { increment: 1 },
+                updatedAt,
+              },
+            });
+
+            if (advanced.count === 0) {
+              const current = await transaction.notificationPreferenceSnapshot.findUnique({
+                where: { deviceId: input.deviceId },
+              });
+              if (current || input.expectedRevision !== 0) {
+                throw new PreferenceConflictError();
+              }
+              await transaction.notificationPreferenceSnapshot.create({
+                data: {
+                  deviceId: input.deviceId,
+                  revision: 1,
+                  updatedAt,
+                },
+              });
+            }
+
+            await transaction.notificationPreference.deleteMany({
+              where: { deviceId: input.deviceId },
+            });
+            if (records.length > 0) {
+              await transaction.notificationPreference.createMany({ data: records });
+            }
+
+            return {
+              preferences: records.map(toPreference),
+              revision: input.expectedRevision + 1,
+              updatedAt: updatedAt.toISOString(),
+            };
+          },
+          { isolationLevel: "Serializable" },
+        );
+      } catch (error) {
+        const code = errorCode(error);
+        if (code === "P2034" && attempt === 0) continue;
+        if (code === "P2002" && input.expectedRevision === 0) {
+          throw new PreferenceConflictError();
+        }
+        throw error;
+      }
     }
 
-    return {
-      preferences: records.map(toPreference),
-      updatedAt: updatedAt.toISOString(),
-    };
+    throw new Error("unreachable preference transaction retry state");
   }
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ChzzkOpenApiAdapter } from "../src/adapters/chzzk/chzzkOpenApiAdapter.js";
+import ChzzkEventIngestor from "../src/events/chzzkEventIngestor.js";
 
 describe("ChzzkOpenApiAdapter observed startedAt fallback", () => {
   it("interprets timezone-less CHZZK openDate values as Korea time", async () => {
@@ -27,14 +28,7 @@ describe("ChzzkOpenApiAdapter observed startedAt fallback", () => {
           sourceVerificationState: "verified"
         }))
       },
-      liveStatusRepository: {
-        getByMemberId: vi.fn(async () => null),
-        upsertLiveStatus: vi.fn(async (input) => {
-          writes.push(input);
-          return input;
-        })
-      },
-      ingestEvent: vi.fn(),
+      observationWriter: observationWriter(null, writes),
       clock: () => new Date("2026-06-15T11:00:00.000Z")
     } as any);
 
@@ -69,14 +63,7 @@ describe("ChzzkOpenApiAdapter observed startedAt fallback", () => {
           sourceVerificationState: "verified"
         }))
       },
-      liveStatusRepository: {
-        getByMemberId: vi.fn(async () => null),
-        upsertLiveStatus: vi.fn(async (input) => {
-          writes.push(input);
-          return input;
-        })
-      },
-      ingestEvent: vi.fn(),
+      observationWriter: observationWriter(null, writes),
       clock: () => now
     } as any);
 
@@ -113,18 +100,11 @@ describe("ChzzkOpenApiAdapter observed startedAt fallback", () => {
           sourceVerificationState: "verified"
         }))
       },
-      liveStatusRepository: {
-        getByMemberId: vi.fn(async () => ({
-          isLive: true,
-          startedAt: previousStartedAt,
-          lastTransitionAt: previousStartedAt
-        })),
-        upsertLiveStatus: vi.fn(async (input) => {
-          writes.push(input);
-          return input;
-        })
-      },
-      ingestEvent: vi.fn(),
+      observationWriter: observationWriter({
+        isLive: true,
+        startedAt: previousStartedAt,
+        lastTransitionAt: previousStartedAt
+      }, writes),
       clock: () => now
     } as any);
 
@@ -135,3 +115,25 @@ describe("ChzzkOpenApiAdapter observed startedAt fallback", () => {
     expect(writes[0].lastTransitionAt?.toISOString()).toBe("2026-06-15T11:00:00.000Z");
   });
 });
+
+function observationWriter(previous: unknown, writes: unknown[]) {
+  return new ChzzkEventIngestor({
+    async runInTransaction(work) {
+      return work({
+        liveStatuses: {
+          getByMemberId: vi.fn(async () => previous),
+          upsertLiveStatus: vi.fn(async (input) => {
+            writes.push(input);
+            return input;
+          })
+        },
+        platformEvents: {
+          createIfNotExists: vi.fn()
+        },
+        notificationJobs: {
+          enqueue: vi.fn()
+        }
+      } as never);
+    }
+  });
+}

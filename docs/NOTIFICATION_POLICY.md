@@ -36,6 +36,8 @@ Hub event notifications are standard delivery by default. Global off, generation
 
 Hub event worker delivery treats `event_sales_open`, `event_deadline_soon`, `event_milestone_due`, and `event_cancelled` as immediate-push candidates only after preference resolution allows the event. Schedule candidates are queued for their current schedule timestamp and revalidated before delivery, so past-on-registration, moved, or cancelled items are not sent. `event_announced` and `event_updated` remain summary/default delivery unless later policy changes explicitly promote them. Disabled preferences, global off, quiet hours, keyword blocks, and rate limits still downgrade to app-history-only or skipped delivery before any FCM/APNs send.
 
+Hub event admin changes commit their audit record and every notification candidate atomically. A failure while creating any candidate leaves neither a partial Hub mutation nor a partial candidate batch. Recovery may automatically enqueue only immediate events received within 15 minutes and future Hub schedule candidates; older immediate events remain diagnostic-only so migration or repair work cannot unexpectedly send stale notifications.
+
 ## Resolution
 
 Global off blocks all notifications. Member explicit overrides can override generation/category settings. Platform and event-type settings apply to the event. More specific member/generation platform and event-type rules can override broader platform/event-type rules.

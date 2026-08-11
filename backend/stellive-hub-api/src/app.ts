@@ -5,7 +5,7 @@ import ChzzkApiClient from "./adapters/chzzk/chzzkApiClient.js";
 import ChzzkOpenApiAdapter from "./adapters/chzzk/chzzkOpenApiAdapter.js";
 import { CatalogService } from "./catalog/catalog.js";
 import { MemberProfileImageHydrator } from "./catalog/memberProfileImageHydrator.js";
-import ChzzkEventIngestor from "./events/chzzkEventIngestor.js";
+import ChzzkEventIngestor, { type ChzzkObservationWriter } from "./events/chzzkEventIngestor.js";
 import YoutubeWebSubSubscriptionService from "./adapters/youtube/youtubeWebSubSubscriptionService.js";
 import YoutubeDataApiClient from "./adapters/youtube/youtubeDataApiClient.js";
 import { LiveStatusRepository } from "./repositories/liveStatusRepository.js";
@@ -65,6 +65,7 @@ export interface BuildAppOptions {
   env?: EnvOverrides;
   useProcessEnv?: boolean;
   chzzkLiveApiFetch?: typeof fetch;
+  chzzkObservationWriter?: ChzzkObservationWriter;
   chzzkAuthRoutes?: {
     dependencies?: Partial<Omit<ChzzkAuthRouteOptions, "env">>;
   };
@@ -219,7 +220,8 @@ function createDefaultServiceAnnouncementSender(env: AppEnv, fcmClient = createD
 function createDefaultChzzkLiveAdapter(
   env: AppEnv,
   dependencies: Partial<InternalRouteDependencies> | undefined,
-  fetchImpl?: typeof fetch
+  fetchImpl?: typeof fetch,
+  observationWriter?: ChzzkObservationWriter
 ): Pick<InternalRouteDependencies, "chzzkLiveAdapter"> {
   if (dependencies?.chzzkLiveAdapter) return {};
   if (!env.CHZZK_CLIENT_ID || !env.CHZZK_CLIENT_SECRET || !env.CHZZK_REDIRECT_URI) return {};
@@ -227,9 +229,6 @@ function createDefaultChzzkLiveAdapter(
   const stateRepository = hasChzzkStateRepository(dependencies?.adapterHealth)
     ? dependencies.adapterHealth
     : new PlatformApiStateRepository();
-  const liveStatusRepository = hasChzzkLiveStatusRepository(dependencies?.liveStatus)
-    ? dependencies.liveStatus
-    : new LiveStatusRepository();
   const apiClient = new ChzzkApiClient({
     clientId: env.CHZZK_CLIENT_ID,
     clientSecret: env.CHZZK_CLIENT_SECRET,
@@ -238,14 +237,13 @@ function createDefaultChzzkLiveAdapter(
     liveListMaxPages: env.CHZZK_LIVE_LIST_MAX_PAGES,
     apiCallLogger: new ExternalApiCallLogRepository()
   });
-  const ingestor = new ChzzkEventIngestor();
+  const ingestor = observationWriter ?? new ChzzkEventIngestor();
 
   return {
     chzzkLiveAdapter: new ChzzkOpenApiAdapter({
       catalog: new CatalogService(),
       apiClient,
-      liveStatusRepository,
-      ingestEvent: (event) => ingestor.ingest(event)
+      observationWriter: ingestor
     })
   };
 }
@@ -498,15 +496,6 @@ function hasChzzkStateRepository(value: unknown): value is Pick<PlatformApiState
   );
 }
 
-function hasChzzkLiveStatusRepository(value: unknown): value is Pick<LiveStatusRepository, "getByMemberId" | "upsertLiveStatus"> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "getByMemberId" in value &&
-    "upsertLiveStatus" in value
-  );
-}
-
 function hasBootstrapDevicePort(value: unknown): value is BootstrapDevicePort {
   return typeof value === "object" && value !== null && "getDevice" in value;
 }
@@ -649,7 +638,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
   });
   const internalRouteDependencies: Partial<InternalRouteDependencies> = options.internalRoutes?.dependencies
     ? {
-      ...createDefaultChzzkLiveAdapter(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
+      ...createDefaultChzzkLiveAdapter(
+        env,
+        options.internalRoutes.dependencies,
+        options.chzzkLiveApiFetch,
+        options.chzzkObservationWriter
+      ),
       ...createDefaultYoutubeSubscriptionScheduler(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
       ...createDefaultYoutubeSongBackfillScheduler(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
       ...createDefaultMusicSyncService(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch, registerClose, (message) => app.log.warn(message)),
@@ -661,7 +655,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         notificationWorker: createDefaultNotificationWorker(env, sharedFcmClient, summaries),
         summaryNotificationWorker: createDefaultSummaryNotificationWorker(env, sharedFcmClient, summaries),
         serviceAnnouncements: createDefaultServiceAnnouncementSender(env, sharedFcmClient),
-        ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch),
+        ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch, options.chzzkObservationWriter),
         ...createDefaultYoutubeSubscriptionScheduler(env, undefined, options.chzzkLiveApiFetch),
         ...createDefaultYoutubeSongBackfillScheduler(env, undefined, options.chzzkLiveApiFetch),
         ...createDefaultMusicSyncService(env, undefined, options.chzzkLiveApiFetch, registerClose, (message) => app.log.warn(message)),

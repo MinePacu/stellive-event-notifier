@@ -115,6 +115,7 @@ import dev.minepacu.stelliveeventnotifier.feature.home.SongParticipation
 import dev.minepacu.stelliveeventnotifier.feature.home.MainNavigationHistory
 import dev.minepacu.stelliveeventnotifier.feature.home.MainNavigationHistoryState
 import dev.minepacu.stelliveeventnotifier.feature.home.MockHubRepository
+import dev.minepacu.stelliveeventnotifier.feature.home.PreferenceSyncConflictException
 import dev.minepacu.stelliveeventnotifier.feature.home.ServerHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongIdentity
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongDetailBottomSheet
@@ -7122,9 +7123,17 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
 
     private fun persistSettings(settings: dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState) {
         CoroutineScope(Dispatchers.Main).launch {
-            serverRepository.updatePreferences(settings)
-            val screen = navigationHistory.currentScreen
-            refreshScreenWhenIdle(screen) { replaceScreenWithoutAnimation(screen) }
+            try {
+                serverRepository.updatePreferences(settings)
+                val screen = navigationHistory.currentScreen
+                refreshScreenWhenIdle(screen) { replaceScreenWithoutAnimation(screen) }
+            } catch (_: PreferenceSyncConflictException) {
+                Snackbar.make(
+                    binding.root,
+                    "설정 동기화가 충돌했습니다. 다시 시도해 주세요.",
+                    Snackbar.LENGTH_LONG,
+                ).show()
+            }
         }
     }
 

@@ -70,7 +70,7 @@ describe("mobile API contract", () => {
     const preferences = {
       deviceId: "device-1",
       preferences: [],
-      clientUpdatedAt: "2026-06-11T00:00:00.000Z",
+      expectedRevision: 0,
     } satisfies UpdatePreferencesRequest;
 
     expect(registration.platform).toBe("android");

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ChzzkOpenApiAdapter } from "../src/adapters/chzzk/chzzkOpenApiAdapter.js";
 import type { ChzzkNormalizedLiveStatus } from "../src/adapters/chzzk/chzzkApiClient.js";
+import ChzzkEventIngestor from "../src/events/chzzkEventIngestor.js";
 import type { Member, PlatformEvent } from "../src/types.js";
 
 const liveMember = member("ayatsuno-yuni", "member", "active", "chzzk-channel-id");
@@ -84,6 +85,19 @@ describe("ChzzkOpenApiAdapter", () => {
     expect(endedEvents[0].type).toBe("chzzk_live_ended");
   });
 
+  it("counts only events that were newly inserted", async () => {
+    const events: PlatformEvent[] = [];
+    const adapter = createAdapter({
+      previous: { isLive: false },
+      events,
+      eventCreated: false,
+      statuses: [liveStatus({ isLive: true, openDate: "2026-06-11T03:00:00.000Z" })]
+    });
+
+    await expect(adapter.pollLiveStatuses()).resolves.toMatchObject({ eventsCreated: 0 });
+    expect(events).toHaveLength(1);
+  });
+
 
   it("stores an unverified observation as non-live without recording an ended transition", async () => {
     const events: PlatformEvent[] = [];
@@ -154,10 +168,34 @@ function createAdapter(options: {
   writes?: unknown[];
   statuses?: ChzzkNormalizedLiveStatus[];
   apiClient?: { getLiveStatuses: ReturnType<typeof vi.fn> };
+  eventCreated?: boolean;
 }) {
   const statuses = options.statuses ?? [liveStatus({ isLive: false })];
   const events = options.events ?? [];
   const writes = options.writes ?? [];
+
+  const observationWriter = new ChzzkEventIngestor({
+    async runInTransaction(work) {
+      return work({
+        liveStatuses: {
+          getByMemberId: vi.fn(async () => previousRecord(options.previous)),
+          upsertLiveStatus: vi.fn(async (input) => {
+            writes.push(input);
+            return input as never;
+          })
+        },
+        platformEvents: {
+          createIfNotExists: vi.fn(async (event) => {
+            events.push(event);
+            return { created: options.eventCreated ?? true, eventId: event.id };
+          })
+        },
+        notificationJobs: {
+          enqueue: vi.fn(async () => ({ created: true }))
+        }
+      } as never);
+    }
+  });
 
   return new ChzzkOpenApiAdapter({
     catalog: {
@@ -172,16 +210,7 @@ function createAdapter(options: {
         ])
       ))
     },
-    liveStatusRepository: {
-      getByMemberId: vi.fn(async () => previousRecord(options.previous)),
-      upsertLiveStatus: vi.fn(async (input) => {
-        writes.push(input);
-        return input as never;
-      })
-    },
-    ingestEvent: vi.fn(async (event) => {
-      events.push(event);
-    }),
+    observationWriter,
     clock: () => new Date("2026-06-11T03:05:00.000Z")
   });
 }

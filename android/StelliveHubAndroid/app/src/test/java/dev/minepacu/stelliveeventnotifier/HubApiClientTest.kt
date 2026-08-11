@@ -29,10 +29,13 @@ import dev.minepacu.stelliveeventnotifier.core.network.UpdatePreferencesResponse
 import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementDto
 import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementListResponseDto
 import kotlinx.coroutines.test.runTest
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import retrofit2.HttpException
+import retrofit2.Response
 import java.io.IOException
 
 class HubApiClientTest {
@@ -110,6 +113,47 @@ class HubApiClientTest {
 
         assertTrue(result is HubNetworkResult.Failure)
         assertFalse(result.toString().contains(token))
+    }
+
+    @Test
+    fun preferenceConflictPreservesHttp409AsDedicatedFailureCode() = runTest {
+        val conflict = HttpException(
+            Response.error<PreferencesResponseDto>(409, "{}".toResponseBody()),
+        )
+        val client = HubApiClient(api = FakeHubApi(failure = conflict))
+
+        val result = client.updatePreferences(
+            UpdatePreferencesRequestDto(
+                deviceId = "device-1",
+                preferences = emptyList(),
+                expectedRevision = 4,
+            ),
+        )
+
+        assertTrue(result is HubNetworkResult.Failure)
+        assertEquals("preference_conflict", (result as HubNetworkResult.Failure).code)
+    }
+
+    @Test
+    fun preferenceDtosUseRevisionContractWithoutClientTimestamp() {
+        val request = UpdatePreferencesRequestDto(
+            deviceId = "device-1",
+            preferences = emptyList(),
+            expectedRevision = 12,
+        )
+
+        val requestJson = HubApiClient.moshi()
+            .adapter(UpdatePreferencesRequestDto::class.java)
+            .toJson(request)
+        val response = HubApiClient.moshi()
+            .adapter(PreferencesResponseDto::class.java)
+            .fromJson(
+                """{"deviceId":"device-1","preferences":[],"updatedAt":"2026-08-11T00:00:00Z","revision":12}""",
+            )
+
+        assertTrue(requestJson.contains("\"expectedRevision\":12"))
+        assertFalse(requestJson.contains("clientUpdatedAt"))
+        assertEquals(12, response?.revision)
     }
 
     @Test
@@ -485,21 +529,27 @@ class HubApiClientTest {
             )
         }
 
-        override suspend fun preferences(deviceId: String): PreferencesResponseDto =
-            PreferencesResponseDto(
+        override suspend fun preferences(deviceId: String): PreferencesResponseDto {
+            failure?.let { throw it }
+            return PreferencesResponseDto(
                 deviceId = deviceId,
                 preferences = emptyList(),
                 updatedAt = "2026-06-11T03:00:00.000Z",
+                revision = 0,
             )
+        }
 
         override suspend fun updatePreferences(
             request: UpdatePreferencesRequestDto,
-        ): UpdatePreferencesResponseDto =
-            UpdatePreferencesResponseDto(
+        ): UpdatePreferencesResponseDto {
+            failure?.let { throw it }
+            return UpdatePreferencesResponseDto(
                 deviceId = request.deviceId,
                 preferences = request.preferences,
-                updatedAt = request.clientUpdatedAt,
+                updatedAt = "2026-06-11T03:00:00.000Z",
+                revision = request.expectedRevision + 1,
             )
+        }
 
         override suspend fun hubEvents(
             category: String?,

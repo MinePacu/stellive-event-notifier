@@ -4,6 +4,7 @@ import okhttp3.OkHttpClient
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import retrofit2.Retrofit
+import retrofit2.HttpException
 import retrofit2.converter.moshi.MoshiConverterFactory
 
 class HubApiClient(
@@ -42,7 +43,7 @@ class HubApiClient(
 
     suspend fun updatePreferences(
         request: UpdatePreferencesRequestDto,
-    ): HubNetworkResult<UpdatePreferencesResponseDto> = runCatchingNetwork {
+    ): HubNetworkResult<UpdatePreferencesResponseDto> = runCatchingNetwork(preferenceConflictAware = true) {
         api.updatePreferences(request)
     }
 
@@ -158,12 +159,19 @@ class HubApiClient(
             )
         }
 
-    private inline fun <T> runCatchingNetwork(block: () -> T): HubNetworkResult<T> =
+    private inline fun <T> runCatchingNetwork(
+        preferenceConflictAware: Boolean = false,
+        block: () -> T,
+    ): HubNetworkResult<T> =
         try {
             HubNetworkResult.Success(block())
         } catch (throwable: Throwable) {
             HubNetworkResult.Failure(
-                code = "network_error",
+                code = if (preferenceConflictAware && throwable is HttpException && throwable.code() == 409) {
+                    "preference_conflict"
+                } else {
+                    "network_error"
+                },
                 throwableType = throwable::class.java.simpleName,
             )
         }

@@ -17,6 +17,8 @@ export interface NotificationJobSummary {
   completed: number;
   failed: number;
   oldestQueuedAt?: string;
+  missingJobCount?: number;
+  oldestMissingJobReceivedAt?: string;
 }
 
 export interface NotificationJobDiagnostic {

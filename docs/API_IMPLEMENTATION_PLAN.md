@@ -251,7 +251,7 @@ Database-backed notification queue. Redis/BullMQ can replace the internals later
 ```prisma
 model NotificationJob {
   id        String   @id @default(cuid(2))
-  eventId   String
+  eventId   String   @unique
   priority  Int
   status    String
   runAfter  DateTime @default(now())
@@ -263,9 +263,13 @@ model NotificationJob {
   updatedAt DateTime @updatedAt
 
   @@index([status, runAfter, priority])
-  @@index([eventId])
+  @@index([status, lockedAt])
 }
 ```
+
+Hub event admin mutations use a Prisma interactive transaction spanning the Hub row, audit log, and all candidate `PlatformEvent`/`NotificationJob` writes. Event and job insertion uses conflict-safe uniqueness handling; retrying a mutation can repair a missing job but must never reset an existing job lifecycle. A candidate failure aborts the complete multi-candidate mutation.
+
+The `eventId` uniqueness migration deterministically keeps duplicates by lifecycle precedence (`completed`, `locked`, `queued`, `failed`), then attempts descending, `runAfter`/`createdAt` ascending, and stable ID. Orphan recovery queues only immediate events received in the last 15 minutes and future Hub schedule candidates. Admin queue health exposes `missingJobCount` and `oldestMissingJobReceivedAt` so older immediate orphans remain observable without being sent unexpectedly.
 
 ### `WebhookSubscription`
 

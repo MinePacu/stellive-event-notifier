@@ -29,8 +29,13 @@ interface NotificationJobDiagnosticSelect {
 }
 
 interface NotificationJobDelegate {
+  $queryRawUnsafe?(query: string): Promise<unknown[]>;
   notificationJob: {
     create?(args: { data: { eventId: string; priority: number; status: string; runAfter?: Date } }): Promise<unknown>;
+    createMany?(args: {
+      data: { eventId: string; priority: number; status: string; runAfter?: Date };
+      skipDuplicates: boolean;
+    }): Promise<{ count: number }>;
     groupBy?(args: {
       by: ["status"];
       _count: { status: true };
@@ -150,16 +155,16 @@ function claimableWhere(now: Date, staleAt: Date): Record<string, unknown> {
 export class NotificationJobRepository {
   constructor(private readonly prisma: NotificationJobDelegate = getPrismaClient() as unknown as NotificationJobDelegate) {}
 
-  async enqueue(input: EnqueueNotificationJobInput): Promise<unknown> {
-    if (!this.prisma.notificationJob.create) throw new Error("notification_job_enqueue_unavailable");
-    return this.prisma.notificationJob.create({
-      data: {
-        eventId: input.eventId,
-        priority: input.priority,
-        status: "queued",
-        runAfter: input.runAfter
-      }
-    });
+  async enqueue(input: EnqueueNotificationJobInput): Promise<{ created: boolean }> {
+    const data = {
+      eventId: input.eventId,
+      priority: input.priority,
+      status: "queued",
+      runAfter: input.runAfter
+    };
+    if (!this.prisma.notificationJob.createMany) throw new Error("notification_job_enqueue_unavailable");
+    const result = await this.prisma.notificationJob.createMany({ data, skipDuplicates: true });
+    return { created: result.count === 1 };
   }
 
   async claimReady(input: ClaimNotificationJobsInput): Promise<ClaimedNotificationJob[]> {
@@ -225,24 +230,46 @@ export class NotificationJobRepository {
 
   async summarize(): Promise<NotificationJobSummary> {
     if (!this.prisma.notificationJob.groupBy || !this.prisma.notificationJob.findFirst) {
-      return { queued: 0, locked: 0, completed: 0, failed: 0 };
+      return { queued: 0, locked: 0, completed: 0, failed: 0, missingJobCount: 0 };
     }
-    const [counts, oldestQueued] = await Promise.all([
+    const [counts, oldestQueued, orphanRows] = await Promise.all([
       this.prisma.notificationJob.groupBy({ by: ["status"], _count: { status: true } }),
       this.prisma.notificationJob.findFirst({
         where: { status: "queued" },
         orderBy: { runAfter: "asc" },
         select: { runAfter: true }
-      })
+      }),
+      this.readOrphanSummary()
     ]);
     const byStatus = new Map(counts.map((entry) => [entry.status, entry._count.status]));
+    const orphan = orphanRows[0];
     return {
       queued: byStatus.get("queued") ?? 0,
       locked: byStatus.get("locked") ?? 0,
       completed: byStatus.get("completed") ?? 0,
       failed: byStatus.get("failed") ?? 0,
-      oldestQueuedAt: oldestQueued?.runAfter.toISOString()
+      oldestQueuedAt: oldestQueued?.runAfter.toISOString(),
+      missingJobCount: Number(orphan?.missingJobCount ?? 0),
+      oldestMissingJobReceivedAt: orphan?.oldestMissingJobReceivedAt?.toISOString()
     };
+  }
+
+  private async readOrphanSummary(): Promise<Array<{
+    missingJobCount: bigint | number;
+    oldestMissingJobReceivedAt: Date | null;
+  }>> {
+    if (!this.prisma.$queryRawUnsafe) return [];
+    return this.prisma.$queryRawUnsafe(`
+      SELECT
+        COUNT(*)::bigint AS "missingJobCount",
+        MIN(event."receivedAt") AS "oldestMissingJobReceivedAt"
+      FROM "PlatformEvent" AS event
+      LEFT JOIN "NotificationJob" AS job ON job."eventId" = event."id"
+      WHERE job."id" IS NULL
+    `) as Promise<Array<{
+      missingJobCount: bigint | number;
+      oldestMissingJobReceivedAt: Date | null;
+    }>>;
   }
 
   async listDiagnostics(limit = 25): Promise<NotificationJobDiagnostic[]> {

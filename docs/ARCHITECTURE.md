@@ -6,7 +6,7 @@
 
 Public APIs return only published, non-deleted hub events. `HUB_EVENTS_STORAGE_MODE=memory` preserves seed-backed reads for local/test use, while `HUB_EVENTS_STORAGE_MODE=prisma` switches public reads to Prisma-backed `HubEvent` storage after migration.
 
-Admin actions never send push directly. Publish/update/cancel create normalized `hub_event` `PlatformEvent` candidates and enqueue notification jobs only through the existing preference-resolving worker path.
+Admin actions never send push directly. Every Hub event create/update/publication/deactivation/deletion or schedule mutation runs the Hub row write, audit snapshot, and every candidate `PlatformEvent` plus `NotificationJob` write in one database transaction. Candidate persistence is conflict-safe: an existing normalized event is left unchanged, while a missing job is repaired without resetting an existing queued, locked, failed, or completed job. Publish/update/cancel candidates still reach devices only through the existing preference-resolving worker path.
 
 The MVP uses an API-first lightweight control plane as the default operating model. The backend still mediates event ingestion, normalization, dedupe, preference resolution, and push dispatch, but it should not require a self-hosted PostgreSQL/Redis stack for initial operation. Docker Compose remains supported for local development and optional self-hosting. Mobile apps own settings UI, local history/cache, live-status display, foreground refresh, and deep-link handling. Managed services may own storage, scheduled jobs, and push infrastructure.
 
@@ -15,6 +15,8 @@ The MVP uses an API-first lightweight control plane as the default operating mod
 Fastify or serverless functions provide HTTP APIs and webhook/scheduler entry points. The MVP should start with managed storage such as Supabase/Firebase, local Docker PostgreSQL, or an equivalent low-cost database for devices, server-visible preferences, normalized events, live status, dedupe keys, notification jobs, short-lived delivery attempts, and delivery state.
 
 Redis/BullMQ is optional, not an MVP requirement. Initial queue behavior can be represented by a database-backed `notification_jobs` table with retry state and priority. A Redis/BullMQ worker can be added later behind the same job adapter if traffic grows.
+
+`NotificationJob.eventId` is unique, so one normalized event has at most one job lifecycle. Migration recovery retains duplicate jobs in `completed`, `locked`, `queued`, then `failed` order, with attempts and timestamps as deterministic tie-breakers. It automatically queues only immediate events received within the previous 15 minutes and future Hub schedule candidates; older immediate orphans remain visible in admin health diagnostics for explicit operator review. The overview reports the orphan count and oldest orphan `receivedAt`.
 
 `backend/stellive-hub-api/docker-compose.yml` provides a local PostgreSQL/Redis/API stack for reproducible development and self-hosting experiments. It is not the default low-cost deployment requirement.
 

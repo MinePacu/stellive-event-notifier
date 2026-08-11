@@ -125,18 +125,19 @@ export interface UpdateDeviceTokenResponse {
 export interface PreferencesResponse {
   deviceId: string;
   preferences: UserNotificationPreference[];
+  revision: number;
   updatedAt: string;
 }
 
 export interface UpdatePreferencesRequest {
   deviceId: string;
   preferences: UserNotificationPreference[];
-  clientUpdatedAt: string;
+  expectedRevision: number;
 }
 
 export interface UpdatePreferencesResponse {
   deviceId: string;
   preferences: UserNotificationPreference[];
+  revision: number;
   updatedAt: string;
-  conflict?: "server_newer" | "client_applied";
 }

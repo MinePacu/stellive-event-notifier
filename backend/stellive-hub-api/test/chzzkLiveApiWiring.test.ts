@@ -111,6 +111,12 @@ describe("CHZZK live API wiring", () => {
       env: { ...testEnv, CHZZK_LIVE_POLLING_ENABLED: "true" },
       useProcessEnv: false,
       chzzkLiveApiFetch: fetchMock,
+      chzzkObservationWriter: {
+        observe: vi.fn(async (input) => {
+          liveStatus.writes.push(input.status);
+          return { eventCreated: false };
+        })
+      },
       internalRoutes: {
         dependencies: {
           adapterHealth: fakeAdapterHealth(true),

@@ -35,6 +35,7 @@ import dev.minepacu.stelliveeventnotifier.core.network.YoutubePremiereMetadataDt
 import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementDto
 import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementListResponseDto
 import dev.minepacu.stelliveeventnotifier.feature.home.MockHubRepository
+import dev.minepacu.stelliveeventnotifier.feature.home.PreferenceSyncConflictException
 import dev.minepacu.stelliveeventnotifier.feature.home.ServerHubRepository
 import java.time.LocalDate
 import kotlinx.coroutines.test.runTest
@@ -59,9 +60,66 @@ class ServerHubRepositoryTest {
 
         val sent = remote.lastUpdatePreferencesRequest!!
         assertEquals("device-1", sent.deviceId)
+        assertEquals(7, sent.expectedRevision)
         assertEquals(listOf("member", "global"), sent.preferences.map { it.scope })
         assertFalse(sent.preferences.last().enabled)
         assertEquals(false, sent.preferences.last().serviceAnnouncementsEnabled)
+    }
+
+    @Test
+    fun updatePreferencesRebasesGlobalChangeOnLatestSnapshotAfterConflict() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            preferenceSnapshots += preferenceSnapshot(
+                revision = 7,
+                scoped = preference(scope = "member", memberId = "akane-lize"),
+            )
+            preferenceSnapshots += preferenceSnapshot(
+                revision = 8,
+                scoped = preference(scope = "generation", generationId = "gen3").copy(
+                    keywordsBlocklist = listOf("spoiler"),
+                ),
+            )
+            updatePreferenceResults += HubNetworkResult.Failure(code = "preference_conflict")
+        }
+        val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()).apply {
+            saveDeviceId("device-1")
+        }
+        val repository = ServerHubRepository(remote, deviceIdStore, MockHubRepository())
+
+        repository.updatePreferences(NotificationSettingState(globalEnabled = false))
+
+        assertEquals(2, remote.preferenceCalls)
+        assertEquals(listOf(7, 8), remote.updatePreferenceRequests.map { it.expectedRevision })
+        assertEquals(listOf("member", "global"), remote.updatePreferenceRequests[0].preferences.map { it.scope })
+        assertEquals(listOf("generation", "global"), remote.updatePreferenceRequests[1].preferences.map { it.scope })
+        assertEquals("gen3", remote.updatePreferenceRequests[1].preferences.first().generationId)
+        assertEquals(listOf("spoiler"), remote.updatePreferenceRequests[1].preferences.first().keywordsBlocklist)
+        assertFalse(remote.updatePreferenceRequests[1].preferences.last().enabled)
+    }
+
+    @Test
+    fun updatePreferencesThrowsAfterSecondConflictWithoutThirdAttempt() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            preferenceSnapshots += preferenceSnapshot(revision = 7)
+            preferenceSnapshots += preferenceSnapshot(revision = 8)
+            updatePreferenceResults += HubNetworkResult.Failure(code = "preference_conflict")
+            updatePreferenceResults += HubNetworkResult.Failure(code = "preference_conflict")
+        }
+        val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()).apply {
+            saveDeviceId("device-1")
+        }
+        val repository = ServerHubRepository(remote, deviceIdStore, MockHubRepository())
+
+        var conflict: PreferenceSyncConflictException? = null
+        try {
+            repository.updatePreferences(NotificationSettingState(globalEnabled = false))
+        } catch (error: PreferenceSyncConflictException) {
+            conflict = error
+        }
+
+        assertTrue(conflict != null)
+        assertEquals(2, remote.preferenceCalls)
+        assertEquals(2, remote.updatePreferenceRequests.size)
     }
 
     @Test
@@ -550,39 +608,62 @@ class ServerHubRepositoryTest {
         var lastMemberMusicMemberId: String? = null
         var lastMemberMusicType: String? = null
         var lastUpdatePreferencesRequest: UpdatePreferencesRequestDto? = null
+        var preferenceCalls = 0
+        val preferenceSnapshots = ArrayDeque<PreferencesResponseDto>()
+        val updatePreferenceResults = ArrayDeque<HubNetworkResult<UpdatePreferencesResponseDto>>()
+        val updatePreferenceRequests = mutableListOf<UpdatePreferencesRequestDto>()
 
-        override suspend fun preferences(deviceId: String): HubNetworkResult<PreferencesResponseDto> =
-            HubNetworkResult.Success(
-                PreferencesResponseDto(
-                    deviceId = deviceId,
-                    preferences = listOf(
-                        PreferenceDto(
-                            deviceId = deviceId,
-                            scope = "member",
-                            memberId = "akane-lize",
-                            enabled = true,
-                            explicitOverride = true,
-                            tapAction = "open_app",
-                            deliveryMode = "standard",
-                            updatedAt = "2026-07-06T00:00:00Z",
-                        ),
-                    ),
-                    updatedAt = "2026-07-06T00:00:00Z",
+        override suspend fun preferences(deviceId: String): HubNetworkResult<PreferencesResponseDto> {
+            preferenceCalls += 1
+            return HubNetworkResult.Success(
+                preferenceSnapshots.removeFirstOrNull() ?: preferenceSnapshot(
+                    revision = 7,
+                    scoped = preference(scope = "member", memberId = "akane-lize"),
                 ),
             )
+        }
 
         override suspend fun updatePreferences(
             request: UpdatePreferencesRequestDto,
         ): HubNetworkResult<UpdatePreferencesResponseDto> {
             lastUpdatePreferencesRequest = request
+            updatePreferenceRequests += request
+            updatePreferenceResults.removeFirstOrNull()?.let { return it }
             return HubNetworkResult.Success(
                 UpdatePreferencesResponseDto(
                     deviceId = request.deviceId,
                     preferences = request.preferences,
-                    updatedAt = request.clientUpdatedAt,
+                    updatedAt = request.preferences.lastOrNull()?.updatedAt ?: "2026-07-06T00:00:00Z",
+                    revision = request.expectedRevision + 1,
                 ),
             )
         }
+
+        fun preferenceSnapshot(
+            revision: Int,
+            scoped: PreferenceDto? = null,
+        ): PreferencesResponseDto = PreferencesResponseDto(
+            deviceId = "device-1",
+            preferences = listOfNotNull(scoped),
+            updatedAt = "2026-07-06T00:00:00Z",
+            revision = revision,
+        )
+
+        fun preference(
+            scope: String,
+            memberId: String? = null,
+            generationId: String? = null,
+        ): PreferenceDto = PreferenceDto(
+            deviceId = "device-1",
+            scope = scope,
+            memberId = memberId,
+            generationId = generationId,
+            enabled = true,
+            explicitOverride = true,
+            tapAction = "open_app",
+            deliveryMode = "standard",
+            updatedAt = "2026-07-06T00:00:00Z",
+        )
 
         override suspend fun bootstrap(deviceId: String?): HubNetworkResult<BootstrapResponseDto> {
             bootstrapCalls += 1

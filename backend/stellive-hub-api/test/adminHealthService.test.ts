@@ -4,7 +4,14 @@ import { loadEnv } from "../src/config/env.js";
 
 function dependencies() {
   return {
-    jobs: { summarize: vi.fn(async () => ({ queued: 1, locked: 0, completed: 2, failed: 0 })) },
+    jobs: { summarize: vi.fn(async () => ({
+      queued: 1,
+      locked: 0,
+      completed: 2,
+      failed: 0,
+      missingJobCount: 3,
+      oldestMissingJobReceivedAt: "2026-07-03T00:00:00.000Z"
+    })) },
     deliveryAttempts: {
       summarizeRecent: vi.fn(async () => ({ sent: 2, queued: 0, skipped: 0, failed: 0 })),
       summarizeDailyBuckets: vi.fn(async () => ({
@@ -53,6 +60,10 @@ describe("AdminHealthService overview cache", () => {
     const [first, concurrent] = await Promise.all([health.overview(), health.overview()]);
     expect(deps.externalApiCalls.summarizeDaily).toHaveBeenCalledTimes(1);
     expect(first).not.toBe(concurrent);
+    expect(first.queue).toMatchObject({
+      missingJobCount: 3,
+      oldestMissingJobReceivedAt: "2026-07-03T00:00:00.000Z"
+    });
 
     first.queue.queued = 99;
     nowMs += 5_000;

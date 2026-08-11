@@ -705,4 +705,110 @@ describe("HubEventAdminService", () => {
     expect(updated.startsAt).toBe("2026-07-20T01:00:00.000Z");
     expect(updated.endsAt).toBe("2026-07-21T01:00:00.000Z");
   });
+
+  it("runs every Hub event and schedule mutation in exactly one unit of work", async () => {
+    const primarySchedule = {
+      id: "primary",
+      kind: "main_window" as const,
+      title: "대표 일정",
+      label: "대표 일정",
+      startsAt: "2026-07-20T01:00:00.000Z",
+      timePrecision: "datetime" as const,
+      timezone: "Asia/Seoul",
+      notificationEligible: true,
+      isPrimary: true,
+      sortOrder: 0
+    };
+    const secondarySchedule = {
+      ...primarySchedule,
+      id: "secondary",
+      kind: "deadline" as const,
+      title: "마감",
+      label: "마감",
+      startsAt: "2026-07-21T01:00:00.000Z",
+      isPrimary: false,
+      sortOrder: 1
+    };
+    const cases: Array<{
+      name: string;
+      seed?: AdminHubEvent;
+      run: (service: HubEventAdminService) => Promise<unknown>;
+    }> = [
+      { name: "create", run: (service) => service.createDraft(adminEvent()) },
+      { name: "update", run: (service) => service.update("event-1", { title: "Updated" }) },
+      { name: "publish", run: (service) => service.publish("event-1") },
+      {
+        name: "cancel",
+        seed: adminEvent({ publicationState: "published", publishedAt: "2026-06-12T00:00:00.000Z" }),
+        run: (service) => service.cancel("event-1")
+      },
+      { name: "deactivate", run: (service) => service.deactivate("event-1") },
+      { name: "delete", run: (service) => service.delete("event-1") },
+      {
+        name: "schedule create",
+        seed: adminEvent({ scheduleItems: [] }),
+        run: (service) => service.createScheduleItem("event-1", {
+          expectedRevision: 1,
+          kind: "custom",
+          title: "추가 일정",
+          startsAt: "2026-07-20T01:00:00.000Z",
+          timePrecision: "datetime",
+          timezone: "Asia/Seoul"
+        })
+      },
+      {
+        name: "schedule update",
+        seed: adminEvent({ scheduleItems: [primarySchedule] }),
+        run: (service) => service.updateScheduleItem("event-1", "primary", {
+          expectedRevision: 1,
+          title: "변경된 대표 일정"
+        })
+      },
+      {
+        name: "schedule delete",
+        seed: adminEvent({ scheduleItems: [primarySchedule] }),
+        run: (service) => service.deleteScheduleItem("event-1", "primary", 1)
+      },
+      {
+        name: "schedule restore",
+        seed: adminEvent({ scheduleItems: [{
+          ...primarySchedule,
+          isPrimary: false,
+          cancelledAt: "2026-07-19T01:00:00.000Z"
+        }] }),
+        run: (service) => service.restoreScheduleItem("event-1", "primary", 1)
+      },
+      {
+        name: "schedule reorder",
+        seed: adminEvent({ scheduleMode: "timeline", scheduleItems: [primarySchedule, secondarySchedule] }),
+        run: (service) => service.reorderScheduleItems("event-1", {
+          expectedRevision: 1,
+          scheduleItemIds: ["secondary", "primary"]
+        })
+      }
+    ];
+
+    for (const testCase of cases) {
+      const fake = createFakeRepository(testCase.seed ?? adminEvent());
+      let runs = 0;
+      const platformEvents = { async createIfNotExists() { return { created: false }; } };
+      const notificationJobs = { async enqueue() { return { created: false }; } };
+      const service = new HubEventAdminService({
+        catalog: new CatalogService(),
+        repository: fake.repository,
+        platformEvents,
+        notificationJobs,
+        unitOfWork: {
+          async run(work) {
+            runs += 1;
+            return work({ hubEvents: fake.repository, platformEvents, notificationJobs });
+          }
+        },
+        now: () => new Date("2026-06-12T12:00:00.000Z")
+      });
+
+      await testCase.run(service);
+      expect(runs, testCase.name).toBe(1);
+    }
+  });
 });

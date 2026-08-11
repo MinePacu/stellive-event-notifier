@@ -96,13 +96,29 @@ struct MemberResponse: Codable, Equatable {
     }
 }
 
+struct PreferenceQuietHoursResponse: Codable, Equatable {
+    let enabled: Bool
+    let start: String
+    let end: String
+    let timezone: String
+}
+
 struct PreferenceResponse: Codable, Equatable {
     let deviceId: String?
     let scope: String
+    let generationId: String?
+    let memberId: String?
+    let source: String?
+    let eventType: String?
     let enabled: Bool
     let explicitOverride: Bool
     let tapAction: String
     let deliveryMode: String
+    let realtimePreference: String?
+    let quietHours: PreferenceQuietHoursResponse?
+    let keywordsAllowlist: [String]?
+    let keywordsBlocklist: [String]?
+    let maxNotificationsPerMinute: Int?
     let serviceAnnouncementsEnabled: Bool?
     let updatedAt: String
 }
@@ -262,20 +278,20 @@ struct PreferencesResponse: Codable, Equatable {
     let deviceId: String
     let preferences: [PreferenceResponse]
     let updatedAt: String
-    let conflict: String?
+    let revision: Int
 }
 
 struct UpdatePreferencesRequest: Codable, Equatable {
     let deviceId: String
     let preferences: [PreferenceResponse]
-    let clientUpdatedAt: String
+    let expectedRevision: Int
 }
 
 struct UpdatePreferencesResponse: Codable, Equatable {
     let deviceId: String
     let preferences: [PreferenceResponse]
     let updatedAt: String
-    let conflict: String?
+    let revision: Int
 }
 
 enum HubAPIError: Error, Equatable {

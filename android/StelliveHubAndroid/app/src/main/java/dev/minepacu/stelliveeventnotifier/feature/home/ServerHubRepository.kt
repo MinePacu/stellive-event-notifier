@@ -69,6 +69,7 @@ import java.util.Locale
 private val builtInHubEventFilters = setOf("all", "goods", "album", "ticketing", "offline", "closing")
 
 class SongRefreshFailedException : IllegalStateException("Unable to refresh the song catalog")
+class PreferenceSyncConflictException : IllegalStateException("Preference synchronization conflicted twice")
 
 class ServerHubRepository(
     private val remoteDataSource: RemoteDataSource,
@@ -107,30 +108,52 @@ class ServerHubRepository(
     override suspend fun updatePreferences(settings: NotificationSettingState): HubDataState {
         val deviceId = deviceIdStore.getDeviceId()
         if (deviceId != null) {
-            val current = remoteDataSource.preferences(deviceId)
-            if (current is HubNetworkResult.Success) {
-                val updatedAt = Instant.now().toString()
-                val preserved = current.value.preferences.filterNot { it.scope == "global" }
-                remoteDataSource.updatePreferences(
-                    UpdatePreferencesRequestDto(
-                        deviceId = deviceId,
-                        preferences = preserved + PreferenceDto(
-                            deviceId = deviceId,
-                            scope = "global",
-                            enabled = settings.globalEnabled,
-                            explicitOverride = true,
-                            tapAction = settings.tapAction.name.lowercase(Locale.US),
-                            deliveryMode = settings.deliveryMode.name.lowercase(Locale.US),
-                            serviceAnnouncementsEnabled = settings.serviceAnnouncementsEnabled,
-                            updatedAt = updatedAt,
-                        ),
-                        clientUpdatedAt = updatedAt,
-                    ),
+            val initial = remoteDataSource.preferences(deviceId)
+            if (initial is HubNetworkResult.Success) {
+                val firstUpdate = remoteDataSource.updatePreferences(
+                    preferenceUpdateRequest(deviceId, settings, initial.value),
                 )
+                if (firstUpdate.isPreferenceConflict()) {
+                    val refreshed = remoteDataSource.preferences(deviceId)
+                    if (refreshed is HubNetworkResult.Success) {
+                        val retry = remoteDataSource.updatePreferences(
+                            preferenceUpdateRequest(deviceId, settings, refreshed.value),
+                        )
+                        if (retry.isPreferenceConflict()) {
+                            throw PreferenceSyncConflictException()
+                        }
+                    }
+                }
             }
         }
         return fallback.updatePreferences(settings)
     }
+
+    private fun preferenceUpdateRequest(
+        deviceId: String,
+        settings: NotificationSettingState,
+        current: PreferencesResponseDto,
+    ): UpdatePreferencesRequestDto {
+        val updatedAt = Instant.now().toString()
+        val preserved = current.preferences.filterNot { it.scope == "global" }
+        return UpdatePreferencesRequestDto(
+            deviceId = deviceId,
+            preferences = preserved + PreferenceDto(
+                deviceId = deviceId,
+                scope = "global",
+                enabled = settings.globalEnabled,
+                explicitOverride = true,
+                tapAction = settings.tapAction.name.lowercase(Locale.US),
+                deliveryMode = settings.deliveryMode.name.lowercase(Locale.US),
+                serviceAnnouncementsEnabled = settings.serviceAnnouncementsEnabled,
+                updatedAt = updatedAt,
+            ),
+            expectedRevision = current.revision,
+        )
+    }
+
+    private fun HubNetworkResult<UpdatePreferencesResponseDto>.isPreferenceConflict(): Boolean =
+        this is HubNetworkResult.Failure && code == "preference_conflict"
 
     override suspend fun hubEvents(filterId: String, from: LocalDate?, to: LocalDate?): List<HubEvent> {
         val response = remoteDataSource.hubEvents(

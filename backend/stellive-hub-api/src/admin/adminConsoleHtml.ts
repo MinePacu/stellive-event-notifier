@@ -2637,7 +2637,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       const queued = queue && queue.queued != null ? queue.queued : 0;
       const locked = queue && queue.locked != null ? queue.locked : 0;
       const failed = queue && queue.failed != null ? queue.failed : 0;
-      return queued + " queued / " + locked + " locked / " + failed + " failed";
+      const missing = queue && queue.missingJobCount != null ? queue.missingJobCount : 0;
+      return queued + " queued / " + locked + " locked / " + failed + " failed / " + missing + " missing jobs";
     }
 
     function formatDeliveryState(recentDelivery) {
@@ -3051,7 +3052,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         createOverviewPanel(
           "Queue",
           data.queue.queued == null ? "-" : String(data.queue.queued),
-          (data.queue.failed == null ? "0" : String(data.queue.failed)) + " failed"
+          (data.queue.failed == null ? "0" : String(data.queue.failed)) + " failed / " +
+            (data.queue.missingJobCount == null ? "0" : String(data.queue.missingJobCount)) + " missing jobs"
         ),
         createOverviewPanel(
           "Events",

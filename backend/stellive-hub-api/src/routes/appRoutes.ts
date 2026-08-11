@@ -5,6 +5,10 @@ import type {
   PushTokenProvider
 } from "../../../../shared/schemas/mobileApi.js";
 import { mobileError } from "../mobile/mobileError.js";
+import {
+  PreferenceConflictError,
+  type PreferenceSnapshot,
+} from "../repositories/preferenceRepository.js";
 import type { UserNotificationPreference } from "../types.js";
 
 export interface MobileAppRouteDependencies {
@@ -37,11 +41,12 @@ export interface MobileAppRouteDependencies {
   };
   preferences?: {
     listForDevice?(deviceId: string): Promise<UserNotificationPreference[]>;
+    getSnapshotForDevice?(deviceId: string): Promise<PreferenceSnapshot>;
     replaceForDevice?(input: {
       deviceId: string;
       preferences: UserNotificationPreference[];
-      clientUpdatedAt: string;
-    }): Promise<{ preferences: UserNotificationPreference[]; updatedAt: string }>;
+      expectedRevision: number;
+    }): Promise<PreferenceSnapshot>;
   };
   serviceTopicSubscriptions?: {
     syncToken?(input: { token: string; preferences: UserNotificationPreference[] }): Promise<unknown>;
@@ -76,12 +81,13 @@ function latestPreferenceUpdatedAt(preferences: UserNotificationPreference[]): s
       .map((rule) => rule.updatedAt)
       .filter((updatedAt): updatedAt is string => Boolean(updatedAt))
       .sort()
-      .at(-1) ?? new Date().toISOString()
+      .at(-1) ?? new Date(0).toISOString()
   );
 }
 
 export async function registerAppRoutes(app: FastifyInstance, options: RegisterAppRouteOptions = {}) {
   const fallbackPreferences = options.fallbackPreferences ?? new Map<string, UserNotificationPreference[]>();
+  const fallbackPreferenceMetadata = new Map<string, { revision: number; updatedAt: string }>();
 
   app.get("/v1/bootstrap", async (request) => {
     const query = request.query as {
@@ -179,13 +185,20 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     }
 
     const preferences = options.dependencies?.preferences;
+    if (preferences?.getSnapshotForDevice) {
+      const snapshot = await preferences.getSnapshotForDevice(deviceId);
+      return { deviceId, ...snapshot };
+    }
+
     const rules = preferences?.listForDevice
       ? await preferences.listForDevice(deviceId)
       : fallbackPreferences.get(deviceId) ?? [];
+    const metadata = fallbackPreferenceMetadata.get(deviceId);
     return {
       deviceId,
       preferences: rules,
-      updatedAt: latestPreferenceUpdatedAt(rules),
+      revision: metadata?.revision ?? 0,
+      updatedAt: metadata?.updatedAt ?? latestPreferenceUpdatedAt(rules),
     };
   });
 
@@ -193,20 +206,32 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     const body = request.body as {
       deviceId?: string;
       preferences?: UserNotificationPreference[];
-      clientUpdatedAt?: string;
+      expectedRevision?: number;
     };
     if (!body.deviceId) {
       const error = mobileError("device_not_registered", 400);
       return reply.code(error.statusCode).send(error.payload);
     }
+    if (!Number.isInteger(body.expectedRevision) || (body.expectedRevision ?? -1) < 0) {
+      return reply.code(400).send({ error: "preference_revision_invalid" });
+    }
 
     const preferences = options.dependencies?.preferences;
     if (preferences?.replaceForDevice) {
-      const result = await preferences.replaceForDevice({
-        deviceId: body.deviceId,
-        preferences: body.preferences ?? [],
-        clientUpdatedAt: body.clientUpdatedAt ?? new Date().toISOString(),
-      });
+      let result: PreferenceSnapshot;
+      try {
+        result = await preferences.replaceForDevice({
+          deviceId: body.deviceId,
+          preferences: body.preferences ?? [],
+          expectedRevision: body.expectedRevision!,
+        });
+      } catch (error) {
+        if (error instanceof PreferenceConflictError) {
+          const conflict = mobileError("preference_conflict", 409);
+          return reply.code(conflict.statusCode).send(conflict.payload);
+        }
+        throw error;
+      }
       if (options.dependencies?.serviceTopicSubscriptions?.syncDevice) {
         try {
           await options.dependencies.serviceTopicSubscriptions.syncDevice({ deviceId: body.deviceId, preferences: result.preferences });
@@ -218,7 +243,15 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     }
 
     const rules = body.preferences ?? [];
+    const currentRevision = fallbackPreferenceMetadata.get(body.deviceId)?.revision ?? 0;
+    if (currentRevision !== body.expectedRevision) {
+      const conflict = mobileError("preference_conflict", 409);
+      return reply.code(conflict.statusCode).send(conflict.payload);
+    }
+    const updatedAt = new Date().toISOString();
+    const revision = currentRevision + 1;
     fallbackPreferences.set(body.deviceId, rules);
+    fallbackPreferenceMetadata.set(body.deviceId, { revision, updatedAt });
     if (options.dependencies?.serviceTopicSubscriptions?.syncDevice) {
       try {
         await options.dependencies.serviceTopicSubscriptions.syncDevice({ deviceId: body.deviceId, preferences: rules });
@@ -226,6 +259,6 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
         request.log.warn({ error }, "service topic subscription sync failed after preference update");
       }
     }
-    return { deviceId: body.deviceId, preferences: rules, updatedAt: new Date().toISOString() };
+    return { deviceId: body.deviceId, preferences: rules, revision, updatedAt };
   });
 }

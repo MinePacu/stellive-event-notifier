@@ -38,6 +38,14 @@ model NotificationPreference {
   deliveryMode   String   @default("standard")
   data           Json?
   updatedAt      DateTime @updatedAt
+
+  @@index([deviceId])
+}
+
+model NotificationPreferenceSnapshot {
+  deviceId  String   @id
+  revision  Int      @default(0)
+  updatedAt DateTime @updatedAt
 }
 
 model PlatformEvent {
@@ -168,7 +176,7 @@ model ExternalApiCallLog {
 
 model NotificationJob {
   id        String   @id @default(cuid(2))
-  eventId   String
+  eventId   String   @unique
   priority  Int
   status    String
   runAfter  DateTime @default(now())
@@ -181,7 +189,6 @@ model NotificationJob {
 
   @@index([status, runAfter, priority])
   @@index([status, lockedAt])
-  @@index([eventId])
 }
 
 model NotificationSummaryBucket {

@@ -23,6 +23,7 @@ import {
 import { validateHubEventForAdmin } from "./hubEventPolicy.js";
 import { normalizeHubEventLinks } from "./hubEventLinkPolicy.js";
 import { normalizeHubEventTags } from "./hubEventTagPolicy.js";
+import { PrismaHubEventAdminUnitOfWork } from "./hubEventAdminUnitOfWork.js";
 import {
   deriveHubEventScheduleMode,
   normalizeHubEventScheduleText,
@@ -35,7 +36,7 @@ export interface HubEventAdminActor {
   reason?: string;
 }
 
-interface HubEventAdminRepository {
+export interface HubEventAdminRepository {
   createDraft(input: AdminHubEventWriteInput): Promise<AdminHubEvent>;
   update(id: string, input: AdminHubEventWriteInput): Promise<AdminHubEvent>;
   hardDeleteScheduleItem?(id: string, scheduleItemId: string, input: AdminHubEventWriteInput): Promise<AdminHubEvent>;
@@ -54,12 +55,22 @@ interface HubEventAdminRepository {
   writeAuditLog(input: HubEventAuditLogInput): Promise<void>;
 }
 
-interface HubEventPlatformEventRepository {
-  createIfNotExists(event: PlatformEvent): Promise<{ created: boolean }>;
+export interface HubEventPlatformEventRepository {
+  createIfNotExists(event: PlatformEvent): Promise<{ created: boolean; eventId?: string }>;
 }
 
-interface HubEventNotificationJobRepository {
+export interface HubEventNotificationJobRepository {
   enqueue(input: { eventId: string; priority: number; runAfter?: Date }): Promise<unknown>;
+}
+
+export interface HubEventAdminTransactionRepositories {
+  hubEvents: HubEventAdminRepository;
+  platformEvents: HubEventPlatformEventRepository;
+  notificationJobs: HubEventNotificationJobRepository;
+}
+
+export interface HubEventAdminUnitOfWork {
+  run<T>(work: (repositories: HubEventAdminTransactionRepositories) => Promise<T>): Promise<T>;
 }
 
 export interface HubEventAdminServiceOptions {
@@ -67,6 +78,7 @@ export interface HubEventAdminServiceOptions {
   repository?: HubEventAdminRepository;
   platformEvents?: HubEventPlatformEventRepository;
   notificationJobs?: HubEventNotificationJobRepository;
+  unitOfWork?: HubEventAdminUnitOfWork;
   now?: () => Date;
 }
 
@@ -105,12 +117,24 @@ export class HubEventAdminService {
   private readonly repository: HubEventAdminRepository;
   private readonly platformEvents: HubEventPlatformEventRepository;
   private readonly notificationJobs: HubEventNotificationJobRepository;
+  private readonly unitOfWork: HubEventAdminUnitOfWork;
   private readonly now: () => Date;
 
   constructor(private readonly options: HubEventAdminServiceOptions) {
     this.repository = options.repository ?? new HubEventRepository();
     this.platformEvents = options.platformEvents ?? new PlatformEventRepository();
     this.notificationJobs = options.notificationJobs ?? new NotificationJobRepository();
+    this.unitOfWork = options.unitOfWork ?? (
+      options.repository || options.platformEvents || options.notificationJobs
+        ? {
+            run: async <T>(work: (repositories: HubEventAdminTransactionRepositories) => Promise<T>) => work({
+              hubEvents: this.repository,
+              platformEvents: this.platformEvents,
+              notificationJobs: this.notificationJobs
+            })
+          }
+        : new PrismaHubEventAdminUnitOfWork()
+    );
     this.now = options.now ?? (() => new Date());
   }
 
@@ -125,9 +149,11 @@ export class HubEventAdminService {
       scheduleItems: singleWindowNormalized.scheduleItems ?? []
     });
     this.assertValid(normalized, "draft");
-    const created = await this.repository.createDraft({ ...normalized, actorId: actor.actorId });
-    await this.audit("create", created.id, actor, null, created);
-    return created;
+    return this.unitOfWork.run(async ({ hubEvents }) => {
+      const created = await hubEvents.createDraft({ ...normalized, actorId: actor.actorId });
+      await this.audit(hubEvents, "create", created.id, actor, null, created);
+      return created;
+    });
   }
 
   async update(id: string, input: AdminHubEventWriteInput, actor: HubEventAdminActor = {}): Promise<AdminHubEvent> {
@@ -138,75 +164,85 @@ export class HubEventAdminService {
       before
     );
     this.assertValid({ ...before, ...normalized }, before.publicationState === "published" ? "publish" : "draft");
-    const updated = await this.repository.update(id, { ...normalized, actorId: actor.actorId });
-    await this.audit("update", id, actor, before, updated);
-    await this.enqueueNotificationCandidates("update", before, updated);
-    return updated;
+    return this.unitOfWork.run(async (repositories) => {
+      const updated = await repositories.hubEvents.update(id, { ...normalized, actorId: actor.actorId });
+      await this.audit(repositories.hubEvents, "update", id, actor, before, updated);
+      await this.enqueueNotificationCandidates(repositories, "update", before, updated);
+      return updated;
+    });
   }
 
   async publish(id: string, actor: HubEventAdminActor = {}): Promise<AdminHubEvent> {
     const before = await this.getExisting(id);
     this.assertMutable(before);
     this.assertValid(before, "publish");
-    const published = await this.repository.setPublicationState({
-      id,
-      publicationState: "published",
-      actorId: actor.actorId,
-      publishedAt: this.now()
+    return this.unitOfWork.run(async (repositories) => {
+      const published = await repositories.hubEvents.setPublicationState({
+        id,
+        publicationState: "published",
+        actorId: actor.actorId,
+        publishedAt: this.now()
+      });
+      await this.audit(repositories.hubEvents, "publish", id, actor, before, published);
+      await this.enqueueNotificationCandidates(repositories, "publish", before, published);
+      return published;
     });
-    await this.audit("publish", id, actor, before, published);
-    await this.enqueueNotificationCandidates("publish", before, published);
-    return published;
   }
 
   async cancel(id: string, actor: HubEventAdminActor = {}): Promise<AdminHubEvent> {
     const before = await this.getExisting(id);
     this.assertMutable(before);
     const cancelledAt = this.now();
-    const statusUpdated = await this.repository.update(id, {
-      status: "cancelled",
-      actorId: actor.actorId
+    return this.unitOfWork.run(async (repositories) => {
+      const statusUpdated = await repositories.hubEvents.update(id, {
+        status: "cancelled",
+        actorId: actor.actorId
+      });
+      const cancelled = await repositories.hubEvents.setPublicationState({
+        id,
+        publicationState: "published",
+        actorId: actor.actorId,
+        cancelledAt
+      });
+      const after: AdminHubEvent = {
+        ...statusUpdated,
+        ...cancelled,
+        status: "cancelled",
+        cancelledAt: cancelledAt.toISOString()
+      };
+      await this.audit(repositories.hubEvents, "cancel", id, actor, before, after);
+      await this.enqueueNotificationCandidates(repositories, "cancel", before, after);
+      return after;
     });
-    const cancelled = await this.repository.setPublicationState({
-      id,
-      publicationState: "published",
-      actorId: actor.actorId,
-      cancelledAt
-    });
-    const after: AdminHubEvent = {
-      ...statusUpdated,
-      ...cancelled,
-      status: "cancelled",
-      cancelledAt: cancelledAt.toISOString()
-    };
-    await this.audit("cancel", id, actor, before, after);
-    await this.enqueueNotificationCandidates("cancel", before, after);
-    return after;
   }
 
   async deactivate(id: string, actor: HubEventAdminActor = {}): Promise<AdminHubEvent> {
     const before = await this.getExisting(id);
     this.assertMutable(before);
-    const deactivated = await this.repository.setPublicationState({
-      id,
-      publicationState: "inactive",
-      actorId: actor.actorId,
-      deactivatedAt: this.now()
+    return this.unitOfWork.run(async ({ hubEvents }) => {
+      const deactivated = await hubEvents.setPublicationState({
+        id,
+        publicationState: "inactive",
+        actorId: actor.actorId,
+        deactivatedAt: this.now()
+      });
+      await this.audit(hubEvents, "deactivate", id, actor, before, deactivated);
+      return deactivated;
     });
-    await this.audit("deactivate", id, actor, before, deactivated);
-    return deactivated;
   }
 
   async delete(id: string, actor: HubEventAdminActor = {}): Promise<AdminHubEvent> {
     const before = await this.getExisting(id);
     this.assertMutable(before);
-    const deleted = await this.repository.softDelete({
-      id,
-      actorId: actor.actorId,
-      deletedAt: this.now()
+    return this.unitOfWork.run(async ({ hubEvents }) => {
+      const deleted = await hubEvents.softDelete({
+        id,
+        actorId: actor.actorId,
+        deletedAt: this.now()
+      });
+      await this.audit(hubEvents, "delete", id, actor, before, deleted);
+      return deleted;
     });
-    await this.audit("delete", id, actor, before, deleted);
-    return deleted;
   }
 
   async list(filters: AdminHubEventFilters = {}): Promise<AdminHubEventListResult> {
@@ -284,19 +320,21 @@ export class HubEventAdminService {
         { ...before, scheduleMode, scheduleItems: normalized },
         before.publicationState === "published" ? "publish" : "draft"
       );
-      const hardDeleteScheduleItem = this.repository.hardDeleteScheduleItem?.bind(this.repository);
-      if (!hardDeleteScheduleItem) throw new Error("hub_event_schedule_item_delete_unavailable");
-      const event = await this.runRevisionWrite(before, expectedRevision, () =>
-        hardDeleteScheduleItem(id, scheduleItemId, {
-          scheduleMode,
-          scheduleItems: normalized,
-          expectedRevision,
-          actorId: actor.actorId
-        })
-      );
-      await this.audit("schedule_delete", id, actor, before, event);
-      await this.enqueueNotificationCandidates("schedule_delete", before, event);
-      return { event, scheduleItemId, deletion: "hard_deleted" };
+      return this.unitOfWork.run(async (repositories) => {
+        const hardDeleteScheduleItem = repositories.hubEvents.hardDeleteScheduleItem?.bind(repositories.hubEvents);
+        if (!hardDeleteScheduleItem) throw new Error("hub_event_schedule_item_delete_unavailable");
+        const event = await this.runRevisionWrite(repositories.hubEvents, before, expectedRevision, () =>
+          hardDeleteScheduleItem(id, scheduleItemId, {
+            scheduleMode,
+            scheduleItems: normalized,
+            expectedRevision,
+            actorId: actor.actorId
+          })
+        );
+        await this.audit(repositories.hubEvents, "schedule_delete", id, actor, before, event);
+        await this.enqueueNotificationCandidates(repositories, "schedule_delete", before, event);
+        return { event, scheduleItemId, deletion: "hard_deleted" };
+      });
     }
 
     const cancelledAt = this.now().toISOString();
@@ -454,18 +492,23 @@ export class HubEventAdminService {
       { ...before, scheduleMode, scheduleItems },
       before.publicationState === "published" ? "publish" : "draft"
     );
-    const updated = await this.runRevisionWrite(before, expectedRevision, () => this.repository.update(before.id, {
-      scheduleMode,
-      scheduleItems,
-      expectedRevision,
-      actorId: actor.actorId
-    }));
-    await this.audit(action, before.id, actor, before, updated);
-    await this.enqueueNotificationCandidates(action, before, updated);
-    return updated;
+    return this.unitOfWork.run(async (repositories) => {
+      const updated = await this.runRevisionWrite(repositories.hubEvents, before, expectedRevision, () =>
+        repositories.hubEvents.update(before.id, {
+          scheduleMode,
+          scheduleItems,
+          expectedRevision,
+          actorId: actor.actorId
+        })
+      );
+      await this.audit(repositories.hubEvents, action, before.id, actor, before, updated);
+      await this.enqueueNotificationCandidates(repositories, action, before, updated);
+      return updated;
+    });
   }
 
   private async runRevisionWrite(
+    repository: HubEventAdminRepository,
     before: AdminHubEvent,
     expectedRevision: number,
     write: () => Promise<AdminHubEvent>
@@ -474,7 +517,7 @@ export class HubEventAdminService {
       return await write();
     } catch (error) {
       if (error instanceof Error && error.message === "hub_event_revision_conflict") {
-        const current = await this.repository.getAdminById(before.id);
+        const current = await repository.getAdminById(before.id);
         throw new HubEventRevisionConflictException(expectedRevision, current?.revision ?? before.revision);
       }
       throw error;
@@ -519,33 +562,40 @@ export class HubEventAdminService {
   }
 
   private async enqueueNotificationCandidates(
+    repositories: Pick<HubEventAdminTransactionRepositories, "platformEvents" | "notificationJobs">,
     action: HubEventAdminAction,
     before: AdminHubEvent | undefined,
     after: AdminHubEvent
   ): Promise<void> {
     const candidates = buildHubEventNotificationCandidates({ before, after, action, now: this.now() });
     for (const candidate of candidates) {
-      const result = await this.platformEvents.createIfNotExists(candidate);
-      if (result.created) {
-        const metadata = candidate.rawPayload;
-        const isScheduleCandidate = typeof metadata === "object" && metadata !== null && "scheduleItemId" in metadata;
-        await this.notificationJobs.enqueue({
-          eventId: candidate.id,
-          priority: 5,
-          ...(isScheduleCandidate ? { runAfter: new Date(candidate.occurredAt) } : {})
-        });
-      }
+      await this.ensureEventAndJob(repositories, candidate);
     }
   }
 
+  private async ensureEventAndJob(
+    repositories: Pick<HubEventAdminTransactionRepositories, "platformEvents" | "notificationJobs">,
+    candidate: PlatformEvent
+  ): Promise<void> {
+    const event = await repositories.platformEvents.createIfNotExists(candidate);
+    const metadata = candidate.rawPayload;
+    const isScheduleCandidate = typeof metadata === "object" && metadata !== null && "scheduleItemId" in metadata;
+    await repositories.notificationJobs.enqueue({
+      eventId: event.eventId ?? candidate.id,
+      priority: candidate.realtimeEligible ? 1 : 5,
+      ...(isScheduleCandidate ? { runAfter: new Date(candidate.occurredAt) } : {})
+    });
+  }
+
   private async audit(
+    repository: HubEventAdminRepository,
     action: HubEventAdminAction,
     hubEventId: string,
     actor: HubEventAdminActor,
     before: HubEvent | AdminHubEvent | null,
     after: HubEvent | AdminHubEvent
   ) {
-    await this.repository.writeAuditLog({
+    await repository.writeAuditLog({
       hubEventId,
       action,
       actorId: actor.actorId,
