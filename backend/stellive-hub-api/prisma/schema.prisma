@@ -10,7 +10,7 @@ datasource db {
 model Device {
   id                 String   @id
   platform           String
-  deviceToken        String?
+  deviceToken        String?  @unique
   tokenStatus        String   @default("active")
   locale             String?
   timezone           String?

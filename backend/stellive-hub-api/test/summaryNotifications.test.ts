@@ -162,13 +162,13 @@ describe("summary notification backfill", () => {
 });
 
 describe("SummaryNotificationWorker", () => {
-  function setup(sendResult: any, checkpoint = false) {
+  function setup(sendResult: any, checkpoint = false, ownsToken = true) {
     const complete = vi.fn(async () => undefined);
     const skip = vi.fn(async () => undefined);
     const fail = vi.fn(async () => undefined);
     const sendToDevice = vi.fn(async () => sendResult);
     const create = vi.fn(async () => undefined);
-    const markTokenInvalid = vi.fn(async () => undefined);
+    const markTokenInvalid = vi.fn(async () => true);
     const worker = new SummaryNotificationWorker({
       summaries: {
         claimReady: async () => [{ id: "bucket-1", deviceId: "device-1", topicKey: "hub_event", windowStart: now, deliverAfter: now, attempts: 0, lockedAt: now, lockedBy: "worker", items: [{ id: "item-1", bucketId: "bucket-1", deviceId: "device-1", eventId: "event-1", status: "queued", reason: "summary_queued", createdAt: now }] }],
@@ -179,6 +179,7 @@ describe("SummaryNotificationWorker", () => {
       platformEvents: { findById: async () => event() },
       devices: {
         findPushTarget: async () => ({ deviceId: "device-1", platform: "android", pushProvider: "fcm", pushToken: "redacted", tokenStatus: "active", timezone: "Asia/Seoul" }),
+        listCurrentPushTokenOwnerIds: async () => new Set(ownsToken ? ["device-1"] : []),
         markTokenInvalid
       },
       preferences: { listForDevice: async () => [] },
@@ -217,7 +218,29 @@ describe("SummaryNotificationWorker", () => {
 
     const permanent = setup({ status: "permanent_token_failure", reason: "registration-token-not-registered" });
     await expect(permanent.worker.drain({ now })).resolves.toMatchObject({ skipped: 1, completed: 1 });
-    expect(permanent.markTokenInvalid).toHaveBeenCalledWith("device-1", "registration-token-not-registered");
+    expect(permanent.markTokenInvalid).toHaveBeenCalledWith({
+      deviceId: "device-1",
+      expectedToken: "redacted",
+      reason: "registration-token-not-registered"
+    });
     expect(permanent.skip).toHaveBeenCalledWith("bucket-1", "registration-token-not-registered", now);
+  });
+
+  it("skips a bucket and records an attempt when token ownership was reassigned", async () => {
+    const test = setup({ status: "sent" }, false, false);
+
+    await expect(test.worker.drain({ now })).resolves.toMatchObject({
+      claimed: 1,
+      completed: 1,
+      sent: 0,
+      skipped: 1
+    });
+    expect(test.sendToDevice).not.toHaveBeenCalled();
+    expect(test.skip).toHaveBeenCalledWith("bucket-1", "summary_token_reassigned", now);
+    expect(test.create).toHaveBeenCalledWith(expect.objectContaining({
+      eventId: "summary:bucket-1",
+      status: "skipped",
+      reason: "push_token_reassigned"
+    }));
   });
 });

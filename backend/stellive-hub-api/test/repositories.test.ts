@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import PlatformEventRepository from "../src/repositories/platformEventRepository.js";
-import DeviceRepository from "../src/repositories/deviceRepository.js";
+import DeviceRepository, { DeviceTokenClaimUnavailableError } from "../src/repositories/deviceRepository.js";
 import { DeliveryAttemptRepository } from "../src/repositories/deliveryAttemptRepository.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -33,6 +33,38 @@ const notificationJobUniquenessMigration = readFileSync(
   resolve(__dirname, "../prisma/migrations/20260810090000_make_notification_job_event_id_unique/migration.sql"),
   "utf8"
 );
+const deviceTokenOwnershipMigration = readFileSync(
+  resolve(__dirname, "../prisma/migrations/20260813150000_add_device_token_ownership/migration.sql"),
+  "utf8"
+);
+
+describe("Prisma device token ownership schema", () => {
+  it("deduplicates existing owners before adding the nullable unique token index", () => {
+    expect(prismaSchema).toContain("deviceToken        String?  @unique");
+    expect(deviceTokenOwnershipMigration).toContain("BEGIN;");
+    expect(deviceTokenOwnershipMigration).toContain("COMMIT;");
+    expect(deviceTokenOwnershipMigration).toContain('"tokenStatus" <> \'active\'');
+    expect(deviceTokenOwnershipMigration).toContain('PARTITION BY "deviceToken"');
+    expect(deviceTokenOwnershipMigration).toContain('"updatedAt" DESC');
+    expect(deviceTokenOwnershipMigration).toContain('"lastSeenAt" DESC NULLS LAST');
+    expect(deviceTokenOwnershipMigration).toContain('"createdAt" DESC');
+    expect(deviceTokenOwnershipMigration).toContain('"id" ASC');
+    expect(deviceTokenOwnershipMigration).toContain('"tokenStatus" = \'missing\'');
+    expect(deviceTokenOwnershipMigration).toContain('CREATE UNIQUE INDEX "Device_deviceToken_key"');
+    expect(deviceTokenOwnershipMigration.indexOf("BEGIN;")).toBeLessThan(
+      deviceTokenOwnershipMigration.indexOf('"tokenStatus" <> \'active\'')
+    );
+    expect(deviceTokenOwnershipMigration.indexOf('"tokenStatus" <> \'active\'')).toBeLessThan(
+      deviceTokenOwnershipMigration.indexOf('PARTITION BY "deviceToken"')
+    );
+    expect(deviceTokenOwnershipMigration.indexOf('"tokenStatus" = \'missing\'')).toBeLessThan(
+      deviceTokenOwnershipMigration.indexOf('CREATE UNIQUE INDEX "Device_deviceToken_key"')
+    );
+    expect(deviceTokenOwnershipMigration.indexOf('CREATE UNIQUE INDEX "Device_deviceToken_key"')).toBeLessThan(
+      deviceTokenOwnershipMigration.indexOf("COMMIT;")
+    );
+  });
+});
 
 describe("Prisma hub event admin schema", () => {
   it("stores HubEvent tags as a non-null empty-array default", () => {
@@ -458,28 +490,291 @@ describe("DeviceRepository push targets", () => {
     ]);
   });
 
-  it("marks push tokens invalid without storing provider response bodies", async () => {
+  it("marks only the current token owner invalid without storing provider response bodies", async () => {
     const calls: unknown[] = [];
     const repository = new DeviceRepository({
       device: {
-        async update(args: unknown) {
+        async updateMany(args: unknown) {
           calls.push(args);
-          return {};
+          return { count: 1 };
         }
       }
     });
 
-    await repository.markTokenInvalid("device-1", "messaging/registration-token-not-registered");
+    await expect(repository.markTokenInvalid({
+      deviceId: "device-1",
+      expectedToken: "expected-token",
+      reason: "messaging/registration-token-not-registered",
+    })).resolves.toBe(true);
 
     expect(calls).toEqual([
       {
-        where: { id: "device-1" },
+        where: { id: "device-1", deviceToken: "expected-token", tokenStatus: "active" },
         data: {
+          deviceToken: null,
           tokenStatus: "invalid",
           lastSeenAt: expect.any(Date)
         }
       }
     ]);
+    expect(JSON.stringify(calls)).not.toContain("registration-token-not-registered");
+  });
+
+  it("returns false when token invalidation loses ownership", async () => {
+    const repository = new DeviceRepository({
+      device: { async updateMany() { return { count: 0 }; } },
+    });
+    await expect(repository.markTokenInvalid({
+      deviceId: "device-1",
+      expectedToken: "stale-token",
+      reason: "provider_failure",
+    })).resolves.toBe(false);
+  });
+
+  it("revalidates exact active device and token pairs in one query", async () => {
+    const findMany = vi.fn(async () => [{
+      id: "device-1",
+      platform: "android",
+      deviceToken: "token-1",
+      tokenStatus: "active",
+      timezone: null,
+      locale: null,
+      appVersion: null,
+    }]);
+    const repository = new DeviceRepository({ device: { findMany } });
+    await expect(repository.listCurrentPushTokenOwnerIds([
+      { deviceId: "device-1", pushToken: "token-1" },
+      { deviceId: "device-2", pushToken: "token-2" },
+    ])).resolves.toEqual(new Set(["device-1"]));
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        tokenStatus: "active",
+        OR: [
+          { id: "device-1", deviceToken: "token-1" },
+          { id: "device-2", deviceToken: "token-2" },
+        ],
+      },
+      select: { id: true, deviceToken: true },
+    });
+  });
+
+  it("does not query ownership for an empty pair list", async () => {
+    const findMany = vi.fn();
+    const repository = new DeviceRepository({ device: { findMany } });
+    await expect(repository.listCurrentPushTokenOwnerIds([])).resolves.toEqual(new Set());
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it.each(["P2002", "P2034"])("retries %s token claim conflicts three times then surfaces a typed error", async (code) => {
+    const transaction = vi.fn(async () => { throw { code }; });
+    const repository = new DeviceRepository({ device: {}, $transaction: transaction });
+
+    await expect(repository.updateToken({
+      deviceId: "device-1",
+      platform: "android",
+      provider: "fcm",
+      token: "private-token",
+    })).rejects.toBeInstanceOf(DeviceTokenClaimUnavailableError);
+    expect(transaction).toHaveBeenCalledTimes(3);
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: "Serializable" });
+  });
+
+  it("retries a serializable token claim conflict once and succeeds on the next attempt", async () => {
+    const transactionClient = {
+      device: {
+        async updateMany() { return { count: 0 }; },
+        async upsert() { return {}; },
+      },
+    };
+    const attempts: Array<{ isolationLevel: "Serializable" }> = [];
+    const repository = new DeviceRepository({
+      device: {},
+      $transaction: (async <T>(
+        operation: (client: typeof transactionClient) => Promise<T>,
+        options: { isolationLevel: "Serializable" },
+      ) => {
+        attempts.push(options);
+        if (attempts.length === 1) throw { code: "P2034" };
+        return operation(transactionClient);
+      }) as never,
+    });
+
+    await expect(repository.updateToken({
+      deviceId: "device-1",
+      platform: "android",
+      provider: "fcm",
+      token: "private-token",
+    })).resolves.toEqual({ updated: true, tokenStatus: "active" });
+    expect(attempts).toEqual([
+      { isolationLevel: "Serializable" },
+      { isolationLevel: "Serializable" },
+    ]);
+  });
+
+  it("claims a token by clearing other owners before the claimant upsert", async () => {
+    const operations: string[] = [];
+    const transactionClient = {
+      device: {
+        async updateMany(args: unknown) {
+          operations.push("clear");
+          expect(args).toEqual({
+            where: { deviceToken: "shared-token", id: { not: "device-new" } },
+            data: { deviceToken: null, tokenStatus: "missing" },
+          });
+          return { count: 1 };
+        },
+        async upsert() {
+          operations.push("claim");
+          return {};
+        },
+      },
+    };
+    const repository = new DeviceRepository({
+      device: {},
+      async $transaction(operation) { return operation(transactionClient); },
+    });
+
+    await expect(repository.updateToken({
+      deviceId: "device-new",
+      platform: "ios",
+      provider: "apns_via_fcm",
+      token: "shared-token",
+    })).resolves.toEqual({ updated: true, tokenStatus: "active" });
+    expect(operations).toEqual(["clear", "claim"]);
+  });
+
+  it("treats the same-device same-token update as an idempotent claim", async () => {
+    const transactionClient = {
+      device: {
+        updateMany: vi.fn(async () => ({ count: 0 })),
+        upsert: vi.fn(async () => ({})),
+      },
+    };
+    const repository = new DeviceRepository({
+      device: {},
+      async $transaction(operation) { return operation(transactionClient); },
+    });
+
+    await expect(repository.updateToken({
+      deviceId: "device-1",
+      platform: "android",
+      provider: "fcm",
+      token: "private-token",
+      locale: "ko-KR",
+      timezone: "Asia/Seoul",
+      appVersion: "1.0.0",
+    })).resolves.toEqual({ updated: true, tokenStatus: "active" });
+
+    expect(transactionClient.device.updateMany).toHaveBeenCalledWith({
+      where: { deviceToken: "private-token", id: { not: "device-1" } },
+      data: { deviceToken: null, tokenStatus: "missing" },
+    });
+    expect(transactionClient.device.upsert).toHaveBeenCalledWith({
+      where: { id: "device-1" },
+      create: expect.objectContaining({
+        id: "device-1",
+        platform: "android",
+        deviceToken: "private-token",
+        tokenStatus: "active",
+        locale: "ko-KR",
+        timezone: "Asia/Seoul",
+        appVersion: "1.0.0",
+        realtimeEnabled: false,
+        realtimeAcknowledged: false,
+        lastSeenAt: expect.any(Date),
+      }),
+      update: expect.objectContaining({
+        platform: "android",
+        deviceToken: "private-token",
+        tokenStatus: "active",
+        locale: "ko-KR",
+        timezone: "Asia/Seoul",
+        appVersion: "1.0.0",
+        lastSeenAt: expect.any(Date),
+      }),
+    });
+  });
+
+  it("resolves concurrent same-token claims with the retried last successful claimant as owner", async () => {
+    const records = new Map<string, { id: string; deviceToken: string | null; tokenStatus: string }>([
+      ["device-old", { id: "device-old", deviceToken: "shared-token", tokenStatus: "active" }],
+      ["device-a", { id: "device-a", deviceToken: null, tokenStatus: "missing" }],
+      ["device-b", { id: "device-b", deviceToken: null, tokenStatus: "missing" }],
+    ]);
+    let transactionCount = 0;
+    let releaseDeviceARetry!: () => void;
+    const deviceARetryGate = new Promise<void>((resolve) => {
+      releaseDeviceARetry = resolve;
+    });
+    let deviceBCommitted = false;
+    const transactionClient = {
+      device: {
+        async updateMany(args: { where: { deviceToken: string; id: { not: string } }; data: { deviceToken: null; tokenStatus: "missing" } }) {
+          if (args.where.id.not === "device-a" && transactionCount > 2 && !deviceBCommitted) {
+            await deviceARetryGate;
+          }
+          for (const record of records.values()) {
+            if (record.deviceToken === args.where.deviceToken && record.id !== args.where.id.not) {
+              record.deviceToken = args.data.deviceToken;
+              record.tokenStatus = args.data.tokenStatus;
+            }
+          }
+          return { count: 1 };
+        },
+        async upsert(args: { where: { id: string }; create: { deviceToken: string; tokenStatus: "active" }; update: { deviceToken: string; tokenStatus: "active" } }) {
+          const existing = records.get(args.where.id);
+          if (existing) {
+            existing.deviceToken = args.update.deviceToken;
+            existing.tokenStatus = args.update.tokenStatus;
+          } else {
+            records.set(args.where.id, {
+              id: args.where.id,
+              deviceToken: args.create.deviceToken,
+              tokenStatus: args.create.tokenStatus,
+            });
+          }
+          if (args.where.id === "device-b") {
+            deviceBCommitted = true;
+            releaseDeviceARetry();
+          }
+          return {};
+        },
+      },
+    };
+    const repository = new DeviceRepository({
+      device: {},
+      $transaction: (async <T>(
+        operation: (client: typeof transactionClient) => Promise<T>,
+        options: { isolationLevel: "Serializable" },
+      ) => {
+        expect(options).toEqual({ isolationLevel: "Serializable" });
+        transactionCount += 1;
+        if (transactionCount === 1) throw { code: "P2034" };
+        return operation(transactionClient);
+      }) as never,
+    });
+
+    const first = repository.updateToken({
+      deviceId: "device-a",
+      platform: "android",
+      provider: "fcm",
+      token: "shared-token",
+    });
+    const second = repository.updateToken({
+      deviceId: "device-b",
+      platform: "android",
+      provider: "fcm",
+      token: "shared-token",
+    });
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { updated: true, tokenStatus: "active" },
+      { updated: true, tokenStatus: "active" },
+    ]);
+
+    expect(records.get("device-a")).toMatchObject({ deviceToken: "shared-token", tokenStatus: "active" });
+    expect(records.get("device-b")).toMatchObject({ deviceToken: null, tokenStatus: "missing" });
+    expect(Array.from(records.values()).filter((record) => record.deviceToken === "shared-token")).toHaveLength(1);
   });
 });
 

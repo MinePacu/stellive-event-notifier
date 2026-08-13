@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
-import DeviceRepository from "../src/repositories/deviceRepository.js";
+import DeviceRepository, { DeviceTokenClaimUnavailableError } from "../src/repositories/deviceRepository.js";
 import type { UserNotificationPreference } from "../src/types.js";
 
 interface FakeDeviceRecord {
@@ -38,6 +38,22 @@ function createFakePrisma() {
         async findUnique(args: { where: { id: string } }) {
           return records.get(args.where.id) ?? null;
         },
+        async updateMany(args: {
+          where: { deviceToken?: string; id?: { not: string } };
+          data: Partial<FakeDeviceRecord>;
+        }) {
+          let count = 0;
+          for (const [id, record] of records) {
+            if (args.where.deviceToken !== undefined && record.deviceToken !== args.where.deviceToken) continue;
+            if (args.where.id?.not === id) continue;
+            records.set(id, { ...record, ...args.data });
+            count += 1;
+          }
+          return { count };
+        },
+      },
+      async $transaction<T>(operation: (transaction: unknown) => Promise<T>) {
+        return operation(this);
       },
     },
   };
@@ -48,7 +64,7 @@ describe("DeviceRepository", () => {
     const { prisma, records } = createFakePrisma();
     const now = new Date("2026-06-11T01:00:00.000Z");
     const repository = new DeviceRepository(
-      prisma,
+      prisma as never,
       () => now,
       () => "device-generated",
     );
@@ -80,7 +96,7 @@ describe("DeviceRepository", () => {
     const { prisma } = createFakePrisma();
     const now = new Date("2026-06-11T02:00:00.000Z");
     const repository = new DeviceRepository(
-      prisma,
+      prisma as never,
       () => now,
       () => "unused-device-id",
     );
@@ -109,6 +125,27 @@ describe("DeviceRepository", () => {
       deviceId: "device-1",
       tokenStatus: "active",
     });
+  });
+
+  it("atomically transfers a token from an older installation", async () => {
+    const { prisma, records } = createFakePrisma();
+    const repository = new DeviceRepository(prisma as never);
+    await repository.updateToken({
+      deviceId: "old-device",
+      platform: "android",
+      provider: "fcm",
+      token: "shared-runtime-token",
+    });
+
+    await repository.updateToken({
+      deviceId: "new-device",
+      platform: "android",
+      provider: "fcm",
+      token: "shared-runtime-token",
+    });
+
+    expect(records.get("old-device")).toMatchObject({ deviceToken: null, tokenStatus: "missing" });
+    expect(records.get("new-device")).toMatchObject({ deviceToken: "shared-runtime-token", tokenStatus: "active" });
   });
 });
 
@@ -279,6 +316,32 @@ describe("mobile device routes", () => {
     expect(response.json()).toEqual({ error: "server_unavailable" });
     expect(updateCalls).toBe(0);
     expect(syncCalls).toBe(1);
+  });
+
+  it("returns server_unavailable when token ownership claim retries are exhausted", async () => {
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: {
+        dependencies: {
+          devices: {
+            async updateToken() {
+              throw new DeviceTokenClaimUnavailableError();
+            },
+          },
+        },
+      },
+    });
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/devices/token",
+      payload: { deviceId: "device-1", platform: "android", provider: "fcm", token: "runtime-token" },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: "server_unavailable" });
   });
 
   it("registers devices through the durable mobile app route", async () => {

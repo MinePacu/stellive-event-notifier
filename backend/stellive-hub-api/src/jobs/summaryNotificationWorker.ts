@@ -24,7 +24,7 @@ interface SummaryNotificationWorkerDependencies {
   summaries: Pick<SummaryNotificationRepository, "claimReady" | "complete" | "skip" | "fail">;
   platformEvents: Pick<PlatformEventRepository, "findById">;
   hubEventSchedules?: { isScheduleNotificationCurrent(event: PlatformEvent, now: Date): Promise<boolean> };
-  devices: Pick<DeviceRepository, "findPushTarget" | "markTokenInvalid">;
+  devices: Pick<DeviceRepository, "findPushTarget" | "listCurrentPushTokenOwnerIds" | "markTokenInvalid">;
   preferences: Pick<PreferenceRepository, "listForDevice">;
   deliveryAttempts: Pick<DeliveryAttemptRepository, "create" | "countSentByDeviceInWindow" | "listSentDeviceIds">;
   preferenceResolution: Pick<PreferenceResolutionService, "resolve">;
@@ -148,6 +148,24 @@ export class SummaryNotificationWorker {
       events: allowed.map((entry) => entry.event),
       resolution: representative.resolution
     });
+    const ownerIds = await this.dependencies.devices.listCurrentPushTokenOwnerIds([
+      { deviceId: device.deviceId, pushToken: device.pushToken }
+    ]);
+    if (!ownerIds.has(device.deviceId)) {
+      await this.dependencies.summaries.skip(bucket.id, "summary_token_reassigned", now);
+      await this.dependencies.deliveryAttempts.create(this.attempt({
+        bucket,
+        device,
+        event: representative.event,
+        resolution: representative.resolution,
+        now,
+        status: "skipped",
+        reason: "push_token_reassigned"
+      }));
+      totals.skipped += 1;
+      totals.completed += 1;
+      return;
+    }
     const result = await this.dependencies.pushSender.sendToDevice({ device, payload });
 
     if (result.status === "sent") {
@@ -175,10 +193,11 @@ export class SummaryNotificationWorker {
     }
 
     if (result.status === "permanent_token_failure") {
-      await this.dependencies.devices.markTokenInvalid(
-        device.deviceId,
-        result.providerErrorCode ?? result.reason ?? "permanent_token_failure"
-      );
+      await this.dependencies.devices.markTokenInvalid({
+        deviceId: device.deviceId,
+        expectedToken: device.pushToken,
+        reason: result.providerErrorCode ?? result.reason ?? "permanent_token_failure"
+      });
       await this.dependencies.summaries.skip(bucket.id, result.reason ?? "permanent_token_failure", now);
       await this.dependencies.deliveryAttempts.create(this.attempt({
         bucket,

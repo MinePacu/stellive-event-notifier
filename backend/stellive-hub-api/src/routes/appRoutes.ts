@@ -10,6 +10,7 @@ import {
   PreferenceStaleUpdateError,
   type PreferenceSnapshot,
 } from "../repositories/preferenceRepository.js";
+import { DeviceTokenClaimUnavailableError } from "../repositories/deviceRepository.js";
 import {
   serviceAnnouncementsEnabled,
   type ServiceTopicSyncResult,
@@ -256,17 +257,26 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     }
 
     const devices = options.dependencies?.devices;
-    const result = devices?.updateToken
-      ? await devices.updateToken({
-          deviceId: body.deviceId,
-          platform: parsePlatform(body.platform),
-          provider,
-          token: body.token,
-          locale: body.locale,
-          timezone: body.timezone,
-          appVersion: body.appVersion,
-        })
-      : { updated: true as const, tokenStatus: "active" as const };
+    let result: { updated: true; tokenStatus: "active" };
+    try {
+      result = devices?.updateToken
+        ? await devices.updateToken({
+            deviceId: body.deviceId,
+            platform: parsePlatform(body.platform),
+            provider,
+            token: body.token,
+            locale: body.locale,
+            timezone: body.timezone,
+            appVersion: body.appVersion,
+          })
+        : { updated: true as const, tokenStatus: "active" as const };
+    } catch (error) {
+      if (error instanceof DeviceTokenClaimUnavailableError) {
+        const unavailable = mobileError("server_unavailable", 503);
+        return reply.code(unavailable.statusCode).send(unavailable.payload);
+      }
+      throw error;
+    }
     if (!topicOptOut && syncToken) {
       await syncServiceTopicsBestEffort(
         request,

@@ -114,6 +114,9 @@ function createWorker(options: {
     retryAt?: Date;
     terminal: boolean;
   }) => Promise<boolean>;
+  listCurrentPushTokenOwnerIds?: (
+    targets: Array<{ deviceId: string; pushToken: string }>
+  ) => Promise<Set<string>>;
 }) {
   const calls = {
     claims: [] as Array<{ limit: number; lockedBy: string; now: Date; staleLockMs?: number }>,
@@ -127,6 +130,7 @@ function createWorker(options: {
     preferenceDeviceIds: [] as string[][],
     attemptBatches: [] as unknown[][],
     sentLookups: [] as Array<{ eventId: string; deviceIds: string[] }>,
+    ownershipLookups: [] as Array<Array<{ deviceId: string; pushToken: string }>>,
     recentSentLookups: [] as Array<{ deviceIds: string[]; since: Date; until: Date }>,
     summaries: [] as Array<{ event: PlatformEvent; deviceId: string; evaluatedAt: Date }>,
     resolveContexts: [] as Array<{ deviceId: string; evaluatedAt: Date; recentNotificationsInLastMinute: number }>
@@ -192,8 +196,13 @@ function createWorker(options: {
       async listPushTargets() {
         return pushTargets;
       },
-      async markTokenInvalid(deviceId: string, reason: string) {
-        calls.invalidated.push({ deviceId, reason });
+      async listCurrentPushTokenOwnerIds(targets: Array<{ deviceId: string; pushToken: string }>) {
+        calls.ownershipLookups.push(targets);
+        return options.listCurrentPushTokenOwnerIds?.(targets) ?? new Set(targets.map((target) => target.deviceId));
+      },
+      async markTokenInvalid(input: { deviceId: string; expectedToken: string; reason: string }) {
+        calls.invalidated.push(input);
+        return true;
       }
     },
     preferences: {
@@ -659,7 +668,7 @@ describe("NotificationWorker", () => {
     expect(calls.batches[0].payload.notification.imageUrl).toBe("https://example.com/event.jpg");
     expect(result).toMatchObject({ sent: 1, skipped: 1, queued: 1, status: "partial" });
     expect(calls.invalidated).toEqual([
-      { deviceId: "device-2", reason: "messaging/invalid-registration-token" }
+      { deviceId: "device-2", expectedToken: "token-2", reason: "messaging/invalid-registration-token" }
     ]);
     expect(calls.failed).toEqual([
       expect.objectContaining({ retryAt: new Date("2026-06-12T00:01:30.000Z") })
@@ -688,6 +697,7 @@ describe("NotificationWorker", () => {
     expect(calls.invalidated).toEqual([
       {
         deviceId: "device-1",
+        expectedToken: "token-redacted",
         reason: "messaging/registration-token-not-registered"
       }
     ]);
@@ -695,7 +705,10 @@ describe("NotificationWorker", () => {
   });
 
   it("filters sent recipients independently in each push-target page", async () => {
-    const devices = Array.from({ length: 1201 }, (_, index) => device({ deviceId: `device-${index}` }));
+    const devices = Array.from({ length: 1201 }, (_, index) => device({
+      deviceId: `device-${index}`,
+      pushToken: `token-${index}`
+    }));
     const { worker, calls } = createWorker({
       devices,
       previousAttempts: [0, 500, 1000].map((index) => ({ deviceId: `device-${index}`, status: "sent" })),
@@ -820,6 +833,108 @@ describe("NotificationWorker", () => {
     await worker.drain({ now });
 
     expect(calls.sent).toHaveLength(1);
+  });
+
+  it("skips a single-device send when exact push token ownership was reassigned", async () => {
+    const { worker, calls } = createWorker({
+      listCurrentPushTokenOwnerIds: async () => new Set()
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ completed: 1, sent: 0, skipped: 1, failed: 0 });
+    expect(calls.sent).toEqual([]);
+    expect(calls.ownershipLookups).toEqual([[
+      { deviceId: "device-1", pushToken: "token-redacted" }
+    ]]);
+    expect(calls.attempts).toEqual([
+      expect.objectContaining({ deviceId: "device-1", status: "skipped", reason: "push_token_reassigned" })
+    ]);
+  });
+
+  it("filters reassigned targets before multicast and keeps result indexes aligned", async () => {
+    const devices = [
+      device({ deviceId: "owner-1", pushToken: "token-1" }),
+      device({ deviceId: "reassigned", pushToken: "token-2" }),
+      device({ deviceId: "owner-3", pushToken: "token-3" })
+    ];
+    const { worker, calls } = createWorker({
+      devices,
+      listCurrentPushTokenOwnerIds: async () => new Set(["owner-1", "owner-3"]),
+      sendBatch: async ({ devices: batch }) => batch.map((target) => ({
+        status: "sent",
+        providerMessageId: `message-${target.deviceId}`
+      }))
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ completed: 1, sent: 2, skipped: 1, failed: 0 });
+    expect(calls.batches[0].devices.map((target) => target.deviceId)).toEqual(["owner-1", "owner-3"]);
+    expect(calls.attempts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ deviceId: "owner-1", status: "sent", providerMessageId: "message-owner-1" }),
+      expect.objectContaining({ deviceId: "reassigned", status: "skipped", reason: "push_token_reassigned" }),
+      expect.objectContaining({ deviceId: "owner-3", status: "sent", providerMessageId: "message-owner-3" })
+    ]));
+  });
+
+  it("suppresses a duplicate raw token across push-target pages", async () => {
+    const devices = Array.from({ length: 51 }, (_, index) => device({
+      deviceId: `device-${index}`,
+      pushToken: index === 50 ? "token-0" : `token-${index}`
+    }));
+    const { worker, calls } = createWorker({
+      devices,
+      deviceBatchSize: 50,
+      sendBatch: async ({ devices: batch }) => batch.map(() => ({ status: "sent" }))
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ completed: 1, sent: 50, skipped: 1 });
+    expect(calls.batches).toHaveLength(1);
+    expect(calls.ownershipLookups).toHaveLength(1);
+    expect(calls.attempts).toContainEqual(expect.objectContaining({
+      deviceId: "device-50",
+      status: "skipped",
+      reason: "duplicate_push_token"
+    }));
+  });
+
+  it("suppresses a duplicate raw token across different payload groups", async () => {
+    const devices = [
+      device({ deviceId: "normal-device", pushToken: "shared-token" }),
+      device({ deviceId: "high-device", pushToken: "shared-token" })
+    ];
+    const { worker, calls } = createWorker({
+      devices,
+      resolve: ({ deviceId }) => resolution({
+        deviceId,
+        pushPriority: deviceId === "high-device" ? "high" : "normal"
+      }),
+      sendBatch: async ({ devices: batch }) => batch.map(() => ({ status: "sent" }))
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ completed: 1, sent: 1, skipped: 1 });
+    expect(calls.batches).toHaveLength(1);
+    expect(calls.batches[0].devices.map((target) => target.deviceId)).toEqual(["normal-device"]);
+    expect(calls.attempts).toContainEqual(expect.objectContaining({
+      deviceId: "high-device",
+      status: "skipped",
+      reason: "duplicate_push_token"
+    }));
+  });
+
+  it("does not call the provider when ownership validation fails", async () => {
+    const { worker, calls } = createWorker({
+      listCurrentPushTokenOwnerIds: async () => { throw new Error("ownership_lookup_failed"); }
+    });
+
+    await expect(worker.drain({ now })).rejects.toThrow("ownership_lookup_failed");
+    expect(calls.sent).toEqual([]);
+    expect(calls.batches).toEqual([]);
   });
 
   it("falls back to create when createMany is unavailable", async () => {

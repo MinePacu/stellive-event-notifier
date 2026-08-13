@@ -48,7 +48,8 @@ interface NotificationWorkerDependencies {
   devices: {
     listPushTargetsPage?(input: { cursor?: string; limit: number }): Promise<{ items: PushTargetDevice[]; nextCursor: string | null }>;
     listPushTargets?(): Promise<PushTargetDevice[]>;
-    markTokenInvalid(deviceId: string, reason: string): Promise<void>;
+    listCurrentPushTokenOwnerIds(targets: Array<{ deviceId: string; pushToken: string }>): Promise<Set<string>>;
+    markTokenInvalid(input: { deviceId: string; expectedToken: string; reason: string }): Promise<boolean>;
   };
   preferences: Pick<PreferenceRepository, "listForDevice"> | { listForDevices(deviceIds: string[]): Promise<UserNotificationPreference[]> };
   deliveryAttempts: {
@@ -199,6 +200,7 @@ export class NotificationWorker {
     let hadSummaryEnqueueFailure = false;
     let providerRetryAfterMs: number | undefined;
     let leaseLost = false;
+    const attemptedPushTokens = new Set<string>();
 
     const processPage = async (devices: PushTargetDevice[]) => {
       if (!(await this.renewJobLock(job, totals))) return false;
@@ -231,7 +233,8 @@ export class NotificationWorker {
           totals,
           now,
           evaluatedAtOverride,
-          attemptBuffer
+          attemptBuffer,
+          attemptedPushTokens
         });
         totals.sent += result.sent;
         totals.skipped += result.skipped;
@@ -307,6 +310,7 @@ export class NotificationWorker {
     now: Date;
     evaluatedAtOverride?: Date;
     attemptBuffer: CreateDeliveryAttemptInput[];
+    attemptedPushTokens: Set<string>;
   }): Promise<{
     sent: number;
     skipped: number;
@@ -376,12 +380,55 @@ export class NotificationWorker {
         if (!(await this.renewJobLock(input.job, input.totals, input.attemptBuffer))) {
           return { sent, skipped, queued, hadTransientFailure, hadSummaryEnqueueFailure, providerRetryAfterMs, leaseLost: true };
         }
-        const results = await this.dependencies.pushSender.sendToDevices({
-          devices: group.map((item) => item.device),
-          payload: group[0].payload
+        const candidates = group.filter((item) => {
+          if (!input.attemptedPushTokens.has(item.device.pushToken)) return true;
+          this.recordAttempt(input.attemptBuffer, {
+            event: input.event,
+            device: item.device,
+            resolution: item.resolution,
+            deliveryLevel: item.deliveryLevel,
+            status: "skipped",
+            reason: "duplicate_push_token",
+            now: input.now,
+            retryCount: input.job.attempts
+          });
+          skipped += 1;
+          return false;
         });
-        for (let index = 0; index < group.length; index += 1) {
-          const item = group[index];
+        if (candidates.length === 0) continue;
+        const ownerIds = await this.dependencies.devices.listCurrentPushTokenOwnerIds(
+          candidates.map((item) => ({ deviceId: item.device.deviceId, pushToken: item.device.pushToken }))
+        );
+        const batchTokens = new Set<string>();
+        const sendable = candidates.filter((item) => {
+          let reason: "push_token_reassigned" | "duplicate_push_token" | undefined;
+          if (!ownerIds.has(item.device.deviceId)) reason = "push_token_reassigned";
+          else if (batchTokens.has(item.device.pushToken)) reason = "duplicate_push_token";
+          if (reason) {
+            this.recordAttempt(input.attemptBuffer, {
+              event: input.event,
+              device: item.device,
+              resolution: item.resolution,
+              deliveryLevel: item.deliveryLevel,
+              status: "skipped",
+              reason,
+              now: input.now,
+              retryCount: input.job.attempts
+            });
+            skipped += 1;
+            return false;
+          }
+          batchTokens.add(item.device.pushToken);
+          return true;
+        });
+        if (sendable.length === 0) continue;
+        for (const item of sendable) input.attemptedPushTokens.add(item.device.pushToken);
+        const results = await this.dependencies.pushSender.sendToDevices({
+          devices: sendable.map((item) => item.device),
+          payload: sendable[0].payload
+        });
+        for (let index = 0; index < sendable.length; index += 1) {
+          const item = sendable[index];
           const result = await this.handleSendResult(input.attemptBuffer, {
             event: input.event,
             device: item.device,
@@ -427,6 +474,7 @@ export class NotificationWorker {
     now: Date;
     evaluatedAtOverride?: Date;
     attemptBuffer: CreateDeliveryAttemptInput[];
+    attemptedPushTokens: Set<string>;
   }): Promise<DeviceProcessResult> {
     const evaluatedAt = input.evaluatedAtOverride ?? this.currentTime();
     const resolution = this.dependencies.preferenceResolution.resolve(
@@ -471,6 +519,36 @@ export class NotificationWorker {
       deliveryLevel: delivery.deliveryLevel
     });
     if (!(await this.renewJobLock(input.job, input.totals, input.attemptBuffer))) return { leaseLost: true };
+    if (input.attemptedPushTokens.has(input.device.pushToken)) {
+      this.recordAttempt(input.attemptBuffer, {
+        event: input.event,
+        device: input.device,
+        resolution,
+        deliveryLevel: delivery.deliveryLevel,
+        status: "skipped",
+        reason: "duplicate_push_token",
+        now: input.now,
+        retryCount: input.job.attempts
+      });
+      return { skipped: true };
+    }
+    const ownerIds = await this.dependencies.devices.listCurrentPushTokenOwnerIds([
+      { deviceId: input.device.deviceId, pushToken: input.device.pushToken }
+    ]);
+    if (!ownerIds.has(input.device.deviceId)) {
+      this.recordAttempt(input.attemptBuffer, {
+        event: input.event,
+        device: input.device,
+        resolution,
+        deliveryLevel: delivery.deliveryLevel,
+        status: "skipped",
+        reason: "push_token_reassigned",
+        now: input.now,
+        retryCount: input.job.attempts
+      });
+      return { skipped: true };
+    }
+    input.attemptedPushTokens.add(input.device.pushToken);
     const sendResult = await this.dependencies.pushSender.sendToDevice({
       device: input.device,
       payload
@@ -508,10 +586,11 @@ export class NotificationWorker {
     }
 
     if (input.sendResult.status === "permanent_token_failure") {
-      await this.dependencies.devices.markTokenInvalid(
-        input.device.deviceId,
-        input.sendResult.providerErrorCode ?? input.sendResult.reason ?? "permanent_token_failure"
-      );
+      await this.dependencies.devices.markTokenInvalid({
+        deviceId: input.device.deviceId,
+        expectedToken: input.device.pushToken,
+        reason: input.sendResult.providerErrorCode ?? input.sendResult.reason ?? "permanent_token_failure"
+      });
       this.recordAttempt(attemptBuffer, {
         ...input,
         status: "skipped",

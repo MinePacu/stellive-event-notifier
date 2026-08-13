@@ -479,6 +479,9 @@ describe("HubEvent notification job delivery flow", () => {
         async listPushTargets() {
           return devices;
         },
+        async listCurrentPushTokenOwnerIds(targets) {
+          return new Set(targets.map((target) => target.deviceId));
+        },
         async markTokenInvalid() {
           throw new Error("unexpected token invalidation");
         }

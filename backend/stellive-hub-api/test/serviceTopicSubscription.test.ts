@@ -46,4 +46,35 @@ describe("service topic subscription policy", () => {
     }]);
     expect(JSON.stringify(result)).not.toContain("private-device-token");
   });
+
+  it("uses the current device preference when reconciling an opted-out owner", async () => {
+    const calls: unknown[] = [];
+    const service = new ServiceTopicSubscriptionService({
+      fcmClient: {
+        async setTopicSubscriptions(input) {
+          calls.push(input);
+          return { status: "synced" as const };
+        },
+      },
+      devices: {
+        async findPushTarget() {
+          return {
+            deviceId: "device-1",
+            platform: "android" as const,
+            pushProvider: "fcm" as const,
+            pushToken: "private-device-token",
+            tokenStatus: "active" as const,
+          };
+        },
+      },
+      preferences: {
+        async listForDevice() {
+          return [globalPreference({ enabled: false })];
+        },
+      },
+    });
+
+    await expect(service.syncDevice({ deviceId: "device-1" })).resolves.toEqual({ status: "synced" });
+    expect(calls).toEqual([expect.objectContaining({ enabled: false })]);
+  });
 });

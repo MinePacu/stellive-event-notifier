@@ -15,6 +15,7 @@
     "dev:chzzk-live-worker": "tsx src/workers/chzzkLivePollWorker.ts",
     "dev:hub-event-status-worker": "tsx src/workers/hubEventStatusReconcileWorker.ts",
     "dev:music-channel-discovery-worker": "tsx src/workers/musicChannelDiscoveryWorker.ts",
+    "start:service-topic-reconcile": "node dist/backend/stellive-hub-api/src/workers/serviceTopicReconcileWorker.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
