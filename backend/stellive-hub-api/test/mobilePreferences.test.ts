@@ -371,15 +371,23 @@ const routeEnv = {
 };
 
 describe("mobile preference routes", () => {
-  it("syncs service topics after preferences are replaced", async () => {
+  it("unsubscribes service topics before replacing opt-out preferences and syncs only once", async () => {
+    const operations: string[] = [];
     const synced: unknown[] = [];
     const rules = [preference({ scope: "global", enabled: true, serviceAnnouncementsEnabled: false })];
     const app = await buildApp({
       env: routeEnv,
       useProcessEnv: false,
       appRoutes: { dependencies: {
-        preferences: { replaceForDevice: async () => ({ preferences: rules, revision: 1, updatedAt: "2026-07-06T00:00:00.000Z" }) },
-        serviceTopicSubscriptions: { async syncDevice(input) { synced.push(input); return { status: "synced" }; } }
+        preferences: { replaceForDevice: async () => {
+          operations.push("replace");
+          return { preferences: rules, revision: 1, updatedAt: "2026-07-06T00:00:00.000Z" };
+        } },
+        serviceTopicSubscriptions: { async syncDevice(input) {
+          operations.push("sync");
+          synced.push(input);
+          return { status: "synced" };
+        } }
       } }
     });
 
@@ -391,7 +399,161 @@ describe("mobile preference routes", () => {
     await app.close();
 
     expect(response.statusCode).toBe(200);
+    expect(operations).toEqual(["sync", "replace"]);
     expect(synced).toEqual([{ deviceId: "device-1", preferences: rules }]);
+  });
+
+  it.each([
+    ["transient_failure", async () => ({ status: "transient_failure" as const })],
+    ["disabled", async () => ({ status: "disabled" as const })],
+    ["a thrown exception", async () => { throw new Error("provider unavailable"); }],
+  ] as const)(
+    "rejects an opt-out when pre-save topic sync encounters %s",
+    async (_scenario, syncDevice) => {
+      const operations: string[] = [];
+      const rules = [preference({ enabled: false })];
+      const app = await buildApp({
+        env: routeEnv,
+        useProcessEnv: false,
+        appRoutes: { dependencies: {
+          preferences: { replaceForDevice: async () => {
+            operations.push("replace");
+            return { preferences: rules, revision: 1, updatedAt: "2026-07-06T00:00:00.000Z" };
+          } },
+          serviceTopicSubscriptions: { async syncDevice() {
+            operations.push("sync");
+            return syncDevice();
+          } },
+        } },
+      });
+
+      const response = await app.inject({
+        method: "PUT",
+        url: "/v1/preferences",
+        payload: { deviceId: "device-1", preferences: rules, expectedRevision: 0 },
+      });
+
+      await app.close();
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toEqual({ error: "server_unavailable" });
+      expect(operations).toEqual(["sync"]);
+    },
+  );
+
+  it("saves opt-out preferences when pre-save topic sync reports a missing token", async () => {
+    let replaceCalls = 0;
+    let syncCalls = 0;
+    const rules = [preference({ serviceAnnouncementsEnabled: false })];
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: { dependencies: {
+        preferences: { replaceForDevice: async () => {
+          replaceCalls += 1;
+          return { preferences: rules, revision: 1, updatedAt: "2026-07-06T00:00:00.000Z" };
+        } },
+        serviceTopicSubscriptions: { async syncDevice() {
+          syncCalls += 1;
+          return { status: "token_missing" };
+        } },
+      } },
+    });
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", preferences: rules, expectedRevision: 0 },
+    });
+
+    await app.close();
+    expect(response.statusCode).toBe(200);
+    expect(replaceCalls).toBe(1);
+    expect(syncCalls).toBe(1);
+  });
+
+  it("keeps opt-in preference saves successful when post-save topic sync fails", async () => {
+    let replaceCalls = 0;
+    let syncCalls = 0;
+    const rules = [preference({ enabled: true })];
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: { dependencies: {
+        preferences: { replaceForDevice: async () => {
+          replaceCalls += 1;
+          return { preferences: rules, revision: 1, updatedAt: "2026-07-06T00:00:00.000Z" };
+        } },
+        serviceTopicSubscriptions: { async syncDevice() {
+          syncCalls += 1;
+          return { status: "transient_failure" };
+        } },
+      } },
+    });
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", preferences: rules, expectedRevision: 0 },
+    });
+
+    await app.close();
+    expect(response.statusCode).toBe(200);
+    expect(replaceCalls).toBe(1);
+    expect(syncCalls).toBe(1);
+  });
+
+  it("rejects omitted preferences before replacing or syncing through injected dependencies", async () => {
+    let replaceCalls = 0;
+    let syncCalls = 0;
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: {
+        dependencies: {
+          preferences: {
+            replaceForDevice: async () => {
+              replaceCalls += 1;
+              return { preferences: [], revision: 1, updatedAt: "2026-07-06T00:00:00.000Z" };
+            },
+          },
+          serviceTopicSubscriptions: {
+            async syncDevice() {
+              syncCalls += 1;
+              return { status: "synced" };
+            },
+          },
+        },
+      },
+    });
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", expectedRevision: 0 },
+    });
+
+    await app.close();
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "preferences_invalid" });
+    expect(replaceCalls).toBe(0);
+    expect(syncCalls).toBe(0);
+  });
+
+  it.each([
+    ["null", null],
+    ["a non-array object", { scope: "global", enabled: true }],
+  ])("rejects preferences supplied as %s", async (_label, preferences) => {
+    const app = await buildApp({ env: routeEnv, useProcessEnv: false });
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", preferences, expectedRevision: 0 },
+    });
+
+    await app.close();
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "preferences_invalid" });
   });
 
   it("returns preferences from the injected repository", async () => {
@@ -441,6 +603,7 @@ describe("mobile preference routes", () => {
           serviceTopicSubscriptions: {
             async syncDevice(input) {
               synced.push(input);
+              return { status: "synced" };
             },
           },
         },
@@ -457,6 +620,139 @@ describe("mobile preference routes", () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({ error: "preference_conflict" });
     expect(synced).toEqual([]);
+  });
+
+  it("rejects a stale opt-out revision before syncing service topics", async () => {
+    let replaceCalls = 0;
+    let syncCalls = 0;
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: { dependencies: {
+        preferences: {
+          getSnapshotForDevice: async () => ({
+            preferences: [preference({ enabled: true })],
+            revision: 3,
+            updatedAt: "2026-08-13T00:00:00.000Z",
+          }),
+          replaceForDevice: async () => {
+            replaceCalls += 1;
+            return { preferences: [], revision: 4, updatedAt: "2026-08-13T00:00:01.000Z" };
+          },
+        },
+        serviceTopicSubscriptions: { async syncDevice() {
+          syncCalls += 1;
+          return { status: "synced" };
+        } },
+      } },
+    });
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", preferences: [preference({ enabled: false })], expectedRevision: 2 },
+    });
+
+    await app.close();
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: "preference_conflict" });
+    expect(replaceCalls).toBe(0);
+    expect(syncCalls).toBe(0);
+  });
+
+  it("compensates a pre-synced opt-out when the durable replace later conflicts", async () => {
+    const operations: string[] = [];
+    const syncedPreferences: UserNotificationPreference[][] = [];
+    const currentRules = [preference({ enabled: true })];
+    let snapshotCalls = 0;
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: { dependencies: {
+        preferences: {
+          getSnapshotForDevice: async () => {
+            snapshotCalls += 1;
+            operations.push(snapshotCalls === 1 ? "snapshot:preflight" : "snapshot:compensation");
+            return {
+              preferences: currentRules,
+              revision: snapshotCalls === 1 ? 2 : 3,
+              updatedAt: "2026-08-13T00:00:00.000Z",
+            };
+          },
+          replaceForDevice: async () => {
+            operations.push("replace");
+            throw new PreferenceConflictError();
+          },
+        },
+        serviceTopicSubscriptions: { async syncDevice(input) {
+          operations.push(syncedPreferences.length === 0 ? "sync:optout" : "sync:compensation");
+          syncedPreferences.push(input.preferences);
+          return { status: "synced" };
+        } },
+      } },
+    });
+    const optOutRules = [preference({ enabled: false })];
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", preferences: optOutRules, expectedRevision: 2 },
+    });
+
+    await app.close();
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: "preference_conflict" });
+    expect(operations).toEqual([
+      "snapshot:preflight",
+      "sync:optout",
+      "replace",
+      "snapshot:compensation",
+      "sync:compensation",
+    ]);
+    expect(syncedPreferences).toEqual([optOutRules, currentRules]);
+  });
+
+  it("compensates a pre-synced opt-out when the durable replace fails unexpectedly", async () => {
+    const operations: string[] = [];
+    const currentRules = [preference({ enabled: true })];
+    let snapshotCalls = 0;
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: { dependencies: {
+        preferences: {
+          getSnapshotForDevice: async () => {
+            snapshotCalls += 1;
+            operations.push(snapshotCalls === 1 ? "snapshot:preflight" : "snapshot:compensation");
+            return { preferences: currentRules, revision: 2, updatedAt: "2026-08-13T00:00:00.000Z" };
+          },
+          replaceForDevice: async () => {
+            operations.push("replace");
+            throw new Error("persistence failed");
+          },
+        },
+        serviceTopicSubscriptions: { async syncDevice() {
+          operations.push(operations.includes("replace") ? "sync:compensation" : "sync:optout");
+          return { status: "synced" };
+        } },
+      } },
+    });
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", preferences: [preference({ enabled: false })], expectedRevision: 2 },
+    });
+
+    await app.close();
+    expect(response.statusCode).toBe(500);
+    expect(operations).toEqual([
+      "snapshot:preflight",
+      "sync:optout",
+      "replace",
+      "snapshot:compensation",
+      "sync:compensation",
+    ]);
   });
 
   it("requires a non-negative integer expected revision", async () => {
@@ -479,12 +775,17 @@ describe("mobile preference routes", () => {
     const first = await app.inject({
       method: "PUT",
       url: "/v1/preferences",
-      payload: { deviceId: "device-1", preferences: [], expectedRevision: 0 },
+      payload: { deviceId: "device-1", preferences: [preference({ enabled: false })], expectedRevision: 0 },
     });
     const stale = await app.inject({
       method: "PUT",
       url: "/v1/preferences",
       payload: { deviceId: "device-1", preferences: [], expectedRevision: 0 },
+    });
+    const deletion = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", preferences: [], expectedRevision: 1 },
     });
     const read = await app.inject({
       method: "GET",
@@ -496,7 +797,75 @@ describe("mobile preference routes", () => {
     expect(first.json()).toMatchObject({ revision: 1 });
     expect(stale.statusCode).toBe(409);
     expect(stale.json()).toEqual({ error: "preference_conflict" });
-    expect(read.json()).toMatchObject({ revision: 1, preferences: [] });
+    expect(deletion.statusCode).toBe(200);
+    expect(deletion.json()).toMatchObject({ revision: 2, preferences: [] });
+    expect(read.json()).toMatchObject({ revision: 2, preferences: [] });
+  });
+
+  it("preserves the fallback snapshot and revision when preferences are omitted", async () => {
+    const app = await buildApp({ env: routeEnv, useProcessEnv: false });
+    const rules = [preference({ enabled: false })];
+
+    const first = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", preferences: rules, expectedRevision: 0 },
+    });
+    const invalid = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", expectedRevision: 1 },
+    });
+    const read = await app.inject({
+      method: "GET",
+      url: "/v1/preferences?deviceId=device-1",
+    });
+
+    await app.close();
+    expect(first.statusCode).toBe(200);
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toEqual({ error: "preferences_invalid" });
+    expect(read.json()).toMatchObject({ revision: 1, preferences: [{ enabled: false }] });
+  });
+
+  it("preserves the fallback snapshot and revision when opt-out sync fails", async () => {
+    let syncCalls = 0;
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: {
+        dependencies: {
+          serviceTopicSubscriptions: {
+            async syncDevice() {
+              syncCalls += 1;
+              return { status: syncCalls === 1 ? "synced" : "transient_failure" };
+            },
+          },
+        },
+      },
+    });
+
+    const first = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", preferences: [preference({ enabled: true })], expectedRevision: 0 },
+    });
+    const failed = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", preferences: [preference({ enabled: false })], expectedRevision: 1 },
+    });
+    const read = await app.inject({
+      method: "GET",
+      url: "/v1/preferences?deviceId=device-1",
+    });
+
+    await app.close();
+    expect(first.statusCode).toBe(200);
+    expect(failed.statusCode).toBe(503);
+    expect(failed.json()).toEqual({ error: "server_unavailable" });
+    expect(read.json()).toMatchObject({ revision: 1, preferences: [{ enabled: true }] });
+    expect(syncCalls).toBe(2);
   });
 
   it("rejects fallback writes with an older client timestamp without replacing settings", async () => {

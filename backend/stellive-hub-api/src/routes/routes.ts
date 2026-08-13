@@ -23,6 +23,7 @@ import type { Member } from "../types.js";
 import { ShortTtlAsyncCache } from "../utils/shortTtlAsyncCache.js";
 import { ResponseCache } from "../cache/responseCache.js";
 import type { AppEnv } from "../config/env.js";
+import type { ServiceTopicSyncResult } from "../push/serviceTopicSubscription.js";
 
 const catalog = new CatalogService();
 const defaultHubEvents = new HubEventService(catalog);
@@ -88,8 +89,8 @@ export interface AppRouteDependencies {
     }): Promise<PreferenceSnapshot>;
   };
   serviceTopicSubscriptions?: {
-    syncToken?(input: { token: string; preferences: UserNotificationPreference[] }): Promise<unknown>;
-    syncDevice?(input: { deviceId: string; preferences: UserNotificationPreference[] }): Promise<unknown>;
+    syncToken?(input: { token: string; preferences: UserNotificationPreference[] }): Promise<ServiceTopicSyncResult>;
+    syncDevice?(input: { deviceId: string; preferences: UserNotificationPreference[] }): Promise<ServiceTopicSyncResult>;
   };
   liveStatus?: {
     listDiagnostics(limit: number): Promise<

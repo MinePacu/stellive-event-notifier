@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type {
   BootstrapResponse,
   MobilePlatform,
@@ -10,6 +10,10 @@ import {
   PreferenceStaleUpdateError,
   type PreferenceSnapshot,
 } from "../repositories/preferenceRepository.js";
+import {
+  serviceAnnouncementsEnabled,
+  type ServiceTopicSyncResult,
+} from "../push/serviceTopicSubscription.js";
 import type { UserNotificationPreference } from "../types.js";
 
 export interface MobileAppRouteDependencies {
@@ -51,8 +55,8 @@ export interface MobileAppRouteDependencies {
     }): Promise<PreferenceSnapshot>;
   };
   serviceTopicSubscriptions?: {
-    syncToken?(input: { token: string; preferences: UserNotificationPreference[] }): Promise<unknown>;
-    syncDevice?(input: { deviceId: string; preferences: UserNotificationPreference[] }): Promise<unknown>;
+    syncToken?(input: { token: string; preferences: UserNotificationPreference[] }): Promise<ServiceTopicSyncResult>;
+    syncDevice?(input: { deviceId: string; preferences: UserNotificationPreference[] }): Promise<ServiceTopicSyncResult>;
   };
 }
 
@@ -84,6 +88,84 @@ function latestPreferenceUpdatedAt(preferences: UserNotificationPreference[]): s
       .filter((updatedAt): updatedAt is string => Boolean(updatedAt))
       .sort()
       .at(-1) ?? new Date(0).toISOString()
+  );
+}
+
+function serviceTopicSyncStatus(result: ServiceTopicSyncResult): string {
+  if (typeof result !== "object" || result === null) return "unknown";
+  const status = (result as { status?: unknown }).status;
+  return typeof status === "string" ? status : "unknown";
+}
+
+function serviceTopicOptOutIsSafe(result: ServiceTopicSyncResult): boolean {
+  const status = serviceTopicSyncStatus(result);
+  return status === "synced" || status === "token_missing";
+}
+
+async function requireServiceTopicOptOut(
+  request: FastifyRequest,
+  sync: () => Promise<ServiceTopicSyncResult>,
+): Promise<boolean> {
+  try {
+    const result = await sync();
+    if (serviceTopicOptOutIsSafe(result)) return true;
+    request.log.warn(
+      { status: serviceTopicSyncStatus(result) },
+      "service topic opt-out sync failed before update",
+    );
+  } catch {
+    request.log.warn("service topic opt-out sync threw before update");
+  }
+  return false;
+}
+
+async function syncServiceTopicsBestEffort(
+  request: FastifyRequest,
+  sync: () => Promise<ServiceTopicSyncResult>,
+  message: string,
+): Promise<void> {
+  try {
+    const result = await sync();
+    if (serviceTopicSyncStatus(result) !== "synced") {
+      request.log.warn({ status: serviceTopicSyncStatus(result) }, message);
+    }
+  } catch {
+    request.log.warn(message);
+  }
+}
+
+async function compensateServiceTopicOptOutFailure(
+  request: FastifyRequest,
+  deviceId: string,
+  preferences: MobileAppRouteDependencies["preferences"],
+  syncDevice: (input: {
+    deviceId: string;
+    preferences: UserNotificationPreference[];
+  }) => Promise<ServiceTopicSyncResult>,
+): Promise<void> {
+  let currentPreferences: UserNotificationPreference[] | undefined;
+  if (preferences?.getSnapshotForDevice) {
+    try {
+      currentPreferences = (await preferences.getSnapshotForDevice(deviceId)).preferences;
+    } catch {
+      // Fall through to the list port when the snapshot read is unavailable.
+    }
+  }
+  if (!currentPreferences && preferences?.listForDevice) {
+    try {
+      currentPreferences = await preferences.listForDevice(deviceId);
+    } catch {
+      // The sanitized warning below covers both read ports.
+    }
+  }
+  if (!currentPreferences) {
+    request.log.warn("service topic compensation preferences unavailable after preference update failure");
+    return;
+  }
+  await syncServiceTopicsBestEffort(
+    request,
+    () => syncDevice({ deviceId, preferences: currentPreferences }),
+    "service topic compensation sync failed after preference update failure",
   );
 }
 
@@ -156,6 +238,23 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       return reply.code(error.statusCode).send(error.payload);
     }
 
+    const serviceTopicSubscriptions = options.dependencies?.serviceTopicSubscriptions;
+    const syncToken = serviceTopicSubscriptions?.syncToken?.bind(serviceTopicSubscriptions);
+    const preferences = syncToken
+      ? await options.dependencies?.preferences?.listForDevice?.(body.deviceId) ?? []
+      : [];
+    const topicOptOut = !serviceAnnouncementsEnabled(preferences);
+    if (topicOptOut && syncToken) {
+      const safe = await requireServiceTopicOptOut(
+        request,
+        () => syncToken({ token: body.token!, preferences }),
+      );
+      if (!safe) {
+        const error = mobileError("server_unavailable", 503);
+        return reply.code(error.statusCode).send(error.payload);
+      }
+    }
+
     const devices = options.dependencies?.devices;
     const result = devices?.updateToken
       ? await devices.updateToken({
@@ -168,13 +267,12 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
           appVersion: body.appVersion,
         })
       : { updated: true as const, tokenStatus: "active" as const };
-    if (options.dependencies?.serviceTopicSubscriptions?.syncToken) {
-      try {
-        const preferences = await options.dependencies.preferences?.listForDevice?.(body.deviceId) ?? [];
-        await options.dependencies.serviceTopicSubscriptions.syncToken({ token: body.token, preferences });
-      } catch (error) {
-        request.log.warn({ error }, "service topic subscription sync failed after token update");
-      }
+    if (!topicOptOut && syncToken) {
+      await syncServiceTopicsBestEffort(
+        request,
+        () => syncToken({ token: body.token!, preferences }),
+        "service topic subscription sync failed after token update",
+      );
     }
     return { ...result, serverTime: new Date().toISOString() };
   });
@@ -218,21 +316,52 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     if (!Number.isInteger(body.expectedRevision) || (body.expectedRevision ?? -1) < 0) {
       return reply.code(400).send({ error: "preference_revision_invalid" });
     }
+    if (!Array.isArray(body.preferences)) {
+      return reply.code(400).send({ error: "preferences_invalid" });
+    }
+    const rules = body.preferences;
     if (body.clientUpdatedAt !== undefined && (typeof body.clientUpdatedAt !== "string" || Number.isNaN(new Date(body.clientUpdatedAt).getTime()))) {
       return reply.code(400).send({ error: "preference_client_updated_at_invalid" });
     }
 
     const preferences = options.dependencies?.preferences;
+    const serviceTopicSubscriptions = options.dependencies?.serviceTopicSubscriptions;
+    const syncDevice = serviceTopicSubscriptions?.syncDevice?.bind(serviceTopicSubscriptions);
+    const topicOptOut = !serviceAnnouncementsEnabled(rules);
+
     if (preferences?.replaceForDevice) {
+      let preOptOutSynchronized = false;
+      if (topicOptOut && syncDevice) {
+        if (preferences.getSnapshotForDevice) {
+          const currentSnapshot = await preferences.getSnapshotForDevice(body.deviceId);
+          if (currentSnapshot.revision !== body.expectedRevision) {
+            const conflict = mobileError("preference_conflict", 409);
+            return reply.code(conflict.statusCode).send(conflict.payload);
+          }
+        }
+        const safe = await requireServiceTopicOptOut(
+          request,
+          () => syncDevice({ deviceId: body.deviceId!, preferences: rules }),
+        );
+        if (!safe) {
+          const error = mobileError("server_unavailable", 503);
+          return reply.code(error.statusCode).send(error.payload);
+        }
+        preOptOutSynchronized = true;
+      }
+
       let result: PreferenceSnapshot;
       try {
         result = await preferences.replaceForDevice({
           deviceId: body.deviceId,
-          preferences: body.preferences ?? [],
+          preferences: rules,
           expectedRevision: body.expectedRevision!,
           clientUpdatedAt: body.clientUpdatedAt,
         });
       } catch (error) {
+        if (preOptOutSynchronized && syncDevice) {
+          await compensateServiceTopicOptOutFailure(request, body.deviceId, preferences, syncDevice);
+        }
         if (error instanceof PreferenceStaleUpdateError) {
           const conflict = mobileError("preference_stale_update", 409);
           return reply.code(conflict.statusCode).send(conflict.payload);
@@ -243,17 +372,16 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
         }
         throw error;
       }
-      if (options.dependencies?.serviceTopicSubscriptions?.syncDevice) {
-        try {
-          await options.dependencies.serviceTopicSubscriptions.syncDevice({ deviceId: body.deviceId, preferences: result.preferences });
-        } catch (error) {
-          request.log.warn({ error }, "service topic subscription sync failed after preference update");
-        }
+      if (!topicOptOut && syncDevice) {
+        await syncServiceTopicsBestEffort(
+          request,
+          () => syncDevice({ deviceId: body.deviceId!, preferences: result.preferences }),
+          "service topic subscription sync failed after preference update",
+        );
       }
       return { deviceId: body.deviceId, ...result };
     }
 
-    const rules = body.preferences ?? [];
     const currentRevision = fallbackPreferenceMetadata.get(body.deviceId)?.revision ?? 0;
     const currentClientUpdatedAt = fallbackPreferenceMetadata.get(body.deviceId)?.lastClientUpdatedAt;
     if (currentRevision !== body.expectedRevision) {
@@ -264,16 +392,27 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       const conflict = mobileError("preference_stale_update", 409);
       return reply.code(conflict.statusCode).send(conflict.payload);
     }
+    if (topicOptOut && syncDevice) {
+      const safe = await requireServiceTopicOptOut(
+        request,
+        () => syncDevice({ deviceId: body.deviceId!, preferences: rules }),
+      );
+      if (!safe) {
+        const error = mobileError("server_unavailable", 503);
+        return reply.code(error.statusCode).send(error.payload);
+      }
+    }
+
     const updatedAt = new Date().toISOString();
     const revision = currentRevision + 1;
     fallbackPreferences.set(body.deviceId, rules);
     fallbackPreferenceMetadata.set(body.deviceId, { revision, updatedAt, lastClientUpdatedAt: body.clientUpdatedAt });
-    if (options.dependencies?.serviceTopicSubscriptions?.syncDevice) {
-      try {
-        await options.dependencies.serviceTopicSubscriptions.syncDevice({ deviceId: body.deviceId, preferences: rules });
-      } catch (error) {
-        request.log.warn({ error }, "service topic subscription sync failed after preference update");
-      }
+    if (!topicOptOut && syncDevice) {
+      await syncServiceTopicsBestEffort(
+        request,
+        () => syncDevice({ deviceId: body.deviceId!, preferences: rules }),
+        "service topic subscription sync failed after preference update",
+      );
     }
     return { deviceId: body.deviceId, preferences: rules, revision, updatedAt };
   });

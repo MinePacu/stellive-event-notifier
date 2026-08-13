@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import DeviceRepository from "../src/repositories/deviceRepository.js";
+import type { UserNotificationPreference } from "../src/types.js";
 
 interface FakeDeviceRecord {
   id: string;
@@ -115,6 +116,21 @@ const routeEnv = {
   DATABASE_URL: "postgresql://stellive:stellive@localhost:5432/stellive_hub",
 };
 
+function globalPreference(
+  overrides: Partial<UserNotificationPreference>,
+): UserNotificationPreference {
+  return {
+    deviceId: "device-1",
+    scope: "global",
+    enabled: true,
+    explicitOverride: true,
+    tapAction: "open_app",
+    deliveryMode: "standard",
+    updatedAt: "2026-08-13T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 class ThisBoundDeviceDependency {
   calls: unknown[] = [];
 
@@ -168,15 +184,23 @@ describe("mobile device routes", () => {
     expect(devices.calls).toHaveLength(1);
   });
 
-  it("syncs service topics after a token update", async () => {
+  it("updates an enabled token before syncing service topics", async () => {
+    const operations: string[] = [];
     const synced: unknown[] = [];
     const app = await buildApp({
       env: routeEnv,
       useProcessEnv: false,
       appRoutes: { dependencies: {
-        devices: { updateToken: async () => ({ updated: true, tokenStatus: "active" }) },
+        devices: { updateToken: async () => {
+          operations.push("update");
+          return { updated: true, tokenStatus: "active" };
+        } },
         preferences: { listForDevice: async () => [] },
-        serviceTopicSubscriptions: { async syncToken(input) { synced.push(input); return { status: "synced" }; } }
+        serviceTopicSubscriptions: { async syncToken(input) {
+          operations.push("sync");
+          synced.push(input);
+          return { status: "synced" };
+        } }
       } }
     });
 
@@ -189,8 +213,72 @@ describe("mobile device routes", () => {
     await app.close();
 
     expect(response.statusCode).toBe(200);
+    expect(operations).toEqual(["update", "sync"]);
     expect(synced).toEqual([{ token: "runtime-token", preferences: [] }]);
     expect(JSON.stringify(response.json())).not.toContain("runtime-token");
+  });
+
+  it("unsubscribes a stored global-off device before updating its token", async () => {
+    const operations: string[] = [];
+    const rules = [globalPreference({ enabled: false })];
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: { dependencies: {
+        devices: { updateToken: async () => {
+          operations.push("update");
+          return { updated: true, tokenStatus: "active" };
+        } },
+        preferences: { listForDevice: async () => rules },
+        serviceTopicSubscriptions: { async syncToken() {
+          operations.push("sync");
+          return { status: "synced" };
+        } },
+      } },
+    });
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/devices/token",
+      payload: { deviceId: "device-1", platform: "android", provider: "fcm", token: "runtime-token" },
+    });
+
+    await app.close();
+    expect(response.statusCode).toBe(200);
+    expect(operations).toEqual(["sync", "update"]);
+  });
+
+  it("does not update an incoming token when stored opt-out sync is unsafe", async () => {
+    let updateCalls = 0;
+    let syncCalls = 0;
+    const rules = [globalPreference({ serviceAnnouncementsEnabled: false })];
+    const app = await buildApp({
+      env: routeEnv,
+      useProcessEnv: false,
+      appRoutes: { dependencies: {
+        devices: { updateToken: async () => {
+          updateCalls += 1;
+          return { updated: true, tokenStatus: "active" };
+        } },
+        preferences: { listForDevice: async () => rules },
+        serviceTopicSubscriptions: { async syncToken() {
+          syncCalls += 1;
+          return { status: "disabled" };
+        } },
+      } },
+    });
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/devices/token",
+      payload: { deviceId: "device-1", platform: "android", provider: "fcm", token: "runtime-token" },
+    });
+
+    await app.close();
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: "server_unavailable" });
+    expect(updateCalls).toBe(0);
+    expect(syncCalls).toBe(1);
   });
 
   it("registers devices through the durable mobile app route", async () => {
