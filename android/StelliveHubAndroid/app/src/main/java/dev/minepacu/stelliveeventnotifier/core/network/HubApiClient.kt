@@ -168,7 +168,11 @@ class HubApiClient(
         } catch (throwable: Throwable) {
             HubNetworkResult.Failure(
                 code = if (preferenceConflictAware && throwable is HttpException && throwable.code() == 409) {
-                    "preference_conflict"
+                    if (throwable.response()?.errorBody()?.string()?.contains("preference_stale_update") == true) {
+                        "preference_stale_update"
+                    } else {
+                        "preference_conflict"
+                    }
                 } else {
                     "network_error"
                 },

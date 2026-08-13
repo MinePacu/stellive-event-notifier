@@ -499,6 +499,26 @@ describe("mobile preference routes", () => {
     expect(read.json()).toMatchObject({ revision: 1, preferences: [] });
   });
 
+  it("rejects fallback writes with an older client timestamp without replacing settings", async () => {
+    const app = await buildApp({ env: routeEnv, useProcessEnv: false });
+    const first = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", preferences: [preference({ enabled: true })], expectedRevision: 0, clientUpdatedAt: "2026-08-13T00:00:02Z" },
+    });
+    const stale = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", preferences: [preference({ enabled: false })], expectedRevision: 1, clientUpdatedAt: "2026-08-13T00:00:01Z" },
+    });
+    const read = await app.inject({ method: "GET", url: "/v1/preferences?deviceId=device-1" });
+    await app.close();
+    expect(first.statusCode).toBe(200);
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toEqual({ error: "preference_stale_update" });
+    expect(read.json()).toMatchObject({ revision: 1, preferences: [{ enabled: true }] });
+  });
+
   it("rejects preference reads without a device id", async () => {
     const app = await buildApp({ env: routeEnv, useProcessEnv: false });
 

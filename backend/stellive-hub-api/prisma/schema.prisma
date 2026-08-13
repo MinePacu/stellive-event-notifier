@@ -43,9 +43,10 @@ model NotificationPreference {
 }
 
 model NotificationPreferenceSnapshot {
-  deviceId  String   @id
-  revision  Int      @default(0)
-  updatedAt DateTime @updatedAt
+  deviceId            String   @id
+  revision            Int      @default(0)
+  lastClientUpdatedAt DateTime?
+  updatedAt           DateTime @updatedAt
 }
 
 model PlatformEvent {

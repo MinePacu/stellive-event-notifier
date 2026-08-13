@@ -7,6 +7,7 @@ import type {
 import { mobileError } from "../mobile/mobileError.js";
 import {
   PreferenceConflictError,
+  PreferenceStaleUpdateError,
   type PreferenceSnapshot,
 } from "../repositories/preferenceRepository.js";
 import type { UserNotificationPreference } from "../types.js";
@@ -46,6 +47,7 @@ export interface MobileAppRouteDependencies {
       deviceId: string;
       preferences: UserNotificationPreference[];
       expectedRevision: number;
+      clientUpdatedAt?: string;
     }): Promise<PreferenceSnapshot>;
   };
   serviceTopicSubscriptions?: {
@@ -87,7 +89,7 @@ function latestPreferenceUpdatedAt(preferences: UserNotificationPreference[]): s
 
 export async function registerAppRoutes(app: FastifyInstance, options: RegisterAppRouteOptions = {}) {
   const fallbackPreferences = options.fallbackPreferences ?? new Map<string, UserNotificationPreference[]>();
-  const fallbackPreferenceMetadata = new Map<string, { revision: number; updatedAt: string }>();
+  const fallbackPreferenceMetadata = new Map<string, { revision: number; updatedAt: string; lastClientUpdatedAt?: string }>();
 
   app.get("/v1/bootstrap", async (request) => {
     const query = request.query as {
@@ -207,6 +209,7 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       deviceId?: string;
       preferences?: UserNotificationPreference[];
       expectedRevision?: number;
+      clientUpdatedAt?: string;
     };
     if (!body.deviceId) {
       const error = mobileError("device_not_registered", 400);
@@ -214,6 +217,9 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     }
     if (!Number.isInteger(body.expectedRevision) || (body.expectedRevision ?? -1) < 0) {
       return reply.code(400).send({ error: "preference_revision_invalid" });
+    }
+    if (body.clientUpdatedAt !== undefined && (typeof body.clientUpdatedAt !== "string" || Number.isNaN(new Date(body.clientUpdatedAt).getTime()))) {
+      return reply.code(400).send({ error: "preference_client_updated_at_invalid" });
     }
 
     const preferences = options.dependencies?.preferences;
@@ -224,8 +230,13 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
           deviceId: body.deviceId,
           preferences: body.preferences ?? [],
           expectedRevision: body.expectedRevision!,
+          clientUpdatedAt: body.clientUpdatedAt,
         });
       } catch (error) {
+        if (error instanceof PreferenceStaleUpdateError) {
+          const conflict = mobileError("preference_stale_update", 409);
+          return reply.code(conflict.statusCode).send(conflict.payload);
+        }
         if (error instanceof PreferenceConflictError) {
           const conflict = mobileError("preference_conflict", 409);
           return reply.code(conflict.statusCode).send(conflict.payload);
@@ -244,14 +255,19 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
 
     const rules = body.preferences ?? [];
     const currentRevision = fallbackPreferenceMetadata.get(body.deviceId)?.revision ?? 0;
+    const currentClientUpdatedAt = fallbackPreferenceMetadata.get(body.deviceId)?.lastClientUpdatedAt;
     if (currentRevision !== body.expectedRevision) {
       const conflict = mobileError("preference_conflict", 409);
+      return reply.code(conflict.statusCode).send(conflict.payload);
+    }
+    if (body.clientUpdatedAt && currentClientUpdatedAt && new Date(body.clientUpdatedAt) <= new Date(currentClientUpdatedAt)) {
+      const conflict = mobileError("preference_stale_update", 409);
       return reply.code(conflict.statusCode).send(conflict.payload);
     }
     const updatedAt = new Date().toISOString();
     const revision = currentRevision + 1;
     fallbackPreferences.set(body.deviceId, rules);
-    fallbackPreferenceMetadata.set(body.deviceId, { revision, updatedAt });
+    fallbackPreferenceMetadata.set(body.deviceId, { revision, updatedAt, lastClientUpdatedAt: body.clientUpdatedAt });
     if (options.dependencies?.serviceTopicSubscriptions?.syncDevice) {
       try {
         await options.dependencies.serviceTopicSubscriptions.syncDevice({ deviceId: body.deviceId, preferences: rules });

@@ -412,6 +412,7 @@ data class UpdatePreferencesRequestDto(
     val deviceId: String,
     val preferences: List<PreferenceDto>,
     val expectedRevision: Int,
+    val clientUpdatedAt: String? = null,
 )
 
 data class UpdatePreferencesResponseDto(

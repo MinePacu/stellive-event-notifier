@@ -1905,6 +1905,9 @@ components:
         expectedRevision:
           type: integer
           minimum: 0
+        clientUpdatedAt:
+          type: string
+          format: date-time
     UpdatePreferencesResponse:
       type: object
       required:

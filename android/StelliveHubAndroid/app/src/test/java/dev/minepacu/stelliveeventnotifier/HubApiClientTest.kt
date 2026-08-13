@@ -135,11 +135,12 @@ class HubApiClientTest {
     }
 
     @Test
-    fun preferenceDtosUseRevisionContractWithoutClientTimestamp() {
+    fun preferenceDtosUseRevisionContractWithClientTimestamp() {
         val request = UpdatePreferencesRequestDto(
             deviceId = "device-1",
             preferences = emptyList(),
             expectedRevision = 12,
+            clientUpdatedAt = "2026-08-13T00:00:00Z",
         )
 
         val requestJson = HubApiClient.moshi()
@@ -152,7 +153,7 @@ class HubApiClientTest {
             )
 
         assertTrue(requestJson.contains("\"expectedRevision\":12"))
-        assertFalse(requestJson.contains("clientUpdatedAt"))
+        assertTrue(requestJson.contains("clientUpdatedAt"))
         assertEquals(12, response?.revision)
     }
 

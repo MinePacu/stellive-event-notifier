@@ -133,6 +133,7 @@ export interface UpdatePreferencesRequest {
   deviceId: string;
   preferences: UserNotificationPreference[];
   expectedRevision: number;
+  clientUpdatedAt?: string;
 }
 
 export interface UpdatePreferencesResponse {

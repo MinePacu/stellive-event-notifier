@@ -3,6 +3,8 @@ export type MobileErrorCode =
   | "device_token_invalid"
   | "device_token_provider_invalid"
   | "preference_conflict"
+  | "preference_stale_update"
+  | "preference_client_updated_at_invalid"
   | "catalog_version_unsupported"
   | "feature_disabled"
   | "rate_limited"

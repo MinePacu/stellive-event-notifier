@@ -285,6 +285,14 @@ struct UpdatePreferencesRequest: Codable, Equatable {
     let deviceId: String
     let preferences: [PreferenceResponse]
     let expectedRevision: Int
+    let clientUpdatedAt: String?
+
+    init(deviceId: String, preferences: [PreferenceResponse], expectedRevision: Int, clientUpdatedAt: String? = nil) {
+        self.deviceId = deviceId
+        self.preferences = preferences
+        self.expectedRevision = expectedRevision
+        self.clientUpdatedAt = clientUpdatedAt
+    }
 }
 
 struct UpdatePreferencesResponse: Codable, Equatable {
@@ -297,6 +305,7 @@ struct UpdatePreferencesResponse: Codable, Equatable {
 enum HubAPIError: Error, Equatable {
     case invalidResponse
     case httpStatus(Int)
+    case preferenceStaleUpdate
 }
 
 final class HubAPIClient {
@@ -516,6 +525,10 @@ final class HubAPIClient {
             throw HubAPIError.invalidResponse
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 409,
+               String(data: data, encoding: .utf8)?.contains("preference_stale_update") == true {
+                throw HubAPIError.preferenceStaleUpdate
+            }
             throw HubAPIError.httpStatus(httpResponse.statusCode)
         }
         return try decoder.decode(responseType, from: data)

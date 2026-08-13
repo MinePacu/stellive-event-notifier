@@ -492,7 +492,7 @@ final class ServerHubStoreTests: XCTestCase {
         XCTAssertEqual(request.preferences.last?.serviceAnnouncementsEnabled, false)
         XCTAssertEqual(request.expectedRevision, 7)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertNil(json["clientUpdatedAt"])
+        XCTAssertNotNil(json["clientUpdatedAt"])
         XCTAssertEqual(json["expectedRevision"] as? Int, 7)
     }
 

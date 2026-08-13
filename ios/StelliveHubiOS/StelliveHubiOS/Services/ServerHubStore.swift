@@ -107,16 +107,20 @@ final class ServerHubStore: ObservableObject {
         preferenceSyncErrorMessage = nil
         do {
             var current = try await api.preferences(deviceId: deviceId)
+            let clientUpdatedAt = ISO8601DateFormatter().string(from: Date())
             for attempt in 0..<2 {
                 do {
                     _ = try await api.updatePreferences(
-                        preferenceUpdateRequest(deviceId: deviceId, settings: settings, current: current)
+                        preferenceUpdateRequest(deviceId: deviceId, settings: settings, current: current, clientUpdatedAt: clientUpdatedAt)
                     )
                     return
                 } catch HubAPIError.httpStatus(409) where attempt == 0 {
                     current = try await api.preferences(deviceId: deviceId)
                 } catch HubAPIError.httpStatus(409) {
                     preferenceSyncErrorMessage = "설정 동기화가 충돌했습니다. 다시 시도해 주세요."
+                    return
+                } catch HubAPIError.preferenceStaleUpdate {
+                    _ = try? await api.preferences(deviceId: deviceId)
                     return
                 }
             }
@@ -128,7 +132,8 @@ final class ServerHubStore: ObservableObject {
     private func preferenceUpdateRequest(
         deviceId: String,
         settings: NotificationSettingsState,
-        current: PreferencesResponse
+        current: PreferencesResponse,
+        clientUpdatedAt: String
     ) -> UpdatePreferencesRequest {
         let updatedAt = ISO8601DateFormatter().string(from: Date())
         let preserved = current.preferences.filter { $0.scope != "global" }
@@ -154,7 +159,8 @@ final class ServerHubStore: ObservableObject {
         return UpdatePreferencesRequest(
             deviceId: deviceId,
             preferences: preserved + [global],
-            expectedRevision: current.revision
+            expectedRevision: current.revision,
+            clientUpdatedAt: clientUpdatedAt
         )
     }
 

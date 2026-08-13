@@ -29,6 +29,7 @@ interface PreferenceRecord {
 interface PreferenceSnapshotRecord {
   deviceId: string;
   revision: number;
+  lastClientUpdatedAt?: Date | string | null;
   updatedAt: Date | string;
 }
 
@@ -43,11 +44,11 @@ interface PreferenceTransactionClient {
       where: { deviceId: string };
     }): Promise<PreferenceSnapshotRecord | null>;
     updateMany(args: {
-      where: { deviceId: string; revision: number };
-      data: { revision: { increment: number }; updatedAt: Date };
+      where: { deviceId: string; revision: number; OR?: unknown[] };
+      data: { revision: { increment: number }; updatedAt: Date; lastClientUpdatedAt?: Date };
     }): Promise<{ count: number }>;
     create(args: {
-      data: { deviceId: string; revision: number; updatedAt: Date };
+      data: { deviceId: string; revision: number; updatedAt: Date; lastClientUpdatedAt?: Date };
     }): Promise<PreferenceSnapshotRecord>;
   };
 }
@@ -69,6 +70,13 @@ export class PreferenceConflictError extends Error {
   constructor() {
     super("preference snapshot revision conflict");
     this.name = "PreferenceConflictError";
+  }
+}
+
+export class PreferenceStaleUpdateError extends Error {
+  constructor() {
+    super("preference client timestamp is stale");
+    this.name = "PreferenceStaleUpdateError";
   }
 }
 
@@ -210,7 +218,12 @@ export default class PreferenceRepository {
     deviceId: string;
     preferences: UserNotificationPreference[];
     expectedRevision: number;
+    clientUpdatedAt?: string;
   }): Promise<PreferenceSnapshot> {
+    const clientUpdatedAt = input.clientUpdatedAt ? new Date(input.clientUpdatedAt) : undefined;
+    if (input.clientUpdatedAt && (!clientUpdatedAt || Number.isNaN(clientUpdatedAt.getTime()))) {
+      throw new PreferenceStaleUpdateError();
+    }
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         return await this.prisma.$transaction(
@@ -224,10 +237,14 @@ export default class PreferenceRepository {
               where: {
                 deviceId: input.deviceId,
                 revision: input.expectedRevision,
+                ...(clientUpdatedAt
+                  ? { OR: [{ lastClientUpdatedAt: null }, { lastClientUpdatedAt: { lt: clientUpdatedAt } }] }
+                  : {}),
               },
               data: {
                 revision: { increment: 1 },
                 updatedAt,
+                ...(clientUpdatedAt ? { lastClientUpdatedAt: clientUpdatedAt } : {}),
               },
             });
 
@@ -236,6 +253,9 @@ export default class PreferenceRepository {
                 where: { deviceId: input.deviceId },
               });
               if (current || input.expectedRevision !== 0) {
+                if (clientUpdatedAt && current?.lastClientUpdatedAt && new Date(current.lastClientUpdatedAt) >= clientUpdatedAt) {
+                  throw new PreferenceStaleUpdateError();
+                }
                 throw new PreferenceConflictError();
               }
               await transaction.notificationPreferenceSnapshot.create({
@@ -243,6 +263,7 @@ export default class PreferenceRepository {
                   deviceId: input.deviceId,
                   revision: 1,
                   updatedAt,
+                  ...(clientUpdatedAt ? { lastClientUpdatedAt: clientUpdatedAt } : {}),
                 },
               });
             }

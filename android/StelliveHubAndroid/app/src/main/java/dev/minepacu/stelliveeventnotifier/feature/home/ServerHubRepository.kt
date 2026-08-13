@@ -108,16 +108,19 @@ class ServerHubRepository(
     override suspend fun updatePreferences(settings: NotificationSettingState): HubDataState {
         val deviceId = deviceIdStore.getDeviceId()
         if (deviceId != null) {
+            val clientUpdatedAt = Instant.now().toString()
             val initial = remoteDataSource.preferences(deviceId)
             if (initial is HubNetworkResult.Success) {
                 val firstUpdate = remoteDataSource.updatePreferences(
-                    preferenceUpdateRequest(deviceId, settings, initial.value),
+                    preferenceUpdateRequest(deviceId, settings, initial.value, clientUpdatedAt),
                 )
-                if (firstUpdate.isPreferenceConflict()) {
+                if (firstUpdate.isPreferenceStaleUpdate()) {
+                    remoteDataSource.preferences(deviceId)
+                } else if (firstUpdate.isPreferenceConflict()) {
                     val refreshed = remoteDataSource.preferences(deviceId)
                     if (refreshed is HubNetworkResult.Success) {
                         val retry = remoteDataSource.updatePreferences(
-                            preferenceUpdateRequest(deviceId, settings, refreshed.value),
+                            preferenceUpdateRequest(deviceId, settings, refreshed.value, clientUpdatedAt),
                         )
                         if (retry.isPreferenceConflict()) {
                             throw PreferenceSyncConflictException()
@@ -133,6 +136,7 @@ class ServerHubRepository(
         deviceId: String,
         settings: NotificationSettingState,
         current: PreferencesResponseDto,
+        clientUpdatedAt: String,
     ): UpdatePreferencesRequestDto {
         val updatedAt = Instant.now().toString()
         val preserved = current.preferences.filterNot { it.scope == "global" }
@@ -149,11 +153,15 @@ class ServerHubRepository(
                 updatedAt = updatedAt,
             ),
             expectedRevision = current.revision,
+            clientUpdatedAt = clientUpdatedAt,
         )
     }
 
     private fun HubNetworkResult<UpdatePreferencesResponseDto>.isPreferenceConflict(): Boolean =
         this is HubNetworkResult.Failure && code == "preference_conflict"
+
+    private fun HubNetworkResult<UpdatePreferencesResponseDto>.isPreferenceStaleUpdate(): Boolean =
+        this is HubNetworkResult.Failure && code == "preference_stale_update"
 
     override suspend fun hubEvents(filterId: String, from: LocalDate?, to: LocalDate?): List<HubEvent> {
         val response = remoteDataSource.hubEvents(
