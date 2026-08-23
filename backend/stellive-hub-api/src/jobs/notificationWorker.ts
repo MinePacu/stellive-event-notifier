@@ -11,6 +11,11 @@ import type {
 } from "./notificationJobRepository.js";
 import type { SummaryNotificationRepository } from "./summaryNotificationRepository.js";
 import type { CreateDeliveryAttemptInput, DeliveryAttemptRepository } from "../repositories/deliveryAttemptRepository.js";
+import {
+  evaluateServiceAnnouncementTarget,
+  SERVICE_ANNOUNCEMENT_TARGETING_POLICY_VERSION,
+  type ServiceAnnouncementTargetDecision,
+} from "../announcements/serviceAnnouncementTargetPolicy.js";
 import type DeviceRepository from "../repositories/deviceRepository.js";
 import type PlatformEventRepository from "../repositories/platformEventRepository.js";
 import type PreferenceRepository from "../repositories/preferenceRepository.js";
@@ -39,6 +44,17 @@ export interface NotificationWorkerDrainResult {
   reason?: string;
 }
 
+export type ServiceAnnouncementDispatchStatus = "sent" | "skipped" | "failed";
+
+export interface ServiceAnnouncementDispatchCompletion {
+  eventId: string;
+  status: ServiceAnnouncementDispatchStatus;
+  completedAt: Date;
+  providerErrorCode?: string;
+  retryAfterMs?: number;
+  pushSentAt?: Date;
+}
+
 interface NotificationWorkerDependencies {
   notificationJobs: Pick<NotificationJobRepository, "claimReady" | "renewLock" | "complete" | "fail">;
   platformEvents: Pick<PlatformEventRepository, "findById">;
@@ -59,6 +75,9 @@ interface NotificationWorkerDependencies {
     countSentByDeviceInWindow(input: { deviceIds: string[]; since: Date; until: Date }): Promise<Map<string, number>>;
   };
   summaryNotifications: Pick<SummaryNotificationRepository, "enqueue">;
+  serviceAnnouncements?: {
+    completeDispatchByEventId(input: ServiceAnnouncementDispatchCompletion): Promise<void>;
+  };
   preferenceResolution: Pick<PreferenceResolutionService, "resolve">;
   pushSender: PushSender;
   now?: () => Date;
@@ -128,6 +147,25 @@ function deliveryPriority(resolution: ResolvedNotificationPreference): "normal" 
 function batchSize(value: number | undefined): number {
   if (value === undefined || !Number.isFinite(value)) return 500;
   return Math.min(Math.max(Math.trunc(value), 50), 5_000);
+}
+
+function serviceAnnouncementTarget(event: PlatformEvent, device: PushTargetDevice): ServiceAnnouncementTargetDecision {
+  if (event.source !== "service_announcement") return { eligible: true };
+  if (!event.rawPayload || typeof event.rawPayload !== "object" || Array.isArray(event.rawPayload)) {
+    return { eligible: false, reason: "service_announcement_target_metadata_missing" };
+  }
+  const raw = event.rawPayload as Record<string, unknown>;
+  if (raw.targetingPolicyVersion !== SERVICE_ANNOUNCEMENT_TARGETING_POLICY_VERSION || !Array.isArray(raw.targetPlatforms)) {
+    return { eligible: false, reason: "service_announcement_target_metadata_missing" };
+  }
+  return evaluateServiceAnnouncementTarget({
+    targetPlatforms: raw.targetPlatforms as ("android" | "ios")[],
+    minimumAppVersion: typeof raw.minimumAppVersion === "string" ? raw.minimumAppVersion : raw.minimumAppVersion == null ? undefined : null,
+    maximumAppVersion: typeof raw.maximumAppVersion === "string" ? raw.maximumAppVersion : raw.maximumAppVersion == null ? undefined : null,
+    platform: device.platform,
+    appVersion: device.appVersion,
+    requireMetadata: true,
+  });
 }
 
 export class NotificationWorker {
@@ -200,6 +238,7 @@ export class NotificationWorker {
     let hadSummaryEnqueueFailure = false;
     let providerRetryAfterMs: number | undefined;
     let leaseLost = false;
+    let jobHasSentDevice = false;
     const attemptedPushTokens = new Set<string>();
 
     const processPage = async (devices: PushTargetDevice[]) => {
@@ -208,9 +247,26 @@ export class NotificationWorker {
         eventId: event.id,
         deviceIds: devices.map((device) => device.deviceId)
       });
-      const pendingDevices = devices.filter((device) => !sentDeviceIds.has(device.deviceId));
-      totals.skipped += devices.length - pendingDevices.length;
+      if (sentDeviceIds.size > 0) jobHasSentDevice = true;
+      totals.skipped += devices.reduce((count, device) => count + (sentDeviceIds.has(device.deviceId) ? 1 : 0), 0);
       const attemptBuffer: CreateDeliveryAttemptInput[] = [];
+      const pendingDevices: PushTargetDevice[] = [];
+      for (const device of devices) {
+        if (sentDeviceIds.has(device.deviceId)) continue;
+        const target = serviceAnnouncementTarget(event, device);
+        if (!target.eligible) {
+          this.recordTargetSkip(attemptBuffer, {
+            event,
+            device,
+            reason: target.reason,
+            now,
+            retryCount: job.attempts,
+          });
+          totals.skipped += 1;
+          continue;
+        }
+        pendingDevices.push(device);
+      }
       const preferenceBatchSize = batchSize(this.dependencies.preferenceBatchSize);
       for (let offset = 0; offset < pendingDevices.length; offset += preferenceBatchSize) {
         if (!(await this.renewJobLock(job, totals, attemptBuffer))) return false;
@@ -237,6 +293,7 @@ export class NotificationWorker {
           attemptedPushTokens
         });
         totals.sent += result.sent;
+        if (result.sent > 0) jobHasSentDevice = true;
         totals.skipped += result.skipped;
         totals.queued += result.queued;
         hadTransientFailure ||= result.hadTransientFailure;
@@ -282,8 +339,15 @@ export class NotificationWorker {
         totals
       );
       if (terminal === undefined) return false;
-      if (terminal) totals.failed += 1;
-      else totals.queued += 1;
+      if (terminal) {
+        totals.failed += 1;
+        await this.completeServiceAnnouncementDispatch(event, {
+          eventId: event.id,
+          status: "failed",
+          completedAt: now,
+          retryAfterMs: providerRetryAfterMs,
+        });
+      } else totals.queued += 1;
       totals.status = "partial";
       return true;
     }
@@ -297,7 +361,27 @@ export class NotificationWorker {
       return false;
     }
     totals.completed += 1;
+    await this.completeServiceAnnouncementDispatch(event, {
+      eventId: event.id,
+      status: jobHasSentDevice ? "sent" : "skipped",
+      completedAt: now,
+      pushSentAt: jobHasSentDevice ? now : undefined,
+    });
     return true;
+  }
+
+  private async completeServiceAnnouncementDispatch(
+    event: PlatformEvent,
+    input: ServiceAnnouncementDispatchCompletion,
+  ): Promise<void> {
+    if (event.source !== "service_announcement" || !this.dependencies.serviceAnnouncements) return;
+    // The notification job is already terminal before this best-effort status update. A
+    // status persistence failure must not make a successful provider send eligible for retry.
+    try {
+      await this.dependencies.serviceAnnouncements.completeDispatchByEventId(input);
+    } catch {
+      // The queued attempt remains available for admin diagnostics and repair.
+    }
   }
 
   private async processDeviceBatch(input: {
@@ -676,6 +760,33 @@ export class NotificationWorker {
       tapActionUsed: input.resolution.tapAction,
       title: input.event.title,
       body: input.event.body
+    });
+  }
+
+  private recordTargetSkip(attemptBuffer: CreateDeliveryAttemptInput[], input: {
+    event: PlatformEvent;
+    device: PushTargetDevice;
+    reason: string;
+    now: Date;
+    retryCount: number;
+  }): void {
+    attemptBuffer.push({
+      eventId: input.event.id,
+      deviceId: input.device.deviceId,
+      attemptedAt: input.now,
+      status: "skipped",
+      reason: input.reason,
+      tapActionUsed: "open_app",
+      title: input.event.title,
+      body: input.event.body,
+      source: input.event.source,
+      eventType: input.event.type,
+      generationId: input.event.generationId,
+      memberId: input.event.memberId,
+      deliveryMode: input.event.deliveryMode,
+      deliveryLevel: "immediate_push",
+      pushPriority: "normal",
+      retryCount: input.retryCount,
     });
   }
 

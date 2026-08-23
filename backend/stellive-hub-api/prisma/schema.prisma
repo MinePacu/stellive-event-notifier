@@ -661,7 +661,8 @@ model ServiceAnnouncementPushAttempt {
   id                String   @id @default(cuid(2))
   announcementId    String
   attentionRevision Int
-  topic             String
+  eventId           String?  @unique
+  topic             String?
   status            String
   providerMessageId String?
   providerErrorCode String?

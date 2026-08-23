@@ -3,7 +3,7 @@ import type { AppEnv } from "../config/env.js";
 import { parseYoutubeAtomFeed } from "../adapters/youtube/youtubeAtomParser.js";
 import type { SongIngestionResult } from "../songs/songIngestionService.js";
 
-interface YoutubeWebhookSubscriptionPort {
+export interface YoutubeWebhookSubscriptionPort {
   upsertSubscription(input: {
     source: string;
     targetId: string;
@@ -14,9 +14,19 @@ interface YoutubeWebhookSubscriptionPort {
     lastVerifiedAt?: Date | null;
     lastError?: string | null;
   }): Promise<void>;
+  upsertVerifiedSubscription(input: {
+    source: string;
+    targetId: string;
+    callbackUrl: string;
+    topicUrl: string;
+    status: string;
+    leaseExpiresAt?: Date | null;
+    lastVerifiedAt?: Date | null;
+    lastError?: string | null;
+  }, legacyTargetId?: string): Promise<void>;
 }
 
-interface YoutubeWebhookSongIngestionPort {
+export interface YoutubeWebhookSongIngestionPort {
   ingestYoutubeUpload(candidate: {
     videoId: string;
     channelId: string;
@@ -27,7 +37,7 @@ interface YoutubeWebhookSongIngestionPort {
   }): Promise<SongIngestionResult>;
 }
 
-interface YoutubeWebhookMusicNotificationPort {
+export interface YoutubeWebhookUploadNotificationPort {
   handleYoutubeUpload(candidate: {
     videoId: string;
     channelId: string;
@@ -35,14 +45,19 @@ interface YoutubeWebhookMusicNotificationPort {
     sourceUrl: string;
     publishedAt: string;
     updatedAt: string;
-  }): Promise<void>;
+  }): Promise<unknown>;
+}
+
+export interface YoutubeWebhookSubscriptionTargetResolver {
+  resolve(channelId: string): { targetId: string; channelId: string; topicUrl: string } | undefined;
 }
 
 export interface WebhookRouteOptions {
   env: AppEnv;
   subscriptions: YoutubeWebhookSubscriptionPort;
   songIngestion: YoutubeWebhookSongIngestionPort;
-  musicNotification?: YoutubeWebhookMusicNotificationPort;
+  uploadNotification: YoutubeWebhookUploadNotificationPort;
+  targetResolver: YoutubeWebhookSubscriptionTargetResolver;
   now?: () => Date;
 }
 
@@ -95,17 +110,22 @@ export async function registerWebhookRoutes(app: FastifyInstance, options: Webho
       return reply.code(400).send({ error: "invalid_youtube_topic_url" });
     }
 
+    const target = options.targetResolver.resolve(channelId);
+    if (!target || target.topicUrl !== topicUrl) {
+      return reply.code(404).send({ error: "youtube_subscription_target_unknown" });
+    }
+
     const now = options.now?.() ?? new Date();
-    await options.subscriptions.upsertSubscription({
+    await options.subscriptions.upsertVerifiedSubscription({
       source: "youtube",
-      targetId: channelId,
+      targetId: target.targetId,
       callbackUrl: options.env.YOUTUBE_WEBSUB_CALLBACK_URL ?? "",
       topicUrl,
       status: "active",
       leaseExpiresAt: leaseExpiresAt(now, readHubParam(query["hub.lease_seconds"])),
       lastVerifiedAt: now,
       lastError: null,
-    });
+    }, channelId);
 
     reply.header("content-type", "text/plain; charset=utf-8");
     return reply.send(challenge);
@@ -124,12 +144,12 @@ export async function registerWebhookRoutes(app: FastifyInstance, options: Webho
 
     let ingested = 0;
     let skipped = 0;
-  for (const entry of parsed.entries) {
-    const result = await options.songIngestion.ingestYoutubeUpload(entry);
-    await options.musicNotification?.handleYoutubeUpload(entry);
-    if (result.ingested) ingested += 1;
-    else skipped += 1;
-  }
+    for (const entry of parsed.entries) {
+      await options.uploadNotification.handleYoutubeUpload(entry);
+      const result = await options.songIngestion.ingestYoutubeUpload(entry);
+      if (result.ingested) ingested += 1;
+      else skipped += 1;
+    }
 
     return reply.code(202).send({
       received: parsed.entries.length,

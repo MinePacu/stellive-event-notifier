@@ -22,6 +22,7 @@ export type NotificationDeliveryAction = "send_immediate" | "enqueue_summary" | 
 
 const immediateEventTypes = new Set<PlatformEvent["type"]>([
   "chzzk_live_started",
+  "service_announcement",
   "event_sales_open",
   "event_deadline_soon",
   "event_milestone_due",
@@ -51,6 +52,14 @@ export function resolveNotificationDelivery(
   }
 
   const baseLevel = baseDeliveryLevel(event, resolution);
+  if (event.source === "service_announcement" || event.type === "service_announcement") {
+    return {
+      eventId: event.id,
+      deviceId: resolution.deviceId,
+      deliveryLevel: "immediate_push",
+      action: "send_immediate"
+    };
+  }
   const downgraded = applySpikeDowngrade(baseLevel, context, config.spikeDowngrade);
 
   return {

@@ -19,8 +19,6 @@ import type {
 import type { ChzzkLiveAdapterCounts } from "../adapters/chzzk/chzzkOpenApiAdapter.js";
 import type { NotificationWorkerDrainInput, NotificationWorkerDrainResult } from "../jobs/notificationWorker.js";
 import { isConfiguredSecret, type AppEnv } from "../config/env.js";
-import { isServiceAnnouncementScope, type ServiceAnnouncementInput } from "../push/serviceAnnouncement.js";
-import type { PushSendResult } from "../push/fcmClient.js";
 import { productionHubCalendarSpecialDays } from "../hub-events/hubCalendarSpecialDayCatalog.js";
 import { buildSpecialDayOccurrences } from "../hub-events/hubCalendarSpecialDayMaterializer.js";
 import {
@@ -37,6 +35,8 @@ import { LiveStatusRepository } from "../repositories/liveStatusRepository.js";
 import { PlatformApiStateRepository } from "../repositories/platformApiStateRepository.js";
 import { WebhookSubscriptionRepository } from "../repositories/webhookSubscriptionRepository.js";
 import type { MusicVideoIngestResult } from "../music/musicVideoIngestService.js";
+import type { ServiceAnnouncementInput } from "../push/serviceAnnouncement.js";
+import type { PushSendResult } from "../push/fcmClient.js";
 
 interface LimitQuery {
   limit?: string | number;
@@ -94,6 +94,7 @@ export interface InternalRouteDependencies {
   summaryNotificationWorker?: {
     drain(input: NotificationWorkerDrainInput): MaybePromise<SummaryNotificationWorkerDrainResult>;
   };
+  /** @deprecated Topic sender is ignored; kept for source compatibility. */
   serviceAnnouncements?: {
     send(input: ServiceAnnouncementInput): MaybePromise<PushSendResult>;
   };
@@ -444,35 +445,11 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
   });
 
   app.post("/v1/internal/notifications/service-announcements", async (request, reply) => {
-    // Compatibility-only endpoint. New operational sends must use the persisted
-    // announcement admin publish/resend flow so delivery attempts are auditable.
+    // Topic delivery was removed. Operational sends must use the persisted
+    // announcement admin publish/resend flow so every device is preference-checked.
     reply.header("Deprecation", "true");
     reply.header("Warning", '299 - "Use /v1/admin/announcements/:id/publish or /resend"');
-    const body = request.body as Record<string, unknown> | undefined;
-    const allowedKeys = ["scope", "title", "body", "appDeepLink", "platformUrl"];
-    if (
-      !body ||
-      Array.isArray(body) ||
-      Object.keys(body).some((key) => !allowedKeys.includes(key)) ||
-      !isServiceAnnouncementScope(body.scope) ||
-      typeof body.title !== "string" || body.title.trim().length === 0 ||
-      typeof body.body !== "string" || body.body.trim().length === 0 ||
-      typeof body.appDeepLink !== "string" ||
-      typeof body.platformUrl !== "string"
-    ) {
-      return reply.code(400).send({ error: "service_announcement_body_invalid" });
-    }
-    if (!dependencies.serviceAnnouncements) {
-      return reply.code(503).send({ error: "service_announcement_sender_not_configured" });
-    }
-    const result = await dependencies.serviceAnnouncements.send({
-      scope: body.scope,
-      title: body.title,
-      body: body.body,
-      appDeepLink: body.appDeepLink,
-      platformUrl: body.platformUrl
-    });
-    return { status: result.status, providerMessageId: result.providerMessageId, providerErrorCode: result.providerErrorCode, retryAfterMs: result.retryAfterMs };
+    return reply.code(410).send({ error: "service_announcement_topic_delivery_removed" });
   });
 
   app.post("/v1/internal/schedulers/youtube/renew-subscriptions", async () => {

@@ -46,10 +46,10 @@ describe("service announcement topics", () => {
     const valid = { scope: "service_all", title: "공지", body: "서비스 공지", appDeepLink: "stellivehub://announcements/1", platformUrl: "" };
 
     expect((await app.inject({ method: "POST", url: "/v1/internal/notifications/service-announcements", payload: valid })).statusCode).toBe(401);
-    expect((await app.inject({ method: "POST", url: "/v1/internal/notifications/service-announcements", headers: { authorization: "Bearer internal-test-token" }, payload: { ...valid, scope: "member_1" } })).statusCode).toBe(400);
-    expect((await app.inject({ method: "POST", url: "/v1/internal/notifications/service-announcements", headers: { authorization: "Bearer internal-test-token" }, payload: { ...valid, memberId: "member-1" } })).statusCode).toBe(400);
-    expect((await app.inject({ method: "POST", url: "/v1/internal/notifications/service-announcements", headers: { authorization: "Bearer internal-test-token" }, payload: valid })).statusCode).toBe(200);
-    expect(sent).toEqual([valid]);
+    expect((await app.inject({ method: "POST", url: "/v1/internal/notifications/service-announcements", headers: { authorization: "Bearer internal-test-token" }, payload: { ...valid, scope: "member_1" } })).statusCode).toBe(410);
+    expect((await app.inject({ method: "POST", url: "/v1/internal/notifications/service-announcements", headers: { authorization: "Bearer internal-test-token" }, payload: { ...valid, memberId: "member-1" } })).statusCode).toBe(410);
+    expect((await app.inject({ method: "POST", url: "/v1/internal/notifications/service-announcements", headers: { authorization: "Bearer internal-test-token" }, payload: valid })).statusCode).toBe(410);
+    expect(sent).toEqual([]);
     await app.close();
   });
 });

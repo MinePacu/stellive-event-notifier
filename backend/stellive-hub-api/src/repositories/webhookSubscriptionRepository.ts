@@ -46,7 +46,11 @@ interface WebhookSubscriptionDelegate {
       create: WebhookSubscriptionWriteInput;
       update: Omit<WebhookSubscriptionWriteInput, "source" | "targetId" | "topicUrl">;
     }): Promise<unknown>;
+    deleteMany?(args: {
+      where: { source: string; targetId: string; topicUrl: string };
+    }): Promise<{ count: number }>;
   };
+  $transaction?<T>(operation: (transaction: WebhookSubscriptionDelegate) => Promise<T>): Promise<T>;
 }
 
 const webhookSubscriptionDiagnosticSelect: WebhookSubscriptionDiagnosticSelect = {
@@ -93,7 +97,32 @@ export class WebhookSubscriptionRepository {
   }
 
   async upsertSubscription(input: WebhookSubscriptionWriteInput): Promise<void> {
-    await this.prisma.webhookSubscription.upsert({
+    await this.upsertWithDelegate(this.prisma, input);
+  }
+
+  async upsertVerifiedSubscription(input: WebhookSubscriptionWriteInput, legacyTargetId?: string): Promise<void> {
+    if (!this.prisma.$transaction) {
+      if (legacyTargetId && legacyTargetId !== input.targetId) {
+        await this.prisma.webhookSubscription.deleteMany?.({
+          where: { source: input.source, targetId: legacyTargetId, topicUrl: input.topicUrl },
+        });
+      }
+      await this.upsertWithDelegate(this.prisma, input);
+      return;
+    }
+
+    await this.prisma.$transaction(async (client) => {
+      if (legacyTargetId && legacyTargetId !== input.targetId) {
+        await client.webhookSubscription.deleteMany?.({
+          where: { source: input.source, targetId: legacyTargetId, topicUrl: input.topicUrl },
+        });
+      }
+      await this.upsertWithDelegate(client, input);
+    });
+  }
+
+  private async upsertWithDelegate(delegate: WebhookSubscriptionDelegate, input: WebhookSubscriptionWriteInput): Promise<void> {
+    await delegate.webhookSubscription.upsert({
       where: {
         source_targetId_topicUrl: {
           source: input.source,

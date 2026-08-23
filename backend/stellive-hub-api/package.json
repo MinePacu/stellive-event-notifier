@@ -12,6 +12,7 @@
     "start:chzzk-live-worker": "node dist/backend/stellive-hub-api/src/workers/chzzkLivePollWorker.js",
     "start:hub-event-status-worker": "node dist/backend/stellive-hub-api/src/workers/hubEventStatusReconcileWorker.js",
     "start:music-channel-discovery-worker": "node dist/backend/stellive-hub-api/src/workers/musicChannelDiscoveryWorker.js",
+    "start:service-topic-cleanup": "node dist/backend/stellive-hub-api/src/workers/serviceTopicCleanupWorker.js",
     "dev:chzzk-live-worker": "tsx src/workers/chzzkLivePollWorker.ts",
     "dev:hub-event-status-worker": "tsx src/workers/hubEventStatusReconcileWorker.ts",
     "dev:music-channel-discovery-worker": "tsx src/workers/musicChannelDiscoveryWorker.ts",

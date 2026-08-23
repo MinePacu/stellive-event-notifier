@@ -11,6 +11,7 @@ import {
   type AdminServiceAnnouncement,
   type ServiceAnnouncementRecord,
 } from "../src/announcements/serviceAnnouncementRepository.js";
+import type { PlatformEvent } from "../src/types.js";
 import { registerAdminServiceAnnouncementRoutes } from "../src/routes/adminServiceAnnouncementRoutes.js";
 
 const now = new Date("2026-07-16T09:00:00.000Z");
@@ -67,35 +68,56 @@ class MemoryAnnouncementRepository {
   async softDelete(_id: string, deletedAt: Date, actorId?: string) { this.value = { ...this.value, deletedAt, updatedBy: actorId ?? null, revision: this.value.revision + 1 }; return this.value; }
   async writeAudit(input: { action: string }) { this.audits.push(input.action); }
   async hasSuccessfulPush(_id: string, revision: number) { return this.attempts.some((item) => item.attentionRevision === revision && item.status === "sent"); }
-  async createPushAttempt(input: { attentionRevision: number }) { const id = `attempt-${this.attempts.length + 1}`; this.attempts.push({ id, status: "sending", attentionRevision: input.attentionRevision }); return id; }
+  async createPushAttempt(input: { attentionRevision: number; status?: string }) { const id = `attempt-${this.attempts.length + 1}`; this.attempts.push({ id, status: input.status ?? "sending", attentionRevision: input.attentionRevision }); return id; }
   async completePushAttempt(id: string, input: { status: string }) { this.attempts.find((item) => item.id === id)!.status = input.status; }
   async markPushResult(_id: string, input: { pushStatus: string; pushSentAt?: Date }) { this.value = { ...this.value, ...input }; }
+}
+
+function dispatchFixture(repository: MemoryAnnouncementRepository, events: PlatformEvent[]) {
+  return {
+    async run(work: (repositories: { announcements: MemoryAnnouncementRepository; platformEvents: unknown; notificationJobs: unknown }) => Promise<unknown>) {
+      return work({
+        announcements: repository,
+        platformEvents: {
+          async createIfNotExists(event: PlatformEvent) {
+            events.push(event);
+            return { created: true, eventId: event.id };
+          },
+        },
+        notificationJobs: {
+          async enqueue() {
+            return { created: true };
+          },
+        },
+      });
+    },
+  } as never;
 }
 
 describe("service announcement publish flow", () => {
   it("keeps a committed publication when FCM fails and does not duplicate publish", async () => {
     const repository = new MemoryAnnouncementRepository();
+    const events: PlatformEvent[] = [];
     repository.value = { ...repository.value, publicationState: "draft", publishedAt: null };
-    const send = vi.fn().mockResolvedValue({ status: "transient_failure", providerErrorCode: "fcm_unavailable" });
     const invalidateCache = vi.fn();
-    const service = new ServiceAnnouncementAdminService({ repository: repository as never, sender: { send }, invalidateCache, now: () => now });
+    const service = new ServiceAnnouncementAdminService({ repository: repository as never, dispatchUnitOfWork: dispatchFixture(repository, events), invalidateCache, now: () => now });
 
     const published = await service.publish("notice-1", { actorId: "admin", sendPush: true });
     expect(published.publicationState).toBe("published");
-    expect(published.pushStatus).toBe("failed");
-    expect(repository.attempts[0]?.status).toBe("failed");
+    expect(published.pushStatus).toBe("queued");
+    expect(repository.attempts[0]?.status).toBe("queued");
     await service.publish("notice-1", { actorId: "admin", sendPush: true });
-    expect(send).toHaveBeenCalledTimes(1);
+    expect(events).toHaveLength(1);
     expect(invalidateCache).toHaveBeenCalledTimes(1);
   });
 
   it("allows explicit resend without bumping attention and bump-attention alone changes the read key", async () => {
     const repository = new MemoryAnnouncementRepository();
-    const send = vi.fn().mockResolvedValue({ status: "sent", providerMessageId: "fcm-1" });
-    const service = new ServiceAnnouncementAdminService({ repository: repository as never, sender: { send }, invalidateCache: vi.fn(), now: () => now });
+    const events: PlatformEvent[] = [];
+    const service = new ServiceAnnouncementAdminService({ repository: repository as never, dispatchUnitOfWork: dispatchFixture(repository, events), invalidateCache: vi.fn(), now: () => now });
     await service.resend("notice-1", { actorId: "admin" });
     expect(repository.value.attentionRevision).toBe(1);
-    expect(send.mock.calls[0][0].appDeepLink).toBe("stellivehub://announcements/notice-1");
+    expect(events[0]?.appDeepLink).toBe("stellivehub://announcements/notice-1");
     await service.bumpAttention("notice-1", { actorId: "admin" });
     expect(repository.value.attentionRevision).toBe(2);
     expect(repository.audits).toContain("bump_attention");

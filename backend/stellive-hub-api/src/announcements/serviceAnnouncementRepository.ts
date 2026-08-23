@@ -7,6 +7,7 @@ import type {
   ServiceAnnouncementType,
 } from "../../../../shared/schemas/domain.js";
 import { getPrismaClient } from "../storage/prisma.js";
+import { compareAppVersions, evaluateServiceAnnouncementTarget } from "./serviceAnnouncementTargetPolicy.js";
 
 export interface ServiceAnnouncementRecord {
   id: string;
@@ -64,7 +65,8 @@ export interface ServiceAnnouncementPushAttemptEntry {
   id: string;
   announcementId: string;
   attentionRevision: number;
-  topic: string;
+  topic?: string;
+  eventId?: string;
   status: string;
   providerMessageId?: string;
   providerErrorCode?: string;
@@ -150,16 +152,7 @@ function toAdmin(record: ServiceAnnouncementRecord): AdminServiceAnnouncement {
   return { ...record, targetPlatforms: platforms(record.targetPlatforms) };
 }
 
-export function compareAppVersions(left: string, right: string): number {
-  const parse = (value: string) => value.split(/[.+-]/).map((part) => Number.parseInt(part, 10) || 0);
-  const a = parse(left);
-  const b = parse(right);
-  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
-    const difference = (a[index] ?? 0) - (b[index] ?? 0);
-    if (difference !== 0) return difference < 0 ? -1 : 1;
-  }
-  return 0;
-}
+export { compareAppVersions } from "./serviceAnnouncementTargetPolicy.js";
 
 export function isAnnouncementVisibleToClient(record: ServiceAnnouncementRecord, input: {
   platform?: ServiceAnnouncementPlatform;
@@ -170,10 +163,16 @@ export function isAnnouncementVisibleToClient(record: ServiceAnnouncementRecord,
   if (record.deletedAt || !record.publishedAt) return false;
   if (record.publicationState !== "published" && !(input.includeArchived && record.publicationState === "archived")) return false;
   if (record.expiresAt && record.expiresAt <= input.now) return false;
-  if (input.platform && !platforms(record.targetPlatforms).includes(input.platform)) return false;
-  if (input.appVersion && record.minimumAppVersion && compareAppVersions(input.appVersion, record.minimumAppVersion) < 0) return false;
-  if (input.appVersion && record.maximumAppVersion && compareAppVersions(input.appVersion, record.maximumAppVersion) > 0) return false;
-  return true;
+  return evaluateServiceAnnouncementTarget({
+    targetPlatforms: platforms(record.targetPlatforms),
+    minimumAppVersion: record.minimumAppVersion,
+    maximumAppVersion: record.maximumAppVersion,
+    platform: input.platform,
+    // Read API intentionally preserves omitted query dimensions: an omitted appVersion
+    // does not filter the list, while worker evaluation requires it when bounded.
+    appVersion: input.appVersion,
+    requireVersionForBounds: false,
+  }).eligible;
 }
 
 export class ServiceAnnouncementRepository {
@@ -289,13 +288,44 @@ export class ServiceAnnouncementRepository {
     return records.map((record) => ({ ...record, actorId: record.actorId ?? undefined, reason: record.reason ?? undefined, createdAt: record.createdAt.toISOString() }));
   }
 
-  async createPushAttempt(input: { announcementId: string; attentionRevision: number; topic: string; requestedBy?: string }): Promise<string> {
-    const record = await this.prisma.serviceAnnouncementPushAttempt.create({ data: { ...input, status: "sending" } });
+  async createPushAttempt(input: { announcementId: string; attentionRevision: number; topic?: string; eventId?: string; requestedBy?: string; status?: string }): Promise<string> {
+    const data = { ...input, status: input.status ?? "sending" };
+    const record = input.eventId
+      ? await this.prisma.serviceAnnouncementPushAttempt.upsert({ where: { eventId: input.eventId }, create: data, update: {} })
+      : await this.prisma.serviceAnnouncementPushAttempt.create({ data });
     return record.id;
   }
 
   async completePushAttempt(id: string, input: { status: string; providerMessageId?: string; providerErrorCode?: string; retryAfterMs?: number; completedAt: Date }): Promise<void> {
     await this.prisma.serviceAnnouncementPushAttempt.update({ where: { id }, data: input });
+  }
+
+  async completeDispatchByEventId(input: {
+    eventId: string;
+    status: "sent" | "skipped" | "failed";
+    providerErrorCode?: string;
+    retryAfterMs?: number;
+    completedAt: Date;
+    pushSentAt?: Date;
+  }): Promise<void> {
+    await this.prisma.$transaction(async (transaction) => {
+      const attempt = await transaction.serviceAnnouncementPushAttempt.update({
+        where: { eventId: input.eventId },
+        data: {
+          status: input.status,
+          providerErrorCode: input.providerErrorCode,
+          retryAfterMs: input.retryAfterMs,
+          completedAt: input.completedAt,
+        },
+      });
+      await transaction.serviceAnnouncement.update({
+        where: { id: attempt.announcementId },
+        data: {
+          pushStatus: input.status,
+          ...(input.pushSentAt ? { pushSentAt: input.pushSentAt } : {}),
+        },
+      });
+    });
   }
 
   async markPushResult(id: string, input: { pushStatus: string; pushSentAt?: Date }): Promise<void> {
@@ -308,6 +338,6 @@ export class ServiceAnnouncementRepository {
 
   async listPushAttempts(announcementId: string, limit = 50): Promise<ServiceAnnouncementPushAttemptEntry[]> {
     const records = await this.prisma.serviceAnnouncementPushAttempt.findMany({ where: { announcementId }, orderBy: { requestedAt: "desc" }, take: Math.min(100, limit) });
-    return records.map((record) => ({ ...record, providerMessageId: record.providerMessageId ?? undefined, providerErrorCode: record.providerErrorCode ?? undefined, retryAfterMs: record.retryAfterMs ?? undefined, requestedBy: record.requestedBy ?? undefined, requestedAt: record.requestedAt.toISOString(), completedAt: record.completedAt?.toISOString() }));
+    return records.map((record) => ({ ...record, topic: record.topic ?? undefined, eventId: record.eventId ?? undefined, providerMessageId: record.providerMessageId ?? undefined, providerErrorCode: record.providerErrorCode ?? undefined, retryAfterMs: record.retryAfterMs ?? undefined, requestedBy: record.requestedBy ?? undefined, requestedAt: record.requestedAt.toISOString(), completedAt: record.completedAt?.toISOString() }));
   }
 }

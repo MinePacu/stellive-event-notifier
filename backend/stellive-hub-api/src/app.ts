@@ -6,8 +6,14 @@ import ChzzkOpenApiAdapter from "./adapters/chzzk/chzzkOpenApiAdapter.js";
 import { CatalogService } from "./catalog/catalog.js";
 import { MemberProfileImageHydrator } from "./catalog/memberProfileImageHydrator.js";
 import ChzzkEventIngestor, { type ChzzkObservationWriter } from "./events/chzzkEventIngestor.js";
+import YoutubeUploadNotificationService from "./events/youtubeUploadNotificationService.js";
 import YoutubeWebSubSubscriptionService from "./adapters/youtube/youtubeWebSubSubscriptionService.js";
 import YoutubeDataApiClient from "./adapters/youtube/youtubeDataApiClient.js";
+import {
+  buildYoutubeWebSubTargets,
+  createYoutubeWebSubTargetResolver,
+  type YoutubeWebSubTargetBuildResult,
+} from "./adapters/youtube/youtubeWebSubTargets.js";
 import { LiveStatusRepository } from "./repositories/liveStatusRepository.js";
 import { PlatformApiStateRepository } from "./repositories/platformApiStateRepository.js";
 import { ChannelImageCacheRepository } from "./repositories/channelImageCacheRepository.js";
@@ -21,6 +27,7 @@ import { HubEventRepository } from "./hub-events/hubEventRepository.js";
 import { ServiceAnnouncementRepository } from "./announcements/serviceAnnouncementRepository.js";
 import { ServiceAnnouncementReadService } from "./announcements/serviceAnnouncementReadService.js";
 import { ServiceAnnouncementAdminService } from "./announcements/serviceAnnouncementAdminService.js";
+import { PrismaServiceAnnouncementDispatchUnitOfWork } from "./announcements/serviceAnnouncementDispatchUnitOfWork.js";
 import { createHubCalendarSpecialDayOccurrenceRepositoryIfAvailable } from "./hub-events/hubCalendarSpecialDayOccurrenceRepository.js";
 import NotificationJobRepository from "./jobs/notificationJobRepository.js";
 import NotificationWorker from "./jobs/notificationWorker.js";
@@ -31,8 +38,6 @@ import { PreferenceResolutionService } from "./preferences/preferenceResolution.
 import { createFcmClient, type FcmClient } from "./push/fcmClient.js";
 import { FcmRateLimiter } from "./push/fcmRateLimiter.js";
 import { FcmPushSender } from "./push/pushSender.js";
-import { ServiceAnnouncementSender } from "./push/serviceAnnouncement.js";
-import { ServiceTopicSubscriptionService } from "./push/serviceTopicSubscription.js";
 import { DeliveryAttemptRepository } from "./repositories/deliveryAttemptRepository.js";
 import DeviceRepository from "./repositories/deviceRepository.js";
 import { ExternalApiCallLogRepository } from "./repositories/externalApiCallLogRepository.js";
@@ -57,7 +62,8 @@ import { registerAdminRoutes } from "./routes/adminRoutes.js";
 import registerChzzkAuthRoutes, { type ChzzkAuthRouteOptions } from "./routes/chzzkAuthRoutes.js";
 import { type InternalRouteDependencies, registerInternalRoutes } from "./routes/internalRoutes.js";
 import { type AppRouteDependencies, registerRoutes } from "./routes/routes.js";
-import { registerWebhookRoutes } from "./routes/webhookRoutes.js";
+import { registerWebhookRoutes, type WebhookRouteOptions } from "./routes/webhookRoutes.js";
+import { PrismaEventPersistenceUnitOfWork } from "./storage/eventPersistenceUnitOfWork.js";
 
 type EnvOverrides = Record<string, string | boolean | number | undefined>;
 
@@ -81,6 +87,9 @@ export interface BuildAppOptions {
   appRoutes?: {
     dependencies?: AppRouteDependencies;
   };
+  webhookRoutes?: {
+    dependencies?: Partial<Pick<WebhookRouteOptions, "subscriptions" | "songIngestion" | "uploadNotification" | "targetResolver" | "now">>;
+  };
 }
 
 const testDatabaseUrl = "postgresql://stellive:stellive@localhost:5432/stellive_hub_test";
@@ -95,6 +104,7 @@ type BootstrapHubEventsPort = Pick<HubEventRepository, "summary">;
 
 export type MusicConfigurationWarning =
   | "music_sync_youtube_api_not_configured"
+  | "youtube_websub_official_channel_disabled"
   | "music_channel_discovery_requires_music_sync"
   | "music_channel_discovery_internal_token_not_configured"
   | "music_channel_discovery_service_not_configured";
@@ -109,6 +119,9 @@ export function musicConfigurationWarnings(
   }
   if (env.MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED && !env.MUSIC_SYNC_ENABLED) {
     warnings.push("music_channel_discovery_requires_music_sync");
+  }
+  if (env.YOUTUBE_WEBSUB_ENABLED && env.YOUTUBE_WEBSUB_CALLBACK_URL && env.YOUTUBE_WEBSUB_VERIFY_TOKEN && !isConfiguredSecret(env.YOUTUBE_API_KEY)) {
+    warnings.push("youtube_websub_official_channel_disabled");
   }
   if (env.MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED && !isConfiguredSecret(env.INTERNAL_API_TOKEN)) {
     warnings.push("music_channel_discovery_internal_token_not_configured");
@@ -176,7 +189,8 @@ export function createDefaultFcmClient(env: AppEnv): FcmClient {
 function createDefaultNotificationWorker(
   env: AppEnv,
   fcmClient = createDefaultFcmClient(env),
-  summaries = new SummaryNotificationRepository()
+  summaries = new SummaryNotificationRepository(),
+  serviceAnnouncements = new ServiceAnnouncementRepository(),
 ): NotificationWorker {
   return new NotificationWorker({
     notificationJobs: new NotificationJobRepository(),
@@ -186,6 +200,7 @@ function createDefaultNotificationWorker(
     preferences: new PreferenceRepository(),
     deliveryAttempts: new DeliveryAttemptRepository(),
     summaryNotifications: summaries,
+    serviceAnnouncements,
     preferenceResolution: new PreferenceResolutionService(),
     pushSender: new FcmPushSender(fcmClient),
     random: Math.random,
@@ -211,10 +226,6 @@ function createDefaultSummaryNotificationWorker(
     pushSender: new FcmPushSender(fcmClient),
     random: Math.random
   });
-}
-
-function createDefaultServiceAnnouncementSender(env: AppEnv, fcmClient = createDefaultFcmClient(env)): ServiceAnnouncementSender {
-  return new ServiceAnnouncementSender(fcmClient, new ExternalApiCallLogRepository());
 }
 
 function createDefaultChzzkLiveAdapter(
@@ -269,33 +280,41 @@ function createDefaultSongIngestionService(): SongIngestionService {
   });
 }
 
+function createDefaultYoutubeUploadNotificationService(
+  env: AppEnv,
+  fetchImpl?: typeof fetch,
+): YoutubeUploadNotificationService {
+  const apiKey = isConfiguredSecret(env.YOUTUBE_API_KEY) ? env.YOUTUBE_API_KEY : undefined;
+  return new YoutubeUploadNotificationService({
+    catalog: new CatalogService(),
+    youtube: apiKey
+      ? new YoutubeDataApiClient({ apiKey, fetch: fetchImpl, apiCallLogger: new ExternalApiCallLogRepository() })
+      : undefined,
+    unitOfWork: new PrismaEventPersistenceUnitOfWork(),
+  });
+}
+
+function createDefaultYoutubeWebSubTargetBuild(env: AppEnv): YoutubeWebSubTargetBuildResult {
+  const catalog = new CatalogService();
+  return buildYoutubeWebSubTargets(catalog.getMembers(), {
+    includeOfficial: isConfiguredSecret(env.YOUTUBE_API_KEY),
+  });
+}
+
 function createDefaultYoutubeSubscriptionScheduler(
   env: AppEnv,
   dependencies: Partial<InternalRouteDependencies> | undefined,
   fetchImpl?: typeof fetch,
+  targetBuild: YoutubeWebSubTargetBuildResult = createDefaultYoutubeWebSubTargetBuild(env),
 ): Pick<InternalRouteDependencies, "youtubeSubscriptionScheduler"> {
   if (dependencies?.youtubeSubscriptionScheduler) return {};
   if (!env.YOUTUBE_WEBSUB_CALLBACK_URL || !env.YOUTUBE_WEBSUB_VERIFY_TOKEN) return {};
-
-  const catalog = new CatalogService();
-  const targets = catalog
-    .getMembers()
-    .filter((member) => member.generationId === "gen1" || member.generationId === "gen2" || member.generationId === "gen3")
-    .flatMap((member) => {
-      const channelId = member.platforms?.youtubeChannelId;
-      if (!channelId) return [];
-      return [{
-        targetId: member.id,
-        channelId,
-        topicUrl: `https://www.youtube.com/xml/feeds/videos.xml?channel_id=${channelId}`,
-      }];
-    });
 
   return {
     youtubeSubscriptionScheduler: new YoutubeWebSubSubscriptionService({
       callbackUrl: env.YOUTUBE_WEBSUB_CALLBACK_URL,
       verifyToken: env.YOUTUBE_WEBSUB_VERIFY_TOKEN,
-      targets,
+      targets: targetBuild.targets,
       subscriptions: new WebhookSubscriptionRepository(),
       fetch: fetchImpl,
     }),
@@ -540,6 +559,10 @@ function resolveEnvInput(options: BuildAppOptions): NodeJS.ProcessEnv | Record<s
 export async function buildApp(options: BuildAppOptions = {}) {
   const env = loadEnv(resolveEnvInput(options));
   const app = Fastify({ logger: true });
+  const youtubeWebSubTargetBuild = createDefaultYoutubeWebSubTargetBuild(env);
+  for (const diagnostic of youtubeWebSubTargetBuild.diagnostics) {
+    app.log.warn(diagnostic, "youtube WebSub target disabled due to duplicate channel");
+  }
   const musicCatalogCache = options.appRoutes?.dependencies?.musicCache ?? new ResponseCache({
     maxEntries: env.MUSIC_CACHE_MAX_ENTRIES,
   });
@@ -614,23 +637,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
       }
     });
   }
-  if (env.HUB_EVENTS_STORAGE_MODE === "prisma" && !appRouteDependencies.serviceTopicSubscriptions) {
-    const devices = new DeviceRepository();
-    const preferences = new PreferenceRepository();
-    appRouteDependencies.devices ??= devices;
-    appRouteDependencies.preferences ??= preferences;
-    appRouteDependencies.serviceTopicSubscriptions = new ServiceTopicSubscriptionService({
-      fcmClient: sharedFcmClient,
-      devices,
-      preferences
-    });
-  }
-
   await registerRoutes(app, { dependencies: appRouteDependencies, env });
   await registerWebhookRoutes(app, {
     env,
-    subscriptions: new WebhookSubscriptionRepository(),
-    songIngestion: createDefaultSongIngestionService(),
+    subscriptions: options.webhookRoutes?.dependencies?.subscriptions ?? new WebhookSubscriptionRepository(),
+    songIngestion: options.webhookRoutes?.dependencies?.songIngestion ?? createDefaultSongIngestionService(),
+    uploadNotification: options.webhookRoutes?.dependencies?.uploadNotification ?? createDefaultYoutubeUploadNotificationService(env, options.chzzkLiveApiFetch),
+    targetResolver: options.webhookRoutes?.dependencies?.targetResolver ?? createYoutubeWebSubTargetResolver(youtubeWebSubTargetBuild),
+    now: options.webhookRoutes?.dependencies?.now,
   });
   await registerChzzkAuthRoutes(app, {
     env,
@@ -644,7 +658,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         options.chzzkLiveApiFetch,
         options.chzzkObservationWriter
       ),
-      ...createDefaultYoutubeSubscriptionScheduler(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
+      ...createDefaultYoutubeSubscriptionScheduler(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch, youtubeWebSubTargetBuild),
       ...createDefaultYoutubeSongBackfillScheduler(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch),
       ...createDefaultMusicSyncService(env, options.internalRoutes.dependencies, options.chzzkLiveApiFetch, registerClose, (message) => app.log.warn(message)),
       ...options.internalRoutes.dependencies
@@ -652,11 +666,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
     : (() => {
       const summaries = new SummaryNotificationRepository();
       return {
-        notificationWorker: createDefaultNotificationWorker(env, sharedFcmClient, summaries),
+        notificationWorker: createDefaultNotificationWorker(env, sharedFcmClient, summaries, announcementRepository),
         summaryNotificationWorker: createDefaultSummaryNotificationWorker(env, sharedFcmClient, summaries),
-        serviceAnnouncements: createDefaultServiceAnnouncementSender(env, sharedFcmClient),
         ...createDefaultChzzkLiveAdapter(env, undefined, options.chzzkLiveApiFetch, options.chzzkObservationWriter),
-        ...createDefaultYoutubeSubscriptionScheduler(env, undefined, options.chzzkLiveApiFetch),
+        ...createDefaultYoutubeSubscriptionScheduler(env, undefined, options.chzzkLiveApiFetch, youtubeWebSubTargetBuild),
         ...createDefaultYoutubeSongBackfillScheduler(env, undefined, options.chzzkLiveApiFetch),
         ...createDefaultMusicSyncService(env, undefined, options.chzzkLiveApiFetch, registerClose, (message) => app.log.warn(message)),
       };
@@ -675,7 +688,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await registerAdminHubEventRoutes(app, { env, dependencies: options.adminHubEventRoutes?.dependencies });
   const announcementAdminService = options.adminServiceAnnouncementRoutes?.service ?? new ServiceAnnouncementAdminService({
     repository: announcementRepository,
-    sender: createDefaultServiceAnnouncementSender(env, sharedFcmClient),
+    dispatchUnitOfWork: new PrismaServiceAnnouncementDispatchUnitOfWork(),
     invalidateCache: () => announcementReads.invalidate(),
   });
   await registerAdminServiceAnnouncementRoutes(app, { env, service: announcementAdminService });

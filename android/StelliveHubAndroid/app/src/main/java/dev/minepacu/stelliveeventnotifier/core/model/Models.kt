@@ -22,7 +22,8 @@ enum class NotificationPlatform(val displayName: String) {
     CHZZK("CHZZK"),
     YOUTUBE("YouTube"),
     HUB_EVENT("굿즈/행사"),
-    NAVER_CAFE("Naver Cafe")
+    NAVER_CAFE("Naver Cafe"),
+    SERVICE_ANNOUNCEMENT("서비스 공지")
 }
 
 enum class NotificationEventType(val wireName: String, val displayName: String) {
@@ -41,7 +42,8 @@ enum class NotificationEventType(val wireName: String, val displayName: String) 
     EVENT_DEADLINE_SOON("event_deadline_soon", "마감 임박"),
     EVENT_MILESTONE_DUE("event_milestone_due", "굿즈/행사 마일스톤"),
     EVENT_UPDATED("event_updated", "굿즈/행사 변경"),
-    EVENT_CANCELLED("event_cancelled", "굿즈/행사 취소")
+    EVENT_CANCELLED("event_cancelled", "굿즈/행사 취소"),
+    SERVICE_ANNOUNCEMENT("service_announcement", "서비스 공지")
 }
 
 enum class HubEventCategory(val displayName: String) {
@@ -523,7 +525,8 @@ private fun defaultPlatformEnabled(): Map<NotificationPlatform, Boolean> = linke
     NotificationPlatform.CHZZK to true,
     NotificationPlatform.YOUTUBE to true,
     NotificationPlatform.HUB_EVENT to true,
-    NotificationPlatform.NAVER_CAFE to false
+    NotificationPlatform.NAVER_CAFE to false,
+    NotificationPlatform.SERVICE_ANNOUNCEMENT to true
 )
 
 private fun defaultEventTypeEnabled(): Map<NotificationEventType, Boolean> = linkedMapOf(
@@ -542,7 +545,8 @@ private fun defaultEventTypeEnabled(): Map<NotificationEventType, Boolean> = lin
     NotificationEventType.EVENT_DEADLINE_SOON to true,
     NotificationEventType.EVENT_MILESTONE_DUE to true,
     NotificationEventType.EVENT_UPDATED to false,
-    NotificationEventType.EVENT_CANCELLED to true
+    NotificationEventType.EVENT_CANCELLED to true,
+    NotificationEventType.SERVICE_ANNOUNCEMENT to true
 )
 
 private fun defaultCombinationPreferences(): List<CombinationPreference> = listOf(

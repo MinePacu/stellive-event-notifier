@@ -23,6 +23,19 @@ const sampleAtom = `<?xml version="1.0" encoding="UTF-8"?>
   </entry>
 </feed>`;
 
+const targetResolver = {
+  resolve: (channelId: string) => channelId === "UC123"
+    ? { targetId: "member-uc123", channelId, topicUrl: `https://www.youtube.com/xml/feeds/videos.xml?channel_id=${channelId}` }
+    : undefined,
+};
+
+function subscriptionDouble(upsertSubscription: (input: unknown) => Promise<void> = async () => undefined) {
+  return {
+    upsertSubscription,
+    upsertVerifiedSubscription: vi.fn(async (input: unknown) => upsertSubscription(input)),
+  };
+}
+
 describe("registerWebhookRoutes", () => {
   it("returns hub challenge and records verification when verify token matches", async () => {
     const app = Fastify();
@@ -30,10 +43,12 @@ describe("registerWebhookRoutes", () => {
 
     await registerWebhookRoutes(app, {
       env: routeEnv,
-      subscriptions: { upsertSubscription },
+      subscriptions: subscriptionDouble(upsertSubscription),
       songIngestion: {
         ingestYoutubeUpload: async () => ({ ingested: true as const, songId: "unused" }),
       },
+      uploadNotification: { handleYoutubeUpload: async () => undefined },
+      targetResolver,
       now: () => new Date("2026-06-22T00:00:00.000Z"),
     });
 
@@ -46,10 +61,10 @@ describe("registerWebhookRoutes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toBe("challenge-token");
-    expect(upsertSubscription).toHaveBeenCalledWith(
+  expect(upsertSubscription).toHaveBeenCalledWith(
       expect.objectContaining({
         source: "youtube",
-        targetId: "UC123",
+        targetId: "member-uc123",
         topicUrl: "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC123",
         status: "active",
       }),
@@ -61,10 +76,12 @@ describe("registerWebhookRoutes", () => {
 
     await registerWebhookRoutes(app, {
       env: routeEnv,
-      subscriptions: { upsertSubscription: async () => undefined },
+      subscriptions: subscriptionDouble(),
       songIngestion: {
         ingestYoutubeUpload: async () => ({ ingested: true as const, songId: "unused" }),
       },
+      uploadNotification: { handleYoutubeUpload: async () => undefined },
+      targetResolver,
     });
 
     const response = await app.inject({
@@ -84,8 +101,10 @@ describe("registerWebhookRoutes", () => {
 
     await registerWebhookRoutes(app, {
       env: routeEnv,
-      subscriptions: { upsertSubscription: async () => undefined },
+      subscriptions: subscriptionDouble(),
       songIngestion: { ingestYoutubeUpload },
+      uploadNotification: { handleYoutubeUpload: async () => undefined },
+      targetResolver,
     });
 
     const response = await app.inject({
@@ -108,15 +127,43 @@ describe("registerWebhookRoutes", () => {
   );
 });
 
-it("passes WebSub video notifications to optional music hook without classifying uploads inline", async () => {
+it("rejects verification for an unknown subscription target", async () => {
   const app = Fastify();
-  const musicNotification = { handleYoutubeUpload: vi.fn(async () => undefined) };
+  const upsertVerifiedSubscription = vi.fn(async () => undefined);
+  await registerWebhookRoutes(app, {
+    env: routeEnv,
+    subscriptions: {
+      upsertSubscription: async () => undefined,
+      upsertVerifiedSubscription,
+    },
+    songIngestion: {
+      ingestYoutubeUpload: async () => ({ ingested: true as const, songId: "unused" }),
+    },
+    uploadNotification: { handleYoutubeUpload: async () => undefined },
+    targetResolver,
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/webhooks/youtube?hub.mode=subscribe&hub.topic=https://www.youtube.com/xml/feeds/videos.xml?channel_id=UNKNOWN&hub.challenge=challenge-token&hub.verify_token=verify-token",
+  });
+  await app.close();
+
+  expect(response.statusCode).toBe(404);
+  expect(response.json()).toEqual({ error: "youtube_subscription_target_unknown" });
+  expect(upsertVerifiedSubscription).not.toHaveBeenCalled();
+});
+
+it("passes WebSub video notifications to the required upload hook before song ingestion", async () => {
+  const app = Fastify();
+  const uploadNotification = { handleYoutubeUpload: vi.fn(async () => undefined) };
   const ingestYoutubeUpload = vi.fn(async () => ({ ingested: true as const, songId: "song-1" }));
   await registerWebhookRoutes(app, {
     env: routeEnv,
-    subscriptions: { upsertSubscription: async () => undefined },
+    subscriptions: subscriptionDouble(),
     songIngestion: { ingestYoutubeUpload },
-    musicNotification,
+    uploadNotification,
+    targetResolver,
   });
   const response = await app.inject({
     method: "POST",
@@ -127,7 +174,7 @@ it("passes WebSub video notifications to optional music hook without classifying
   await app.close();
 
   expect(response.statusCode).toBe(202);
-  expect(musicNotification.handleYoutubeUpload).toHaveBeenCalledWith({
+  expect(uploadNotification.handleYoutubeUpload).toHaveBeenCalledWith({
     videoId: "abc123",
     channelId: "UC123",
     title: "Song upload",
@@ -136,5 +183,28 @@ it("passes WebSub video notifications to optional music hook without classifying
     updatedAt: "2026-06-22T10:01:00.000Z",
   });
   expect(ingestYoutubeUpload).toHaveBeenCalledTimes(1);
+});
+
+it("returns a retryable 5xx when upload notification persistence fails", async () => {
+  const app = Fastify();
+  const ingestYoutubeUpload = vi.fn(async () => ({ ingested: true as const, songId: "song-1" }));
+  await registerWebhookRoutes(app, {
+    env: routeEnv,
+    subscriptions: subscriptionDouble(),
+    songIngestion: { ingestYoutubeUpload },
+    uploadNotification: { handleYoutubeUpload: async () => { throw new Error("platform_event_create_failed"); } },
+    targetResolver,
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/webhooks/youtube",
+    headers: { "content-type": "application/atom+xml" },
+    payload: sampleAtom,
+  });
+  await app.close();
+
+  expect(response.statusCode).toBe(500);
+  expect(ingestYoutubeUpload).not.toHaveBeenCalled();
 });
 });

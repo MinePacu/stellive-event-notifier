@@ -9,6 +9,8 @@ enum NotificationCollapsePolicy {
             return NotificationThreadPolicy.threadIdentifier(for: payload)
         case .officialYoutubeUpload:
             return "official:\(payload.eventType.rawValue)"
+        case .serviceAnnouncement:
+            return "service:\(payload.eventId)"
         default:
             return payload.summaryGroupId.map { "summary:\($0)" }
         }

@@ -88,6 +88,7 @@ export interface AppRouteDependencies {
       expectedRevision: number;
     }): Promise<PreferenceSnapshot>;
   };
+  /** @deprecated Kept only for source compatibility; mobile routes no longer call topic sync. */
   serviceTopicSubscriptions?: {
     syncToken?(input: { token: string; preferences: UserNotificationPreference[] }): Promise<ServiceTopicSyncResult>;
     syncDevice?(input: { deviceId: string; preferences: UserNotificationPreference[] }): Promise<ServiceTopicSyncResult>;

@@ -50,7 +50,7 @@ object NotificationChannels {
             displayName = "서비스 공지",
             description = "앱 운영, 장애, 점검, 업데이트 안내",
             importance = NotificationManager.IMPORTANCE_DEFAULT,
-            eventTypes = emptySet()
+            eventTypes = setOf(NotificationEventType.SERVICE_ANNOUNCEMENT)
         ),
         NotificationChannelDefinition(
             id = CHZZK_LIVE,

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { calculateRetryDelayMs, NotificationWorker } from "../src/jobs/notificationWorker.js";
+import {
+  calculateRetryDelayMs,
+  NotificationWorker,
+  type ServiceAnnouncementDispatchCompletion,
+} from "../src/jobs/notificationWorker.js";
 import type { ClaimedNotificationJob } from "../src/jobs/notificationJobRepository.js";
 import { PreferenceResolutionService } from "../src/preferences/preferenceResolution.js";
 import type { PushSendResult } from "../src/push/fcmClient.js";
@@ -33,6 +37,18 @@ function event(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
     realtimeEligible: overrides.realtimeEligible ?? false,
     deliveryMode: overrides.deliveryMode ?? "standard"
   };
+}
+
+function serviceAnnouncementEvent(rawPayload: unknown): PlatformEvent {
+  return event({
+    id: "service-announcement-event-1",
+    source: "service_announcement",
+    type: "service_announcement",
+    title: "서비스 공지",
+    body: "서비스 공지 본문입니다.",
+    appDeepLink: "stellivehub://announcements/notice-1",
+    rawPayload,
+  });
 }
 
 function job(overrides: Partial<ClaimedNotificationJob> = {}): ClaimedNotificationJob {
@@ -90,6 +106,7 @@ function createWorker(options: {
   }) => ResolvedNotificationPreference;
   send?: (input: { device: PushTargetDevice; payload: MinimalPushPayload }) => Promise<PushSendResult>;
   sendBatch?: (input: { devices: PushTargetDevice[]; payload: MinimalPushPayload }) => Promise<PushSendResult[]>;
+  completeServiceAnnouncementDispatch?: (input: ServiceAnnouncementDispatchCompletion) => Promise<void>;
   useListFallback?: boolean;
   deviceBatchSize?: number;
   preferenceBatchSize?: number;
@@ -133,7 +150,8 @@ function createWorker(options: {
     ownershipLookups: [] as Array<Array<{ deviceId: string; pushToken: string }>>,
     recentSentLookups: [] as Array<{ deviceIds: string[]; since: Date; until: Date }>,
     summaries: [] as Array<{ event: PlatformEvent; deviceId: string; evaluatedAt: Date }>,
-    resolveContexts: [] as Array<{ deviceId: string; evaluatedAt: Date; recentNotificationsInLastMinute: number }>
+    resolveContexts: [] as Array<{ deviceId: string; evaluatedAt: Date; recentNotificationsInLastMinute: number }>,
+    announcementDispatches: [] as ServiceAnnouncementDispatchCompletion[],
   };
   const pushTargets = options.devices ?? [device()];
   const preferences = options.preferences ?? [];
@@ -244,6 +262,16 @@ function createWorker(options: {
         return options.enqueueSummary?.(input) ?? { bucketId: "summary-bucket-1", topicKey: "hub_event", created: true };
       }
     },
+    ...(options.completeServiceAnnouncementDispatch
+      ? {
+          serviceAnnouncements: {
+            async completeDispatchByEventId(input: ServiceAnnouncementDispatchCompletion) {
+              calls.announcementDispatches.push(input);
+              await options.completeServiceAnnouncementDispatch?.(input);
+            }
+          }
+        }
+      : {}),
     preferenceResolution: {
       resolve(
         eventInput: PlatformEvent,
@@ -384,6 +412,120 @@ describe("NotificationWorker", () => {
       })
     ]);
     expect(calls.completed).toEqual(["job-1"]);
+  });
+
+  it("enforces service announcement platform and version targets before preference resolution", async () => {
+    const { worker, calls } = createWorker({
+      event: serviceAnnouncementEvent({
+        targetPlatforms: ["ios"],
+        minimumAppVersion: "2.0.0",
+        maximumAppVersion: "3.0.0",
+        targetingPolicyVersion: 1,
+      }),
+      devices: [
+        device({ deviceId: "android-device", appVersion: "2.5.0" }),
+        device({ deviceId: "ios-old-device", platform: "ios", appVersion: "1.9.9", pushProvider: "apns_via_fcm", pushToken: "ios-old-token" }),
+      ],
+      completeServiceAnnouncementDispatch: async () => {},
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ completed: 1, sent: 0, skipped: 2, queued: 0, failed: 0 });
+    expect(calls.sent).toEqual([]);
+    expect(calls.preferenceDeviceIds).toEqual([]);
+    expect(calls.resolveContexts).toEqual([]);
+    expect(calls.attempts).toEqual([
+      expect.objectContaining({
+        eventId: "service-announcement-event-1",
+        deviceId: "android-device",
+        status: "skipped",
+        reason: "service_announcement_platform_mismatch",
+      }),
+      expect.objectContaining({
+        eventId: "service-announcement-event-1",
+        deviceId: "ios-old-device",
+        status: "skipped",
+        reason: "service_announcement_version_below_minimum",
+      }),
+    ]);
+    expect(calls.announcementDispatches).toEqual([
+      expect.objectContaining({ eventId: "service-announcement-event-1", status: "skipped", completedAt: now }),
+    ]);
+  });
+
+  it("sends a service announcement to a device inside the inclusive target range", async () => {
+    const { worker, calls } = createWorker({
+      event: serviceAnnouncementEvent({
+        targetPlatforms: ["android"],
+        minimumAppVersion: "2.0.0",
+        maximumAppVersion: "3.0.0",
+        targetingPolicyVersion: 1,
+      }),
+      devices: [device({ appVersion: "2.0.0" })],
+      completeServiceAnnouncementDispatch: async () => {},
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ completed: 1, sent: 1, skipped: 0, queued: 0, failed: 0 });
+    expect(calls.sent).toHaveLength(1);
+    expect(calls.sent[0]?.device.deviceId).toBe("device-1");
+    expect(calls.attempts).toEqual([
+      expect.objectContaining({
+        eventId: "service-announcement-event-1",
+        deviceId: "device-1",
+        status: "sent",
+        deliveryLevel: "immediate_push",
+      }),
+    ]);
+    expect(calls.announcementDispatches).toEqual([
+      expect.objectContaining({ eventId: "service-announcement-event-1", status: "sent", completedAt: now, pushSentAt: now }),
+    ]);
+  });
+
+  it("fails closed for service announcements without targeting metadata", async () => {
+    const { worker, calls } = createWorker({
+      event: serviceAnnouncementEvent({}),
+      completeServiceAnnouncementDispatch: async () => {},
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ completed: 1, sent: 0, skipped: 1, queued: 0, failed: 0 });
+    expect(calls.sent).toEqual([]);
+    expect(calls.preferenceDeviceIds).toEqual([]);
+    expect(calls.attempts).toEqual([
+      expect.objectContaining({
+        eventId: "service-announcement-event-1",
+        deviceId: "device-1",
+        status: "skipped",
+        reason: "service_announcement_target_metadata_missing",
+      }),
+    ]);
+    expect(calls.announcementDispatches).toEqual([
+      expect.objectContaining({ eventId: "service-announcement-event-1", status: "skipped", completedAt: now }),
+    ]);
+  });
+
+  it("marks a terminal service announcement provider failure as failed without reintroducing a send path", async () => {
+    const { worker, calls } = createWorker({
+      jobs: [job({ attempts: 4 })],
+      event: serviceAnnouncementEvent({
+        targetPlatforms: ["android"],
+        targetingPolicyVersion: 1,
+      }),
+      send: async () => ({ status: "transient_failure", reason: "fcm_transient" }),
+      completeServiceAnnouncementDispatch: async () => {},
+    });
+
+    const result = await worker.drain({ now });
+
+    expect(result).toMatchObject({ completed: 0, sent: 0, skipped: 0, queued: 0, failed: 1 });
+    expect(calls.sent).toHaveLength(1);
+    expect(calls.announcementDispatches).toEqual([
+      expect.objectContaining({ eventId: "service-announcement-event-1", status: "failed", completedAt: now }),
+    ]);
   });
 
   it("skips default-off events until an exact opt-in enables both axes", async () => {

@@ -94,9 +94,10 @@ class ServerHubRepository(
         val deviceId = deviceIdStore.getDeviceId()
         val response = remoteDataSource.bootstrap(deviceId)
         if (response is HubNetworkResult.Success) {
-            if (response.value.device == null) {
-                registerDevice()
-            }
+            // Refresh server-side device metadata on every successful startup. The
+            // registration endpoint is idempotent, and failures must not prevent
+            // the bootstrap response from reaching the local fallback.
+            runCatching { registerDevice() }
             return fallback.bootstrap()
                 .mergeCatalogProfileImages(response.value.effectiveCatalog.members)
                 .mergeLiveStatus(response.value.liveStatus)
@@ -342,6 +343,7 @@ class ServerHubRepository(
             RegisterDeviceRequestDto(
                 deviceId = deviceIdStore.getDeviceId(),
                 platform = "android",
+                appVersion = BuildConfig.VERSION_NAME,
             ),
         )
         if (response is HubNetworkResult.Success) {

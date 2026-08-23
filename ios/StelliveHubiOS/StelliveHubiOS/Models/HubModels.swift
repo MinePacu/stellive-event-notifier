@@ -28,6 +28,7 @@ enum NotificationPlatform: String, Codable, CaseIterable, Hashable, Identifiable
     case youtube
     case hubEvent = "hub_event"
     case naverCafe = "naver_cafe"
+    case serviceAnnouncement = "service_announcement"
 
     var id: String { rawValue }
 
@@ -41,6 +42,8 @@ enum NotificationPlatform: String, Codable, CaseIterable, Hashable, Identifiable
             return "굿즈/행사"
         case .naverCafe:
             return "Naver Cafe"
+        case .serviceAnnouncement:
+            return "서비스 공지"
         }
     }
 }
@@ -62,6 +65,7 @@ enum NotificationEventType: String, Codable, CaseIterable, Hashable, Identifiabl
     case eventMilestoneDue = "event_milestone_due"
     case eventUpdated = "event_updated"
     case eventCancelled = "event_cancelled"
+    case serviceAnnouncement = "service_announcement"
 
     var id: String { rawValue }
 
@@ -99,6 +103,8 @@ enum NotificationEventType: String, Codable, CaseIterable, Hashable, Identifiabl
             return "굿즈/행사 변경"
         case .eventCancelled:
             return "굿즈/행사 취소"
+        case .serviceAnnouncement:
+            return "서비스 공지"
         }
     }
 }
@@ -1945,7 +1951,8 @@ struct NotificationSettingsState: Equatable {
         .chzzk: true,
         .youtube: true,
         .hubEvent: true,
-        .naverCafe: false
+        .naverCafe: false,
+        .serviceAnnouncement: true
     ]
     var eventTypeEnabled: [NotificationEventType: Bool] = [
         .cafePost: false,
@@ -1963,7 +1970,8 @@ struct NotificationSettingsState: Equatable {
         .eventDeadlineSoon: true,
         .eventMilestoneDue: true,
         .eventUpdated: false,
-        .eventCancelled: true
+        .eventCancelled: true,
+        .serviceAnnouncement: true
     ]
     var combinationPreferences = [
         CombinationPreference(id: "generation_platform", scope: .generationPlatform, label: "분류별 플랫폼 설정", enabled: true),

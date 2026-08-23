@@ -88,14 +88,17 @@ const androidChannelByType: Partial<Record<PlatformEvent["type"], string>> = {
   event_cancelled: "stellive_hub_events",
   chzzk_chat: "stellive_chzzk_chat",
   chzzk_subscription: "stellive_chzzk_subscription",
-  cafe_post: "stellive_cafe_posts"
+  cafe_post: "stellive_cafe_posts",
+  service_announcement: "stellive_service_announcements"
 };
 
 function pushTitle(event: PlatformEvent): string {
+  if (event.source === "service_announcement" || event.type === "service_announcement") return event.title;
   return titleByType[event.type] ?? "스텔라이브 알림";
 }
 
 function pushBody(event: PlatformEvent): string {
+  if (event.source === "service_announcement" || event.type === "service_announcement") return event.body;
   const title = event.title.trim();
   return title.length > 0 ? title : "굿즈/행사 알림";
 }

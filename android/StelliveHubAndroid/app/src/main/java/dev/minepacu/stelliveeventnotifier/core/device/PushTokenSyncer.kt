@@ -1,6 +1,7 @@
 package dev.minepacu.stelliveeventnotifier.core.device
 
 import android.content.Context
+import dev.minepacu.stelliveeventnotifier.BuildConfig
 import dev.minepacu.stelliveeventnotifier.core.network.HubApiClient
 import dev.minepacu.stelliveeventnotifier.core.network.HubNetworkResult
 import dev.minepacu.stelliveeventnotifier.core.network.UpdateDeviceTokenRequestDto
@@ -54,6 +55,7 @@ class PushTokenSyncer(
                 platform = "android",
                 provider = "fcm",
                 token = token,
+                appVersion = BuildConfig.VERSION_NAME,
             ),
         )
         return result is HubNetworkResult.Success

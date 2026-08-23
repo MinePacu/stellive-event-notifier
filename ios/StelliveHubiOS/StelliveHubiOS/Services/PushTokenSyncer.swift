@@ -52,7 +52,7 @@ final class PushTokenSyncer {
                     platform: "ios",
                     provider: "apns_via_fcm",
                     token: token,
-                    appVersion: nil,
+                    appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
                     locale: Locale.current.identifier,
                     timezone: TimeZone.current.identifier
                 )

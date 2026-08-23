@@ -75,9 +75,10 @@ final class ServerHubStore: ObservableObject {
     func bootstrap() async -> MockHubStore {
         do {
             let response = try await api.bootstrap(deviceId: deviceIDStore.loadDeviceID())
-    if deviceIDStore.loadDeviceID() == nil {
-      try? await registerDevice()
-    }
+            // Registration is idempotent and refreshes the server-side app version
+            // for existing devices. Keep it best-effort so a registration outage
+            // does not discard an otherwise usable bootstrap response.
+            try? await registerDevice()
             fallback.applyBootstrap(response)
             announcementsSummary = response.announcementsSummary
             try? HubCalendarWidgetStore.saveToSharedContainer(fallback.calendarWidgetSnapshot())
@@ -93,7 +94,7 @@ final class ServerHubStore: ObservableObject {
             RegisterDeviceRequest(
                 deviceId: deviceIDStore.loadDeviceID(),
                 platform: "ios",
-                appVersion: nil,
+                appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
                 locale: Locale.current.identifier,
                 timezone: TimeZone.current.identifier,
                 installationId: nil

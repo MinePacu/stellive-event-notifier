@@ -32,7 +32,7 @@ The auth topology is intentionally split. `ADMIN_CONSOLE_ENABLED` controls only 
 
 Blank values and placeholders are not treated as valid configuration. Empty strings, `replace_with_*`, and `verify_required` leave the related admin route protection effectively unconfigured, so they do not enable `/admin` or authenticated `/v1/internal/*` access.
 
-This surface is for diagnostics and controlled operational nudges only. It must not bypass normal ingestion, event guards, preference resolution, load-reduction policy, quiet hours, keyword filters, rate limits, or push dispatch boundaries. Manual actions are limited to the same backend-owned services the application already uses.
+This surface is for diagnostics and controlled operational nudges only. It must not bypass normal ingestion, event guards, preference resolution, load-reduction policy, quiet hours, keyword filters, rate limits, or push dispatch boundaries. Manual actions are limited to the same backend-owned services the application already uses. Service announcements are ordinary `PlatformEvent`/`NotificationJob` intents and are never sent through FCM topics; their publish state, audit, dispatch attempt, event, and job are committed in one transaction.
 
 The admin surface also must not expose secrets or production device tokens. The overview route returns secret readiness only as configured-or-missing state, and diagnostics are limited to operational metadata rather than raw provider credentials or user device-token material.
 

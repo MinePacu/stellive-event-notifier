@@ -1,7 +1,7 @@
 export type CatalogRole = "member" | "representative" | "official_channel" | "placeholder";
 export type ActiveStatus = "active" | "upcoming";
 export type GenerationType = "generation" | "gamja" | "official" | "upcoming";
-export type PlatformSource = "naver_cafe" | "chzzk" | "youtube" | "hub_event";
+export type PlatformSource = "naver_cafe" | "chzzk" | "youtube" | "hub_event" | "service_announcement";
 export type DeliveryMode = "standard" | "realtime_best_effort";
 export type NotificationDeliveryLevel = "immediate_push" | "summary_push" | "in_app_history_only";
 export type PushPriority = "normal" | "high";
@@ -23,7 +23,8 @@ export type PlatformEventType =
   | "event_deadline_soon"
   | "event_milestone_due"
   | "event_updated"
-  | "event_cancelled";
+  | "event_cancelled"
+  | "service_announcement";
 
 export type NotificationPreferenceScope =
   | "global"

@@ -1,8 +1,8 @@
 import "dotenv/config";
 import { createDefaultFcmClient } from "../app.js";
 import { loadEnv } from "../config/env.js";
-import { cleanupLegacyServiceTopics } from "../push/legacyServiceTopicCleanup.js";
 import DeviceRepository from "../repositories/deviceRepository.js";
+import { cleanupLegacyServiceTopics } from "../push/legacyServiceTopicCleanup.js";
 import { disconnectPrismaClient } from "../storage/prisma.js";
 
 async function main(): Promise<void> {
@@ -13,9 +13,7 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-
-  const devices = new DeviceRepository();
-  const summary = await cleanupLegacyServiceTopics({ devices, fcmClient });
+  const summary = await cleanupLegacyServiceTopics({ devices: new DeviceRepository(), fcmClient });
   console.info(JSON.stringify({ operation: "legacy_service_topic_cleanup", ...summary }));
   if (summary.failed > 0) process.exitCode = 1;
 }

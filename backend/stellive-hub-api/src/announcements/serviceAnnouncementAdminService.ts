@@ -1,13 +1,17 @@
 import { z } from "zod";
-import type { PushSendResult } from "../push/fcmClient.js";
-import type { ServiceAnnouncementInput } from "../push/serviceAnnouncement.js";
-import { serviceAnnouncementTopic } from "../push/serviceAnnouncement.js";
+import { buildServiceAnnouncementEvent } from "./serviceAnnouncementEvent.js";
+import {
+  PrismaServiceAnnouncementDispatchUnitOfWork,
+  type ServiceAnnouncementDispatchRepositories,
+  type ServiceAnnouncementDispatchUnitOfWork,
+} from "./serviceAnnouncementDispatchUnitOfWork.js";
 import {
   ServiceAnnouncementRepository,
   compareAppVersions,
   type AdminServiceAnnouncement,
   type ServiceAnnouncementWriteInput,
 } from "./serviceAnnouncementRepository.js";
+import { isValidAppVersion } from "./serviceAnnouncementTargetPolicy.js";
 
 const optionalUrl = z.union([z.string().url(), z.literal(""), z.null()]).optional();
 const writeSchema = z.object({
@@ -46,27 +50,19 @@ export interface ServiceAnnouncementAdminActor {
   sendPush?: boolean;
 }
 
-interface AnnouncementSender {
-  send(input: ServiceAnnouncementInput): Promise<PushSendResult>;
-}
-
-const scopeByType = {
-  general: "service_all",
-  incident: "service_incident",
-  maintenance: "service_maintenance",
-  version_update: "service_version_update",
-} as const;
-
 export class ServiceAnnouncementAdminService {
   constructor(private readonly options: {
     repository?: ServiceAnnouncementRepository;
-    sender: AnnouncementSender;
+    /** @deprecated Legacy topic sender is ignored; dispatch always uses persisted jobs. */
+    sender?: unknown;
     invalidateCache: () => void;
     now?: () => Date;
+    dispatchUnitOfWork?: ServiceAnnouncementDispatchUnitOfWork;
   }) {}
 
   private get repository() { return this.options.repository ??= new ServiceAnnouncementRepository(); }
   private get now() { return this.options.now ?? (() => new Date()); }
+  private get dispatchUnitOfWork() { return this.options.dispatchUnitOfWork ?? new PrismaServiceAnnouncementDispatchUnitOfWork(); }
 
   validate(input: unknown, mode: "draft" | "publish" = "publish"): ServiceAnnouncementWriteInput {
     if (mode === "draft") {
@@ -77,6 +73,12 @@ export class ServiceAnnouncementAdminService {
     const result = writeSchema.safeParse(input);
     if (!result.success) this.throwValidation(result.error);
     const value = result.data;
+    if (value.minimumAppVersion && !isValidAppVersion(value.minimumAppVersion)) {
+      throw new ServiceAnnouncementValidationError([{ path: "minimumAppVersion", message: "최소 앱 버전 형식이 올바르지 않습니다." }]);
+    }
+    if (value.maximumAppVersion && !isValidAppVersion(value.maximumAppVersion)) {
+      throw new ServiceAnnouncementValidationError([{ path: "maximumAppVersion", message: "최대 앱 버전 형식이 올바르지 않습니다." }]);
+    }
     if (value.minimumAppVersion && value.maximumAppVersion && compareAppVersions(value.minimumAppVersion, value.maximumAppVersion) > 0) {
       throw new ServiceAnnouncementValidationError([{ path: "maximumAppVersion", message: "최대 앱 버전은 최소 앱 버전보다 낮을 수 없습니다." }]);
     }
@@ -89,7 +91,17 @@ export class ServiceAnnouncementAdminService {
   async list(input: Parameters<ServiceAnnouncementRepository["listAdmin"]>[0]) { return this.repository.listAdmin(input); }
   async getById(id: string) { return this.repository.getAdminById(id); }
   async listAudit(id: string, limit?: number) { return this.repository.listAudit(id, limit); }
-  async listPushAttempts(id: string, limit?: number) { return this.repository.listPushAttempts(id, limit); }
+  async listPushAttempts(id: string, limit?: number) {
+    const items = await this.repository.listPushAttempts(id, limit);
+    const summary = items.reduce((aggregate, item) => {
+      const status = item.status === "sent" || item.status === "skipped" || item.status === "failed" || item.status === "queued" || item.status === "locked" || item.status === "completed"
+        ? item.status
+        : "failed";
+      aggregate[status] += 1;
+      return aggregate;
+    }, { queued: 0, locked: 0, completed: 0, failed: 0, sent: 0, skipped: 0 } as Record<string, number>);
+    return { items, summary };
+  }
 
   async createDraft(input: unknown, actor: ServiceAnnouncementAdminActor = {}) {
     const validated = this.validate(input, "draft");
@@ -112,16 +124,19 @@ export class ServiceAnnouncementAdminService {
     const before = await this.existing(id);
     if (before.publicationState === "published") return before;
     this.validate(before, "publish");
-    const published = await this.repository.transition(id, {
-      publicationState: "published",
-      publishedAt: before.publishedAt ?? this.now(),
-      archivedAt: null,
-      pushStatus: actor.sendPush ?? before.pushEnabled ? "pending" : "not_requested",
-    }, actor.actorId);
-    await this.audit("publish", actor, before, published);
+    const published = await this.dispatchUnitOfWork.run(async (repositories) => {
+      const next = await repositories.announcements.transition(id, {
+        publicationState: "published",
+        publishedAt: before.publishedAt ?? this.now(),
+        archivedAt: null,
+        pushStatus: actor.sendPush ?? before.pushEnabled ? "queued" : "not_requested",
+      }, actor.actorId);
+      await repositories.announcements.writeAudit({ announcementId: id, action: "publish", actorId: actor.actorId, reason: actor.reason, before, after: next });
+      if (actor.sendPush ?? next.pushEnabled) await this.enqueueDispatch(repositories, next, actor);
+      return next;
+    });
     this.options.invalidateCache();
-    if (actor.sendPush ?? published.pushEnabled) await this.sendPush(published, actor, false);
-    return this.existing(id);
+    return published;
   }
 
   async resolve(id: string, actor: ServiceAnnouncementAdminActor = {}) {
@@ -159,48 +174,37 @@ export class ServiceAnnouncementAdminService {
   async resend(id: string, actor: ServiceAnnouncementAdminActor = {}) {
     const announcement = await this.existing(id);
     if (announcement.publicationState !== "published") throw new Error("service_announcement_not_published");
-    const result = await this.sendPush(announcement, actor, true);
-    await this.audit("resend", actor, announcement, await this.existing(id));
+    const result = await this.dispatchUnitOfWork.run(async (repositories) => {
+      const dispatch = await this.enqueueDispatch(repositories, announcement, actor, true);
+      await repositories.announcements.writeAudit({ announcementId: id, action: "resend", actorId: actor.actorId, reason: actor.reason, before: announcement, after: announcement });
+      return { status: "queued" as const, eventId: dispatch.eventId };
+    });
     return result;
   }
 
-  private async sendPush(announcement: AdminServiceAnnouncement, actor: ServiceAnnouncementAdminActor, allowDuplicate: boolean) {
-    if (!allowDuplicate && await this.repository.hasSuccessfulPush(announcement.id, announcement.attentionRevision)) {
-      return { status: "duplicate_skipped" as const };
+  private async enqueueDispatch(
+    repositories: ServiceAnnouncementDispatchRepositories,
+    announcement: AdminServiceAnnouncement,
+    actor: ServiceAnnouncementAdminActor,
+    allowDuplicate = false,
+  ): Promise<{ eventId: string }> {
+    if (!allowDuplicate && await repositories.announcements.hasSuccessfulPush(announcement.id, announcement.attentionRevision)) {
+      throw new Error("service_announcement_push_already_sent");
     }
-    const scope = scopeByType[announcement.type as keyof typeof scopeByType];
-    const topic = serviceAnnouncementTopic(scope);
-    const attemptId = await this.repository.createPushAttempt({
+    const dispatchId = allowDuplicate
+      ? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+      : "publish";
+    const event = buildServiceAnnouncementEvent(announcement, dispatchId, this.now());
+    await repositories.announcements.createPushAttempt({
       announcementId: announcement.id,
       attentionRevision: announcement.attentionRevision,
-      topic,
+      eventId: event.id,
+      status: "queued",
       requestedBy: actor.actorId,
     });
-    let result: PushSendResult;
-    try {
-      result = await this.options.sender.send({
-        scope,
-        title: announcement.title,
-        body: announcement.summary,
-        appDeepLink: announcement.appDeepLink || `stellivehub://announcements/${announcement.id}`,
-        platformUrl: announcement.externalUrl || "",
-      });
-    } catch (error) {
-      result = { status: "transient_failure", providerErrorCode: "sender_exception", reason: error instanceof Error ? error.message : "unknown" };
-    }
-    const status = result.status === "sent" ? "sent" : "failed";
-    await this.repository.completePushAttempt(attemptId, {
-      status,
-      providerMessageId: result.providerMessageId,
-      providerErrorCode: result.providerErrorCode,
-      retryAfterMs: result.retryAfterMs,
-      completedAt: this.now(),
-    });
-    await this.repository.markPushResult(announcement.id, {
-      pushStatus: status,
-      pushSentAt: status === "sent" ? this.now() : undefined,
-    });
-    return { status, providerMessageId: result.providerMessageId, providerErrorCode: result.providerErrorCode, retryAfterMs: result.retryAfterMs };
+    const persisted = await repositories.platformEvents.createIfNotExists(event);
+    await repositories.notificationJobs.enqueue({ eventId: persisted.eventId, priority: 5 });
+    return { eventId: persisted.eventId };
   }
 
   private async existing(id: string): Promise<AdminServiceAnnouncement> {

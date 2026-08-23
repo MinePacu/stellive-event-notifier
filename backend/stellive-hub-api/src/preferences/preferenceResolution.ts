@@ -113,6 +113,26 @@ export class PreferenceResolutionService {
       return this.blocked(event, deviceId, "global_off", ["global:off"], global.tapAction, "standard");
     }
 
+    // Service announcements intentionally use only the global/service-announcement
+    // switches. They must still pass through this resolver so a queued delivery
+    // cannot bypass a preference change made after the job was created.
+    if (event.source === "service_announcement" || event.type === "service_announcement") {
+      if (global?.serviceAnnouncementsEnabled === false) {
+        return this.blocked(event, deviceId, "service_announcements_off", ["service_announcements:off"], global.tapAction, "standard");
+      }
+      return {
+        eventId: event.id,
+        deviceId,
+        shouldNotify: true,
+        reason: "allowed",
+        matchedRules: ["service_announcements:on"],
+        tapAction: global?.tapAction ?? "open_app",
+        deliveryMode: "standard",
+        pushPriority: "normal",
+        foregroundStreamEligible: false
+      };
+    }
+
     let shouldNotify = true;
     let tapAction = global?.tapAction ?? "open_app";
     let requestedDelivery: DeliveryMode = global?.deliveryMode ?? "standard";
