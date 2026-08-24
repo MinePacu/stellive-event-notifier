@@ -931,7 +931,9 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       font-weight: 600;
       color: var(--admin-label);
     }
-    input {
+    input,
+    select,
+    textarea {
       width: 100%;
       min-width: 0;
       border: 1px solid var(--admin-input-border);
@@ -939,8 +941,22 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       padding: 10px 12px;
       font: inherit;
       font-size: 13px;
-      background: var(--admin-surface);
+      background-color: var(--admin-surface);
       color: var(--admin-text);
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%239aa8bd' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      background-size: 12px 12px;
+      padding-right: 34px;
+    }
+    textarea {
+      min-height: 96px;
+      resize: vertical;
+      line-height: 1.45;
     }
     .refresh-controls,
     .action-controls {
@@ -953,15 +969,36 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     }
     .switch-control {
       align-items: center;
-      border: 1px solid var(--admin-input-border);
-      border-radius: 13px;
-      background: var(--admin-surface);
       color: var(--admin-label);
+      cursor: pointer;
       display: inline-flex;
       gap: 8px;
-      min-height: 36px;
-      padding: 0 10px;
       white-space: nowrap;
+    }
+    .switch-control input[type="checkbox"]:not(.auto-refresh-input) {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      flex: none;
+      margin: 0;
+      padding: 0;
+      border-radius: 6px;
+      border: 1px solid var(--admin-input-border);
+      background: var(--admin-surface);
+      cursor: pointer;
+    }
+    .switch-control input[type="checkbox"]:not(.auto-refresh-input):checked {
+      background: var(--admin-primary);
+      border-color: var(--admin-primary);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.3 4.8 8.6 9.5 3.9' fill='none' stroke='%23ffffff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 12px 12px;
+    }
+    .switch-control input[type="checkbox"]:not(.auto-refresh-input):focus-visible {
+      outline: 2px solid var(--admin-primary);
+      outline-offset: 2px;
     }
     .auto-refresh-input {
       height: 1px;
@@ -1017,6 +1054,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       background: var(--admin-surface-hover);
     }
     input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
     button:focus-visible {
       outline: 2px solid var(--admin-primary);
       outline-offset: 2px;
@@ -1029,6 +1068,74 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     button:disabled {
       cursor: wait;
       opacity: 0.7;
+    }
+    button.is-primary {
+      background: var(--admin-primary);
+      border-color: var(--admin-primary);
+      color: var(--admin-primary-text);
+    }
+    button.is-primary:hover {
+      background: color-mix(in srgb, var(--admin-primary) 88%, black);
+    }
+    button.is-danger {
+      color: var(--admin-danger);
+      border-color: color-mix(in srgb, var(--admin-danger) 45%, transparent);
+    }
+    button.is-danger:hover {
+      background: color-mix(in srgb, var(--admin-danger) 12%, transparent);
+    }
+    .action-overflow {
+      position: relative;
+      display: inline-flex;
+    }
+    .overflow-trigger {
+      width: 38px;
+      min-height: 38px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--admin-muted);
+    }
+    .overflow-trigger:hover {
+      color: var(--admin-text);
+    }
+    .overflow-trigger[aria-expanded="true"] {
+      background: var(--admin-surface-hover);
+      color: var(--admin-text);
+    }
+    .overflow-panel {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 40;
+      min-width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px;
+      border: 1px solid var(--admin-border);
+      border-radius: 14px;
+      background: var(--admin-surface);
+      box-shadow: 0 16px 34px rgba(2, 6, 23, 0.34);
+    }
+    .overflow-panel button {
+      width: 100%;
+      justify-content: flex-start;
+      text-align: left;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      min-height: 34px;
+      padding: 6px 10px;
+    }
+    .overflow-panel button:hover {
+      background: var(--admin-surface-hover);
+    }
+    .overflow-sep {
+      height: 1px;
+      margin: 6px 4px;
+      background: var(--admin-soft-border);
     }
     .message {
       display: inline-flex;
@@ -1876,10 +1983,18 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
                 <button class="has-tooltip" data-tooltip="Refresh Hub event list." title="Refresh Hub event list." id="hub-event-refresh" type="button">Refresh events</button>
                 <button class="has-tooltip" data-tooltip="Validate the current Hub event form without saving." title="Validate the current Hub event form without saving." id="hub-event-validate" type="button">Validate</button>
             <button data-hub-event-action="save-draft" id="hub-event-save-draft" type="button">Save draft</button>
-            <button data-hub-event-action="publish" id="hub-event-publish" type="button">Publish</button>
-            <button data-hub-event-action="cancel" id="hub-event-cancel" type="button">Cancel</button>
-            <button data-hub-event-action="deactivate" id="hub-event-deactivate" type="button">Deactivate</button>
-            <button data-hub-event-action="delete" id="hub-event-delete" type="button">Delete</button>
+            <button class="is-primary" data-hub-event-action="publish" id="hub-event-publish" type="button">Publish</button>
+            <div class="action-overflow">
+              <button type="button" class="overflow-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="More actions">
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="8" cy="3.2" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="12.8" r="1.3" fill="currentColor"/></svg>
+              </button>
+              <div class="overflow-panel" role="menu" hidden>
+                <button data-hub-event-action="cancel" id="hub-event-cancel" type="button">Cancel</button>
+                <button data-hub-event-action="deactivate" id="hub-event-deactivate" type="button">Deactivate</button>
+                <div class="overflow-sep" role="separator"></div>
+                <button class="is-danger" data-hub-event-action="delete" id="hub-event-delete" type="button">Delete</button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="section-body">
@@ -2089,15 +2204,23 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
           <div class="section-head">
             <div><h2>Announcement management</h2><p class="subtle">Create app service announcements and manage publication state and FCM delivery.</p></div>
             <div class="hub-events-toolbar">
-              <button id="announcement-new" type="button">New announcement</button>
-              <button id="announcement-refresh" type="button">Refresh</button>
               <button id="announcement-save" type="button">Save draft</button>
-              <button id="announcement-publish" type="button">Publish</button>
-              <button id="announcement-resolve" type="button">Resolve</button>
-              <button id="announcement-archive" type="button">Archive</button>
-              <button id="announcement-delete" type="button">Delete</button>
-              <button id="announcement-bump" type="button">Bump attention revision</button>
-              <button id="announcement-resend" type="button">Resend push</button>
+              <button class="is-primary" id="announcement-publish" type="button">Publish</button>
+              <div class="action-overflow">
+                <button type="button" class="overflow-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="More actions">
+                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="8" cy="3.2" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="12.8" r="1.3" fill="currentColor"/></svg>
+                </button>
+                <div class="overflow-panel" role="menu" hidden>
+                  <button id="announcement-new" type="button">New announcement</button>
+                  <button id="announcement-refresh" type="button">Refresh</button>
+                  <button id="announcement-resolve" type="button">Resolve</button>
+                  <button id="announcement-archive" type="button">Archive</button>
+                  <button id="announcement-bump" type="button">Bump attention revision</button>
+                  <button id="announcement-resend" type="button">Resend push</button>
+                  <div class="overflow-sep" role="separator"></div>
+                  <button class="is-danger" id="announcement-delete" type="button">Delete</button>
+                </div>
+              </div>
             </div>
           </div>
           <div class="section-body hub-events-workspace">
@@ -4386,6 +4509,127 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     if (logoutForm) {
       logoutForm.addEventListener("submit", clearStoredInternalToken);
     }
+    /* action-overflow controller */
+    (function () {
+      if (document.documentElement.dataset.actionOverflowInit === "1") {
+        return;
+      }
+      document.documentElement.dataset.actionOverflowInit = "1";
+      var wrappers = document.querySelectorAll(".action-overflow");
+      var openWrapper = null;
+      function items(panel) {
+        return panel.querySelectorAll("button");
+      }
+      function closeAll(except) {
+        var list = document.querySelectorAll(".action-overflow");
+        for (var i = 0; i < list.length; i += 1) {
+          if (except && list[i] === except) {
+            continue;
+          }
+          var t = list[i].querySelector(".overflow-trigger");
+          var p = list[i].querySelector(".overflow-panel");
+          if (p && !p.hidden) {
+            p.hidden = true;
+          }
+          if (t) {
+            t.setAttribute("aria-expanded", "false");
+          }
+        }
+        if (!except) {
+          openWrapper = null;
+        }
+      }
+      for (var w = 0; w < wrappers.length; w += 1) {
+        (function (wrapper) {
+          var trigger = wrapper.querySelector(".overflow-trigger");
+          var panel = wrapper.querySelector(".overflow-panel");
+          if (!trigger || !panel) {
+            return;
+          }
+          function open() {
+            closeAll(wrapper);
+            panel.hidden = false;
+            trigger.setAttribute("aria-expanded", "true");
+            openWrapper = wrapper;
+            var list = items(panel);
+            if (list.length) {
+              list[0].focus();
+            }
+          }
+          function close(refocus) {
+            panel.hidden = true;
+            trigger.setAttribute("aria-expanded", "false");
+            if (openWrapper === wrapper) {
+              openWrapper = null;
+            }
+            if (refocus) {
+              trigger.focus();
+            }
+          }
+          trigger.addEventListener("click", function () {
+            if (panel.hidden) {
+              open();
+            } else {
+              close(false);
+            }
+          });
+          wrapper.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" || event.key === "Esc") {
+              if (!panel.hidden) {
+                event.preventDefault();
+                close(true);
+              }
+              return;
+            }
+            if (panel.hidden) {
+              return;
+            }
+            var list = items(panel);
+            if (!list.length) {
+              return;
+            }
+            var current = -1;
+            for (var i = 0; i < list.length; i += 1) {
+              if (list[i] === document.activeElement) {
+                current = i;
+                break;
+              }
+            }
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              list[(current + 1 + list.length) % list.length].focus();
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              list[(current - 1 + list.length) % list.length].focus();
+            } else if (event.key === "Home") {
+              event.preventDefault();
+              list[0].focus();
+            } else if (event.key === "End") {
+              event.preventDefault();
+              list[list.length - 1].focus();
+            }
+          });
+          panel.addEventListener("click", function (event) {
+            var node = event.target;
+            while (node && node !== panel) {
+              if (node.tagName === "BUTTON") {
+                close(false);
+                return;
+              }
+              node = node.parentNode;
+            }
+          });
+        })(wrappers[w]);
+      }
+      document.addEventListener("click", function (event) {
+        if (!openWrapper) {
+          return;
+        }
+        if (!openWrapper.contains(event.target)) {
+          closeAll(null);
+        }
+      });
+    })();
   </script>
 </body>
 </html>`, locale);
