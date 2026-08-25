@@ -1,0 +1,10 @@
+# Dependencies — local node_modules is a pnpm symlink topology; bodies live in
+# an external store. Never commit it.
+node_modules/
+
+# Machine-local pnpm store paths (external volume). Not portable to CI/other
+# machines, so it stays out of version control.
+.npmrc
+
+# Build output
+dist/
