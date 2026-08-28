@@ -79,7 +79,7 @@ export function renderAdminThemeStyle(): string {
       --admin-danger: #b42318;
       --admin-primary: #243b73;
       --admin-primary-text: #ffffff;
-      --admin-accent: #14b8a6;
+      --admin-accent: #0f766e;
       --admin-pill-bg: #edf2f7;
       --admin-pill-text: #334155;
       --admin-pill-ok-bg: #d9f4ec;
@@ -104,7 +104,7 @@ export function renderAdminThemeStyle(): string {
       --admin-input-border: #40516d;
       --admin-danger: #fb7185;
       --admin-primary: #818cf8;
-      --admin-primary-text: #ffffff;
+      --admin-primary-text: #0f172a;
       --admin-accent: #2dd4bf;
       --admin-pill-bg: #223049;
       --admin-pill-text: #dbe7f5;
