@@ -57,13 +57,16 @@ cache:
   cache:
     key:
       files:
-        - backend/stellive-hub-api/package-lock.json
+        - backend/stellive-hub-api/pnpm-lock.yaml
     paths:
-      - backend/stellive-hub-api/.npm/
+      - backend/stellive-hub-api/.pnpm-store/
     policy: pull-push
   before_script:
     - cd "$BACKEND_PROJECT_DIR"
-    - npm ci --cache .npm --prefer-offline
+    - corepack enable
+    - corepack prepare pnpm@9.15.0 --activate
+    - pnpm install --frozen-lockfile --store-dir .pnpm-store
+    - pnpm exec prisma generate
   rules:
     - if: '($CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api") && ($CI_TARGET == "all" || $CI_TARGET == "backend")'
       when: on_success
@@ -79,8 +82,8 @@ verify:backend:
   stage: test
   extends: .backend_node_job
   script:
-    - npm run build
-    - npm test
+    - pnpm run build
+    - pnpm test
 
 verify:android:
   stage: test
