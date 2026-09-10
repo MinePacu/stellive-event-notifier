@@ -42,7 +42,6 @@ function isValidLocalDate(year: number, month: number, day: number): boolean {
 
 function isAllowedSpecialDay(day: HubCalendarSpecialDay, options: BuildSpecialDayOccurrencesOptions): boolean {
   if (!options.includeVerifyRequired && day.policyState !== "catalog_verified") return false;
-  if (day.policyState !== "catalog_verified") return false;
   if (day.generationId === ("official" as HubCalendarSpecialDay["generationId"])) return false;
   if (day.activeStatus !== "active" && day.activeStatus !== "upcoming") return false;
   if (day.kind === "member_birthday" && !day.memberId) return false;

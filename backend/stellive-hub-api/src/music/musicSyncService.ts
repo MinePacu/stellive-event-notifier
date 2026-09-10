@@ -222,7 +222,12 @@ export class MusicSyncService {
       }
 
       let missingCount = 0;
-      if (mode === "full") {
+      // Guard: only reconcile "missing" items when the full sync actually observed
+      // at least one item. A successful-but-empty fetch (transient YouTube glitch or a
+      // momentarily empty playlist response) would otherwise mark the entire source as
+      // missing/private — both the byLastSeen (lastSeenAt < syncStartedAt) and the
+      // notIn(seen) reconciliation paths match every row when nothing was seen.
+      if (mode === "full" && fetchedCount > 0) {
         const missingResult = this.options.repository.markMissingFromSourceByLastSeen
           ? await this.options.repository.markMissingFromSourceByLastSeen({
             sourcePlaylistId: source.id,

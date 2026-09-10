@@ -1,7 +1,30 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { AppEnv } from "../config/env.js";
 import { parseYoutubeAtomFeed } from "../adapters/youtube/youtubeAtomParser.js";
 import type { SongIngestionResult } from "../songs/songIngestionService.js";
+
+/**
+ * Verifies a WebSub `X-Hub-Signature` header against the raw request body.
+ * Header format is `<algorithm>=<hex digest>` (WebSub mandates sha1; some hubs emit sha256).
+ * The HMAC is computed over the exact raw body bytes and compared in constant time.
+ */
+function verifyWebSubSignature(secret: string, rawBody: string, signatureHeader: string | undefined): boolean {
+  if (!signatureHeader) return false;
+  const separatorIndex = signatureHeader.indexOf("=");
+  if (separatorIndex <= 0) return false;
+
+  const algorithm = signatureHeader.slice(0, separatorIndex).trim().toLowerCase();
+  const providedHex = signatureHeader.slice(separatorIndex + 1).trim().toLowerCase();
+  if (algorithm !== "sha1" && algorithm !== "sha256") return false;
+  if (providedHex.length === 0 || providedHex.length % 2 !== 0 || !/^[0-9a-f]+$/.test(providedHex)) return false;
+
+  const expectedHex = createHmac(algorithm, secret).update(rawBody, "utf8").digest("hex");
+  const providedBuffer = Buffer.from(providedHex, "hex");
+  const expectedBuffer = Buffer.from(expectedHex, "hex");
+  if (providedBuffer.length !== expectedBuffer.length) return false;
+  return timingSafeEqual(providedBuffer, expectedBuffer);
+}
 
 export interface YoutubeWebhookSubscriptionPort {
   upsertSubscription(input: {
@@ -137,6 +160,16 @@ export async function registerWebhookRoutes(app: FastifyInstance, options: Webho
     }
 
     const body = typeof request.body === "string" ? request.body : "";
+
+    const secret = options.env.YOUTUBE_WEBSUB_SECRET;
+    if (secret) {
+      const signatureHeader = request.headers["x-hub-signature"];
+      const headerValue = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
+      if (!verifyWebSubSignature(secret, body, headerValue)) {
+        return reply.code(403).send({ error: "invalid_websub_signature" });
+      }
+    }
+
     const parsed = parseYoutubeAtomFeed(body);
     if (!parsed.ok) {
       return reply.code(400).send({ error: parsed.error });

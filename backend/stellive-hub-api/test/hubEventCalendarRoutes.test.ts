@@ -81,7 +81,8 @@ describe("hub event calendar routes", () => {
         dependencies: {
           hubEvents: {
             async list(filters) {
-              calls.push(`list:${filters?.limit ?? "default"}`);
+              const window = filters?.from && filters?.to ? "window" : "no-window";
+              calls.push(`list:${filters?.limit ?? "default"}:${window}`);
               return { items: [injectedEvent] };
             },
             async getById() {
@@ -113,7 +114,9 @@ describe("hub event calendar routes", () => {
     expect(JSON.stringify(calendarResponse.json())).toContain("Injected Calendar Event");
     expect(widgetResponse.statusCode).toBe(200);
     expect(JSON.stringify(widgetResponse.json())).not.toContain("Injected Calendar Event");
-    expect(calls).toEqual(["list:100", "list:100"]);
+    // Calendar forwards the requested window (from/to) and omits the 100-item cap so
+    // in-window events beyond 100 are not truncated; the widget snapshot keeps its cap.
+    expect(calls).toEqual(["list:default:window", "list:100:no-window"]);
 
     await app.close();
   });

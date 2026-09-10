@@ -314,6 +314,7 @@ function createDefaultYoutubeSubscriptionScheduler(
     youtubeSubscriptionScheduler: new YoutubeWebSubSubscriptionService({
       callbackUrl: env.YOUTUBE_WEBSUB_CALLBACK_URL,
       verifyToken: env.YOUTUBE_WEBSUB_VERIFY_TOKEN,
+      secret: env.YOUTUBE_WEBSUB_SECRET,
       targets: targetBuild.targets,
       subscriptions: new WebhookSubscriptionRepository(),
       fetch: fetchImpl,
