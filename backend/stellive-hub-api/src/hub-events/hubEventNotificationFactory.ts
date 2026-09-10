@@ -1,4 +1,4 @@
-import type { HubEventScheduleItem, PlatformEvent, PlatformEventType } from "../types.js";
+import type { HubEvent, HubEventScheduleItem, PlatformEvent, PlatformEventType } from "../types.js";
 import { normalizeSafeImageUrl } from "../notification/imageUrlPolicy.js";
 import type { AdminHubEvent, HubEventAdminAction } from "./hubEventAdminTypes.js";
 
@@ -114,6 +114,37 @@ function scheduleCandidates(
   });
 }
 
+const userVisibleScalarFields: Array<keyof HubEvent> = [
+  "title",
+  "summary",
+  "status",
+  "category",
+  "participationMode",
+  "announcedAt",
+  "startsAt",
+  "endsAt",
+  "venueName",
+  "venueAddress",
+  "sourceUrl",
+  "sourceLabel",
+  "purchaseUrl",
+  "ticketUrl",
+  "scheduleMode"
+];
+
+function hasUserVisibleChange(before: AdminHubEvent, after: AdminHubEvent): boolean {
+  for (const field of userVisibleScalarFields) {
+    if (before[field] !== after[field]) {
+      return true;
+    }
+  }
+  return (
+    JSON.stringify(before.tags ?? []) !== JSON.stringify(after.tags ?? []) ||
+    JSON.stringify(before.links ?? []) !== JSON.stringify(after.links ?? []) ||
+    JSON.stringify(before.image ?? null) !== JSON.stringify(after.image ?? null)
+  );
+}
+
 export function buildHubEventNotificationCandidates(input: HubEventNotificationCandidateInput): PlatformEvent[] {
   const { after, action, now } = input;
   if (!after.notificationEligible) return [];
@@ -139,9 +170,14 @@ export function buildHubEventNotificationCandidates(input: HubEventNotificationC
   }
 
   if (action === "update" && input.before) {
+    const before = input.before;
+    const scheduled = scheduleCandidates(after, action, now, before);
+    if (!hasUserVisibleChange(before, after)) {
+      return scheduled;
+    }
     return [
       candidate(after, "event_updated", `hub_event:${after.id}:event_updated:${after.revision}`, action, now),
-      ...scheduleCandidates(after, action, now, input.before)
+      ...scheduled
     ];
   }
 

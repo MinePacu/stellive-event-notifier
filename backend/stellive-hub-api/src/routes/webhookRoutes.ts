@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { AppEnv } from "../config/env.js";
 import { parseYoutubeAtomFeed } from "../adapters/youtube/youtubeAtomParser.js";
+import { YoutubeUploadMetadataRetryableError } from "../events/youtubeUploadNotificationService.js";
 import type { SongIngestionResult } from "../songs/songIngestionService.js";
 
 /**
@@ -177,11 +178,35 @@ export async function registerWebhookRoutes(app: FastifyInstance, options: Webho
 
     let ingested = 0;
     let skipped = 0;
+    let retryable = 0;
+    let fatalError: unknown;
     for (const entry of parsed.entries) {
-      await options.uploadNotification.handleYoutubeUpload(entry);
-      const result = await options.songIngestion.ingestYoutubeUpload(entry);
-      if (result.ingested) ingested += 1;
-      else skipped += 1;
+      try {
+        await options.uploadNotification.handleYoutubeUpload(entry);
+      } catch (error) {
+        if (error instanceof YoutubeUploadMetadataRetryableError) {
+          retryable += 1;
+          request.log.warn({ err: error, videoId: entry.videoId }, "youtube_websub_entry_retryable");
+          continue;
+        }
+        request.log.error({ err: error, videoId: entry.videoId }, "youtube_websub_entry_failed");
+        if (fatalError === undefined) fatalError = error;
+        continue;
+      }
+      try {
+        const result = await options.songIngestion.ingestYoutubeUpload(entry);
+        if (result.ingested) ingested += 1;
+        else skipped += 1;
+      } catch (error) {
+        request.log.error({ err: error, videoId: entry.videoId }, "youtube_websub_entry_ingest_failed");
+        if (fatalError === undefined) fatalError = error;
+      }
+    }
+
+    if (fatalError !== undefined) throw fatalError;
+
+    if (retryable > 0) {
+      return reply.code(503).send({ error: "youtube_websub_entry_retryable", retryable });
     }
 
     return reply.code(202).send({

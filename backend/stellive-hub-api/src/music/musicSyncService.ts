@@ -2,6 +2,7 @@ import type { MusicItemType } from "../../../../shared/schemas/domain.js";
 import { classifyMusicSource } from "./musicClassifier.js";
 import type { MusicSyncLock } from "./musicLocks.js";
 import { matchMusicMembers, type MusicMemberAliasInput } from "./musicMemberMatcher.js";
+import { matchMusicOriginalTitle } from "./musicOriginalTitleMatcher.js";
 
 export type MusicSyncMode = "light" | "full";
 
@@ -164,17 +165,21 @@ export class MusicSyncService {
             duration: detail?.duration ?? null,
             channelId: detail?.channelId ?? null,
             channelTitle: detail?.channelTitle ?? null,
-            isPublic: detail?.privacyStatus !== "private",
+            isPublic: detail ? detail.privacyStatus !== "private" : false,
             lastSeenAt: syncStartedAt,
             playlistPosition: item.position ?? null,
             rawCategoryHint: source.rawCategoryHint,
           });
           upserted += 1;
+          const structuredOriginal = matchMusicOriginalTitle(detail?.title ?? item.title, this.options.members);
           const match = matchMusicMembers({
             sourceMemberId: source.memberId,
             title: detail?.title ?? item.title,
             description: detail?.description ?? "",
+            channelId: detail?.channelId,
+            channelTitle: detail?.channelTitle,
             members: this.options.members,
+            structuredOriginal,
           });
           await this.options.repository.replaceMusicItemMembers(saved.id, match.links);
         }

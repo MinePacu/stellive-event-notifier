@@ -12,7 +12,7 @@ export type MusicReconciliationDiagnostic =
   | { kind: "missing_in_db"; youtubeVideoId: string; expected: MusicItemType };
 
 export interface MusicReconciliationRepository {
-  listMusicItems(filters: { type?: "all"; limit?: number }): Promise<{ items: MusicCatalogItem[]; nextCursor?: string | null }>;
+  listMusicItems(filters: { type?: "all"; limit?: number; cursor?: string }): Promise<{ items: MusicCatalogItem[]; nextCursor?: string | null }>;
 }
 
 export class MusicReconciliationService {
@@ -22,8 +22,16 @@ export class MusicReconciliationService {
     checkedCount: number;
     diagnostics: MusicReconciliationDiagnostic[];
   }> {
-    const dbItems = await this.options.repository.listMusicItems({ type: "all", limit: 100 });
-    const byVideoId = new Map(dbItems.items.map((item) => [item.youtubeVideoId, item]));
+    // Page through the entire catalog rather than only the first 100 items; otherwise every
+    // source item beyond the newest 100 was falsely reported as missing_in_db.
+    const byVideoId = new Map<string, MusicCatalogItem>();
+    let cursor: string | undefined;
+    for (let guard = 0; guard < 1000; guard += 1) {
+      const page = await this.options.repository.listMusicItems({ type: "all", limit: 200, cursor });
+      for (const item of page.items) byVideoId.set(item.youtubeVideoId, item);
+      cursor = page.nextCursor ?? undefined;
+      if (!cursor) break;
+    }
     const diagnostics: MusicReconciliationDiagnostic[] = [];
 
     for (const source of sourceItems) {

@@ -15,6 +15,10 @@ export interface ChzzkAuthRouteAuthClient {
 export interface ChzzkAuthRouteStateRepository {
   upsertState(source: string, key: string, value: Prisma.InputJsonValue, status: string): Promise<unknown>;
   upsertAdapterHealth(source: "chzzk", health: AdapterHealth): Promise<unknown>;
+  upsertStateTransaction?(
+    entries: Array<{ source: string; key: string; value: Prisma.InputJsonValue; status: string }>,
+    health?: { source: "chzzk"; health: AdapterHealth }
+  ): Promise<void>;
 }
 
 export interface ChzzkAuthRouteOptions {
@@ -45,18 +49,32 @@ async function storeTokenMetadata(
 ): Promise<void> {
   const expiresAt = new Date(now.getTime() + token.expiresIn * 1000).toISOString();
 
-  await repository.upsertState("chzzk", "oauth.accessToken", { token: token.accessToken }, "enabled");
-  await repository.upsertState("chzzk", "oauth.refreshToken", { token: token.refreshToken }, "enabled");
-  await repository.upsertState("chzzk", "oauth.expiresAt", { value: expiresAt }, "enabled");
-  await repository.upsertState("chzzk", "oauth.scope", { value: token.scope ?? null }, "enabled");
-  await repository.upsertState("chzzk", "oauth.tokenType", { value: token.tokenType }, "enabled");
-  await repository.upsertState("chzzk", "oauth.lastRefreshedAt", { value: now.toISOString() }, "enabled");
-  await repository.upsertAdapterHealth("chzzk", {
+  const entries = [
+    { source: "chzzk", key: "oauth.accessToken", value: { token: token.accessToken }, status: "enabled" },
+    { source: "chzzk", key: "oauth.refreshToken", value: { token: token.refreshToken }, status: "enabled" },
+    { source: "chzzk", key: "oauth.expiresAt", value: { value: expiresAt }, status: "enabled" },
+    { source: "chzzk", key: "oauth.scope", value: { value: token.scope ?? null }, status: "enabled" },
+    { source: "chzzk", key: "oauth.tokenType", value: { value: token.tokenType }, status: "enabled" },
+    { source: "chzzk", key: "oauth.lastRefreshedAt", value: { value: now.toISOString() }, status: "enabled" }
+  ];
+  const health: AdapterHealth = {
     source: "chzzk",
     status: "verify_required",
     reason: "chzzk_allowed_api_not_confirmed",
     lastCheckedAt: now.toISOString()
-  });
+  };
+
+  // Persist all OAuth token metadata atomically so a partial failure cannot leave, e.g., an
+  // access token without its matching expiry. Repositories without transaction support fall
+  // back to sequential writes (in-memory test doubles only).
+  if (repository.upsertStateTransaction) {
+    await repository.upsertStateTransaction(entries, { source: "chzzk", health });
+    return;
+  }
+  for (const entry of entries) {
+    await repository.upsertState(entry.source, entry.key, entry.value, entry.status);
+  }
+  await repository.upsertAdapterHealth("chzzk", health);
 }
 
 export async function registerChzzkAuthRoutes(app: FastifyInstance, input: ChzzkAuthRouteOptions): Promise<void> {

@@ -46,6 +46,7 @@ interface PlatformApiStateDelegate {
       };
     }): Promise<PlatformApiStateRecord[]>;
   };
+  $transaction?(operations: unknown[]): Promise<unknown[]>;
 }
 
 const adapterHealthSources = new Set<AdapterHealthSource>(["youtube", "chzzk", "naver_cafe"]);
@@ -96,6 +97,35 @@ export class PlatformApiStateRepository {
 
   async upsertState(source: string, key: string, value: Prisma.InputJsonValue, status: string) {
     return this.upsert({ source, key, value, status });
+  }
+
+  async upsertStateTransaction(
+    entries: PlatformApiStateInput[],
+    health?: { source: AdapterHealthSource; health: AdapterHealth }
+  ): Promise<void> {
+    if (this.prisma.$transaction) {
+      const ops: unknown[] = entries.map((entry) =>
+        this.prisma.platformApiState.upsert({
+          where: { source_key: { source: entry.source, key: entry.key } },
+          create: { source: entry.source, key: entry.key, value: entry.value, status: entry.status },
+          update: { value: entry.value, status: entry.status }
+        })
+      );
+      if (health) {
+        const value = { reason: health.health.reason, lastCheckedAt: health.health.lastCheckedAt };
+        ops.push(
+          this.prisma.platformApiState.upsert({
+            where: { source_key: { source: health.source, key: "health" } },
+            create: { source: health.source, key: "health", value, status: health.health.status },
+            update: { value, status: health.health.status }
+          })
+        );
+      }
+      await this.prisma.$transaction(ops);
+      return;
+    }
+    for (const entry of entries) await this.upsert(entry);
+    if (health) await this.upsertAdapterHealth(health.source, health.health);
   }
 
   async getState(source: string, key: string): Promise<PlatformApiStateRecord | null> {

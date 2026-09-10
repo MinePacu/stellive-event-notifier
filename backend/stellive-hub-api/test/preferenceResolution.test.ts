@@ -385,6 +385,24 @@ describe("PreferenceResolutionService", () => {
     expect(notAllowed.reason).toBe("keyword_allowlist_no_match");
   });
 
+  it("scopes allowlists per rule so a narrow rule cannot satisfy a broader rule's allowlist", () => {
+    const rules = [
+      pref({ scope: "global", keywordsAllowlist: ["important"] }),
+      pref({ scope: "platform", source: "youtube", enabled: true, keywordsAllowlist: ["update"] })
+    ];
+
+    // Matches only the platform rule's allowlist; the global allowlist is still unsatisfied,
+    // so the broader gate must block (previously the flattened OR let this through).
+    const narrowOnly = service.resolve(event({ title: "update stream" }), "device-1", rules);
+    expect(narrowOnly.shouldNotify).toBe(false);
+    expect(narrowOnly.reason).toBe("keyword_allowlist_no_match");
+
+    // Satisfies every rule that defines an allowlist.
+    const allSatisfied = service.resolve(event({ title: "important update stream" }), "device-1", rules);
+    expect(allSatisfied.shouldNotify).toBe(true);
+    expect(allSatisfied.reason).toBe("allowed");
+  });
+
   it("rate limit applies after keyword checks", () => {
     const result = service.resolve(
       event(),

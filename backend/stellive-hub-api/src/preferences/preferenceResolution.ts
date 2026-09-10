@@ -250,8 +250,15 @@ export class PreferenceResolutionService {
       return this.blocked(event, deviceId, "keyword_blocklist", [...matchedRules, "keyword_blocklist:match"], tapAction, "standard");
     }
 
-    const allowlistKeywords = applicableRules.flatMap((rule) => rule.keywordsAllowlist ?? []).map(normalizeKeyword).filter(Boolean);
-    if (allowlistKeywords.length > 0 && !allowlistKeywords.some((keyword) => text.includes(keyword))) {
+    // Allowlists are scoped per rule: every applicable rule that defines an allowlist must be
+    // satisfied on its own terms (OR within a rule, AND across rules). Previously all allowlists
+    // were flattened into one set and matched with a single OR, which let a narrow rule's keyword
+    // satisfy a broader rule's allowlist gate — bypassing the broader rule's restriction.
+    const allowlistUnmatched = applicableRules.some((rule) => {
+      const keywords = (rule.keywordsAllowlist ?? []).map(normalizeKeyword).filter(Boolean);
+      return keywords.length > 0 && !keywords.some((keyword) => text.includes(keyword));
+    });
+    if (allowlistUnmatched) {
       return this.blocked(event, deviceId, "keyword_allowlist_no_match", [...matchedRules, "keyword_allowlist:no_match"], tapAction, "standard");
     }
 

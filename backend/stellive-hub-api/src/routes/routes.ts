@@ -247,8 +247,12 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
     );
   });
 
+  const isProduction = process.env.NODE_ENV === "production";
+
   app.get("/v1/live-status", async () => {
-    const persisted = await liveStatusRepository.listDiagnostics(100).catch(() => []);
+    const persisted = isProduction
+      ? await liveStatusRepository.listDiagnostics(100)
+      : await liveStatusRepository.listDiagnostics(100).catch(() => []);
     if (persisted.length > 0) {
       return persisted.map((status) => ({
         memberId: status.memberId,
@@ -265,6 +269,9 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
         sourceVerificationState: status.sourceVerificationState
       }));
     }
+
+    // Never fabricate mock live state in production: with no persisted rows, report none.
+    if (isProduction) return [];
 
     return catalog
       .getMembers()
@@ -322,6 +329,9 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
     reply.raw.write(`event: status\ndata: ${JSON.stringify(realtime.status())}\n\n`);
   });
 
+  // Dev/mock endpoints and the in-memory delivery-attempts buffer are registered only outside
+  // production so mock events cannot be injected or inspected on a live deployment.
+  if (!isProduction) {
   app.get("/v1/notifications/delivery-attempts", async () => deliveryAttempts);
 
   app.post("/v1/dev/mock-events", async (request, reply) => {
@@ -374,6 +384,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
       loadReductionReason: deliveryDecision.loadReductionReason,
       pushPriority: resolution.pushPriority
     });
+    if (deliveryAttempts.length > 1000) deliveryAttempts.splice(0, deliveryAttempts.length - 1000);
     return { event, resolution, deliveryDecision };
   });
   app.post("/v1/dev/mock-live-status", async () => ({ updated: true }));
@@ -385,4 +396,5 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
       evaluatedAt: new Date()
     });
   });
+  }
 }

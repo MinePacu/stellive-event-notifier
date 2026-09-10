@@ -32,6 +32,12 @@ export type YoutubeListUploadsResult =
     candidates: [];
     pagesFetched: 0;
     quotaUnits: number;
+    }
+  | {
+    status: "quota_exceeded" | "error";
+    candidates: [];
+    pagesFetched: number;
+    quotaUnits: number;
     };
 
 export type YoutubeFetchPlaylistItemsResult =
@@ -307,9 +313,16 @@ export class YoutubeDataApiClient {
       if (response.status === 304) return { status: "not_modified", candidates: [], pagesFetched: 0, quotaUnits };
 
       const body = await response.json() as YoutubeListWrapper<YoutubePlaylistItem>;
-      if (!response.ok) break;
+      if (!response.ok) {
+        return {
+          status: response.status === 403 ? "quota_exceeded" : "error",
+          candidates: [],
+          pagesFetched,
+          quotaUnits,
+        };
+      }
       pagesFetched += 1;
-      etag = body.etag ?? etag;
+      if (page === 0) etag = body.etag ?? etag;
       candidates.push(...(body.items ?? []).flatMap((item) => this.toUploadCandidate(input.channelId, item)));
       pageToken = body.nextPageToken;
       if (!pageToken) break;

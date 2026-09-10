@@ -8,19 +8,23 @@ export interface MusicSyncLock {
 }
 
 export class InMemoryMusicSyncLock implements MusicSyncLock {
-  private readonly locks = new Map<string, number>();
+  private readonly locks = new Map<string, { token: string; expiresAt: number }>();
 
   acquire(key: string, ttlMs: number): MusicSyncLockRelease | null {
     const now = Date.now();
-    const expiresAt = this.locks.get(key);
-    if (expiresAt && expiresAt > now) return null;
+    const existing = this.locks.get(key);
+    if (existing && existing.expiresAt > now) return null;
 
-    this.locks.set(key, now + ttlMs);
+    const token = randomUUID();
+    this.locks.set(key, { token, expiresAt: now + ttlMs });
     let released = false;
     return () => {
       if (released) return;
       released = true;
-      this.locks.delete(key);
+      // Only the current owner may release; a stale release after TTL expiry must not
+      // delete a lock another worker has since acquired.
+      const current = this.locks.get(key);
+      if (current && current.token === token) this.locks.delete(key);
     };
   }
 }
