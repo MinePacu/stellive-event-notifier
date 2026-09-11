@@ -398,15 +398,63 @@ export function serializeAdminScriptValue(value: unknown): string {
     .replaceAll("\u2029", "\\u2029");
 }
 
+const SLOT_START = "\uFFF9";
+const SLOT_PARAM_SEP = "\uFFFA";
+const SLOT_END = "\uFFFB";
+
+function encodeAdminSlotParams(parameters: Record<string, string | number>): string {
+  return Buffer.from(JSON.stringify(parameters), "utf8")
+    .toString("base64")
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
+}
+
+function decodeAdminSlotParams(encoded: string): Record<string, string | number> {
+  const base64 = encoded.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<string, string | number>;
+}
+
+function createAdminSlot(context: "T" | "A", key: AdminMessageKey, parameters?: Record<string, string | number>): string {
+  const payload = parameters && Object.keys(parameters).length > 0
+    ? `${SLOT_PARAM_SEP}${encodeAdminSlotParams(parameters)}`
+    : "";
+  return `${SLOT_START}${context}${key}${payload}${SLOT_END}`;
+}
+
+export function t(key: AdminMessageKey, parameters?: Record<string, string | number>): string {
+  return createAdminSlot("T", key, parameters);
+}
+
+export function tAttr(key: AdminMessageKey, parameters?: Record<string, string | number>): string {
+  return createAdminSlot("A", key, parameters);
+}
+
+export function escapeAdminText(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+export function escapeAdminAttr(value: string): string {
+  return escapeAdminText(value).replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+}
+
+const adminSlotPattern = new RegExp(
+  `${SLOT_START}(T|A)([^${SLOT_PARAM_SEP}${SLOT_END}]+)(?:${SLOT_PARAM_SEP}([^${SLOT_END}]+))?${SLOT_END}`,
+  "g"
+);
+
 export function localizeAdminDocument(document: string, locale: AdminLocale): string {
-  if (locale === "en") return document;
-  const pairs = (Object.keys(enAdminMessages) as AdminMessageKey[])
-    .map((key) => [enAdminMessages[key], koAdminMessages[key]] as const)
-    .filter(([english, korean]) => english !== korean && !english.includes("{") && english.length > 1)
-    .sort(([left], [right]) => right.length - left.length);
-  return pairs.reduce((html, [english, korean]) => html
-    .replaceAll(`>${english}<`, `>${korean}<`)
-    .replaceAll(`> ${english}<`, `> ${korean}<`)
-    .replaceAll(`"${english}"`, `"${korean}"`)
-    .replaceAll(`'${english}'`, `'${korean}'`), document);
+  const resolved = document.replace(adminSlotPattern, (_match, context: string, key: string, encoded?: string) => {
+    if (!Object.hasOwn(enAdminMessages, key)) {
+      throw new Error(`unknown admin i18n message key: ${key}`);
+    }
+    const parameters = encoded === undefined ? {} : decodeAdminSlotParams(encoded);
+    const value = translateAdmin(locale, key as AdminMessageKey, parameters);
+    return context === "A" ? escapeAdminAttr(value) : escapeAdminText(value);
+  });
+  if (resolved.includes(SLOT_START) || resolved.includes(SLOT_PARAM_SEP) || resolved.includes(SLOT_END)) {
+    throw new Error("unresolved admin i18n slot(s) remain");
+  }
+  return resolved;
 }

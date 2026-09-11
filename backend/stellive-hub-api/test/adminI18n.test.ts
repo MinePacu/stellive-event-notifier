@@ -3,8 +3,13 @@ import { renderAdminConsoleHtml } from "../src/admin/adminConsoleHtml.js";
 import {
   adminMessages,
   enAdminMessages,
+  escapeAdminAttr,
+  escapeAdminText,
   koAdminMessages,
+  localizeAdminDocument,
   serializeAdminScriptValue,
+  t,
+  tAttr,
   translateAdmin
 } from "../src/admin/adminI18n.js";
 import { renderAdminLanguageHtml } from "../src/admin/adminLanguageHtml.js";
@@ -86,6 +91,50 @@ describe("admin i18n", () => {
     expect(extract(korean, /\sid="([^"]+)"/g)).toEqual(extract(english, /\sid="([^"]+)"/g));
     expect(extract(korean, /<option value="([^"]*)"/g)).toEqual(extract(english, /<option value="([^"]*)"/g));
     expect(extract(korean, /^\s+\w+: "(\/v1\/[^"]+)"/gm)).toEqual(extract(english, /^\s+\w+: "(\/v1\/[^"]+)"/gm));
+  });
+
+  it("resolves text and attribute slots for both locales, including parameters", () => {
+    const document = `<p>${t("common.all")}</p><input aria-label="${tAttr("common.status")}"><span>${t("common.itemCount", { count: 3 })}</span>`;
+    expect(localizeAdminDocument(document, "en")).toBe('<p>All</p><input aria-label="Status"><span>3 items</span>');
+    expect(localizeAdminDocument(document, "ko")).toBe('<p>\uc804\uccb4</p><input aria-label="\uc0c1\ud0dc"><span>3\uac1c \ud56d\ubaa9</span>');
+  });
+
+  it("escapes resolved values per slot context", () => {
+    expect(escapeAdminText('<a href="x">&')).toBe("&lt;a href=\"x\"&gt;&amp;");
+    expect(escapeAdminAttr('<a href="x">&\'')).toBe("&lt;a href=&quot;x&quot;&gt;&amp;&#39;");
+  });
+
+  it("throws on an unknown slot key", () => {
+    const document = `<p>${"\uFFF9"}Tcommon.doesNotExist${"\uFFFB"}</p>`;
+    expect(() => localizeAdminDocument(document, "ko")).toThrow(/common\.doesNotExist/);
+  });
+
+  it("throws when a malformed slot cannot be resolved", () => {
+    expect(() => localizeAdminDocument(`<p>${"\uFFF9"}Tcommon.all</p>`, "ko")).toThrow(/unresolved admin i18n slot/);
+    expect(() => localizeAdminDocument(`<p>${"\uFFFB"}</p>`, "en")).toThrow(/unresolved admin i18n slot/);
+  });
+
+  it("leaves no sentinel characters in rendered console output", () => {
+    for (const html of [renderAdminConsoleHtml("en"), renderAdminConsoleHtml("ko")]) {
+      expect(html).not.toContain("\uFFF9");
+      expect(html).not.toContain("\uFFFA");
+      expect(html).not.toContain("\uFFFB");
+    }
+  });
+
+  it("never rewrites client-side JavaScript string sentinels (D1 regression)", () => {
+    const english = renderAdminConsoleHtml("en");
+    const korean = renderAdminConsoleHtml("ko");
+    for (const html of [english, korean]) {
+      expect(html).toContain('text === "Off"');
+      expect(html).toContain('setAutoRefreshStatus("Off")');
+      expect(html).toContain('setAutoRefreshStatus("Retrying")');
+      expect(html).toContain('<option value="">');
+    }
+    const optionValues = (html: string) => [...html.matchAll(/<option value="([^"]*)"/g)].map((match) => match[1]);
+    expect(optionValues(korean)).toEqual(optionValues(english));
+    expect(korean).toContain(`<option value="none">${translateAdmin("ko", "common.none")}</option>`);
+    expect(english).toContain('<option value="none">None</option>');
   });
 
   it("sets localized response headers and a persistent language cookie", async () => {

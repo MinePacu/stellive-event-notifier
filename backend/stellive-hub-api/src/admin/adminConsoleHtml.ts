@@ -4,7 +4,7 @@ import {
   renderAdminThemeInitScript,
   renderAdminThemeStyle
 } from "./adminThemeHtml.js";
-import { localizeAdminDocument, serializeAdminCatalog, translateAdmin, type AdminLocale } from "./adminI18n.js";
+import { localizeAdminDocument, serializeAdminCatalog, t, translateAdmin, type AdminLocale } from "./adminI18n.js";
 import { renderAdminLanguageHtml } from "./adminLanguageHtml.js";
 import { adminIntlLocale } from "./adminLocale.js";
 
@@ -1762,27 +1762,27 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         <div class="brand-title admin-brand-title">Stellive Hub Admin</div>
       </div>
       <div class="nav admin-nav-links">
-        <button type="button" data-page-target="dashboard" aria-current="page">Dashboard<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="dashboard" aria-current="page">${t("nav.dashboard")}<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
         <button type="button" data-page-target="hub-events">Hub events<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
-        <button type="button" data-page-target="announcements">Announcements<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
-        <button type="button" data-page-target="operations">Operations<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
-        <button type="button" data-page-target="audit">Audit<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
-        <button type="button" data-page-target="settings">Settings<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="announcements">${t("nav.announcements")}<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="operations">${t("nav.operations")}<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="audit">${t("audit.title")}<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
+        <button type="button" data-page-target="settings">${t("nav.settings")}<span class="dot admin-nav-dot" aria-hidden="true"></span></button>
       </div>
       <div class="admin-sidebar-card">
-        <strong>Session active</strong>
-        <span>Internal API access is configured in Settings only.</span>
+        <strong>${t("settings.sessionActive")}</strong>
+        <span>${t("settings.internalAccessDescription")}</span>
       </div>
     </nav>
     <main class="main admin-content stack">
       <div class="topbar admin-topbar">
         <nav class="tabs admin-tabs" aria-label="Quick page tabs">
-          <button type="button" data-page-target="dashboard" aria-current="page">Dashboard</button>
+          <button type="button" data-page-target="dashboard" aria-current="page">${t("nav.dashboard")}</button>
           <button type="button" data-page-target="hub-events">Hub events</button>
-          <button type="button" data-page-target="announcements">Announcements</button>
-          <button type="button" data-page-target="operations">Operations</button>
-          <button type="button" data-page-target="audit">Audit</button>
-          <button type="button" data-page-target="settings">Settings</button>
+          <button type="button" data-page-target="announcements">${t("nav.announcements")}</button>
+          <button type="button" data-page-target="operations">${t("nav.operations")}</button>
+          <button type="button" data-page-target="audit">${t("audit.title")}</button>
+          <button type="button" data-page-target="settings">${t("nav.settings")}</button>
         </nav>
         <div class="top-actions topbar-actions">
           ${renderAdminLanguageHtml(locale, "/admin")}
@@ -1804,8 +1804,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       <div id="message" class="message" aria-live="polite"></div>
       <div class="page-head admin-page-head">
         <div>
-          <h1 id="admin-current-page-title">Dashboard</h1>
-          <p id="admin-current-page-description" class="subtle">Admin session and internal token are separate.</p>
+          <h1 id="admin-current-page-title">${t("nav.dashboard")}</h1>
+          <p id="admin-current-page-description" class="subtle">${t("page.dashboardDescription")}</p>
         </div>
       </div>
 
@@ -1813,8 +1813,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       <section id="overview-section" class="section">
         <div class="section-head">
           <div>
-            <h2>Dashboard</h2>
-            <p class="subtle">Health, Database, Uptime, Queue, Events, and service status.</p>
+            <h2>${t("nav.dashboard")}</h2>
+            <p class="subtle">${t("dashboard.healthDescription")}</p>
           </div>
         </div>
         <div class="section-body">
@@ -1825,18 +1825,18 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       <section id="daily-queue-section" class="section is-empty">
         <div class="section-head">
           <div>
-            <h2>Daily client delivery queue</h2>
-            <p class="subtle">Last 14 days of delivery attempts sent to clients. Timezone: Asia/Seoul.</p>
+            <h2>${t("dashboard.deliveryQueue")}</h2>
+            <p class="subtle">${t("dashboard.deliveryQueueDescription")}</p>
           </div>
         </div>
         <div class="section-body queue-chart-layout">
           <div class="queue-chart-card">
             <div id="daily-queue-chart" class="daily-queue-chart" aria-label="Daily client delivery queue chart"></div>
             <div class="queue-chart-legend" aria-label="Delivery status legend">
-              <span><i class="legend-dot sent" aria-hidden="true"></i>Sent</span>
-              <span><i class="legend-dot queued" aria-hidden="true"></i>Queued</span>
-              <span><i class="legend-dot skipped" aria-hidden="true"></i>Skipped</span>
-              <span><i class="legend-dot failed" aria-hidden="true"></i>Failed</span>
+              <span><i class="legend-dot sent" aria-hidden="true"></i>${t("status.sent")}</span>
+              <span><i class="legend-dot queued" aria-hidden="true"></i>${t("status.queued")}</span>
+              <span><i class="legend-dot skipped" aria-hidden="true"></i>${t("status.skipped")}</span>
+              <span><i class="legend-dot failed" aria-hidden="true"></i>${t("status.failed")}</span>
             </div>
           </div>
           <aside id="daily-queue-summary" class="queue-chart-summary" aria-label="Daily delivery queue summary"></aside>
@@ -1847,8 +1847,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       <section id="external-api-section" class="section is-empty">
         <div class="section-head">
           <div>
-            <h2>External API calls</h2>
-            <p class="subtle">Daily outbound API calls and sanitized response results. Retention: 31 days.</p>
+            <h2>${t("dashboard.externalApiCalls")}</h2>
+            <p class="subtle">${t("dashboard.externalApiDescription")}</p>
             <p class="subtle">Tracked quotaUnits are calculated from recorded YouTube list API requests and may not match provider billing exactly.</p>
           </div>
         </div>
@@ -1864,7 +1864,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         <div class="section-body">
           <div class="external-api-results-head">
             <div>
-              <h3>Recent API results</h3>
+              <h3>${t("dashboard.recentApiResults")}</h3>
               <p class="subtle">Sanitized results from the last 31 days only.</p>
             </div>
             <div class="external-api-filters">
@@ -1894,13 +1894,13 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
             <table class="status-table">
               <thead>
                 <tr>
-                  <th>Time</th>
-                  <th>Source</th>
-                  <th>Operation</th>
-                  <th>Result</th>
-                  <th>Status</th>
-                  <th>Duration</th>
-                  <th>Quota</th>
+                  <th>${t("common.time")}</th>
+                  <th>${t("common.source")}</th>
+                  <th>${t("common.operation")}</th>
+                  <th>${t("common.result")}</th>
+                  <th>${t("common.status")}</th>
+                  <th>${t("common.duration")}</th>
+                  <th>${t("dashboard.quota")}</th>
                 </tr>
               </thead>
               <tbody id="external-api-results"></tbody>
@@ -1911,11 +1911,11 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
 
       <section id="adapters-section" class="section">
         <div class="section-head">
-          <h2>System status</h2>
+          <h2>${t("dashboard.systemStatus")}</h2>
         </div>
         <div class="section-body split">
           <div class="panel">
-            <h2>Service overview</h2>
+            <h2>${t("dashboard.serviceOverview")}</h2>
             <div id="service-overview-summary" class="summary-list" aria-live="polite"></div>
             <div class="table-scroll">
               <table class="status-table">
@@ -1924,19 +1924,19 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
             </div>
           </div>
           <div class="panel">
-            <h2>Recent activity</h2>
+            <h2>${t("audit.recent")}</h2>
             <div id="dashboard-recent-activity" class="activity-list" aria-live="polite"></div>
           </div>
           <div class="panel">
-            <h2>Adapter health</h2>
+            <h2>${t("dashboard.adapterHealth")}</h2>
             <div class="table-scroll">
               <table>
                 <thead>
                   <tr>
-                    <th>Source</th>
-                    <th>Status</th>
-                    <th>Reason</th>
-                    <th>Last checked</th>
+                    <th>${t("common.source")}</th>
+                    <th>${t("common.status")}</th>
+                    <th>${t("common.reason")}</th>
+                    <th>${t("dashboard.lastChecked")}</th>
                   </tr>
                 </thead>
                 <tbody id="adapters"></tbody>
@@ -1944,13 +1944,13 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
             </div>
           </div>
           <div class="panel">
-            <h2>Configuration readiness</h2>
+            <h2>${t("dashboard.configuration")}</h2>
             <div class="table-scroll">
               <table>
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>State</th>
+                    <th>${t("common.name")}</th>
+                    <th>${t("common.state")}</th>
                   </tr>
                 </thead>
                 <tbody id="secrets"></tbody>
@@ -1960,8 +1960,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
               <table>
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Value</th>
+                    <th>${t("common.name")}</th>
+                    <th>${t("common.value")}</th>
                   </tr>
                 </thead>
                 <tbody id="feature-flags"></tbody>
@@ -1977,22 +1977,22 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         <div class="section-head">
           <div>
             <h2>Hub events</h2>
-            <p class="subtle">Goods and event schedule publishing controls.</p>
+            <p class="subtle">${t("hubEvent.goodsControls")}</p>
           </div>
           <div class="hub-events-toolbar action-controls">
-                <button class="has-tooltip" data-tooltip="Refresh Hub event list." title="Refresh Hub event list." id="hub-event-refresh" type="button">Refresh events</button>
-                <button class="has-tooltip" data-tooltip="Validate the current Hub event form without saving." title="Validate the current Hub event form without saving." id="hub-event-validate" type="button">Validate</button>
-            <button data-hub-event-action="save-draft" id="hub-event-save-draft" type="button">Save draft</button>
-            <button class="is-primary" data-hub-event-action="publish" id="hub-event-publish" type="button">Publish</button>
+                <button class="has-tooltip" data-tooltip="Refresh Hub event list." title="Refresh Hub event list." id="hub-event-refresh" type="button">${t("hubEvent.refreshEvents")}</button>
+                <button class="has-tooltip" data-tooltip="Validate the current Hub event form without saving." title="Validate the current Hub event form without saving." id="hub-event-validate" type="button">${t("hubEvent.validate")}</button>
+            <button data-hub-event-action="save-draft" id="hub-event-save-draft" type="button">${t("announcement.saveDraft")}</button>
+            <button class="is-primary" data-hub-event-action="publish" id="hub-event-publish" type="button">${t("announcement.publish")}</button>
             <div class="action-overflow">
               <button type="button" class="overflow-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="More actions">
                 <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="8" cy="3.2" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="12.8" r="1.3" fill="currentColor"/></svg>
               </button>
               <div class="overflow-panel" role="menu" hidden>
-                <button data-hub-event-action="cancel" id="hub-event-cancel" type="button">Cancel</button>
-                <button data-hub-event-action="deactivate" id="hub-event-deactivate" type="button">Deactivate</button>
+                <button data-hub-event-action="cancel" id="hub-event-cancel" type="button">${t("common.cancel")}</button>
+                <button data-hub-event-action="deactivate" id="hub-event-deactivate" type="button">${t("hubEvent.deactivate")}</button>
                 <div class="overflow-sep" role="separator"></div>
-                <button class="is-danger" data-hub-event-action="delete" id="hub-event-delete" type="button">Delete</button>
+                <button class="is-danger" data-hub-event-action="delete" id="hub-event-delete" type="button">${t("common.delete")}</button>
               </div>
             </div>
           </div>
@@ -2001,36 +2001,36 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         <div class="event-layout hub-events-workspace">
           <div class="editor hub-event-editor-panel hub-events-editor">
           <div class="hub-event-editor-tabs" role="tablist" aria-label="Hub event editor">
-            <button class="hub-event-editor-tab" data-hub-event-tab="info" role="tab" aria-selected="true" type="button">Event information</button>
+            <button class="hub-event-editor-tab" data-hub-event-tab="info" role="tab" aria-selected="true" type="button">${t("hubEvent.infoTab")}</button>
             <button class="hub-event-editor-tab" id="hub-event-schedule-tab" data-hub-event-tab="schedule" role="tab" aria-selected="false" type="button">Detailed schedule (0)</button>
-            <button class="hub-event-editor-tab" data-hub-event-tab="history" role="tab" aria-selected="false" type="button">Change history</button>
+            <button class="hub-event-editor-tab" data-hub-event-tab="history" role="tab" aria-selected="false" type="button">${t("hubEvent.historyTab")}</button>
           </div>
           <form id="hub-event-form" class="hub-event-form-wide hub-events-editor-grid">
             <input id="hub-event-id" type="hidden">
             <div class="form-section hub-events-section">
-              <h3 class="form-section-title hub-events-section-title">Basic information</h3>
+              <h3 class="form-section-title hub-events-section-title">${t("hubEvent.basic")}</h3>
               <div class="hub-events-section-body">
-                <div class="field"><label for="hub-event-title">Title</label><input id="hub-event-title" name="title" autocomplete="off"></div>
-                <div class="field"><label for="hub-event-summary">Summary</label><textarea id="hub-event-summary" name="summary" rows="3"></textarea></div>
+                <div class="field"><label for="hub-event-title">${t("announcement.subject")}</label><input id="hub-event-title" name="title" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-summary">${t("announcement.summary")}</label><textarea id="hub-event-summary" name="summary" rows="3"></textarea></div>
                 <div class="hub-events-three">
-                  <div class="field"><label for="hub-event-category">Category</label><select id="hub-event-category" name="category"><option value="online_goods">Online goods</option><option value="online_collab">Online collab</option><option value="offline_concert">Offline concert</option><option value="offline_collab">Offline collab</option><option value="offline_popup">Offline popup</option><option value="ticketing">Ticketing</option></select></div>
-                  <div class="field"><label for="hub-event-participation-mode">Participation mode</label><select id="hub-event-participation-mode" name="participationMode"><option value="online">Online</option><option value="offline">Offline</option><option value="hybrid">Hybrid</option></select></div>
-                  <div class="field"><label for="hub-event-status">Status</label><select id="hub-event-status" name="status"><option value="announced">Announced</option><option value="upcoming">Upcoming</option><option value="open">Open</option><option value="closing_soon">Closing soon</option><option value="ended">Ended</option><option value="cancelled">Cancelled</option></select></div>
+                  <div class="field"><label for="hub-event-category">${t("hubEvent.category")}</label><select id="hub-event-category" name="category"><option value="online_goods">${t("hubEvent.onlineGoods")}</option><option value="online_collab">${t("hubEvent.onlineCollab")}</option><option value="offline_concert">${t("hubEvent.offlineConcert")}</option><option value="offline_collab">${t("hubEvent.offlineCollab")}</option><option value="offline_popup">${t("hubEvent.offlinePopup")}</option><option value="ticketing">${t("hubEvent.ticketing")}</option></select></div>
+                  <div class="field"><label for="hub-event-participation-mode">${t("hubEvent.participation")}</label><select id="hub-event-participation-mode" name="participationMode"><option value="online">Online</option><option value="offline">Offline</option><option value="hybrid">${t("hubEvent.hybrid")}</option></select></div>
+                  <div class="field"><label for="hub-event-status">${t("common.status")}</label><select id="hub-event-status" name="status"><option value="announced">${t("hubEvent.announced")}</option><option value="upcoming">${t("hubEvent.upcoming")}</option><option value="open">${t("status.open")}</option><option value="closing_soon">${t("hubEvent.closingSoon")}</option><option value="ended">${t("status.ended")}</option><option value="cancelled">${t("hubEvent.scheduleCancelled")}</option></select></div>
                 </div>
                 <label class="switch-control"><input id="hub-event-tag-album" type="checkbox"> Album</label>
-                <div class="field"><label for="hub-event-generation">Generation</label><input id="hub-event-generation" name="generationId" autocomplete="off" value="official" placeholder="official, gen1, gen2, gen3"><p class="subtle">Examples: official, gen1, gen2, gen3. Use the member's matching generation for member-scoped events.</p></div>
-                <div class="field"><label for="hub-event-member">Member</label><input id="hub-event-member" name="memberId" autocomplete="off" placeholder="akane-lize"><p class="subtle">Example: akane-lize. Leave blank for generation-wide or official events.</p></div>
+                <div class="field"><label for="hub-event-generation">${t("hubEvent.generation")}</label><input id="hub-event-generation" name="generationId" autocomplete="off" value="official" placeholder="official, gen1, gen2, gen3"><p class="subtle">Examples: official, gen1, gen2, gen3. Use the member's matching generation for member-scoped events.</p></div>
+                <div class="field"><label for="hub-event-member">${t("hubEvent.member")}</label><input id="hub-event-member" name="memberId" autocomplete="off" placeholder="akane-lize"><p class="subtle">Example: akane-lize. Leave blank for generation-wide or official events.</p></div>
               </div>
             </div>
             <div class="form-section hub-events-section">
-              <h3 class="form-section-title hub-events-section-title">Source and thumbnail</h3>
+              <h3 class="form-section-title hub-events-section-title">${t("hubEvent.sourceThumbnail")}</h3>
               <div class="hub-events-section-body">
                 <div class="hub-events-two">
-                  <div class="field"><label for="hub-event-source-type">Source type</label><select id="hub-event-source-type" name="sourceType"><option value="official">Official</option><option value="member">Member</option><option value="official_collab">Official collab</option></select></div>
-                  <div class="field"><label for="hub-event-image-policy-state">Image policy state</label><select id="hub-event-image-policy-state" name="imagePolicyState"><option value="none">None</option><option value="official_runtime_url">Official runtime URL</option><option value="third_party_allowed">Third-party allowed</option><option value="verify_required">Verify required</option><option value="blocked">Blocked</option></select></div>
+                  <div class="field"><label for="hub-event-source-type">${t("hubEvent.sourceType")}</label><select id="hub-event-source-type" name="sourceType"><option value="official">Official</option><option value="member">${t("hubEvent.member")}</option><option value="official_collab">Official collab</option></select></div>
+                  <div class="field"><label for="hub-event-image-policy-state">${t("hubEvent.imagePolicy")}</label><select id="hub-event-image-policy-state" name="imagePolicyState"><option value="none">${t("common.none")}</option><option value="official_runtime_url">Official runtime URL</option><option value="third_party_allowed">Third-party allowed</option><option value="verify_required">${t("status.verifyRequired")}</option><option value="blocked">${t("status.blocked")}</option></select></div>
                 </div>
-                <div class="field"><label for="hub-event-source-url">Source URL</label><input id="hub-event-source-url" name="sourceUrl" type="url" autocomplete="off"></div>
-                <div class="field"><label for="hub-event-source-label">Source label</label><input id="hub-event-source-label" name="sourceLabel" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-source-url">${t("hubEvent.sourceUrl")}</label><input id="hub-event-source-url" name="sourceUrl" type="url" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-source-label">${t("hubEvent.sourceLabel")}</label><input id="hub-event-source-label" name="sourceLabel" autocomplete="off"></div>
                 <div class="image-policy-help" aria-label="Source and image metadata help">
                   <strong>No bundled image</strong>
                   <div class="policy-help-grid">
@@ -2039,161 +2039,161 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
                     <span><strong>Common:</strong> Metadata only. No uploads or copied assets. No base64, local path, logo/poster/profile image asset fields. Displayable images require HTTPS. sourceUrl, purchaseUrl, ticketUrl must be HTTPS when filled.</span>
                   </div>
                 </div>
-                <div class="field"><label for="hub-event-image-url">Image URL</label><input id="hub-event-image-url" name="imageUrl" type="url" autocomplete="off"></div>
-                <div class="field"><label for="hub-event-image-source-label">Image source label</label><input id="hub-event-image-source-label" name="imageSourceLabel" autocomplete="off"></div>
-                <div class="field"><label for="hub-event-image-source-url">Image source URL</label><input id="hub-event-image-source-url" name="imageSourceUrl" type="url" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-image-url">${t("hubEvent.imageUrl")}</label><input id="hub-event-image-url" name="imageUrl" type="url" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-image-source-label">${t("hubEvent.imageSourceLabel")}</label><input id="hub-event-image-source-label" name="imageSourceLabel" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-image-source-url">${t("hubEvent.imageSourceUrl")}</label><input id="hub-event-image-source-url" name="imageSourceUrl" type="url" autocomplete="off"></div>
               </div>
             </div>
             <div class="form-section hub-events-section" data-hub-event-tab-panel="info">
-              <h3 class="form-section-title hub-events-section-title">Schedule</h3>
+              <h3 class="form-section-title hub-events-section-title">${t("hubEvent.schedule")}</h3>
               <div class="hub-events-section-body">
-                <div class="field"><label for="hub-event-announced-at">Announced at</label><input id="hub-event-announced-at" name="announcedAt" type="datetime-local"></div>
+                <div class="field"><label for="hub-event-announced-at">${t("hubEvent.announcedAt")}</label><input id="hub-event-announced-at" name="announcedAt" type="datetime-local"></div>
                 <input id="hub-event-schedule-mode" name="scheduleMode" type="hidden" value="single_window">
                 <div id="hub-event-single-window-fields">
-                  <div class="field"><label for="hub-event-starts-at">Starts at</label><input id="hub-event-starts-at" name="startsAt" type="datetime-local"></div>
-                  <div class="field"><label for="hub-event-ends-at">Ends at</label><input id="hub-event-ends-at" name="endsAt" type="datetime-local"></div>
+                  <div class="field"><label for="hub-event-starts-at">${t("hubEvent.startsAt")}</label><input id="hub-event-starts-at" name="startsAt" type="datetime-local"></div>
+                  <div class="field"><label for="hub-event-ends-at">${t("hubEvent.endsAt")}</label><input id="hub-event-ends-at" name="endsAt" type="datetime-local"></div>
                 </div>
               </div>
             </div>
             <div class="form-section hub-events-section hub-events-links-venue-section">
-              <h3 class="form-section-title hub-events-section-title">Links and venue</h3>
+              <h3 class="form-section-title hub-events-section-title">${t("hubEvent.linksVenue")}</h3>
               <div class="hub-events-section-body">
-                <div class="section-head"><div><strong><span>Related links</span> (<span id="hub-event-link-count">0</span>)</strong><p class="subtle">Add purchase, ticket, source, content, video, or map links independently.</p></div><button id="hub-event-link-add" type="button">Add link</button></div>
+                <div class="section-head"><div><strong><span>${t("hubEvent.relatedLinks")}</span> (<span id="hub-event-link-count">0</span>)</strong><p class="subtle">${t("hubEvent.relatedLinksHelp")}</p></div><button id="hub-event-link-add" type="button">${t("hubEvent.addLink")}</button></div>
                 <div id="hub-event-links" class="hub-event-link-editor"></div>
-                <div class="field"><label for="hub-event-venue-name">Venue name</label><input id="hub-event-venue-name" name="venueName" autocomplete="off"></div>
-                <div class="field"><label for="hub-event-venue-address">Venue address</label><input id="hub-event-venue-address" name="venueAddress" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-venue-name">${t("hubEvent.venueName")}</label><input id="hub-event-venue-name" name="venueName" autocomplete="off"></div>
+                <div class="field"><label for="hub-event-venue-address">${t("hubEvent.venueAddress")}</label><input id="hub-event-venue-address" name="venueAddress" autocomplete="off"></div>
                 <label class="switch-control"><input id="hub-event-notification-eligible" name="notificationEligible" type="checkbox" checked> Notification eligible</label>
               </div>
             </div>
           </form>
           <section id="hub-event-timeline-fields" class="hub-events-section panel" data-hub-event-tab-panel="schedule" hidden>
             <div class="section-head">
-              <div><h3>Detailed schedule</h3><p class="subtle"><span>Manage each milestone independently.</span> <span>Selecting a new primary schedule replaces the current primary.</span></p></div>
-              <button id="hub-event-schedule-add" type="button">Add schedule item</button>
+              <div><h3>${t("hubEvent.scheduleDetail")}</h3><p class="subtle"><span>${t("hubEvent.scheduleHelp")}</span> <span>${t("hubEvent.primaryReplacementHelp")}</span></p></div>
+              <button id="hub-event-schedule-add" type="button">${t("hubEvent.addSchedule")}</button>
             </div>
             <div class="hub-events-section-body"><div id="hub-event-schedule-items" class="hub-event-schedule-list"></div></div>
           </section>
           <div class="hub-events-footer">
-            <div class="hub-events-section panel validation-panel"><h3>Validation</h3><ul id="hub-event-validation" class="message-list"></ul></div>
-            <div class="hub-events-section panel audit-log-panel" data-hub-event-tab-panel="history" hidden><h3>Audit log</h3><ul id="hub-event-audit-log" class="message-list"></ul></div>
+            <div class="hub-events-section panel validation-panel"><h3>${t("hubEvent.validation")}</h3><ul id="hub-event-validation" class="message-list"></ul></div>
+            <div class="hub-events-section panel audit-log-panel" data-hub-event-tab-panel="history" hidden><h3>${t("announcement.auditLog")}</h3><ul id="hub-event-audit-log" class="message-list"></ul></div>
           </div>
           <dialog id="hub-event-schedule-dialog" class="hub-event-schedule-dialog">
             <form id="hub-event-schedule-form" method="dialog" class="hub-event-schedule-dialog-body">
-              <div class="hub-event-schedule-dialog-head"><h3 id="hub-event-schedule-dialog-title">Add schedule</h3><button id="hub-event-schedule-dialog-close" type="button">Cancel</button></div>
+              <div class="hub-event-schedule-dialog-head"><h3 id="hub-event-schedule-dialog-title">${t("hubEvent.scheduleCreate")}</h3><button id="hub-event-schedule-dialog-close" type="button">${t("common.cancel")}</button></div>
               <input id="hub-event-schedule-edit-id" type="hidden">
               <div class="hub-events-two">
-                <div class="field"><label for="hub-event-schedule-kind">Kind</label><select id="hub-event-schedule-kind"><option value="main_window">Main window</option><option value="announcement">Announcement</option><option value="sales_open">Sales open</option><option value="ticket_open">Ticket open</option><option value="content_reveal">Content reveal</option><option value="release">Release</option><option value="deadline">Deadline</option><option value="custom">Custom</option></select></div>
-                <div class="field"><label for="hub-event-schedule-title">Title</label><input id="hub-event-schedule-title" autocomplete="off" required maxlength="160"></div>
+                <div class="field"><label for="hub-event-schedule-kind">${t("hubEvent.linkKind")}</label><select id="hub-event-schedule-kind"><option value="main_window">Main window</option><option value="announcement">Announcement</option><option value="sales_open">Sales open</option><option value="ticket_open">Ticket open</option><option value="content_reveal">Content reveal</option><option value="release">Release</option><option value="deadline">Deadline</option><option value="custom">Custom</option></select></div>
+                <div class="field"><label for="hub-event-schedule-title">${t("announcement.subject")}</label><input id="hub-event-schedule-title" autocomplete="off" required maxlength="160"></div>
               </div>
               <div class="hub-events-two">
-                <div class="field"><label for="hub-event-schedule-timing">Timing</label><select id="hub-event-schedule-timing"><option value="point">Single point</option><option value="period">Period</option></select></div>
-                <div class="field"><label for="hub-event-schedule-precision">Time precision</label><select id="hub-event-schedule-precision"><option value="datetime">Date and time</option><option value="date">Date only</option></select></div>
+                <div class="field"><label for="hub-event-schedule-timing">${t("hubEvent.scheduleTiming")}</label><select id="hub-event-schedule-timing"><option value="point">${t("hubEvent.schedulePoint")}</option><option value="period">${t("hubEvent.schedulePeriod")}</option></select></div>
+                <div class="field"><label for="hub-event-schedule-precision">${t("hubEvent.timePrecision")}</label><select id="hub-event-schedule-precision"><option value="datetime">${t("hubEvent.dateTime")}</option><option value="date">${t("hubEvent.dateOnly")}</option></select></div>
               </div>
               <div class="hub-events-two">
-                <div class="field"><label id="hub-event-schedule-starts-at-label" for="hub-event-schedule-starts-at">Occurs at</label><input id="hub-event-schedule-starts-at" type="datetime-local" required></div>
-                <div id="hub-event-schedule-ends-at-field" class="field hub-event-schedule-hidden"><label for="hub-event-schedule-ends-at">Ends at</label><input id="hub-event-schedule-ends-at" type="datetime-local" disabled></div>
+                <div class="field"><label id="hub-event-schedule-starts-at-label" for="hub-event-schedule-starts-at">${t("hubEvent.occursAt")}</label><input id="hub-event-schedule-starts-at" type="datetime-local" required></div>
+                <div id="hub-event-schedule-ends-at-field" class="field hub-event-schedule-hidden"><label for="hub-event-schedule-ends-at">${t("hubEvent.endsAt")}</label><input id="hub-event-schedule-ends-at" type="datetime-local" disabled></div>
               </div>
               <div class="hub-event-schedule-flags"><label class="switch-control"><input id="hub-event-schedule-primary" type="radio" name="hub-event-dialog-primary"> Set as primary</label><label class="switch-control"><input id="hub-event-schedule-notification" type="checkbox" checked> Notification eligible</label></div>
-              <details><summary>Additional information</summary>
+              <details><summary>${t("hubEvent.additionalInfo")}</summary>
                 <div class="hub-events-section-body">
-                  <div class="field"><label for="hub-event-schedule-description">Description (optional)</label><textarea id="hub-event-schedule-description" rows="3" maxlength="2000"></textarea></div>
-                  <div class="field"><label for="hub-event-schedule-label">Short label (optional)</label><input id="hub-event-schedule-label" autocomplete="off" maxlength="80"><span class="subtle">Uses the title when empty</span></div>
-                  <div class="field"><label for="hub-event-schedule-timezone">Timezone</label><input id="hub-event-schedule-timezone" value="Asia/Seoul"></div>
-                  <div class="section-head"><div><strong><span>Schedule links</span> (<span id="hub-event-schedule-link-count">0</span>)</strong><p class="subtle">These links belong only to this schedule item.</p></div><button id="hub-event-schedule-link-add" type="button">Add link</button></div>
+                  <div class="field"><label for="hub-event-schedule-description">${t("hubEvent.scheduleDescriptionOptional")}</label><textarea id="hub-event-schedule-description" rows="3" maxlength="2000"></textarea></div>
+                  <div class="field"><label for="hub-event-schedule-label">${t("hubEvent.scheduleShortLabelOptional")}</label><input id="hub-event-schedule-label" autocomplete="off" maxlength="80"><span class="subtle">${t("hubEvent.scheduleShortLabelHelp")}</span></div>
+                  <div class="field"><label for="hub-event-schedule-timezone">${t("hubEvent.timezone")}</label><input id="hub-event-schedule-timezone" value="Asia/Seoul"></div>
+                  <div class="section-head"><div><strong><span>${t("hubEvent.scheduleLinks")}</span> (<span id="hub-event-schedule-link-count">0</span>)</strong><p class="subtle">${t("hubEvent.scheduleLinksHelp")}</p></div><button id="hub-event-schedule-link-add" type="button">${t("hubEvent.addLink")}</button></div>
                   <div id="hub-event-schedule-links" class="hub-event-link-editor"></div>
                 </div>
               </details>
-              <div class="hub-event-schedule-dialog-actions"><span></span><button id="hub-event-schedule-save" type="submit">Save schedule</button></div>
+              <div class="hub-event-schedule-dialog-actions"><span></span><button id="hub-event-schedule-save" type="submit">${t("hubEvent.scheduleSave")}</button></div>
             </form>
           </dialog>
           </div>
           <div class="hub-event-list-panel hub-events-sidebar events-card">
             <div class="card-body events-card-body">
               <h3>Events</h3>
-              <p class="subtle">Filter and select existing Hub events.</p>
+              <p class="subtle">${t("hubEvent.filterHelp")}</p>
             </div>
             <div class="hub-events-filters">
               <div class="hub-events-filter-row">
                 <div class="field">
-                  <label class="has-tooltip" data-tooltip="Filter the events list by publication state." title="Filter the events list by publication state." for="hub-event-state-filter">Publication state</label>
+                  <label class="has-tooltip" data-tooltip="Filter the events list by publication state." title="Filter the events list by publication state." for="hub-event-state-filter">${t("announcement.publicationState")}</label>
                   <select id="hub-event-state-filter">
-                    <option value="">All</option>
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="deleted">Deleted</option>
+                    <option value="">${t("common.all")}</option>
+                    <option value="draft">${t("status.draft")}</option>
+                    <option value="published">${t("status.published")}</option>
+                    <option value="inactive">${t("status.inactive")}</option>
+                    <option value="deleted">${t("status.deleted")}</option>
                   </select>
                 </div>
                 <div class="field">
                   <label class="has-tooltip" data-tooltip="Defaults to open events. Select Ended to review finished events." title="Defaults to open events. Select Ended to review finished events." for="hub-event-status-filter">Public status</label>
                   <select id="hub-event-status-filter">
-                    <option value="open" selected>Open</option>
-                    <option value="">All statuses</option>
-                    <option value="announced">Announced</option>
-                    <option value="upcoming">Upcoming</option>
-                    <option value="closing_soon">Closing soon</option>
-                    <option value="ended">Ended</option>
-                    <option value="cancelled">Cancelled</option>
+                    <option value="open" selected>${t("status.open")}</option>
+                    <option value="">${t("enum.allStatuses")}</option>
+                    <option value="announced">${t("hubEvent.announced")}</option>
+                    <option value="upcoming">${t("hubEvent.upcoming")}</option>
+                    <option value="closing_soon">${t("hubEvent.closingSoon")}</option>
+                    <option value="ended">${t("status.ended")}</option>
+                    <option value="cancelled">${t("hubEvent.scheduleCancelled")}</option>
                   </select>
                 </div>
               </div>
               <div class="hub-events-filter-row">
                 <div class="field">
-                  <label for="hub-event-category-filter">Category</label>
+                  <label for="hub-event-category-filter">${t("hubEvent.category")}</label>
                   <select id="hub-event-category-filter">
-                    <option value="">All</option>
-                    <option value="online_goods">Online goods</option>
-                    <option value="online_collab">Online collab</option>
-                    <option value="offline_concert">Offline concert</option>
-                    <option value="offline_collab">Offline collab</option>
-                    <option value="offline_popup">Offline popup</option>
-                    <option value="ticketing">Ticketing</option>
+                    <option value="">${t("common.all")}</option>
+                    <option value="online_goods">${t("hubEvent.onlineGoods")}</option>
+                    <option value="online_collab">${t("hubEvent.onlineCollab")}</option>
+                    <option value="offline_concert">${t("hubEvent.offlineConcert")}</option>
+                    <option value="offline_collab">${t("hubEvent.offlineCollab")}</option>
+                    <option value="offline_popup">${t("hubEvent.offlinePopup")}</option>
+                    <option value="ticketing">${t("hubEvent.ticketing")}</option>
                   </select>
                 </div>
                 <div class="field">
-                  <label for="hub-event-participation-mode-filter">Participation mode</label>
+                  <label for="hub-event-participation-mode-filter">${t("hubEvent.participation")}</label>
                   <select id="hub-event-participation-mode-filter">
-                    <option value="">All</option>
+                    <option value="">${t("common.all")}</option>
                     <option value="online">Online</option>
                     <option value="offline">Offline</option>
-                    <option value="hybrid">Hybrid</option>
+                    <option value="hybrid">${t("hubEvent.hybrid")}</option>
                   </select>
                 </div>
                 <div class="field">
-                  <label for="hub-event-tag-filter">Tag</label>
-                  <select id="hub-event-tag-filter"><option value="">All</option><option value="album">Album</option></select>
+                  <label for="hub-event-tag-filter">${t("hubEvent.tags")}</label>
+                  <select id="hub-event-tag-filter"><option value="">${t("common.all")}</option><option value="album">${t("hubEvent.album")}</option></select>
                 </div>
               </div>
               <div class="hub-events-filter-row">
                 <div class="field">
-                  <label for="hub-event-generation-filter">Generation</label>
+                  <label for="hub-event-generation-filter">${t("hubEvent.generation")}</label>
                   <input id="hub-event-generation-filter" autocomplete="off" placeholder="official, gen1, gen2, gen3">
                 </div>
                 <div class="field">
-                  <label for="hub-event-member-filter">Member</label>
+                  <label for="hub-event-member-filter">${t("hubEvent.member")}</label>
                   <input id="hub-event-member-filter" autocomplete="off" placeholder="akane-lize">
                 </div>
               </div>
               <div class="field">
-                <label for="hub-event-search">Search</label>
+                <label for="hub-event-search">${t("hubEvent.search")}</label>
                 <input id="hub-event-search" type="search" autocomplete="off" spellcheck="false">
               </div>
               <label class="switch-control"><input id="hub-event-include-deleted" type="checkbox"> Include deleted</label>
             </div>
             <div id="hub-event-list" class="event-list hub-events-list" role="list" aria-label="Hub events"></div>
             <div class="hub-event-pagination" aria-label="Hub events pagination">
-              <span id="hub-event-pagination-status" class="subtle">Page 1</span>
+              <span id="hub-event-pagination-status" class="subtle">${t("hubEvent.pageOne")}</span>
               <div class="hub-event-pagination-actions">
-                <button id="hub-event-prev-page" type="button">Previous</button>
-                <button id="hub-event-next-page" type="button">Next</button>
+                <button id="hub-event-prev-page" type="button">${t("hubEvent.previous")}</button>
+                <button id="hub-event-next-page" type="button">${t("hubEvent.next")}</button>
               </div>
             </div>
           </div>
         </div>
         <div class="bottom-actions" aria-label="Hub event mobile actions">
-          <button type="button" data-mobile-hub-event-action="validate">Validate</button>
-          <button type="button" data-mobile-hub-event-action="save-draft">Save draft</button>
-          <button type="button" data-mobile-hub-event-action="delete">Delete</button>
+          <button type="button" data-mobile-hub-event-action="validate">${t("hubEvent.validate")}</button>
+          <button type="button" data-mobile-hub-event-action="save-draft">${t("announcement.saveDraft")}</button>
+          <button type="button" data-mobile-hub-event-action="delete">${t("common.delete")}</button>
         </div>
         </div>
       </section>
@@ -2202,23 +2202,23 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       <section class="page" id="page-announcements" data-admin-page="announcements">
         <section class="section stack">
           <div class="section-head">
-            <div><h2>Announcement management</h2><p class="subtle">Create app service announcements and manage publication state and FCM delivery.</p></div>
+            <div><h2>${t("announcement.title")}</h2><p class="subtle">${t("announcement.description")}</p></div>
             <div class="hub-events-toolbar">
-              <button id="announcement-save" type="button">Save draft</button>
-              <button class="is-primary" id="announcement-publish" type="button">Publish</button>
+              <button id="announcement-save" type="button">${t("announcement.saveDraft")}</button>
+              <button class="is-primary" id="announcement-publish" type="button">${t("announcement.publish")}</button>
               <div class="action-overflow">
                 <button type="button" class="overflow-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="More actions">
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="8" cy="3.2" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="12.8" r="1.3" fill="currentColor"/></svg>
                 </button>
                 <div class="overflow-panel" role="menu" hidden>
-                  <button id="announcement-new" type="button">New announcement</button>
+                  <button id="announcement-new" type="button">${t("announcement.new")}</button>
                   <button id="announcement-refresh" type="button">Refresh</button>
-                  <button id="announcement-resolve" type="button">Resolve</button>
-                  <button id="announcement-archive" type="button">Archive</button>
-                  <button id="announcement-bump" type="button">Bump attention revision</button>
-                  <button id="announcement-resend" type="button">Resend push</button>
+                  <button id="announcement-resolve" type="button">${t("announcement.resolve")}</button>
+                  <button id="announcement-archive" type="button">${t("announcement.archive")}</button>
+                  <button id="announcement-bump" type="button">${t("announcement.bumpAttention")}</button>
+                  <button id="announcement-resend" type="button">${t("announcement.resend")}</button>
                   <div class="overflow-sep" role="separator"></div>
-                  <button class="is-danger" id="announcement-delete" type="button">Delete</button>
+                  <button class="is-danger" id="announcement-delete" type="button">${t("common.delete")}</button>
                 </div>
               </div>
             </div>
@@ -2230,42 +2230,42 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
                 <h3 class="hub-events-section-title">Content</h3>
                 <div class="hub-events-section-body">
                   <div class="hub-events-two">
-                    <div class="field"><label for="announcement-type">Type</label><select id="announcement-type"><option value="general">General</option><option value="incident">Incident</option><option value="maintenance">Maintenance</option><option value="version_update">Version update</option></select></div>
-                    <div class="field"><label for="announcement-severity">Severity</label><select id="announcement-severity"><option value="info">Info</option><option value="important">Important</option><option value="critical">Critical</option></select></div>
+                    <div class="field"><label for="announcement-type">${t("announcement.type")}</label><select id="announcement-type"><option value="general">${t("enum.general")}</option><option value="incident">${t("enum.incident")}</option><option value="maintenance">${t("enum.maintenance")}</option><option value="version_update">${t("enum.versionUpdate")}</option></select></div>
+                    <div class="field"><label for="announcement-severity">${t("announcement.severity")}</label><select id="announcement-severity"><option value="info">${t("enum.info")}</option><option value="important">${t("enum.important")}</option><option value="critical">${t("enum.critical")}</option></select></div>
                   </div>
-                  <div class="field"><label for="announcement-title">Title</label><input id="announcement-title" maxlength="120"></div>
-                  <div class="field"><label for="announcement-summary">Summary</label><textarea id="announcement-summary" rows="3" maxlength="300"></textarea></div>
-                  <div class="field"><label for="announcement-body">Body</label><textarea id="announcement-body" rows="10"></textarea></div>
+                  <div class="field"><label for="announcement-title">${t("announcement.subject")}</label><input id="announcement-title" maxlength="120"></div>
+                  <div class="field"><label for="announcement-summary">${t("announcement.summary")}</label><textarea id="announcement-summary" rows="3" maxlength="300"></textarea></div>
+                  <div class="field"><label for="announcement-body">${t("announcement.body")}</label><textarea id="announcement-body" rows="10"></textarea></div>
                 </div>
               </div>
               <div class="hub-events-section">
-                <h3 class="hub-events-section-title">Targets and actions</h3>
+                <h3 class="hub-events-section-title">${t("announcement.targetAndAction")}</h3>
                 <div class="hub-events-section-body">
                   <div class="hub-events-two">
                     <label class="switch-control"><input id="announcement-platform-android" type="checkbox" checked> Android</label>
                     <label class="switch-control"><input id="announcement-platform-ios" type="checkbox" checked> iOS</label>
                   </div>
                   <div class="hub-events-two">
-                    <div class="field"><label for="announcement-min-version">Minimum app version</label><input id="announcement-min-version" placeholder="1.0.0"></div>
-                    <div class="field"><label for="announcement-max-version">Maximum app version</label><input id="announcement-max-version" placeholder="2.0.0"></div>
+                    <div class="field"><label for="announcement-min-version">${t("announcement.minimumVersion")}</label><input id="announcement-min-version" placeholder="1.0.0"></div>
+                    <div class="field"><label for="announcement-max-version">${t("announcement.maximumVersion")}</label><input id="announcement-max-version" placeholder="2.0.0"></div>
                   </div>
-                  <div class="field"><label for="announcement-expires-at">Expires at</label><input id="announcement-expires-at" type="datetime-local"></div>
-                  <div class="field"><label for="announcement-action-label">CTA label</label><input id="announcement-action-label" maxlength="40"></div>
-                  <div class="field"><label for="announcement-deep-link">App deep link</label><input id="announcement-deep-link" placeholder="stellivehub://announcements/..."></div>
-                  <div class="field"><label for="announcement-external-url">External URL</label><input id="announcement-external-url" type="url"></div>
+                  <div class="field"><label for="announcement-expires-at">${t("announcement.expiresAt")}</label><input id="announcement-expires-at" type="datetime-local"></div>
+                  <div class="field"><label for="announcement-action-label">${t("announcement.actionLabel")}</label><input id="announcement-action-label" maxlength="40"></div>
+                  <div class="field"><label for="announcement-deep-link">${t("announcement.deepLink")}</label><input id="announcement-deep-link" placeholder="stellivehub://announcements/..."></div>
+                  <div class="field"><label for="announcement-external-url">${t("announcement.externalUrl")}</label><input id="announcement-external-url" type="url"></div>
                   <label class="switch-control"><input id="announcement-pinned" type="checkbox"> Pin on home</label>
                   <label class="switch-control"><input id="announcement-push-enabled" type="checkbox" checked> Send push on publish</label>
                 </div>
               </div>
             </form>
             <div class="hub-events-sidebar">
-              <div class="hub-events-sidebar-header">Announcement list</div>
-              <div class="hub-events-filters"><div class="field"><label for="announcement-state-filter">Publication state</label><select id="announcement-state-filter"><option value="">All</option><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select></div></div>
+              <div class="hub-events-sidebar-header">${t("announcement.listAction")}</div>
+              <div class="hub-events-filters"><div class="field"><label for="announcement-state-filter">${t("announcement.publicationState")}</label><select id="announcement-state-filter"><option value="">${t("common.all")}</option><option value="draft">${t("status.draft")}</option><option value="published">${t("status.published")}</option><option value="archived">${t("status.archived")}</option></select></div></div>
               <div id="announcement-list" class="hub-events-list" role="list"></div>
             </div>
             <div class="hub-events-footer">
-              <div class="hub-events-section panel"><h3>Audit log</h3><ul id="announcement-audit-log" class="message-list"></ul></div>
-              <div class="hub-events-section panel"><h3>Push attempts</h3><ul id="announcement-push-attempts" class="message-list"></ul></div>
+              <div class="hub-events-section panel"><h3>${t("announcement.auditLog")}</h3><ul id="announcement-audit-log" class="message-list"></ul></div>
+              <div class="hub-events-section panel"><h3>${t("announcement.pushAttempts")}</h3><ul id="announcement-push-attempts" class="message-list"></ul></div>
             </div>
           </div>
         </section>
@@ -2275,64 +2275,64 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       <section id="operations-section" class="section">
         <div class="section-head">
           <div>
-            <h2>Operations</h2>
-            <p class="subtle">Internal maintenance actions use the token saved in Settings.</p>
+            <h2>${t("nav.operations")}</h2>
+            <p class="subtle">${t("operations.description")}</p>
           </div>
         </div>
         <div class="section-body settings-layout">
           <div class="panel">
-            <h2>Schedulers and jobs</h2>
+            <h2>${t("operations.schedulersJobs")}</h2>
             <div class="summary-list">
               <div class="summary-row">
                 <div>
-                  <div class="summary-title">Notification queue</div>
-                  <div class="summary-description">Run a bounded drain for queued notification jobs.</div>
+                  <div class="summary-title">${t("dashboard.queue")}</div>
+                  <div class="summary-description">${t("operations.drainDescription")}</div>
                 </div>
                 <button id="drain" type="button">Drain jobs</button>
               </div>
               <div class="summary-row">
                 <div>
                   <div class="summary-title">YouTube scheduler</div>
-                  <div class="summary-description">Renew official upload webhook subscriptions.</div>
+                  <div class="summary-description">${t("operations.renewDescription")}</div>
                 </div>
                 <button id="renew-youtube" type="button">Renew YouTube</button>
               </div>
               <div class="summary-row">
                 <div>
                   <div class="summary-title">CHZZK live status</div>
-                  <div class="summary-description">Poll current member live state through the internal adapter.</div>
+                  <div class="summary-description">${t("operations.pollDescription")}</div>
                 </div>
                 <button id="poll-chzzk" type="button">Poll CHZZK</button>
               </div>
               <div class="summary-row">
                 <div>
-                  <div class="summary-title">Special day status</div>
-                  <div class="summary-description">Recalculate derived calendar status for hub events.</div>
+                  <div class="summary-title">${t("hubEvent.specialDayStatus")}</div>
+                  <div class="summary-description">${t("operations.recalculateDescription")}</div>
                 </div>
                 <button class="has-tooltip" data-tooltip="Recalculate special day calendar status." title="Recalculate special day calendar status." id="recalculate-special-days" type="button">Recalculate special days</button>
               </div>
               <div class="summary-row">
                 <div>
-                  <div class="summary-title">External API logs</div>
-                  <div class="summary-description">Prune sanitized external API call logs older than 31 days.</div>
+                  <div class="summary-title">${t("dashboard.externalApiLogs")}</div>
+                  <div class="summary-description">${t("operations.pruneDescription")}</div>
                 </div>
-                <button id="external-api-prune" type="button">Prune old API logs</button>
+                <button id="external-api-prune" type="button">${t("operations.pruneLogs")}</button>
               </div>
             </div>
           </div>
           <div class="panel">
-            <h2>Run state</h2>
+            <h2>${t("operations.runState")}</h2>
             <table class="status-table">
               <tbody>
-                <tr><td>Admin session</td><td>Required</td></tr>
-                <tr><td>Internal bearer token</td><td>Settings only</td></tr>
-                <tr><td>Secret exposure</td><td>Never shown</td></tr>
-                <tr><td>Action result</td><td>Shown in console status</td></tr>
+                <tr><td>${t("dashboard.adminSession")}</td><td>${t("status.required")}</td></tr>
+                <tr><td>${t("operations.internalBearerToken")}</td><td>${t("settings.settingsOnly")}</td></tr>
+                <tr><td>${t("settings.secretExposure")}</td><td>${t("settings.neverShown")}</td></tr>
+                <tr><td>${t("common.actionResult")}</td><td>${t("settings.shownStatus")}</td></tr>
               </tbody>
             </table>
             <div class="security-item">
-              <div class="settings-title">Credential boundary</div>
-              <div class="settings-description">Operations reads the Settings token at request time. The token field is not duplicated on this page.</div>
+              <div class="settings-title">${t("settings.credentialBoundary")}</div>
+              <div class="settings-description">${t("operations.tokenDescription")}</div>
             </div>
           </div>
         </div>
@@ -2343,29 +2343,29 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       <section id="audit-section" class="section">
         <div class="section-head">
           <div>
-            <h2>Audit</h2>
+            <h2>${t("audit.title")}</h2>
             <p class="subtle">Recent operator-facing results and hub event audit details.</p>
           </div>
         </div>
         <div class="section-body">
           <div class="panel" id="admin-audit-activity">
-            <h2>Recent activity</h2>
+            <h2>${t("audit.recent")}</h2>
             <div class="activity-list">
               <div class="activity-item">
-                <div class="activity-title">Admin session</div>
-                <div class="activity-description">Login and logout are handled by the existing admin session route.</div>
+                <div class="activity-title">${t("dashboard.adminSession")}</div>
+                <div class="activity-description">${t("dashboard.loginDescription")}</div>
               </div>
               <div class="activity-item">
-                <div class="activity-title">Hub event changes</div>
-                <div class="activity-description">Validate, save draft, publish, cancel, deactivate, and delete results appear in the Hub events audit log after an event is selected.</div>
+                <div class="activity-title">${t("dashboard.hubEventChanges")}</div>
+                <div class="activity-description">${t("hubEvent.auditDescription")}</div>
               </div>
               <div class="activity-item">
-                <div class="activity-title">Adapter refresh</div>
-                <div class="activity-description">Dashboard refresh updates adapter health, secrets, feature flags, queue, and delivery counters.</div>
+                <div class="activity-title">${t("dashboard.adapterRefresh")}</div>
+                <div class="activity-description">${t("dashboard.refreshDescription")}</div>
               </div>
               <div class="activity-item">
-                <div class="activity-title">Internal operations</div>
-                <div class="activity-description">Scheduler and queue action results are reported in the console status without logging token values.</div>
+                <div class="activity-title">${t("dashboard.internalOperations")}</div>
+                <div class="activity-description">${t("dashboard.operationsDescription")}</div>
               </div>
             </div>
           </div>
@@ -2377,8 +2377,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       <section id="settings-section" class="section">
         <div class="section-head">
           <div>
-            <h2>Settings</h2>
-            <p class="subtle">Console credentials, theme, refresh, and page-size preferences.</p>
+            <h2>${t("nav.settings")}</h2>
+            <p class="subtle">${t("settings.description")}</p>
           </div>
         </div>
         <div class="section-body settings-layout">
@@ -2386,66 +2386,66 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
           <div class="token-input-card panel">
             <div class="credential-head">
               <div>
-                <h2>Internal API bearer token</h2>
-                <p class="subtle">Used only for /v1/internal/* requests. It is stored in this browser session and is not saved on the server.</p>
+                <h2>${t("settings.internalToken")}</h2>
+                <p class="subtle">${t("settings.internalTokenHelp")}</p>
               </div>
-              <span class="credential-badge">session only</span>
+              <span class="credential-badge">${t("settings.sessionOnly")}</span>
             </div>
             <div class="field">
-              <label class="has-tooltip" data-tooltip="Store the internal API bearer token in this browser session only." title="Store the internal API bearer token in this browser session only." for="internal-token">Internal API bearer token</label>
+              <label class="has-tooltip" data-tooltip="Store the internal API bearer token in this browser session only." title="Store the internal API bearer token in this browser session only." for="internal-token">${t("settings.internalToken")}</label>
               <div class="credential-input-wrap">
                 <span class="credential-icon" aria-hidden="true">lock</span>
                 <input id="internal-token" type="password" autocomplete="off" spellcheck="false" placeholder="Required for /v1/internal/* requests">
-                <span class="credential-input-badge">private</span>
+                <span class="credential-input-badge">${t("common.private")}</span>
               </div>
             </div>
             <div class="settings-actions">
-              <button id="internal-token-save" type="button">Use token</button>
-              <button id="internal-token-test" type="button">Test connection</button>
-              <button id="internal-token-clear" type="button">Clear</button>
+              <button id="internal-token-save" type="button">${t("settings.useToken")}</button>
+              <button id="internal-token-test" type="button">${t("settings.testConnection")}</button>
+              <button id="internal-token-clear" type="button">${t("common.clear")}</button>
             </div>
             <p id="settings-token-status" class="message" aria-live="polite"></p>
           </div>
           <div class="panel">
-            <h2>Security notes</h2>
+            <h2>${t("settings.securityNotes")}</h2>
             <div class="security-grid">
               <div class="security-item">
                 <div class="settings-title">Admin session first</div>
-                <div class="settings-description">The session opens the console. It does not replace internal API authorization.</div>
+                <div class="settings-description">${t("settings.sessionDescription")}</div>
               </div>
               <div class="security-item">
-                <div class="settings-title">Internal token later</div>
-                <div class="settings-description">The bearer token is read from sessionStorage for /v1/internal/* calls only.</div>
+                <div class="settings-title">${t("settings.internalTokenLater")}</div>
+                <div class="settings-description">${t("settings.bearerDescription")}</div>
               </div>
               <div class="security-item">
-                <div class="settings-title">No bundled assets</div>
-                <div class="settings-description">Uploads, base64, local paths, copied assets, logos, profile images, screenshots, and fan art are not accepted.</div>
+                <div class="settings-title">${t("settings.noBundledAssets")}</div>
+                <div class="settings-description">${t("settings.assetsDescription")}</div>
               </div>
             </div>
           </div>
           </div>
           <div class="settings-column">
           <div class="panel">
-            <h2>Console preferences</h2>
+            <h2>${t("settings.consolePreferences")}</h2>
             <div class="settings-stack">
               <div class="settings-row">
-                <div class="settings-title">Theme</div>
-                <div class="settings-description">Choose the console color mode for this browser.</div>
+                <div class="settings-title">${t("theme.label")}</div>
+                <div class="settings-description">${t("settings.themeDescription")}</div>
                 ${renderAdminThemeControl(themeLabels)}
               </div>
               <div class="settings-row">
-                <div class="settings-title">Auto refresh</div>
+                <div class="settings-title">${t("dashboard.autoRefresh")}</div>
                 <label class="switch-control">
-                  <span>Refresh Dashboard status</span>
+                  <span>${t("settings.refreshDashboard")}</span>
                   <input id="auto-refresh" class="auto-refresh-input" type="checkbox">
                   <span class="auto-refresh-switch" aria-hidden="true"></span>
                 </label>
                 <span id="auto-refresh-status" class="auto-refresh-status pill disabled" aria-live="polite">Off</span>
               </div>
               <div class="settings-row">
-                <div class="settings-title">Hub event page size</div>
+                <div class="settings-title">${t("settings.hubEventPageSize")}</div>
                 <div class="field">
-                  <label for="hub-event-page-size">Events per page</label>
+                  <label for="hub-event-page-size">${t("settings.eventsPerPage")}</label>
                   <select id="hub-event-page-size">
                     <option value="10">10</option>
                     <option value="15">15</option>
@@ -2456,15 +2456,15 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
             </div>
           </div>
           <div class="panel">
-            <h2>Recommended routing</h2>
+            <h2>${t("settings.recommendedRouting")}</h2>
             <div class="security-grid">
               <div class="security-item">
-                <div class="settings-title">Dashboard</div>
-                <div class="settings-description">Use for health, uptime, queue, delivery, adapter, and configuration review.</div>
+                <div class="settings-title">${t("nav.dashboard")}</div>
+                <div class="settings-description">${t("settings.dashboardRouting")}</div>
               </div>
               <div class="security-item">
-                <div class="settings-title">Operations</div>
-                <div class="settings-description">Use only after a Settings token is active for this browser session.</div>
+                <div class="settings-title">${t("nav.operations")}</div>
+                <div class="settings-description">${t("settings.operationsRouting")}</div>
               </div>
             </div>
           </div>
