@@ -4,7 +4,7 @@ import {
   renderAdminThemeInitScript,
   renderAdminThemeStyle
 } from "./adminThemeHtml.js";
-import { localizeAdminDocument, serializeAdminCatalog, t, translateAdmin, type AdminLocale } from "./adminI18n.js";
+import { localizeAdminDocument, serializeAdminCatalog, t, tAttr, translateAdmin, type AdminLocale } from "./adminI18n.js";
 import { renderAdminLanguageHtml } from "./adminLanguageHtml.js";
 import { adminIntlLocale } from "./adminLocale.js";
 
@@ -1786,7 +1786,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         </nav>
         <div class="top-actions topbar-actions">
           ${renderAdminLanguageHtml(locale, "/admin")}
-          <button class="icon-button has-tooltip" data-tooltip="Refresh adapter, secret, feature flag, and job status." title="Refresh adapter, secret, feature flag, and job status." id="refresh" type="button" aria-label="Refresh">&#8635;</button>
+          <button class="icon-button has-tooltip" data-tooltip="Refresh adapter, secret, feature flag, and job status." title="Refresh adapter, secret, feature flag, and job status." id="refresh" type="button" aria-label="${tAttr("common.refresh")}">&#8635;</button>
           <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle dark mode">&#9790;</button>
           <button class="icon-button" type="button" aria-label="Console status">&#9825;</button>
           <form class="logout-form" method="post" action="/admin/logout">
@@ -2082,7 +2082,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
               <div class="hub-event-schedule-dialog-head"><h3 id="hub-event-schedule-dialog-title">${t("hubEvent.scheduleCreate")}</h3><button id="hub-event-schedule-dialog-close" type="button">${t("common.cancel")}</button></div>
               <input id="hub-event-schedule-edit-id" type="hidden">
               <div class="hub-events-two">
-                <div class="field"><label for="hub-event-schedule-kind">${t("hubEvent.linkKind")}</label><select id="hub-event-schedule-kind"><option value="main_window">Main window</option><option value="announcement">Announcement</option><option value="sales_open">Sales open</option><option value="ticket_open">Ticket open</option><option value="content_reveal">Content reveal</option><option value="release">Release</option><option value="deadline">Deadline</option><option value="custom">Custom</option></select></div>
+                <div class="field"><label for="hub-event-schedule-kind">${t("hubEvent.linkKind")}</label><select id="hub-event-schedule-kind"><option value="main_window">${t("hubEvent.kindMainWindow")}</option><option value="announcement">${t("hubEvent.kindAnnouncement")}</option><option value="sales_open">${t("hubEvent.kindSalesOpen")}</option><option value="ticket_open">${t("hubEvent.kindTicketOpen")}</option><option value="content_reveal">${t("hubEvent.kindContentReveal")}</option><option value="release">${t("hubEvent.kindRelease")}</option><option value="deadline">${t("hubEvent.kindDeadline")}</option><option value="custom">${t("hubEvent.kindCustom")}</option></select></div>
                 <div class="field"><label for="hub-event-schedule-title">${t("announcement.subject")}</label><input id="hub-event-schedule-title" autocomplete="off" required maxlength="160"></div>
               </div>
               <div class="hub-events-two">
@@ -2180,7 +2180,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
               </div>
               <label class="switch-control"><input id="hub-event-include-deleted" type="checkbox"> Include deleted</label>
             </div>
-            <div id="hub-event-list" class="event-list hub-events-list" role="list" aria-label="Hub events"></div>
+            <div id="hub-event-list" class="event-list hub-events-list" role="list" aria-label="${tAttr("nav.hubEvents")}"></div>
             <div class="hub-event-pagination" aria-label="Hub events pagination">
               <span id="hub-event-pagination-status" class="subtle">${t("hubEvent.pageOne")}</span>
               <div class="hub-event-pagination-actions">
@@ -2288,28 +2288,28 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
                   <div class="summary-title">${t("dashboard.queue")}</div>
                   <div class="summary-description">${t("operations.drainDescription")}</div>
                 </div>
-                <button id="drain" type="button">Drain jobs</button>
+                <button id="drain" type="button">${t("operations.drainJobs")}</button>
               </div>
               <div class="summary-row">
                 <div>
                   <div class="summary-title">YouTube scheduler</div>
                   <div class="summary-description">${t("operations.renewDescription")}</div>
                 </div>
-                <button id="renew-youtube" type="button">Renew YouTube</button>
+                <button id="renew-youtube" type="button">${t("operations.renewYoutube")}</button>
               </div>
               <div class="summary-row">
                 <div>
                   <div class="summary-title">CHZZK live status</div>
                   <div class="summary-description">${t("operations.pollDescription")}</div>
                 </div>
-                <button id="poll-chzzk" type="button">Poll CHZZK</button>
+                <button id="poll-chzzk" type="button">${t("operations.pollChzzk")}</button>
               </div>
               <div class="summary-row">
                 <div>
                   <div class="summary-title">${t("hubEvent.specialDayStatus")}</div>
                   <div class="summary-description">${t("operations.recalculateDescription")}</div>
                 </div>
-                <button class="has-tooltip" data-tooltip="Recalculate special day calendar status." title="Recalculate special day calendar status." id="recalculate-special-days" type="button">Recalculate special days</button>
+                <button class="has-tooltip" data-tooltip="Recalculate special day calendar status." title="Recalculate special day calendar status." id="recalculate-special-days" type="button">${t("operations.recalculate")}</button>
               </div>
               <div class="summary-row">
                 <div>
@@ -2440,7 +2440,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
                   <input id="auto-refresh" class="auto-refresh-input" type="checkbox">
                   <span class="auto-refresh-switch" aria-hidden="true"></span>
                 </label>
-                <span id="auto-refresh-status" class="auto-refresh-status pill disabled" aria-live="polite">Off</span>
+                <span id="auto-refresh-status" class="auto-refresh-status pill disabled" data-state="off" aria-live="polite">${t("dashboard.off")}</span>
               </div>
               <div class="settings-row">
                 <div class="settings-title">${t("settings.hubEventPageSize")}</div>
@@ -2536,7 +2536,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     const settingsTokenStatusRoot = document.getElementById("settings-token-status");
     const internalTokenStorageKey = "stellive.admin.internalApiToken";
     const autoRefreshIntervalMs = 30000;
-    const autoRefreshLabel = "Every " + (autoRefreshIntervalMs / 1000) + "s";
+    const autoRefreshLabel = t("dashboard.autoRefreshEvery", { seconds: autoRefreshIntervalMs / 1000 });
     let autoRefreshTimer = null;
     let refreshInFlight = false;
     let actionInFlight = false;
@@ -2604,10 +2604,11 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       settingsTokenStatusRoot.className = isError ? "message error" : "message";
     }
 
-    function setAutoRefreshStatus(text) {
+    function setAutoRefreshStatus(text, state) {
       autoRefreshStatusRoot.textContent = text;
+      autoRefreshStatusRoot.dataset.state = state;
       autoRefreshStatusRoot.className = "auto-refresh-status pill " + (
-        text === "Off" ? "disabled" : text === "Retrying" ? "verify-required" : "enabled"
+        state === "off" ? "disabled" : state === "retrying" ? "verify-required" : "enabled"
       );
     }
 
@@ -3319,13 +3320,13 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       const source = options && options.source === "auto" ? "auto" : "manual";
       if (actionInFlight) {
         if (source === "auto") {
-          setAutoRefreshStatus("Paused while busy");
+          setAutoRefreshStatus(t("dashboard.autoRefreshPaused"), "paused");
         }
         return;
       }
       if (refreshInFlight) {
         if (source === "auto") {
-          setAutoRefreshStatus("Paused while busy");
+          setAutoRefreshStatus(t("dashboard.autoRefreshPaused"), "paused");
         }
         return;
       }
@@ -3335,7 +3336,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         setBusy(true);
         setMessage(t("dashboard.loading"), false);
       } else {
-        setAutoRefreshStatus(autoRefreshLabel);
+        setAutoRefreshStatus(autoRefreshLabel, "enabled");
       }
 
       try {
@@ -3351,7 +3352,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
           setMessage(t("dashboard.refreshed"), false);
         }
         if (autoRefreshInput.checked) {
-          setAutoRefreshStatus(autoRefreshLabel);
+          setAutoRefreshStatus(autoRefreshLabel, "enabled");
         }
       } catch (error) {
         if (!overviewRoot.children.length) {
@@ -3359,7 +3360,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         }
         setMessage(error instanceof Error ? error.message : "unknown_error", true);
         if (source === "auto" && autoRefreshInput.checked) {
-          setAutoRefreshStatus("Retrying");
+          setAutoRefreshStatus(t("dashboard.retrying"), "retrying");
         }
       } finally {
         refreshInFlight = false;
@@ -3371,7 +3372,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       if (autoRefreshTimer) {
         return;
       }
-      setAutoRefreshStatus(autoRefreshLabel);
+      setAutoRefreshStatus(autoRefreshLabel, "enabled");
       autoRefreshTimer = window.setInterval(function () {
         refreshDashboard({ source: "auto" });
       }, autoRefreshIntervalMs);
@@ -3382,7 +3383,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         window.clearInterval(autoRefreshTimer);
         autoRefreshTimer = null;
       }
-      setAutoRefreshStatus("Off");
+      setAutoRefreshStatus(t("dashboard.off"), "off");
     }
 
     async function runAction(label, path, init) {
@@ -3618,13 +3619,10 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     }
 
     function scheduleKindOptions(selected) {
-      return [
-        ["main_window", "Main window"], ["announcement", "Announcement"], ["sales_open", "Sales open"],
-        ["ticket_open", "Ticket open"], ["content_reveal", "Content reveal"], ["release", "Release"],
-        ["deadline", "Deadline"], ["custom", "Custom"]
-      ].map(function (entry) {
-        return '<option value="' + entry[0] + '"' + (entry[0] === selected ? " selected" : "") + ">" + entry[1] + "</option>";
-      }).join("");
+      return ["main_window", "announcement", "sales_open", "ticket_open", "content_reveal", "release", "deadline", "custom"]
+        .map(function (kind) {
+          return '<option value="' + kind + '"' + (kind === selected ? " selected" : "") + ">" + scheduleKindLabel(kind) + "</option>";
+        }).join("");
     }
 
     function scheduleKindLabel(kind) {
@@ -4443,19 +4441,19 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       return refreshDashboard({ source: "manual" });
     });
     document.getElementById("drain").addEventListener("click", function () {
-      return runAction("Drain jobs", endpoints.drainJobs, {
+      return runAction("${t("operations.drainJobs")}", endpoints.drainJobs, {
         method: "POST",
         body: JSON.stringify({ limit: 25 })
       });
     });
     document.getElementById("renew-youtube").addEventListener("click", function () {
-      return runAction("Renew YouTube", endpoints.renewYoutube, { method: "POST" });
+      return runAction("${t("operations.renewYoutube")}", endpoints.renewYoutube, { method: "POST" });
     });
     document.getElementById("poll-chzzk").addEventListener("click", function () {
-      return runAction("Poll CHZZK", endpoints.pollChzzk, { method: "POST" });
+      return runAction("${t("operations.pollChzzk")}", endpoints.pollChzzk, { method: "POST" });
     });
     document.getElementById("recalculate-special-days").addEventListener("click", function () {
-      return runHubEventUiAction("Recalculate special days", function () {
+      return runHubEventUiAction("${t("operations.recalculate")}", function () {
         return adminApi(endpoints.recalculateSpecialDays, { method: "POST" });
       });
     });

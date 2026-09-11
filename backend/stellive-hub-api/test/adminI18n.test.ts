@@ -126,15 +126,77 @@ describe("admin i18n", () => {
     const english = renderAdminConsoleHtml("en");
     const korean = renderAdminConsoleHtml("ko");
     for (const html of [english, korean]) {
-      expect(html).toContain('text === "Off"');
-      expect(html).toContain('setAutoRefreshStatus("Off")');
-      expect(html).toContain('setAutoRefreshStatus("Retrying")');
+      expect(html).toContain('state === "off"');
+      expect(html).toContain('setAutoRefreshStatus(t("dashboard.off"), "off")');
+      expect(html).toContain('setAutoRefreshStatus(t("dashboard.retrying"), "retrying")');
       expect(html).toContain('<option value="">');
     }
     const optionValues = (html: string) => [...html.matchAll(/<option value="([^"]*)"/g)].map((match) => match[1]);
     expect(optionValues(korean)).toEqual(optionValues(english));
     expect(korean).toContain(`<option value="none">${translateAdmin("ko", "common.none")}</option>`);
     expect(english).toContain('<option value="none">None</option>');
+  });
+
+  it("localizes the auto-refresh status pill through a data-state attribute", () => {
+    const english = renderAdminConsoleHtml("en");
+    const korean = renderAdminConsoleHtml("ko");
+    for (const html of [english, korean]) {
+      expect(html).toMatch(/id="auto-refresh-status"[^>]*data-state="off"/);
+      expect(html).toMatch(/id="auto-refresh-status"[^>]*class="auto-refresh-status pill disabled"/);
+    }
+    expect(english).toContain(`data-state="off" aria-live="polite">${translateAdmin("en", "dashboard.off")}<`);
+    expect(korean).toContain(`data-state="off" aria-live="polite">${translateAdmin("ko", "dashboard.off")}<`);
+    expect(korean).not.toContain('aria-live="polite">Off<');
+    expect(translateAdmin("ko", "dashboard.autoRefreshEvery", { seconds: 30 })).toBe("30초마다");
+    expect(translateAdmin("en", "dashboard.autoRefreshEvery", { seconds: 30 })).toBe("Every 30s");
+    expect(translateAdmin("ko", "dashboard.autoRefreshPaused")).toBe("작업 중 일시중지");
+  });
+
+  it("localizes schedule kind option labels while keeping option values stable", () => {
+    const english = renderAdminConsoleHtml("en");
+    const korean = renderAdminConsoleHtml("ko");
+    const kinds = [
+      ["main_window", "hubEvent.kindMainWindow"],
+      ["announcement", "hubEvent.kindAnnouncement"],
+      ["sales_open", "hubEvent.kindSalesOpen"],
+      ["ticket_open", "hubEvent.kindTicketOpen"],
+      ["content_reveal", "hubEvent.kindContentReveal"],
+      ["release", "hubEvent.kindRelease"],
+      ["deadline", "hubEvent.kindDeadline"],
+      ["custom", "hubEvent.kindCustom"]
+    ] as const;
+    for (const [value, key] of kinds) {
+      expect(english).toContain(`<option value="${value}">${translateAdmin("en", key)}</option>`);
+      expect(korean).toContain(`<option value="${value}">${translateAdmin("ko", key)}</option>`);
+      expect(translateAdmin("ko", key)).not.toBe(translateAdmin("en", key));
+    }
+  });
+
+  it("localizes internal operation button labels and action names", () => {
+    const english = renderAdminConsoleHtml("en");
+    const korean = renderAdminConsoleHtml("ko");
+    const operations = [
+      ["renew-youtube", "operations.renewYoutube"],
+      ["poll-chzzk", "operations.pollChzzk"],
+      ["drain", "operations.drainJobs"],
+      ["recalculate-special-days", "operations.recalculate"]
+    ] as const;
+    for (const [id, key] of operations) {
+      expect(english).toMatch(new RegExp(`id="${id}" type="button">${translateAdmin("en", key)}<`));
+      expect(korean).toMatch(new RegExp(`id="${id}" type="button">${translateAdmin("ko", key)}<`));
+      expect(korean).toContain(`"${translateAdmin("ko", key)}"`);
+    }
+    expect(korean).not.toContain("Renew YouTube");
+    expect(korean).not.toContain("Poll CHZZK");
+    expect(korean).not.toContain("Drain jobs");
+  });
+
+  it("localizes accessible labels rendered as HTML attributes", () => {
+    const english = renderAdminConsoleHtml("en");
+    const korean = renderAdminConsoleHtml("ko");
+    expect(english).toContain(`id="refresh" type="button" aria-label="${translateAdmin("en", "common.refresh")}"`);
+    expect(korean).toContain(`id="refresh" type="button" aria-label="${translateAdmin("ko", "common.refresh")}"`);
+    expect(korean).toContain(`role="list" aria-label="${translateAdmin("ko", "nav.hubEvents")}"`);
   });
 
   it("sets localized response headers and a persistent language cookie", async () => {
