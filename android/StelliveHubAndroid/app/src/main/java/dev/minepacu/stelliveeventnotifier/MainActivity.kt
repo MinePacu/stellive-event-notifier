@@ -1,6 +1,7 @@
 package dev.minepacu.stelliveeventnotifier
 
 import dev.minepacu.stelliveeventnotifier.feature.settings.SettingsScreenController
+import dev.minepacu.stelliveeventnotifier.feature.songs.SongsScreenController
 
 import android.Manifest
 import android.app.AlertDialog
@@ -281,7 +282,7 @@ private data class RootNavigationItem(
     val view: View,
 )
 
-private data class SongRenderState(
+internal data class SongRenderState(
 val catalogMembers: List<HubMember>,
 val visibleSongs: List<SongCatalogItem>,
 val displayedSongs: List<SongCatalogItem>,
@@ -311,14 +312,14 @@ private data class ReservationEditStatusInput(
     val update: (ReservationStatus) -> Unit,
 )
 
-private data class SongPanes(val filter: ScrollablePane, val list: ScrollablePane)
+internal data class SongPanes(val filter: ScrollablePane, val list: ScrollablePane)
 
 private data class PendingScreenRefresh(
     val screen: HubScreen,
     val render: () -> Unit,
 )
 
-private enum class SongScrollSlot { SONGS_SINGLE, SONGS_TWO_PANE, SONG_SEARCH }
+internal enum class SongScrollSlot { SONGS_SINGLE, SONGS_TWO_PANE, SONG_SEARCH }
 
 
     private object SongResultDiffCallback : DiffUtil.ItemCallback<SongCatalogItem>() {
@@ -356,6 +357,7 @@ internal class SongBrowseSessionViewModel : ViewModel() {
 
 internal lateinit var binding: ActivityMainBinding
     private lateinit var settingsScreenController: SettingsScreenController
+    internal lateinit var songsScreenController: SongsScreenController
     internal val repository = MockHubRepository()
     internal lateinit var serverRepository: HubRepository
     private lateinit var pushTokenSyncer: PushTokenSyncer
@@ -367,14 +369,14 @@ internal lateinit var binding: ActivityMainBinding
             scheduleLiveClockRefresh()
         }
     }
-    private var serverMembers: List<HubMember>? = null
+    internal var serverMembers: List<HubMember>? = null
     private var liveStatusSourceLabel = "앱 내 목업"
     internal var debugModeEnabled = false
     private var systemTopInsetPx = 0
     private var systemBottomInsetPx = 0
     private var currentFoldFeature: HubFoldFeature? = null
     internal var currentAdaptiveSpec: HubAdaptiveSpec = HubAdaptivePolicy.spec(widthDp = 0)
-    private val topBarScrollSourceOffsets = mutableMapOf<View, Int>()
+    internal val topBarScrollSourceOffsets = mutableMapOf<View, Int>()
     private val avatarBitmapCache = LruCache<String, Bitmap>(64)
     private val serverConnectionDebugLogs = mutableListOf("bootstrap: 대기 중")
     internal val navigationHistory = MainNavigationHistory()
@@ -391,53 +393,53 @@ private var liveMemberPriorityIds: List<String> = emptyList()
 private var draggingLiveMemberId: String? = null
     private var selectedHistoryEventTypeFilterId = "all"
     private var selectedHistoryMemberFilterId = "all"
-private val songBrowseSession: SongBrowseSessionViewModel by viewModels()
-private var selectedSongType: String
+internal val songBrowseSession: SongBrowseSessionViewModel by viewModels()
+internal var selectedSongType: String
     get() = songBrowseSession.type
     set(value) { songBrowseSession.type = value }
-private var selectedSongLibraryId: String
+internal var selectedSongLibraryId: String
     get() = songBrowseSession.libraryId
     set(value) { songBrowseSession.libraryId = value }
-private var songFavoriteIds: Set<String> = emptySet()
-private var songDiscoveryState = SongDiscoveryStateV1()
-private lateinit var songDiscoveryRepository: SongDiscoveryRepository
-private lateinit var songFavoritesRepository: SongFavoritesRepository
+internal var songFavoriteIds: Set<String> = emptySet()
+internal var songDiscoveryState = SongDiscoveryStateV1()
+internal lateinit var songDiscoveryRepository: SongDiscoveryRepository
+internal lateinit var songFavoritesRepository: SongFavoritesRepository
 internal val songOpenPreferenceStore by lazy { SongOpenPreferenceStore(this) }
-private var selectedSongSortId: String
+internal var selectedSongSortId: String
     get() = songBrowseSession.sortId
     set(value) { songBrowseSession.sortId = value }
-private var selectedSongQuery: String
+internal var selectedSongQuery: String
     get() = songBrowseSession.query
     set(value) { songBrowseSession.query = value }
-private var appliedSongQuery = ""
-private var visibleSongLimit: Int
+internal var appliedSongQuery = ""
+internal var visibleSongLimit: Int
     get() = songBrowseSession.visibleLimit
     set(value) { songBrowseSession.visibleLimit = value }
-private var isLoadingMoreSongs = false
-private var activeSongScrollView: View? = null
-private var activeSongRefreshScrollSources: List<View> = emptyList()
-private var activeSongListContainer: LinearLayout? = null
-private var activeSongScrollSlot: SongScrollSlot? = null
-private var isRestoringSongScrollPosition = false
-private lateinit var songScrollToTopButton: ImageButton
-private var selectedSongMemberFilter: SongMemberFilterState
+internal var isLoadingMoreSongs = false
+internal var activeSongScrollView: View? = null
+internal var activeSongRefreshScrollSources: List<View> = emptyList()
+internal var activeSongListContainer: LinearLayout? = null
+internal var activeSongScrollSlot: SongScrollSlot? = null
+internal var isRestoringSongScrollPosition = false
+internal lateinit var songScrollToTopButton: ImageButton
+internal var selectedSongMemberFilter: SongMemberFilterState
     get() = songBrowseSession.memberFilter
     set(value) { songBrowseSession.memberFilter = value.normalized() }
-private var selectedSongMemberFilterDraft: SongMemberFilterState? = null
-private val songSearchHandler = Handler(Looper.getMainLooper())
-private var pendingSongSearchRender: Runnable? = null
-private var cachedSongItems: List<SongCatalogItem> = emptyList()
-private var cachedSongType: String? = null
-private var cachedSongCatalogAuthoritative = false
-private var songRefreshJob: Job? = null
+internal var selectedSongMemberFilterDraft: SongMemberFilterState? = null
+internal val songSearchHandler = Handler(Looper.getMainLooper())
+internal var pendingSongSearchRender: Runnable? = null
+internal var cachedSongItems: List<SongCatalogItem> = emptyList()
+internal var cachedSongType: String? = null
+internal var cachedSongCatalogAuthoritative = false
+internal var songRefreshJob: Job? = null
 
     private var goodsEventsJob: Job? = null
     private var hubEventDetailJob: Job? = null
     private var serverHubEventDetailJob: Job? = null
     private var homeRecentSongsJob: Job? = null
     internal var persistSettingsJob: Job? = null
-private var songSearchResultsContainer: LinearLayout? = null
-private var songSearchResultsAdapter: SongResultsAdapter? = null
+internal var songSearchResultsContainer: LinearLayout? = null
+internal var songSearchResultsAdapter: SongResultsAdapter? = null
 private var homeRecentSongs: List<SongCatalogItem>? = null
 private var isLoadingHomeRecentSongs = false
 private var selectedHubEventId: String? = null
@@ -527,6 +529,7 @@ private var notificationPermissionRequested = false
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         settingsScreenController = SettingsScreenController(this)
+        songsScreenController = SongsScreenController(this)
         binding.root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             scheduleReservationReturnPromptPositionUpdate()
         }
@@ -535,7 +538,7 @@ private var notificationPermissionRequested = false
             dp = { value -> dp(value).toFloat() },
             onIdle = ::onScreenTransitionIdle,
         )
-        setupSongScrollToTopButton()
+        songsScreenController.setupSongScrollToTopButton()
         serverRepository = createServerRepository()
         songFavoritesRepository = DataStoreSongFavoritesRepository(this)
         songDiscoveryRepository = DataStoreSongDiscoveryRepository(this)
@@ -576,7 +579,7 @@ private var notificationPermissionRequested = false
                 songFavoritesRepository.favorites.collect { favorites ->
                     songFavoriteIds = favorites
                     if (navigationHistory.currentScreen == HubScreen.SONGS && cachedSongItems.isNotEmpty()) {
-                        refreshScreenWhenIdle(HubScreen.SONGS, ::renderSongsFromCache)
+                        refreshScreenWhenIdle(HubScreen.SONGS, songsScreenController::renderSongsFromCache)
                     }
                 }
             }
@@ -586,7 +589,7 @@ private var notificationPermissionRequested = false
                 songDiscoveryRepository.state.collect { state ->
                     songDiscoveryState = state
                     if (navigationHistory.currentScreen == HubScreen.SONGS && cachedSongItems.isNotEmpty()) {
-                        refreshScreenWhenIdle(HubScreen.SONGS, ::renderSongsFromCache)
+                        refreshScreenWhenIdle(HubScreen.SONGS, songsScreenController::renderSongsFromCache)
                     }
                 }
             }
@@ -787,7 +790,7 @@ private var notificationPermissionRequested = false
  private fun setupPullToRefresh() {
  binding.contentRefresh.isEnabled = false
  binding.contentRefresh.setOnChildScrollUpCallback { _, child ->
- if (navigationHistory.currentScreen == HubScreen.SONGS && shouldUseSongsTwoPane()) {
+ if (navigationHistory.currentScreen == HubScreen.SONGS && songsScreenController.shouldUseSongsTwoPane()) {
      SongsPanePolicy.shouldBlockTwoPanePullToRefresh(
          buildList {
              add(binding.contentScroll.canScrollVertically(-1))
@@ -803,7 +806,7 @@ private var notificationPermissionRequested = false
  binding.contentRefresh.setOnRefreshListener {
  when (navigationHistory.currentScreen) {
      HubScreen.ANNOUNCEMENTS -> loadAnnouncements(reset = true)
-     HubScreen.SONGS -> forceRefreshSongs()
+     HubScreen.SONGS -> songsScreenController.forceRefreshSongs()
      else -> loadServerBootstrap()
  }
  }
@@ -819,7 +822,7 @@ private var notificationPermissionRequested = false
     internal fun visibleServerConnectionDebugLogs(): List<String> =
         MainUiPolicy.debugServerConnectionLogs(debugModeEnabled, serverConnectionDebugLogs)
 
-    private fun serverStatusStrip(): MaterialCardView =
+    internal fun serverStatusStrip(): MaterialCardView =
         baseCard().apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -920,12 +923,12 @@ private var notificationPermissionRequested = false
         }
     }
 
-    private fun resetTopBarScrollSources() {
+    internal fun resetTopBarScrollSources() {
         topBarScrollSourceOffsets.clear()
         topBarScrollSourceOffsets[binding.contentScroll] = binding.contentScroll.scrollY
     }
 
-    private fun updateTopBarScrolledFromSources() {
+    internal fun updateTopBarScrolledFromSources() {
         updateTopBarScrolled(topBarScrollSourceOffsets.values.any { it > dp(24) })
     }
 
@@ -976,7 +979,7 @@ private var notificationPermissionRequested = false
         ) {
             return
         }
-        captureActiveSongScrollPosition()
+        songsScreenController.captureActiveSongScrollPosition()
         lastRootBackPressedAt = 0L
         val from = latestRootDestination
         val motion = ScreenTransitionPolicy.motion(from, screen, ScreenTransitionReason.ROOT_SELECTION)
@@ -989,7 +992,7 @@ private var notificationPermissionRequested = false
 
     internal fun pushScreen(screen: HubScreen) {
         if (screen == latestNavigationDestination) return
-        captureActiveSongScrollPosition()
+        songsScreenController.captureActiveSongScrollPosition()
         lastRootBackPressedAt = 0L
         val motion = ScreenTransitionPolicy.motion(
             latestNavigationDestination,
@@ -1002,7 +1005,7 @@ private var notificationPermissionRequested = false
         }
     }
 
-    private fun popScreen(): Boolean {
+    internal fun popScreen(): Boolean {
         if (confirmReservationEditDiscardIfNeeded { popScreen() }) return true
         if (screenTransitionController.isTransitionRunning) {
             screenTransitionController.runWhenIdle("deferred:pop", ::popScreenNow)
@@ -1017,7 +1020,7 @@ private var notificationPermissionRequested = false
             HubScreen.RESERVATION_DETAIL -> HubScreen.RESERVATIONS
             else -> navigationHistory.previousScreen ?: return false
         }
-        captureActiveSongScrollPosition()
+        songsScreenController.captureActiveSongScrollPosition()
         latestNavigationDestination = previous
         val motion = ScreenTransitionPolicy.motion(
             current,
@@ -1168,9 +1171,9 @@ private var notificationPermissionRequested = false
         }
         when (screen) {
 HubScreen.HOME -> renderHome()
-HubScreen.SONGS -> renderSongs()
-HubScreen.SONG_SEARCH -> renderSongSearch()
-HubScreen.SONG_MEMBER_FILTER -> renderSongMemberFilter()
+HubScreen.SONGS -> songsScreenController.renderSongs()
+HubScreen.SONG_SEARCH -> songsScreenController.renderSongSearch()
+HubScreen.SONG_MEMBER_FILTER -> songsScreenController.renderSongMemberFilter()
 HubScreen.GOODS_EVENTS -> renderGoodsEvents()
             HubScreen.GOODS_EVENT_DETAIL -> renderHubEventDetail()
             HubScreen.RESERVATIONS -> renderReservations()
@@ -1197,7 +1200,7 @@ HubScreen.HISTORY -> renderHistory()
     private fun updateTwoPaneScrollChrome(screen: HubScreen = navigationHistory.currentScreen) {
         val isTwoPaneScreen =
             screen == HubScreen.GOODS_EVENTS && shouldUseGoodsEventsTwoPane() ||
-                screen == HubScreen.SONGS && shouldUseSongsTwoPane() ||
+                screen == HubScreen.SONGS && songsScreenController.shouldUseSongsTwoPane() ||
                 screen == HubScreen.SETTINGS && shouldUseSettingsTwoPane()
         val isRefreshableScreen =
             screen == HubScreen.LIVE || screen == HubScreen.GOODS_EVENTS || screen == HubScreen.ANNOUNCEMENTS
@@ -1276,7 +1279,7 @@ private fun updateNavigationChrome() {
         binding.navigationRailDivider.isVisible = navigationSpec.showNavigationRail
         updateTopGlassOverlayStartMargin(navigationSpec.showNavigationRail)
         updateContentWidthConstraint(navigationSpec.constrainContentWidth)
-        scheduleSongScrollToTopButtonPositionUpdate()
+        songsScreenController.scheduleSongScrollToTopButtonPositionUpdate()
         scheduleReservationReturnPromptPositionUpdate()
     }
 
@@ -1323,7 +1326,7 @@ internal fun startScreen(
     showExpandedBodyHeader: Boolean = true,
 ) {
         binding.screenActionContainer.isVisible = false
-        scheduleSongScrollToTopButtonPositionUpdate()
+        songsScreenController.scheduleSongScrollToTopButtonPositionUpdate()
         activeTwoPaneDetailPane = null
         activeSettingsHubScrollView = null
         if (screenId != "song_member_filter") selectedSongMemberFilterDraft = null
@@ -1376,7 +1379,7 @@ internal fun startScreen(
             val maxWidthDp = when {
                 navigationHistory.currentScreen == HubScreen.GOODS_EVENTS && shouldUseGoodsEventsTwoPane() ->
                     GOODS_EVENTS_TWO_PANE_CONTENT_MAX_WIDTH_DP
-                navigationHistory.currentScreen == HubScreen.SONGS && shouldUseSongsTwoPane() ->
+                navigationHistory.currentScreen == HubScreen.SONGS && songsScreenController.shouldUseSongsTwoPane() ->
                     SONGS_TWO_PANE_CONTENT_MAX_WIDTH_DP
                 navigationHistory.currentScreen == HubScreen.SETTINGS && shouldUseSettingsTwoPane() ->
                     SETTINGS_TWO_PANE_CONTENT_MAX_WIDTH_DP
@@ -1421,53 +1424,13 @@ internal fun startScreen(
         return ScrollablePane(scrollView, content)
     }
 
-    private fun setupSongScrollToTopButton() {
-        songScrollToTopButton = ImageButton(this).apply {
-            setImageResource(android.R.drawable.arrow_up_float)
-            background = rounded(fill = color(R.color.hub_card), radius = dp(24))
-            contentDescription = "맨 위로 이동"
-            elevation = dp(8).toFloat()
-            isVisible = false
-            setOnClickListener {
-                val source = activeSongScrollView ?: return@setOnClickListener
-                smoothScrollSongViewTo(source, 0)
-                activeSongScrollSlot?.let { slot ->
-                    songBrowseSession.positions[slot.name] = SongScrollPosition(
-                        anchorSongId = null,
-                        anchorOffset = 0,
-                        fallbackAbsoluteOffset = 0,
-                        visibleLimitAtCapture = visibleSongLimit,
-                        queryKey = currentSongQueryKey(),
-                    )
-                }
-                isVisible = false
-            }
-        }
-        binding.root.addView(
-            songScrollToTopButton,
-            FrameLayout.LayoutParams(dp(48), dp(48), Gravity.END or Gravity.BOTTOM).apply {
-                marginEnd = dp(18)
-                bottomMargin = dp(80)
-            },
-        )
-        scheduleSongScrollToTopButtonPositionUpdate()
-    }
+    // lateinit's `::prop.isInitialized` can only be checked lexically inside the declaring
+    // class (or top level); these expose that check to SongsScreenController.
+    internal fun isSongScrollToTopButtonInitialized(): Boolean = ::songScrollToTopButton.isInitialized
 
-    private fun scheduleSongScrollToTopButtonPositionUpdate() {
-        if (!::songScrollToTopButton.isInitialized || !::binding.isInitialized) return
-        binding.root.post {
-            val occupiedBottomHeight = currentBottomObstructionHeight()
-            val params = songScrollToTopButton.layoutParams as? FrameLayout.LayoutParams ?: return@post
-            val nextBottomMargin = occupiedBottomHeight + dp(16)
-            if (params.bottomMargin != nextBottomMargin) {
-                params.bottomMargin = nextBottomMargin
-                songScrollToTopButton.layoutParams = params
-            }
-            scheduleReservationReturnPromptPositionUpdate()
-        }
-    }
+    internal fun isBindingInitialized(): Boolean = ::binding.isInitialized
 
-    private fun currentBottomObstructionHeight(): Int {
+    internal fun currentBottomObstructionHeight(): Int {
         val obstruction = when {
             binding.screenActionContainer.isVisible -> binding.screenActionContainer
             binding.bottomNavigation.isVisible -> binding.bottomNavigation
@@ -1482,146 +1445,6 @@ internal fun startScreen(
         } ?: systemBottomInsetPx
     }
 
-    private fun registerSongMemberFilterScrollToTop() {
-        val source = binding.contentScroll
-        activeSongScrollView = source
-        activeSongRefreshScrollSources = listOf(source)
-        activeSongListContainer = null
-        activeSongScrollSlot = null
-        source.setOnScrollChangeListener { view, _, scrollY, _, _ ->
-            topBarScrollSourceOffsets[view] = scrollY
-            updateTopBarScrolledFromSources()
-            songScrollToTopButton.isVisible = MainUiPolicy.shouldShowSongScrollToTop(
-                absoluteOffset = scrollY,
-                isLoading = false,
-                isEmpty = false,
-                isRestoring = false,
-                threshold = dp(240),
-            )
-        }
-    }
-
-    private fun currentSongQueryKey(): SongListQueryKey = SongListQueryKey(
-        generationId = "all",
-        type = selectedSongType,
-        selectedMemberIds = selectedSongMemberFilter.selectedMemberIds.sorted(),
-        memberMatchMode = selectedSongMemberFilter.matchMode,
-        participation = selectedSongMemberFilter.participation,
-        libraryId = selectedSongLibraryId,
-        sortId = selectedSongSortId,
-        query = selectedSongQuery,
-    )
-
-    private fun ViewGroup.childrenSequence(): Sequence<View> = sequence {
-        for (index in 0 until childCount) yield(getChildAt(index))
-    }
-
-    // Song search rows live inside a RecyclerView nested in the (still LinearLayout) scroll
-    // container; unwrap it one level so scroll-anchor lookups keep finding tagged song views.
-    private fun ViewGroup.songCandidateViews(): Sequence<View> =
-        childrenSequence().flatMap { child -> if (child is RecyclerView) child.childrenSequence() else sequenceOf(child) }
-
-    private fun songScrollY(source: View): Int = when (source) {
-        is ScrollView -> source.scrollY
-        is NestedScrollView -> source.scrollY
-        else -> source.scrollY
-    }
-
-    private fun smoothScrollSongViewTo(source: View, y: Int) {
-        when (source) {
-            is ScrollView -> source.smoothScrollTo(0, y)
-            is NestedScrollView -> source.smoothScrollTo(0, y)
-        }
-    }
-
-    private fun scrollSongViewTo(source: View, y: Int) {
-        when (source) {
-            is ScrollView -> source.scrollTo(0, y)
-            is NestedScrollView -> source.scrollTo(0, y)
-        }
-    }
-
-    private fun viewTopInSongScroll(view: View, source: View): Int {
-        var top = view.top
-        var parent = view.parent
-        while (parent is View && parent !== source) {
-            top += parent.top
-            parent = parent.parent
-        }
-        return top
-    }
-
-    private fun captureActiveSongScrollPosition() {
-        if (isRestoringSongScrollPosition) return
-        val source = activeSongScrollView ?: return
-        val container = activeSongListContainer ?: return
-        val slot = activeSongScrollSlot ?: return
-        val scrollY = songScrollY(source)
-        val anchor = container.songCandidateViews()
-            .filter { it.tag is String }
-            .firstOrNull { viewTopInSongScroll(it, source) + it.height > scrollY }
-        songBrowseSession.visibleLimit = visibleSongLimit
-        songBrowseSession.positions[slot.name] = SongScrollPosition(
-            anchorSongId = anchor?.tag as? String,
-            anchorOffset = anchor?.let { viewTopInSongScroll(it, source) - scrollY } ?: 0,
-            fallbackAbsoluteOffset = scrollY,
-            visibleLimitAtCapture = visibleSongLimit,
-            queryKey = currentSongQueryKey(),
-        )
-    }
-
-    private fun registerSongScrollSession(
-        source: View,
-        container: LinearLayout,
-        state: SongRenderState,
-        slot: SongScrollSlot,
-    ) {
-        activeSongScrollView = source
-        activeSongRefreshScrollSources = listOf(source)
-        activeSongListContainer = container
-        activeSongScrollSlot = slot
-        source.setOnScrollChangeListener { view, _, scrollY, _, _ ->
-            topBarScrollSourceOffsets[view] = scrollY
-            updateTopBarScrolledFromSources()
-            captureActiveSongScrollPosition()
-            songScrollToTopButton.isVisible = MainUiPolicy.shouldShowSongScrollToTop(
-                absoluteOffset = scrollY,
-                isLoading = false,
-                isEmpty = state.displayedSongs.isEmpty(),
-                isRestoring = isRestoringSongScrollPosition,
-                threshold = dp(240),
-            )
-        }
-        restoreSongScrollPosition(source, container, slot)
-    }
-
-    private fun restoreSongScrollPosition(source: View, container: LinearLayout, slot: SongScrollSlot) {
-        val position = songBrowseSession.positions[slot.name] ?: when (slot) {
-            SongScrollSlot.SONGS_SINGLE -> songBrowseSession.positions[SongScrollSlot.SONGS_TWO_PANE.name]
-            SongScrollSlot.SONGS_TWO_PANE -> songBrowseSession.positions[SongScrollSlot.SONGS_SINGLE.name]
-            SongScrollSlot.SONG_SEARCH -> null
-        }
-        if (!MainUiPolicy.canRestoreSongScroll(position, currentSongQueryKey())) {
-            scrollSongViewTo(source, 0)
-            return
-        }
-        visibleSongLimit = maxOf(visibleSongLimit, position?.visibleLimitAtCapture ?: MainUiPolicy.SONG_PAGE_SIZE)
-        isRestoringSongScrollPosition = true
-        source.post {
-            val anchor = position?.anchorSongId?.let { id ->
-                container.songCandidateViews().firstOrNull { it.tag == id }
-            }
-            val target = anchor?.let { viewTopInSongScroll(it, source) - (position?.anchorOffset ?: 0) }
-                ?: position?.fallbackAbsoluteOffset
-                ?: 0
-            scrollSongViewTo(source, target.coerceAtLeast(0))
-            source.post {
-                isRestoringSongScrollPosition = false
-                captureActiveSongScrollPosition()
-            }
-        }
-    }
-
     internal fun twoPaneViewportHeight(): Int {
         val viewport = binding.contentScroll.height
         val verticalPadding = binding.contentList.paddingTop + binding.contentList.paddingBottom
@@ -1631,7 +1454,7 @@ internal fun startScreen(
             .coerceAtLeast(dp(360))
     }
 
-    private fun clearTopFilters() {
+    internal fun clearTopFilters() {
         binding.topFilterContainer.removeAllViews()
         binding.topFilterContainer.isVisible = false
         binding.topBarFadeSpace.layoutParams = binding.topBarFadeSpace.layoutParams.apply {
@@ -1694,7 +1517,7 @@ internal fun startScreen(
             emptyList<SongCatalogItem>() -> binding.contentList.addView(
                 compactEventCard("최근 곡 없음", "등록된 곡이 없습니다.", listOf("노래"))
             )
-            else -> recentSongs.forEach { binding.contentList.addView(songCard(it)) }
+            else -> recentSongs.forEach { binding.contentList.addView(songsScreenController.songCard(it)) }
         }
         binding.contentList.addView(
             compactEventCard("노래 전체 보기", "커버곡과 오리지널 곡 전체 목록으로 이동합니다.", listOf("전체")).apply {
@@ -3473,7 +3296,7 @@ internal fun startScreen(
         return true
     }
 
-    private fun scheduleReservationReturnPromptPositionUpdate() {
+    internal fun scheduleReservationReturnPromptPositionUpdate() {
         val prompt = reservationReturnPromptView ?: return
         binding.root.post {
             if (reservationReturnPromptView !== prompt || binding.root.width == 0) return@post
@@ -4061,294 +3884,11 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
         binding.contentList.addView(settingsNoticeCard(MainUiPolicy.historyPolicyNotice()))
     }
 
-private fun renderSongs() {
-        pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
-        pendingSongSearchRender = null
-        startScreen(
-            screenId = "songs",
-            title = getString(R.string.songs_title),
-            role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
-        )
-        clearTopFilters()
-        if (shouldUseSongsTwoPane()) {
-            renderSongsTwoPaneLoading()
-        } else {
-            binding.contentList.addView(songFilterPanel())
-            binding.contentList.addView(serverStatusStrip())
-            binding.contentList.addView(loadingCard(MainUiPolicy.songsLoadingPresentation()))
-        }
-
-        lifecycleScope.launch {
-            val state = songRenderState(loadSongItemsForCurrentType())
-            if (navigationHistory.currentScreen != HubScreen.SONGS) return@launch
-            refreshScreenWhenIdle(HubScreen.SONGS) {
-                startScreen(
-                    screenId = "songs",
-                    title = getString(R.string.songs_title),
-                    role = "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다."
-                )
-                clearTopFilters()
-                if (shouldUseSongsTwoPane()) {
-                    renderSongsTwoPane(state)
-                } else {
-                    binding.contentList.addView(songFilterPanel())
-                    renderSongListInto(binding.contentList, state, includeServerStatus = true)
-                    registerSongScrollSession(binding.contentScroll, binding.contentList, state, SongScrollSlot.SONGS_SINGLE)
-                }
-            }
-        }
-    }
-
-    private fun forceRefreshSongs() {
-        if (songRefreshJob?.isActive == true) return
-        songRefreshJob = lifecycleScope.launch {
-            try {
-                val result = serverRepository.songs(
-                    generationId = "all",
-                    type = "all",
-                    forceRefresh = true,
-                )
-                songDiscoveryRepository.initialize(result.serverTime, result.items, result.isAuthoritative)
-                cachedSongItems = result.items
-                cachedSongType = "all"
-                cachedSongCatalogAuthoritative = result.isAuthoritative
-                if (navigationHistory.currentScreen == HubScreen.SONGS) {
-                    refreshScreenWhenIdle(HubScreen.SONGS, ::renderSongsFromCache)
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Throwable) {
-                recordServerConnectionLog("songs refresh: ${error.javaClass.simpleName}")
-                Toast.makeText(
-                    this@MainActivity,
-                    "노래 목록을 새로고침하지 못했습니다. 기존 목록을 유지합니다.",
-                    Toast.LENGTH_SHORT,
-                ).show()
-            } finally {
-                binding.contentRefresh.isRefreshing = false
-                songRefreshJob = null
-            }
-        }
-    }
-
-    private suspend fun loadSongItemsForCurrentType(): List<SongCatalogItem> =
-        if (cachedSongType == "all" && cachedSongItems.isNotEmpty()) {
-            cachedSongItems
-        } else {
-            serverRepository.songs(generationId = "all", type = "all").let { result ->
-                songDiscoveryRepository.initialize(result.serverTime, result.items, result.isAuthoritative)
-                cachedSongCatalogAuthoritative = result.isAuthoritative
-                result.items.also {
-                cachedSongItems = it
-                cachedSongType = "all"
-                }
-            }
-        }
-
-    private fun songRenderState(songItems: List<SongCatalogItem>): SongRenderState {
-        val songCatalogMembers = serverMembers ?: repository.members
-        val visibleSongs = MainUiPolicy.sortSongs(
-            songItems.filter { song ->
-                (selectedSongType == "all" || song.type.apiValue == selectedSongType) &&
-                    MainUiPolicy.songMatchesMember(song, selectedSongMemberFilter) &&
-                    MainUiPolicy.songMatchesQuery(song, selectedSongQuery, songCatalogMembers) &&
-                    MainUiPolicy.songMatchesLibrary(song, selectedSongLibraryId, songFavoriteIds)
-            },
-            selectedSongSortId,
-        )
-        visibleSongLimit = MainUiPolicy.coerceSongVisibleLimit(visibleSongLimit, visibleSongs.size)
-        return SongRenderState(
-            catalogMembers = songCatalogMembers,
-            visibleSongs = visibleSongs,
-            displayedSongs = MainUiPolicy.displayedSongItems(visibleSongs, visibleSongLimit),
-            displayedCount = MainUiPolicy.displayedSongCount(visibleSongLimit, visibleSongs.size),
-            totalFilteredCount = visibleSongs.size,
-            remainingCount = MainUiPolicy.remainingSongCount(visibleSongLimit, visibleSongs.size),
-        )
-    }
-
-    private fun renderSongsFromCache() {
-        captureActiveSongScrollPosition()
-        val state = songRenderState(cachedSongItems)
-        startScreen("songs", getString(R.string.songs_title), "멤버별 오리지널곡과 커버곡을 서버 캐시에서 탐색합니다.")
-        clearTopFilters()
-        if (shouldUseSongsTwoPane()) renderSongsTwoPane(state) else {
-            binding.contentList.addView(songFilterPanel())
-            renderSongListInto(binding.contentList, state, includeServerStatus = true)
-            registerSongScrollSession(binding.contentScroll, binding.contentList, state, SongScrollSlot.SONGS_SINGLE)
-        }
-    }
-
-    private fun renderSongsSelectionChange(render: () -> Unit = ::renderSongsFromCache) {
-        if (shouldUseSongsTwoPane() && activeTwoPaneDetailPane != null) {
-            val key = listOf(
-                selectedSongType,
-                selectedSongLibraryId,
-                selectedSongSortId,
-                selectedSongQuery,
-            ).joinToString(":")
-            crossFadeTwoPaneSelection("songs:$key", render)
-        } else {
-            render()
-        }
-    }
-
-    private fun renderSongsTwoPaneLoading() {
-        val panes = songsTwoPaneContainer()
-        renderSongFilterPaneInto(panes.filter.content)
-        panes.list.content.addView(loadingCard(MainUiPolicy.songsLoadingPresentation()))
-    }
-
-    private fun renderSongsTwoPane(state: SongRenderState) {
-        val panes = songsTwoPaneContainer()
-        renderSongFilterPaneInto(panes.filter.content, state.visibleSongs.size)
-        renderSongListInto(panes.list.content, state, includeServerStatus = true)
-        registerSongScrollSession(panes.list.scrollView, panes.list.content, state, SongScrollSlot.SONGS_TWO_PANE)
-    }
-
-    private fun songsTwoPaneContainer(): SongPanes {
-        binding.contentList.removeAllViews()
-        resetTopBarScrollSources()
-        val paneRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            isBaselineAligned = false
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                twoPaneViewportHeight(),
-            )
-        }
-        val filterPane = scrollablePane()
-        val listPane = scrollablePane()
-        val paneWeights = if (shouldUseSongsFoldAwarePane()) {
-            0.9f to 1.1f
-        } else {
-            0.9f to 1.1f
-        }
-        paneRow.addView(
-            filterPane.scrollView,
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, paneWeights.first).apply {
-                marginEnd = dp(8)
-            },
-        )
-        paneRow.addView(
-            listPane.scrollView,
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, paneWeights.second).apply {
-                marginStart = dp(8)
-            },
-        )
-        activeTwoPaneDetailPane = listPane.scrollView
-        activeSongRefreshScrollSources = listOf(filterPane.scrollView, listPane.scrollView)
-        binding.contentList.addView(paneRow)
-        return SongPanes(filterPane, listPane)
-    }
-
-    private fun renderSongListInto(container: LinearLayout, state: SongRenderState, includeServerStatus: Boolean) {
-        if (includeServerStatus) {
-            container.addView(serverStatusStrip())
-        }
-        if (state.visibleSongs.isEmpty()) {
-            val message = if (selectedSongLibraryId == "favorites") {
-                MainUiPolicy.songFavoriteEmptyMessage(songFavoriteIds.isNotEmpty())
-            } else SongMemberFilterPolicy.emptyMessage(state.catalogMembers, selectedSongMemberFilter)
-            container.addView(noticeCard(message))
-            return
-        }
-        state.displayedSongs.forEach { song ->
-            container.addView(songCard(song, state.catalogMembers))
-        }
-        addSongListFooter(container, state)
-    }
-
-    private fun addSongListFooter(container: LinearLayout, state: SongRenderState) {
-        container.addView(songLoadMoreControl(container, state))
-    }
-
-    private fun renderSongFilterPaneInto(container: LinearLayout, visibleCount: Int = 0) {
-        container.addView(songSearchCard())
-        container.addView(songFilterPanel())
-        container.addView(songInlineMemberFilterPanel(visibleCount))
-    }
-
-    private fun shouldUseSongsTwoPane(): Boolean =
-        SongsPanePolicy.shouldUseTwoPane(currentAdaptiveSpec)
-
-    private fun shouldUseSongsFoldAwarePane(): Boolean =
-        SongsPanePolicy.shouldUseFoldAwarePane(currentAdaptiveSpec)
-
-    private fun renderSongSearch() {
-        binding.topBarSongSearch.isEnabled = true
-        startScreen(
-            screenId = "song_search",
-            title = "노래 검색",
-            role = "제목 또는 멤버 이름으로 검색합니다.",
-        )
-        binding.collapsedTitle.text = "노래 검색"
-        binding.collapsedRole.text = "제목 또는 멤버"
-        binding.contentList.addView(songSearchCard())
-        val songAdapter = SongResultsAdapter()
-        songSearchResultsAdapter = songAdapter
-        val resultsList = RecyclerView(this).apply {
-            layoutManager = LinearLayoutManager(this@MainActivity)
-            isNestedScrollingEnabled = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-            adapter = songAdapter
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        }
-        songSearchResultsContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(resultsList)
-        }.also(binding.contentList::addView)
-        refreshSongSearchResults()
-    }
-
-    private fun refreshSongSearchResults() {
-        captureActiveSongScrollPosition()
-        val container = songSearchResultsContainer ?: return
-        val adapter = songSearchResultsAdapter ?: return
-        fun clearSongSearchExtras() {
-            if (container.childCount > 1) container.removeViews(1, container.childCount - 1)
-        }
-        val renderItems: (List<SongCatalogItem>) -> Unit = { items ->
-            val state = songRenderState(items)
-            clearSongSearchExtras()
-            adapter.catalogMembers = state.catalogMembers
-            if (state.visibleSongs.isEmpty()) {
-                adapter.submitList(emptyList())
-                container.addView(noticeCard("검색 결과가 없습니다."))
-            } else {
-                adapter.submitList(state.displayedSongs)
-                addSongSearchListFooter(container, adapter, state)
-                registerSongScrollSession(binding.contentScroll, container, state, SongScrollSlot.SONG_SEARCH)
-            }
-        }
-        if (cachedSongType == "all" && cachedSongItems.isNotEmpty()) {
-            renderItems(cachedSongItems)
-            return
-        }
-        clearSongSearchExtras()
-        adapter.submitList(emptyList())
-        container.addView(loadingCard(MainUiPolicy.songSearchLoadingPresentation()))
-        lifecycleScope.launch {
-            val result = serverRepository.songs(generationId = "all", type = "all")
-            val items = result.items
-            songDiscoveryRepository.initialize(result.serverTime, items, result.isAuthoritative)
-            cachedSongCatalogAuthoritative = result.isAuthoritative
-            cachedSongItems = items
-            cachedSongType = "all"
-            if (navigationHistory.currentScreen != HubScreen.SONG_SEARCH) return@launch
-            refreshScreenWhenIdle(HubScreen.SONG_SEARCH) refresh@{
-                if (container !== songSearchResultsContainer) return@refresh
-                renderItems(items)
-            }
-        }
-    }
-
-
     // RecyclerView.Adapter for song search results. songCard() already builds a full,
     // self-contained row (thumbnail, chips, favorite/menu click listeners); this adapter's
     // only job is to let DiffUtil skip rebuilding rows that haven't changed between refreshes,
     // instead of the previous removeAllViews()+addView() rebuild of the entire result set.
-    private inner class SongResultsAdapter : ListAdapter<SongCatalogItem, SongViewHolder>(SongResultDiffCallback) {
+    internal inner class SongResultsAdapter : ListAdapter<SongCatalogItem, SongViewHolder>(SongResultDiffCallback) {
 
         var catalogMembers: List<HubMember> = emptyList()
 
@@ -4365,7 +3905,7 @@ private fun renderSongs() {
             wrapper.removeAllViews()
             wrapper.tag = SongIdentity.identifier(song)
             wrapper.addView(
-                songCard(song, catalogMembers),
+                songsScreenController.songCard(song, catalogMembers),
                 FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
                     bottomMargin = dp(10)
                 },
@@ -4374,76 +3914,7 @@ private fun renderSongs() {
     }
 
 
-    private class SongViewHolder(view: FrameLayout) : RecyclerView.ViewHolder(view)
-
-    private fun addSongSearchListFooter(container: LinearLayout, adapter: SongResultsAdapter, state: SongRenderState) {
-        container.addView(songSearchLoadMoreControl(container, adapter, state))
-    }
-
-    // Mirrors songLoadMoreControl(), but drives the RecyclerView adapter used by song search
-    // instead of appending song cards directly to a LinearLayout (which also backs the
-    // separate SONGS_SINGLE/SONGS_TWO_PANE screens and must stay untouched).
-    private fun songSearchLoadMoreControl(container: LinearLayout, adapter: SongResultsAdapter, state: SongRenderState): MaterialCardView {
-        lateinit var control: MaterialCardView
-        control = baseCard().apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(10)
-            }
-            addView(LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(15), dp(10), dp(15), dp(10))
-                addView(TextView(context).apply {
-                    text = MainUiPolicy.songProgressText(
-                        state.displayedCount,
-                        state.totalFilteredCount,
-                        cachedSongCatalogAuthoritative,
-                    )
-                    gravity = Gravity.CENTER
-                    setTextColor(color(R.color.hub_text_muted))
-                    textSize = 12f
-                })
-                if (state.remainingCount > 0) {
-                    addView(Chip(context).apply {
-                        text = MainUiPolicy.songLoadMoreText(state.remainingCount)
-                        contentDescription = "$text, ${MainUiPolicy.songProgressText(state.displayedCount, state.totalFilteredCount, cachedSongCatalogAuthoritative)}"
-                        setOnClickListener {
-                            if (isLoadingMoreSongs) return@setOnClickListener
-                            isLoadingMoreSongs = true
-                            val footerIndex = container.indexOfChild(control)
-                            if (footerIndex >= 0) container.removeViews(footerIndex, container.childCount - footerIndex)
-                            visibleSongLimit = MainUiPolicy.nextSongVisibleLimit(
-                                visibleSongLimit,
-                                state.totalFilteredCount,
-                            )
-                            songBrowseSession.visibleLimit = visibleSongLimit
-                            val nextState = songRenderState(cachedSongItems)
-                            adapter.catalogMembers = nextState.catalogMembers
-                            adapter.submitList(nextState.displayedSongs)
-                            addSongSearchListFooter(container, adapter, nextState)
-                            isLoadingMoreSongs = false
-                        }
-                    })
-                }
-            })
-        }
-        return control
-    }
-
-private fun applySongMemberFilter(state: SongMemberFilterState) {
-    val normalized = state.normalized(SongMemberFilterPolicy.selectableMembers(serverMembers ?: repository.members).map { it.id }.toSet())
-    if (normalized == selectedSongMemberFilter) return
-    selectedSongMemberFilter = normalized
-    resetSongBrowseForQueryChange()
-}
-
-private fun resetSongBrowseForQueryChange() {
-    visibleSongLimit = MainUiPolicy.SONG_PAGE_SIZE
-    songBrowseSession.visibleLimit = visibleSongLimit
-    songBrowseSession.positions.clear()
-    activeSongScrollView?.let { scrollSongViewTo(it, 0) }
-    if (::songScrollToTopButton.isInitialized) songScrollToTopButton.isVisible = false
-}
+    internal class SongViewHolder(view: FrameLayout) : RecyclerView.ViewHolder(view)
 
 private fun filterPanel(
     groups: List<TopFilterGroup>,
@@ -4478,90 +3949,6 @@ private fun filterPanel(
         })
     }
 
-private fun songFilterPanel(): MaterialCardView =
-    baseCard(HubCardStyle.COMPACT).apply {
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            bottomMargin = dp(12)
-        }
-        val members = serverMembers ?: repository.members
-        addView(LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(12), dp(12), dp(10))
-            addView(songSegmentedRow(MainUiPolicy.songTypeFilters(), selectedSongType) { optionId ->
-                selectedSongType = optionId
-                resetSongBrowseForQueryChange()
-                renderSongsSelectionChange()
-            }.apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply {
-                    bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
-                }
-            })
-            addView(divider())
-            addView(songSegmentedRow(MainUiPolicy.songLibraryFilters(), selectedSongLibraryId) { optionId ->
-                selectedSongLibraryId = optionId
-                resetSongBrowseForQueryChange()
-                renderSongsSelectionChange()
-            }.apply {
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
-                    bottomMargin = dp(MainUiPolicy.SONG_FILTER_SEGMENT_SPACING_DP)
-                }
-            })
-            addView(divider())
-            addView(songSelectorRow("정렬", MainUiPolicy.songSortLabel(selectedSongSortId), accentValue = true) {
-                showSongSortDialog()
-            })
-            if (SongsPanePolicy.memberSelectionMode(currentAdaptiveSpec) == SongMemberSelectionMode.NAVIGATE_TO_MEMBER_FILTER) {
-                addView(divider())
-                addView(songSelectorRow("멤버", MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberFilter), accentValue = false) {
-                    pushScreen(HubScreen.SONG_MEMBER_FILTER)
-                })
-            }
-        })
-    }
-
-private fun songInlineMemberFilterPanel(visibleCount: Int): MaterialCardView =
-    baseCard(HubCardStyle.COMPACT).apply {
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            bottomMargin = dp(12)
-        }
-        val members = serverMembers ?: repository.members
-        val memberById = members.associateBy { it.id }
-        addView(LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(12), dp(12), dp(10))
-            addView(TextView(context).apply {
-                text = "멤버"
-                setTextColor(color(R.color.hub_text))
-                textSize = 15f
-                typeface = Typeface.DEFAULT_BOLD
-            })
-            addView(TextView(context).apply {
-                text = MainUiPolicy.songMemberFilterSummary(members, selectedSongMemberFilter, visibleCount)
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 12f
-                setPadding(0, dp(4), 0, dp(8))
-            })
-            addView(TextView(context).apply {
-                text = "상세 조건 편집 ›"
-                setPadding(0, dp(10), 0, dp(10))
-                isClickable = true
-                isFocusable = true
-                contentDescription = "멤버 필터 상세 조건 편집"
-                setOnClickListener { pushScreen(HubScreen.SONG_MEMBER_FILTER) }
-            })
-        })
-    }
-
 private fun segmentedFilterRow(
     filters: List<TopFilterOption>,
     selectedId: String,
@@ -4579,24 +3966,7 @@ private fun segmentedFilterRow(
         }
     }
 
-private fun songSegmentedRow(
-    filters: List<dev.minepacu.stelliveeventnotifier.feature.home.SongFilterOption>,
-    selectedId: String,
-    onSelected: (String) -> Unit,
-): LinearLayout =
-    LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        weightSum = filters.size.toFloat()
-        filters.forEachIndexed { index, filter ->
-            addView(filterSegmentView(filter.id, filter.label, filter.id == selectedId) {
-                onSelected(filter.id)
-            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                if (index < filters.lastIndex) marginEnd = dp(6)
-            })
-        }
-    }
-
-private fun filterSegmentView(
+internal fun filterSegmentView(
     id: String,
     label: String,
     selected: Boolean,
@@ -4619,641 +3989,6 @@ private fun filterSegmentView(
         isFocusable = true
         contentDescription = label
         setOnClickListener { onSelected() }
-    }
-
-private fun songSelectorRow(
-    label: String,
-    value: String,
-    accentValue: Boolean,
-    onClick: () -> Unit,
-): LinearLayout =
-    LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(3), dp(9), dp(3), dp(9))
-        isClickable = true
-        isFocusable = true
-        setOnClickListener { onClick() }
-        addView(TextView(context).apply {
-            text = label
-            setTextColor(color(R.color.hub_text))
-            textSize = 14f
-            typeface = Typeface.DEFAULT_BOLD
-        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        addView(TextView(context).apply {
-            text = "$value ›"
-            setTextColor(if (accentValue) Color.rgb(74, 144, 226) else color(R.color.hub_text))
-            textSize = 14f
-            typeface = Typeface.DEFAULT_BOLD
-        })
-    }
-
-private fun showSongSortDialog() {
-    val options = MainUiPolicy.songSortOptions()
-    HubSingleChoiceBottomSheet(
-        context = this,
-        title = getString(R.string.song_sort_title),
-        options = options.map { HubSingleChoiceOption(it.id, it.label) },
-        selectedId = selectedSongSortId,
-        onSelected = { selectedId ->
-            selectedSongSortId = selectedId
-            resetSongBrowseForQueryChange()
-            renderSongsSelectionChange(::renderSongs)
-        },
-    ).show()
-}
-
-private fun songSearchCard(): MaterialCardView =
-        baseCard(HubCardStyle.COMPACT).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(10)
-            }
-            val input = EditText(context).apply {
-                hint = "노래 제목 또는 멤버 검색"
-                setSingleLine(true)
-                setText(selectedSongQuery)
-                setTextColor(color(R.color.hub_text))
-                setHintTextColor(color(R.color.hub_text_muted))
-                textSize = 14f
-                setPadding(dp(13), dp(8), dp(13), dp(8))
-                setOnEditorActionListener { view, _, _ ->
-                    applySongSearchText(view.text?.toString().orEmpty())
-                    true
-                }
-                setOnFocusChangeListener { view, hasFocus ->
-                    if (!hasFocus) {
-                        applySongSearchText((view as EditText).text?.toString().orEmpty())
-                    }
-                }
-                addTextChangedListener(object : TextWatcher {
-                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-
-                    override fun afterTextChanged(s: Editable?) {
-                        selectedSongQuery = s?.toString().orEmpty()
-                        resetSongBrowseForQueryChange()
-                    }
-                })
-            }
-            addView(input)
-        }
-
-private fun applySongSearchText(rawQuery: String) {
-    if (shouldUseSongsTwoPane()) {
-        selectedSongQuery = MainUiPolicy.normalizedSongQuery(rawQuery)
-        resetSongBrowseForQueryChange()
-        renderSongsSelectionChange(::renderSongs)
-    } else {
-        scheduleSongSearchRender(rawQuery)
-    }
-}
-
-private fun scheduleSongSearchRender(rawQuery: String) {
-    val normalized = MainUiPolicy.normalizedSongQuery(rawQuery)
-    selectedSongQuery = normalized
-    resetSongBrowseForQueryChange()
-    pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
-    if (normalized == appliedSongQuery) return
-    pendingSongSearchRender = Runnable {
-        pendingSongSearchRender = null
-        if (navigationHistory.currentScreen != HubScreen.SONG_SEARCH) return@Runnable
-        appliedSongQuery = normalized
-        refreshScreenWhenIdle(HubScreen.SONG_SEARCH, ::refreshSongSearchResults)
-    }.also { songSearchHandler.postDelayed(it, 150L) }
-}
-
-    private fun songFilterChips(): LinearLayout =
-        LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(12)
-            }
-            addView(songFilterRow(MainUiPolicy.songTypeFilters(), selectedSongType) { selectedSongType = it })
-            addView(songFilterRow(MainUiPolicy.songSortOptions(), selectedSongSortId) { selectedSongSortId = it })
-        }
-
-private fun songMemberFilterCard(members: List<HubMember>, visibleCount: Int): MaterialCardView =
-    baseCard(HubCardStyle.INTERACTIVE).apply {
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            bottomMargin = dp(10)
-        }
-        isClickable = true
-        isFocusable = true
-        setOnClickListener { pushScreen(HubScreen.SONG_MEMBER_FILTER) }
-        addView(LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(15), dp(14), dp(15), dp(14))
-            addView(LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(TextView(context).apply {
-                    text = "멤버"
-                    setTextColor(color(R.color.hub_text))
-                    textSize = 15f
-                    typeface = Typeface.DEFAULT_BOLD
-                })
-                addView(TextView(context).apply {
-                    text = MainUiPolicy.songMemberFilterSummary(members, selectedSongMemberFilter, visibleCount)
-                    setTextColor(color(R.color.hub_text_muted))
-                    textSize = 12f
-                    setPadding(0, dp(4), 0, 0)
-                })
-            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginEnd = dp(12)
-            })
-            addView(TextView(context).apply {
-                text = MainUiPolicy.songMemberFilterLabel(members, selectedSongMemberFilter) + " ›"
-                gravity = Gravity.CENTER
-                maxLines = 1
-                setTextColor(color(R.color.hub_text))
-                textSize = 13f
-                typeface = Typeface.DEFAULT_BOLD
-                background = rounded(
-                    fill = color(R.color.hub_card_surface_compact),
-                    radius = dp(18),
-                    stroke = color(R.color.hub_line),
-                )
-                setPadding(dp(12), dp(7), dp(12), dp(7))
-            })
-        })
-    }
-
-private fun renderSongMemberFilter(restoreScrollY: Int? = null) {
-    val members = serverMembers ?: repository.members
-    val selectable = SongMemberFilterPolicy.selectableMembers(members)
-    val draft = selectedSongMemberFilterDraft ?: selectedSongMemberFilter.also { selectedSongMemberFilterDraft = it }
-    startScreen(
-        screenId = "song_member_filter",
-        title = "노래 멤버 선택",
-        role = "노래 목록을 멤버별로 좁혀 봅니다"
-    )
-    fun updateDraft(next: SongMemberFilterState) {
-        val currentScrollY = binding.contentScroll.scrollY
-        selectedSongMemberFilterDraft = next.normalized(selectable.map { it.id }.toSet())
-        renderSongMemberFilter(restoreScrollY = currentScrollY)
-    }
-
-    binding.contentList.addView(baseCard(HubCardStyle.COMPACT).apply {
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-            bottomMargin = dp(16)
-        }
-        addView(LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(14), dp(14), dp(14))
-            addView(TextView(context).apply {
-                text = "현재 조건"
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 12f
-                typeface = Typeface.DEFAULT_BOLD
-            })
-            addView(TextView(context).apply {
-                text = SongMemberFilterPolicy.summary(members, draft)
-                setTextColor(color(R.color.hub_text))
-                textSize = 16f
-                typeface = Typeface.DEFAULT_BOLD
-                setPadding(0, dp(4), 0, dp(14))
-                contentDescription = "현재 조건, $text"
-            })
-            addView(TextView(context).apply {
-                text = "선택 멤버"
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 12f
-                typeface = Typeface.DEFAULT_BOLD
-                setPadding(0, 0, 0, dp(7))
-            })
-            val matchModeEnabled = draft.selectedMemberIds.size >= 2 && draft.participation != SongParticipation.SOLO
-            addView(songSegmentedRow(listOf(SongFilterOption("ANY", "한 명 이상"), SongFilterOption("ALL", "모두 참여")), draft.matchMode.name) {
-                updateDraft(draft.copy(matchMode = SongMemberMatchMode.valueOf(it)))
-            }.apply {
-                alpha = if (matchModeEnabled) 1f else 0.48f
-                contentDescription = if (matchModeEnabled) "멤버 일치 방식" else "멤버 두 명 이상 선택 시 사용 가능"
-                childrenSequence().forEach { it.isEnabled = matchModeEnabled }
-            })
-            addView(TextView(context).apply {
-                text = "참여 형태"
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 12f
-                typeface = Typeface.DEFAULT_BOLD
-                setPadding(0, dp(14), 0, dp(7))
-            })
-            addView(songSegmentedRow(listOf(SongFilterOption("ANY", "전체"), SongFilterOption("SOLO", "솔로"), SongFilterOption("COLLABORATION", "함께")), draft.participation.name) {
-                updateDraft(draft.copy(participation = SongParticipation.valueOf(it)))
-            })
-            addView(TextView(context).apply {
-                text = "솔로는 1명, 함께 부른 곡은 연결된 스텔라이브 멤버 2명 이상을 기준으로 하며 외부 가수는 계산에 포함되지 않습니다."
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 12f
-                setPadding(0, dp(12), 0, 0)
-                contentDescription = text
-            })
-        })
-    })
-
-    binding.contentList.addView(sectionLabel("빠른 선택"))
-    binding.contentList.addView(HorizontalScrollView(this).apply {
-        isHorizontalScrollBarEnabled = false
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-            bottomMargin = dp(14)
-        }
-        addView(ChipGroup(context).apply {
-            isSingleLine = true
-            chipSpacingHorizontal = dp(8)
-            listOf("gen1" to "1기생 전원", "gen2" to "2기생 전원", "gen3" to "3기생 전원").forEach { (id, label) ->
-                val preset = SongMemberFilterPolicy.generationPreset(members, id)
-                addView(centerChipText(Chip(context).apply {
-                    val selected = draft == preset
-                    text = label
-                    isCheckable = false
-                    isClickable = true
-                    setEnsureMinTouchTargetSize(true)
-                    chipMinHeight = dp(40).toFloat()
-                    shapeAppearanceModel = shapeAppearanceModel.toBuilder()
-                        .setAllCornerSizes(dp(20).toFloat())
-                        .build()
-                    chipStrokeWidth = dp(1).toFloat()
-                    chipStrokeColor = ColorStateList.valueOf(color(if (selected) R.color.hub_primary else R.color.hub_line))
-                    chipBackgroundColor = ColorStateList.valueOf(color(if (selected) R.color.hub_accent_soft else R.color.hub_card))
-                    setTextColor(color(if (selected) R.color.hub_primary else R.color.hub_text_muted))
-                    textSize = 13f
-                    typeface = Typeface.DEFAULT_BOLD
-                    textStartPadding = dp(12).toFloat()
-                    textEndPadding = dp(12).toFloat()
-                    contentDescription = "$label 빠른 선택${if (selected) ", 선택됨" else ""}"
-                    setOnClickListener { updateDraft(preset) }
-                }))
-            }
-        })
-    })
-
-    selectable.groupBy { it.generationId }.forEach { (generationId, generationMembers) ->
-        binding.contentList.addView(sectionLabel(when (generationId) { "gen1" -> "1기생"; "gen2" -> "2기생"; else -> "3기생" }))
-        generationMembers.forEach { member ->
-            val checked = member.id in draft.selectedMemberIds
-            val option = SongFilterOption(member.id, member.koreanName.ifBlank { member.englishName })
-            binding.contentList.addView(songMemberFilterOptionCard(option, member, checked).apply {
-                setOnClickListener {
-                val ids = draft.selectedMemberIds.toMutableSet().apply { if (!add(member.id)) remove(member.id) }
-                    updateDraft(draft.copy(selectedMemberIds = ids))
-                }
-            })
-        }
-    }
-
-    val normalizedDraft = draft.normalized(selectable.map { it.id }.toSet())
-    val canReset = normalizedDraft != SongMemberFilterState()
-    val canApply = normalizedDraft != selectedSongMemberFilter.normalized(selectable.map { it.id }.toSet())
-    binding.screenActionContainer.isVisible = true
-    binding.screenActionReset.apply {
-        background = rounded(fill = color(R.color.hub_surface), radius = dp(14), stroke = color(R.color.hub_line))
-        alpha = if (canReset) 1f else 0.45f
-        isEnabled = canReset
-        contentDescription = if (canReset) "멤버 조건 초기화" else "멤버 조건 초기화, 이미 초기 상태"
-        setOnClickListener { updateDraft(SongMemberFilterState()) }
-    }
-    binding.screenActionApply.apply {
-        background = rounded(fill = color(R.color.hub_primary), radius = dp(14))
-        alpha = if (canApply) 1f else 0.45f
-        isEnabled = canApply
-        contentDescription = if (canApply) "멤버 조건 적용" else "멤버 조건 적용, 변경 사항 없음"
-        setOnClickListener {
-            applySongMemberFilter(normalizedDraft)
-            selectedSongMemberFilterDraft = null
-            popScreen()
-        }
-    }
-    registerSongMemberFilterScrollToTop()
-    scheduleSongScrollToTopButtonPositionUpdate()
-    restoreScrollY?.let { scrollY ->
-        binding.contentScroll.post { binding.contentScroll.scrollTo(0, scrollY) }
-    }
-}
-
-private fun songMemberFilterOptionCard(
-        option: dev.minepacu.stelliveeventnotifier.feature.home.SongFilterOption,
-        member: HubMember?,
-        selected: Boolean,
-    ): MaterialCardView =
-        baseCard(HubCardStyle.INTERACTIVE).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(10)
-            }
-            setCardBackgroundColor(color(if (selected) R.color.hub_card_surface_compact else R.color.hub_card_surface))
-            strokeColor = color(if (selected) R.color.hub_primary else R.color.hub_line)
-            isClickable = true
-            isFocusable = true
-            val row = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(14), dp(12), dp(14), dp(12))
-            }
-            if (member != null) {
-                row.addView(songMemberProfileAvatar(member, dp(42)), LinearLayout.LayoutParams(dp(42), dp(42)).apply {
-                    marginEnd = dp(12)
-                })
-            }
-            row.addView(LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(TextView(context).apply {
-                    text = option.label
-                    setTextColor(color(R.color.hub_text))
-                    textSize = 15f
-                    typeface = Typeface.DEFAULT_BOLD
-                    maxLines = 1
-                })
-                addView(TextView(context).apply {
-                    text = if (selected) "선택됨" else "선택 안 됨"
-                    setTextColor(color(R.color.hub_text_muted))
-                    textSize = 12f
-                    setPadding(0, dp(4), 0, 0)
-                })
-            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            if (selected) {
-                row.addView(rowChip("선택됨"), LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply {
-                    marginStart = dp(12)
-                })
-            }
-            contentDescription = "${option.label}, ${if (selected) "선택됨" else "선택 안 됨"}"
-            addView(row)
-        }
-
-private fun songFilterRow(
-        filters: List<dev.minepacu.stelliveeventnotifier.feature.home.SongFilterOption>,
-        selectedId: String,
-        onSelected: (String) -> Unit,
-    ): HorizontalScrollView =
-        HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            addView(ChipGroup(context).apply {
-                isSingleLine = true
-                filters.forEach { filter ->
-                    addView(centerChipText(Chip(context).apply {
-                        text = filter.label
-                        isCheckable = true
-                        isChecked = filter.id == selectedId
-                        setOnClickListener {
-                            onSelected(filter.id)
-                            resetSongBrowseForQueryChange()
-                            renderSongsSelectionChange(::renderSongs)
-                        }
-                    }))
-                }
-            })
-        }
-
-    private fun songCard(song: SongCatalogItem, catalogMembers: List<HubMember> = serverMembers ?: repository.members): MaterialCardView =
-        baseCard(HubCardStyle.INTERACTIVE).apply {
-            tag = SongIdentity.identifier(song)
-            val displayText = MainUiPolicy.songDisplayText(song, catalogMembers)
-            isClickable = true
-            isFocusable = true
-            contentDescription = "${displayText.title}, 곡 상세 보기"
-            setOnClickListener { showSongDetail(song) }
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(10)
-            }
-            val row = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(dp(15), dp(14), dp(15), dp(14))
-            }
-            row.addView(songThumbnail(song))
-            val content = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            }
-            content.addView(TextView(context).apply {
-                text = displayText.title
-                setTextColor(color(R.color.hub_text))
-                textSize = 15f
-                typeface = Typeface.DEFAULT_BOLD
-                maxLines = MainUiPolicy.SONG_TITLE_MAX_LINES
-                ellipsize = TextUtils.TruncateAt.END
-                includeFontPadding = false
-            })
-            content.addView(TextView(context).apply {
-                text = displayText.subtitle
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 12f
-                setPadding(0, dp(5), 0, 0)
-                maxLines = MainUiPolicy.SONG_SUBTITLE_MAX_LINES
-                ellipsize = TextUtils.TruncateAt.END
-                includeFontPadding = false
-            })
-            content.addView(ChipGroup(context).apply {
-                isSingleLine = false
-                isSelectionRequired = false
-                chipSpacingHorizontal = dp(6)
-                chipSpacingVertical = dp(4)
-                addView(rowChip(song.type.displayName))
-                MainUiPolicy.songPremiereStatusLabel(song)?.let { label ->
-                    addView(rowChip(label))
-                }
-                if (SongDiscoveryPolicy.isNew(song, songDiscoveryState)) {
-                    addView(rowChip("NEW").apply {
-                        contentDescription = "새로 추가된 노래"
-                    })
-                }
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply {
-                    topMargin = dp(7)
-                }
-            })
-            content.addView(LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
-                MainUiPolicy.songFavoriteIdentifier(song)?.let { identifier ->
-                    addView(TextView(context).apply {
-                        text = if (identifier in songFavoriteIds) "★" else "☆"
-                        textSize = 24f
-                        gravity = Gravity.CENTER
-                        setTextColor(color(R.color.hub_text))
-                        contentDescription = if (identifier in songFavoriteIds) "즐겨찾기 해제" else "즐겨찾기 추가"
-                        isClickable = true
-                        isFocusable = true
-                        minWidth = dp(48)
-                        minHeight = dp(48)
-                        setOnClickListener {
-                            lifecycleScope.launch { songFavoritesRepository.toggle(identifier) }
-                        }
-                    })
-                }
-                addView(TextView(context).apply {
-                    text = "⋮"
-                    textSize = 24f
-                    gravity = Gravity.CENTER
-                    minWidth = dp(48)
-                    minHeight = dp(48)
-                    isClickable = true
-                    isFocusable = true
-                    contentDescription = "${displayText.title} 빠른 동작" +
-                        if (SongLinkPolicy.videoUrl(song) == null) ", ${SongLinkPolicy.unavailableReason}" else ""
-                    setOnClickListener { anchor -> showSongQuickMenu(anchor, song) }
-                })
-            })
-            row.addView(content)
-            addView(row)
-        }
-
-    private fun showSongDetail(song: SongCatalogItem) {
-        val sheet = SongDetailBottomSheet(
-            context = this,
-            openTarget = songOpenPreferenceStore.read(),
-            isFavorite = { target -> MainUiPolicy.songFavoriteIdentifier(target)?.let(songFavoriteIds::contains) == true },
-            onOpen = { openExternalUrl(it) },
-            onShare = ::shareSongUrl,
-            onCopy = ::copySongUrl,
-            onToggleFavorite = { target ->
-                MainUiPolicy.songFavoriteIdentifier(target)?.let { identifier ->
-                    lifecycleScope.launch { songFavoritesRepository.toggle(identifier) }
-                }
-            },
-            onMemberFilter = { memberId -> applyRelatedSongFilter(SongDetailPolicy.memberFilter(memberId), null) },
-            onAllMembersFilter = { target -> applyRelatedSongFilter(SongDetailPolicy.allMembersFilter(target), null) },
-            onSameTypeFilter = { target -> applyRelatedSongFilter(null, target.type.apiValue) },
-        )
-        sheet.show(song)
-        lifecycleScope.launch {
-            songDiscoveryRepository.acknowledge(listOf(song), cachedSongItems)
-            sheet.update(serverRepository.songDetail(song.id, song))
-        }
-    }
-
-    private fun showSongQuickMenu(anchor: View, song: SongCatalogItem) {
-        val selectedTarget = songOpenPreferenceStore.read()
-        val youtubeUrl = SongLinkPolicy.videoUrl(song, SongOpenTarget.YOUTUBE)
-        val youtubeMusicUrl = SongLinkPolicy.videoUrl(song, SongOpenTarget.YOUTUBE_MUSIC)
-        PopupMenu(ContextThemeWrapper(this, R.style.ThemeOverlay_StelliveHub_PopupMenu), anchor).apply {
-            val youtube = menu.add(
-                "YouTube에서 열기" + if (selectedTarget == SongOpenTarget.YOUTUBE) " · 기본" else "",
-            )
-            val youtubeMusic = menu.add(
-                "YouTube Music에서 열기" + if (selectedTarget == SongOpenTarget.YOUTUBE_MUSIC) " · 기본" else "",
-            )
-            val share = menu.add("링크 공유")
-            val copy = menu.add("링크 복사")
-            youtube.isEnabled = youtubeUrl != null
-            youtubeMusic.isEnabled = youtubeMusicUrl != null
-            listOf(share, copy).forEach { it.isEnabled = youtubeUrl != null }
-            setOnMenuItemClickListener { item ->
-                when (item) {
-                    youtube -> youtubeUrl?.let(::openExternalUrl)
-                    youtubeMusic -> youtubeMusicUrl?.let(::openExternalUrl)
-                    share -> youtubeUrl?.let(::shareSongUrl)
-                    copy -> youtubeUrl?.let(::copySongUrl)
-                }
-                true
-            }
-            show()
-        }
-    }
-
-    private fun shareSongUrl(url: String) {
-        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, url)
-        }, "노래 링크 공유"))
-    }
-
-    private fun copySongUrl(url: String) {
-        (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-            .setPrimaryClip(ClipData.newPlainText("YouTube 링크", url))
-        Toast.makeText(this, "링크를 복사했습니다.", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun applyRelatedSongFilter(memberState: SongMemberFilterState?, type: String?) {
-        selectedSongQuery = ""
-        memberState?.let { selectedSongMemberFilter = it.normalized() }
-        type?.let { selectedSongType = it }
-        resetSongBrowseForQueryChange()
-        renderSongsSelectionChange()
-        Toast.makeText(this, "관련 노래 필터를 적용했습니다.", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun songThumbnail(song: SongCatalogItem): View =
-        FrameLayout(this).apply {
-            val widthDp = MainUiPolicy.songThumbnailWidthDp(resources.configuration.screenWidthDp)
-            val width = dp(widthDp)
-            val height = dp(MainUiPolicy.songThumbnailHeightDp(widthDp))
-            layoutParams = LinearLayout.LayoutParams(width, height).apply {
-                rightMargin = dp(12)
-            }
-            background = rounded(fill = color(R.color.hub_surface), radius = dp(12))
-            addView(TextView(context).apply {
-                text = "♪"
-                gravity = Gravity.CENTER
-                setTextColor(color(R.color.hub_text_muted))
-                textSize = 20f
-            }, FrameLayout.LayoutParams(width, height))
-            val url = song.thumbnailUrl?.takeIf { it.startsWith("https://") }
-            if (url != null) {
-                addView(ImageView(context).apply {
-                    scaleType = ImageView.ScaleType.CENTER_CROP
-                    clipToOutline = true
-                    thread {
-                        runCatching {
-                            URL(url).openStream().use { BitmapFactory.decodeStream(it) }
-                        }.getOrNull()?.let { bitmap ->
-                            runOnUiThread { setImageBitmap(bitmap) }
-                        }
-                    }
-                }, FrameLayout.LayoutParams(width, height))
-            }
-        }
-
-    private fun songLoadMoreControl(container: LinearLayout, state: SongRenderState): MaterialCardView {
-        lateinit var control: MaterialCardView
-        control = baseCard().apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(10)
-            }
-            addView(LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(15), dp(10), dp(15), dp(10))
-                addView(TextView(context).apply {
-                    text = MainUiPolicy.songProgressText(
-                        state.displayedCount,
-                        state.totalFilteredCount,
-                        cachedSongCatalogAuthoritative,
-                    )
-                    gravity = Gravity.CENTER
-                    setTextColor(color(R.color.hub_text_muted))
-                    textSize = 12f
-                })
-                if (state.remainingCount > 0) {
-                    addView(Chip(context).apply {
-                        text = MainUiPolicy.songLoadMoreText(state.remainingCount)
-                        contentDescription = "$text, ${MainUiPolicy.songProgressText(state.displayedCount, state.totalFilteredCount, cachedSongCatalogAuthoritative)}"
-                        setOnClickListener {
-                            if (isLoadingMoreSongs) return@setOnClickListener
-                            isLoadingMoreSongs = true
-                            val footerIndex = container.indexOfChild(control)
-                            if (footerIndex >= 0) container.removeViews(footerIndex, container.childCount - footerIndex)
-                            visibleSongLimit = MainUiPolicy.nextSongVisibleLimit(
-                                visibleSongLimit,
-                                state.totalFilteredCount,
-                            )
-                            songBrowseSession.visibleLimit = visibleSongLimit
-                            val nextState = songRenderState(cachedSongItems)
-                            nextState.displayedSongs.drop(state.displayedCount).forEach { song ->
-                                container.addView(songCard(song, nextState.catalogMembers))
-                            }
-                            addSongListFooter(container, nextState)
-                            isLoadingMoreSongs = false
-                        }
-                    })
-                }
-            })
-        }
-        return control
     }
 
     internal fun requestNotificationPermissionIfNeeded(moment: NotificationPermissionPromptMoment) {
@@ -5626,7 +4361,7 @@ private fun filterChips(): HorizontalScrollView =
             })
         }
 
-private fun loadingCard(presentation: LoadingPresentation): MaterialCardView =
+internal fun loadingCard(presentation: LoadingPresentation): MaterialCardView =
         baseCard(HubCardStyle.COMPACT).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(14)
@@ -5694,21 +4429,7 @@ internal fun noticeCard(text: String): TextView = TextView(this).apply {
             }
         }
 
-    private fun songMemberProfileAvatar(member: HubMember, size: Int): FrameLayout =
-        FrameLayout(this).apply {
-            addView(
-                avatarText(member, size),
-                FrameLayout.LayoutParams(size, size)
-            )
-            member.profileImageUrl?.takeIf { it.startsWith("https://") }?.let { imageUrl ->
-                addView(
-                    channelImageAvatar(imageUrl, size),
-                    FrameLayout.LayoutParams(size, size)
-                )
-            }
-        }
-
-    private fun channelImageAvatar(imageUrl: String, size: Int): ImageView =
+    internal fun channelImageAvatar(imageUrl: String, size: Int): ImageView =
         ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = rounded(fill = color(R.color.hub_primary), radius = size / 2)
@@ -5727,7 +4448,7 @@ internal fun noticeCard(text: String): TextView = TextView(this).apply {
             }
         }
 
-    private fun avatarText(member: HubMember, size: Int): TextView = TextView(this).apply {
+    internal fun avatarText(member: HubMember, size: Int): TextView = TextView(this).apply {
         text = when (member.catalogRole) {
             CatalogRole.OFFICIAL_CHANNEL -> "공식"
             else -> member.koreanName.take(2)
@@ -6541,7 +5262,7 @@ internal fun compactEventCard(title: String, body: String, pills: List<String>, 
             (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dp(10)
         }
 
-private fun rowChip(text: String): Chip = Chip(this).apply {
+internal fun rowChip(text: String): Chip = Chip(this).apply {
         this.text = text
         centerChipText(this)
         val isWarning = text.contains("필터") || text.contains("확인")
@@ -6602,7 +5323,7 @@ internal fun pill(text: String, good: Boolean): TextView = TextView(this).apply 
         setPadding(dp(8), dp(4), dp(8), dp(4))
     }
 
-    private fun centerChipText(chip: Chip): Chip = chip.apply {
+    internal fun centerChipText(chip: Chip): Chip = chip.apply {
         gravity = Gravity.CENTER
         textAlignment = View.TEXT_ALIGNMENT_CENTER
         textStartPadding = 0f
