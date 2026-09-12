@@ -1,5 +1,6 @@
 package dev.minepacu.stelliveeventnotifier
 
+import dev.minepacu.stelliveeventnotifier.feature.goodsevents.GoodsEventsScreenController
 import dev.minepacu.stelliveeventnotifier.feature.settings.SettingsScreenController
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongsScreenController
 
@@ -329,21 +330,6 @@ internal enum class SongScrollSlot { SONGS_SINGLE, SONGS_TWO_PANE, SONG_SEARCH }
         override fun areContentsTheSame(oldItem: SongCatalogItem, newItem: SongCatalogItem): Boolean = oldItem == newItem
     }
 
-private enum class ScheduleBadgeTone {
-    UPCOMING,
-    IN_PROGRESS,
-    COMPLETED,
-    CANCELLED,
-    KIND,
-    PRIMARY,
-    SELECTED,
-}
-
-private data class ScheduleBadgePresentation(
-    val label: String,
-    val tone: ScheduleBadgeTone,
-)
-
 internal class SongBrowseSessionViewModel : ViewModel() {
     var generationId = "all"
     var type = "all"
@@ -358,6 +344,7 @@ internal class SongBrowseSessionViewModel : ViewModel() {
 internal lateinit var binding: ActivityMainBinding
     private lateinit var settingsScreenController: SettingsScreenController
     internal lateinit var songsScreenController: SongsScreenController
+    internal lateinit var goodsEventsScreenController: GoodsEventsScreenController
     internal val repository = MockHubRepository()
     internal lateinit var serverRepository: HubRepository
     private lateinit var pushTokenSyncer: PushTokenSyncer
@@ -372,7 +359,7 @@ internal lateinit var binding: ActivityMainBinding
     internal var serverMembers: List<HubMember>? = null
     private var liveStatusSourceLabel = "앱 내 목업"
     internal var debugModeEnabled = false
-    private var systemTopInsetPx = 0
+    internal var systemTopInsetPx = 0
     private var systemBottomInsetPx = 0
     private var currentFoldFeature: HubFoldFeature? = null
     internal var currentAdaptiveSpec: HubAdaptiveSpec = HubAdaptivePolicy.spec(widthDp = 0)
@@ -387,7 +374,7 @@ internal lateinit var binding: ActivityMainBinding
     internal var activeTwoPaneDetailPane: View? = null
     internal var activeSettingsHubScrollView: NestedScrollView? = null
     private var lastRootBackPressedAt = 0L
-private var selectedFilter = "all"
+internal var selectedFilter = "all"
 private var selectedLiveStatusFilter = "all"
 private var liveMemberPriorityIds: List<String> = emptyList()
 private var draggingLiveMemberId: String? = null
@@ -433,17 +420,17 @@ internal var cachedSongType: String? = null
 internal var cachedSongCatalogAuthoritative = false
 internal var songRefreshJob: Job? = null
 
-    private var goodsEventsJob: Job? = null
-    private var hubEventDetailJob: Job? = null
-    private var serverHubEventDetailJob: Job? = null
+    internal var goodsEventsJob: Job? = null
+    internal var hubEventDetailJob: Job? = null
+    internal var serverHubEventDetailJob: Job? = null
     private var homeRecentSongsJob: Job? = null
     internal var persistSettingsJob: Job? = null
 internal var songSearchResultsContainer: LinearLayout? = null
 internal var songSearchResultsAdapter: SongResultsAdapter? = null
 private var homeRecentSongs: List<SongCatalogItem>? = null
 private var isLoadingHomeRecentSongs = false
-private var selectedHubEventId: String? = null
-private var selectedHubEventScheduleItemId: String? = null
+internal var selectedHubEventId: String? = null
+internal var selectedHubEventScheduleItemId: String? = null
 private val reservationDateFormatter = DateTimeFormatter.ofPattern("yyyy. M. d. HH:mm").withZone(ZoneId.of("Asia/Seoul"))
 private var reservationDrafts: List<ReservationDraft> = emptyList()
 private var reservationRecords: List<ReservationRecord> = emptyList()
@@ -458,25 +445,25 @@ private var reservationReturnPromptView: View? = null
 private var pendingReservationHelpScrollAction: ReservationHelpAction? = null
 private var expandedReservationHelpFaqId: ReservationHelpFaqId? = null
 private val reservationHelpFaqUiStates = mutableMapOf<ReservationHelpFaqId, ReservationHelpFaqUiState>()
-private var expandedHubEventScheduleEventId: String? = null
-private val expandedHubEventScheduleItemIds = mutableSetOf<String>()
-private var detailCalendarSelectionEventId: String? = null
-private var detailCalendarSelectedDate: LocalDate? = null
-private val detailCalendarSelectedScheduleItemIds = mutableSetOf<String>()
-private var detailCalendarExpansionEventId: String? = null
-private var detailCalendarExpanded = true
+internal var expandedHubEventScheduleEventId: String? = null
+internal val expandedHubEventScheduleItemIds = mutableSetOf<String>()
+internal var detailCalendarSelectionEventId: String? = null
+internal var detailCalendarSelectedDate: LocalDate? = null
+internal val detailCalendarSelectedScheduleItemIds = mutableSetOf<String>()
+internal var detailCalendarExpansionEventId: String? = null
+internal var detailCalendarExpanded = true
 private var selectedAnnouncementId: String? = null
 private var announcementsSummary = AnnouncementsSummary()
 private var announcementItems: List<ServiceAnnouncement> = emptyList()
 private var announcementNextCursor: String? = null
 private var announcementReadKeys: Set<String> = emptySet()
 private lateinit var announcementReadStore: AnnouncementReadStore
-    private var goodsEventsDays: List<HubCalendarDay> = emptyList()
-    private var goodsEvents: List<HubEvent> = emptyList()
-    private var goodsEventsSelectedMonth: YearMonth = YearMonth.now()
-    private var goodsEventsCalendarExpanded = true
-    private var serverHubEventDetailLoadedId: String? = null
-    private var serverHubEventDetail: HubEvent? = null
+    internal var goodsEventsDays: List<HubCalendarDay> = emptyList()
+    internal var goodsEvents: List<HubEvent> = emptyList()
+    internal var goodsEventsSelectedMonth: YearMonth = YearMonth.now()
+    internal var goodsEventsCalendarExpanded = true
+    internal var serverHubEventDetailLoadedId: String? = null
+    internal var serverHubEventDetail: HubEvent? = null
     internal var selectedAppearanceMode = AppearanceMode.SYSTEM
 private var notificationPermissionRequested = false
     private val requestNotificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -530,6 +517,7 @@ private var notificationPermissionRequested = false
         setContentView(binding.root)
         settingsScreenController = SettingsScreenController(this)
         songsScreenController = SongsScreenController(this)
+        goodsEventsScreenController = GoodsEventsScreenController(this)
         binding.root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             scheduleReservationReturnPromptPositionUpdate()
         }
@@ -900,7 +888,7 @@ private var notificationPermissionRequested = false
         selectedHubEventScheduleItemId = HubCalendarDeepLinkPolicy.scheduleItemIdFromAppDeepLink(deepLink)
         serverHubEventDetailLoadedId = null
         navigationHistory.selectRoot(HubScreen.GOODS_EVENTS)
-        if (shouldUseGoodsEventsTwoPane()) {
+        if (goodsEventsScreenController.shouldUseGoodsEventsTwoPane()) {
             replaceScreenWithoutAnimation(HubScreen.GOODS_EVENTS)
         } else {
             navigationHistory.select(HubScreen.GOODS_EVENT_DETAIL)
@@ -1174,8 +1162,8 @@ HubScreen.HOME -> renderHome()
 HubScreen.SONGS -> songsScreenController.renderSongs()
 HubScreen.SONG_SEARCH -> songsScreenController.renderSongSearch()
 HubScreen.SONG_MEMBER_FILTER -> songsScreenController.renderSongMemberFilter()
-HubScreen.GOODS_EVENTS -> renderGoodsEvents()
-            HubScreen.GOODS_EVENT_DETAIL -> renderHubEventDetail()
+HubScreen.GOODS_EVENTS -> goodsEventsScreenController.renderGoodsEvents()
+            HubScreen.GOODS_EVENT_DETAIL -> goodsEventsScreenController.renderHubEventDetail()
             HubScreen.RESERVATIONS -> renderReservations()
             HubScreen.RESERVATION_DETAIL -> renderReservationDetail()
             HubScreen.RESERVATION_EDIT -> renderReservationEdit()
@@ -1199,7 +1187,7 @@ HubScreen.HISTORY -> renderHistory()
 
     private fun updateTwoPaneScrollChrome(screen: HubScreen = navigationHistory.currentScreen) {
         val isTwoPaneScreen =
-            screen == HubScreen.GOODS_EVENTS && shouldUseGoodsEventsTwoPane() ||
+            screen == HubScreen.GOODS_EVENTS && goodsEventsScreenController.shouldUseGoodsEventsTwoPane() ||
                 screen == HubScreen.SONGS && songsScreenController.shouldUseSongsTwoPane() ||
                 screen == HubScreen.SETTINGS && shouldUseSettingsTwoPane()
         val isRefreshableScreen =
@@ -1358,7 +1346,7 @@ internal fun startScreen(
         }
     }
 
-    private fun applyContentTopPadding(underTopBar: Boolean) {
+    internal fun applyContentTopPadding(underTopBar: Boolean) {
         val overlayHeight = binding.topGlassOverlay.height.takeIf { it > 0 } ?: (systemTopInsetPx + dp(52))
         val topPadding = if (underTopBar) 0 else overlayHeight
         val horizontalPadding = if (underTopBar) 0 else dp(18)
@@ -1377,7 +1365,7 @@ internal fun startScreen(
         val params = binding.contentList.layoutParams
         val nextWidth = if (constrainContentWidth) {
             val maxWidthDp = when {
-                navigationHistory.currentScreen == HubScreen.GOODS_EVENTS && shouldUseGoodsEventsTwoPane() ->
+                navigationHistory.currentScreen == HubScreen.GOODS_EVENTS && goodsEventsScreenController.shouldUseGoodsEventsTwoPane() ->
                     GOODS_EVENTS_TWO_PANE_CONTENT_MAX_WIDTH_DP
                 navigationHistory.currentScreen == HubScreen.SONGS && songsScreenController.shouldUseSongsTwoPane() ->
                     SONGS_TWO_PANE_CONTENT_MAX_WIDTH_DP
@@ -1729,191 +1717,7 @@ internal fun startScreen(
             }
         }
 
-    private fun renderGoodsEvents() {
-        startScreen(
-            screenId = "goods_events",
-            title = "굿즈/행사",
-            role = "공식/멤버/공식 콜라보 출처가 있는 기간성 정보만 표시합니다."
-        )
-        binding.contentList.addView(filterPanel(MainUiPolicy.goodsEventsTopFilterGroups(selectedFilter)) { _, optionId ->
-            selectedFilter = optionId
-            if (goodsEventsDays.isEmpty()) renderGoodsEvents()
-            else renderServerGoodsEvents(goodsEventsDays, goodsEvents)
-        })
-        binding.contentList.addView(reservationSummaryCard())
-        binding.contentList.addView(serverStatusStrip())
-        loadServerGoodsEvents()
-    }
-
-    private fun loadServerGoodsEvents() {
-        binding.contentList.addView(loadingCard(MainUiPolicy.goodsEventsLoadingPresentation()))
-        goodsEventsJob?.cancel()
-        goodsEventsJob = lifecycleScope.launch {
-            val today = LocalDate.now()
-            val from = today.minusMonths(1)
-            val to = today.plusMonths(3)
-            val days = serverRepository.hubCalendarDays(from, to, "Asia/Seoul")
-            val listedEvents = serverRepository.hubEvents("all", from, to)
-            val listedEventIds = listedEvents.mapTo(mutableSetOf()) { it.id }
-            val missingEventIds = days
-                .flatMap { it.entries }
-                .asSequence()
-                .filter { it.entryKind == HubCalendarEntryKind.HUB_EVENT }
-                .map { it.eventId }
-                .filterNot(listedEventIds::contains)
-                .distinct()
-                .toList()
-            val resolvedMissingEvents = missingEventIds.mapNotNull { serverRepository.hubEventDetail(it) }
-            val events = (listedEvents + resolvedMissingEvents).distinctBy { it.id }
-            goodsEventsSelectedMonth = YearMonth.from(today)
-            goodsEventsDays = days
-            goodsEvents = events
-            if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS) {
-                refreshScreenWhenIdle(HubScreen.GOODS_EVENTS) {
-                    renderServerGoodsEvents(days, events)
-                }
-            }
-        }
-    }
-
-    private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<HubEvent>) {
-        goodsEventsDays = days
-        goodsEvents = events
-        val filteredDays = filteredGoodsEventDays(days)
-        val filteredEvents = filteredGoodsEvents(events)
-        val monthDays = monthDaysForGoodsEvents(filteredDays)
-        binding.contentList.removeAllViews()
-        resetTopBarScrollSources()
-        if (shouldUseGoodsEventsTwoPane()) {
-            renderServerGoodsEventsTwoPane(filteredDays, filteredEvents, monthDays)
-            return
-        }
-        renderGoodsEventsListInto(binding.contentList, filteredDays, filteredEvents, monthDays)
-        binding.contentList.addView(
-            noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
-        )
-    }
-
-    private fun filteredGoodsEventDays(days: List<HubCalendarDay>): List<HubCalendarDay> =
-        days.mapNotNull { day ->
-            val entries = day.entries.filter { entry ->
-                MainUiPolicy.goodsEventMatchesFilter(
-                    selectedFilter,
-                    entry.category,
-                    entry.status,
-                    entry.participationMode,
-                    entry.tags,
-                )
-            }
-            day.copy(entries = entries).takeIf { entries.isNotEmpty() }
-        }
-
-    private fun filteredGoodsEvents(events: List<HubEvent>): List<HubEvent> =
-        events.filter { event ->
-            MainUiPolicy.goodsEventMatchesFilter(
-                selectedFilter,
-                event.category,
-                event.status,
-                event.participationMode,
-                event.tags,
-            )
-        }
-
-    private fun monthDaysForGoodsEvents(days: List<HubCalendarDay>): List<HubCalendarDay> =
-        days.filter { it.date.take(7) == goodsEventsSelectedMonth.toString() }
-
-    private fun renderServerGoodsEventsTwoPane(
-        filteredDays: List<HubCalendarDay>,
-        filteredEvents: List<HubEvent>,
-        monthDays: List<HubCalendarDay>,
-    ) {
-        val paneRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            isBaselineAligned = false
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                twoPaneViewportHeight(),
-            )
-        }
-        val listPane = scrollablePane()
-        val detailPane = scrollablePane().apply {
-            scrollView.background = rounded(color(R.color.hub_surface), dp(16), color(R.color.hub_line))
-            content.setPadding(dp(10), dp(10), dp(10), dp(10))
-        }
-        val paneWeights = if (shouldUseGoodsEventsFoldAwarePane()) {
-            1f to 1f
-        } else {
-            1f to 1f
-        }
-        paneRow.addView(
-            listPane.scrollView,
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, paneWeights.first).apply {
-                marginEnd = dp(8)
-            },
-        )
-        paneRow.addView(
-            detailPane.scrollView,
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, paneWeights.second).apply {
-                marginStart = dp(8)
-            },
-        )
-        activeTwoPaneDetailPane = detailPane.scrollView
-        binding.contentList.addView(paneRow)
-        renderGoodsEventsListInto(listPane.content, filteredDays, filteredEvents, monthDays)
-        listPane.content.addView(
-            noticeCard("방송/라이브/업로드와 팬 주최 이벤트는 굿즈/행사 피드에 포함하지 않습니다.")
-        )
-        renderGoodsEventDetailPane(detailPane.content)
-    }
-
-    private fun renderGoodsEventsListInto(
-        container: LinearLayout,
-        filteredDays: List<HubCalendarDay>,
-        filteredEvents: List<HubEvent>,
-        monthDays: List<HubCalendarDay>,
-    ) {
-        container.addView(filterPanel(MainUiPolicy.goodsEventsTopFilterGroups(selectedFilter)) { _, optionId ->
-            selectedFilter = optionId
-            renderServerGoodsEvents(goodsEventsDays, goodsEvents)
-        })
-        container.addView(reservationSummaryCard())
-        container.addView(serverStatusStrip())
-        container.addView(
-            HubEventsCalendarView(
-                context = this,
-                days = filteredDays,
-                initialMonth = goodsEventsSelectedMonth,
-                showModeControls = false,
-                showCollapseControl = true,
-                initiallyExpanded = goodsEventsCalendarExpanded,
-                onExpandedChanged = { expanded -> goodsEventsCalendarExpanded = expanded },
-                onMonthChanged = { month ->
-                    goodsEventsSelectedMonth = month
-                    if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS) {
-                        renderServerGoodsEvents(goodsEventsDays, goodsEvents)
-                    }
-                },
-            ) { entry -> onGoodsEventSelected(entry.eventId) }
-        )
-        val feedRows = CalendarUiPolicy.feedRenderRowsForMonth(
-            days = monthDays,
-            month = goodsEventsSelectedMonth,
-            events = filteredEvents,
-        )
-        var previousHeader: String? = null
-        feedRows.forEach { row ->
-            val header = CalendarUiPolicy.feedRowHeaderText(row)
-            if (header != previousHeader) {
-                container.addView(calendarDayHeader(header))
-                previousHeader = header
-            }
-            row.canonicalEvent?.let { event ->
-                container.addView(hubEventCard(event = event))
-            } ?: container.addView(localCalendarEntryRow(row.entry))
-        }
-    }
-
-    private fun reservationSummaryCard(): MaterialCardView = baseCard(HubCardStyle.INTERACTIVE).apply {
+    internal fun reservationSummaryCard(): MaterialCardView = baseCard(HubCardStyle.INTERACTIVE).apply {
         val now = Instant.now()
         val activeDrafts = reservationDrafts.filter { it.expiresAt.isAfter(now) }
         val upcoming = reservationRecords.filter {
@@ -3136,7 +2940,7 @@ internal fun startScreen(
         })
     }
 
-    private fun openHubEventLink(
+    internal fun openHubEventLink(
         event: HubEvent,
         scheduleItem: dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleItem?,
         link: dev.minepacu.stelliveeventnotifier.core.model.HubEventLink,
@@ -3310,492 +3114,6 @@ internal fun startScreen(
         }
     }
 
-    private fun onGoodsEventSelected(eventId: String) {
-        val selection = CalendarUiPolicy.feedSelection(eventId)
-        when (HubEventsPanePolicy.selectionMode(currentAdaptiveSpec)) {
-            GoodsEventSelectionMode.UPDATE_INLINE_DETAIL -> crossFadeTwoPaneSelection(selection.transitionKey) {
-                selectedHubEventId = selection.eventId
-                selectedHubEventScheduleItemId = null
-                serverHubEventDetailLoadedId = null
-                renderServerGoodsEvents(goodsEventsDays, goodsEvents)
-            }
-            GoodsEventSelectionMode.NAVIGATE_TO_DETAIL -> {
-                selectedHubEventId = selection.eventId
-                selectedHubEventScheduleItemId = null
-                serverHubEventDetailLoadedId = null
-                pushScreen(HubScreen.GOODS_EVENT_DETAIL)
-            }
-        }
-    }
-
-    private fun shouldUseGoodsEventsTwoPane(): Boolean =
-        HubEventsPanePolicy.shouldUseTwoPane(currentAdaptiveSpec)
-
-    private fun shouldUseGoodsEventsFoldAwarePane(): Boolean =
-        HubEventsPanePolicy.shouldUseFoldAwarePane(currentAdaptiveSpec)
-
-    private fun renderGoodsEventDetailPane(container: LinearLayout) {
-        val eventId = selectedHubEventId
-        if (eventId == null) {
-            renderGoodsEventEmptyDetailPane(container)
-            return
-        }
-        if (serverHubEventDetailLoadedId != eventId) {
-            container.addView(loadingCard(MainUiPolicy.hubEventDetailLoadingPresentation()))
-            hubEventDetailJob?.cancel()
-            hubEventDetailJob = lifecycleScope.launch {
-                serverHubEventDetail = serverRepository.hubEventDetail(eventId)
-                serverHubEventDetailLoadedId = eventId
-                if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS && selectedHubEventId == eventId) {
-                    refreshScreenWhenIdle(HubScreen.GOODS_EVENTS) {
-                        renderServerGoodsEvents(goodsEventsDays, goodsEvents)
-                    }
-                }
-            }
-            return
-        }
-        val event = currentSelectedHubEvent()
-        if (event == null) {
-            container.addView(compactEventCard("항목 없음", "목록에서 다시 선택해 주세요.", listOf("굿즈/행사")))
-            return
-        }
-        renderHubEventDetailInto(container, event, fullScreen = false)
-    }
-
-    private fun renderGoodsEventEmptyDetailPane(container: LinearLayout) {
-        container.addView(
-            compactEventCard(
-                title = "굿즈/행사를 선택해 상세 정보를 확인하세요.",
-                body = "왼쪽 목록이나 캘린더에서 항목을 선택하면 이 영역에 상세 정보가 표시됩니다.",
-                pills = listOf("상세")
-            )
-        )
-    }
-
-    private fun localCalendarEntryRow(entry: HubCalendarEntry): MaterialCardView =
-        compactEventCard(
-            title = CalendarUiPolicy.displayTitle(entry),
-            body = listOf(CalendarUiPolicy.entryPeriodDateText(entry), entry.displayTimeText)
-                .filter { it.isNotBlank() }
-                .joinToString(" · "),
-            pills = MainUiPolicy.goodsEventPillLabels(
-                entry.category,
-                entry.participationMode,
-                entry.tags,
-            ),
-    )
-
-    private fun calendarDayHeaderText(day: HubCalendarDay): String {
-        val periodEntry = day.entries.firstOrNull { entry ->
-            CalendarUiPolicy.entryPeriodDateText(entry) != entry.displayDate
-        } ?: return day.date
-        return CalendarUiPolicy.entryPeriodDateText(periodEntry)
-    }
-
-private fun calendarDayHeader(date: String): SectionHeaderView =
-        SectionHeaderView(this).bind(date).apply {
-            setPadding(dp(2), dp(18), dp(2), dp(8))
-        }
-
-    private fun renderHubEventDetail() {
-        val eventId = selectedHubEventId
-        if (eventId != null && serverHubEventDetailLoadedId != eventId) {
-            startScreen(
-                screenId = "goods_event_detail",
-                title = "상세",
-                role = "선택한 굿즈/행사를 불러오고 있습니다."
-            )
-            binding.contentList.addView(loadingCard(MainUiPolicy.hubEventDetailLoadingPresentation()))
-            serverHubEventDetailJob?.cancel()
-            serverHubEventDetailJob = lifecycleScope.launch {
-                serverHubEventDetail = serverRepository.hubEventDetail(eventId)
-                serverHubEventDetailLoadedId = eventId
-                if (navigationHistory.currentScreen == HubScreen.GOODS_EVENT_DETAIL && selectedHubEventId == eventId) {
-                    refreshScreenWhenIdle(HubScreen.GOODS_EVENT_DETAIL, ::renderHubEventDetail)
-                }
-            }
-            return
-        }
-        val event = currentSelectedHubEvent()
-        if (event == null) {
-            startScreen(
-                screenId = "goods_event_detail",
-                title = "상세",
-                role = "선택한 굿즈/행사를 찾을 수 없습니다."
-            )
-            binding.contentList.addView(compactEventCard("항목 없음", "목록에서 다시 선택해 주세요.", listOf("굿즈/행사")))
-            return
-        }
-
-        startScreen(
-            screenId = "goods_event_detail",
-            title = "",
-            role = ""
-        )
-        binding.collapsedTitle.text = ""
-        binding.collapsedRole.text = ""
-        binding.contentList.removeAllViews()
-        resetTopBarScrollSources()
-        applyContentTopPadding(underTopBar = true)
-        renderHubEventDetailInto(binding.contentList, event, fullScreen = true)
-    }
-
-    private fun currentSelectedHubEvent(): HubEvent? =
-        serverHubEventDetail?.takeIf { it.id == selectedHubEventId }
-            ?: goodsEvents.firstOrNull { it.id == selectedHubEventId }
-            ?: repository.hubEvents.firstOrNull { it.id == selectedHubEventId }
-
-    private fun renderHubEventDetailInto(container: LinearLayout, event: HubEvent, fullScreen: Boolean) {
-        if (detailCalendarSelectionEventId != event.id || selectedHubEventScheduleItemId != null) {
-            detailCalendarSelectionEventId = event.id
-            detailCalendarSelectedDate = null
-            detailCalendarSelectedScheduleItemIds.clear()
-        }
-        val resolvedExpandedIds = HubEventLinkPolicy.resolvedExpandedScheduleItemIds(
-            previousEventId = expandedHubEventScheduleEventId,
-            eventId = event.id,
-            currentIds = expandedHubEventScheduleItemIds,
-            highlightedScheduleItemId = selectedHubEventScheduleItemId,
-        )
-        expandedHubEventScheduleItemIds.clear()
-        expandedHubEventScheduleItemIds.addAll(resolvedExpandedIds)
-        expandedHubEventScheduleEventId = event.id
-        container.addView(hubEventDetailHero(event).apply {
-            if (!fullScreen) {
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    dp(220),
-                ).apply {
-                    bottomMargin = dp(8)
-                }
-            }
-        })
-        container.addView(hubEventDetailActions(event))
-        container.addView(sectionLabel(HubEventDetailFormatting.SummaryLabel).let { if (fullScreen) it.withDetailHorizontalMargins() else it })
-        container.addView(
-            compactEventCard(
-                title = "",
-                body = event.summary ?: "공식 출처 기반 굿즈/행사 정보입니다.",
-                pills = emptyList()
-            ).let { if (fullScreen) it.withDetailHorizontalMargins() else it }
-        )
-        val timeline = HubEventDetailFormatting.timeline(event)
-        val scheduleCardsById = mutableMapOf<String, MaterialCardView>()
-        val initialCalendarPresentation = HubEventDetailCalendarPolicy.build(
-            event = event,
-            highlightedScheduleItemId = selectedHubEventScheduleItemId,
-        )
-        val calendarPresentation = detailCalendarSelectedDate
-            ?.takeIf { selectedHubEventScheduleItemId == null && initialCalendarPresentation.day(it) != null }
-            ?.let { selectedDate ->
-                initialCalendarPresentation.copy(
-                    selectedDate = selectedDate,
-                    displayedMonth = YearMonth.from(selectedDate),
-                )
-            }
-            ?: initialCalendarPresentation
-        if (selectedHubEventScheduleItemId == null && detailCalendarSelectedDate == null) {
-            detailCalendarSelectedDate = calendarPresentation.initialSelectedDate
-            detailCalendarSelectedScheduleItemIds.clear()
-            calendarPresentation.initialSelectedDate
-                ?.let(calendarPresentation::scheduleIdsFor)
-                ?.let(detailCalendarSelectedScheduleItemIds::addAll)
-        }
-        if (calendarPresentation.mode != HubEventDetailCalendarMode.HIDDEN) {
-            detailCalendarExpanded = HubEventDetailCalendarExpansionPolicy.resolve(
-                previousEventId = detailCalendarExpansionEventId,
-                eventId = event.id,
-                currentExpanded = detailCalendarExpanded,
-                highlightedScheduleItemId = selectedHubEventScheduleItemId,
-            )
-            detailCalendarExpansionEventId = event.id
-            container.addView(sectionLabel("행사 일정").let { if (fullScreen) it.withDetailHorizontalMargins() else it })
-            container.addView(
-                HubEventDetailCalendarCard(
-                    context = this,
-                    event = event,
-                    presentation = calendarPresentation,
-                    initiallyExpanded = detailCalendarExpanded,
-                    onExpandedChanged = { expanded ->
-                        detailCalendarExpansionEventId = event.id
-                        detailCalendarExpanded = expanded
-                    },
-                ) { selectedDate, scheduleIds ->
-                    detailCalendarSelectionEventId = event.id
-                    detailCalendarSelectedDate = selectedDate
-                    selectedHubEventScheduleItemId = null
-                    detailCalendarSelectedScheduleItemIds.clear()
-                    detailCalendarSelectedScheduleItemIds.addAll(scheduleIds)
-                    scheduleCardsById.forEach { (scheduleId, card) ->
-                        updateHubEventScheduleCardHighlight(
-                            card = card,
-                            highlighted = scheduleId in detailCalendarSelectedScheduleItemIds,
-                        )
-                    }
-                    val firstCard = scheduleIds.firstOrNull()?.let(scheduleCardsById::get)
-                    if (scheduleIds.size == 1 && firstCard != null && !firstCard.isActivated) {
-                        firstCard.performClick()
-                    }
-                    firstCard?.let(::scrollHubEventScheduleCardIntoView)
-                }.let { if (fullScreen) it.withDetailHorizontalMargins() else it },
-            )
-        }
-        if (timeline.isNotEmpty()) {
-            container.addView(sectionLabel("세부 일정").let { if (fullScreen) it.withDetailHorizontalMargins() else it })
-            val effectivePrimaryId = HubEventLinkPolicy.effectivePrimaryScheduleItemId(event)
-            timeline.forEach { item ->
-                val highlighted =
-                    item.schedule.id == selectedHubEventScheduleItemId ||
-                        item.schedule.id in detailCalendarSelectedScheduleItemIds
-                val card = hubEventScheduleCard(
-                    item = item,
-                    highlighted = highlighted,
-                    isEffectivePrimary = item.schedule.id == effectivePrimaryId,
-                    initiallyExpanded = item.schedule.id in expandedHubEventScheduleItemIds,
-                )
-                    .let { if (fullScreen) it.withDetailHorizontalMargins() else it }
-                scheduleCardsById[item.schedule.id] = card as MaterialCardView
-                container.addView(card)
-            }
-            selectedHubEventScheduleItemId
-                ?.let(scheduleCardsById::get)
-                ?.post { selectedHubEventScheduleItemId?.let(scheduleCardsById::get)?.let(::scrollHubEventScheduleCardIntoView) }
-        }
-        container.addView(sectionLabel("행사 정보").let { if (fullScreen) it.withDetailHorizontalMargins() else it })
-        container.addView(
-            settingsPanel(
-                rows = HubEventDetailFormatting.rows(event).map { row ->
-                    SettingRow(row.label, row.value, null, null)
-                }
-            ).let { if (fullScreen) it.withDetailHorizontalMargins() else it }
-        )
-        container.addView(noticeCard(HubEventDetailFormatting.NoticeText).let { if (fullScreen) it.withDetailHorizontalMargins() else it })
-    }
-
-    private fun hubEventScheduleCard(
-        item: dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventScheduleTimelineItem,
-        highlighted: Boolean,
-        isEffectivePrimary: Boolean,
-        initiallyExpanded: Boolean,
-    ): MaterialCardView = baseCard(HubCardStyle.COMPACT).apply {
-        val scheduleCard = this
-        val displayTitle = HubEventDetailFormatting.displayTitle(item.schedule)
-        val links = HubEventLinkPolicy.resolvedScheduleLinks(item.schedule)
-        var expanded = initiallyExpanded
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-            bottomMargin = dp(10)
-        }
-        updateHubEventScheduleCardHighlight(this, highlighted)
-        alpha = if (item.schedule.cancelledAt != null) 0.58f else 1f
-        val content = LinearLayout(context).apply {
-            val detailContainer = this
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(10), dp(14), dp(12))
-            addView(scheduleBadgeRow(buildList {
-                add(ScheduleBadgePresentation(item.stateText, scheduleStateBadgeTone(item.stateText)))
-                add(
-                    ScheduleBadgePresentation(
-                        HubEventDetailFormatting.scheduleKindLabel(item.schedule.kind),
-                        ScheduleBadgeTone.KIND,
-                    )
-                )
-                if (isEffectivePrimary) add(ScheduleBadgePresentation("대표 일정", ScheduleBadgeTone.PRIMARY))
-                if (highlighted) add(ScheduleBadgePresentation("선택한 일정", ScheduleBadgeTone.SELECTED))
-            }))
-            val heading = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, dp(7), 0, 0)
-            }
-            heading.addView(LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(TextView(context).apply {
-                    text = displayTitle
-                    setTextColor(color(R.color.hub_text))
-                    textSize = 15f
-                    typeface = Typeface.DEFAULT_BOLD
-                    includeFontPadding = false
-                })
-                addView(TextView(context).apply {
-                    text = item.timingText
-                    setTextColor(color(R.color.hub_text_muted))
-                    textSize = 12f
-                    includeFontPadding = false
-                    setPadding(0, dp(4), 0, 0)
-                })
-            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            val chevron = ImageView(context).apply {
-                setImageResource(R.drawable.ic_chevron_down_24)
-                imageTintList = ColorStateList.valueOf(color(R.color.hub_text_muted))
-                scaleType = ImageView.ScaleType.CENTER
-            }
-            heading.addView(chevron, LinearLayout.LayoutParams(dp(36), dp(44)))
-            addView(heading)
-
-            val details = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                isVisible = expanded
-                addView(TextView(context).apply {
-                    text = "정확한 일정 · ${item.timingText}"
-                    setTextColor(color(R.color.hub_text_muted))
-                    textSize = 11f
-                    setPadding(0, dp(9), 0, 0)
-                })
-                addView(TextView(context).apply {
-                    val precision = if (item.schedule.timePrecision.name == "DATE") "날짜만" else "날짜와 시간"
-                    text = "$precision · ${item.schedule.timezone}"
-                    setTextColor(color(R.color.hub_text_muted))
-                    textSize = 11f
-                    setPadding(0, dp(5), 0, 0)
-                })
-                HubEventDetailFormatting.scheduleDescription(item.schedule)?.let { description ->
-                    addView(TextView(context).apply {
-                        text = description
-                        setTextColor(color(R.color.hub_text))
-                        textSize = 12f
-                        setPadding(0, dp(7), 0, 0)
-                    })
-                }
-                item.schedule.sourceLabel?.takeIf { it.isNotBlank() }?.let { source ->
-                    addView(TextView(context).apply {
-                        text = "출처 · $source"
-                        setTextColor(color(R.color.hub_text_muted))
-                        textSize = 11f
-                        setPadding(0, dp(6), 0, 0)
-                    })
-                }
-                links.forEach { link ->
-                    val label = HubEventLinkPolicy.displayLinkLabel(link)
-                    addView(detailActionButton(label, primary = false) { openHubEventLink(currentSelectedHubEvent() ?: return@detailActionButton, item.schedule, link) }.apply {
-                        contentDescription = "$label, 외부 링크 열기"
-                    }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(44)).apply {
-                        topMargin = dp(9)
-                    })
-                }
-            }
-            addView(details)
-
-            fun updateExpansionPresentation(animate: Boolean) {
-                details.isVisible = expanded
-                scheduleCard.isActivated = expanded
-                val targetRotation = if (expanded) 180f else 0f
-                if (animate) {
-                    chevron.animate()
-                        .rotation(targetRotation)
-                        .setDuration(220L)
-                        .start()
-                } else {
-                    chevron.rotation = targetRotation
-                }
-                scheduleCard.contentDescription = buildString {
-                    append(displayTitle)
-                    append(", ")
-                    append(item.stateText)
-                    if (isEffectivePrimary) append(", 대표 일정")
-                    append(", ")
-                    append(item.timingText)
-                    if (highlighted) append(", 선택한 일정")
-                    append(if (expanded) ", 펼쳐짐, 세부 정보 접기" else ", 접힘, 세부 정보 펼치기")
-                }
-            }
-            updateExpansionPresentation(animate = false)
-            scheduleCard.isClickable = true
-            scheduleCard.isFocusable = true
-            scheduleCard.setOnClickListener {
-                expanded = !expanded
-                if (expanded) expandedHubEventScheduleItemIds.add(item.schedule.id)
-                else expandedHubEventScheduleItemIds.remove(item.schedule.id)
-                val transitionRoot = (scheduleCard.parent as? ViewGroup) ?: detailContainer
-                TransitionManager.beginDelayedTransition(
-                    transitionRoot,
-                    AutoTransition().apply { duration = 220L },
-                )
-                updateExpansionPresentation(animate = true)
-            }
-        }
-        addView(content)
-    }
-
-    private fun updateHubEventScheduleCardHighlight(
-        card: MaterialCardView,
-        highlighted: Boolean,
-    ) {
-        card.isSelected = highlighted
-        card.strokeWidth = if (highlighted) dp(2) else 0
-        card.strokeColor = if (highlighted) color(R.color.hub_primary) else color(R.color.hub_line)
-        card.setCardBackgroundColor(
-            color(if (highlighted) R.color.hub_accent_soft else R.color.hub_card_surface),
-        )
-        ViewCompat.setStateDescription(card, if (highlighted) "선택한 날짜의 일정" else null)
-    }
-
-    private fun scrollHubEventScheduleCardIntoView(card: MaterialCardView) {
-        card.post {
-            var descendant: View = card
-            var targetY = 0
-            while (true) {
-                targetY += descendant.top
-                when (val parent = descendant.parent) {
-                    is NestedScrollView -> {
-                        parent.smoothScrollTo(0, (targetY - dp(16)).coerceAtLeast(0))
-                        break
-                    }
-                    is ScrollView -> {
-                        parent.smoothScrollTo(0, (targetY - dp(16)).coerceAtLeast(0))
-                        break
-                    }
-                    is View -> descendant = parent
-                    else -> break
-                }
-            }
-            card.requestFocus()
-            card.announceForAccessibility("선택한 세부 일정으로 이동")
-        }
-    }
-
-    private fun scheduleStateBadgeTone(stateText: String): ScheduleBadgeTone = when (stateText) {
-        "예정" -> ScheduleBadgeTone.UPCOMING
-        "진행" -> ScheduleBadgeTone.IN_PROGRESS
-        "취소" -> ScheduleBadgeTone.CANCELLED
-        else -> ScheduleBadgeTone.COMPLETED
-    }
-
-    private fun scheduleBadgeColors(tone: ScheduleBadgeTone): Pair<Int, Int> = when (tone) {
-        ScheduleBadgeTone.UPCOMING -> R.color.hub_schedule_tag_upcoming to R.color.hub_schedule_tag_upcoming_soft
-        ScheduleBadgeTone.IN_PROGRESS -> R.color.hub_schedule_tag_progress to R.color.hub_schedule_tag_progress_soft
-        ScheduleBadgeTone.COMPLETED -> R.color.hub_schedule_tag_completed to R.color.hub_schedule_tag_completed_soft
-        ScheduleBadgeTone.CANCELLED -> R.color.hub_schedule_tag_cancelled to R.color.hub_schedule_tag_cancelled_soft
-        ScheduleBadgeTone.KIND -> R.color.hub_schedule_tag_kind to R.color.hub_schedule_tag_kind_soft
-        ScheduleBadgeTone.PRIMARY -> R.color.hub_schedule_tag_primary to R.color.hub_schedule_tag_primary_soft
-        ScheduleBadgeTone.SELECTED -> R.color.hub_schedule_tag_selected to R.color.hub_schedule_tag_selected_soft
-    }
-
-    private fun scheduleBadgeRow(badges: List<ScheduleBadgePresentation>): ChipGroup = ChipGroup(this).apply {
-        isSingleLine = false
-        chipSpacingHorizontal = dp(5)
-        chipSpacingVertical = dp(4)
-        badges.forEach { badge ->
-            val (textColorRes, backgroundColorRes) = scheduleBadgeColors(badge.tone)
-            addView(Chip(context).apply {
-                text = badge.label
-                textSize = 10f
-                includeFontPadding = false
-                gravity = Gravity.CENTER
-                textAlignment = View.TEXT_ALIGNMENT_CENTER
-                setTextColor(color(textColorRes))
-                chipBackgroundColor = ColorStateList.valueOf(color(backgroundColorRes))
-                chipStrokeWidth = 0f
-                isClickable = false
-                isCheckable = false
-                isFocusable = false
-                setEnsureMinTouchTargetSize(false)
-                chipMinHeight = dp(23).toFloat()
-                minHeight = dp(23)
-                setPadding(0, 0, 0, 0)
-            })
-        }
-    }
-
     private fun renderLive() {
         startScreen(
             screenId = "live",
@@ -3916,7 +3234,7 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
 
     internal class SongViewHolder(view: FrameLayout) : RecyclerView.ViewHolder(view)
 
-private fun filterPanel(
+internal fun filterPanel(
     groups: List<TopFilterGroup>,
     onSelected: (groupId: String, optionId: String) -> Unit,
 ): MaterialCardView =
@@ -4795,158 +4113,7 @@ private fun liveMemberRow(member: HubMember, reorderable: Boolean = false): Mate
             liveStartedAt?.let { registerLiveClockTextView(it, valueView) }
         }
 
-private fun View.withDetailHorizontalMargins(): View {
-    val params = (layoutParams as? LinearLayout.LayoutParams)
-        ?: LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        params.leftMargin = dp(18)
-        params.rightMargin = dp(18)
-    layoutParams = params
-    return this
-}
-
-private fun View.withGoodsEventsNoticeTopMargin(): View {
-    val params = (layoutParams as? LinearLayout.LayoutParams)
-        ?: LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-    params.topMargin = dp(8)
-    layoutParams = params
-    return this
-}
-
-private fun hubEventDetailHero(event: dev.minepacu.stelliveeventnotifier.core.model.HubEvent): FrameLayout =
-        FrameLayout(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                systemTopInsetPx + dp(338)
-            ).apply {
-                leftMargin = 0
-                rightMargin = 0
-                bottomMargin = dp(8)
-            }
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(
-                    Color.rgb(54, 79, 99),
-                    Color.rgb(16, 43, 53),
-                    Color.rgb(15, 20, 23)
-                )
-            )
-
-            event.image?.takeIf(HubEventImagePolicy::canDisplay)?.url?.let { imageUrl ->
-                val imageView = ImageView(context).apply {
-                    visibility = View.GONE
-                    scaleType = ImageView.ScaleType.CENTER_CROP
-                }
-                addView(
-                    imageView,
-                    FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT
-                    )
-                )
-                imageView.load(imageUrl) {
-                    listener(
-                        onSuccess = { _, _ -> imageView.visibility = View.VISIBLE },
-                        onError = { _, _ -> imageView.visibility = View.GONE },
-                    )
-                }
-            }
-
-            addView(
-                View(context).apply {
-                    background = GradientDrawable(
-                        GradientDrawable.Orientation.TOP_BOTTOM,
-                        intArrayOf(Color.TRANSPARENT, Color.argb(188, 0, 0, 0))
-                    )
-                },
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    dp(172),
-                    Gravity.BOTTOM
-                )
-            )
-
-            addView(
-                LinearLayout(context).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(dp(18), 0, dp(18), dp(10))
-                    addView(ChipGroup(context).apply {
-                        isSingleLine = false
-                        chipSpacingHorizontal = dp(10)
-                        chipSpacingVertical = dp(6)
-                        HubEventDetailFormatting.heroTags(event).forEach { tag ->
-                            addView(heroTagChip(tag.label, tag.tone))
-                        }
-                    })
-                    addView(LinearLayout(context).apply {
-                        orientation = LinearLayout.VERTICAL
-                        setPadding(0, dp(10), 0, 0)
-                        addView(TextView(context).apply {
-                            text = event.title
-                            setTextColor(Color.WHITE)
-                            textSize = 25f
-                            typeface = Typeface.DEFAULT_BOLD
-                            setLineSpacing(0f, 1.06f)
-                        })
-                        HubEventDetailFormatting.heroSubtitleLines(event).forEachIndexed { index, line ->
-                            addView(TextView(context).apply {
-                                text = line
-                                setTextColor(Color.argb(214, 255, 255, 255))
-                                textSize = 13f
-                                typeface = if (index == 0) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-                                setPadding(0, if (index == 0) dp(7) else dp(3), 0, 0)
-                            })
-                        }
-                    })
-                },
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT,
-                    Gravity.BOTTOM or Gravity.START
-                )
-            )
-        }
-
-    private fun hubEventDetailActions(event: HubEvent): LinearLayout = LinearLayout(this).apply {
-        val links = HubEventLinkPolicy.resolvedEventLinks(event)
-        orientation = LinearLayout.HORIZONTAL
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            leftMargin = dp(18)
-            rightMargin = dp(18)
-            bottomMargin = dp(12)
-        }
-
-        val calendarParams = LinearLayout.LayoutParams(0, dp(50), 1f)
-        if (links.isNotEmpty()) calendarParams.marginEnd = dp(5)
-        addView(detailActionButton("캘린더 추가", primary = true) { openCalendarInsert(event) }, calendarParams)
-        if (links.isNotEmpty()) {
-            val ctaMode = HubEventLinkPolicy.eventCtaMode(event)
-            val label = if (ctaMode == HubEventLinkCtaMode.DIRECT) {
-                HubEventLinkPolicy.displayLinkLabel(links.single())
-            } else {
-                "관련 링크 ${links.size}개"
-            }
-            addView(
-                detailActionButton(label, primary = false) {
-                    if (ctaMode == HubEventLinkCtaMode.DIRECT) openHubEventLink(event, null, links.single())
-                    else HubEventLinksBottomSheet(this@MainActivity) { link -> openHubEventLink(event, null, link) }.show("관련 링크", links)
-                }.apply {
-                    contentDescription = if (ctaMode == HubEventLinkCtaMode.DIRECT) "$label, 외부 링크 열기" else "$label, 목록 열기"
-                },
-                LinearLayout.LayoutParams(0, dp(50), 1f).apply { marginStart = dp(5) }
-            )
-        }
-    }
-
-    private fun detailActionButton(label: String, primary: Boolean, onClick: () -> Unit): TextView =
+    internal fun detailActionButton(label: String, primary: Boolean, onClick: () -> Unit): TextView =
         TextView(this).apply {
             text = label
             gravity = Gravity.CENTER
@@ -4960,16 +4127,6 @@ private fun hubEventDetailHero(event: dev.minepacu.stelliveeventnotifier.core.mo
             )
             setOnClickListener { onClick() }
         }
-
-    private fun openCalendarInsert(event: HubEvent) {
-        val intent = Intent(Intent.ACTION_INSERT).setData(CalendarContract.Events.CONTENT_URI)
-            .putExtra(CalendarContract.Events.TITLE, event.title)
-            .putExtra(CalendarContract.Events.EVENT_LOCATION, event.venueName)
-            .putExtra(CalendarContract.Events.DESCRIPTION, event.summary ?: event.sourceLabel)
-        event.startsAt?.let { intent.putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, it.toEpochMilli()) }
-        event.endsAt?.let { intent.putExtra(CalendarContract.EXTRA_EVENT_END_TIME, it.toEpochMilli()) }
-        startActivity(intent)
-    }
 
     internal fun openExternalUrl(url: String?) {
         val target = url?.trim()?.takeIf { it.isNotEmpty() } ?: return
@@ -5053,7 +4210,7 @@ internal fun compactEventCard(title: String, body: String, pills: List<String>, 
             }
         }
 
-    private fun hubEventCard(event: dev.minepacu.stelliveeventnotifier.core.model.HubEvent): MaterialCardView {
+    internal fun hubEventCard(event: dev.minepacu.stelliveeventnotifier.core.model.HubEvent): MaterialCardView {
         val body = listOfNotNull(
             listOfNotNull(event.status.displayName, event.sourceLabel, event.venueName).joinToString(" · "),
             event.summary?.takeIf { it.isNotBlank() },
@@ -5071,7 +4228,7 @@ internal fun compactEventCard(title: String, body: String, pills: List<String>, 
             isClickable = true
             isFocusable = true
             setOnClickListener {
-                onGoodsEventSelected(event.id)
+                goodsEventsScreenController.onGoodsEventSelected(event.id)
             }
         }
     }
@@ -5126,7 +4283,7 @@ internal fun compactEventCard(title: String, body: String, pills: List<String>, 
         addView(pillRow(listOf(item.eventType, item.deliveryMode.name.lowercase(), "${item.deliveryLatencyMs ?: "-"}ms")))
     }
 
-    private fun settingsPanel(title: String? = null, rows: List<SettingRow>): MaterialCardView =
+    internal fun settingsPanel(title: String? = null, rows: List<SettingRow>): MaterialCardView =
         baseCard().apply {
             val spacing = MainUiPolicy.settingsCardSpacing
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -5232,35 +4389,6 @@ internal fun compactEventCard(title: String, body: String, pills: List<String>, 
             addView(rowChip(label))
         }
     }
-
-    private fun heroTagChip(text: String, tone: HubEventHeroTagTone): Chip =
-        rowChip(text).apply {
-            val textColorRes = when (tone) {
-                HubEventHeroTagTone.STATUS -> R.color.hub_success
-                HubEventHeroTagTone.CATEGORY -> R.color.hub_warning
-                HubEventHeroTagTone.PARTICIPATION -> R.color.hub_primary
-                HubEventHeroTagTone.SUPPLEMENTARY -> R.color.hub_text_muted
-            }
-            val tagColor = color(textColorRes)
-            setTextColor(tagColor)
-            gravity = Gravity.CENTER
-            textAlignment = View.TEXT_ALIGNMENT_CENTER
-            minWidth = 0
-            minHeight = 0
-            chipMinHeight = dp(32).toFloat()
-            chipStartPadding = dp(9).toFloat()
-            chipEndPadding = dp(9).toFloat()
-            textStartPadding = 0f
-            textEndPadding = 0f
-            iconStartPadding = 0f
-            iconEndPadding = 0f
-            closeIconStartPadding = 0f
-            closeIconEndPadding = 0f
-            chipBackgroundColor = ColorStateList.valueOf(tagColor.withAlpha(112))
-            chipStrokeColor = ColorStateList.valueOf(tagColor.withAlpha(88))
-            rippleColor = ColorStateList.valueOf(Color.TRANSPARENT)
-            (layoutParams as? ViewGroup.MarginLayoutParams)?.marginEnd = dp(10)
-        }
 
 internal fun rowChip(text: String): Chip = Chip(this).apply {
         this.text = text
@@ -5373,7 +4501,7 @@ private data class HistoryFilterSelectorRow(
     val onClick: () -> Unit
 )
 
-private data class SettingRow(
+internal data class SettingRow(
     val title: String,
     val body: String?,
     val checked: Boolean? = null,
