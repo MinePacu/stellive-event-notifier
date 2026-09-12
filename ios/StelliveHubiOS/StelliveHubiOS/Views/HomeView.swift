@@ -93,14 +93,14 @@ struct HomeView: View {
                 }
 
                 Section("마감 임박 굿즈/행사") {
-                    if store.closingSoonHubEvents.isEmpty {
+                    if serverStore.hubEvents(for: "closing").isEmpty {
                         NavigationLink {
                             HubEventsView()
                         } label: {
                             Text("마감 임박 항목 없음")
                         }
                     } else {
-                        ForEach(store.closingSoonHubEvents) { event in
+                        ForEach(serverStore.hubEvents(for: "closing")) { event in
                             NavigationLink {
                                 HubEventDetailView(event: event)
                             } label: {
