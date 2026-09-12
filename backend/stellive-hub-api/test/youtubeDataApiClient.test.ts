@@ -220,7 +220,8 @@ describe("YoutubeDataApiClient", () => {
 
     const details = await client.getVideoDetails(ids);
 
-    expect(details[0]).toEqual({
+    expect(details.status).toBe("ok");
+    expect(details.items[0]).toEqual({
       videoId: "video-1",
       channelId: "UC123",
       title: "별빛",

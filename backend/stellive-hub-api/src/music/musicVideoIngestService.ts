@@ -50,7 +50,10 @@ export interface MusicVideoProcessorResult {
 
 export interface MusicVideoIngestServiceOptions {
   youtube: {
-    fetchVideos(videoIds: string[]): Promise<YoutubeVideoDetail[]>;
+    fetchVideos(videoIds: string[]): Promise<{
+      status: "ok" | "quota_exceeded" | "error";
+      items: YoutubeVideoDetail[];
+    }>;
   };
   processor: {
     ingestVideoDetail(
@@ -125,7 +128,11 @@ export class MusicVideoIngestService {
     try {
       // The internal route accepts at most 50 IDs, so this must remain one
       // videos.list batch rather than allowing the client to chunk requests.
-      details = await this.options.youtube.fetchVideos(videoIds);
+      const fetched = await this.options.youtube.fetchVideos(videoIds);
+      // quota_exceeded / error must be reported as a fetch failure, not as
+      // "these videos do not exist".
+      if (fetched.status !== "ok") throw new Error(fetched.status);
+      details = fetched.items;
     } catch {
       const items = videoIds.map((videoId) => emptyItem(videoId, "failed", "youtube_fetch_failed"));
       return {

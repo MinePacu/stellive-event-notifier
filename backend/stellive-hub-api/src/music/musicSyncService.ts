@@ -51,7 +51,10 @@ export interface MusicYoutubeSyncPort {
     | { status: "ok"; items: MusicPlaylistItemForSync[]; pagesFetched: number; quotaUnits: number }
     | { status: "quota_exceeded" | "error"; items: MusicPlaylistItemForSync[]; pagesFetched: number; quotaUnits: number }
   >;
-  fetchVideos(videoIds: string[]): Promise<MusicVideoDetailForSync[]>;
+  fetchVideos(videoIds: string[]): Promise<{
+    status: "ok" | "quota_exceeded" | "error";
+    items: MusicVideoDetailForSync[];
+  }>;
 }
 
 export interface MusicSyncRepositoryPort {
@@ -143,11 +146,17 @@ export class MusicSyncService {
       ? [] as string[]
       : undefined;
     try {
-      const processPage = async (items: MusicPlaylistItemForSync[]) => {
+      const processPage = async (items: MusicPlaylistItemForSync[]): Promise<"quota_exceeded" | "error" | null> => {
         const videoIds = items.map((item) => item.videoId);
         if (seenYoutubeVideoIds) seenYoutubeVideoIds.push(...videoIds);
-        const details = videoIds.length > 0 ? await this.options.youtube.fetchVideos(videoIds) : [];
-        const detailsById = new Map(details.map((detail) => [detail.videoId, detail]));
+        // A videos.list failure must not be mistaken for "these videos are private":
+        // `isPublic` below defaults to false when a detail is missing, so a transient
+        // 403/5xx would silently hide the whole page. Fail the sync instead.
+        const detailsResult = videoIds.length > 0
+          ? await this.options.youtube.fetchVideos(videoIds)
+          : { status: "ok" as const, items: [] as MusicVideoDetailForSync[] };
+        if (detailsResult.status !== "ok") return detailsResult.status;
+        const detailsById = new Map(detailsResult.items.map((detail) => [detail.videoId, detail]));
         const musicType = classifyMusicSource(source);
 
         for (const item of items) {
@@ -184,6 +193,7 @@ export class MusicSyncService {
           await this.options.repository.replaceMusicItemMembers(saved.id, match.links);
         }
         fetchedCount += items.length;
+        return null;
       };
 
       const failForPlaylistStatus = async (status: "quota_exceeded" | "error") => {
@@ -211,7 +221,8 @@ export class MusicSyncService {
           });
           quotaUnits += page.quotaUnits;
           if (page.status !== "ok") return failForPlaylistStatus(page.status);
-          await processPage(page.items);
+          const pageFailure = await processPage(page.items);
+          if (pageFailure) return failForPlaylistStatus(pageFailure);
           pagesFetched += page.pagesFetched;
           pageToken = page.nextPageToken;
           if (mode === "light" && pagesFetched >= this.lightMaxPages) break;
@@ -223,7 +234,8 @@ export class MusicSyncService {
         );
         quotaUnits += playlistResult.quotaUnits;
         if (playlistResult.status !== "ok") return failForPlaylistStatus(playlistResult.status);
-        await processPage(playlistResult.items);
+        const pageFailure = await processPage(playlistResult.items);
+        if (pageFailure) return failForPlaylistStatus(pageFailure);
       }
 
       let missingCount = 0;

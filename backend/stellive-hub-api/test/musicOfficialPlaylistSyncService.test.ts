@@ -41,7 +41,7 @@ function createService() {
           { playlistItemId: "pli-original-1", videoId: "video-dup", title: "Lize original", publishedAt: "2026-06-21T00:00:00.000Z", position: 0 },
         ],
     })),
-    fetchVideos: vi.fn(async () => [
+    fetchVideos: vi.fn(async () => ({ status: "ok" as const, items: [
       {
         videoId: "video-dup",
         title: "STELLIVE cover",
@@ -64,7 +64,7 @@ function createService() {
         channelTitle: "Akane Lize",
         privacyStatus: "public",
       },
-    ]),
+    ] })),
   };
   const syncRuns = {
     startRun: vi.fn(async () => ({ id: "run-1" })),
@@ -152,7 +152,7 @@ describe("OfficialStelliveMusicSyncService", () => {
             ]
           : [],
       })),
-      fetchVideos: vi.fn(async () => [
+      fetchVideos: vi.fn(async () => ({ status: "ok" as const, items: [
         {
           videoId: "P_oxx3_VpIY",
           title: exactTitle,
@@ -165,7 +165,7 @@ describe("OfficialStelliveMusicSyncService", () => {
           duration: "PT3M",
           privacyStatus: "public",
         },
-      ]),
+      ] })),
     };
     const service = new OfficialStelliveMusicSyncService({
       repository,

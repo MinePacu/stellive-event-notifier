@@ -69,7 +69,7 @@ describe("YoutubeUploadNotificationService", () => {
 
   it("creates official upload notifications only after metadata proves a non-live video", async () => {
     const persistenceState = persistence();
-    const fetchVideos = vi.fn(async () => [{ videoId: "video-1", channelId: "UC_OFFICIAL", liveBroadcastContent: "none", tags: [] }]);
+    const fetchVideos = vi.fn(async () => ({ status: "ok" as const, items: [{ videoId: "video-1", channelId: "UC_OFFICIAL", liveBroadcastContent: "none", tags: [] }] }));
     const service = new YoutubeUploadNotificationService({
       catalog: catalog([member({ id: "official", generationId: "official", catalogRole: "official_channel", platforms: { youtubeChannelId: "UC_OFFICIAL", externalUrls: {} }, supportedEventTypes: ["official_youtube_upload"] })]),
       youtube: { fetchVideos },
@@ -85,7 +85,7 @@ describe("YoutubeUploadNotificationService", () => {
     const persistenceState = persistence();
     const service = new YoutubeUploadNotificationService({
       catalog: catalog([member({ id: "official", generationId: "official", catalogRole: "official_channel", platforms: { youtubeChannelId: "UC_OFFICIAL", externalUrls: {} }, supportedEventTypes: ["official_youtube_upload"] })]),
-      youtube: { fetchVideos: async () => [{ videoId: "video-1", channelId: "UC_OFFICIAL", liveBroadcastContent: "live", tags: [] }] },
+      youtube: { fetchVideos: async () => ({ status: "ok" as const, items: [{ videoId: "video-1", channelId: "UC_OFFICIAL", liveBroadcastContent: "live", tags: [] }] }) },
       unitOfWork: persistenceState.unitOfWork,
     });
 
@@ -98,7 +98,7 @@ describe("YoutubeUploadNotificationService", () => {
     const persistenceState = persistence();
     const service = new YoutubeUploadNotificationService({
       catalog: catalog([member({ id: "official", generationId: "official", catalogRole: "official_channel", platforms: { youtubeChannelId: "UC_OFFICIAL", externalUrls: {} }, supportedEventTypes: ["official_youtube_upload"] })]),
-      youtube: { fetchVideos: async () => [{ videoId: "video-1", channelId: "UC_OFFICIAL", liveBroadcastContent: "none", actualEndTime: "2026-08-20T00:05:00.000Z", tags: [] }] },
+      youtube: { fetchVideos: async () => ({ status: "ok" as const, items: [{ videoId: "video-1", channelId: "UC_OFFICIAL", liveBroadcastContent: "none", actualEndTime: "2026-08-20T00:05:00.000Z", tags: [] }] }) },
       unitOfWork: persistenceState.unitOfWork,
     });
 
@@ -111,7 +111,7 @@ describe("YoutubeUploadNotificationService", () => {
     const persistenceState = persistence();
     const service = new YoutubeUploadNotificationService({
       catalog: catalog([member({ id: "official", generationId: "official", catalogRole: "official_channel", platforms: { youtubeChannelId: "UC_OFFICIAL", externalUrls: {} }, supportedEventTypes: ["official_youtube_upload"] })]),
-      youtube: { fetchVideos: async () => [] },
+      youtube: { fetchVideos: async () => ({ status: "ok" as const, items: [] }) },
       unitOfWork: persistenceState.unitOfWork,
     });
 

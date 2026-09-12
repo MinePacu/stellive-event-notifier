@@ -168,7 +168,8 @@ describe("YoutubeDataApiClient music playlist methods", () => {
 
     const details = await client.fetchVideos(ids);
 
-    expect(details).toEqual([{
+    expect(details.status).toBe("ok");
+    expect(details.items).toEqual([{
       videoId: "video-1",
       title: "original one",
       description: "desc",
