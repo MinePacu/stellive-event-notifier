@@ -1,6 +1,10 @@
 package dev.minepacu.stelliveeventnotifier
 
+import dev.minepacu.stelliveeventnotifier.feature.announcements.AnnouncementsScreenController
 import dev.minepacu.stelliveeventnotifier.feature.goodsevents.GoodsEventsScreenController
+import dev.minepacu.stelliveeventnotifier.feature.history.HistoryScreenController
+import dev.minepacu.stelliveeventnotifier.feature.home.HomeScreenController
+import dev.minepacu.stelliveeventnotifier.feature.live.LiveScreenController
 import dev.minepacu.stelliveeventnotifier.feature.reservations.ReservationsScreenController
 import dev.minepacu.stelliveeventnotifier.feature.settings.SettingsScreenController
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongsScreenController
@@ -10,7 +14,6 @@ import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.ActivityNotFoundException
-import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -31,13 +34,11 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.CalendarContract
 import android.text.Editable
-import android.text.TextUtils
 import android.text.TextWatcher
 import android.transition.AutoTransition
 import android.transition.TransitionManager
 import android.util.Log
 import android.util.LruCache
-import android.view.DragEvent
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -97,7 +98,6 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarEntryKind
 import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
 import dev.minepacu.stelliveeventnotifier.core.model.HubMember
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationEventType
-import dev.minepacu.stelliveeventnotifier.core.model.NotificationHistoryItem
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationPlatform
 import dev.minepacu.stelliveeventnotifier.core.notification.NotificationPermissionPromptMoment
 import dev.minepacu.stelliveeventnotifier.core.notification.NotificationPermissionPromptPolicy
@@ -111,7 +111,6 @@ import dev.minepacu.stelliveeventnotifier.feature.calendar.CalendarUiPolicy
 import dev.minepacu.stelliveeventnotifier.feature.calendar.HubEventsCalendarView
 import dev.minepacu.stelliveeventnotifier.feature.home.HubScreen
 import dev.minepacu.stelliveeventnotifier.feature.home.HubRepository
-import dev.minepacu.stelliveeventnotifier.feature.home.LiveMemberOrderingPolicy
 import dev.minepacu.stelliveeventnotifier.feature.home.LoadingPresentation
 import dev.minepacu.stelliveeventnotifier.core.network.HubApiClient
 import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
@@ -156,8 +155,6 @@ import dev.minepacu.stelliveeventnotifier.feature.songs.DataStoreSongDiscoveryRe
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongDiscoveryPolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongDiscoveryRepository
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongDiscoveryStateV1
-import dev.minepacu.stelliveeventnotifier.ui.components.HubSingleChoiceBottomSheet
-import dev.minepacu.stelliveeventnotifier.ui.components.HubSingleChoiceOption
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -272,11 +269,6 @@ private data class LiveClockTextView(
     val textView: TextView,
 )
 
-private data class LiveDragPayload(
-    val memberId: String,
-    val fromIndex: Int,
-)
-
 private data class RootNavigationItem(
     val screen: HubScreen,
     val view: View,
@@ -330,6 +322,10 @@ internal lateinit var binding: ActivityMainBinding
     internal lateinit var songsScreenController: SongsScreenController
     internal lateinit var goodsEventsScreenController: GoodsEventsScreenController
     internal lateinit var reservationsScreenController: ReservationsScreenController
+    private lateinit var homeScreenController: HomeScreenController
+    internal lateinit var announcementsScreenController: AnnouncementsScreenController
+    internal lateinit var liveScreenController: LiveScreenController
+    internal lateinit var historyScreenController: HistoryScreenController
     internal val repository = MockHubRepository()
     internal lateinit var serverRepository: HubRepository
     private lateinit var pushTokenSyncer: PushTokenSyncer
@@ -360,11 +356,11 @@ internal lateinit var binding: ActivityMainBinding
     internal var activeSettingsHubScrollView: NestedScrollView? = null
     private var lastRootBackPressedAt = 0L
 internal var selectedFilter = "all"
-private var selectedLiveStatusFilter = "all"
-private var liveMemberPriorityIds: List<String> = emptyList()
-private var draggingLiveMemberId: String? = null
-    private var selectedHistoryEventTypeFilterId = "all"
-    private var selectedHistoryMemberFilterId = "all"
+internal var selectedLiveStatusFilter = "all"
+internal var liveMemberPriorityIds: List<String> = emptyList()
+internal var draggingLiveMemberId: String? = null
+    internal var selectedHistoryEventTypeFilterId = "all"
+    internal var selectedHistoryMemberFilterId = "all"
 internal val songBrowseSession: SongBrowseSessionViewModel by viewModels()
 internal var selectedSongType: String
     get() = songBrowseSession.type
@@ -408,12 +404,12 @@ internal var songRefreshJob: Job? = null
     internal var goodsEventsJob: Job? = null
     internal var hubEventDetailJob: Job? = null
     internal var serverHubEventDetailJob: Job? = null
-    private var homeRecentSongsJob: Job? = null
+    internal var homeRecentSongsJob: Job? = null
     internal var persistSettingsJob: Job? = null
 internal var songSearchResultsContainer: LinearLayout? = null
 internal var songSearchResultsAdapter: SongResultsAdapter? = null
-private var homeRecentSongs: List<SongCatalogItem>? = null
-private var isLoadingHomeRecentSongs = false
+internal var homeRecentSongs: List<SongCatalogItem>? = null
+internal var isLoadingHomeRecentSongs = false
 internal var selectedHubEventId: String? = null
 internal var selectedHubEventScheduleItemId: String? = null
 internal val reservationDateFormatter = DateTimeFormatter.ofPattern("yyyy. M. d. HH:mm").withZone(ZoneId.of("Asia/Seoul"))
@@ -437,12 +433,12 @@ internal var detailCalendarSelectedDate: LocalDate? = null
 internal val detailCalendarSelectedScheduleItemIds = mutableSetOf<String>()
 internal var detailCalendarExpansionEventId: String? = null
 internal var detailCalendarExpanded = true
-private var selectedAnnouncementId: String? = null
-private var announcementsSummary = AnnouncementsSummary()
-private var announcementItems: List<ServiceAnnouncement> = emptyList()
-private var announcementNextCursor: String? = null
-private var announcementReadKeys: Set<String> = emptySet()
-private lateinit var announcementReadStore: AnnouncementReadStore
+internal var selectedAnnouncementId: String? = null
+internal var announcementsSummary = AnnouncementsSummary()
+internal var announcementItems: List<ServiceAnnouncement> = emptyList()
+internal var announcementNextCursor: String? = null
+internal var announcementReadKeys: Set<String> = emptySet()
+internal lateinit var announcementReadStore: AnnouncementReadStore
     internal var goodsEventsDays: List<HubCalendarDay> = emptyList()
     internal var goodsEvents: List<HubEvent> = emptyList()
     internal var goodsEventsSelectedMonth: YearMonth = YearMonth.now()
@@ -504,6 +500,10 @@ private var notificationPermissionRequested = false
         songsScreenController = SongsScreenController(this)
         goodsEventsScreenController = GoodsEventsScreenController(this)
         reservationsScreenController = ReservationsScreenController(this)
+        homeScreenController = HomeScreenController(this)
+        announcementsScreenController = AnnouncementsScreenController(this)
+        liveScreenController = LiveScreenController(this)
+        historyScreenController = HistoryScreenController(this)
         binding.root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             scheduleReservationReturnPromptPositionUpdate()
         }
@@ -544,7 +544,7 @@ private var notificationPermissionRequested = false
                 announcementReadStore.readKeys.collect { keys ->
                     announcementReadKeys = keys
                     updateAnnouncementAction()
-                    if (navigationHistory.currentScreen == HubScreen.ANNOUNCEMENTS) refreshScreenWhenIdle(HubScreen.ANNOUNCEMENTS, ::renderAnnouncements)
+                    if (navigationHistory.currentScreen == HubScreen.ANNOUNCEMENTS) refreshScreenWhenIdle(HubScreen.ANNOUNCEMENTS, announcementsScreenController::renderAnnouncements)
                 }
             }
         }
@@ -779,7 +779,7 @@ private var notificationPermissionRequested = false
  }
  binding.contentRefresh.setOnRefreshListener {
  when (navigationHistory.currentScreen) {
-     HubScreen.ANNOUNCEMENTS -> loadAnnouncements(reset = true)
+     HubScreen.ANNOUNCEMENTS -> announcementsScreenController.loadAnnouncements(reset = true)
      HubScreen.SONGS -> songsScreenController.forceRefreshSongs()
      else -> loadServerBootstrap()
  }
@@ -947,7 +947,7 @@ private var notificationPermissionRequested = false
         )
     }
 
-    private fun navigateToRoot(screen: HubScreen) {
+    internal fun navigateToRoot(screen: HubScreen) {
         if (screen == latestNavigationDestination &&
             (screenTransitionController.isTransitionRunning || !navigationHistory.canGoBack)
         ) {
@@ -1144,7 +1144,7 @@ private var notificationPermissionRequested = false
             songSearchResultsContainer = null
         }
         when (screen) {
-HubScreen.HOME -> renderHome()
+HubScreen.HOME -> homeScreenController.renderHome()
 HubScreen.SONGS -> songsScreenController.renderSongs()
 HubScreen.SONG_SEARCH -> songsScreenController.renderSongSearch()
 HubScreen.SONG_MEMBER_FILTER -> songsScreenController.renderSongMemberFilter()
@@ -1155,10 +1155,10 @@ HubScreen.GOODS_EVENTS -> goodsEventsScreenController.renderGoodsEvents()
             HubScreen.RESERVATION_EDIT -> reservationsScreenController.renderReservationEdit()
             HubScreen.RESERVATIONS_HELP -> reservationsScreenController.renderReservationHelp(ReservationHelpPage.LIST)
             HubScreen.RESERVATION_DETAIL_HELP -> reservationsScreenController.renderReservationHelp(ReservationHelpPage.DETAIL)
-            HubScreen.LIVE -> renderLive()
-HubScreen.HISTORY -> renderHistory()
-            HubScreen.ANNOUNCEMENTS -> renderAnnouncements()
-            HubScreen.ANNOUNCEMENT_DETAIL -> renderAnnouncementDetail()
+            HubScreen.LIVE -> liveScreenController.renderLive()
+HubScreen.HISTORY -> historyScreenController.renderHistory()
+            HubScreen.ANNOUNCEMENTS -> announcementsScreenController.renderAnnouncements()
+            HubScreen.ANNOUNCEMENT_DETAIL -> announcementsScreenController.renderAnnouncementDetail()
             HubScreen.SETTINGS -> settingsScreenController.renderSettings()
             HubScreen.SETTINGS_DELIVERY -> settingsScreenController.renderSettingsDelivery()
             HubScreen.SETTINGS_TARGETS -> settingsScreenController.renderSettingsTargets()
@@ -1436,123 +1436,7 @@ internal fun startScreen(
         }
     }
 
-    private fun liveMembersForUi(): List<HubMember> =
-        LiveMemberOrderingPolicy.orderedLiveMembers(serverMembers ?: repository.members, liveMemberPriorityIds)
-
-    private fun chzzkMembersForUi(): List<HubMember> =
-        LiveMemberOrderingPolicy.orderedChzzkTargets(serverMembers ?: repository.members, liveMemberPriorityIds)
-
-    private fun liveStatusFilteredMembersForUi(): List<HubMember> =
-        chzzkMembersForUi()
-            .filter {
-                when (selectedLiveStatusFilter) {
-                    "live" -> it.isLive
-                    "offline" -> !it.isLive
-                    else -> true
-                }
-            }
-
-    private fun renderHome() {
-        startScreen(
-            screenId = "home",
-            title = getString(R.string.home_title),
-            role = "지금 라이브, 최근 알림, 마감 임박 굿즈/행사를 확인합니다."
-        )
-        binding.root.post {
-            if (navigationHistory.currentScreen == HubScreen.HOME) {
-                checkForAndroidUpdate(manual = false)
-            }
-        }
-        val homeAnnouncement = AnnouncementPolicy.homeAnnouncement(
-            (announcementItems + listOfNotNull(announcementsSummary.pinned)).distinctBy { it.id }
-        )
-        if (homeAnnouncement != null) {
-            binding.contentList.addView(sectionLabel("중요 공지"))
-            binding.contentList.addView(announcementCard(homeAnnouncement, showBody = false))
-        }
-        binding.contentList.addView(sectionLabel("지금 라이브"))
-        binding.contentList.addView(serverStatusStrip())
-        if (liveMembersForUi().isEmpty()) {
-            binding.contentList.addView(
-                compactEventCard("현재 라이브 없음", "서버 갱신 기준으로 표시합니다.", listOf("대기"))
-            )
-        } else {
-            LiveMemberOrderingPolicy.homeLivePreview(serverMembers ?: repository.members, liveMemberPriorityIds)
-                .forEach { binding.contentList.addView(liveMemberRow(it)) }
-            if (LiveMemberOrderingPolicy.hasHomeLiveOverflow(serverMembers ?: repository.members)) {
-                binding.contentList.addView(moreLiveMembersButton())
-            }
-        }
-        binding.contentList.addView(sectionLabel("최근 곡"))
-        when (val recentSongs = homeRecentSongs) {
-            null -> binding.contentList.addView(
-                loadingCard(MainUiPolicy.homeRecentSongsLoadingPresentation())
-            )
-            emptyList<SongCatalogItem>() -> binding.contentList.addView(
-                compactEventCard("최근 곡 없음", "등록된 곡이 없습니다.", listOf("노래"))
-            )
-            else -> recentSongs.forEach { binding.contentList.addView(songsScreenController.songCard(it)) }
-        }
-        binding.contentList.addView(
-            compactEventCard("노래 전체 보기", "커버곡과 오리지널 곡 전체 목록으로 이동합니다.", listOf("전체")).apply {
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { navigateToRoot(HubScreen.SONGS) }
-            }
-        )
-        loadHomeRecentSongsIfNeeded()
-        binding.contentList.addView(sectionLabel("최근 알림"))
-        if (repository.recentHistoryPreview.isEmpty()) {
-            binding.contentList.addView(
-                compactEventCard("최근 알림 없음", "허용된 알림이 도착하면 여기에 표시됩니다.", listOf("기록"))
-            )
-        } else {
-            repository.recentHistoryPreview.forEach {
-                binding.contentList.addView(
-                    historyEventCard(
-                        item = it,
-                        member = repository.memberForHistory(it)
-                    )
-                )
-            }
-        }
-        binding.contentList.addView(sectionLabel("마감 임박 굿즈/행사"))
-        val hubEventsListAction = MainUiPolicy.homeHubEventsListAction(repository.closingSoonHubEvents.size)
-        if (repository.closingSoonHubEvents.isEmpty()) {
-            binding.contentList.addView(
-                compactEventCard(
-                    hubEventsListAction.title,
-                    hubEventsListAction.body,
-                    hubEventsListAction.pills
-                ).apply {
-                    isClickable = true
-                    isFocusable = true
-                    setOnClickListener {
-                        navigateToRoot(HubScreen.GOODS_EVENTS)
-                    }
-                }
-            )
-        } else {
-            repository.closingSoonHubEvents.forEach {
-                binding.contentList.addView(hubEventCard(it))
-            }
-            binding.contentList.addView(
-                compactEventCard(
-                    hubEventsListAction.title,
-                    hubEventsListAction.body,
-                    hubEventsListAction.pills
-                ).apply {
-                    isClickable = true
-                    isFocusable = true
-                    setOnClickListener {
-                        navigateToRoot(HubScreen.GOODS_EVENTS)
-                    }
-                }
-            )
-        }
-    }
-
-    private fun updateAnnouncementAction() {
+    internal fun updateAnnouncementAction() {
         if (!::binding.isInitialized) return
         val unreadCount = announcementsSummary.items.count {
             AnnouncementPolicy.readKey(it.id, it.attentionRevision) !in announcementReadKeys
@@ -1561,147 +1445,6 @@ internal fun startScreen(
         binding.topBarAnnouncementBadge.isVisible = unreadCount > 0 && binding.topBarAnnouncementContainer.isVisible
         binding.topBarAnnouncement.contentDescription = AnnouncementPolicy.accessibilityLabel(unreadCount)
     }
-
-    private fun renderAnnouncements() {
-        startScreen("announcements", "공지사항", "앱 서비스 운영 안내와 장애·점검·업데이트 소식입니다.")
-        if (announcementItems.isEmpty()) {
-            binding.contentList.addView(compactEventCard("공지 확인 중", "서버에서 최신 공지를 불러오고 있습니다.", emptyList()))
-            loadAnnouncements(reset = true)
-            return
-        }
-        val sorted = AnnouncementPolicy.sorted(announcementItems)
-        val pinned = sorted.filter { it.isPinned }
-        val recent = sorted.filterNot { it.isPinned }
-        if (pinned.isNotEmpty()) {
-            binding.contentList.addView(sectionLabel("고정 공지"))
-            pinned.forEach { binding.contentList.addView(announcementCard(it, showBody = false)) }
-        }
-        binding.contentList.addView(sectionLabel("최근 공지"))
-        recent.forEach { binding.contentList.addView(announcementCard(it, showBody = false)) }
-        announcementNextCursor?.let {
-            binding.contentList.addView(compactEventCard("더 불러오기", "이전 공지를 이어서 확인합니다.", emptyList()).apply {
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { loadAnnouncements(reset = false) }
-            })
-        }
-    }
-
-    private fun loadAnnouncements(reset: Boolean) {
-        lifecycleScope.launch {
-            val page = serverRepository.announcements(if (reset) null else announcementNextCursor)
-            announcementItems = if (reset) page.items else (announcementItems + page.items).distinctBy { it.id }
-            announcementNextCursor = page.nextCursor
-            announcementReadStore.initialize(announcementItems)
-            binding.contentRefresh.isRefreshing = false
-            if (navigationHistory.currentScreen == HubScreen.ANNOUNCEMENTS) refreshScreenWhenIdle(HubScreen.ANNOUNCEMENTS, ::renderAnnouncements)
-        }
-    }
-
-    private fun announcementCard(announcement: ServiceAnnouncement, showBody: Boolean): MaterialCardView {
-        val unread = AnnouncementPolicy.readKey(announcement.id, announcement.attentionRevision) !in announcementReadKeys
-        val meta = mutableListOf(announcement.type.displayName, announcement.severity.displayName)
-        if (unread) meta += "읽지 않음"
-        if (announcement.resolvedAt != null) meta += "해결됨"
-        meta += announcement.publishedAt.toString().take(10)
-        return compactEventCard(
-            announcement.title,
-            if (showBody) announcement.body else announcement.summary,
-            meta,
-        ).apply {
-            isClickable = true
-            isFocusable = true
-            setOnClickListener {
-                selectedAnnouncementId = announcement.id
-                markAnnouncementRead(announcement)
-                pushScreen(HubScreen.ANNOUNCEMENT_DETAIL)
-            }
-        }
-    }
-
-    private fun markAnnouncementRead(announcement: ServiceAnnouncement) {
-        announcementReadKeys = announcementReadKeys + AnnouncementPolicy.readKey(announcement.id, announcement.attentionRevision)
-        updateAnnouncementAction()
-        lifecycleScope.launch { announcementReadStore.markRead(announcement) }
-    }
-
-    private fun renderAnnouncementDetail() {
-        startScreen("announcement_detail", "공지사항", "")
-        val id = selectedAnnouncementId
-        val announcement = announcementItems.firstOrNull { it.id == id } ?: announcementsSummary.pinned?.takeIf { it.id == id }
-        if (id == null) {
-            binding.contentList.addView(compactEventCard("공지를 찾을 수 없습니다", "공지 목록에서 다시 선택해 주세요.", emptyList()))
-            return
-        }
-        if (announcement == null) {
-            binding.contentList.addView(compactEventCard("공지 불러오는 중", "상세 내용을 확인하고 있습니다.", emptyList()))
-            lifecycleScope.launch {
-                serverRepository.announcementDetail(id)?.let {
-                    announcementItems = (announcementItems + it).distinctBy(ServiceAnnouncement::id)
-                    markAnnouncementRead(it)
-                    refreshScreenWhenIdle(HubScreen.ANNOUNCEMENT_DETAIL, ::renderAnnouncementDetail)
-                }
-            }
-            return
-        }
-        markAnnouncementRead(announcement)
-        binding.contentList.addView(sectionLabel(announcement.type.displayName + " · " + announcement.severity.displayName))
-        binding.contentList.addView(screenTitle(announcement.title))
-        binding.contentList.addView(screenCopy("게시 ${announcement.publishedAt.toString().take(16).replace('T', ' ')} · 수정 ${announcement.updatedAt.toString().take(16).replace('T', ' ')}"))
-        binding.contentList.addView(compactEventCard("", announcement.body, listOfNotNull(if (announcement.resolvedAt != null) "해결됨" else null)))
-        if (!announcement.actionLabel.isNullOrBlank() && (!announcement.appDeepLink.isNullOrBlank() || !announcement.externalUrl.isNullOrBlank())) {
-            binding.contentList.addView(compactEventCard(announcement.actionLabel, "관련 화면 또는 링크를 엽니다.", emptyList()).apply {
-                isClickable = true
-                isFocusable = true
-                setOnClickListener {
-                    announcement.appDeepLink?.let { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) }
-                        ?: openExternalUrl(announcement.externalUrl)
-                }
-            })
-        }
-        announcement.externalUrl?.let { url ->
-            binding.contentList.addView(compactEventCard("외부 링크", url, emptyList()).apply {
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { openExternalUrl(url) }
-            })
-        }
-    }
-
-    private fun loadHomeRecentSongsIfNeeded() {
-        if (homeRecentSongs != null || isLoadingHomeRecentSongs) return
-        isLoadingHomeRecentSongs = true
-        homeRecentSongsJob?.cancel()
-        homeRecentSongsJob = lifecycleScope.launch {
-            homeRecentSongs = serverRepository.recentSongs(limit = 5)
-            isLoadingHomeRecentSongs = false
-            if (navigationHistory.currentScreen == HubScreen.HOME) {
-                refreshScreenWhenIdle(HubScreen.HOME, ::renderHome)
-            }
-        }
-    }
-
-    private fun moreLiveMembersButton(): Chip =
-        Chip(this).apply {
-            text = "더보기"
-            isCheckable = false
-            chipMinHeight = dp(34).toFloat()
-            textSize = 13f
-            typeface = Typeface.DEFAULT_BOLD
-            chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_surface)
-            chipStrokeWidth = dp(1).toFloat()
-            chipStrokeColor = ContextCompat.getColorStateList(context, R.color.hub_line)
-            setTextColor(color(R.color.hub_text))
-            setOnClickListener {
-                navigateToRoot(HubScreen.LIVE)
-            }
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply {
-                bottomMargin = dp(10)
-            }
-        }
 
     internal fun reservationSummaryCard(): MaterialCardView = baseCard(HubCardStyle.INTERACTIVE).apply {
         val now = Instant.now()
@@ -1931,94 +1674,6 @@ internal fun startScreen(
             params.gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
             prompt.layoutParams = params
         }
-    }
-
-    private fun renderLive() {
-        startScreen(
-            screenId = "live",
-            title = getString(R.string.live_title),
-            role = "Foreground 상태 갱신은 화면 표시용입니다. 백그라운드 알림은 서버 중심 푸시로 처리합니다."
-        )
-        binding.contentList.addView(filterPanel(MainUiPolicy.liveTopFilterGroups(selectedLiveStatusFilter)) { _, optionId ->
-            selectedLiveStatusFilter = optionId
-            renderLive()
-        })
-        binding.contentList.addView(serverStatusStrip())
-        val members = liveStatusFilteredMembersForUi()
-        if (members.isEmpty()) {
-            binding.contentList.addView(compactEventCard("조건에 맞는 멤버 없음", "다른 라이브 상태 필터를 선택해 확인할 수 있습니다.", listOf("필터")))
-        } else {
-            members.forEach { member ->
-                binding.contentList.addView(liveMemberRow(member, reorderable = true))
-            }
-        }
-    }
-
-    private fun renderHistory() {
-        val eventTypeOptions = repository.historyEventTypeFilters()
-        val memberOptions = repository.historyMemberFilters()
-        val filteredHistory = repository.filteredHistory(
-            eventTypeFilterId = selectedHistoryEventTypeFilterId,
-            memberFilterId = selectedHistoryMemberFilterId
-        )
-        startScreen(
-            screenId = "history",
-            title = getString(R.string.history_title),
-            role = "서버에서 허용, 중복 제거, 사용자 설정, rate limit을 통과한 이벤트만 표시합니다."
-        )
-        binding.contentList.addView(
-            historyFilterPanel(
-                rows = listOf(
-                    HistoryFilterSelectorRow(
-                        title = "알림 종류",
-                        selectedValue = eventTypeOptions.firstOrNull { it.id == selectedHistoryEventTypeFilterId }?.displayName ?: "전체",
-                        onClick = {
-                            showHistoryFilterDialog(
-                                title = "알림 종류",
-                                options = eventTypeOptions.map { it.id to it.displayName },
-                                selectedId = selectedHistoryEventTypeFilterId
-                            ) {
-                                selectedHistoryEventTypeFilterId = it
-                                renderHistory()
-                            }
-                        }
-                    ),
-                    HistoryFilterSelectorRow(
-                        title = "멤버",
-                        selectedValue = memberOptions.firstOrNull { it.id == selectedHistoryMemberFilterId }?.displayName ?: "전체",
-                        onClick = {
-                            showHistoryFilterDialog(
-                                title = "멤버",
-                                options = memberOptions.map { it.id to it.displayName },
-                                selectedId = selectedHistoryMemberFilterId
-                            ) {
-                                selectedHistoryMemberFilterId = it
-                                renderHistory()
-                            }
-                        }
-                    )
-                )
-            )
-        )
-        if (filteredHistory.isEmpty()) {
-            binding.contentList.addView(
-                settingsInfoCard(
-                    "조건에 맞는 알림 없음",
-                    "다른 알림 종류나 멤버를 선택하면 해당 기록만 볼 수 있습니다.",
-                    listOf("필터")
-                )
-            )
-        } else {
-            filteredHistory.forEach {
-                binding.contentList.addView(
-                    historyEventCard(
-                        item = it,
-                        member = repository.memberForHistory(it)
-                    )
-                )
-            }
-        }
-        binding.contentList.addView(settingsNoticeCard(MainUiPolicy.historyPolicyNotice()))
     }
 
     // RecyclerView.Adapter for song search results. songCard() already builds a full,
@@ -2278,35 +1933,7 @@ internal fun filterSegmentView(
             ?.filter { it.isNotBlank() }
             ?: emptyList()
 
-private fun writeLiveMemberPriorityIds(ids: List<String>) {
-    liveMemberPriorityIds = ids
-    getSharedPreferences("hub_preferences", Context.MODE_PRIVATE)
-        .edit()
-        .putString(PreferenceKeys.LIVE_MEMBER_ORDER, ids.joinToString(","))
-        .apply()
-}
-
-private fun moveLiveMember(fromIndex: Int, toIndex: Int) {
-    val members = liveStatusFilteredMembersForUi()
-    writeLiveMemberPriorityIds(
-        LiveMemberOrderingPolicy.movedPriority(
-            priorityMemberIds = liveMemberPriorityIds,
-            orderedMembers = members,
-            fromIndex = fromIndex,
-            toIndex = toIndex,
-        ),
-    )
-    renderLive()
-}
-
-private fun moveLiveMember(member: HubMember, offset: Int) {
-    val members = liveStatusFilteredMembersForUi()
-    val index = members.indexOfFirst { it.id == member.id }
-    if (index == -1) return
-    moveLiveMember(index, index + offset)
-}
-
-    private fun registerLiveClockTextView(startedAt: Instant, textView: TextView) {
+    internal fun registerLiveClockTextView(startedAt: Instant, textView: TextView) {
         liveClockTextViews += LiveClockTextView(startedAt, textView)
         scheduleLiveClockRefresh()
     }
@@ -2363,7 +1990,7 @@ private fun updateTopBarScrolled(scrolled: Boolean) {
         window.statusBarColor = Color.TRANSPARENT
     }
 
-    private fun screenTitle(text: String): TextView = TextView(this).apply {
+    internal fun screenTitle(text: String): TextView = TextView(this).apply {
         this.text = text
         setTextColor(color(R.color.hub_text))
         textSize = 26f
@@ -2372,7 +1999,7 @@ private fun updateTopBarScrolled(scrolled: Boolean) {
         setPadding(0, 0, 0, dp(8))
     }
 
-    private fun screenCopy(text: String): TextView = TextView(this).apply {
+    internal fun screenCopy(text: String): TextView = TextView(this).apply {
         this.text = text
         setTextColor(color(R.color.hub_text_muted))
         textSize = 13f
@@ -2443,7 +2070,7 @@ private fun filterChips(): HorizontalScrollView =
                 )
                 setOnClickListener {
                     selectedFilter = filter.id
-                    renderHome()
+                    homeScreenController.renderHome()
                 }
             })
         })
@@ -2481,7 +2108,7 @@ private fun filterChips(): HorizontalScrollView =
                 )
                 setOnClickListener {
                     selectedLiveStatusFilter = id
-                    renderLive()
+                    liveScreenController.renderLive()
                 }
             })
         })
@@ -2524,12 +2151,6 @@ internal fun noticeCard(text: String): TextView = TextView(this).apply {
         }
     }
 
-    private fun settingsNoticeCard(text: String): TextView = noticeCard(text).apply {
-        val verticalPadding = dp(MainUiPolicy.settingsCardSpacing.contentVerticalPaddingDp)
-        setPadding(paddingLeft, verticalPadding, paddingRight, verticalPadding)
-        layoutParams = settingsCardLayoutParams()
-    }
-
     private fun memberCard(member: HubMember): MaterialCardView =
         baseCard().apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -2549,7 +2170,7 @@ internal fun noticeCard(text: String): TextView = TextView(this).apply {
             addView(row)
         }
 
-    private fun memberAvatar(member: HubMember, size: Int, showsLiveIndicator: Boolean = false): FrameLayout =
+    internal fun memberAvatar(member: HubMember, size: Int, showsLiveIndicator: Boolean = false): FrameLayout =
         FrameLayout(this).apply {
             addView(
                 avatarText(member, size),
@@ -2647,7 +2268,7 @@ internal fun noticeCard(text: String): TextView = TextView(this).apply {
         else -> "OFFLINE"
     }
 
-private fun statusBadge(text: String, positive: Boolean): TextView = TextView(this).apply {
+internal fun statusBadge(text: String, positive: Boolean): TextView = TextView(this).apply {
         this.text = text
         gravity = Gravity.CENTER
         textAlignment = View.TEXT_ALIGNMENT_CENTER
@@ -2663,228 +2284,6 @@ private fun statusBadge(text: String, positive: Boolean): TextView = TextView(th
         setPadding(dp(8), dp(5), dp(8), dp(5))
     }
 
-private fun liveMemberRow(member: HubMember, reorderable: Boolean = false): MaterialCardView =
-        baseCard(HubCardStyle.INTERACTIVE).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = dp(10)
-            }
-            val row = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(13), dp(13), dp(13), dp(13))
-            }
-            row.addView(memberAvatar(member, dp(42), showsLiveIndicator = true), LinearLayout.LayoutParams(dp(42), dp(42)))
-            row.addView(liveMemberTextBlock(member), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = dp(12)
-                marginEnd = dp(10)
-            })
-            row.addView(liveMemberStatusBlock(member))
-            addView(row)
-            if (reorderable) {
-                attachLiveReorderHandlers(this, member)
-            }
-        }
-
-    private fun attachLiveReorderHandlers(card: MaterialCardView, member: HubMember) {
-        val orderedMembers = liveStatusFilteredMembersForUi()
-        val currentIndex = orderedMembers.indexOfFirst { it.id == member.id }
-        card.contentDescription = "${member.koreanName}, ${currentIndex + 1}번째, 길게 눌러 순서 변경"
-        card.setOnLongClickListener {
-            if (currentIndex == -1) return@setOnLongClickListener false
-            draggingLiveMemberId = member.id
-            card.alpha = 0.84f
-            val payload = ClipData.newPlainText("live-member-id", member.id)
-            val shadow = View.DragShadowBuilder(card)
-            card.startDragAndDrop(payload, shadow, LiveDragPayload(member.id, currentIndex), 0)
-            card.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-            true
-        }
-        card.setOnDragListener { _, event ->
-            when (event.action) {
-                DragEvent.ACTION_DRAG_STARTED -> event.localState is LiveDragPayload
-                DragEvent.ACTION_DRAG_ENTERED -> {
-                    val payload = event.localState as? LiveDragPayload ?: return@setOnDragListener false
-                    if (payload.memberId != member.id) {
-                        card.alpha = 0.72f
-                    }
-                    true
-                }
-                DragEvent.ACTION_DRAG_EXITED -> {
-                    card.alpha = if (draggingLiveMemberId == member.id) 0.84f else 1f
-                    true
-                }
-                DragEvent.ACTION_DROP -> {
-                    val payload = event.localState as? LiveDragPayload ?: return@setOnDragListener false
-                    if (payload.memberId != member.id && currentIndex != -1) {
-                        moveLiveMember(payload.fromIndex, currentIndex)
-                    }
-                    true
-                }
-                DragEvent.ACTION_DRAG_ENDED -> {
-                    card.alpha = 1f
-                    draggingLiveMemberId = null
-                    true
-                }
-                else -> true
-            }
-        }
-        card.accessibilityDelegate = object : View.AccessibilityDelegate() {
-            override fun onInitializeAccessibilityNodeInfo(
-                host: View,
-                info: android.view.accessibility.AccessibilityNodeInfo,
-            ) {
-                super.onInitializeAccessibilityNodeInfo(host, info)
-                info.addAction(
-                    android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
-                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD,
-                        "위로 이동",
-                    ),
-                )
-                info.addAction(
-                    android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
-                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD,
-                        "아래로 이동",
-                    ),
-                )
-            }
-
-            override fun performAccessibilityAction(host: View, action: Int, args: Bundle?): Boolean =
-                when (action) {
-                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> {
-                        moveLiveMember(member, -1)
-                        true
-                    }
-                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> {
-                        moveLiveMember(member, 1)
-                        true
-                    }
-                    else -> super.performAccessibilityAction(host, action, args)
-                }
-        }
-    }
-
-    private fun liveMemberTextBlock(member: HubMember): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        addView(TextView(context).apply {
-            text = member.koreanName
-            setTextColor(color(R.color.hub_text))
-            textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
-            setLineSpacing(0f, 1.08f)
-        })
-        addView(TextView(context).apply {
-            text = "${member.generationName} · ${member.unitName}"
-            setTextColor(color(R.color.hub_text_muted))
-            textSize = 11f
-            setPadding(0, dp(3), 0, 0)
-        })
-        addView(TextView(context).apply {
-            text = if (member.isLive) MainUiPolicy.liveTitleText(member.liveTitle) else MainUiPolicy.liveStatusText(member.isLive, member.liveStartedAt)
-            setTextColor(if (member.isLive) color(R.color.hub_text) else color(R.color.hub_text_muted))
-            textSize = if (member.isLive) 13f else 12f
-            typeface = if (member.isLive) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-            maxLines = 2
-            ellipsize = TextUtils.TruncateAt.END
-            setPadding(0, dp(6), 0, 0)
-            setLineSpacing(0f, 1.1f)
-        })
-        if (member.isLive) {
-            liveSupplementaryChipGroup(member)?.let { group ->
-                addView(group, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = dp(6)
-                })
-            }
-        }
-    }
-
-    private fun liveSupplementaryChipGroup(member: HubMember): ChipGroup? {
-        val chips = buildList {
-            MainUiPolicy.liveCategoryText(member.liveCategory)?.let { category ->
-                add(liveCategoryChip(category))
-            }
-            member.livePlatformUrl?.takeIf { it.startsWith("https://") }?.let { url ->
-                add(liveOpenLinkChip(url))
-                if (currentAdaptiveSpec.showAdjacentLiveAction) {
-                    add(liveOpenAdjacentChip(url))
-                }
-            }
-        }
-        if (chips.isEmpty()) return null
-        return ChipGroup(this).apply {
-            isSingleLine = false
-            chipSpacingHorizontal = dp(6)
-            chipSpacingVertical = dp(4)
-            chips.forEach(::addView)
-        }
-    }
-
-    private fun liveCategoryChip(category: String): Chip =
-        Chip(this).apply {
-            text = category
-            isCheckable = false
-            isClickable = false
-            isFocusable = false
-            setEnsureMinTouchTargetSize(false)
-            chipMinHeight = dp(22).toFloat()
-            textSize = 11f
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            textAlignment = View.TEXT_ALIGNMENT_CENTER
-            chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_card_surface_compact)
-            setTextColor(color(R.color.hub_text_muted))
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.END
-            maxWidth = dp(140)
-        }
-
-    private fun liveOpenLinkChip(url: String): Chip =
-        Chip(this).apply {
-            text = getString(R.string.live_open_chzzk)
-            isCheckable = false
-            setEnsureMinTouchTargetSize(false)
-            chipMinHeight = dp(24).toFloat()
-            textSize = 11f
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            textAlignment = View.TEXT_ALIGNMENT_CENTER
-            chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_success_soft)
-            setTextColor(color(R.color.hub_primary))
-            setOnClickListener {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-            }
-        }
-
-    private fun liveOpenAdjacentChip(url: String): Chip =
-        Chip(this).apply {
-            text = getString(R.string.live_open_split)
-            isCheckable = false
-            setEnsureMinTouchTargetSize(false)
-            chipMinHeight = dp(24).toFloat()
-            textSize = 11f
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            textAlignment = View.TEXT_ALIGNMENT_CENTER
-            chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_card_surface_compact)
-            setTextColor(color(R.color.hub_text))
-            setOnClickListener {
-                openLiveUrlAdjacentOrFallback(url)
-            }
-        }
-
-    private fun openLiveUrlAdjacentOrFallback(url: String) {
-        val uri = Uri.parse(url)
-        val adjacentIntent = Intent(Intent.ACTION_VIEW, uri).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
-        }
-
-        runCatching {
-            startActivity(adjacentIntent)
-        }.onFailure {
-            startActivity(Intent(Intent.ACTION_VIEW, uri))
-        }
-    }
-
     private fun liveIndicator(size: Int): View = View(this).apply {
         background = rounded(
             fill = color(R.color.hub_success),
@@ -2892,45 +2291,6 @@ private fun liveMemberRow(member: HubMember, reorderable: Boolean = false): Mate
             stroke = color(R.color.hub_card)
         )
     }
-
-    private fun liveMemberStatusBlock(member: HubMember): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.END
-        addView(statusBadge(if (member.isLive) "LIVE" else "OFF", member.isLive))
-        if (member.isLive) {
-            MainUiPolicy.liveElapsedClockText(member.liveStartedAt)?.let { elapsed ->
-                addView(liveSideMetricRow(R.drawable.ic_metric_clock, elapsed, color(R.color.hub_text_muted), member.liveStartedAt))
-            }
-            MainUiPolicy.viewerCountText(member.liveViewerCount)?.let { viewers ->
-                addView(liveSideMetricRow(R.drawable.ic_metric_viewers, viewers, color(R.color.hub_primary)))
-            }
-        }
-    }
-
-    private fun liveSideMetricRow(iconResId: Int, value: String, valueColor: Int, liveStartedAt: Instant? = null): LinearLayout =
-        LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL or Gravity.END
-            setPadding(0, dp(5), 0, 0)
-            addView(ImageView(context).apply {
-                setImageResource(iconResId)
-                setColorFilter(valueColor)
-                contentDescription = null
-            }, LinearLayout.LayoutParams(dp(12), dp(12)))
-            val valueView = TextView(context).apply {
-                text = value
-                setTextColor(valueColor)
-                textSize = 11f
-                typeface = Typeface.DEFAULT_BOLD
-            }
-            addView(valueView, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                marginStart = dp(4)
-            })
-            liveStartedAt?.let { registerLiveClockTextView(it, valueView) }
-        }
 
     internal fun detailActionButton(label: String, primary: Boolean, onClick: () -> Unit): TextView =
         TextView(this).apply {
@@ -2991,20 +2351,6 @@ internal fun compactEventCard(title: String, body: String, pills: List<String>, 
             addView(content)
         }
 
-    private fun settingsInfoCard(title: String, body: String, pills: List<String>): MaterialCardView =
-        compactEventCard(title, body, pills).apply {
-            layoutParams = settingsCardLayoutParams()
-            (getChildAt(0) as? LinearLayout)?.let { content ->
-                content.applySettingsCardContentPadding(horizontalPaddingDp = 13)
-                (content.getChildAt(1) as? TextView)?.setPadding(
-                    0,
-                    dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp),
-                    0,
-                    0,
-                )
-            }
-        }
-
     internal fun hubEventThumbnail(imageUrl: String): ImageView =
         ImageView(this).apply {
             visibility = View.GONE
@@ -3052,56 +2398,6 @@ internal fun compactEventCard(title: String, body: String, pills: List<String>, 
         }
     }
 
-    private fun historyEventCard(item: NotificationHistoryItem, member: HubMember?): MaterialCardView =
-        baseCard().apply {
-            layoutParams = settingsCardLayoutParams()
-            val row = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.TOP
-                applySettingsCardContentPadding(horizontalPaddingDp = 13)
-            }
-            if (member != null) {
-                row.addView(memberAvatar(member, dp(42)), LinearLayout.LayoutParams(dp(42), dp(42)))
-            } else {
-                row.addView(historyFallbackAvatar(item.memberName), LinearLayout.LayoutParams(dp(42), dp(42)))
-            }
-            row.addView(historyTextBlock(item), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = dp(12)
-            })
-            addView(row)
-        }
-
-    private fun historyFallbackAvatar(memberName: String): TextView = TextView(this).apply {
-        text = memberName.take(2).ifBlank { "?" }
-        gravity = Gravity.CENTER
-        setTextColor(Color.WHITE)
-        textSize = 14f
-        typeface = Typeface.DEFAULT_BOLD
-        background = rounded(
-            fill = color(R.color.hub_text_subtle),
-            radius = dp(21)
-        )
-    }
-
-    private fun historyTextBlock(item: NotificationHistoryItem): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        addView(TextView(context).apply {
-            text = item.title
-            setTextColor(color(R.color.hub_text))
-            textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
-            setLineSpacing(0f, 1.08f)
-        })
-        addView(TextView(context).apply {
-            text = item.body
-            setTextColor(color(R.color.hub_text_muted))
-            textSize = 12f
-            setPadding(0, dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp), 0, 0)
-            setLineSpacing(0f, 1.12f)
-        })
-        addView(pillRow(listOf(item.eventType, item.deliveryMode.name.lowercase(), "${item.deliveryLatencyMs ?: "-"}ms")))
-    }
-
     internal fun settingsPanel(title: String? = null, rows: List<SettingRow>): MaterialCardView =
         baseCard().apply {
             val spacing = MainUiPolicy.settingsCardSpacing
@@ -3128,67 +2424,6 @@ internal fun compactEventCard(title: String, body: String, pills: List<String>, 
             }
             addView(content)
         }
-
-    private fun historyFilterPanel(rows: List<HistoryFilterSelectorRow>): MaterialCardView =
-        baseCard().apply {
-            layoutParams = settingsCardLayoutParams()
-            val content = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(15), 0, dp(15), 0)
-            }
-            content.addView(TextView(context).apply {
-                text = "보기 필터"
-                setTextColor(color(R.color.hub_text))
-                textSize = 15f
-                typeface = Typeface.DEFAULT_BOLD
-                val verticalPadding = dp(MainUiPolicy.settingsCardSpacing.contentVerticalPaddingDp)
-                setPadding(0, verticalPadding, 0, verticalPadding)
-            })
-            rows.forEach { row ->
-                content.addView(divider())
-                content.addView(historyFilterSelectorRowView(row))
-            }
-            addView(content)
-        }
-
-    private fun historyFilterSelectorRowView(row: HistoryFilterSelectorRow): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        val verticalPadding = dp(MainUiPolicy.settingsCardSpacing.rowVerticalPaddingDp)
-        setPadding(0, verticalPadding, 0, verticalPadding)
-        isClickable = true
-        isFocusable = true
-        setOnClickListener { row.onClick() }
-        addView(TextView(context).apply {
-            text = row.title
-            setTextColor(color(R.color.hub_text))
-            textSize = 14f
-            typeface = Typeface.DEFAULT_BOLD
-        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-            marginEnd = dp(12)
-        })
-        addView(TextView(context).apply {
-            text = row.selectedValue
-            setTextColor(color(R.color.hub_text_muted))
-            textSize = 13f
-            maxLines = 1
-        })
-    }
-
-    private fun showHistoryFilterDialog(
-        title: String,
-        options: List<Pair<String, String>>,
-        selectedId: String,
-        onSelected: (String) -> Unit
-    ) {
-        HubSingleChoiceBottomSheet(
-            context = this,
-            title = title,
-            options = options.map { HubSingleChoiceOption(it.first, it.second) },
-            selectedId = selectedId,
-            onSelected = onSelected,
-        ).show()
-    }
 
     private fun settingRowView(row: SettingRow): SettingsRowView =
         SettingsRowView(this).bind(
@@ -3280,19 +2515,6 @@ internal fun pill(text: String, good: Boolean): TextView = TextView(this).apply 
 internal fun baseCard(style: HubCardStyle = HubCardStyle.STANDARD): MaterialCardView =
         cardFactory.create(style)
 
-    private fun settingsCardLayoutParams(): LinearLayout.LayoutParams =
-        LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            bottomMargin = dp(MainUiPolicy.settingsCardSpacing.bottomMarginDp)
-        }
-
-    private fun LinearLayout.applySettingsCardContentPadding(horizontalPaddingDp: Int = 15) {
-        val verticalPadding = dp(MainUiPolicy.settingsCardSpacing.contentVerticalPaddingDp)
-        setPadding(dp(horizontalPaddingDp), verticalPadding, dp(horizontalPaddingDp), verticalPadding)
-    }
-
     internal fun divider(): View = View(this).apply {
         setBackgroundColor(color(R.color.hub_line))
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1))
@@ -3313,12 +2535,6 @@ private fun Int.withAlpha(alpha: Int): Int =
     internal fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }
 
-
-private data class HistoryFilterSelectorRow(
-    val title: String,
-    val selectedValue: String,
-    val onClick: () -> Unit
-)
 
 internal data class SettingRow(
     val title: String,
