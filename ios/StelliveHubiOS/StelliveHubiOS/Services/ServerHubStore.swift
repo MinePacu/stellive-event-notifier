@@ -61,6 +61,7 @@ final class ServerHubStore: ObservableObject {
     @Published private(set) var serviceAnnouncements: [ServiceAnnouncement] = []
     @Published private(set) var announcementNextCursor: String?
     @Published private(set) var announcementDetailCache: [String: ServiceAnnouncement] = [:]
+    @Published private(set) var announcementsErrorMessage: String?
 
     init(
         api: HubAPIClient,
@@ -310,13 +311,20 @@ final class ServerHubStore: ObservableObject {
     }
 
     func refreshAnnouncements(reset: Bool) async {
+        announcementsErrorMessage = nil
         do {
             let response = try await api.announcements(cursor: reset ? nil : announcementNextCursor)
             serviceAnnouncements = reset ? response.items : Array(Dictionary(uniqueKeysWithValues: (serviceAnnouncements + response.items).map { ($0.id, $0) }).values)
             serviceAnnouncements.sort { $0.publishedAt > $1.publishedAt }
             announcementNextCursor = response.nextCursor
             response.items.forEach { announcementDetailCache[$0.id] = $0 }
-        } catch { }
+        } catch {
+            announcementsErrorMessage = "공지사항을 새로고침하지 못했습니다. 기존 목록을 유지합니다."
+        }
+    }
+
+    func clearAnnouncementsError() {
+        announcementsErrorMessage = nil
     }
 
     func loadAnnouncementDetail(id: String) async -> ServiceAnnouncement? {

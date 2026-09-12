@@ -1,22 +1,6 @@
 import ActivityKit
 import Foundation
 
-enum ReservationStoreError: LocalizedError {
-    case sharedContainerUnavailable
-    case draftNotFound
-    case invalidURL
-    case sensitiveURLRequiresConfirmation
-
-    var errorDescription: String? {
-        switch self {
-        case .sharedContainerUnavailable: String(localized: "reservation_error_storage_unavailable")
-        case .draftNotFound: String(localized: "reservation_error_draft_missing")
-        case .invalidURL: String(localized: "reservation_error_invalid_url")
-        case .sensitiveURLRequiresConfirmation: String(localized: "reservation_error_sensitive_url")
-        }
-    }
-}
-
 @MainActor
 final class ReservationStore: ObservableObject {
     @Published private(set) var records: [ReservationRecord]
@@ -73,7 +57,7 @@ final class ReservationStore: ObservableObject {
     func reload() {
         let previousSessionIDs = Set(drafts.map(\.sessionID))
         do {
-            guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+            guard let sharedStore else { throw ReservationError.sharedContainerUnavailable }
             let state = try sharedStore.pruneExpiredDrafts(now: now())
             records = state.records
             drafts = ReservationDraftPolicy.active(state.drafts, now: now())
@@ -92,7 +76,7 @@ final class ReservationStore: ObservableObject {
             scheduleCancelled: scheduleItem?.cancelledAt != nil
         ) else { return nil }
         guard let actionURL = ReservationURLPolicy.validatedURL(link.url), let host = actionURL.host else {
-            throw ReservationStoreError.invalidURL
+            throw ReservationError.invalidURL
         }
         let current = now()
         let candidate = ReservationDraft(
@@ -116,7 +100,7 @@ final class ReservationStore: ObservableObject {
             expiresAt: current.addingTimeInterval(2 * 60 * 60),
             attemptCount: 1
         )
-        guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+        guard let sharedStore else { throw ReservationError.sharedContainerUnavailable }
         let draft = try sharedStore.upsertDraft(candidate)
         let state = try sharedStore.loadState()
         records = state.records
@@ -135,15 +119,15 @@ final class ReservationStore: ObservableObject {
     ) throws -> ReservationRecord {
         let normalizedURL: String?
         if let value = ReservationTextPolicy.nonEmpty(detailURL) {
-            guard let url = ReservationURLPolicy.validatedURL(value) else { throw ReservationStoreError.invalidURL }
+            guard let url = ReservationURLPolicy.validatedURL(value) else { throw ReservationError.invalidURL }
             if ReservationURLPolicy.containsSensitiveQuery(value), !allowsSensitiveURL {
-                throw ReservationStoreError.sensitiveURLRequiresConfirmation
+                throw ReservationError.sensitiveURLRequiresConfirmation
             }
             normalizedURL = url.absoluteString
         } else {
             normalizedURL = nil
         }
-        guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+        guard let sharedStore else { throw ReservationError.sharedContainerUnavailable }
         let record = try sharedStore.confirm(
             sessionID: sessionID,
             detailURL: normalizedURL,
@@ -161,14 +145,14 @@ final class ReservationStore: ObservableObject {
     func update(_ record: ReservationRecord) throws {
         var updated = record
         updated.updatedAt = now()
-        guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+        guard let sharedStore else { throw ReservationError.sharedContainerUnavailable }
         try sharedStore.updateRecord(updated)
         try reloadOrThrow()
     }
 
     @discardableResult
     func delete(id: UUID) throws -> ReservationRecord? {
-        guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+        guard let sharedStore else { throw ReservationError.sharedContainerUnavailable }
         let deleted = try sharedStore.deleteRecord(id: id)
         try reloadOrThrow()
         lastDeletedRecord = deleted
@@ -176,7 +160,7 @@ final class ReservationStore: ObservableObject {
     }
 
     func restore(_ record: ReservationRecord) throws {
-        guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+        guard let sharedStore else { throw ReservationError.sharedContainerUnavailable }
         try sharedStore.restoreRecord(record)
         try reloadOrThrow()
         if lastDeletedRecord?.id == record.id { lastDeletedRecord = nil }
@@ -202,7 +186,7 @@ final class ReservationStore: ObservableObject {
     func clearDeletedRecord() { lastDeletedRecord = nil }
 
     private func reloadOrThrow() throws {
-        guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+        guard let sharedStore else { throw ReservationError.sharedContainerUnavailable }
         let state = try sharedStore.loadState()
         records = state.records
         drafts = ReservationDraftPolicy.active(state.drafts, now: now())

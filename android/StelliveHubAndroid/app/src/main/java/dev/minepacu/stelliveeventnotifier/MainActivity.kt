@@ -44,6 +44,10 @@ import android.widget.ImageView
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.ListAdapter
+import androidx.recyclerview.widget.RecyclerView
 import android.widget.TextView
 import android.widget.Toast
 import android.widget.ScrollView
@@ -67,6 +71,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.WindowMetricsCalculator
+import coil.load
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
@@ -313,6 +318,14 @@ private data class PendingScreenRefresh(
 
 private enum class SongScrollSlot { SONGS_SINGLE, SONGS_TWO_PANE, SONG_SEARCH }
 
+
+    private object SongResultDiffCallback : DiffUtil.ItemCallback<SongCatalogItem>() {
+        override fun areItemsTheSame(oldItem: SongCatalogItem, newItem: SongCatalogItem): Boolean =
+            (SongIdentity.identifier(oldItem) ?: oldItem.id) == (SongIdentity.identifier(newItem) ?: newItem.id)
+
+        override fun areContentsTheSame(oldItem: SongCatalogItem, newItem: SongCatalogItem): Boolean = oldItem == newItem
+    }
+
 private enum class ScheduleBadgeTone {
     UPCOMING,
     IN_PROGRESS,
@@ -415,7 +428,14 @@ private var cachedSongItems: List<SongCatalogItem> = emptyList()
 private var cachedSongType: String? = null
 private var cachedSongCatalogAuthoritative = false
 private var songRefreshJob: Job? = null
+
+    private var goodsEventsJob: Job? = null
+    private var hubEventDetailJob: Job? = null
+    private var serverHubEventDetailJob: Job? = null
+    private var homeRecentSongsJob: Job? = null
+    private var persistSettingsJob: Job? = null
 private var songSearchResultsContainer: LinearLayout? = null
+private var songSearchResultsAdapter: SongResultsAdapter? = null
 private var homeRecentSongs: List<SongCatalogItem>? = null
 private var isLoadingHomeRecentSongs = false
 private var selectedHubEventId: String? = null
@@ -627,6 +647,11 @@ private var notificationPermissionRequested = false
         pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
         liveClockTextViews.clear()
         screenTransitionController.cancelAndClear()
+        goodsEventsJob?.cancel()
+        hubEventDetailJob?.cancel()
+        serverHubEventDetailJob?.cancel()
+        homeRecentSongsJob?.cancel()
+        persistSettingsJob?.cancel()
         super.onDestroy()
     }
 
@@ -1489,6 +1514,11 @@ private fun startScreen(
         for (index in 0 until childCount) yield(getChildAt(index))
     }
 
+    // Song search rows live inside a RecyclerView nested in the (still LinearLayout) scroll
+    // container; unwrap it one level so scroll-anchor lookups keep finding tagged song views.
+    private fun ViewGroup.songCandidateViews(): Sequence<View> =
+        childrenSequence().flatMap { child -> if (child is RecyclerView) child.childrenSequence() else sequenceOf(child) }
+
     private fun songScrollY(source: View): Int = when (source) {
         is ScrollView -> source.scrollY
         is NestedScrollView -> source.scrollY
@@ -1525,7 +1555,7 @@ private fun startScreen(
         val container = activeSongListContainer ?: return
         val slot = activeSongScrollSlot ?: return
         val scrollY = songScrollY(source)
-        val anchor = container.childrenSequence()
+        val anchor = container.songCandidateViews()
             .filter { it.tag is String }
             .firstOrNull { viewTopInSongScroll(it, source) + it.height > scrollY }
         songBrowseSession.visibleLimit = visibleSongLimit
@@ -1577,7 +1607,7 @@ private fun startScreen(
         isRestoringSongScrollPosition = true
         source.post {
             val anchor = position?.anchorSongId?.let { id ->
-                container.childrenSequence().firstOrNull { it.tag == id }
+                container.songCandidateViews().firstOrNull { it.tag == id }
             }
             val target = anchor?.let { viewTopInSongScroll(it, source) - (position?.anchorOffset ?: 0) }
                 ?: position?.fallbackAbsoluteOffset
@@ -1842,7 +1872,8 @@ private fun startScreen(
     private fun loadHomeRecentSongsIfNeeded() {
         if (homeRecentSongs != null || isLoadingHomeRecentSongs) return
         isLoadingHomeRecentSongs = true
-        CoroutineScope(Dispatchers.Main).launch {
+        homeRecentSongsJob?.cancel()
+        homeRecentSongsJob = lifecycleScope.launch {
             homeRecentSongs = serverRepository.recentSongs(limit = 5)
             isLoadingHomeRecentSongs = false
             if (navigationHistory.currentScreen == HubScreen.HOME) {
@@ -1891,7 +1922,8 @@ private fun startScreen(
 
     private fun loadServerGoodsEvents() {
         binding.contentList.addView(loadingCard(MainUiPolicy.goodsEventsLoadingPresentation()))
-        CoroutineScope(Dispatchers.Main).launch {
+        goodsEventsJob?.cancel()
+        goodsEventsJob = lifecycleScope.launch {
             val today = LocalDate.now()
             val from = today.minusMonths(1)
             val to = today.plusMonths(3)
@@ -3485,7 +3517,8 @@ private fun startScreen(
         }
         if (serverHubEventDetailLoadedId != eventId) {
             container.addView(loadingCard(MainUiPolicy.hubEventDetailLoadingPresentation()))
-            CoroutineScope(Dispatchers.Main).launch {
+            hubEventDetailJob?.cancel()
+            hubEventDetailJob = lifecycleScope.launch {
                 serverHubEventDetail = serverRepository.hubEventDetail(eventId)
                 serverHubEventDetailLoadedId = eventId
                 if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS && selectedHubEventId == eventId) {
@@ -3548,7 +3581,8 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
                 role = "선택한 굿즈/행사를 불러오고 있습니다."
             )
             binding.contentList.addView(loadingCard(MainUiPolicy.hubEventDetailLoadingPresentation()))
-            CoroutineScope(Dispatchers.Main).launch {
+            serverHubEventDetailJob?.cancel()
+            serverHubEventDetailJob = lifecycleScope.launch {
                 serverHubEventDetail = serverRepository.hubEventDetail(eventId)
                 serverHubEventDetailLoadedId = eventId
                 if (navigationHistory.currentScreen == HubScreen.GOODS_EVENT_DETAIL && selectedHubEventId == eventId) {
@@ -4249,8 +4283,18 @@ private fun renderSongs() {
         binding.collapsedTitle.text = "노래 검색"
         binding.collapsedRole.text = "제목 또는 멤버"
         binding.contentList.addView(songSearchCard())
+        val songAdapter = SongResultsAdapter()
+        songSearchResultsAdapter = songAdapter
+        val resultsList = RecyclerView(this).apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            isNestedScrollingEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            adapter = songAdapter
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
         songSearchResultsContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            addView(resultsList)
         }.also(binding.contentList::addView)
         refreshSongSearchResults()
     }
@@ -4258,14 +4302,20 @@ private fun renderSongs() {
     private fun refreshSongSearchResults() {
         captureActiveSongScrollPosition()
         val container = songSearchResultsContainer ?: return
-        container.removeAllViews()
+        val adapter = songSearchResultsAdapter ?: return
+        fun clearSongSearchExtras() {
+            if (container.childCount > 1) container.removeViews(1, container.childCount - 1)
+        }
         val renderItems: (List<SongCatalogItem>) -> Unit = { items ->
             val state = songRenderState(items)
+            clearSongSearchExtras()
+            adapter.catalogMembers = state.catalogMembers
             if (state.visibleSongs.isEmpty()) {
+                adapter.submitList(emptyList())
                 container.addView(noticeCard("검색 결과가 없습니다."))
             } else {
-                state.displayedSongs.forEach { container.addView(songCard(it, state.catalogMembers)) }
-                addSongListFooter(container, state)
+                adapter.submitList(state.displayedSongs)
+                addSongSearchListFooter(container, adapter, state)
                 registerSongScrollSession(binding.contentScroll, container, state, SongScrollSlot.SONG_SEARCH)
             }
         }
@@ -4273,6 +4323,8 @@ private fun renderSongs() {
             renderItems(cachedSongItems)
             return
         }
+        clearSongSearchExtras()
+        adapter.submitList(emptyList())
         container.addView(loadingCard(MainUiPolicy.songSearchLoadingPresentation()))
         lifecycleScope.launch {
             val result = serverRepository.songs(generationId = "all", type = "all")
@@ -4284,10 +4336,96 @@ private fun renderSongs() {
             if (navigationHistory.currentScreen != HubScreen.SONG_SEARCH) return@launch
             refreshScreenWhenIdle(HubScreen.SONG_SEARCH) refresh@{
                 if (container !== songSearchResultsContainer) return@refresh
-                container.removeAllViews()
                 renderItems(items)
             }
         }
+    }
+
+
+    // RecyclerView.Adapter for song search results. songCard() already builds a full,
+    // self-contained row (thumbnail, chips, favorite/menu click listeners); this adapter's
+    // only job is to let DiffUtil skip rebuilding rows that haven't changed between refreshes,
+    // instead of the previous removeAllViews()+addView() rebuild of the entire result set.
+    private inner class SongResultsAdapter : ListAdapter<SongCatalogItem, SongViewHolder>(SongResultDiffCallback) {
+
+        var catalogMembers: List<HubMember> = emptyList()
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SongViewHolder =
+            SongViewHolder(
+                FrameLayout(parent.context).apply {
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                },
+            )
+
+        override fun onBindViewHolder(holder: SongViewHolder, position: Int) {
+            val song = getItem(position)
+            val wrapper = holder.itemView as FrameLayout
+            wrapper.removeAllViews()
+            wrapper.tag = SongIdentity.identifier(song)
+            wrapper.addView(
+                songCard(song, catalogMembers),
+                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                    bottomMargin = dp(10)
+                },
+            )
+        }
+    }
+
+
+    private class SongViewHolder(view: FrameLayout) : RecyclerView.ViewHolder(view)
+
+    private fun addSongSearchListFooter(container: LinearLayout, adapter: SongResultsAdapter, state: SongRenderState) {
+        container.addView(songSearchLoadMoreControl(container, adapter, state))
+    }
+
+    // Mirrors songLoadMoreControl(), but drives the RecyclerView adapter used by song search
+    // instead of appending song cards directly to a LinearLayout (which also backs the
+    // separate SONGS_SINGLE/SONGS_TWO_PANE screens and must stay untouched).
+    private fun songSearchLoadMoreControl(container: LinearLayout, adapter: SongResultsAdapter, state: SongRenderState): MaterialCardView {
+        lateinit var control: MaterialCardView
+        control = baseCard().apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(10)
+            }
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(15), dp(10), dp(15), dp(10))
+                addView(TextView(context).apply {
+                    text = MainUiPolicy.songProgressText(
+                        state.displayedCount,
+                        state.totalFilteredCount,
+                        cachedSongCatalogAuthoritative,
+                    )
+                    gravity = Gravity.CENTER
+                    setTextColor(color(R.color.hub_text_muted))
+                    textSize = 12f
+                })
+                if (state.remainingCount > 0) {
+                    addView(Chip(context).apply {
+                        text = MainUiPolicy.songLoadMoreText(state.remainingCount)
+                        contentDescription = "$text, ${MainUiPolicy.songProgressText(state.displayedCount, state.totalFilteredCount, cachedSongCatalogAuthoritative)}"
+                        setOnClickListener {
+                            if (isLoadingMoreSongs) return@setOnClickListener
+                            isLoadingMoreSongs = true
+                            val footerIndex = container.indexOfChild(control)
+                            if (footerIndex >= 0) container.removeViews(footerIndex, container.childCount - footerIndex)
+                            visibleSongLimit = MainUiPolicy.nextSongVisibleLimit(
+                                visibleSongLimit,
+                                state.totalFilteredCount,
+                            )
+                            songBrowseSession.visibleLimit = visibleSongLimit
+                            val nextState = songRenderState(cachedSongItems)
+                            adapter.catalogMembers = nextState.catalogMembers
+                            adapter.submitList(nextState.displayedSongs)
+                            addSongSearchListFooter(container, adapter, nextState)
+                            isLoadingMoreSongs = false
+                        }
+                    })
+                }
+            })
+        }
+        return control
     }
 
 private fun applySongMemberFilter(state: SongMemberFilterState) {
@@ -6720,16 +6858,11 @@ private fun hubEventDetailHero(event: dev.minepacu.stelliveeventnotifier.core.mo
                         FrameLayout.LayoutParams.MATCH_PARENT
                     )
                 )
-                thread {
-                    val bitmap = runCatching {
-                        URL(imageUrl).openStream().use(BitmapFactory::decodeStream)
-                    }.getOrNull()
-                    runOnUiThread {
-                        if (bitmap != null) {
-                            imageView.setImageBitmap(bitmap)
-                            imageView.visibility = View.VISIBLE
-                        }
-                    }
+                imageView.load(imageUrl) {
+                    listener(
+                        onSuccess = { _, _ -> imageView.visibility = View.VISIBLE },
+                        onError = { _, _ -> imageView.visibility = View.GONE },
+                    )
                 }
             }
 
@@ -7122,7 +7255,8 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
         )
 
     private fun persistSettings(settings: dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState) {
-        CoroutineScope(Dispatchers.Main).launch {
+        persistSettingsJob?.cancel()
+        persistSettingsJob = lifecycleScope.launch {
             try {
                 serverRepository.updatePreferences(settings)
                 val screen = navigationHistory.currentScreen

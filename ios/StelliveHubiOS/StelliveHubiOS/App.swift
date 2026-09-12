@@ -15,9 +15,17 @@ struct StelliveHubApp: App {
     init() {
         let fallback = MockHubStore()
         _store = StateObject(wrappedValue: fallback)
+        let resolvedHubBaseURL: URL
+        if let configuredHubBaseURL = Bundle.main.hubBaseURL {
+            resolvedHubBaseURL = configuredHubBaseURL
+        } else {
+            assertionFailure("hubBaseURL missing from Info.plist — check build configuration")
+            // swiftlint:disable:next force_unwrapping
+            resolvedHubBaseURL = URL(string: "https://hub.invalid")!
+        }
         _serverStore = StateObject(
             wrappedValue: ServerHubStore(
-                api: HubAPIClient(baseURL: Bundle.main.hubBaseURL ?? URL(string: "http://127.0.0.1:4000")!),
+                api: HubAPIClient(baseURL: resolvedHubBaseURL),
                 fallback: fallback
             )
         )

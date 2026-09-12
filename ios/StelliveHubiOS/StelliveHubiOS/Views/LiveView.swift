@@ -22,22 +22,25 @@ struct LiveView: View {
                 .listRowBackground(Color.clear)
 
                 Section("치지직 방송 상태") {
-                    ForEach(store.chzzkLiveTargets) { member in
-                        LiveMemberRow(
-                            member: member,
-                            moveUp: { store.moveLiveMember(member, offset: -1) },
-                            moveDown: { store.moveLiveMember(member, offset: 1) }
-                        )
-                        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                        .listRowSeparator(.hidden)
-                        .accessibilityAction(named: "위로 이동") {
-                            store.moveLiveMember(member, offset: -1)
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        ForEach(store.chzzkLiveTargets) { member in
+                            LiveMemberRow(
+                                member: member,
+                                currentDate: context.date,
+                                moveUp: { store.moveLiveMember(member, offset: -1) },
+                                moveDown: { store.moveLiveMember(member, offset: 1) }
+                            )
+                            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                            .listRowSeparator(.hidden)
+                            .accessibilityAction(named: "위로 이동") {
+                                store.moveLiveMember(member, offset: -1)
+                            }
+                            .accessibilityAction(named: "아래로 이동") {
+                                store.moveLiveMember(member, offset: 1)
+                            }
                         }
-                        .accessibilityAction(named: "아래로 이동") {
-                            store.moveLiveMember(member, offset: 1)
-                        }
+                        .onMove(perform: store.moveLiveMember)
                     }
-                    .onMove(perform: store.moveLiveMember)
                 }
             }
             .refreshable {
@@ -65,6 +68,7 @@ struct LiveView: View {
 
 private struct LiveMemberRow: View {
     let member: HubMember
+    let currentDate: Date
     let moveUp: () -> Void
     let moveDown: () -> Void
 
@@ -114,18 +118,16 @@ private struct LiveMemberRow: View {
                     .foregroundStyle(member.isLive ? .red : .secondary)
 
                 if member.isLive {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        VStack(alignment: .trailing, spacing: 4) {
-                            if let elapsed = LiveStatusFormatter.elapsedClockText(
-                                startedAt: member.liveStartedAt,
-                                now: context.date
-                            ) {
-                                LiveSideMetric(systemImage: "clock", value: elapsed, color: .secondary)
-                            }
+                    VStack(alignment: .trailing, spacing: 4) {
+                        if let elapsed = LiveStatusFormatter.elapsedClockText(
+                            startedAt: member.liveStartedAt,
+                            now: currentDate
+                        ) {
+                            LiveSideMetric(systemImage: "clock", value: elapsed, color: .secondary)
+                        }
 
-                            if let viewers = LiveStatusFormatter.viewerCountText(member.liveViewerCount) {
-                                LiveSideMetric(systemImage: "eye", value: viewers, color: .teal)
-                            }
+                        if let viewers = LiveStatusFormatter.viewerCountText(member.liveViewerCount) {
+                            LiveSideMetric(systemImage: "eye", value: viewers, color: .teal)
                         }
                     }
                 }

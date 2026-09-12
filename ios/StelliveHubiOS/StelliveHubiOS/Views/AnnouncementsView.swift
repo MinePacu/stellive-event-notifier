@@ -55,6 +55,21 @@ struct AnnouncementsView: View {
         .navigationTitle("공지사항")
         .refreshable { await serverStore.refreshAnnouncements(reset: true) }
         .task { if serverStore.serviceAnnouncements.isEmpty { await serverStore.refreshAnnouncements(reset: true) } }
+        .alert(
+            "새로고침 실패",
+            isPresented: Binding(
+                get: { serverStore.announcementsErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { serverStore.clearAnnouncementsError() }
+                }
+            )
+        ) {
+            Button("확인", role: .cancel) {
+                serverStore.clearAnnouncementsError()
+            }
+        } message: {
+            Text(serverStore.announcementsErrorMessage ?? "")
+        }
     }
 
     private func row(_ item: ServiceAnnouncement) -> some View {

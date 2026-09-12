@@ -9,23 +9,6 @@ struct ReservationStateV1: Codable, Equatable {
     var drafts: [ReservationDraft] = []
 }
 
-enum ReservationPersistenceError: LocalizedError {
-    case sharedContainerUnavailable
-    case corruptedData(backupFileName: String)
-    case draftNotFound
-
-    var errorDescription: String? {
-        switch self {
-        case .sharedContainerUnavailable:
-            "예약 저장 공간을 열 수 없습니다."
-        case .corruptedData:
-            "예약 저장 파일이 손상되어 원본을 보존했습니다. 앱에서 다시 시도해 주세요."
-        case .draftNotFound:
-            "앱에서 예매 링크를 먼저 열어 주세요."
-        }
-    }
-}
-
 struct ReservationSharedStore {
     static let appGroupIdentifier = "group.dev.minepacu.stelliveeventnotifier"
     static let stateFileName = "reservation-state-v1.json"
@@ -43,7 +26,7 @@ struct ReservationSharedStore {
         fileManager: FileManager = .default,
         beforeAtomicReplace: (() throws -> Void)? = nil
     ) throws {
-        guard let directoryURL else { throw ReservationPersistenceError.sharedContainerUnavailable }
+        guard let directoryURL else { throw ReservationError.sharedContainerUnavailable }
         self.directoryURL = directoryURL
         self.fileManager = fileManager
         self.beforeAtomicReplace = beforeAtomicReplace
@@ -68,7 +51,7 @@ struct ReservationSharedStore {
             result = Result { try decodeState(at: coordinatedURL) }
         }
         if let coordinationError { throw coordinationError }
-        return try result?.get() ?? { throw ReservationPersistenceError.sharedContainerUnavailable }()
+        return try result?.get() ?? { throw ReservationError.sharedContainerUnavailable }()
     }
 
     @discardableResult
@@ -90,7 +73,7 @@ struct ReservationSharedStore {
             }
         }
         if let coordinationError { throw coordinationError }
-        return try result?.get() ?? { throw ReservationPersistenceError.sharedContainerUnavailable }()
+        return try result?.get() ?? { throw ReservationError.sharedContainerUnavailable }()
     }
 
     func upsertDraft(_ candidate: ReservationDraft) throws -> ReservationDraft {
@@ -122,7 +105,7 @@ struct ReservationSharedStore {
                 return existing
             }
             guard let draft = state.drafts.first(where: { $0.sessionID == sessionID }) else {
-                throw ReservationPersistenceError.draftNotFound
+                throw ReservationError.draftNotFound
             }
             let record = ReservationRecord(
                 id: UUID(), sourceSessionID: draft.sessionID, eventID: draft.eventID,
@@ -191,7 +174,7 @@ struct ReservationSharedStore {
             return state
         } catch {
             let backup = try preserveCorruptedFile(at: url)
-            throw ReservationPersistenceError.corruptedData(backupFileName: backup.lastPathComponent)
+            throw ReservationError.corruptedData(backupFileName: backup.lastPathComponent)
         }
     }
 
@@ -207,7 +190,7 @@ struct ReservationSharedStore {
             return try decoder.decode(type, from: Data(contentsOf: url))
         } catch {
             let backup = try preserveCorruptedFile(at: url)
-            throw ReservationPersistenceError.corruptedData(backupFileName: backup.lastPathComponent)
+            throw ReservationError.corruptedData(backupFileName: backup.lastPathComponent)
         }
     }
 

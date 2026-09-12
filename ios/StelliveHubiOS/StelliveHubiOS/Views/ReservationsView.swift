@@ -200,6 +200,35 @@ private struct ReservationRecordRow: View {
     }
 }
 
+private extension View {
+    /// Shared delete-confirmation + error-alert pair used by reservation detail/edit screens.
+    /// Presents "내역을 삭제할까요?" with 삭제/취소 actions; on 삭제 runs `onDelete`, and on
+    /// failure surfaces `errorTitle` with the thrown error's localized description.
+    func reservationDeleteAlert(
+        isPresented: Binding<Bool>,
+        errorTitle: String,
+        errorMessage: Binding<String?>,
+        onDelete: @escaping () throws -> Void
+    ) -> some View {
+        self
+            .alert("내역을 삭제할까요?", isPresented: isPresented) {
+                Button("삭제", role: .destructive) {
+                    do { try onDelete() }
+                    catch { errorMessage.wrappedValue = error.localizedDescription }
+                }
+                Button("취소", role: .cancel) {}
+            }
+            .alert(errorTitle, isPresented: Binding(
+                get: { errorMessage.wrappedValue != nil },
+                set: { if !$0 { errorMessage.wrappedValue = nil } }
+            )) {
+                Button("확인") {}
+            } message: {
+                Text(errorMessage.wrappedValue ?? "")
+            }
+    }
+}
+
 struct ReservationDetailView: View {
     let reservationID: UUID
     @EnvironmentObject private var store: ReservationStore
@@ -283,16 +312,14 @@ struct ReservationDetailView: View {
                 .accessibilityLabel("내역 상세 도움말")
             }
         }
-        .alert("내역을 삭제할까요?", isPresented: $showsDeleteConfirmation) {
-            Button("삭제", role: .destructive) {
-                do { _ = try store.delete(id: reservationID); dismiss() }
-                catch { errorMessage = error.localizedDescription }
-            }
-            Button("취소", role: .cancel) {}
+        .reservationDeleteAlert(
+            isPresented: $showsDeleteConfirmation,
+            errorTitle: "삭제할 수 없습니다",
+            errorMessage: $errorMessage
+        ) {
+            _ = try store.delete(id: reservationID)
+            dismiss()
         }
-        .alert("삭제할 수 없습니다", isPresented: Binding(
-            get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
-        )) { Button("확인") {} } message: { Text(errorMessage ?? "") }
         .onChange(of: store.records) { records in
             if !records.contains(where: { $0.id == reservationID }) { dismiss() }
         }
@@ -730,12 +757,13 @@ struct ReservationEditView: View {
             draft = record
             initialRecord = record
         }
-        .alert("내역을 삭제할까요?", isPresented: $showsDeleteConfirmation) {
-            Button("삭제", role: .destructive) {
-                do { _ = try store.delete(id: reservationID); dismiss() }
-                catch { errorMessage = error.localizedDescription }
-            }
-            Button("취소", role: .cancel) {}
+        .reservationDeleteAlert(
+            isPresented: $showsDeleteConfirmation,
+            errorTitle: "저장할 수 없습니다",
+            errorMessage: $errorMessage
+        ) {
+            _ = try store.delete(id: reservationID)
+            dismiss()
         }
         .alert("변경사항을 버릴까요?", isPresented: $showsDiscardConfirmation) {
             Button("버리기", role: .destructive) { dismiss() }
@@ -758,9 +786,6 @@ struct ReservationEditView: View {
             }
             Button(String(localized: "reservation_action_cancel"), role: .cancel) {}
         } message: { Text(String(localized: "reservation_error_duplicate_body")) }
-        .alert("저장할 수 없습니다", isPresented: Binding(
-            get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
-        )) { Button("확인") {} } message: { Text(errorMessage ?? "") }
         .navigationDestination(isPresented: Binding(
             get: { existingRecordToOpen != nil },
             set: { if !$0 { existingRecordToOpen = nil } }
@@ -779,7 +804,7 @@ struct ReservationEditView: View {
         guard var draft else { return }
         for value in [draft.reservationDetailURL, draft.providerHistoryURL] {
             if ReservationTextPolicy.nonEmpty(value) != nil, ReservationURLPolicy.validatedURL(value) == nil {
-                errorMessage = ReservationStoreError.invalidURL.localizedDescription
+                errorMessage = ReservationError.invalidURL.localizedDescription
                 return
             }
         }
@@ -955,7 +980,7 @@ struct ReservationQuickAddView: View {
                 allowsSensitiveURL: allowsSensitiveURL
             )
             dismiss()
-        } catch ReservationStoreError.sensitiveURLRequiresConfirmation {
+        } catch ReservationError.sensitiveURLRequiresConfirmation {
             requestsSensitiveConfirmation = true
         } catch {
             errorMessage = error.localizedDescription
