@@ -3,8 +3,15 @@ import { renderAdminConsoleHtml } from "../src/admin/adminConsoleHtml.js";
 import {
   adminMessages,
   enAdminMessages,
+  escapeAdminAttr,
+  escapeAdminText,
   koAdminMessages,
+  localizeAdminDocument,
+  escapeAdminScript,
   serializeAdminScriptValue,
+  t,
+  tAttr,
+  tScript,
   translateAdmin
 } from "../src/admin/adminI18n.js";
 import { renderAdminLanguageHtml } from "../src/admin/adminLanguageHtml.js";
@@ -88,6 +95,112 @@ describe("admin i18n", () => {
     expect(extract(korean, /^\s+\w+: "(\/v1\/[^"]+)"/gm)).toEqual(extract(english, /^\s+\w+: "(\/v1\/[^"]+)"/gm));
   });
 
+  it("resolves text and attribute slots for both locales, including parameters", () => {
+    const document = `<p>${t("common.all")}</p><input aria-label="${tAttr("common.status")}"><span>${t("common.itemCount", { count: 3 })}</span>`;
+    expect(localizeAdminDocument(document, "en")).toBe('<p>All</p><input aria-label="Status"><span>3 items</span>');
+    expect(localizeAdminDocument(document, "ko")).toBe('<p>\uc804\uccb4</p><input aria-label="\uc0c1\ud0dc"><span>3\uac1c \ud56d\ubaa9</span>');
+  });
+
+  it("escapes resolved values per slot context", () => {
+    expect(escapeAdminText('<a href="x">&')).toBe("&lt;a href=\"x\"&gt;&amp;");
+    expect(escapeAdminAttr('<a href="x">&\'')).toBe("&lt;a href=&quot;x&quot;&gt;&amp;&#39;");
+  });
+
+  it("throws on an unknown slot key", () => {
+    const document = `<p>${"\uFFF9"}Tcommon.doesNotExist${"\uFFFB"}</p>`;
+    expect(() => localizeAdminDocument(document, "ko")).toThrow(/common\.doesNotExist/);
+  });
+
+  it("throws when a malformed slot cannot be resolved", () => {
+    expect(() => localizeAdminDocument(`<p>${"\uFFF9"}Tcommon.all</p>`, "ko")).toThrow(/unresolved admin i18n slot/);
+    expect(() => localizeAdminDocument(`<p>${"\uFFFB"}</p>`, "en")).toThrow(/unresolved admin i18n slot/);
+  });
+
+  it("leaves no sentinel characters in rendered console output", () => {
+    for (const html of [renderAdminConsoleHtml("en"), renderAdminConsoleHtml("ko")]) {
+      expect(html).not.toContain("\uFFF9");
+      expect(html).not.toContain("\uFFFA");
+      expect(html).not.toContain("\uFFFB");
+    }
+  });
+
+  it("never rewrites client-side JavaScript string sentinels (D1 regression)", () => {
+    const english = renderAdminConsoleHtml("en");
+    const korean = renderAdminConsoleHtml("ko");
+    for (const html of [english, korean]) {
+      expect(html).toContain('state === "off"');
+      expect(html).toContain('setAutoRefreshStatus(t("dashboard.off"), "off")');
+      expect(html).toContain('setAutoRefreshStatus(t("dashboard.retrying"), "retrying")');
+      expect(html).toContain('<option value="">');
+    }
+    const optionValues = (html: string) => [...html.matchAll(/<option value="([^"]*)"/g)].map((match) => match[1]);
+    expect(optionValues(korean)).toEqual(optionValues(english));
+    expect(korean).toContain(`<option value="none">${translateAdmin("ko", "common.none")}</option>`);
+    expect(english).toContain('<option value="none">None</option>');
+  });
+
+  it("localizes the auto-refresh status pill through a data-state attribute", () => {
+    const english = renderAdminConsoleHtml("en");
+    const korean = renderAdminConsoleHtml("ko");
+    for (const html of [english, korean]) {
+      expect(html).toMatch(/id="auto-refresh-status"[^>]*data-state="off"/);
+      expect(html).toMatch(/id="auto-refresh-status"[^>]*class="auto-refresh-status pill disabled"/);
+    }
+    expect(english).toContain(`data-state="off" aria-live="polite">${translateAdmin("en", "dashboard.off")}<`);
+    expect(korean).toContain(`data-state="off" aria-live="polite">${translateAdmin("ko", "dashboard.off")}<`);
+    expect(korean).not.toContain('aria-live="polite">Off<');
+    expect(translateAdmin("ko", "dashboard.autoRefreshEvery", { seconds: 30 })).toBe("30초마다");
+    expect(translateAdmin("en", "dashboard.autoRefreshEvery", { seconds: 30 })).toBe("Every 30s");
+    expect(translateAdmin("ko", "dashboard.autoRefreshPaused")).toBe("작업 중 일시중지");
+  });
+
+  it("localizes schedule kind option labels while keeping option values stable", () => {
+    const english = renderAdminConsoleHtml("en");
+    const korean = renderAdminConsoleHtml("ko");
+    const kinds = [
+      ["main_window", "hubEvent.kindMainWindow"],
+      ["announcement", "hubEvent.kindAnnouncement"],
+      ["sales_open", "hubEvent.kindSalesOpen"],
+      ["ticket_open", "hubEvent.kindTicketOpen"],
+      ["content_reveal", "hubEvent.kindContentReveal"],
+      ["release", "hubEvent.kindRelease"],
+      ["deadline", "hubEvent.kindDeadline"],
+      ["custom", "hubEvent.kindCustom"]
+    ] as const;
+    for (const [value, key] of kinds) {
+      expect(english).toContain(`<option value="${value}">${translateAdmin("en", key)}</option>`);
+      expect(korean).toContain(`<option value="${value}">${translateAdmin("ko", key)}</option>`);
+      expect(translateAdmin("ko", key)).not.toBe(translateAdmin("en", key));
+    }
+  });
+
+  it("localizes internal operation button labels and action names", () => {
+    const english = renderAdminConsoleHtml("en");
+    const korean = renderAdminConsoleHtml("ko");
+    const operations = [
+      ["renew-youtube", "operations.renewYoutube"],
+      ["poll-chzzk", "operations.pollChzzk"],
+      ["drain", "operations.drainJobs"],
+      ["recalculate-special-days", "operations.recalculate"]
+    ] as const;
+    for (const [id, key] of operations) {
+      expect(english).toMatch(new RegExp(`id="${id}" type="button">${translateAdmin("en", key)}<`));
+      expect(korean).toMatch(new RegExp(`id="${id}" type="button">${translateAdmin("ko", key)}<`));
+      expect(korean).toContain(`"${translateAdmin("ko", key)}"`);
+    }
+    expect(korean).not.toContain("Renew YouTube");
+    expect(korean).not.toContain("Poll CHZZK");
+    expect(korean).not.toContain("Drain jobs");
+  });
+
+  it("localizes accessible labels rendered as HTML attributes", () => {
+    const english = renderAdminConsoleHtml("en");
+    const korean = renderAdminConsoleHtml("ko");
+    expect(english).toContain(`id="refresh" type="button" aria-label="${translateAdmin("en", "common.refresh")}"`);
+    expect(korean).toContain(`id="refresh" type="button" aria-label="${translateAdmin("ko", "common.refresh")}"`);
+    expect(korean).toContain(`role="list" aria-label="${translateAdmin("ko", "nav.hubEvents")}"`);
+  });
+
   it("sets localized response headers and a persistent language cookie", async () => {
     const app = await buildApp({ env, useProcessEnv: false });
     const response = await app.inject({
@@ -126,5 +239,45 @@ describe("admin i18n", () => {
     expect(cookies).toContain(`${adminLanguageCookieName}=ko`);
     expect(cookies).toContain("Max-Age=31536000");
     expect(response.headers["content-language"]).toBe("ko");
+  });
+
+  it("escapes script-context slots so they stay valid JS string literals", () => {
+    const key = "announcement.deleteConfirm" as const;
+    const expected = translateAdmin("en", key, { title: 'He said "hi"' });
+    expect(expected).toContain('"');
+    expect(expected).toContain("\n");
+
+    const document = `var label = "${tScript(key, { title: 'He said "hi"' })}";`;
+    const rendered = localizeAdminDocument(document, "en");
+
+    expect(rendered).not.toContain("\n");
+    expect(rendered).toContain('\\"');
+
+    const evaluate = new Function(`${rendered} return label;`) as () => string;
+    expect(evaluate()).toBe(expected);
+  });
+
+  it("escapeAdminScript neutralizes backslashes, line separators and script terminators", () => {
+    expect(escapeAdminScript("a\\b")).toBe("a\\\\b");
+    expect(escapeAdminScript('say "hi"')).toBe('say \\"hi\\"');
+    expect(escapeAdminScript("a\r\nb")).toBe("a\\r\\nb");
+    expect(escapeAdminScript("a b c")).toBe("a\\u2028b\\u2029c");
+    expect(escapeAdminScript("</script>")).toBe("<\\/script>");
+    expect(escapeAdminScript("</SCRIPT>")).toBe("<\\/SCRIPT>");
+    // HTML metacharacters are intentionally untouched in the JS string context.
+    expect(escapeAdminScript("a & b < c > d")).toBe("a & b < c > d");
+  });
+
+  it.each(["en", "ko"] as const)("keeps operations action labels intact inside inline script for %s", (locale) => {
+    const html = renderAdminConsoleHtml(locale);
+
+    for (const key of ["operations.renewYoutube", "operations.pollChzzk", "operations.drainJobs"] as const) {
+      expect(html).toContain(`runAction("${translateAdmin(locale, key)}"`);
+    }
+    expect(html).toContain(`runHubEventUiAction("${translateAdmin(locale, "operations.recalculate")}"`);
+
+    for (const sentinel of ["￹", "￺", "￻"]) {
+      expect(html).not.toContain(sentinel);
+    }
   });
 });

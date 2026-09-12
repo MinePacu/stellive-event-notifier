@@ -85,6 +85,7 @@ const envSchema = z
     YOUTUBE_API_BASE_URL: z.string().url().default("https://www.googleapis.com/youtube/v3"),
     YOUTUBE_WEBSUB_CALLBACK_URL: optionalString(),
     YOUTUBE_WEBSUB_VERIFY_TOKEN: optionalString(),
+    YOUTUBE_WEBSUB_SECRET: optionalString(),
     YOUTUBE_WEBSUB_ENABLED: booleanFlag(true),
     YOUTUBE_DATA_API_FALLBACK_ENABLED: booleanFlag(false),
     YOUTUBE_SONG_BACKFILL_MAX_PAGES: z.coerce.number().int().positive().default(1),

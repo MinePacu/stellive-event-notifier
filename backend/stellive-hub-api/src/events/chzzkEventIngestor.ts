@@ -109,7 +109,7 @@ function toEvent(
     body: type === "chzzk_live_started" ? "CHZZK live status changed to live." : "CHZZK live status changed to offline.",
     platformUrl: status.platformUrl,
     appDeepLink: `stellivehub://members/${member.id}`,
-    occurredAt: status.openDate ?? now.toISOString(),
+    occurredAt: status.openDate ? parseChzzkOpenDate(status.openDate).toISOString() : now.toISOString(),
     receivedAt: now.toISOString(),
     dedupeKey: `chzzk:${type}:${status.channelId}:${observedKey}`,
     realtimeEligible: type === "chzzk_live_started",

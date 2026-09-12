@@ -51,6 +51,25 @@ describe("service announcement public policy", () => {
     expect(result.items[0]).not.toHaveProperty("createdBy");
     expect(result.items[0]).not.toHaveProperty("deletedAt");
   });
+
+  it("treats a cursor whose row is gone as the end of the list instead of throwing", async () => {
+    const findMany = vi.fn().mockRejectedValue(
+      Object.assign(new Error("An operation failed because it depends on one or more records that were required but not found."), {
+        code: "P2025",
+      }),
+    );
+    const repository = new ServiceAnnouncementRepository({ serviceAnnouncement: { findMany } } as never);
+    const result = await repository.listPublic({ platform: "android", cursor: "deleted-notice", now });
+    expect(result.items).toEqual([]);
+    expect(result.nextCursor).toBeUndefined();
+    expect(findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("rethrows non-cursor database failures from listPublic", async () => {
+    const findMany = vi.fn().mockRejectedValue(Object.assign(new Error("connection refused"), { code: "P1001" }));
+    const repository = new ServiceAnnouncementRepository({ serviceAnnouncement: { findMany } } as never);
+    await expect(repository.listPublic({ platform: "android", cursor: "notice-1", now })).rejects.toThrow("connection refused");
+  });
 });
 
 class MemoryAnnouncementRepository {

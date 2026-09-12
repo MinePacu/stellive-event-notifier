@@ -89,10 +89,19 @@ interface SongCursorPayload {
   id: string;
 }
 
+interface SongGroupByRow {
+  songType?: string;
+  memberId?: string;
+  memberName?: string;
+  generationId?: string;
+  _count: { _all: number };
+}
+
 interface SongDelegate {
   song: {
     upsert(args: { where: { dedupeKey: string }; create: Record<string, unknown>; update: Record<string, unknown> }): Promise<SongRecord>;
     findMany(args: Record<string, unknown>): Promise<SongRecord[]>;
+    groupBy?(args: { by: string[]; where?: Record<string, unknown>; _count?: Record<string, unknown> }): Promise<SongGroupByRow[]>;
   };
 }
 
@@ -292,7 +301,59 @@ export class PrismaSongRepository implements SongRepository {
     return { items: visible.map(toSongCatalogItem), nextCursor };
   }
 
-  async facets(): Promise<SongFacetsResult> {
-    return new EmptySongRepository().facets();
+  async facets(filters: Omit<SongListFilters, "cursor" | "limit"> = {}): Promise<SongFacetsResult> {
+    // Prisma always provides groupBy; the guard keeps lightweight test doubles (upsert/findMany
+    // only) working and mirrors the fallback pattern used by the notification repositories.
+    if (!this.prisma.song.groupBy) {
+      return new EmptySongRepository().facets();
+    }
+
+    // Facet counts reflect the free-text search universe only. Categorical selections
+    // (generation/member/type) are intentionally not applied so each dimension shows the full
+    // set of options the user can pivot to, with live counts.
+    const where: Record<string, unknown> = {};
+    if (filters.q?.trim()) {
+      const query = filters.q.trim();
+      where.OR = [
+        { title: { contains: query, mode: "insensitive" } },
+        { memberName: { contains: query, mode: "insensitive" } },
+      ];
+    }
+
+    const [typeGroups, memberGroups] = await Promise.all([
+      this.prisma.song.groupBy({ by: ["songType"], where, _count: { _all: true } }),
+      this.prisma.song.groupBy({ by: ["memberId", "memberName", "generationId"], where, _count: { _all: true } }),
+    ]);
+
+    const total = typeGroups.reduce((sum, group) => sum + group._count._all, 0);
+    const typeCount = (type: string) =>
+      typeGroups.filter((group) => group.songType === type).reduce((sum, group) => sum + group._count._all, 0);
+
+    const generationCounts = new Map<string, number>();
+    const memberFilters: SongFilterCount[] = [];
+    for (const group of memberGroups) {
+      const generationId = group.generationId ?? "";
+      generationCounts.set(generationId, (generationCounts.get(generationId) ?? 0) + group._count._all);
+      memberFilters.push({
+        id: group.memberId ?? "",
+        label: group.memberName ?? group.memberId ?? "",
+        generationId: generationId as SongGenerationFilterId,
+        count: group._count._all,
+      });
+    }
+    memberFilters.sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+
+    return {
+      summary: { total, original: typeCount("original"), cover: typeCount("cover") },
+      generationFilters: emptyGenerationFilters.map((filter) => ({
+        ...filter,
+        count: filter.id === "all" ? total : generationCounts.get(filter.id) ?? 0,
+      })),
+      memberFilters: [{ id: "all", label: "전체", generationId: "all", count: total }, ...memberFilters],
+      typeFilters: emptyTypeFilters.map((filter) => ({
+        ...filter,
+        count: filter.id === "all" ? total : typeCount(filter.id),
+      })),
+    };
   }
 }

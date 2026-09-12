@@ -84,6 +84,20 @@ function latestPreferenceUpdatedAt(preferences: UserNotificationPreference[]): s
   );
 }
 
+function isValidPreferenceRule(rule: unknown): rule is UserNotificationPreference {
+  if (typeof rule !== "object" || rule === null) return false;
+  const r = rule as Record<string, unknown>;
+  // Validate the fields dereferenced downstream (e.g. updatedAt sorting, enabled/scope gating)
+  // so a malformed element cannot crash preference resolution after being persisted.
+  return (
+    typeof r.scope === "string" && r.scope.length > 0 &&
+    typeof r.enabled === "boolean" &&
+    typeof r.tapAction === "string" &&
+    typeof r.deliveryMode === "string" &&
+    typeof r.updatedAt === "string"
+  );
+}
+
 export async function registerAppRoutes(app: FastifyInstance, options: RegisterAppRouteOptions = {}) {
   const fallbackPreferences = options.fallbackPreferences ?? new Map<string, UserNotificationPreference[]>();
   const fallbackPreferenceMetadata = new Map<string, { revision: number; updatedAt: string; lastClientUpdatedAt?: string }>();
@@ -220,6 +234,9 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       return reply.code(400).send({ error: "preferences_invalid" });
     }
     const rules = body.preferences;
+    if (!rules.every(isValidPreferenceRule)) {
+      return reply.code(400).send({ error: "preferences_invalid" });
+    }
     if (body.clientUpdatedAt !== undefined && (typeof body.clientUpdatedAt !== "string" || Number.isNaN(new Date(body.clientUpdatedAt).getTime()))) {
       return reply.code(400).send({ error: "preference_client_updated_at_invalid" });
     }

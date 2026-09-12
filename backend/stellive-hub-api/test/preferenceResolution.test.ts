@@ -385,6 +385,24 @@ describe("PreferenceResolutionService", () => {
     expect(notAllowed.reason).toBe("keyword_allowlist_no_match");
   });
 
+  it("scopes allowlists per rule so a narrow rule cannot satisfy a broader rule's allowlist", () => {
+    const rules = [
+      pref({ scope: "global", keywordsAllowlist: ["important"] }),
+      pref({ scope: "platform", source: "youtube", enabled: true, keywordsAllowlist: ["update"] })
+    ];
+
+    // Matches only the platform rule's allowlist; the global allowlist is still unsatisfied,
+    // so the broader gate must block (previously the flattened OR let this through).
+    const narrowOnly = service.resolve(event({ title: "update stream" }), "device-1", rules);
+    expect(narrowOnly.shouldNotify).toBe(false);
+    expect(narrowOnly.reason).toBe("keyword_allowlist_no_match");
+
+    // Satisfies every rule that defines an allowlist.
+    const allSatisfied = service.resolve(event({ title: "important update stream" }), "device-1", rules);
+    expect(allSatisfied.shouldNotify).toBe(true);
+    expect(allSatisfied.reason).toBe("allowed");
+  });
+
   it("rate limit applies after keyword checks", () => {
     const result = service.resolve(
       event(),
@@ -458,5 +476,99 @@ describe("CHZZK live notification policy", () => {
         recentNotificationsInLastMinute: 1
       }).reason
     ).toBe("rate_limited");
+  });
+});
+
+describe("disabled rules are not filter gates", () => {
+  // A switched-off scope rule keeps its stored quiet_hours/blocklist/allowlist payload. Once a
+  // later, explicitly enabled scope restores shouldNotify, the dead rule must not gate delivery.
+  const overriddenEvent = () => event({ memberId: "neneko-mashiro", generationId: "gen2", title: "title", body: "body" });
+  const enabledMemberOverride = () =>
+    pref({ scope: "member", memberId: "neneko-mashiro", enabled: true, explicitOverride: true });
+
+  it("ignores a disabled generation rule's stale allowlist", () => {
+    const result = service.resolve(overriddenEvent(), "device-1", [
+      pref({ scope: "generation", generationId: "gen2", enabled: false, keywordsAllowlist: ["구버전키워드"] }),
+      enabledMemberOverride()
+    ]);
+    expect(result.shouldNotify).toBe(true);
+    expect(result.reason).toBe("allowed");
+  });
+
+  it("ignores a disabled member rule's stale allowlist, quiet hours, and blocklist", () => {
+    const staleMemberRule = pref({
+      scope: "member",
+      memberId: "neneko-mashiro",
+      enabled: false,
+      explicitOverride: true,
+      keywordsAllowlist: ["구버전키워드"],
+      keywordsBlocklist: ["title"],
+      quietHours: { enabled: true, start: "00:00", end: "23:59", timezone: "UTC" }
+    });
+    // member_event_type is applied after member, so the explicit on restores delivery.
+    const result = service.resolve(overriddenEvent(), "device-1", [
+      staleMemberRule,
+      pref({
+        scope: "member_event_type",
+        memberId: "neneko-mashiro",
+        eventType: "youtube_upload",
+        enabled: true,
+        explicitOverride: true
+      })
+    ]);
+    expect(result.shouldNotify).toBe(true);
+    expect(result.reason).toBe("allowed");
+  });
+
+  it("still honors an enabled rule's allowlist", () => {
+    const result = service.resolve(overriddenEvent(), "device-1", [
+      pref({ scope: "generation", generationId: "gen2", enabled: true, keywordsAllowlist: ["구버전키워드"] }),
+      enabledMemberOverride()
+    ]);
+    expect(result.shouldNotify).toBe(false);
+    expect(result.reason).toBe("keyword_allowlist_no_match");
+  });
+
+  it("still blocks everything when the global rule is disabled", () => {
+    const result = service.resolve(overriddenEvent(), "device-1", [
+      pref({ scope: "global", enabled: false }),
+      enabledMemberOverride()
+    ]);
+    expect(result.shouldNotify).toBe(false);
+    expect(result.reason).toBe("global_off");
+  });
+});
+
+describe("GET /v1/preferences/resolved production gating", () => {
+  async function injectResolved(nodeEnv: string) {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = nodeEnv;
+    try {
+      // routes.ts reads process.env.NODE_ENV directly; keep the validated env on "test" so only
+      // the dev-route gate changes.
+      const app = await buildApp({ env: { NODE_ENV: "test" } });
+      try {
+        return await app.inject({
+          method: "GET",
+          url: "/v1/preferences/resolved?deviceId=dev-device&source=youtube&eventType=youtube_upload"
+        });
+      } finally {
+        await app.close();
+      }
+    } finally {
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
+  }
+
+  it("is not registered in production", async () => {
+    const response = await injectResolved("production");
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("still resolves outside production", async () => {
+    const response = await injectResolved("test");
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ deviceId: "dev-device", shouldNotify: true });
   });
 });

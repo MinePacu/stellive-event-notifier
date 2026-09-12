@@ -176,6 +176,13 @@ export interface MusicSourcePlaylistRecord {
   memberId?: string | null;
 }
 
+/** Minimal projection consumed by the reconciliation service (no visibility filtering). */
+export interface MusicReconciliationItemRow {
+  youtubeVideoId: string;
+  type: MusicItemType;
+  memberIds: string[];
+}
+
 export interface MusicRepositoryDelegate {
   musicMember?: { upsert(args: unknown): Promise<unknown>; findMany?(args: unknown): Promise<unknown[]> };
   sourcePlaylist?: {
@@ -715,6 +722,47 @@ export class PrismaMusicRepository {
     return {
       items: page.map(toMusicCatalogItem),
       nextCursor: rows.length > limit && last ? encodeMusicCursor(last, sort) : null,
+    };
+  }
+
+  /**
+   * Reconciliation-only listing: every MusicItem row, with no public-catalog visibility
+   * filter (isPublic / isAvailable / isExcluded / classificationStatus / isInstrumental /
+   * graduated members). Reusing `listMusicItems` here made private, excluded and
+   * not-yet-reviewed rows that DO exist in the DB get reported as `missing_in_db`.
+   * Paginated on the primary key so the cursor stays stable while rows change.
+   */
+  async listAllMusicItemsForReconciliation(
+    filters: { limit?: number; cursor?: string } = {},
+  ): Promise<{ items: MusicReconciliationItemRow[]; nextCursor?: string | null }> {
+    const limit = Math.min(Math.max(filters.limit ?? 200, 1), 500);
+    const where: Record<string, unknown> = {};
+    if (filters.cursor) where.id = { gt: filters.cursor };
+    const rows = await this.prisma.musicItem!.findMany!({
+      where,
+      select: {
+        id: true,
+        youtubeVideoId: true,
+        type: true,
+        members: { select: { memberId: true } },
+      },
+      orderBy: [{ id: "asc" }],
+      take: limit + 1,
+    }) as unknown as Array<{
+      id: string;
+      youtubeVideoId: string;
+      type: string;
+      members?: Array<{ memberId: string }>;
+    }>;
+    const page = rows.slice(0, limit);
+    const last = page.at(-1);
+    return {
+      items: page.map((row) => ({
+        youtubeVideoId: row.youtubeVideoId,
+        type: row.type as MusicItemType,
+        memberIds: (row.members ?? []).map((link) => link.memberId),
+      })),
+      nextCursor: rows.length > limit && last ? last.id : null,
     };
   }
 

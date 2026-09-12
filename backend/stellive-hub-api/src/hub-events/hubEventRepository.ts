@@ -620,13 +620,25 @@ export class HubEventRepository {
 
   async listPublished(filters: HubEventFilters = {}, now: Date = new Date()): Promise<HubEventListResult> {
     const findMany = requireMethod(this.prisma.hubEvent?.findMany?.bind(this.prisma.hubEvent), "hub_event_find_many");
-    const limit = Math.min(100, Math.max(1, filters.limit ?? 50));
-    const queryLimit = filters.status ? 100 : limit;
+    const windowStart = asDate(filters.from);
+    const windowEnd = asDate(filters.to);
+    const hasWindow = windowStart !== undefined || windowEnd !== undefined;
+    // Windowed queries (e.g. the public calendar) must not silently drop in-window events past
+    // the default page size, but an unbounded date range must not become an unbounded query
+    // either — cap at a generous but bounded ceiling instead of the normal small page size.
+    const limit = hasWindow ? 500 : Math.min(100, Math.max(1, filters.limit ?? 50));
+    const queryLimit = filters.status ? Math.max(limit, 100) : limit;
     const where: Record<string, unknown> = {
       publicationState: "published",
       deletedAt: null
     };
     addHubEventFilters(where, filters, { includeStatus: false });
+    // Window filtering is applied at the DB level as a coarse (null-tolerant) overlap check —
+    // rows with a null startsAt/endsAt always pass here — and then re-checked exactly below
+    // using the same coalesced-date semantics as the in-memory HubEventService, so neither a
+    // missing column nor the coarse SQL condition can incorrectly include or exclude a row.
+    if (windowStart) where.OR = [{ endsAt: { gte: windowStart } }, { endsAt: null }];
+    if (windowEnd) where.AND = [{ OR: [{ startsAt: { lte: windowEnd } }, { startsAt: null }] }];
 
     const records = await findMany({
       where,
@@ -640,6 +652,14 @@ export class HubEventRepository {
       .map(toPublicHubEvent)
       .map((event) => withEffectiveHubEventStatus(event, now))
       .filter((event) => !filters.status || event.status === filters.status)
+      .filter((event) => {
+        if (!hasWindow) return true;
+        const eventStart = asDate(event.startsAt ?? event.endsAt ?? event.updatedAt);
+        const eventEnd = asDate(event.endsAt ?? event.startsAt ?? event.updatedAt);
+        if (windowStart && eventEnd && eventEnd.getTime() < windowStart.getTime()) return false;
+        if (windowEnd && eventStart && eventStart.getTime() > windowEnd.getTime()) return false;
+        return true;
+      })
       .slice(0, limit);
     return { items };
   }

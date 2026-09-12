@@ -42,7 +42,10 @@ interface DiscoveryYoutubePort {
     maxPages: number;
     maxResults?: number;
   }): Promise<YoutubeListUploadsResult>;
-  fetchVideos(videoIds: string[]): Promise<YoutubeVideoDetail[]>;
+  fetchVideos(videoIds: string[]): Promise<{
+    status: "ok" | "quota_exceeded" | "error";
+    items: YoutubeVideoDetail[];
+  }>;
 }
 
 interface DiscoveryRepository {
@@ -444,7 +447,12 @@ export class MusicChannelDiscoverySyncService {
             maxResults: target.maxResults ?? 50,
           });
           summary.apiCallsEstimated += uploads.quotaUnits;
-          if (uploads.status !== "ok") continue;
+          if (uploads.status !== "ok") {
+            // quota_exceeded / error are real failures: report them instead of
+            // silently treating the channel as having no uploads.
+            if (uploads.status !== "not_modified") summary.failed += 1;
+            continue;
+          }
           summary.playlistItemsChecked += uploads.candidates.length;
           for (const candidate of uploads.candidates) {
             if (!candidates.has(candidate.videoId)) candidates.set(candidate.videoId, { candidate, target });
@@ -465,8 +473,17 @@ export class MusicChannelDiscoverySyncService {
       }));
       const now = (this.options.now ?? (() => new Date()))();
       const refreshIds = videoIds.filter((videoId) => shouldRefreshVideo(existingById.get(videoId), now));
-      const details = refreshIds.length > 0 ? await this.options.youtube.fetchVideos(refreshIds) : [];
+      const detailsResult = refreshIds.length > 0
+        ? await this.options.youtube.fetchVideos(refreshIds)
+        : { status: "ok" as const, items: [] as YoutubeVideoDetail[] };
       summary.apiCallsEstimated += Math.ceil(refreshIds.length / 50);
+      // Without video details the candidates would be classified from the bare upload
+      // feed, so a videos.list failure is reported rather than silently downgraded.
+      if (detailsResult.status !== "ok") {
+        summary.failed += 1;
+        return summary;
+      }
+      const details = detailsResult.items;
       const detailsById = new Map<string, YoutubeVideoDetail>([
         ...existingRows.map((row) => {
           const value = record(row);

@@ -95,6 +95,12 @@ export class SongBackfillService {
           result.notModified += 1;
           continue;
         }
+        // quota_exceeded / error return an empty candidate list; counting that as a
+        // clean run would report an outage as a successful backfill.
+        if (uploads.status !== "ok") {
+          result.failed += 1;
+          continue;
+        }
 
         for (const candidate of uploads.candidates) {
           const ingested = await this.dependencies.ingestion.ingestYoutubeUpload(candidate);

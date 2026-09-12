@@ -157,8 +157,15 @@ export class HubEventService {
   }
 
   list(filters: HubEventFilters = {}, now: Date = new Date()): HubEventListResult {
-    const limit = Math.min(100, Math.max(1, filters.limit ?? 50));
     const filtered = this.filteredEvents(filters, now);
+
+    // When a from/to window is supplied (e.g. calendar queries), the window filter in
+    // filteredEvents already scopes results to the requested range, so the default 100-item
+    // hard cap must not truncate in-window events. Non-window callers keep the legacy cap.
+    const hasWindow = filters.from !== undefined || filters.to !== undefined;
+    const limit = hasWindow
+      ? Math.max(1, filters.limit ?? filtered.length ?? 1)
+      : Math.min(100, Math.max(1, filters.limit ?? 50));
 
     const items = filtered.slice(0, limit).map((event) => withEffectiveHubEventStatus(event, now));
     const nextCursor = filtered.length > limit ? items[items.length - 1]?.id : undefined;

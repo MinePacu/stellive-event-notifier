@@ -175,6 +175,17 @@ export function isAnnouncementVisibleToClient(record: ServiceAnnouncementRecord,
   }).eligible;
 }
 
+// Prisma raises P2025 ("An operation failed because it depends on one or more records that were
+// required but not found") when a cursor id no longer matches a row selected by `where` — e.g. the
+// announcement was deleted or unpublished between two pages. Some Prisma versions report it only in
+// the message, so both are accepted.
+function isUnknownCursorError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  if ("code" in error && (error as { code?: unknown }).code === "P2025") return true;
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" && message.includes("Record");
+}
+
 export class ServiceAnnouncementRepository {
   constructor(private readonly prisma: PrismaLike = getPrismaClient()) {}
 
@@ -187,19 +198,46 @@ export class ServiceAnnouncementRepository {
     now?: Date;
   } = {}): Promise<{ items: ServiceAnnouncement[]; nextCursor?: string }> {
     const now = input.now ?? new Date();
-    const records = await this.prisma.serviceAnnouncement.findMany({
-      where: { deletedAt: null, publicationState: { in: input.includeArchived ? ["published", "archived"] : ["published"] } },
-      orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
-      take: 500,
-    });
-    const visible = records.filter((record) => isAnnouncementVisibleToClient(record, { ...input, now }));
-    const cursorIndex = input.cursor ? visible.findIndex((record) => record.id === input.cursor) : -1;
-    const start = cursorIndex >= 0 ? cursorIndex + 1 : 0;
     const limit = Math.min(100, Math.max(1, input.limit ?? 20));
-    const page = visible.slice(start, start + limit);
+    const where = {
+      deletedAt: null,
+      publicationState: { in: input.includeArchived ? ["published", "archived"] : ["published"] },
+    };
+    const orderBy = [{ publishedAt: "desc" as const }, { id: "asc" as const }];
+    // DB-level cursor pagination: page through the ordered set in batches and apply the
+    // client-visibility filter per record, accumulating until we have one more than the
+    // requested limit (to detect a next page) or the table is exhausted. This avoids the
+    // previous take:500 cap (which permanently dropped records past the first 500 visible)
+    // and the in-memory findIndex cursor (which re-returned the first page on an unknown
+    // cursor). A cursor whose row has since been deleted or unpublished makes Prisma throw,
+    // which on the unauthenticated GET /v1/announcements surfaced as a 500; such a cursor is
+    // treated as the end of the result set instead (empty batch -> loop ends).
+    const batchSize = Math.max(limit + 1, 50);
+    const visible: ServiceAnnouncementRecord[] = [];
+    let cursorId = input.cursor;
+    for (let guard = 0; visible.length <= limit && guard < 1000; guard += 1) {
+      let batch: ServiceAnnouncementRecord[];
+      try {
+        batch = await this.prisma.serviceAnnouncement.findMany({
+          where,
+          orderBy,
+          take: batchSize,
+          ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+        });
+      } catch (error) {
+        if (cursorId && isUnknownCursorError(error)) break;
+        throw error;
+      }
+      for (const record of batch) {
+        if (isAnnouncementVisibleToClient(record, { ...input, now })) visible.push(record);
+      }
+      if (batch.length < batchSize) break;
+      cursorId = batch[batch.length - 1]!.id;
+    }
+    const page = visible.slice(0, limit);
     return {
       items: page.map(toPublic),
-      nextCursor: visible.length > start + limit ? page.at(-1)?.id : undefined,
+      nextCursor: visible.length > limit ? page.at(-1)?.id : undefined,
     };
   }
 

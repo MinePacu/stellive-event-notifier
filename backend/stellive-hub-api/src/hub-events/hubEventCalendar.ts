@@ -333,8 +333,11 @@ export function buildHubCalendarWidgetSnapshot(
   const today = localDateString(options.now, options.timezone);
   const hubEventEntries = events.flatMap((event) => {
     if (event.scheduleMode !== "timeline") {
-      const date = localDateString(primaryStart(event), options.timezone);
-      return date >= today ? [toEntry(event, date, effectiveStatus(event, options.now), options.timezone)] : [];
+      const startDate = localDateString(primaryStart(event), options.timezone);
+      const endDate = localDateString(primaryEnd(event), options.timezone);
+      if (endDate < today) return [];
+      const date = startDate >= today ? startDate : today;
+      return [toEntry(event, date, effectiveStatus(event, options.now), options.timezone)];
     }
     return (event.scheduleItems ?? [])
       .filter((item) => !item.cancelledAt)

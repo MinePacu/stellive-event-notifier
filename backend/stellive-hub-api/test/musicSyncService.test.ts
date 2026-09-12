@@ -44,7 +44,7 @@ function createService(overrides: Partial<ConstructorParameters<typeof MusicSync
       pagesFetched: 1,
       quotaUnits: 1,
     })),
-    fetchVideos: vi.fn(async (_videoIds: string[]) => [{
+    fetchVideos: vi.fn(async (_videoIds: string[]) => ({ status: "ok" as "ok" | "quota_exceeded" | "error", items: [{
       videoId: "video-1",
       title: "유니 x 히나 cover",
       description: "with Hina",
@@ -54,7 +54,7 @@ function createService(overrides: Partial<ConstructorParameters<typeof MusicSync
       channelId: "UC1",
       channelTitle: "Stellive",
       privacyStatus: "public",
-    }]),
+    }] })),
   };
   const locks = new InMemoryMusicSyncLock();
   const service = new MusicSyncService({
@@ -153,7 +153,7 @@ describe("MusicSyncService", () => {
     const youtube = {
       fetchPlaylistItemsPage: vi.fn(async () => ({ status: "quota_exceeded" as const, items: [], pagesFetched: 0, quotaUnits: 1 })),
       fetchPlaylistItems: vi.fn(async () => ({ status: "quota_exceeded" as const, items: [], pagesFetched: 0, quotaUnits: 1 })),
-      fetchVideos: vi.fn(async () => []),
+      fetchVideos: vi.fn(async () => ({ status: "ok" as const, items: [] })),
     };
     const { service, syncRuns } = createService({ youtube });
 
@@ -163,6 +163,21 @@ describe("MusicSyncService", () => {
     expect(youtube.fetchPlaylistItems).not.toHaveBeenCalled();
     expect(youtube.fetchVideos).not.toHaveBeenCalled();
     expect(syncRuns.failRun).toHaveBeenCalledWith("run-1", expect.objectContaining({ errorMessage: "quota_exceeded" }));
+  });
+
+  it("fails the sync when videos.list fails instead of hiding the page as private", async () => {
+    const { service, repository, syncRuns, youtube } = createService();
+    youtube.fetchVideos.mockResolvedValueOnce({ status: "quota_exceeded", items: [] });
+
+    await expect(service.syncSourcePlaylist(source, "light")).resolves.toMatchObject({
+      status: "failed",
+      insertedOrUpdatedCount: 0,
+    });
+
+    expect(repository.upsertMusicItem).not.toHaveBeenCalled();
+    expect(repository.markMissingFromSourceByLastSeen).not.toHaveBeenCalled();
+    expect(syncRuns.failRun).toHaveBeenCalledWith("run-1", expect.objectContaining({ errorMessage: "quota_exceeded" }));
+    expect(syncRuns.finishRun).not.toHaveBeenCalled();
   });
 
   it("does not run duplicate syncs for the same source concurrently", async () => {
@@ -247,7 +262,7 @@ describe("MusicSyncService", () => {
         pagesFetched: 1,
         quotaUnits: 1,
       })),
-      fetchVideos: vi.fn(async () => []),
+      fetchVideos: vi.fn(async () => ({ status: "ok" as const, items: [] })),
     };
     const { service } = createService({ youtube });
 
