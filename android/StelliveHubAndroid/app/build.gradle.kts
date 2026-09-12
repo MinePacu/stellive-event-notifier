@@ -111,6 +111,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation(platform("com.google.firebase:firebase-bom:34.15.0"))
     implementation("com.google.firebase:firebase-messaging")
+    implementation("io.coil-kt:coil:2.7.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

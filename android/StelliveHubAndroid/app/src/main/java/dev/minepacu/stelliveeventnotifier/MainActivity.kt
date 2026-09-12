@@ -67,6 +67,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.WindowMetricsCalculator
+import coil.load
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
@@ -415,6 +416,9 @@ private var cachedSongItems: List<SongCatalogItem> = emptyList()
 private var cachedSongType: String? = null
 private var cachedSongCatalogAuthoritative = false
 private var songRefreshJob: Job? = null
+
+    private var goodsEventsJob: Job? = null
+    private var hubEventDetailJob: Job? = null
 private var songSearchResultsContainer: LinearLayout? = null
 private var homeRecentSongs: List<SongCatalogItem>? = null
 private var isLoadingHomeRecentSongs = false
@@ -627,6 +631,8 @@ private var notificationPermissionRequested = false
         pendingSongSearchRender?.let(songSearchHandler::removeCallbacks)
         liveClockTextViews.clear()
         screenTransitionController.cancelAndClear()
+        goodsEventsJob?.cancel()
+        hubEventDetailJob?.cancel()
         super.onDestroy()
     }
 
@@ -1891,7 +1897,8 @@ private fun startScreen(
 
     private fun loadServerGoodsEvents() {
         binding.contentList.addView(loadingCard(MainUiPolicy.goodsEventsLoadingPresentation()))
-        CoroutineScope(Dispatchers.Main).launch {
+        goodsEventsJob?.cancel()
+        goodsEventsJob = lifecycleScope.launch {
             val today = LocalDate.now()
             val from = today.minusMonths(1)
             val to = today.plusMonths(3)
@@ -3485,7 +3492,8 @@ private fun startScreen(
         }
         if (serverHubEventDetailLoadedId != eventId) {
             container.addView(loadingCard(MainUiPolicy.hubEventDetailLoadingPresentation()))
-            CoroutineScope(Dispatchers.Main).launch {
+            hubEventDetailJob?.cancel()
+            hubEventDetailJob = lifecycleScope.launch {
                 serverHubEventDetail = serverRepository.hubEventDetail(eventId)
                 serverHubEventDetailLoadedId = eventId
                 if (navigationHistory.currentScreen == HubScreen.GOODS_EVENTS && selectedHubEventId == eventId) {
@@ -6720,16 +6728,11 @@ private fun hubEventDetailHero(event: dev.minepacu.stelliveeventnotifier.core.mo
                         FrameLayout.LayoutParams.MATCH_PARENT
                     )
                 )
-                thread {
-                    val bitmap = runCatching {
-                        URL(imageUrl).openStream().use(BitmapFactory::decodeStream)
-                    }.getOrNull()
-                    runOnUiThread {
-                        if (bitmap != null) {
-                            imageView.setImageBitmap(bitmap)
-                            imageView.visibility = View.VISIBLE
-                        }
-                    }
+                imageView.load(imageUrl) {
+                    listener(
+                        onSuccess = { _, _ -> imageView.visibility = View.VISIBLE },
+                        onError = { _, _ -> imageView.visibility = View.GONE },
+                    )
                 }
             }
 
