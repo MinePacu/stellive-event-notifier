@@ -7,9 +7,11 @@ import {
   escapeAdminText,
   koAdminMessages,
   localizeAdminDocument,
+  escapeAdminScript,
   serializeAdminScriptValue,
   t,
   tAttr,
+  tScript,
   translateAdmin
 } from "../src/admin/adminI18n.js";
 import { renderAdminLanguageHtml } from "../src/admin/adminLanguageHtml.js";
@@ -237,5 +239,45 @@ describe("admin i18n", () => {
     expect(cookies).toContain(`${adminLanguageCookieName}=ko`);
     expect(cookies).toContain("Max-Age=31536000");
     expect(response.headers["content-language"]).toBe("ko");
+  });
+
+  it("escapes script-context slots so they stay valid JS string literals", () => {
+    const key = "announcement.deleteConfirm" as const;
+    const expected = translateAdmin("en", key, { title: 'He said "hi"' });
+    expect(expected).toContain('"');
+    expect(expected).toContain("\n");
+
+    const document = `var label = "${tScript(key, { title: 'He said "hi"' })}";`;
+    const rendered = localizeAdminDocument(document, "en");
+
+    expect(rendered).not.toContain("\n");
+    expect(rendered).toContain('\\"');
+
+    const evaluate = new Function(`${rendered} return label;`) as () => string;
+    expect(evaluate()).toBe(expected);
+  });
+
+  it("escapeAdminScript neutralizes backslashes, line separators and script terminators", () => {
+    expect(escapeAdminScript("a\\b")).toBe("a\\\\b");
+    expect(escapeAdminScript('say "hi"')).toBe('say \\"hi\\"');
+    expect(escapeAdminScript("a\r\nb")).toBe("a\\r\\nb");
+    expect(escapeAdminScript("a b c")).toBe("a\\u2028b\\u2029c");
+    expect(escapeAdminScript("</script>")).toBe("<\\/script>");
+    expect(escapeAdminScript("</SCRIPT>")).toBe("<\\/SCRIPT>");
+    // HTML metacharacters are intentionally untouched in the JS string context.
+    expect(escapeAdminScript("a & b < c > d")).toBe("a & b < c > d");
+  });
+
+  it.each(["en", "ko"] as const)("keeps operations action labels intact inside inline script for %s", (locale) => {
+    const html = renderAdminConsoleHtml(locale);
+
+    for (const key of ["operations.renewYoutube", "operations.pollChzzk", "operations.drainJobs"] as const) {
+      expect(html).toContain(`runAction("${translateAdmin(locale, key)}"`);
+    }
+    expect(html).toContain(`runHubEventUiAction("${translateAdmin(locale, "operations.recalculate")}"`);
+
+    for (const sentinel of ["￹", "￺", "￻"]) {
+      expect(html).not.toContain(sentinel);
+    }
   });
 });

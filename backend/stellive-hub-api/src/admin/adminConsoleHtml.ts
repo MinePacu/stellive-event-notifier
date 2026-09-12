@@ -4,7 +4,7 @@ import {
   renderAdminThemeInitScript,
   renderAdminThemeStyle
 } from "./adminThemeHtml.js";
-import { localizeAdminDocument, serializeAdminCatalog, t, tAttr, translateAdmin, type AdminLocale } from "./adminI18n.js";
+import { localizeAdminDocument, serializeAdminCatalog, t, tAttr, tScript, translateAdmin, type AdminLocale } from "./adminI18n.js";
 import { renderAdminLanguageHtml } from "./adminLanguageHtml.js";
 import { adminIntlLocale } from "./adminLocale.js";
 
@@ -4441,19 +4441,19 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       return refreshDashboard({ source: "manual" });
     });
     document.getElementById("drain").addEventListener("click", function () {
-      return runAction("${t("operations.drainJobs")}", endpoints.drainJobs, {
+      return runAction("${tScript("operations.drainJobs")}", endpoints.drainJobs, {
         method: "POST",
         body: JSON.stringify({ limit: 25 })
       });
     });
     document.getElementById("renew-youtube").addEventListener("click", function () {
-      return runAction("${t("operations.renewYoutube")}", endpoints.renewYoutube, { method: "POST" });
+      return runAction("${tScript("operations.renewYoutube")}", endpoints.renewYoutube, { method: "POST" });
     });
     document.getElementById("poll-chzzk").addEventListener("click", function () {
-      return runAction("${t("operations.pollChzzk")}", endpoints.pollChzzk, { method: "POST" });
+      return runAction("${tScript("operations.pollChzzk")}", endpoints.pollChzzk, { method: "POST" });
     });
     document.getElementById("recalculate-special-days").addEventListener("click", function () {
-      return runHubEventUiAction("${t("operations.recalculate")}", function () {
+      return runHubEventUiAction("${tScript("operations.recalculate")}", function () {
         return adminApi(endpoints.recalculateSpecialDays, { method: "POST" });
       });
     });

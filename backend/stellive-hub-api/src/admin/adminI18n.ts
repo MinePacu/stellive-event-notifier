@@ -418,7 +418,7 @@ function decodeAdminSlotParams(encoded: string): Record<string, string | number>
   return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<string, string | number>;
 }
 
-function createAdminSlot(context: "T" | "A", key: AdminMessageKey, parameters?: Record<string, string | number>): string {
+function createAdminSlot(context: "T" | "A" | "S", key: AdminMessageKey, parameters?: Record<string, string | number>): string {
   const payload = parameters && Object.keys(parameters).length > 0
     ? `${SLOT_PARAM_SEP}${encodeAdminSlotParams(parameters)}`
     : "";
@@ -433,6 +433,14 @@ export function tAttr(key: AdminMessageKey, parameters?: Record<string, string |
   return createAdminSlot("A", key, parameters);
 }
 
+/**
+ * Slot for values interpolated inside a double-quoted JS string literal in an inline `<script>`.
+ * Resolves via `escapeAdminScript`, not the HTML text/attribute escapers.
+ */
+export function tScript(key: AdminMessageKey, parameters?: Record<string, string | number>): string {
+  return createAdminSlot("S", key, parameters);
+}
+
 export function escapeAdminText(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
@@ -441,8 +449,24 @@ export function escapeAdminAttr(value: string): string {
   return escapeAdminText(value).replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
 
+/**
+ * Escapes a value for embedding inside a double-quoted JS string literal in an inline `<script>`.
+ * This context is JS, not HTML, so `&`/`<`/`>` are intentionally left alone; only characters that
+ * terminate the string literal, the line, or the `<script>` element are escaped.
+ */
+export function escapeAdminScript(value: string): string {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll('"', '\\"')
+    .replaceAll("\n", "\\n")
+    .replaceAll("\r", "\\r")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029")
+    .replace(/<\/(?=script)/gi, "<\\/");
+}
+
 const adminSlotPattern = new RegExp(
-  `${SLOT_START}(T|A)([^${SLOT_PARAM_SEP}${SLOT_END}]+)(?:${SLOT_PARAM_SEP}([^${SLOT_END}]+))?${SLOT_END}`,
+  `${SLOT_START}(T|A|S)([^${SLOT_PARAM_SEP}${SLOT_END}]+)(?:${SLOT_PARAM_SEP}([^${SLOT_END}]+))?${SLOT_END}`,
   "g"
 );
 
@@ -453,7 +477,13 @@ export function localizeAdminDocument(document: string, locale: AdminLocale): st
     }
     const parameters = encoded === undefined ? {} : decodeAdminSlotParams(encoded);
     const value = translateAdmin(locale, key as AdminMessageKey, parameters);
-    return context === "A" ? escapeAdminAttr(value) : escapeAdminText(value);
+    if (context === "A") {
+      return escapeAdminAttr(value);
+    }
+    if (context === "S") {
+      return escapeAdminScript(value);
+    }
+    return escapeAdminText(value);
   });
   if (resolved.includes(SLOT_START) || resolved.includes(SLOT_PARAM_SEP) || resolved.includes(SLOT_END)) {
     throw new Error("unresolved admin i18n slot(s) remain");
