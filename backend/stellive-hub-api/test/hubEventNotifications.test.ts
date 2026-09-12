@@ -187,6 +187,31 @@ describe("hub event notification candidates", () => {
     })).toEqual([]);
   });
 
+  it("emits event_updated when member, generation, source type, or schedule items change", () => {
+    const before = adminEvent({ publicationState: "published", revision: 2 });
+    const overrideCases: AdminHubEventOverrides[] = [
+      { memberId: "ayatsuno-yuni" },
+      { generationId: "gen1" },
+      { sourceType: "official_collab" },
+      { scheduleItems: before.scheduleItems?.map((item) => ({ ...item, label: "예약 판매 시작 변경" })) }
+    ];
+
+    for (const override of overrideCases) {
+      const after = adminEvent({ publicationState: "published", revision: 3, ...override });
+      const candidates = buildHubEventNotificationCandidates({ action: "update", before, after, now });
+      expect(candidates.map((event) => event.type)).toContain("event_updated");
+    }
+  });
+
+  it("keeps event_updated suppressed when only non-user-visible fields change", () => {
+    const before = adminEvent({ publicationState: "published", revision: 2 });
+    const after = adminEvent({ publicationState: "published", revision: 3, updatedBy: "admin-9" });
+
+    expect(
+      buildHubEventNotificationCandidates({ action: "update", before, after, now }).map((event) => event.type)
+    ).not.toContain("event_updated");
+  });
+
   it.each(["official_runtime_url", "third_party_allowed"] as const)(
     "maps an allowed %s HubEvent image to PlatformEvent.thumbnailUrl",
     (policyState) => {

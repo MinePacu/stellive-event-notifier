@@ -129,7 +129,10 @@ const userVisibleScalarFields: Array<keyof HubEvent> = [
   "sourceLabel",
   "purchaseUrl",
   "ticketUrl",
-  "scheduleMode"
+  "scheduleMode",
+  "memberId",
+  "generationId",
+  "sourceType"
 ];
 
 function hasUserVisibleChange(before: AdminHubEvent, after: AdminHubEvent): boolean {
@@ -141,7 +144,8 @@ function hasUserVisibleChange(before: AdminHubEvent, after: AdminHubEvent): bool
   return (
     JSON.stringify(before.tags ?? []) !== JSON.stringify(after.tags ?? []) ||
     JSON.stringify(before.links ?? []) !== JSON.stringify(after.links ?? []) ||
-    JSON.stringify(before.image ?? null) !== JSON.stringify(after.image ?? null)
+    JSON.stringify(before.image ?? null) !== JSON.stringify(after.image ?? null) ||
+    JSON.stringify(before.scheduleItems ?? []) !== JSON.stringify(after.scheduleItems ?? [])
   );
 }
 

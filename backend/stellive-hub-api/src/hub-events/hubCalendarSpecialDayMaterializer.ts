@@ -13,7 +13,7 @@ export interface SpecialDayOccurrence {
   startsAt: Date;
   endsAt: Date;
   sourceLabel: string;
-  policyState: "catalog_verified";
+  policyState: HubCalendarSpecialDay["policyState"];
 }
 
 export interface BuildSpecialDayOccurrencesOptions {
@@ -77,7 +77,7 @@ function occurrenceForSpecialDay(
       startsAt,
       endsAt,
       sourceLabel: day.sourceLabel,
-      policyState: "catalog_verified"
+      policyState: day.policyState
     };
   }
 
@@ -94,7 +94,7 @@ function occurrenceForSpecialDay(
     startsAt,
     endsAt,
     sourceLabel: day.sourceLabel,
-    policyState: "catalog_verified"
+    policyState: day.policyState
   };
 }
 
