@@ -419,6 +419,9 @@ private var songRefreshJob: Job? = null
 
     private var goodsEventsJob: Job? = null
     private var hubEventDetailJob: Job? = null
+    private var serverHubEventDetailJob: Job? = null
+    private var homeRecentSongsJob: Job? = null
+    private var persistSettingsJob: Job? = null
 private var songSearchResultsContainer: LinearLayout? = null
 private var homeRecentSongs: List<SongCatalogItem>? = null
 private var isLoadingHomeRecentSongs = false
@@ -633,6 +636,9 @@ private var notificationPermissionRequested = false
         screenTransitionController.cancelAndClear()
         goodsEventsJob?.cancel()
         hubEventDetailJob?.cancel()
+        serverHubEventDetailJob?.cancel()
+        homeRecentSongsJob?.cancel()
+        persistSettingsJob?.cancel()
         super.onDestroy()
     }
 
@@ -1848,7 +1854,8 @@ private fun startScreen(
     private fun loadHomeRecentSongsIfNeeded() {
         if (homeRecentSongs != null || isLoadingHomeRecentSongs) return
         isLoadingHomeRecentSongs = true
-        CoroutineScope(Dispatchers.Main).launch {
+        homeRecentSongsJob?.cancel()
+        homeRecentSongsJob = lifecycleScope.launch {
             homeRecentSongs = serverRepository.recentSongs(limit = 5)
             isLoadingHomeRecentSongs = false
             if (navigationHistory.currentScreen == HubScreen.HOME) {
@@ -3556,7 +3563,8 @@ private fun calendarDayHeader(date: String): SectionHeaderView =
                 role = "선택한 굿즈/행사를 불러오고 있습니다."
             )
             binding.contentList.addView(loadingCard(MainUiPolicy.hubEventDetailLoadingPresentation()))
-            CoroutineScope(Dispatchers.Main).launch {
+            serverHubEventDetailJob?.cancel()
+            serverHubEventDetailJob = lifecycleScope.launch {
                 serverHubEventDetail = serverRepository.hubEventDetail(eventId)
                 serverHubEventDetailLoadedId = eventId
                 if (navigationHistory.currentScreen == HubScreen.GOODS_EVENT_DETAIL && selectedHubEventId == eventId) {
@@ -7125,7 +7133,8 @@ private fun compactEventCard(title: String, body: String, pills: List<String>, t
         )
 
     private fun persistSettings(settings: dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState) {
-        CoroutineScope(Dispatchers.Main).launch {
+        persistSettingsJob?.cancel()
+        persistSettingsJob = lifecycleScope.launch {
             try {
                 serverRepository.updatePreferences(settings)
                 val screen = navigationHistory.currentScreen

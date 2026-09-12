@@ -26,9 +26,11 @@ struct HomeView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(store.homeLiveMembers) { member in
-                            NavigationLink(value: member) {
-                                MemberRow(member: member)
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            ForEach(store.homeLiveMembers) { member in
+                                NavigationLink(value: member) {
+                                    MemberRow(member: member, currentDate: context.date)
+                                }
                             }
                         }
                         if store.hasHomeLiveOverflow {
@@ -412,6 +414,7 @@ private struct HeaderMetric: View {
 
 struct MemberRow: View {
     let member: HubMember
+    let currentDate: Date
 
     var body: some View {
         HStack(spacing: 12) {
@@ -433,10 +436,8 @@ struct MemberRow: View {
                 Text(member.catalogRole == .officialChannel ? "공식" : (member.isLive ? "LIVE" : "OFF"))
                     .font(.caption.weight(.semibold))
                 if member.isLive {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        if let elapsed = LiveStatusFormatter.elapsedClockText(startedAt: member.liveStartedAt, now: context.date) {
-                            LiveSideMetric(systemImage: "clock", value: elapsed, color: .secondary)
-                        }
+                    if let elapsed = LiveStatusFormatter.elapsedClockText(startedAt: member.liveStartedAt, now: currentDate) {
+                        LiveSideMetric(systemImage: "clock", value: elapsed, color: .secondary)
                     }
                     if let viewers = LiveStatusFormatter.viewerCountText(member.liveViewerCount) {
                         LiveSideMetric(systemImage: "eye", value: viewers, color: .teal)
