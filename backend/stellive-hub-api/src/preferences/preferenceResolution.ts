@@ -239,7 +239,11 @@ export class PreferenceResolutionService {
       generationEvent,
       memberPlatform,
       memberEvent
-    ]);
+      // Disabled rules must not act as gates: a scope rule the user has switched off keeps its
+      // stored quiet_hours/blocklist/allowlist payload, and including it here let a dead rule's
+      // stale allowlist block every notification (especially after allowlists became per-rule AND).
+      // The global scope is handled separately above (`!global.enabled` returns early).
+    ]).filter((rule) => rule.enabled);
 
     if (applicableRules.some((rule) => isWithinQuietHours(context.evaluatedAt, rule))) {
       return this.blocked(event, deviceId, "quiet_hours", [...matchedRules, "quiet_hours:on"], tapAction, "standard");

@@ -228,25 +228,6 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
     return member;
   });
 
-  app.get("/v1/preferences/resolved", async (request, reply) => {
-    const query = request.query as { deviceId?: string; memberId?: string; generationId?: string; source?: unknown; eventType?: unknown };
-    if (!isSupportedPlatformEventInput({ source: query.source, type: query.eventType })) {
-      return reply.badRequest("unsupported platform event");
-    }
-    const event = sampleEvent({
-      memberId: query.memberId,
-      generationId: query.generationId,
-      source: query.source as PlatformSource | undefined,
-      type: query.eventType as PlatformEventType | undefined
-    });
-    return preferenceResolution.resolve(
-      event,
-      query.deviceId ?? "dev-device",
-      preferences.get(query.deviceId ?? "dev-device") ?? [],
-      { evaluatedAt: new Date() }
-    );
-  });
-
   const isProduction = process.env.NODE_ENV === "production";
 
   app.get("/v1/live-status", async () => {
@@ -386,6 +367,27 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
     });
     if (deliveryAttempts.length > 1000) deliveryAttempts.splice(0, deliveryAttempts.length - 1000);
     return { event, resolution, deliveryDecision };
+  });
+  // Diagnostic resolver over the in-memory dev preference store and a synthetic sampleEvent.
+  // Path kept for backwards compatibility, but registration moved inside the non-production
+  // gate so it is not exposed on a live deployment.
+  app.get("/v1/preferences/resolved", async (request, reply) => {
+    const query = request.query as { deviceId?: string; memberId?: string; generationId?: string; source?: unknown; eventType?: unknown };
+    if (!isSupportedPlatformEventInput({ source: query.source, type: query.eventType })) {
+      return reply.badRequest("unsupported platform event");
+    }
+    const event = sampleEvent({
+      memberId: query.memberId,
+      generationId: query.generationId,
+      source: query.source as PlatformSource | undefined,
+      type: query.eventType as PlatformEventType | undefined
+    });
+    return preferenceResolution.resolve(
+      event,
+      query.deviceId ?? "dev-device",
+      preferences.get(query.deviceId ?? "dev-device") ?? [],
+      { evaluatedAt: new Date() }
+    );
   });
   app.post("/v1/dev/mock-live-status", async () => ({ updated: true }));
   app.post("/v1/dev/mock-realtime-event", async () => ({ queued: true, status: realtime.status() }));
