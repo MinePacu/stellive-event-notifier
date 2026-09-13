@@ -14,6 +14,7 @@
     "reservation_draft_expiry_hours_format" : { "localizations" : { "ko" : { "stringUnit" : { "state" : "translated", "value" : "약 %d시간 뒤 자동 정리" } } } },
     "reservation_draft_expiry_minutes_format" : { "localizations" : { "ko" : { "stringUnit" : { "state" : "translated", "value" : "약 %d분 뒤 자동 정리" } } } },
     "reservation_draft_expiry_soon" : { "localizations" : { "ko" : { "stringUnit" : { "state" : "translated", "value" : "곧 자동 정리" } } } },
+    "reservation_error_corrupted_data" : { "localizations" : { "ko" : { "stringUnit" : { "state" : "translated", "value" : "예약 저장 파일이 손상되어 원본을 보존했습니다. 앱에서 다시 시도해 주세요." } } } },
     "reservation_error_draft_missing" : { "localizations" : { "ko" : { "stringUnit" : { "state" : "translated", "value" : "앱에서 티켓·구매·예약 링크를 먼저 열어 주세요." } } } },
     "reservation_error_duplicate_body" : { "localizations" : { "ko" : { "stringUnit" : { "state" : "translated", "value" : "다른 내역에 같은 상세 링크가 연결되어 있습니다." } } } },
     "reservation_error_duplicate_title" : { "localizations" : { "ko" : { "stringUnit" : { "state" : "translated", "value" : "같은 링크가 이미 있습니다" } } } },

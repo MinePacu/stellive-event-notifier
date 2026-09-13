@@ -174,7 +174,7 @@ function expectHubEventAdminConsoleSupport(html: string) {
   expect(html).toContain('bar.addEventListener("focus"');
   expect(html).toContain("Retention: 31 days");
   expect(html).toContain("const autoRefreshIntervalMs = 30000");
-  expect(html).toContain('const autoRefreshLabel = "Every " + (autoRefreshIntervalMs / 1000) + "s"');
+  expect(html).toContain('const autoRefreshLabel = t("dashboard.autoRefreshEvery", { seconds: autoRefreshIntervalMs / 1000 })');
   expect(html).not.toContain("Every 5s");
   expect(html).not.toContain("autoRefreshIntervalMs = 5000");
   expect(html).toContain('if (source === "manual")');
@@ -995,7 +995,7 @@ describe("admin console routes", () => {
     expect(response.body).toContain('class="top-actions topbar-actions"');
     expect(response.body).toContain('class="icon-button has-tooltip"');
     expect(response.body).toContain('id="refresh"');
-    expect(response.body).toContain('aria-label="Refresh"');
+    expect(response.body).toContain('aria-label="Refresh"'); // localized via tAttr("common.refresh"); en render keeps this text
     expect(response.body).toContain('id="theme-toggle"');
     expect(response.body).toContain('class="profile"');
     expect(response.body).toContain("Welcome back,");

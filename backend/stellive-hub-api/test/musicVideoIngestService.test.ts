@@ -17,7 +17,7 @@ function detail(videoId: string): YoutubeVideoDetail {
 
 describe("MusicVideoIngestService", () => {
   it("fetches one batch, reports missing IDs, and isolates per-video failures", async () => {
-    const fetchVideos = vi.fn(async () => [detail(videoA), detail(videoB)]);
+    const fetchVideos = vi.fn(async () => ({ status: "ok" as const, items: [detail(videoA), detail(videoB)] }));
     const ingestVideoDetail = vi.fn(async (input: YoutubeVideoDetail) => {
       if (input.videoId === videoB) throw new Error("database URL must not escape");
       return {
@@ -101,7 +101,7 @@ describe("MusicVideoIngestService", () => {
       reviewRequired: false,
     }));
     const service = new MusicVideoIngestService({
-      youtube: { fetchVideos: async () => [detail(videoA)] },
+      youtube: { fetchVideos: async () => ({ status: "ok" as const, items: [detail(videoA)] }) },
       processor: { ingestVideoDetail },
     });
 
@@ -114,7 +114,7 @@ describe("MusicVideoIngestService", () => {
 
   it("counts persisted review rows in both persistence and review totals", async () => {
     const service = new MusicVideoIngestService({
-      youtube: { fetchVideos: async () => [detail(videoA)] },
+      youtube: { fetchVideos: async () => ({ status: "ok" as const, items: [detail(videoA)] }) },
       processor: {
         ingestVideoDetail: async () => ({
           action: "needs_review",

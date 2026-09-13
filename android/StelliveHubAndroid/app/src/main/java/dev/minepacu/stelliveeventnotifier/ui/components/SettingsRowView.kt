@@ -255,6 +255,8 @@ class SettingsRowView(context: Context) : ViewGroup(context), Checkable {
             minWidth = 0
             minHeight = 0
             setPadding(0, 0, 0, 0)
+            thumbTintList = ContextCompat.getColorStateList(context, R.color.hub_switch_thumb_selector)
+            trackTintList = ContextCompat.getColorStateList(context, R.color.hub_switch_track_selector)
         }
 
     private fun updateStateDescription(checked: Boolean) {

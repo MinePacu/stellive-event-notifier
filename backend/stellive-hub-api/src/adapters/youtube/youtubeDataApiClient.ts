@@ -32,6 +32,12 @@ export type YoutubeListUploadsResult =
     candidates: [];
     pagesFetched: 0;
     quotaUnits: number;
+    }
+  | {
+    status: "quota_exceeded" | "error";
+    candidates: [];
+    pagesFetched: number;
+    quotaUnits: number;
     };
 
 export type YoutubeFetchPlaylistItemsResult =
@@ -63,6 +69,11 @@ export type YoutubeFetchPlaylistItemsPageResult =
       pagesFetched: 0;
       quotaUnits: number;
     };
+
+export type YoutubeFetchVideosResult = {
+  status: "ok" | "quota_exceeded" | "error";
+  items: YoutubeVideoDetail[];
+};
 
 export interface YoutubeChannelProfile {
   channelId: string;
@@ -307,9 +318,16 @@ export class YoutubeDataApiClient {
       if (response.status === 304) return { status: "not_modified", candidates: [], pagesFetched: 0, quotaUnits };
 
       const body = await response.json() as YoutubeListWrapper<YoutubePlaylistItem>;
-      if (!response.ok) break;
+      if (!response.ok) {
+        return {
+          status: response.status === 403 ? "quota_exceeded" : "error",
+          candidates: [],
+          pagesFetched,
+          quotaUnits,
+        };
+      }
       pagesFetched += 1;
-      etag = body.etag ?? etag;
+      if (page === 0) etag = body.etag ?? etag;
       candidates.push(...(body.items ?? []).flatMap((item) => this.toUploadCandidate(input.channelId, item)));
       pageToken = body.nextPageToken;
       if (!pageToken) break;
@@ -380,11 +398,11 @@ export class YoutubeDataApiClient {
     };
   }
 
-  async fetchVideos(videoIds: string[]): Promise<YoutubeVideoDetail[]> {
+  async fetchVideos(videoIds: string[]): Promise<YoutubeFetchVideosResult> {
     return this.getVideoDetails(videoIds);
   }
 
-  async getVideoDetails(videoIds: string[]): Promise<YoutubeVideoDetail[]> {
+  async getVideoDetails(videoIds: string[]): Promise<YoutubeFetchVideosResult> {
     const details: YoutubeVideoDetail[] = [];
     for (const ids of chunk(videoIds, 50)) {
       if (ids.length === 0) continue;
@@ -395,10 +413,15 @@ export class YoutubeDataApiClient {
 
       const response = await this.fetchAndRecord(url, "youtube.videos.list", 1);
       const body = await response.json() as YoutubeListWrapper<YoutubeVideoItem>;
-      if (!response.ok) continue;
+      // A failed chunk must never be reported as a successful (partial) result: callers
+      // treat a missing detail as "private", so swallowing a 403/5xx here would hide
+      // whole pages of the catalog. Surface the failure and let the caller retry.
+      if (!response.ok) {
+        return { status: response.status === 403 ? "quota_exceeded" : "error", items: [] };
+      }
       details.push(...(body.items ?? []).flatMap((item) => this.toVideoDetail(item)));
     }
-    return details;
+    return { status: "ok", items: details };
   }
 
   private async fetchAndRecord(url: URL, operation: string, quotaUnits: number, init?: RequestInit): Promise<Response> {

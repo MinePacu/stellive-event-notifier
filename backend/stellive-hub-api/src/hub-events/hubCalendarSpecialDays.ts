@@ -56,6 +56,15 @@ function localDateString(parts: LocalDateParts): string {
   ].join("-");
 }
 
+function isValidLocalDate(parts: LocalDateParts): boolean {
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  return (
+    date.getUTCFullYear() === parts.year &&
+    date.getUTCMonth() === parts.month - 1 &&
+    date.getUTCDate() === parts.day
+  );
+}
+
 function specialDayStatus(
   displayDate: string,
   snapshot: SpecialDayStatusSnapshot
@@ -174,6 +183,7 @@ export function buildSpecialDayEntries(
 
     return yearsInRange(options.from, options.to, options.timezone).flatMap((year) => {
       const candidate = { year, month: day.month, day: day.day };
+      if (!isValidLocalDate(candidate)) return [];
       if (compareLocalDate(candidate, fromLocal) < 0 || compareLocalDate(candidate, toLocal) > 0) return [];
 
       const displayDate = localDateString(candidate);

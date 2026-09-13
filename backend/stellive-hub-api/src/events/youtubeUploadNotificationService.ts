@@ -4,7 +4,10 @@ import type { YoutubeUploadCandidate } from "../adapters/youtube/youtubeAtomPars
 import { PrismaEventPersistenceUnitOfWork, type EventPersistenceUnitOfWork } from "../storage/eventPersistenceUnitOfWork.js";
 
 export interface YoutubeUploadMetadataPort {
-  fetchVideos(videoIds: string[]): Promise<YoutubeVideoDetail[]>;
+  fetchVideos(videoIds: string[]): Promise<{
+    status: "ok" | "quota_exceeded" | "error";
+    items: YoutubeVideoDetail[];
+  }>;
 }
 
 export interface YoutubeUploadNotificationCatalogPort {
@@ -109,7 +112,9 @@ export class YoutubeUploadNotificationService {
       if (!this.options.youtube) return { status: "skipped", reason: "official_metadata_unavailable" };
       let details: YoutubeVideoDetail[];
       try {
-        details = await this.options.youtube.fetchVideos([candidate.videoId]);
+        const fetched = await this.options.youtube.fetchVideos([candidate.videoId]);
+        if (fetched.status !== "ok") throw new Error(fetched.status);
+        details = fetched.items;
       } catch {
         throw new YoutubeUploadMetadataRetryableError("official_upload_metadata_unavailable");
       }

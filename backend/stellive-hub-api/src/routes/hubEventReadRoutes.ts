@@ -269,7 +269,8 @@ export default function registerHubEventReadRoutes(app: FastifyInstance, options
     if (!parsed.ok) return parsed.response;
 
     const events = await hubEvents.list({
-      limit: 100,
+      from: parsed.value.from,
+      to: parsed.value.to,
       generationId: parsed.value.generationId,
       memberId: parsed.value.memberId
     }, parsed.value.now);

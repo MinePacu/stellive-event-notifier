@@ -20,6 +20,7 @@ interface YoutubeWebSubSubscriptionWritePort {
 interface YoutubeWebSubSubscriptionServiceOptions {
   callbackUrl: string;
   verifyToken: string;
+  secret?: string;
   targets: YoutubeWebSubSubscriptionTarget[];
   subscriptions: YoutubeWebSubSubscriptionWritePort;
   fetch?: typeof fetch;
@@ -56,6 +57,10 @@ export class YoutubeWebSubSubscriptionService {
         "hub.verify": "async",
         "hub.verify_token": this.options.verifyToken,
       });
+
+      if (this.options.secret) {
+        body.set("hub.secret", this.options.secret);
+      }
 
       try {
         const response = await this.fetchImpl("https://pubsubhubbub.appspot.com/subscribe", {

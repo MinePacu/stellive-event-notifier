@@ -229,7 +229,6 @@ private struct ReservationReturnBannerView: View {
 }
 
 private struct HubEventsTabView: View {
-    @EnvironmentObject private var store: MockHubStore
     @EnvironmentObject private var serverStore: ServerHubStore
     @Binding var deepLinkedEventId: String?
     @Binding var deepLinkedScheduleItemId: String?
@@ -283,7 +282,7 @@ private struct HubEventsTabView: View {
     private func openPendingHubEvent() {
         guard
             let eventId = deepLinkedEventId,
-            let event = serverStore.cachedHubEvent(id: eventId) ?? store.hubEvents.first(where: { $0.id == eventId })
+            let event = serverStore.cachedHubEvent(id: eventId)
         else {
             if let eventId = deepLinkedEventId {
                 Task {

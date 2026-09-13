@@ -353,9 +353,9 @@ object CalendarUiPolicy {
 
         val emphasis = emphasisForEntries(entries)
         val size = when (entries.size) {
-            1 -> 5
-            2 -> 6
-            else -> 8
+            1 -> 6
+            2 -> 7
+            else -> 9
         }
 
         return CalendarEventDotStyle(

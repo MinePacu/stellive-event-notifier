@@ -95,6 +95,33 @@ describe("hub calendar special-day year materializer", () => {
     expect(occurrences).toEqual([]);
   });
 
+  it("carries the source policy state onto occurrences when verify-required days are included", () => {
+    const occurrences = buildSpecialDayOccurrences(
+      [
+        specialDay({ id: "birthday:verify", policyState: "verify_required" }),
+        specialDay({
+          id: "anniversary:verify",
+          kind: "generation_anniversary",
+          title: "스텔라이브 3기",
+          generationId: "gen3",
+          memberId: undefined,
+          month: 5,
+          day: 19,
+          startYear: 2024,
+          policyState: "verify_required"
+        }),
+        specialDay()
+      ],
+      { targetYear: 2026, timezone: "Asia/Seoul", includeVerifyRequired: true }
+    );
+
+    expect(occurrences.map((occurrence) => [occurrence.specialDayId, occurrence.policyState])).toEqual([
+      ["birthday:verify", "verify_required"],
+      ["anniversary:verify", "verify_required"],
+      ["birthday:ayatsuno-yuni", "catalog_verified"]
+    ]);
+  });
+
   it("upserts materialized occurrences without creating duplicates", async () => {
     const rows = new Map<string, unknown>();
     const delegate = {

@@ -36,7 +36,7 @@ export class MemberProfileImageHydrator {
   private readonly ttlMs: number;
   private readonly refreshWaitMs: number;
   private readonly now: () => Date;
-  private refreshInFlight: Promise<void> | null = null;
+  private readonly refreshInFlight = new Map<string, Promise<void>>();
 
   constructor(private readonly options: MemberProfileImageHydratorOptions) {
     this.ttlMs = options.ttlMs ?? defaultTtlMs;
@@ -120,14 +120,16 @@ export class MemberProfileImageHydrator {
 
   private async refreshProfiles(channelIds: string[]): Promise<void> {
     if (!this.options.youtube) return;
-    if (!this.refreshInFlight) {
-      const refresh = this.performRefreshWithLock(channelIds);
-      this.refreshInFlight = refresh;
+    const key = [...channelIds].sort().join(",");
+    let refresh = this.refreshInFlight.get(key);
+    if (!refresh) {
+      refresh = this.performRefreshWithLock(channelIds);
+      this.refreshInFlight.set(key, refresh);
       refresh.finally(() => {
-        if (this.refreshInFlight === refresh) this.refreshInFlight = null;
+        if (this.refreshInFlight.get(key) === refresh) this.refreshInFlight.delete(key);
       }).catch(() => undefined);
     }
-    await Promise.race([this.refreshInFlight, sleep(this.refreshWaitMs)]);
+    await Promise.race([refresh, sleep(this.refreshWaitMs)]);
   }
 
   private async performRefreshWithLock(channelIds: string[]): Promise<void> {

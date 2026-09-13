@@ -88,7 +88,10 @@ interface OfficialYoutubePort {
     | { status: "ok"; items: OfficialMusicPlaylistItem[]; pagesFetched: number; quotaUnits: number }
     | { status: "quota_exceeded" | "error"; items: []; pagesFetched: number; quotaUnits: number }
   >;
-  fetchVideos(videoIds: string[]): Promise<OfficialMusicVideoDetail[]>;
+  fetchVideos(videoIds: string[]): Promise<{
+    status: "ok" | "quota_exceeded" | "error";
+    items: OfficialMusicVideoDetail[];
+  }>;
 }
 
 interface OfficialSyncRunsPort {
@@ -167,9 +170,21 @@ export class OfficialStelliveMusicSyncService {
       }
 
       const uniqueVideoIds = [...new Set(playlistItems.map(({ item }) => item.videoId))];
-      const details = uniqueVideoIds.length > 0 ? await this.options.youtube.fetchVideos(uniqueVideoIds) : [];
+      const detailsResult = uniqueVideoIds.length > 0
+        ? await this.options.youtube.fetchVideos(uniqueVideoIds)
+        : { status: "ok" as const, items: [] as OfficialMusicVideoDetail[] };
       quotaUnits += Math.ceil(uniqueVideoIds.length / 50);
-      const detailsByVideoId = new Map(details.map((detail) => [detail.videoId, detail]));
+      // Missing details degrade to "unavailable/private" downstream, so an API failure
+      // must fail the run instead of mass-hiding the official catalog.
+      if (detailsResult.status !== "ok") {
+        await this.options.syncRuns.failRun(run.id, {
+          finishedAt: this.now(),
+          errorMessage: detailsResult.status,
+          quotaUnits,
+        });
+        return { status: "failed", errorMessage: detailsResult.status, quotaUnits };
+      }
+      const detailsByVideoId = new Map(detailsResult.items.map((detail) => [detail.videoId, detail]));
 
       let needsReview = 0;
       let excludedCandidates = 0;

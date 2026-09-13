@@ -55,7 +55,7 @@ final class ShareViewController: UIViewController {
         self.sharedURL = sharedURL
         let drafts: [ReservationDraft]
         do {
-            guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+            guard let sharedStore else { throw ReservationError.sharedContainerUnavailable }
             drafts = ReservationDraftPolicy.active(try sharedStore.loadState().drafts)
         } catch {
             presentMessage(title: "내역을 불러올 수 없습니다", message: error.localizedDescription)
@@ -119,7 +119,7 @@ final class ShareViewController: UIViewController {
             return
         }
         do {
-            guard let sharedStore else { throw ReservationPersistenceError.sharedContainerUnavailable }
+            guard let sharedStore else { throw ReservationError.sharedContainerUnavailable }
             _ = try sharedStore.confirm(
                 sessionID: draft.sessionID,
                 detailURL: sharedURL,

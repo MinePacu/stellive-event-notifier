@@ -1,0 +1,30 @@
+appId: dev.minepacu.stelliveeventnotifier
+name: "Live: status filters and member list render"
+tags:
+  - regression
+  - live
+---
+- launchApp:
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/tab_live"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    text: "방송 중"
+- assertVisible:
+    text: "전체"
+- assertVisible:
+    text: "오프라인"
+- assertVisible:
+    text: "● 서버 연결됨"
+
+# Filter to "방송 중" (currently live) and back to "전체"
+- tapOn: "방송 중"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "전체"
+- waitForAnimationToEnd:
+    timeout: 2000

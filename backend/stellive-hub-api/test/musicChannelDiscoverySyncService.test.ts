@@ -27,7 +27,7 @@ describe("MusicChannelDiscoverySyncService", () => {
       youtube: {
         getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "official-uploads" }),
         listUploads,
-        fetchVideos: async () => [{
+        fetchVideos: async () => ({ status: "ok" as const, items: [{
           videoId: "video-1",
           channelId: "official-channel",
           title: "Official Song Cover",
@@ -37,7 +37,7 @@ describe("MusicChannelDiscoverySyncService", () => {
           privacyStatus: "public",
           liveBroadcastContent: "upcoming",
           scheduledStartTime: "2026-07-01T12:00:00.000Z",
-        }],
+        }] }),
       },
       repository: {
         getMusicItemByVideoId: async () => null,
@@ -66,7 +66,7 @@ describe("MusicChannelDiscoverySyncService", () => {
   });
 
   it("reuses fresh completed metadata without spending a video detail request", async () => {
-    const fetchVideos = vi.fn(async () => []);
+    const fetchVideos = vi.fn(async () => ({ status: "ok" as const, items: [] }));
     const upsertMusicItem = vi.fn(async (input) => ({ id: "music-1", ...input }));
     const service = new MusicChannelDiscoverySyncService({
       youtube: {
@@ -113,7 +113,7 @@ describe("MusicChannelDiscoverySyncService", () => {
   });
 
   it("dedupes uploads, preserves official source, and links the channel member", async () => {
-    const fetchVideos = vi.fn(async () => [{
+    const fetchVideos = vi.fn(async () => ({ status: "ok" as const, items: [{
       videoId: "video-1",
       channelId: "channel-1",
       title: "New Song Cover",
@@ -122,7 +122,7 @@ describe("MusicChannelDiscoverySyncService", () => {
       publishedAt: candidate.publishedAt,
       duration: "PT3M",
       privacyStatus: "public",
-    }]);
+    }] }));
     const upsertMusicItem = vi.fn(async (input) => ({ id: "music-1", ...input }));
     const replaceMusicItemMembers = vi.fn(async () => undefined);
     const service = new MusicChannelDiscoverySyncService({
@@ -175,7 +175,7 @@ describe("MusicChannelDiscoverySyncService", () => {
       youtube: {
         getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
         listUploads: async () => ({ status: "ok", candidates: [candidate], pagesFetched: 1, quotaUnits: 1 }),
-        fetchVideos: async () => [{
+        fetchVideos: async () => ({ status: "ok" as const, items: [{
           videoId: "video-1",
           channelId: "official-channel",
           title: "Official MV",
@@ -183,7 +183,7 @@ describe("MusicChannelDiscoverySyncService", () => {
           tags: [],
           duration: "PT3M",
           privacyStatus: "public",
-        }],
+        }] }),
       },
       repository: {
         getMusicItemByVideoId: async () => null,
@@ -216,7 +216,7 @@ describe("MusicChannelDiscoverySyncService", () => {
           pagesFetched: 1,
           quotaUnits: 1,
         }),
-        fetchVideos: async () => [{
+        fetchVideos: async () => ({ status: "ok" as const, items: [{
           videoId: "video-1",
           channelId: "channel-1",
           title: "선배 생활 최대 위기 발생",
@@ -224,7 +224,7 @@ describe("MusicChannelDiscoverySyncService", () => {
           tags: ["스텔라이브", "cover", "커버곡", "여자커버"],
           duration: "PT3M",
           privacyStatus: "public",
-        }],
+        }] }),
       },
       repository: {
         getMusicItemByVideoId: async () => null,
@@ -256,7 +256,7 @@ describe("MusicChannelDiscoverySyncService", () => {
       youtube: {
         getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
         listUploads: async () => ({ status: "ok", candidates: [playlistCandidate], pagesFetched: 1, quotaUnits: 1 }),
-        fetchVideos: async () => [{
+        fetchVideos: async () => ({ status: "ok" as const, items: [{
           videoId: "X7pjwim9NHE",
           channelId: "channel-1",
           title: "[Playlist] 새벽 감성 노래 모음",
@@ -265,7 +265,7 @@ describe("MusicChannelDiscoverySyncService", () => {
           duration: "PT39M12S",
           privacyStatus: "public",
           liveBroadcastContent: "none",
-        }],
+        }] }),
       },
       repository: {
         getMusicItemByVideoId: async () => null,
@@ -304,7 +304,7 @@ describe("MusicChannelDiscoverySyncService", () => {
           pagesFetched: 1,
           quotaUnits: 1,
         }),
-        fetchVideos: async () => [{
+        fetchVideos: async () => ({ status: "ok" as const, items: [{
           videoId: "original-1",
           channelId: "official-channel",
           title: "스텔라이브 Universe | 마음악보 Cover",
@@ -312,7 +312,7 @@ describe("MusicChannelDiscoverySyncService", () => {
           tags: ["cover"],
           duration: "PT3M",
           privacyStatus: "public",
-        }],
+        }] }),
       },
       repository: {
         getMusicItemByVideoId: async () => ({
@@ -356,7 +356,7 @@ describe("MusicChannelDiscoverySyncService", () => {
           pagesFetched: 1,
           quotaUnits: 1,
         }),
-        fetchVideos: async () => [{
+        fetchVideos: async () => ({ status: "ok" as const, items: [{
           videoId: "manual-1",
           channelId: "channel-1",
           title: "유즈하 리코(Yuzuha Riko) | 수동 원곡 'Manual Original'",
@@ -364,7 +364,7 @@ describe("MusicChannelDiscoverySyncService", () => {
           tags: [],
           duration: "PT3M",
           privacyStatus: "public",
-        }],
+        }] }),
       },
       repository: {
         getMusicItemByVideoId: async () => ({
@@ -428,7 +428,7 @@ describe("MusicChannelDiscoverySyncService", () => {
       youtube: {
         getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
         listUploads: async () => ({ status: "ok", candidates: fixtures, pagesFetched: 1, quotaUnits: 1 }),
-        fetchVideos: async (videoIds) => fixtures
+        fetchVideos: async (videoIds) => ({ status: "ok" as const, items: fixtures
           .filter((fixture) => videoIds.includes(fixture.videoId))
           .map((fixture) => ({
             videoId: fixture.videoId,
@@ -438,7 +438,7 @@ describe("MusicChannelDiscoverySyncService", () => {
             tags: [],
             duration: "PT3M",
             privacyStatus: "public",
-          })),
+          })) }),
       },
       repository: {
         getMusicItemByVideoId: async () => null,
@@ -533,7 +533,7 @@ describe("MusicChannelDiscoverySyncService", () => {
           pagesFetched: 1,
           quotaUnits: 1,
         }),
-        fetchVideos: async () => [{
+        fetchVideos: async () => ({ status: "ok" as const, items: [{
           videoId: "nsZmnwC9ukE",
           channelId: "shibuki-channel",
           title,
@@ -541,7 +541,7 @@ describe("MusicChannelDiscoverySyncService", () => {
           tags: [],
           duration: "PT3M",
           privacyStatus: "public",
-        }],
+        }] }),
       },
       repository: {
         getMusicItemByVideoId: async () => null,
@@ -613,7 +613,7 @@ describe("MusicChannelDiscoverySyncService", () => {
       youtube: {
         getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
         listUploads: async () => ({ status: "ok", candidates: [sourceBacked, excluded], pagesFetched: 1, quotaUnits: 1 }),
-        fetchVideos: async () => [sourceBacked, excluded].map((fixture) => ({
+        fetchVideos: async () => ({ status: "ok" as const, items: [sourceBacked, excluded].map((fixture) => ({
           videoId: fixture.videoId,
           channelId: "official-channel",
           title: fixture.title,
@@ -621,7 +621,7 @@ describe("MusicChannelDiscoverySyncService", () => {
           tags: [],
           duration: "PT3M",
           privacyStatus: "public",
-        })),
+        })) }),
       },
       repository: {
         getMusicItemByVideoId: async (videoId) => videoId === sourceBacked.videoId
@@ -675,7 +675,7 @@ describe("MusicChannelDiscoverySyncService", () => {
       youtube: {
         getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
         listUploads: async () => ({ status: "ok", candidates: [], pagesFetched: 1, quotaUnits: 1 }),
-        fetchVideos: async () => [],
+        fetchVideos: async () => ({ status: "ok" as const, items: [] }),
       },
       repository: {
         getMusicItemByVideoId: async () => null,
@@ -762,6 +762,38 @@ describe("MusicChannelDiscoverySyncService", () => {
     });
     expect(upsertMusicItem).toHaveBeenCalledTimes(1);
     expect(replaceMusicItemMembers).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts quota_exceeded upload listings as failures and reports video detail failures", async () => {
+    const upsertMusicItem = vi.fn(async (input) => ({ id: "music-1", ...input }));
+    const makeService = (
+      youtube: ConstructorParameters<typeof MusicChannelDiscoverySyncService>[0]["youtube"],
+    ) => new MusicChannelDiscoverySyncService({
+      youtube,
+      repository: {
+        getMusicItemByVideoId: async () => null,
+        getOverrideByVideoId: async () => null,
+        upsertMusicItem,
+        replaceMusicItemMembers: async () => undefined,
+      },
+      locks: new InMemoryMusicSyncLock(),
+      members: [{ id: "member-1", aliases: ["Member One"] }],
+      targets: [{ kind: "member", memberId: "member-1", channelId: "channel-1" }],
+    });
+
+    await expect(makeService({
+      getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
+      listUploads: async () => ({ status: "quota_exceeded", candidates: [], pagesFetched: 0, quotaUnits: 1 }),
+      fetchVideos: async () => ({ status: "ok" as const, items: [] }),
+    }).discover()).resolves.toMatchObject({ channelsChecked: 1, uniqueVideos: 0, failed: 1 });
+
+    await expect(makeService({
+      getUploadsPlaylistId: async (channelId) => ({ status: "ok", channelId, uploadsPlaylistId: "uploads" }),
+      listUploads: async () => ({ status: "ok", candidates: [candidate], pagesFetched: 1, quotaUnits: 1 }),
+      fetchVideos: async () => ({ status: "error" as const, items: [] }),
+    }).discover()).resolves.toMatchObject({ uniqueVideos: 1, inserted: 0, failed: 1 });
+
+    expect(upsertMusicItem).not.toHaveBeenCalled();
   });
 });
 

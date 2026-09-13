@@ -91,4 +91,36 @@ describe("SongBackfillService", () => {
     });
     expect(ingestYoutubeUpload).not.toHaveBeenCalled();
   });
+
+  it("counts quota_exceeded upload listings as failures instead of clean empty runs", async () => {
+    const ingestYoutubeUpload = vi.fn();
+    const service = new SongBackfillService({
+      maxPages: 1,
+      maxChannels: 10,
+      targets: [{ memberId: "akane-lize", channelId: "UC1", uploadsPlaylistId: "UU1" }],
+      youtube: {
+        getUploadsPlaylistId: async () => ({
+          status: "ok" as const,
+          channelId: "UC1",
+          uploadsPlaylistId: "UU1",
+        }),
+        listUploads: async () => ({
+          status: "quota_exceeded" as const,
+          candidates: [],
+          pagesFetched: 0,
+          quotaUnits: 1,
+        }),
+      },
+      ingestion: { ingestYoutubeUpload },
+    });
+
+    await expect(service.reconcile()).resolves.toMatchObject({
+      status: "ok",
+      checkedChannels: 1,
+      ingested: 0,
+      notModified: 0,
+      failed: 1,
+    });
+    expect(ingestYoutubeUpload).not.toHaveBeenCalled();
+  });
 });

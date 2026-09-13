@@ -127,6 +127,69 @@ describe("YoutubeDataApiClient", () => {
     });
   });
 
+  it("returns the first page ETag when paginating multiple pages", async () => {
+    const fetchImpl = vi
+      .fn(async (_input: string | URL | Request, _init?: RequestInit): Promise<Response> => jsonResponse({}))
+      .mockReset()
+      .mockResolvedValueOnce(jsonResponse({
+        kind: "youtube#playlistItemListResponse",
+        etag: "page-1",
+        nextPageToken: "next-page",
+        items: [],
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        kind: "youtube#playlistItemListResponse",
+        etag: "page-2",
+        items: [],
+      }));
+    const client = new YoutubeDataApiClient({ apiKey: "test-key", fetch: fetchImpl });
+
+    const result = await client.listUploads({
+      channelId: "UC123",
+      uploadsPlaylistId: "UU123",
+      maxPages: 2,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.etag).toBe("page-1");
+      expect(result.pagesFetched).toBe(2);
+    }
+  });
+
+  it("propagates a failure status instead of masking a non-ok page as ok", async () => {
+    const quotaClient = new YoutubeDataApiClient({
+      apiKey: "test-key",
+      fetch: vi.fn(async () => jsonResponse({ error: { message: "quota" } }, { status: 403 })),
+    });
+    await expect(quotaClient.listUploads({
+      channelId: "UC123",
+      uploadsPlaylistId: "UU123",
+      maxPages: 1,
+    })).resolves.toEqual({
+      status: "quota_exceeded",
+      candidates: [],
+      pagesFetched: 0,
+      quotaUnits: 1,
+    });
+
+    const errorClient = new YoutubeDataApiClient({
+      apiKey: "test-key",
+      fetch: vi.fn(async () => jsonResponse({ error: { message: "boom" } }, { status: 500 })),
+    });
+    await expect(errorClient.listUploads({
+      channelId: "UC123",
+      uploadsPlaylistId: "UU123",
+      maxPages: 1,
+    })).resolves.toEqual({
+      status: "error",
+      candidates: [],
+      pagesFetched: 0,
+      quotaUnits: 1,
+    });
+  });
+
   it("normalizes video detail metadata in batches of 50 ids", async () => {
     const fetchImpl = vi.fn(async (_input: string | URL | Request, _init?: RequestInit): Promise<Response> => jsonResponse({
       kind: "youtube#videoListResponse",
@@ -157,7 +220,8 @@ describe("YoutubeDataApiClient", () => {
 
     const details = await client.getVideoDetails(ids);
 
-    expect(details[0]).toEqual({
+    expect(details.status).toBe("ok");
+    expect(details.items[0]).toEqual({
       videoId: "video-1",
       channelId: "UC123",
       title: "별빛",
