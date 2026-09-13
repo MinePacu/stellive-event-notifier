@@ -766,6 +766,8 @@ internal class SettingsScreenController(private val activity: MainActivity) {
 
             content.addView(SwitchMaterial(context).apply {
                 isChecked = activity.debugModeEnabled
+                thumbTintList = ContextCompat.getColorStateList(context, R.color.hub_switch_thumb_selector)
+                trackTintList = ContextCompat.getColorStateList(context, R.color.hub_switch_track_selector)
                 setOnCheckedChangeListener { _, checked ->
                     activity.debugModeEnabled = checked
                     activity.recordServerConnectionLog(

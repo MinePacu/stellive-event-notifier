@@ -9,6 +9,7 @@ import com.google.android.material.card.MaterialCardView
 import dev.minepacu.stelliveeventnotifier.MainActivity
 import dev.minepacu.stelliveeventnotifier.R
 import dev.minepacu.stelliveeventnotifier.core.model.HubMember
+import dev.minepacu.stelliveeventnotifier.core.model.NotificationEventType
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationHistoryItem
 import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
 import dev.minepacu.stelliveeventnotifier.ui.components.HubSingleChoiceBottomSheet
@@ -172,7 +173,15 @@ internal class HistoryScreenController(private val activity: MainActivity) {
             setPadding(0, activity.dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp), 0, 0)
             setLineSpacing(0f, 1.12f)
         })
-        addView(activity.pillRow(listOf(item.eventType, item.deliveryMode.name.lowercase(), "${item.deliveryLatencyMs ?: "-"}ms")))
+        addView(
+            activity.pillRow(
+                buildList {
+                    add(NotificationEventType.entries.firstOrNull { it.wireName == item.eventType }?.displayName ?: item.eventType)
+                    add(MainUiPolicy.settingsDeliveryModeLabel(item.deliveryMode.name))
+                    item.deliveryLatencyMs?.let { add("${it}ms") }
+                }
+            )
+        )
     }
 
     private fun historyFilterPanel(rows: List<HistoryFilterSelectorRow>): MaterialCardView =

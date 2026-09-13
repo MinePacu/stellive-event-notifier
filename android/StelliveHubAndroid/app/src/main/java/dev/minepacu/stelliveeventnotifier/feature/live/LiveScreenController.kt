@@ -238,14 +238,14 @@ internal class LiveScreenController(private val activity: MainActivity) {
 
     private fun liveSupplementaryChipGroup(member: HubMember): ChipGroup? {
         val chips = buildList {
-            MainUiPolicy.liveCategoryText(member.liveCategory)?.let { category ->
-                add(liveCategoryChip(category))
-            }
             member.livePlatformUrl?.takeIf { it.startsWith("https://") }?.let { url ->
                 add(liveOpenLinkChip(url))
                 if (activity.currentAdaptiveSpec.showAdjacentLiveAction) {
                     add(liveOpenAdjacentChip(url))
                 }
+            }
+            MainUiPolicy.liveCategoryText(member.liveCategory)?.let { category ->
+                add(liveCategoryChip(category))
             }
         }
         if (chips.isEmpty()) return null

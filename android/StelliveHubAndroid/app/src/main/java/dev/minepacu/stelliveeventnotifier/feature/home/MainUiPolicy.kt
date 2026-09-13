@@ -745,11 +745,15 @@ object MainUiPolicy {
     }
 
     fun songPremiereStatusLabel(song: SongCatalogItem): String? = when (song.premiere?.state) {
-        "scheduled" -> song.premiere.scheduledStartAt
-            ?.let { "최초 공개 예정 · ${songPremiereDateTimeFormatter.format(it)}" }
-            ?: "최초 공개 예정"
+        "scheduled" -> "최초 공개 예정"
         "live" -> "최초 공개 중"
         else -> null
+    }
+
+    fun songPremiereScheduledDateText(song: SongCatalogItem): String? {
+        if (song.premiere?.state != "scheduled") return null
+        val scheduledStartAt = song.premiere.scheduledStartAt ?: return null
+        return songPremiereDateTimeFormatter.format(scheduledStartAt)
     }
 
     fun songMatchesGeneration(

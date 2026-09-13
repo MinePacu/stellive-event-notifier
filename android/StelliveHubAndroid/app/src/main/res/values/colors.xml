@@ -14,7 +14,7 @@
     <color name="hub_text_subtle">#8C999C</color>
     <color name="hub_line">#D9E2E4</color>
     <color name="hub_top_bar_glass">#D1F7F8FA</color>
-    <color name="hub_top_bar_glass_scrolled">#F2F7F8FA</color>
+    <color name="hub_top_bar_glass_scrolled">#FFF7F8FA</color>
     <color name="hub_top_bar_divider">#00000000</color>
     <color name="hub_top_bar_button_glass">#BFFFFFFF</color>
     <color name="hub_accent_soft">#E8F5F3</color>

@@ -1997,6 +1997,9 @@ private fun updateTopBarScrolled(scrolled: Boolean) {
 
     private fun updateTopBarGlass(scrolled: Boolean) {
         window.statusBarColor = Color.TRANSPARENT
+        binding.topGlassOverlay.setBackgroundResource(
+            if (scrolled) R.drawable.bg_top_bar_glass_scrolled else R.drawable.bg_top_bar_glass,
+        )
     }
 
     internal fun screenTitle(text: String): TextView = TextView(this).apply {
@@ -2281,14 +2284,14 @@ internal fun statusBadge(text: String, positive: Boolean): TextView = TextView(t
         this.text = text
         gravity = Gravity.CENTER
         textAlignment = View.TEXT_ALIGNMENT_CENTER
-        setTextColor(if (positive) color(R.color.hub_success) else color(R.color.hub_text_muted))
+        setTextColor(if (positive) color(R.color.hub_success) else color(R.color.hub_text))
         textSize = 11f
         typeface = Typeface.DEFAULT_BOLD
         includeFontPadding = false
         background = rounded(
             fill = if (positive) color(R.color.hub_success_soft) else color(R.color.hub_surface),
             radius = dp(14),
-            stroke = if (positive) color(R.color.hub_success) else color(R.color.hub_line)
+            stroke = if (positive) color(R.color.hub_success) else color(R.color.hub_text_muted)
         )
         setPadding(dp(8), dp(5), dp(8), dp(5))
     }
