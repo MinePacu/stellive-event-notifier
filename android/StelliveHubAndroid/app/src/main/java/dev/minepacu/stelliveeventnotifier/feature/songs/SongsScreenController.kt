@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.text.Editable
@@ -394,6 +395,13 @@ internal class SongsScreenController(private val activity: MainActivity) {
         val canReset = normalizedDraft != SongMemberFilterState()
         val canApply = normalizedDraft != activity.selectedSongMemberFilter.normalized(selectable.map { it.id }.toSet())
         activity.binding.screenActionContainer.isVisible = true
+        activity.binding.contentList.let { list ->
+            val baseBottomPadding = list.paddingBottom
+            activity.binding.root.post {
+                val obstruction = activity.currentBottomObstructionHeight()
+                list.setPadding(list.paddingLeft, list.paddingTop, list.paddingRight, baseBottomPadding + obstruction)
+            }
+        }
         activity.binding.screenActionReset.apply {
             background = activity.rounded(fill = activity.color(R.color.hub_surface), radius = activity.dp(14), stroke = activity.color(R.color.hub_line))
             alpha = if (canReset) 1f else 0.45f
@@ -478,6 +486,15 @@ internal class SongsScreenController(private val activity: MainActivity) {
                     topMargin = activity.dp(7)
                 }
             })
+            MainUiPolicy.songPremiereScheduledDateText(song)?.let { dateText ->
+                content.addView(TextView(context).apply {
+                    text = dateText
+                    setTextColor(activity.color(R.color.hub_text_muted))
+                    textSize = 12f
+                    setPadding(0, activity.dp(4), 0, 0)
+                    includeFontPadding = false
+                })
+            }
             content.addView(LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -1063,6 +1080,11 @@ internal class SongsScreenController(private val activity: MainActivity) {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = activity.dp(10)
             }
+            val icon = ImageView(context).apply {
+                setImageResource(R.drawable.ic_search)
+                imageTintList = ColorStateList.valueOf(activity.color(R.color.hub_text_muted))
+                contentDescription = null
+            }
             val input = EditText(context).apply {
                 hint = "노래 제목 또는 멤버 검색"
                 setSingleLine(true)
@@ -1070,7 +1092,8 @@ internal class SongsScreenController(private val activity: MainActivity) {
                 setTextColor(activity.color(R.color.hub_text))
                 setHintTextColor(activity.color(R.color.hub_text_muted))
                 textSize = 14f
-                setPadding(activity.dp(13), activity.dp(8), activity.dp(13), activity.dp(8))
+                background = null
+                setPadding(0, activity.dp(8), activity.dp(13), activity.dp(8))
                 setOnEditorActionListener { view, _, _ ->
                     applySongSearchText(view.text?.toString().orEmpty())
                     true
@@ -1090,7 +1113,16 @@ internal class SongsScreenController(private val activity: MainActivity) {
                     }
                 })
             }
-            addView(input)
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(activity.dp(13), 0, 0, 0)
+                addView(icon, LinearLayout.LayoutParams(activity.dp(18), activity.dp(18)))
+                addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginStart = activity.dp(8)
+                })
+            }
+            addView(row)
         }
 
     // Currently unused by any live screen (superseded by songFilterPanel's segmented rows),

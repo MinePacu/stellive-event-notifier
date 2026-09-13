@@ -18,10 +18,13 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import com.google.android.material.snackbar.Snackbar
 import dev.minepacu.stelliveeventnotifier.MainActivity
 import dev.minepacu.stelliveeventnotifier.R
@@ -169,7 +172,7 @@ internal class ReservationsScreenController(private val activity: MainActivity) 
             role = "임시 항목과 내역은 이 기기에 저장되며 외부 완료 여부를 자동 확인하지 않습니다.",
             showExpandedBodyHeader = false,
         )
-        activity.binding.contentList.addView(activity.detailActionButton("빠른 설정에 내역 추가 버튼 넣기", false) {
+        activity.binding.contentList.addView(activity.detailActionButton("빠른 설정에 내역 추가 버튼 넣기 ›", false) {
             ReservationSystemShortcutCoordinator.requestTile(activity)
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, activity.dp(48)).apply { bottomMargin = activity.dp(10) })
         val now = Instant.now()
@@ -249,7 +252,7 @@ internal class ReservationsScreenController(private val activity: MainActivity) 
             officialEventCancelled = latestEvent?.status == dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus.CANCELLED,
         )
 
-        activity.binding.contentList.addView(reservationDetailSummaryCard(presentation))
+        activity.binding.contentList.addView(reservationDetailSummaryCard(presentation, record.status))
         activity.binding.contentList.addView(activity.sectionLabel("빠른 동작"))
         activity.binding.contentList.addView(reservationDetailActionRow(presentation.links.firstOrNull()?.url))
 
@@ -907,7 +910,7 @@ internal class ReservationsScreenController(private val activity: MainActivity) 
         }
     }
 
-    private fun reservationDetailSummaryCard(presentation: ReservationDetailPresentation): MaterialCardView =
+    private fun reservationDetailSummaryCard(presentation: ReservationDetailPresentation, status: ReservationStatus): MaterialCardView =
         activity.baseCard(HubCardStyle.STANDARD).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -924,7 +927,12 @@ internal class ReservationsScreenController(private val activity: MainActivity) 
                     setTextColor(activity.color(R.color.hub_text))
                     setLineSpacing(0f, 1.08f)
                 })
-                addView(activity.pillRow(listOf(presentation.statusLabel, presentation.kindLabel)))
+                addView(ChipGroup(context).apply {
+                    setPadding(0, activity.dp(8), 0, 0)
+                    isSingleLine = false
+                    addView(reservationDetailStatusChip(status, presentation.statusLabel))
+                    addView(activity.rowChip(presentation.kindLabel))
+                })
                 presentation.dateTimeLabel?.let { dateTime ->
                     addView(TextView(context).apply {
                         text = dateTime
@@ -1106,7 +1114,7 @@ internal class ReservationsScreenController(private val activity: MainActivity) 
         val row = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = activity.rounded(activity.color(R.color.hub_surface), activity.dp(12), activity.color(R.color.hub_line))
+            background = activity.rounded(activity.color(R.color.hub_surface), activity.dp(12), activity.color(R.color.hub_text_subtle))
         }
         val container = labeledReservationEditInput(label, row)
         val input = ReservationDateTimeInput(field, value, container)
@@ -1152,7 +1160,7 @@ internal class ReservationsScreenController(private val activity: MainActivity) 
             textSize = 14f
             setTextColor(activity.color(R.color.hub_text))
             setHintTextColor(activity.color(R.color.hub_text_subtle))
-            background = activity.rounded(activity.color(R.color.hub_surface), activity.dp(12), activity.color(R.color.hub_line))
+            background = activity.rounded(activity.color(R.color.hub_surface), activity.dp(12), activity.color(R.color.hub_text_subtle))
             setPadding(activity.dp(14), activity.dp(12), activity.dp(14), activity.dp(12))
             minHeight = activity.dp(if (multiline) 96 else 52)
             gravity = if (multiline) Gravity.TOP or Gravity.START else Gravity.CENTER_VERTICAL
@@ -1261,6 +1269,28 @@ internal class ReservationsScreenController(private val activity: MainActivity) 
         ReservationStatus.COMPLETED -> R.color.hub_text_muted
         ReservationStatus.CANCELLED -> R.color.hub_schedule_tag_cancelled
     }
+
+    private fun reservationDetailStatusFillColor(status: ReservationStatus): Int = when (status) {
+        ReservationStatus.PENDING_CONFIRMATION, ReservationStatus.REFUNDED -> R.color.hub_warning_soft
+        ReservationStatus.CONFIRMED -> R.color.hub_success_soft
+        ReservationStatus.COMPLETED -> R.color.hub_schedule_tag_completed_soft
+        ReservationStatus.CANCELLED -> R.color.hub_schedule_tag_cancelled_soft
+    }
+
+    private fun reservationDetailStatusChip(status: ReservationStatus, label: String): Chip =
+        Chip(activity).apply {
+            text = label
+            activity.centerChipText(this)
+            isCheckable = false
+            isClickable = false
+            setEnsureMinTouchTargetSize(false)
+            setTextColor(activity.color(reservationEditStatusColor(status)))
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            chipStrokeWidth = activity.dp(1).toFloat()
+            chipStrokeColor = ContextCompat.getColorStateList(context, reservationEditStatusColor(status))
+            chipBackgroundColor = ContextCompat.getColorStateList(context, reservationDetailStatusFillColor(status))
+        }
 
     private fun reservationEditStatusDescriptionRes(kind: ReservationKind, status: ReservationStatus): Int = when (status) {
         ReservationStatus.PENDING_CONFIRMATION -> R.string.reservation_edit_status_pending_description
