@@ -1,0 +1,45 @@
+appId: dev.minepacu.stelliveeventnotifier
+name: "Settings: History and App Info are reachable"
+tags:
+  - regression
+  - settings
+# See settings_screen.yaml for the KNOWN APP BUG note about Settings sub-screen back behavior.
+---
+- launchApp:
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarSettings"
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# History, reached via Settings > 기록 및 정보 (not a bottom-nav tab)
+- scrollUntilVisible:
+    element:
+      text: "알림 기록"
+    direction: DOWN
+- tapOn: "알림 기록"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "기록"
+- assertVisible: "보기 필터"
+
+# App info sub-screen
+- back
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarSettings"
+- waitForAnimationToEnd:
+    timeout: 2000
+- scrollUntilVisible:
+    element:
+      text: "앱 정보"
+    direction: DOWN
+- tapOn: "앱 정보"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "GitHub 저장소"

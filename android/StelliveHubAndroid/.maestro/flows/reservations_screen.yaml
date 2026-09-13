@@ -1,0 +1,34 @@
+appId: dev.minepacu.stelliveeventnotifier
+name: "Reservations: list opens from the GoodsEvents shortcut"
+tags:
+  - regression
+  - reservations
+---
+- launchApp:
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/tab_goods_events"
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarReservations"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "내 예약·구매"
+- back
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "굿즈/행사"
+    label: "Back returns to GoodsEvents, not further up the stack"
+
+# Alternate entry point: the in-list "내 예약·구매" card
+- tapOn: "내 예약·구매"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "내 예약·구매"

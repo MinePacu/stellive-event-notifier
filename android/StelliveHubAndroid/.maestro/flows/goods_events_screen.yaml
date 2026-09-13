@@ -1,0 +1,38 @@
+appId: dev.minepacu.stelliveeventnotifier
+name: "GoodsEvents: filters, calendar, and reservations shortcut render"
+tags:
+  - regression
+  - goods_events
+---
+- launchApp:
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/tab_goods_events"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    text: "내 예약·구매"
+- assertVisible:
+    text: "굿즈/행사 캘린더"
+- assertVisible:
+    text: "● 서버 연결됨"
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarReservations"
+
+# Category filter chips
+- tapOn: "티켓"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "전체"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# Calendar month navigation (fold-aware two-pane on this device may render differently — see two_pane_fold.yaml)
+- tapOn: "다음"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "이전"
+- waitForAnimationToEnd:
+    timeout: 2000

@@ -1,0 +1,59 @@
+appId: dev.minepacu.stelliveeventnotifier
+name: "Nav: bottom tabs render correct screen"
+tags:
+  - smoke
+  - navigation
+---
+- launchApp:
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# Home (default tab)
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/tab_home"
+    selected: true
+
+# Live
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/tab_live"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "라이브"
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/tab_live"
+    selected: true
+
+# Songs
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/tab_songs"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "노래"
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarSongSearch"
+
+# Goods/Events
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/tab_goods_events"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "굿즈/행사"
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarReservations"
+    label: "Reservations shortcut only appears on GoodsEvents"
+
+# Back to Home
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/tab_home"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "홈"

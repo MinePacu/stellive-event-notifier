@@ -1,0 +1,31 @@
+appId: dev.minepacu.stelliveeventnotifier
+name: "Announcements: list and detail render"
+tags:
+  - regression
+  - announcements
+---
+- launchApp:
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarAnnouncement"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "공지사항"
+- assertVisible:
+    text: "최근 공지"
+
+# Open whichever announcement card is first in the list (content is server-seeded, not fixed)
+- tapOn:
+    below:
+      text: "최근 공지"
+    index: 0
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "공지사항"
+- back
