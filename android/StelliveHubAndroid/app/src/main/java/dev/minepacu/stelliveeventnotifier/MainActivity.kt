@@ -1044,6 +1044,15 @@ private var notificationPermissionRequested = false
                 HubScreen.RESERVATION_DETAIL,
                 HubScreen.RESERVATIONS_HELP,
                 HubScreen.RESERVATION_DETAIL_HELP,
+                HubScreen.ANNOUNCEMENT_DETAIL,
+                HubScreen.HISTORY,
+                HubScreen.SETTINGS_DELIVERY,
+                HubScreen.SETTINGS_TARGETS,
+                HubScreen.SETTINGS_PLATFORMS,
+                HubScreen.SETTINGS_EVENT_TYPES,
+                HubScreen.SETTINGS_HUB_EVENTS,
+                HubScreen.SETTINGS_ADVANCED,
+                HubScreen.SETTINGS_ABOUT,
             ) && popScreenNow()
         ) {
             lastRootBackPressedAt = 0L

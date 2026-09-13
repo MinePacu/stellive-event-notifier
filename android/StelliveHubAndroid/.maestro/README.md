@@ -41,15 +41,28 @@ CI/tool timeouts — a single file covering all 6+ Settings sub-screens took lon
 exceed the Maestro MCP tool's response timeout during authoring, even though the on-device run
 itself completed. Prefer several short flows over one long one for this reason.
 
-## Known app bug found while writing this suite
+## App bug found (and fixed) while writing this suite
 
 A single `back` press from **any** Settings sub-screen (Targets, Platforms, History, About, ...)
-skips the Settings root entirely and lands on Home, instead of returning to Settings. Reproduced
-on-device for both Targets and History (2025-09, SM-F707N). Settings sub-screens only render a
-`topBarBack` icon (no `topBarSettings`), so the flows here work around it by going back to Home
-and re-entering Settings from the top-bar icon rather than asserting `back` returns to Settings.
-This is almost certainly not the intended navigation-stack behavior and is worth its own fix —
-not addressed here since it's outside this task's scope (setting up test automation).
+used to skip the Settings root entirely and land on Home, instead of returning to Settings.
+Reproduced on-device for both Targets and History (2025-09, SM-F707N).
+
+Root cause: `handleSystemBackPressedNow()` in `MainActivity.kt` only used incremental
+one-level-back (`popScreenNow()`) for the 3 Reservation-detail screens; every other screen fell
+through to `navigateBackToCurrentRootNow()`, which jumps to whichever bottom-nav tab
+(`MainNavigationHistory.currentRoot`) was last selected via `selectRoot()` — a field that plain
+`pushScreen()`/`select()` navigation (how Settings and its sub-screens are entered) never
+updates. So from any Settings sub-screen, "current root" was always stuck at whatever tab was
+active before Settings was opened (Home, on a fresh launch), and back jumped straight there.
+
+Fixed in `fix/settings-back-stack-skips-home` by adding History and all `SETTINGS_*` sub-screens
+to the same incremental-back set the Reservation-detail screens already used. `settings_screen.yaml`
+and `settings_history_and_about.yaml` now assert the correct behavior (back → Settings) instead of
+working around it.
+
+The identical root cause also affected `HubScreen.ANNOUNCEMENT_DETAIL` — confirmed on-device, back
+skipped the Announcements list and landed on Home. Fixed the same way (added to the same
+incremental-back set); `announcements_screen.yaml` now asserts back → Announcements list → Home.
 
 ## Conventions
 

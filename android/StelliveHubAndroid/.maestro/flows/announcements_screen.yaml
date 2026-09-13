@@ -1,8 +1,11 @@
 appId: dev.minepacu.stelliveeventnotifier
-name: "Announcements: list and detail render"
+name: "Announcements: list, detail, and back-stack render correctly"
 tags:
   - regression
   - announcements
+# Regression coverage for the same back-stack bug fixed for Settings/History
+# (fix/settings-back-stack-skips-home): back from the detail screen used to skip the
+# Announcements list and land on Home.
 ---
 - launchApp:
     stopApp: true
@@ -28,4 +31,20 @@ tags:
 - assertVisible:
     id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
     text: "공지사항"
+
+# back must return to the Announcements list, not skip past it to Home
 - back
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "공지사항"
+- assertVisible: "최근 공지"
+
+# and from the list itself, back still exits to Home as before (unaffected, regression-checked)
+- back
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "홈"

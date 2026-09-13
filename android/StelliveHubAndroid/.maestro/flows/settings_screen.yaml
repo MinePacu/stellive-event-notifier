@@ -7,11 +7,11 @@ tags:
 # does not toggle any notification switches or appearance mode, since that would persist
 # a real setting change on the tester's phone.
 #
-# KNOWN APP BUG (found while writing this suite, reproduced on-device, not yet filed as a
-# code fix): a single `back` press from ANY Settings sub-screen (Targets, Platforms, History,
-# etc.) skips the Settings root entirely and lands on Home, instead of returning to Settings.
-# Sub-screens only have a `topBarBack` icon (no `topBarSettings`), so re-entering Settings
-# after a sub-screen means going back to Home first, then tapping topBarSettings again.
+# Regression coverage for a bug found while writing this suite (fixed in
+# fix/settings-back-stack-skips-home): `back` from a Settings sub-screen used to skip the
+# Settings root and land on Home. handleSystemBackPressedNow() now treats every Settings
+# sub-screen (and History) like the existing Reservation-detail special case — pop one level
+# via popScreenNow() instead of jumping straight to the current bottom-nav-tab root.
 ---
 - launchApp:
     stopApp: true
@@ -25,21 +25,32 @@ tags:
 - assertVisible: "대상별 알림"
 - assertVisible: "플랫폼별 알림"
 
-# Targets sub-screen
+# Targets sub-screen: back must return to Settings, not Home
 - tapOn: "대상별 알림"
 - waitForAnimationToEnd:
     timeout: 2000
 - assertVisible: "분류별 알림"
-
-# Platforms sub-screen
 - back
 - waitForAnimationToEnd:
     timeout: 2000
-- tapOn:
-    id: "dev.minepacu.stelliveeventnotifier:id/topBarSettings"
-- waitForAnimationToEnd:
-    timeout: 2000
+- assertVisible: "전체 알림"
+- assertVisible: "대상별 알림"
+
+# Platforms sub-screen: same check
 - tapOn: "플랫폼별 알림"
 - waitForAnimationToEnd:
     timeout: 2000
 - assertVisible: "알림 적용 기준"
+- back
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "전체 알림"
+- assertVisible: "플랫폼별 알림"
+
+# Settings root itself is unaffected: back from here still exits to Home
+- back
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "홈"
