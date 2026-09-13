@@ -1044,6 +1044,7 @@ private var notificationPermissionRequested = false
                 HubScreen.RESERVATION_DETAIL,
                 HubScreen.RESERVATIONS_HELP,
                 HubScreen.RESERVATION_DETAIL_HELP,
+                HubScreen.ANNOUNCEMENT_DETAIL,
                 HubScreen.HISTORY,
                 HubScreen.SETTINGS_DELIVERY,
                 HubScreen.SETTINGS_TARGETS,

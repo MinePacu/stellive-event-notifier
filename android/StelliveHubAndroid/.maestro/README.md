@@ -60,10 +60,9 @@ to the same incremental-back set the Reservation-detail screens already used. `s
 and `settings_history_and_about.yaml` now assert the correct behavior (back → Settings) instead of
 working around it.
 
-The identical root cause likely also affects `HubScreen.ANNOUNCEMENT_DETAIL` (`back` probably
-skips the Announcements list and lands on Home too) — not fixed here since it wasn't part of the
-reported bug and `announcements_screen.yaml` doesn't currently assert where `back` from the detail
-screen lands. Worth a follow-up if confirmed.
+The identical root cause also affected `HubScreen.ANNOUNCEMENT_DETAIL` — confirmed on-device, back
+skipped the Announcements list and landed on Home. Fixed the same way (added to the same
+incremental-back set); `announcements_screen.yaml` now asserts back → Announcements list → Home.
 
 ## Conventions
 
