@@ -1,0 +1,24 @@
+appId: dev.minepacu.stelliveeventnotifier
+name: "Home: live/songs previews and top-bar shortcuts render"
+tags:
+  - regression
+  - home
+---
+- launchApp:
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "홈"
+- assertVisible:
+    text: "지금 라이브"
+- assertVisible:
+    text: "최근 곡"
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarAnnouncement"
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarSettings"
+- assertNotVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarReservations"
+    label: "Reservations shortcut must not leak onto Home"

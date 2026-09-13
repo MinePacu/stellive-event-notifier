@@ -1,0 +1,21 @@
+appId: dev.minepacu.stelliveeventnotifier
+name: "Smoke: app launches to Home"
+tags:
+  - smoke
+---
+- launchApp:
+    clearState: false
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/bottomNavigation"
+    label: "Bottom navigation is visible"
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/tab_home"
+    selected: true
+    label: "Home tab is selected by default"
+- assertVisible:
+    text: "홈"
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    label: "Home screen title is shown"

@@ -1,0 +1,50 @@
+appId: dev.minepacu.stelliveeventnotifier
+name: "Songs: catalog, member filter, and search results render"
+tags:
+  - regression
+  - songs
+---
+- launchApp:
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/tab_songs"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    text: "정렬"
+- assertVisible:
+    text: "멤버"
+- assertVisible:
+    text: "● 서버 연결됨"
+
+# Songs search — regression check for the RecyclerView/DiffUtil migration
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarSongSearch"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "dev.minepacu.stelliveeventnotifier:id/collapsedTitle"
+    text: "노래 검색"
+- tapOn:
+    text: "노래 제목 또는 멤버 검색"
+- inputText: "바다"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible:
+    text: ".*아이와 나의 바다.*"
+- eraseText
+- hideKeyboard
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarBack"
+
+# Member filter entry point
+- tapOn:
+    text: ".*멤버 전체.*"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarBack"
+    optional: true
+- back

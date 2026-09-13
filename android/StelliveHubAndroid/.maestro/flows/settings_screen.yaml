@@ -1,0 +1,45 @@
+appId: dev.minepacu.stelliveeventnotifier
+name: "Settings: main screen and Targets/Platforms sub-screens"
+tags:
+  - regression
+  - settings
+# NOTE: this suite runs against a real device. Deliberately read-only / navigation-only —
+# does not toggle any notification switches or appearance mode, since that would persist
+# a real setting change on the tester's phone.
+#
+# KNOWN APP BUG (found while writing this suite, reproduced on-device, not yet filed as a
+# code fix): a single `back` press from ANY Settings sub-screen (Targets, Platforms, History,
+# etc.) skips the Settings root entirely and lands on Home, instead of returning to Settings.
+# Sub-screens only have a `topBarBack` icon (no `topBarSettings`), so re-entering Settings
+# after a sub-screen means going back to Home first, then tapping topBarSettings again.
+---
+- launchApp:
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarSettings"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "전체 알림"
+- assertVisible: "대상별 알림"
+- assertVisible: "플랫폼별 알림"
+
+# Targets sub-screen
+- tapOn: "대상별 알림"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "분류별 알림"
+
+# Platforms sub-screen
+- back
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn:
+    id: "dev.minepacu.stelliveeventnotifier:id/topBarSettings"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn: "플랫폼별 알림"
+- waitForAnimationToEnd:
+    timeout: 2000
+- assertVisible: "알림 적용 기준"
