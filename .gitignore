@@ -15,6 +15,7 @@ build/
 android/StelliveHubAndroid/.kotlin/
 local.properties
 google-services.json
+!android/StelliveHubAndroid/app/src/debug/google-services.json
 
 # iOS
 DerivedData/
