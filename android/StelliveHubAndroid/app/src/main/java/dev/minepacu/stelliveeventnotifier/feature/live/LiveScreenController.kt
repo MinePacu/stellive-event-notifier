@@ -13,10 +13,7 @@ import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import com.google.android.material.card.MaterialCardView
-import com.google.android.material.chip.Chip
-import com.google.android.material.chip.ChipGroup
 import dev.minepacu.stelliveeventnotifier.MainActivity
 import dev.minepacu.stelliveeventnotifier.R
 import dev.minepacu.stelliveeventnotifier.core.datastore.PreferenceKeys
@@ -106,6 +103,15 @@ internal class LiveScreenController(private val activity: MainActivity) {
         activity.baseCard(HubCardStyle.INTERACTIVE).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = activity.dp(10)
+            }
+            val liveUrl = member.livePlatformUrl?.takeIf { member.isLive && it.startsWith("https://") }
+            if (liveUrl != null) {
+                isClickable = true
+                isFocusable = true
+                contentDescription = "${member.koreanName}, CHZZK에서 라이브 시청"
+                setOnClickListener {
+                    activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(liveUrl)))
+                }
             }
             val row = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -204,111 +210,51 @@ internal class LiveScreenController(private val activity: MainActivity) {
 
     private fun liveMemberTextBlock(member: HubMember): LinearLayout = LinearLayout(activity).apply {
         orientation = LinearLayout.VERTICAL
-        addView(TextView(context).apply {
-            text = member.koreanName
-            setTextColor(activity.color(R.color.hub_text))
-            textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
-            setLineSpacing(0f, 1.08f)
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(context).apply {
+                text = member.koreanName
+                setTextColor(activity.color(R.color.hub_text))
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
+                setLineSpacing(0f, 1.08f)
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+            })
+            addView(TextView(context).apply {
+                text = " · ${member.generationName} · ${member.unitName}"
+                setTextColor(activity.color(R.color.hub_text_muted))
+                textSize = 11f
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         })
-        addView(TextView(context).apply {
-            text = "${member.generationName} · ${member.unitName}"
-            setTextColor(activity.color(R.color.hub_text_muted))
-            textSize = 11f
-            setPadding(0, activity.dp(3), 0, 0)
-        })
-        addView(TextView(context).apply {
-            text = if (member.isLive) MainUiPolicy.liveTitleText(member.liveTitle) else MainUiPolicy.liveStatusText(member.isLive, member.liveStartedAt)
-            setTextColor(if (member.isLive) activity.color(R.color.hub_text) else activity.color(R.color.hub_text_muted))
-            textSize = if (member.isLive) 13f else 12f
-            typeface = if (member.isLive) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-            maxLines = 2
-            ellipsize = TextUtils.TruncateAt.END
+        val liveCategory = if (member.isLive) MainUiPolicy.liveCategoryText(member.liveCategory) else null
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
             setPadding(0, activity.dp(6), 0, 0)
-            setLineSpacing(0f, 1.1f)
-        })
-        if (member.isLive) {
-            liveSupplementaryChipGroup(member)?.let { group ->
-                addView(group, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    topMargin = activity.dp(6)
+            addView(TextView(context).apply {
+                text = if (member.isLive) MainUiPolicy.liveTitleText(member.liveTitle) else MainUiPolicy.liveStatusText(member.isLive, member.liveStartedAt)
+                setTextColor(if (member.isLive) activity.color(R.color.hub_text) else activity.color(R.color.hub_text_muted))
+                textSize = if (member.isLive) 13f else 12f
+                typeface = if (member.isLive) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                maxLines = 2
+                ellipsize = TextUtils.TruncateAt.END
+                setLineSpacing(0f, 1.1f)
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            if (liveCategory != null) {
+                addView(TextView(context).apply {
+                    text = " · $liveCategory"
+                    setTextColor(activity.color(R.color.hub_text_muted))
+                    textSize = 11f
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                    gravity = Gravity.BOTTOM
                 })
             }
-        }
+        })
     }
-
-    private fun liveSupplementaryChipGroup(member: HubMember): ChipGroup? {
-        val chips = buildList {
-            member.livePlatformUrl?.takeIf { it.startsWith("https://") }?.let { url ->
-                add(liveOpenLinkChip(url))
-                if (activity.currentAdaptiveSpec.showAdjacentLiveAction) {
-                    add(liveOpenAdjacentChip(url))
-                }
-            }
-            MainUiPolicy.liveCategoryText(member.liveCategory)?.let { category ->
-                add(liveCategoryChip(category))
-            }
-        }
-        if (chips.isEmpty()) return null
-        return ChipGroup(activity).apply {
-            isSingleLine = false
-            chipSpacingHorizontal = activity.dp(6)
-            chipSpacingVertical = activity.dp(4)
-            chips.forEach(::addView)
-        }
-    }
-
-    private fun liveCategoryChip(category: String): Chip =
-        Chip(activity).apply {
-            text = category
-            isCheckable = false
-            isClickable = false
-            isFocusable = false
-            setEnsureMinTouchTargetSize(false)
-            chipMinHeight = activity.dp(22).toFloat()
-            textSize = 11f
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            textAlignment = View.TEXT_ALIGNMENT_CENTER
-            chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_card_surface_compact)
-            setTextColor(activity.color(R.color.hub_text_muted))
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.END
-            maxWidth = activity.dp(140)
-        }
-
-    private fun liveOpenLinkChip(url: String): Chip =
-        Chip(activity).apply {
-            text = activity.getString(R.string.live_open_chzzk)
-            isCheckable = false
-            setEnsureMinTouchTargetSize(false)
-            chipMinHeight = activity.dp(24).toFloat()
-            textSize = 11f
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            textAlignment = View.TEXT_ALIGNMENT_CENTER
-            chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_success_soft)
-            setTextColor(activity.color(R.color.hub_primary))
-            setOnClickListener {
-                activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-            }
-        }
-
-    private fun liveOpenAdjacentChip(url: String): Chip =
-        Chip(activity).apply {
-            text = activity.getString(R.string.live_open_split)
-            isCheckable = false
-            setEnsureMinTouchTargetSize(false)
-            chipMinHeight = activity.dp(24).toFloat()
-            textSize = 11f
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            textAlignment = View.TEXT_ALIGNMENT_CENTER
-            chipBackgroundColor = ContextCompat.getColorStateList(context, R.color.hub_card_surface_compact)
-            setTextColor(activity.color(R.color.hub_text))
-            setOnClickListener {
-                openLiveUrlAdjacentOrFallback(url)
-            }
-        }
 
     private fun openLiveUrlAdjacentOrFallback(url: String) {
         val uri = Uri.parse(url)
@@ -335,8 +281,34 @@ internal class LiveScreenController(private val activity: MainActivity) {
             MainUiPolicy.viewerCountText(member.liveViewerCount)?.let { viewers ->
                 addView(liveSideMetricRow(R.drawable.ic_metric_viewers, viewers, activity.color(R.color.hub_primary)))
             }
+            if (activity.currentAdaptiveSpec.showAdjacentLiveAction) {
+                member.livePlatformUrl?.takeIf { it.startsWith("https://") }?.let { url ->
+                    addView(liveOpenAdjacentIconButton(url), LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply {
+                        topMargin = activity.dp(5)
+                    })
+                }
+            }
         }
     }
+
+    private fun liveOpenAdjacentIconButton(url: String): TextView =
+        TextView(activity).apply {
+            text = "⧉"
+            contentDescription = activity.getString(R.string.live_open_split)
+            setTextColor(activity.color(R.color.hub_text_muted))
+            textSize = 13f
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            minWidth = activity.dp(24)
+            minHeight = activity.dp(24)
+            setOnClickListener {
+                openLiveUrlAdjacentOrFallback(url)
+            }
+        }
 
     private fun liveSideMetricRow(iconResId: Int, value: String, valueColor: Int, liveStartedAt: Instant? = null): LinearLayout =
         LinearLayout(activity).apply {

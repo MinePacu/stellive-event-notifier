@@ -122,7 +122,7 @@ object MainUiPolicy {
     const val SONG_COMPACT_WIDTH_BREAKPOINT_DP = 400
     const val SONG_COMPACT_THUMBNAIL_WIDTH_DP = 96
     const val SONG_REGULAR_THUMBNAIL_WIDTH_DP = 112
-    const val SONG_TITLE_MAX_LINES = 3
+    const val SONG_TITLE_MAX_LINES = 2
     const val SONG_SUBTITLE_MAX_LINES = 2
     const val SONG_FILTER_SEGMENT_SPACING_DP = 12
     private val songPremiereZoneId: ZoneId = ZoneId.of("Asia/Seoul")
