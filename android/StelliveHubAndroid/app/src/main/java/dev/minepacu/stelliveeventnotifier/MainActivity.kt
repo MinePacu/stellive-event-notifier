@@ -1997,9 +1997,6 @@ private fun updateTopBarScrolled(scrolled: Boolean) {
 
     private fun updateTopBarGlass(scrolled: Boolean) {
         window.statusBarColor = Color.TRANSPARENT
-        binding.topGlassOverlay.setBackgroundResource(
-            if (scrolled) R.drawable.bg_top_bar_glass_scrolled else R.drawable.bg_top_bar_glass,
-        )
     }
 
     internal fun screenTitle(text: String): TextView = TextView(this).apply {
