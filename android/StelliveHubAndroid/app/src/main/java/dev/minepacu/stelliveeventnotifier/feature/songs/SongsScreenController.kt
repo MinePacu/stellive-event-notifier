@@ -447,7 +447,10 @@ internal class SongsScreenController(private val activity: MainActivity) {
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                setPadding(0, 0, activity.dp(48), 0)
+                // Reserve the overlay's real footprint: favorite icon (48dp) + quick-menu icon (48dp)
+                // + overlay rightMargin (6dp) + a small buffer (6dp) = 108dp, so a two-line title
+                // never runs under the ★/⋮ icons.
+                setPadding(0, 0, activity.dp(48 + 48 + 6 + 6), 0)
             }
             content.addView(TextView(context).apply {
                 text = displayText.title
@@ -1377,8 +1380,18 @@ internal class SongsScreenController(private val activity: MainActivity) {
                 }, FrameLayout.LayoutParams(width, height))
             }
             if (isNew) {
-                addView(activity.rowChip("NEW").apply {
+                addView(TextView(context).apply {
+                    text = "NEW"
                     contentDescription = "새로 추가된 노래"
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                    textSize = 10f
+                    setTextColor(activity.color(R.color.hub_on_primary))
+                    setPadding(activity.dp(6), activity.dp(2), activity.dp(6), activity.dp(2))
+                    background = activity.rounded(
+                        fill = activity.color(R.color.hub_primary),
+                        radius = activity.dp(6),
+                        stroke = activity.color(R.color.hub_on_primary),
+                    )
                 }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
                     gravity = Gravity.TOP or Gravity.START
                 })

@@ -239,21 +239,21 @@ internal class LiveScreenController(private val activity: MainActivity) {
                 setTextColor(if (member.isLive) activity.color(R.color.hub_text) else activity.color(R.color.hub_text_muted))
                 textSize = if (member.isLive) 13f else 12f
                 typeface = if (member.isLive) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-                maxLines = 2
+                maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
                 setLineSpacing(0f, 1.1f)
-            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            if (liveCategory != null) {
-                addView(TextView(context).apply {
-                    text = " · $liveCategory"
-                    setTextColor(activity.color(R.color.hub_text_muted))
-                    textSize = 11f
-                    maxLines = 1
-                    ellipsize = TextUtils.TruncateAt.END
-                    gravity = Gravity.BOTTOM
-                })
-            }
+            })
         })
+        if (liveCategory != null) {
+            addView(TextView(context).apply {
+                text = liveCategory
+                setTextColor(activity.color(R.color.hub_text_muted))
+                textSize = 11f
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+                setPadding(0, activity.dp(4), 0, 0)
+            })
+        }
     }
 
     private fun openLiveUrlAdjacentOrFallback(url: String) {
