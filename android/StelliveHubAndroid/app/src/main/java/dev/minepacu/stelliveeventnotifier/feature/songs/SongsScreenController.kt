@@ -1388,7 +1388,7 @@ internal class SongsScreenController(private val activity: MainActivity) {
                     setTextColor(activity.color(R.color.hub_on_primary))
                     setPadding(activity.dp(6), activity.dp(2), activity.dp(6), activity.dp(2))
                     background = activity.rounded(
-                        fill = activity.color(R.color.hub_primary),
+                        fill = activity.color(R.color.hub_new_badge_fill),
                         radius = activity.dp(6),
                         stroke = activity.color(R.color.hub_on_primary),
                     )
