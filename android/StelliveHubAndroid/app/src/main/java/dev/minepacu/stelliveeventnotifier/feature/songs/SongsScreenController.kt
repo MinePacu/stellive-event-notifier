@@ -431,6 +431,7 @@ internal class SongsScreenController(private val activity: MainActivity) {
         activity.baseCard(HubCardStyle.INTERACTIVE).apply {
             tag = SongIdentity.identifier(song)
             val displayText = MainUiPolicy.songDisplayText(song, catalogMembers)
+            val isNew = SongDiscoveryPolicy.isNew(song, activity.songDiscoveryState)
             isClickable = true
             isFocusable = true
             contentDescription = "${displayText.title}, 곡 상세 보기"
@@ -442,10 +443,14 @@ internal class SongsScreenController(private val activity: MainActivity) {
                 orientation = LinearLayout.HORIZONTAL
                 setPadding(activity.dp(15), activity.dp(14), activity.dp(15), activity.dp(14))
             }
-            row.addView(songThumbnail(song))
+            row.addView(songThumbnail(song, isNew))
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                // Reserve the overlay's real footprint: the icons are stacked vertically (one
+                // 48dp column, not two side by side) + overlay rightMargin (6dp) + a small
+                // buffer (6dp) = 60dp, so a two-line title never runs under the ★/⋮ icons.
+                setPadding(0, 0, activity.dp(48 + 6 + 6), 0)
             }
             content.addView(TextView(context).apply {
                 text = displayText.title
@@ -457,7 +462,7 @@ internal class SongsScreenController(private val activity: MainActivity) {
                 includeFontPadding = false
             })
             content.addView(TextView(context).apply {
-                text = displayText.subtitle
+                text = "${song.type.displayName} · ${displayText.subtitle}"
                 setTextColor(activity.color(R.color.hub_text_muted))
                 textSize = 12f
                 setPadding(0, activity.dp(5), 0, 0)
@@ -465,27 +470,21 @@ internal class SongsScreenController(private val activity: MainActivity) {
                 ellipsize = TextUtils.TruncateAt.END
                 includeFontPadding = false
             })
-            content.addView(ChipGroup(context).apply {
-                isSingleLine = false
-                isSelectionRequired = false
-                chipSpacingHorizontal = activity.dp(6)
-                chipSpacingVertical = activity.dp(4)
-                addView(activity.rowChip(song.type.displayName))
-                MainUiPolicy.songPremiereStatusLabel(song)?.let { label ->
+            MainUiPolicy.songPremiereStatusLabel(song)?.let { label ->
+                content.addView(ChipGroup(context).apply {
+                    isSingleLine = false
+                    isSelectionRequired = false
+                    chipSpacingHorizontal = activity.dp(6)
+                    chipSpacingVertical = activity.dp(4)
                     addView(activity.rowChip(label))
-                }
-                if (SongDiscoveryPolicy.isNew(song, activity.songDiscoveryState)) {
-                    addView(activity.rowChip("NEW").apply {
-                        contentDescription = "새로 추가된 노래"
-                    })
-                }
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply {
-                    topMargin = activity.dp(7)
-                }
-            })
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply {
+                        topMargin = activity.dp(7)
+                    }
+                })
+            }
             MainUiPolicy.songPremiereScheduledDateText(song)?.let { dateText ->
                 content.addView(TextView(context).apply {
                     text = dateText
@@ -495,10 +494,11 @@ internal class SongsScreenController(private val activity: MainActivity) {
                     includeFontPadding = false
                 })
             }
-            content.addView(LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
+            row.addView(content)
+            addView(row)
+            val overlayRow = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
                 MainUiPolicy.songFavoriteIdentifier(song)?.let { identifier ->
                     addView(TextView(context).apply {
                         text = if (identifier in activity.songFavoriteIds) "★" else "☆"
@@ -527,9 +527,12 @@ internal class SongsScreenController(private val activity: MainActivity) {
                         if (SongLinkPolicy.videoUrl(song) == null) ", ${SongLinkPolicy.unavailableReason}" else ""
                     setOnClickListener { anchor -> showSongQuickMenu(anchor, song) }
                 })
+            }
+            addView(overlayRow, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.TOP or Gravity.END
+                topMargin = activity.dp(6)
+                rightMargin = activity.dp(6)
             })
-            row.addView(content)
-            addView(row)
         }
 
     // endregion
@@ -1347,7 +1350,7 @@ internal class SongsScreenController(private val activity: MainActivity) {
         Toast.makeText(activity, "관련 노래 필터를 적용했습니다.", Toast.LENGTH_SHORT).show()
     }
 
-    private fun songThumbnail(song: SongCatalogItem): View =
+    private fun songThumbnail(song: SongCatalogItem, isNew: Boolean = false): View =
         FrameLayout(activity).apply {
             val widthDp = MainUiPolicy.songThumbnailWidthDp(activity.resources.configuration.screenWidthDp)
             val width = activity.dp(widthDp)
@@ -1375,6 +1378,23 @@ internal class SongsScreenController(private val activity: MainActivity) {
                         }
                     }
                 }, FrameLayout.LayoutParams(width, height))
+            }
+            if (isNew) {
+                addView(TextView(context).apply {
+                    text = "NEW"
+                    contentDescription = "새로 추가된 노래"
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                    textSize = 10f
+                    setTextColor(activity.color(R.color.hub_on_primary))
+                    setPadding(activity.dp(6), activity.dp(2), activity.dp(6), activity.dp(2))
+                    background = activity.rounded(
+                        fill = activity.color(R.color.hub_new_badge_fill),
+                        radius = activity.dp(6),
+                        stroke = activity.color(R.color.hub_on_primary),
+                    )
+                }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.TOP or Gravity.START
+                })
             }
         }
 
