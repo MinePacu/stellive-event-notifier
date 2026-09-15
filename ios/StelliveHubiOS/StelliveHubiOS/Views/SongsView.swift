@@ -127,12 +127,22 @@ extension IOSSongPagePolicy {
 }
 
 struct SongsView: View {
+    @State private var path = NavigationPath()
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            SongsContentView()
+                .globalToolbar(path: $path)
+        }
+    }
+}
+
+struct SongsContentView: View {
     @EnvironmentObject private var store: MockHubStore
     @EnvironmentObject private var serverStore: ServerHubStore
     @EnvironmentObject private var favoritesStore: SongFavoritesStore
     @EnvironmentObject private var discoveryStore: SongDiscoveryStore
     @EnvironmentObject private var browseSession: SongBrowseSessionStore
-    @State private var path = NavigationPath()
     @State private var selectedType = "all"
     @State private var selectedLibraryId = "all"
     @State private var selectedSortId = "publishedAt_desc"
@@ -149,6 +159,7 @@ struct SongsView: View {
     @State private var scrollSaveTask: Task<Void, Never>?
     @State private var derivedState = SongsDerivedState.empty
     @State private var selectedSong: SongCatalogItem?
+    @State private var isFilterExpanded = false
 
     private var queryKey: SongListQueryKey {
         SongListQueryKey(
@@ -175,73 +186,78 @@ struct SongsView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
-            ScrollViewReader { songListProxy in
-                List {
+        ScrollViewReader { songListProxy in
+            List {
                 HubHeaderCard(
                     iconText: "♪",
-                title: "노래",
-                subtitle: "YouTube 기반 오리지널/커버 곡 목록",
-                metrics: [
-                    .init(value: "\(derivedState.summary.total)", label: "전체"),
-                    .init(value: "\(derivedState.summary.original)", label: "오리지널"),
-                    .init(value: "\(derivedState.summary.cover)", label: "커버")
-                ]
-            )
+                    title: "노래",
+                    subtitle: "YouTube 기반 오리지널/커버 곡 목록",
+                    metrics: [
+                        .init(value: "\(derivedState.summary.total)", label: "전체"),
+                        .init(value: "\(derivedState.summary.original)", label: "오리지널"),
+                        .init(value: "\(derivedState.summary.cover)", label: "커버")
+                    ]
+                )
                 .listRowInsets(IOSGroupedScreenPolicy.headerRowInsets)
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
                 .id("songs-list-start")
 
-                Section("검색") {
-                    TextField("노래 제목 또는 멤버 검색", text: $query)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                }
+                Section {
+                    DisclosureGroup(isExpanded: $isFilterExpanded) {
+                        Picker("분류", selection: $selectedType) {
+                            ForEach(IOSSongPagePolicy.typeFilters) { filter in
+                                Text(filter.label).tag(filter.id)
+                            }
+                        }
+                        .pickerStyle(.segmented)
 
-                Section("필터") {
-            Picker("분류", selection: $selectedType) {
-                ForEach(IOSSongPagePolicy.typeFilters) { filter in
-                    Text(filter.label).tag(filter.id)
-                }
-            }
-            .pickerStyle(.segmented)
+                        NavigationLink {
+                            SongMemberFilterView(
+                                members: store.members,
+                                appliedState: $memberFilter
+                            )
+                        } label: {
+                            HStack {
+                                Text("멤버")
+                                Spacer()
+                                Text(IOSSongPagePolicy.memberFilterLabel(from: store.members, state: memberFilter))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
 
-            NavigationLink {
-                SongMemberFilterView(
-                    members: store.members,
-                    appliedState: $memberFilter
-                )
-            } label: {
-                HStack {
-                    Text("멤버")
-                    Spacer()
-                    Text(IOSSongPagePolicy.memberFilterLabel(from: store.members, state: memberFilter))
-                        .foregroundStyle(.secondary)
-                }
-            }
+                        if IOSSongPagePolicy.canClearMemberFilter(memberFilter) {
+                            Button("멤버 조건 초기화") {
+                                memberFilter = SongMemberFilterState()
+                            }
+                        }
 
-            if IOSSongPagePolicy.canClearMemberFilter(memberFilter) {
-                Button("멤버 조건 초기화") {
-                    memberFilter = SongMemberFilterState()
-                }
-            }
+                        Picker("보관함", selection: $selectedLibraryId) {
+                            ForEach(IOSSongPagePolicy.libraryFilters) { filter in
+                                Text(filter.label).tag(filter.id)
+                            }
+                        }
+                        .pickerStyle(.segmented)
 
-            Picker("보관함", selection: $selectedLibraryId) {
-                ForEach(IOSSongPagePolicy.libraryFilters) { filter in
-                    Text(filter.label).tag(filter.id)
+                        Picker("정렬", selection: $selectedSortId) {
+                            ForEach(IOSSongPagePolicy.sortOptions) { option in
+                                Text(option.label).tag(option.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    } label: {
+                        HStack {
+                            Text("필터")
+                            Spacer()
+                            Text(filterSummaryText)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("필터, \(filterSummaryText)")
+                    }
                 }
-            }
-            .pickerStyle(.segmented)
-
-            Picker("정렬", selection: $selectedSortId) {
-                ForEach(IOSSongPagePolicy.sortOptions) { option in
-                    Text(option.label).tag(option.id)
-                }
-            }
-            .pickerStyle(.menu)
-
-        }
 
                 Section("노래 목록") {
                     if serverStore.isRefreshingSongs && serverStore.serverSongs.isEmpty {
@@ -284,7 +300,7 @@ struct SongsView: View {
                 .coordinateSpace(name: "song-list-scroll")
                 .scrollContentBackground(.hidden)
                 .background(Color(uiColor: .systemGroupedBackground))
-                .globalToolbar(path: $path)
+                .searchable(text: $query, prompt: "노래 제목 또는 멤버 검색")
                 .onChange(of: queryKey) { _ in
                     guard !isApplyingSession else { return }
                     resetSongList()
@@ -369,8 +385,23 @@ struct SongsView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                 }
-            }
         }
+    }
+
+    private var filterSummaryText: String {
+        var parts: [String] = []
+        if let typeLabel = IOSSongPagePolicy.typeFilters.first(where: { $0.id == selectedType })?.label,
+           selectedType != "all" {
+            parts.append(typeLabel)
+        }
+        if IOSSongPagePolicy.canClearMemberFilter(memberFilter) {
+            parts.append(IOSSongPagePolicy.memberFilterLabel(from: store.members, state: memberFilter))
+        }
+        if let libraryLabel = IOSSongPagePolicy.libraryFilters.first(where: { $0.id == selectedLibraryId })?.label,
+           selectedLibraryId != "all" {
+            parts.append(libraryLabel)
+        }
+        return parts.isEmpty ? "전체" : parts.joined(separator: " · ")
     }
 
     private func applyRelatedMemberFilter(_ filter: SongMemberFilterState) {
@@ -658,7 +689,7 @@ struct SongRow: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        HStack(alignment: .top, spacing: 4) {
             Button {
                 onOpenDetail(model.song)
             } label: {
@@ -688,9 +719,6 @@ struct SongRow: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-
-                        Color.clear
-                            .frame(height: 44)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -701,7 +729,7 @@ struct SongRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel(model.detailAccessibilityLabel)
 
-            HStack(spacing: 4) {
+            VStack(spacing: 4) {
                 if model.canFavorite {
                     Button {
                         onToggleFavorite(model.song)
@@ -750,7 +778,8 @@ struct SongRow: View {
                 .accessibilityLabel(model.quickActionAccessibilityLabel)
                 .accessibilityHint(model.videoURL == nil ? SongLinkPolicy.unavailableReason : "YouTube 또는 YouTube Music에서 열기, 공유 또는 복사")
             }
-            .padding(14)
+            .padding(.trailing, 10)
+            .padding(.vertical, 14)
         }
         .alert("링크를 열 수 없습니다", isPresented: $isOpenFailurePresented) {
             Button("확인", role: .cancel) {}

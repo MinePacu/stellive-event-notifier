@@ -35,7 +35,7 @@ struct HomeView: View {
                         }
                         if store.hasHomeLiveOverflow {
                             NavigationLink {
-                                LiveView()
+                                LiveContentView()
                             } label: {
                                 Label("더보기", systemImage: "chevron.right")
                             }
@@ -71,7 +71,7 @@ struct HomeView: View {
                     }
 
                     NavigationLink {
-                        SongsView()
+                        SongsContentView()
                     } label: {
                         Text("노래 전체 보기")
                     }
@@ -122,7 +122,7 @@ struct HomeView: View {
                 MemberDetailView(member: member)
             }
             .navigationDestination(for: HomeRoute.self) { route in
-                if route == .songs { SongsView() }
+                if route == .songs { SongsContentView() }
             }
             .task {
                 await serverStore.refreshRecentSongs()

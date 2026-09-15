@@ -366,7 +366,7 @@ struct SettingsContentView: View {
     private func settingsDestination(_ route: SettingsRoute) -> some View {
         switch route {
         case .history:
-            HistoryView()
+            HistoryContentView()
         case .delivery:
             deliverySettings
         case .targets:
