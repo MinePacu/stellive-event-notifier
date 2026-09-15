@@ -447,10 +447,10 @@ internal class SongsScreenController(private val activity: MainActivity) {
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                // Reserve the overlay's real footprint: favorite icon (48dp) + quick-menu icon (48dp)
-                // + overlay rightMargin (6dp) + a small buffer (6dp) = 108dp, so a two-line title
-                // never runs under the ★/⋮ icons.
-                setPadding(0, 0, activity.dp(48 + 48 + 6 + 6), 0)
+                // Reserve the overlay's real footprint: the icons are stacked vertically (one
+                // 48dp column, not two side by side) + overlay rightMargin (6dp) + a small
+                // buffer (6dp) = 60dp, so a two-line title never runs under the ★/⋮ icons.
+                setPadding(0, 0, activity.dp(48 + 6 + 6), 0)
             }
             content.addView(TextView(context).apply {
                 text = displayText.title
@@ -497,8 +497,8 @@ internal class SongsScreenController(private val activity: MainActivity) {
             row.addView(content)
             addView(row)
             val overlayRow = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
                 MainUiPolicy.songFavoriteIdentifier(song)?.let { identifier ->
                     addView(TextView(context).apply {
                         text = if (identifier in activity.songFavoriteIds) "★" else "☆"
