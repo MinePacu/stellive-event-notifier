@@ -1,3 +1,4 @@
+import EventKit
 import SwiftUI
 
 enum HubEventDetailColors {
@@ -41,6 +42,84 @@ enum HubEventScheduleExpansionPolicy {
     }
 }
 
+enum HubEventCalendarPolicy {
+    struct Window: Equatable {
+        let start: Date
+        let end: Date
+    }
+
+    static let fallbackDuration: TimeInterval = 60 * 60
+
+    static func window(for event: HubEvent) -> Window? {
+        if let start = event.startsAt, let end = event.endsAt {
+            return window(start: start, end: end)
+        }
+        if let item = fallbackScheduleItem(for: event) {
+            return window(start: item.startsAt, end: item.endsAt)
+        }
+        if let start = event.startsAt {
+            return window(start: start, end: nil)
+        }
+        return nil
+    }
+
+    private static func fallbackScheduleItem(for event: HubEvent) -> HubEventScheduleItem? {
+        if let primary = event.scheduleItems.first(where: { $0.isPrimary }) {
+            return primary
+        }
+        return event.scheduleItems.min { $0.startsAt < $1.startsAt }
+    }
+
+    private static func window(start: Date, end: Date?) -> Window {
+        guard let end, end > start else {
+            return Window(start: start, end: start.addingTimeInterval(fallbackDuration))
+        }
+        return Window(start: start, end: end)
+    }
+
+    static func location(for event: HubEvent) -> String? {
+        let parts = [event.venueName, event.venueAddress]
+            .compactMap { $0 }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: ", ")
+    }
+
+    static func notes(for event: HubEvent) -> String? {
+        guard let summary = event.summary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty else {
+            return nil
+        }
+        return summary
+    }
+}
+
+private enum HubEventCalendarFeedback: Equatable {
+    case saved
+    case permissionDenied
+    case failure(String)
+
+    var title: String {
+        switch self {
+        case .saved: "캘린더에 추가했습니다"
+        case .permissionDenied: "캘린더 권한이 필요합니다"
+        case .failure: "캘린더 추가 실패"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .saved: "기본 캘린더에 행사 일정을 저장했습니다."
+        case .permissionDenied: "설정 앱에서 캘린더 접근을 허용한 뒤 다시 시도해 주세요."
+        case .failure(let reason): reason
+        }
+    }
+
+    var showsSettingsAction: Bool {
+        self == .permissionDenied
+    }
+}
+
 struct HubEventDetailView: View {
     let event: HubEvent
     var highlightedScheduleItemId: String? = nil
@@ -55,6 +134,7 @@ struct HubEventDetailView: View {
     @State private var isCalendarSelectionActive = false
     @State private var calendarHighlightedScheduleItemIds = Set<String>()
     @State private var presentedLinks: HubEventLinksSheetContext?
+    @State private var calendarFeedback: HubEventCalendarFeedback?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -104,6 +184,23 @@ struct HubEventDetailView: View {
                 presentedLinks = nil
                 openHubEventLink(link, scheduleItem: nil)
             }
+        }
+        .alert(
+            calendarFeedback?.title ?? "",
+            isPresented: Binding(
+                get: { calendarFeedback != nil },
+                set: { if !$0 { calendarFeedback = nil } }
+            ),
+            presenting: calendarFeedback
+        ) { feedback in
+            if feedback.showsSettingsAction {
+                Button("설정 열기") { openAppSettings() }
+                Button("닫기", role: .cancel) {}
+            } else {
+                Button("확인", role: .cancel) {}
+            }
+        } message: { feedback in
+            Text(feedback.message)
         }
     }
 
@@ -261,9 +358,21 @@ struct HubEventDetailView: View {
             repeating: GridItem(.flexible(), spacing: 10),
             count: links.isEmpty ? 1 : 2
         )
+        let calendarWindow = HubEventCalendarPolicy.window(for: event)
         return LazyVGrid(columns: columns, spacing: 10) {
-            Button("캘린더 추가") {}
+            Button("캘린더 추가") {
+                if let calendarWindow {
+                    addEventToCalendar(window: calendarWindow)
+                }
+            }
                 .buttonStyle(HubEventCTAButtonStyle(primary: true))
+                .disabled(calendarWindow == nil)
+                .opacity(calendarWindow == nil ? 0.55 : 1)
+                .accessibilityLabel(
+                    calendarWindow == nil
+                        ? "캘린더 추가, 일정 정보가 없어 사용할 수 없습니다"
+                        : "캘린더 추가, 기본 캘린더에 저장"
+                )
             if ctaMode == .direct, url(from: links[0].url) != nil {
                 Button(HubEventLinkPolicy.displayLabel(links[0])) {
                     openHubEventLink(links[0], scheduleItem: nil)
@@ -380,6 +489,62 @@ struct HubEventDetailView: View {
         guard let rawValue, !rawValue.isEmpty else { return nil }
         guard let url = URL(string: rawValue), url.scheme?.lowercased() == "https", url.host != nil else { return nil }
         return url
+    }
+
+    private func addEventToCalendar(window: HubEventCalendarPolicy.Window) {
+        let store = EKEventStore()
+        let completion: (Bool, Error?) -> Void = { granted, error in
+            DispatchQueue.main.async {
+                saveEventToCalendar(store: store, window: window, granted: granted, error: error)
+            }
+        }
+        if #available(iOS 17.0, *) {
+            store.requestFullAccessToEvents(completion: completion)
+        } else {
+            requestLegacyCalendarAccess(store: store, completion: completion)
+        }
+    }
+
+    @available(iOS, introduced: 16.0, deprecated: 17.0, message: "iOS 17부터는 requestFullAccessToEvents를 사용합니다.")
+    private func requestLegacyCalendarAccess(
+        store: EKEventStore,
+        completion: @escaping (Bool, Error?) -> Void
+    ) {
+        store.requestAccess(to: .event, completion: completion)
+    }
+
+    private func saveEventToCalendar(
+        store: EKEventStore,
+        window: HubEventCalendarPolicy.Window,
+        granted: Bool,
+        error: Error?
+    ) {
+        guard granted, error == nil else {
+            calendarFeedback = .permissionDenied
+            return
+        }
+        guard let calendar = store.defaultCalendarForNewEvents else {
+            calendarFeedback = .failure("기본 캘린더를 찾을 수 없습니다.")
+            return
+        }
+        let calendarEvent = EKEvent(eventStore: store)
+        calendarEvent.calendar = calendar
+        calendarEvent.title = event.title
+        calendarEvent.startDate = window.start
+        calendarEvent.endDate = window.end
+        calendarEvent.location = HubEventCalendarPolicy.location(for: event)
+        calendarEvent.notes = HubEventCalendarPolicy.notes(for: event)
+        do {
+            try store.save(calendarEvent, span: .thisEvent, commit: true)
+            calendarFeedback = .saved
+        } catch {
+            calendarFeedback = .failure(error.localizedDescription)
+        }
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        openURL(url)
     }
 
     private func openHubEventLink(_ link: HubEventLink, scheduleItem: HubEventScheduleItem?) {
