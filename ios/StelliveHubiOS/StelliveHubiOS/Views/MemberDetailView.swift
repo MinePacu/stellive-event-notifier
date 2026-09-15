@@ -3,6 +3,8 @@ import SwiftUI
 struct MemberDetailView: View {
     let member: HubMember
 
+    @EnvironmentObject private var store: MockHubStore
+
     var body: some View {
         Form {
             Section {
@@ -21,9 +23,9 @@ struct MemberDetailView: View {
             }
 
             Section("알림") {
-                Toggle("항목 알림", isOn: .constant(member.notificationEnabled))
-                Toggle("최대한 실시간 모드", isOn: .constant(member.realtimeEnabled))
-                Toggle("YouTube 업로드", isOn: .constant(member.youtubeHandle != nil))
+                Toggle("항목 알림", isOn: memberBinding(member.id, defaultValue: member.notificationEnabled))
+                Toggle("최대한 실시간 모드", isOn: $store.settings.realtimeEnabled)
+                LabeledContent("YouTube 업로드", value: member.youtubeHandle != nil ? "지원함" : "지원 안 함")
                 if member.catalogRole == .officialChannel {
                     LabeledContent("공식 YouTube 라이브", value: "지원하지 않음")
                 }
@@ -34,5 +36,13 @@ struct MemberDetailView: View {
             }
         }
         .navigationTitle(member.koreanName)
+    }
+
+    private func memberBinding(_ id: String, defaultValue: Bool) -> Binding<Bool> {
+        Binding {
+            store.settings.memberEnabled[id] ?? defaultValue
+        } set: { newValue in
+            store.settings.memberEnabled[id] = newValue
+        }
     }
 }
