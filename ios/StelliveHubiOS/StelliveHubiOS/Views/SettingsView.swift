@@ -211,7 +211,11 @@ enum SettingsNavigationPolicy {
     }
 
     private static func enabledSummary(values: [Bool]) -> String {
-        "\(values.filter { $0 }.count)/\(values.count)"
+        guard !values.isEmpty else { return "없음" }
+        let enabledCount = values.filter { $0 }.count
+        if enabledCount == values.count { return "전체 켜짐" }
+        if enabledCount == 0 { return "전체 꺼짐" }
+        return "\(values.count)개 중 \(enabledCount)개 켜짐"
     }
 
     private static func hubEventSummary(settings: NotificationSettingsState) -> String {
@@ -366,7 +370,7 @@ struct SettingsContentView: View {
     private func settingsDestination(_ route: SettingsRoute) -> some View {
         switch route {
         case .history:
-            HistoryContentView()
+            HistoryView()
         case .delivery:
             deliverySettings
         case .targets:
