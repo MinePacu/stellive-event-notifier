@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SwiftUI
 
 enum CatalogRole: String, Codable {
     case member
@@ -289,6 +290,19 @@ enum HubEventStatus: String, Codable, Hashable {
             return "종료"
         case .cancelled:
             return "취소"
+        }
+    }
+
+    var displayColor: Color {
+        switch self {
+        case .announced, .upcoming:
+            return .blue
+        case .open:
+            return .green
+        case .closingSoon:
+            return .red
+        case .ended, .cancelled:
+            return Color(uiColor: .secondaryLabel)
         }
     }
 }
