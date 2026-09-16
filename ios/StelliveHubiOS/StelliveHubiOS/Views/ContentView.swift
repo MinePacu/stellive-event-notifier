@@ -390,6 +390,14 @@ private struct GlobalToolbarModifier: ViewModifier {
                         .onAppear { if announcementRouteDepth == nil { announcementRouteDepth = path.count } }
                 }
             }
+            // Registered as a sibling of the GlobalToolbarRoute destination above (both attached
+            // directly to the tab-root `content`) rather than nested inside SettingsContentView's
+            // own Form. A destination registered only inside another navigationDestination's
+            // pushed view is not reliably visible to NavigationLink resolution against this
+            // shared NavigationPath — see SettingsRouteDestinationView in SettingsView.swift.
+            .navigationDestination(for: SettingsRoute.self) { route in
+                SettingsRouteDestinationView(route: route)
+            }
             .onChange(of: path.count) { newCount in
                 if let settingsRouteDepth, newCount < settingsRouteDepth {
                     self.settingsRouteDepth = nil
