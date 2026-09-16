@@ -57,9 +57,15 @@ struct ReservationQuickAddView: View {
                 }
                 Section {
                     Button("링크 없이 추가") { detailURL = ""; confirm(allowsSensitiveURL: false) }
+                        .buttonStyle(.bordered)
+                        .frame(maxWidth: .infinity)
+                        .listRowBackground(Color.clear)
                     Button(selectedDraft.map { ReservationPresentationPolicy.addActionLabel($0.kind) } ?? "내역에 추가") {
                         confirm(allowsSensitiveURL: false)
                     }
+                        .buttonStyle(.borderedProminent)
+                        .frame(maxWidth: .infinity)
+                        .listRowBackground(Color.clear)
                         .disabled(ReservationTextPolicy.nonEmpty(detailURL) == nil)
                 }
             }
