@@ -32,15 +32,6 @@ struct SongDetailSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    Text(IOSSongPagePolicy.titleDisplayText(song))
-                        .font(.title3.weight(.semibold))
-                        .accessibilityAddTraits(.isHeader)
-                    ForEach(SongDetailPolicy.rows(for: song)) { row in
-                        LabeledContent(row.label, value: row.value)
-                    }
-                }
-
                 Section("동작") {
                     actionButton(
                         songOpenPreferenceStore.target.openButtonTitle,
@@ -72,6 +63,15 @@ struct SongDetailSheet: View {
                         )
                     }
                     .songDetailActionRow()
+                }
+
+                Section {
+                    Text(IOSSongPagePolicy.titleDisplayText(song))
+                        .font(.title3.weight(.semibold))
+                        .accessibilityAddTraits(.isHeader)
+                    ForEach(SongDetailPolicy.rows(for: song)) { row in
+                        LabeledContent(row.label, value: row.value)
+                    }
                 }
 
                 Section("관련 노래") {

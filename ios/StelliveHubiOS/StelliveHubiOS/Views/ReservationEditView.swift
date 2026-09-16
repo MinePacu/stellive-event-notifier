@@ -7,6 +7,7 @@ struct ReservationEditView: View {
     @State private var draft: ReservationRecord?
     @State private var initialRecord: ReservationRecord?
     @State private var showsDeleteConfirmation = false
+    @State private var showsDetailLinkDeleteConfirmation = false
     @State private var showsDiscardConfirmation = false
     @State private var showsSensitiveConfirmation = false
     @State private var showsDuplicateConfirmation = false
@@ -38,9 +39,8 @@ struct ReservationEditView: View {
                     if let original = binding.wrappedValue.originalActionURL {
                         LabeledContent("최초 링크", value: original).lineLimit(2)
                     }
-                    Button("상세 링크만 삭제") {
-                        draft?.reservationDetailURL = nil
-                        draft?.providerHistoryURL = nil
+                    Button("상세 링크만 삭제", role: .destructive) {
+                        showsDetailLinkDeleteConfirmation = true
                     }
                 }
                 Section("추가 정보") {
@@ -83,6 +83,10 @@ struct ReservationEditView: View {
         ) {
             _ = try store.delete(id: reservationID)
             dismiss()
+        }
+        .alert("상세 링크를 삭제할까요?", isPresented: $showsDetailLinkDeleteConfirmation) {
+            Button("삭제", role: .destructive) { draft?.reservationDetailURL = nil }
+            Button("취소", role: .cancel) {}
         }
         .alert("변경사항을 버릴까요?", isPresented: $showsDiscardConfirmation) {
             Button("버리기", role: .destructive) { dismiss() }

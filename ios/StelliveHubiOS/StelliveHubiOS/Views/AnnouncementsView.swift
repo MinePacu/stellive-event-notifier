@@ -90,6 +90,7 @@ struct AnnouncementDetailView: View {
     @EnvironmentObject private var serverStore: ServerHubStore
     @EnvironmentObject private var readStore: AnnouncementReadStore
     @Environment(\.openURL) private var openURL
+    @State private var loadFailed = false
 
     private var announcement: ServiceAnnouncement? { serverStore.cachedAnnouncement(id: announcementID) }
 
@@ -110,10 +111,30 @@ struct AnnouncementDetailView: View {
                     if let raw = announcement.externalUrl, let url = URL(string: raw) { Section { Link("외부 링크 열기", destination: url) } }
                 }
                 .onAppear { readStore.markRead(announcement) }
+            } else if loadFailed {
+                failureView
             } else { ProgressView("공지 불러오는 중") }
         }
         .navigationTitle("공지사항")
         .navigationBarTitleDisplayMode(.inline)
-        .task { if announcement == nil { _ = await serverStore.loadAnnouncementDetail(id: announcementID) } }
+        .task { await loadDetailIfNeeded() }
+    }
+
+    private var failureView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle").font(.largeTitle).foregroundStyle(.secondary)
+            Text("공지를 불러오지 못했습니다").font(.headline)
+            Text("네트워크 상태를 확인한 뒤 다시 시도해 주세요.").font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Button("다시 시도") { Task { await loadDetailIfNeeded(retry: true) } }.buttonStyle(.borderedProminent)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @MainActor
+    private func loadDetailIfNeeded(retry: Bool = false) async {
+        guard announcement == nil else { return }
+        if retry { loadFailed = false }
+        loadFailed = await serverStore.loadAnnouncementDetail(id: announcementID) == nil
     }
 }

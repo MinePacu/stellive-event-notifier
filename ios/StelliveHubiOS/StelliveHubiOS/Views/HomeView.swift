@@ -35,7 +35,7 @@ struct HomeView: View {
                         }
                         if store.hasHomeLiveOverflow {
                             NavigationLink {
-                                LiveContentView()
+                                LiveView()
                             } label: {
                                 Label("더보기", systemImage: "chevron.right")
                             }
@@ -71,7 +71,7 @@ struct HomeView: View {
                     }
 
                     NavigationLink {
-                        SongsContentView()
+                        SongsView()
                     } label: {
                         Text("노래 전체 보기")
                     }
@@ -122,7 +122,7 @@ struct HomeView: View {
                 MemberDetailView(member: member)
             }
             .navigationDestination(for: HomeRoute.self) { route in
-                if route == .songs { SongsContentView() }
+                if route == .songs { SongsView() }
             }
             .task {
                 await serverStore.refreshRecentSongs()
@@ -217,7 +217,7 @@ private struct HomeHubEventRow: View {
 
             Text(event.status.displayName)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(event.status == .closingSoon ? Color.red : Color.teal)
+                .foregroundStyle(event.status.displayColor)
                 .lineLimit(HubEventStatusRowLayout.statusLineLimit)
                 .minimumScaleFactor(HubEventStatusRowLayout.statusMinimumScaleFactor)
                 .multilineTextAlignment(.trailing)
@@ -250,13 +250,13 @@ private struct HubEventPreviewBadge: View {
                 .minimumScaleFactor(0.82)
             Text(event.status.displayName)
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(event.status == .closingSoon ? Color.red : Color.teal)
+                .foregroundStyle(event.status.displayColor)
                 .lineLimit(1)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(
                     Capsule()
-                        .fill((event.status == .closingSoon ? Color.red : Color.teal).opacity(0.14))
+                        .fill(event.status.displayColor.opacity(0.14))
                 )
         }
         .frame(maxWidth: .infinity, alignment: .leading)

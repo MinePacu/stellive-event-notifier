@@ -557,7 +557,7 @@ private struct HubEventStatusBadge: View {
     var body: some View {
         Text(status.displayName)
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(status == .closingSoon ? Color.red : Color.teal)
+            .foregroundStyle(status.displayColor)
             .lineLimit(HubEventStatusRowLayout.statusLineLimit)
             .minimumScaleFactor(HubEventStatusRowLayout.statusMinimumScaleFactor)
             .multilineTextAlignment(.trailing)
@@ -565,7 +565,7 @@ private struct HubEventStatusBadge: View {
             .padding(.vertical, 4)
             .background(
                 Capsule()
-                    .fill((status == .closingSoon ? Color.red : Color.teal).opacity(0.14))
+                    .fill(status.displayColor.opacity(0.14))
             )
             .fixedSize(horizontal: HubEventStatusRowLayout.preservesStatusIntrinsicWidth, vertical: false)
     }

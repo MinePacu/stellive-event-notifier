@@ -674,12 +674,12 @@ private struct CalendarEntryRow: View {
 
             Text(entry.status.displayName)
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(entry.status == .closingSoon ? Color.red : Color.teal)
+                .foregroundStyle(entry.status.displayColor)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(
                     Capsule()
-                        .fill((entry.status == .closingSoon ? Color.red : Color.teal).opacity(0.14))
+                        .fill(entry.status.displayColor.opacity(0.14))
                 )
         }
         .accessibilityElement(children: .combine)
