@@ -309,9 +309,6 @@ struct SettingsContentView: View {
             }
         }
         .navigationTitle("설정")
-        .navigationDestination(for: SettingsRoute.self) { route in
-            settingsDestination(route)
-        }
     }
 
     private func settingsNavigationLink(_ row: SettingsHubRow) -> some View {
@@ -362,8 +359,19 @@ struct SettingsContentView: View {
         }
     }
 
-    @ViewBuilder
-    private func settingsDestination(_ route: SettingsRoute) -> some View {
+}
+
+/// The destination pushed for each `SettingsRoute`. This is registered as a real, standalone
+/// `View` (see `.navigationDestination(for: SettingsRoute.self)` in `GlobalToolbarModifier`)
+/// so SwiftUI mounts it into the navigation stack normally and resolves its `@EnvironmentObject`
+/// values the standard way, rather than via a bare method call on a manually-constructed
+/// `SettingsContentView` instance (which would never receive environment injection).
+struct SettingsRouteDestinationView: View {
+    let route: SettingsRoute
+
+    @EnvironmentObject private var store: MockHubStore
+
+    var body: some View {
         switch route {
         case .history:
             HistoryView()
