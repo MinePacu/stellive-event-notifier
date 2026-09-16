@@ -374,7 +374,7 @@ struct SettingsRouteDestinationView: View {
     var body: some View {
         switch route {
         case .history:
-            HistoryView()
+            HistoryContentView()
         case .delivery:
             deliverySettings
         case .targets:

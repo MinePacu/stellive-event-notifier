@@ -1,8 +1,18 @@
 import SwiftUI
 
 struct HistoryView: View {
-    @EnvironmentObject private var store: MockHubStore
     @State private var path = NavigationPath()
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            HistoryContentView()
+                .globalToolbar(path: $path)
+        }
+    }
+}
+
+struct HistoryContentView: View {
+    @EnvironmentObject private var store: MockHubStore
     @State private var selectedEventTypeFilterId = "all"
     @State private var selectedMemberFilterId = "all"
 
@@ -14,9 +24,8 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
-            List {
-                HubHeaderCard(
+        List {
+            HubHeaderCard(
                     iconText: "기",
                     title: "알림 기록",
                     subtitle: historySubtitle,
@@ -62,10 +71,8 @@ struct HistoryView: View {
                     Text("공식 YouTube 라이브 알림 기록은 생성하지 않습니다.")
                         .secondaryNoticeTextStyle()
                 }
-            }
-            .listStyle(.insetGrouped)
-            .globalToolbar(path: $path)
         }
+        .listStyle(.insetGrouped)
     }
 
     private var historySubtitle: String {

@@ -1,57 +1,64 @@
 import SwiftUI
 
 struct LiveView: View {
-    @EnvironmentObject private var store: MockHubStore
     @State private var path = NavigationPath()
 
     var body: some View {
         NavigationStack(path: $path) {
-            List {
-                HubHeaderCard(
-                    iconText: "ON",
-                    title: "라이브 상태",
-                    subtitle: "현재 방송 중 \(store.liveMemberCount)명 · \(store.liveStatusSourceLabel)",
-                    metrics: [
-                        .init(value: "\(store.liveMemberCount)", label: "라이브"),
-                        .init(value: "\(store.chzzkLiveTargetCount)", label: "CHZZK 대상"),
-                        .init(value: "\(store.offlineChzzkTargetCount)", label: "오프라인"),
-                    ]
-                )
-                .listRowInsets(IOSGroupedScreenPolicy.headerRowInsets)
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
+            LiveContentView()
+                .globalToolbar(path: $path)
+        }
+    }
+}
 
-                Section("치지직 방송 상태") {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        ForEach(store.chzzkLiveTargets) { member in
-                            LiveMemberRow(
-                                member: member,
-                                currentDate: context.date,
-                                moveUp: { store.moveLiveMember(member, offset: -1) },
-                                moveDown: { store.moveLiveMember(member, offset: 1) }
-                            )
-                            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                            .listRowSeparator(.hidden)
-                            .accessibilityAction(named: "위로 이동") {
-                                store.moveLiveMember(member, offset: -1)
-                            }
-                            .accessibilityAction(named: "아래로 이동") {
-                                store.moveLiveMember(member, offset: 1)
-                            }
+struct LiveContentView: View {
+    @EnvironmentObject private var store: MockHubStore
+
+    var body: some View {
+        List {
+            HubHeaderCard(
+                iconText: "ON",
+                title: "라이브 상태",
+                subtitle: "현재 방송 중 \(store.liveMemberCount)명 · \(store.liveStatusSourceLabel)",
+                metrics: [
+                    .init(value: "\(store.liveMemberCount)", label: "라이브"),
+                    .init(value: "\(store.chzzkLiveTargetCount)", label: "CHZZK 대상"),
+                    .init(value: "\(store.offlineChzzkTargetCount)", label: "오프라인"),
+                ]
+            )
+            .listRowInsets(IOSGroupedScreenPolicy.headerRowInsets)
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+
+            Section("치지직 방송 상태") {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    ForEach(store.chzzkLiveTargets) { member in
+                        LiveMemberRow(
+                            member: member,
+                            currentDate: context.date,
+                            moveUp: { store.moveLiveMember(member, offset: -1) },
+                            moveDown: { store.moveLiveMember(member, offset: 1) }
+                        )
+                        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                        .listRowSeparator(.hidden)
+                        .accessibilityAction(named: "위로 이동") {
+                            store.moveLiveMember(member, offset: -1)
                         }
-                        .onMove(perform: store.moveLiveMember)
+                        .accessibilityAction(named: "아래로 이동") {
+                            store.moveLiveMember(member, offset: 1)
+                        }
                     }
+                    .onMove(perform: store.moveLiveMember)
                 }
             }
-            .refreshable {
-                await refreshLiveStatus()
-            }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Color(uiColor: .systemGroupedBackground))
-            .globalToolbar(path: $path)
-            .navigationBarTitleDisplayMode(.inline)
         }
+        .refreshable {
+            await refreshLiveStatus()
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(Color(uiColor: .systemGroupedBackground))
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func refreshLiveStatus() async {
