@@ -169,7 +169,7 @@ private struct ReservationRecordRow: View {
             Text(record.displayTitle).font(.headline)
             Text([ReservationPresentationPolicy.statusLabel(kind: record.kind, status: record.status), record.eventSnapshot.sourceLabel].joined(separator: " · "))
                 .font(.subheadline)
-                .foregroundStyle(record.status == .confirmed ? Color.teal : Color.secondary)
+                .foregroundStyle(ReservationPresentationPolicy.statusColor(record.status))
             if let timestampLabel = ReservationListPresentationPolicy.timestampLabel(
                 record: record,
                 section: section,
