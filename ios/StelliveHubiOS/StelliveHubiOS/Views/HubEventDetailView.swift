@@ -22,6 +22,19 @@ enum HubEventDetailLayoutPolicy {
     static let contentOrder: [HubEventDetailContentSection] = [.actions, .summary, .eventSchedule, .timeline, .info, .notice]
 }
 
+enum HubEventHeroLayoutPolicy {
+    static let maxHeight: CGFloat = 390
+    static let minHeight: CGFloat = 220
+    static let heightRatio: CGFloat = 0.46
+
+    /// Hero banner height clamped to a fraction of the enclosing container height,
+    /// so small devices (SE-class) do not lose half the screen to the banner.
+    static func height(containerHeight: CGFloat) -> CGFloat {
+        guard containerHeight > 0 else { return maxHeight }
+        return min(maxHeight, max(minHeight, containerHeight * heightRatio))
+    }
+}
+
 enum HubEventScheduleScrollPolicy {
     static func target(highlightedID: String?, lastScrolledID: String?) -> String? {
         guard let highlightedID, highlightedID != lastScrolledID else { return nil }
@@ -139,40 +152,41 @@ struct HubEventDetailView: View {
     var body: some View {
         ZStack(alignment: .top) {
             HubEventDetailColors.background.ignoresSafeArea()
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 0) {
-                        hero
-                        VStack(spacing: 14) {
-                            ForEach(HubEventDetailLayoutPolicy.contentOrder, id: \.self) { section in
-                                contentSection(section, scrollProxy: proxy)
+            GeometryReader { container in
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            hero(containerHeight: container.size.height)
+                            VStack(spacing: 14) {
+                                ForEach(HubEventDetailLayoutPolicy.contentOrder, id: \.self) { section in
+                                    contentSection(section, scrollProxy: proxy)
+                                }
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 18)
+                            .padding(.bottom, 28)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 18)
-                        .padding(.bottom, 28)
+                        .padding(.top, -36)
                     }
-                    .padding(.top, -36)
-                    .frame(width: UIScreen.main.bounds.width)
-                }
-                .ignoresSafeArea(edges: .top)
-                .onAppear {
-                    resolveEventScheduleExpansion(highlightedScheduleItemID: highlightedScheduleItemId)
-                    expandHighlightedSchedule()
-                    scrollToHighlightedSchedule(using: proxy)
-                }
-                .onChange(of: highlightedScheduleItemId) { highlightedID in
-                    resolveEventScheduleExpansion(highlightedScheduleItemID: highlightedID)
-                    isCalendarSelectionActive = false
-                    calendarHighlightedScheduleItemIds.removeAll()
-                    expandHighlightedSchedule()
-                    scrollToHighlightedSchedule(using: proxy)
-                }
-                .onChange(of: event.id) { _ in
-                    resolveEventScheduleExpansion(highlightedScheduleItemID: highlightedScheduleItemId)
-                    isCalendarSelectionActive = false
-                    calendarHighlightedScheduleItemIds.removeAll()
-                    expandHighlightedSchedule()
+                    .ignoresSafeArea(edges: .top)
+                    .onAppear {
+                        resolveEventScheduleExpansion(highlightedScheduleItemID: highlightedScheduleItemId)
+                        expandHighlightedSchedule()
+                        scrollToHighlightedSchedule(using: proxy)
+                    }
+                    .onChange(of: highlightedScheduleItemId) { highlightedID in
+                        resolveEventScheduleExpansion(highlightedScheduleItemID: highlightedID)
+                        isCalendarSelectionActive = false
+                        calendarHighlightedScheduleItemIds.removeAll()
+                        expandHighlightedSchedule()
+                        scrollToHighlightedSchedule(using: proxy)
+                    }
+                    .onChange(of: event.id) { _ in
+                        resolveEventScheduleExpansion(highlightedScheduleItemID: highlightedScheduleItemId)
+                        isCalendarSelectionActive = false
+                        calendarHighlightedScheduleItemIds.removeAll()
+                        expandHighlightedSchedule()
+                    }
                 }
             }
         }
@@ -280,8 +294,9 @@ struct HubEventDetailView: View {
         }
     }
 
-    private var hero: some View {
-        GeometryReader { geometry in
+    private func hero(containerHeight: CGFloat) -> some View {
+        let heroHeight = HubEventHeroLayoutPolicy.height(containerHeight: containerHeight)
+        return GeometryReader { geometry in
             let horizontalPadding: CGFloat = 18
             let contentWidth = max(0, geometry.size.width - horizontalPadding * 2)
 
@@ -300,7 +315,7 @@ struct HubEventDetailView: View {
                     }
                 }
             Text(event.title)
-                .font(.system(size: 25, weight: .bold))
+                .font(.title2.weight(.bold))
                 .lineLimit(3)
                 .minimumScaleFactor(0.84)
                 .multilineTextAlignment(.leading)
@@ -321,7 +336,7 @@ struct HubEventDetailView: View {
         }
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
-        .frame(height: 390)
+        .frame(height: heroHeight)
         .clipped()
         .ignoresSafeArea(edges: .top)
     }
