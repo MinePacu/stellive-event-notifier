@@ -430,7 +430,7 @@ final class ServerHubStore: ObservableObject {
         guard filter != "all" else { return days }
         return days.compactMap { day in
             let entries = day.entries.filter { entry in
-                entry.entryKind != .hubEvent || HubEventFilterPolicy.matches(entry, filterId: filter)
+                HubEventFilterPolicy.matches(calendarEntry: entry, filterId: filter)
             }
             return entries.isEmpty ? nil : HubCalendarDay(date: day.date, entries: entries)
         }

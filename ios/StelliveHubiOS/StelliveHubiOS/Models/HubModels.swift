@@ -602,6 +602,20 @@ enum HubEventFilterPolicy {
         )
     }
 
+    /// Filter ids that describe an event's own type or lifecycle state.
+    static let typeFilterIds: Set<String> = ["goods", "album", "ticketing", "offline", "closing"]
+
+    /// Calendar entries that are not hub events (member birthdays, generation
+    /// anniversaries) are server-side projections of the special-day catalog and
+    /// carry placeholder `category`/`participationMode`/`tags` values, so they can
+    /// only be filtered by generation - never by the type filters above.
+    static func matches(calendarEntry entry: HubCalendarEntry, filterId: String) -> Bool {
+        if entry.entryKind != .hubEvent, typeFilterIds.contains(filterId) {
+            return false
+        }
+        return matches(entry, filterId: filterId)
+    }
+
     private static func matches(
         category: HubEventCategory,
         tags: Set<HubEventTag>,
