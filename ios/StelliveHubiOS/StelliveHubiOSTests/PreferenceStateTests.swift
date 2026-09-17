@@ -56,7 +56,7 @@ final class PreferenceStateTests: XCTestCase {
 
         XCTAssertEqual(rows.map(\.route), [.history, .delivery, .targets, .platforms, .eventTypes, .hubEvents, .advanced, .about])
         XCTAssertEqual(rows.first { $0.route == .delivery }?.summary, "표준")
-        XCTAssertEqual(rows.first { $0.route == .platforms }?.summary, "3/4")
+        XCTAssertEqual(rows.first { $0.route == .platforms }?.summary, "5개 중 4개 켜짐")
         XCTAssertEqual(rows.first { $0.route == .hubEvents }?.summary, "켜짐 · 마감 임박 우선")
         XCTAssertEqual(rows.first { $0.route == .delivery }?.title, "알림 수신 방식")
         XCTAssertEqual(rows.first { $0.route == .eventTypes }?.title, "알림 종류별 설정")
@@ -305,7 +305,7 @@ final class PreferenceStateTests: XCTestCase {
         let goodsEvents = store.hubEvents(for: "goods")
         XCTAssertEqual(Set(goodsEvents.map(\.category)), [.onlineGoods, .onlineCollab])
         XCTAssertTrue(goodsEvents.allSatisfy { $0.category == .onlineGoods || $0.category == .onlineCollab })
-        XCTAssertEqual(goodsEvents.map(\.id), ["closing-official-goods", "open-gen3-goods"])
+        XCTAssertEqual(goodsEvents.map(\.id), ["closing-official-goods", "open-gen3-goods", "sakihane-huya-3d-debut"])
 
         let offlineEvents = store.hubEvents(for: "offline")
         XCTAssertTrue(offlineEvents.allSatisfy { $0.participationMode.isOffline })
