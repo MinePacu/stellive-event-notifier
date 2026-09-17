@@ -274,6 +274,23 @@ export default function registerHubEventReadRoutes(app: FastifyInstance, options
       generationId: parsed.value.generationId,
       memberId: parsed.value.memberId
     }, parsed.value.now);
+
+    const maxUpdatedAtMs = events.items.length === 0
+      ? undefined
+      : Math.max(...events.items.map((item) => new Date(item.updatedAt).getTime()));
+    if (maxUpdatedAtMs !== undefined) {
+      const lastModified = new Date(Math.floor(maxUpdatedAtMs / 1000) * 1000);
+      reply.header("Last-Modified", lastModified.toUTCString());
+
+      const ifModifiedSinceHeader = request.headers["if-modified-since"];
+      if (typeof ifModifiedSinceHeader === "string") {
+        const parsedIfModifiedSince = new Date(ifModifiedSinceHeader);
+        if (!Number.isNaN(parsedIfModifiedSince.getTime()) && lastModified.getTime() <= parsedIfModifiedSince.getTime()) {
+          return reply.code(304).send();
+        }
+      }
+    }
+
     const specialDayOccurrences = await listOptionalSpecialDayOccurrences(
       {
         from: parsed.value.from,

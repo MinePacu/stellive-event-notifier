@@ -101,12 +101,16 @@ final class HubAPIClientTests: XCTestCase {
             )
         }
 
-        let response = try await client.hubEventsCalendar(
+        let result = try await client.hubEventsCalendar(
             from: "2026-06-01",
             to: "2026-06-30",
             timezone: "Asia/Seoul"
         )
 
+        guard case let .fresh(response, _) = result else {
+            XCTFail("Expected a fresh calendar response")
+            return
+        }
         XCTAssertEqual(response.timezone, "Asia/Seoul")
         XCTAssertEqual(response.days.first?.date, "2026-06-13")
         XCTAssertEqual(response.days.first?.entries.first?.title, "온라인 굿즈 판매")
