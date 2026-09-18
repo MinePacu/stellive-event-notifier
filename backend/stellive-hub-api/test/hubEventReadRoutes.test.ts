@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { HubEventRepository } from "../src/hub-events/hubEventRepository.js";
 import type { HubCalendarSpecialDay, HubEvent } from "../src/types.js";
@@ -87,6 +87,10 @@ async function buildRouteApp(
 }
 
 describe("HubEvent read routes", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns public HubEvent list DTOs", async () => {
     const app = await buildRouteApp([hubEvent(), hubEvent({ id: "official-goods-2" })]);
     const response = await app.inject({ method: "GET", url: "/v1/hub-events?limit=1" });
@@ -256,6 +260,83 @@ describe("HubEvent read routes", () => {
     await app.close();
 
     expect(response.statusCode).toBe(200);
+  });
+
+  it("does not return a stale 304 when a special-day occurrence's derived status changed, even though no HubEvent updated", async () => {
+    // The hub event's updatedAt never changes between the two requests below, so the
+    // Last-Modified header derived from it stays identical. Only the special-day
+    // occurrence's *derived* status (computed live from `now`) flips from "upcoming"
+    // to "open" between now1 and now2.
+    const occurrence: SpecialDayOccurrence = {
+      id: "special-day-occurrence:birthday:ayatsuno-yuni:2026",
+      specialDayId: "birthday:ayatsuno-yuni",
+      kind: "member_birthday",
+      displayYear: 2026,
+      displayDate: "2026-06-15",
+      title: "아야츠노 유니 생일",
+      specialDayLabel: "생일",
+      generationId: "gen1",
+      memberId: "ayatsuno-yuni",
+      startsAt: new Date("2026-06-15T00:00:00.000Z"),
+      endsAt: new Date("2026-06-16T00:00:00.000Z"),
+      sourceLabel: "카탈로그",
+      policyState: "catalog_verified",
+    };
+    const listRange = async () => [occurrence];
+    const app = await buildRouteApp(
+      [hubEvent({ id: "calendar-event", updatedAt: "2026-05-01T00:00:00.000Z" })],
+      [],
+      { listRange },
+    );
+
+    const now1 = new Date("2026-06-14T12:00:00.000Z"); // before occurrence.startsAt -> "upcoming"
+    const now2 = new Date("2026-06-15T12:00:00.000Z"); // between startsAt/endsAt -> "open"
+    const url = "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul";
+
+    vi.useFakeTimers();
+    vi.setSystemTime(now1);
+    const firstResponse = await app.inject({ method: "GET", url });
+    const lastModified = firstResponse.headers["last-modified"] as string;
+    const firstEntries = firstResponse.json().days.flatMap((day: { entries: Array<{ id: string; status: string }> }) => day.entries);
+    const firstOccurrence = firstEntries.find((entry: { id: string }) => entry.id === "birthday:ayatsuno-yuni:2026-06-15");
+
+    vi.setSystemTime(now2);
+    const secondResponse = await app.inject({
+      method: "GET",
+      url,
+      headers: { "if-modified-since": lastModified },
+    });
+    vi.useRealTimers();
+    await app.close();
+
+    expect(firstOccurrence?.status).toBe("upcoming");
+    expect(secondResponse.statusCode).not.toBe(304);
+    expect(secondResponse.statusCode).toBe(200);
+    const secondEntries = secondResponse.json().days.flatMap((day: { entries: Array<{ id: string; status: string }> }) => day.entries);
+    const secondOccurrence = secondEntries.find((entry: { id: string }) => entry.id === "birthday:ayatsuno-yuni:2026-06-15");
+    expect(secondOccurrence?.status).toBe("open");
+  });
+
+  it("still returns 304 for unchanged If-Modified-Since when no special-day status could have changed", async () => {
+    const app = await buildRouteApp([hubEvent({ id: "calendar-event", updatedAt: "2026-05-01T00:00:00.000Z" })]);
+    const url = "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul";
+
+    const now = new Date("2026-06-14T12:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const firstResponse = await app.inject({ method: "GET", url });
+    const lastModified = firstResponse.headers["last-modified"] as string;
+
+    const secondResponse = await app.inject({
+      method: "GET",
+      url,
+      headers: { "if-modified-since": lastModified },
+    });
+    vi.useRealTimers();
+    await app.close();
+
+    expect(secondResponse.statusCode).toBe(304);
+    expect(secondResponse.body).toBe("");
   });
 
   it("returns ended status for past special-day calendar entries", async () => {

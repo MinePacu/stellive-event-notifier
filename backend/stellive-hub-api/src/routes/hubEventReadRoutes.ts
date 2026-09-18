@@ -10,6 +10,7 @@ import type { SpecialDayOccurrence } from "../hub-events/hubCalendarSpecialDayMa
 import type {
   HubCalendarEntryKind,
   HubCalendarSpecialDay,
+  HubEvent,
   HubEventCategory,
   HubEventTag,
   HubEventParticipationMode,
@@ -231,6 +232,49 @@ function isMissingOptionalSpecialDayOccurrenceStore(error: unknown): boolean {
   );
 }
 
+/**
+ * Renders the calendar's special-day (member_birthday / generation_anniversary) entries
+ * as a sorted "id:status" signature for a given `now`. Special-day statuses only ever
+ * advance forward in time (upcoming -> open -> ended); they never regress. So if the
+ * signature is identical at two points in time, the status of every special-day entry
+ * must have stayed constant for the entire interval between those two points — it cannot
+ * have changed and changed back. That lets us safely compare "now" against the time the
+ * client's cached response was known to be valid without re-deriving what happened at
+ * every instant in between.
+ */
+function specialDayStatusSignature(
+  events: HubEvent[],
+  options: CalendarResponseOptions,
+  hubCalendarSpecialDays: HubCalendarSpecialDay[],
+  specialDayOccurrences: SpecialDayOccurrence[],
+  now: Date
+): string {
+  const response = buildHubCalendarResponse(events, { ...options, now }, hubCalendarSpecialDays, specialDayOccurrences);
+  return response.days
+    .flatMap((day) => day.entries.filter((entry) => entry.entryKind !== "hub_event").map((entry) => `${entry.id}:${entry.status}`))
+    .sort()
+    .join("|");
+}
+
+/**
+ * True when a special-day entry's derived status could have changed between `since`
+ * (the time the client's cached Last-Modified was known valid, i.e. the parsed
+ * If-Modified-Since header) and the current request's `now`. See specialDayStatusSignature
+ * for why comparing the two endpoints is sufficient.
+ */
+function specialDayStatusesChanged(
+  events: HubEvent[],
+  options: CalendarResponseOptions,
+  hubCalendarSpecialDays: HubCalendarSpecialDay[],
+  specialDayOccurrences: SpecialDayOccurrence[],
+  since: Date
+): boolean {
+  if (options.includeSpecialDays === false) return false;
+  const previousSignature = specialDayStatusSignature(events, options, hubCalendarSpecialDays, specialDayOccurrences, since);
+  const currentSignature = specialDayStatusSignature(events, options, hubCalendarSpecialDays, specialDayOccurrences, options.now);
+  return previousSignature !== currentSignature;
+}
+
 export default function registerHubEventReadRoutes(app: FastifyInstance, options: RegisterHubEventReadRouteOptions): void {
   const { hubEvents, hubCalendarSpecialDays = [], hubCalendarSpecialDayOccurrences } = options;
 
@@ -275,6 +319,21 @@ export default function registerHubEventReadRoutes(app: FastifyInstance, options
       memberId: parsed.value.memberId
     }, parsed.value.now);
 
+    // Fetch special-day occurrences before deciding on a 304: unlike HubEvent rows,
+    // special-day (birthday / anniversary) entries have no `updatedAt` of their own —
+    // their displayed status is derived live from the request's `now`. A 304 decided
+    // purely from HubEvent.updatedAt can therefore hide a real status change (e.g.
+    // upcoming -> open) that happened only because time passed.
+    const specialDayOccurrences = await listOptionalSpecialDayOccurrences(
+      {
+        from: parsed.value.from,
+        to: parsed.value.to,
+        generationId: parsed.value.generationId,
+        memberId: parsed.value.memberId
+      },
+      parsed.value.includeSpecialDays
+    );
+
     const maxUpdatedAtMs = events.items.length === 0
       ? undefined
       : Math.max(...events.items.map((item) => new Date(item.updatedAt).getTime()));
@@ -285,21 +344,16 @@ export default function registerHubEventReadRoutes(app: FastifyInstance, options
       const ifModifiedSinceHeader = request.headers["if-modified-since"];
       if (typeof ifModifiedSinceHeader === "string") {
         const parsedIfModifiedSince = new Date(ifModifiedSinceHeader);
-        if (!Number.isNaN(parsedIfModifiedSince.getTime()) && lastModified.getTime() <= parsedIfModifiedSince.getTime()) {
+        if (
+          !Number.isNaN(parsedIfModifiedSince.getTime()) &&
+          lastModified.getTime() <= parsedIfModifiedSince.getTime() &&
+          !specialDayStatusesChanged(events.items, parsed.value, hubCalendarSpecialDays, specialDayOccurrences, parsedIfModifiedSince)
+        ) {
           return reply.code(304).send();
         }
       }
     }
 
-    const specialDayOccurrences = await listOptionalSpecialDayOccurrences(
-      {
-        from: parsed.value.from,
-        to: parsed.value.to,
-        generationId: parsed.value.generationId,
-        memberId: parsed.value.memberId
-      },
-      parsed.value.includeSpecialDays
-    );
     return buildHubCalendarResponse(events.items, parsed.value, hubCalendarSpecialDays, specialDayOccurrences);
   });
 
