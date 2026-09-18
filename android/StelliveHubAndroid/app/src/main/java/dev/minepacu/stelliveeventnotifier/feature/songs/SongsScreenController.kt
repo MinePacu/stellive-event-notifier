@@ -447,10 +447,15 @@ internal class SongsScreenController(private val activity: MainActivity) {
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                // Reserve the overlay's real footprint: the icons are stacked vertically (one
-                // 48dp column, not two side by side) + overlay rightMargin (6dp) + a small
-                // buffer (6dp) = 60dp, so a two-line title never runs under the ★/⋮ icons.
-                setPadding(0, 0, activity.dp(48 + 6 + 6), 0)
+                // Reserve the overlay's real footprint: two 48dp touch targets (★/⋮) side by
+                // side + 4dp gap between them + overlay rightMargin (6dp) + a small buffer
+                // (6dp) = 112dp. Two 48dp-minHeight views can't be stacked vertically instead
+                // (48+48=96dp already blows the card's ~82-91dp target height), so the
+                // accessibility-minimum touch targets force horizontal icons, and horizontal
+                // icons force this wider reserved padding back close to its pre-trim value —
+                // the title-width gain from the vertical-stack attempt had to be traded back
+                // for the row-height fix.
+                setPadding(0, 0, activity.dp(48 + 48 + 4 + 6 + 6), 0)
             }
             content.addView(TextView(context).apply {
                 text = displayText.title
@@ -497,8 +502,8 @@ internal class SongsScreenController(private val activity: MainActivity) {
             row.addView(content)
             addView(row)
             val overlayRow = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
                 MainUiPolicy.songFavoriteIdentifier(song)?.let { identifier ->
                     addView(TextView(context).apply {
                         text = if (identifier in activity.songFavoriteIds) "★" else "☆"
@@ -510,6 +515,9 @@ internal class SongsScreenController(private val activity: MainActivity) {
                         isFocusable = true
                         minWidth = activity.dp(48)
                         minHeight = activity.dp(48)
+                        layoutParams = LinearLayout.LayoutParams(activity.dp(48), activity.dp(48)).apply {
+                            marginEnd = activity.dp(4)
+                        }
                         setOnClickListener {
                             activity.lifecycleScope.launch { activity.songFavoritesRepository.toggle(identifier) }
                         }
