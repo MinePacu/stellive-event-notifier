@@ -7,11 +7,14 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Rect
 import android.text.Editable
 import android.text.TextUtils
 import android.text.TextWatcher
 import android.view.ContextThemeWrapper
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.TouchDelegate
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
@@ -444,18 +447,18 @@ internal class SongsScreenController(private val activity: MainActivity) {
                 setPadding(activity.dp(15), activity.dp(14), activity.dp(15), activity.dp(14))
             }
             row.addView(songThumbnail(song, isNew))
+            // The overlay icons (★/⋮) are stacked vertically at a small 28dp visual size —
+            // two of them plus a 4dp gap total ~60dp, well inside the card's ~82-91dp
+            // compact content height — while each still gets an independent ≥48x48dp
+            // touch target via a composite TouchDelegate on overlayRow (see below), so the
+            // visual footprint and the touch footprint no longer have to be the same size.
+            val overlayIconSizeDp = 28
             val content = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                // Reserve the overlay's real footprint: two 48dp touch targets (★/⋮) side by
-                // side + 4dp gap between them + overlay rightMargin (6dp) + a small buffer
-                // (6dp) = 112dp. Two 48dp-minHeight views can't be stacked vertically instead
-                // (48+48=96dp already blows the card's ~82-91dp target height), so the
-                // accessibility-minimum touch targets force horizontal icons, and horizontal
-                // icons force this wider reserved padding back close to its pre-trim value —
-                // the title-width gain from the vertical-stack attempt had to be traded back
-                // for the row-height fix.
-                setPadding(0, 0, activity.dp(48 + 48 + 4 + 6 + 6), 0)
+                // Reserve only a single icon column's width: icon width (28dp) + overlay
+                // rightMargin (6dp) + a small buffer (6dp) = 40dp.
+                setPadding(0, 0, activity.dp(overlayIconSizeDp + 6 + 6), 0)
             }
             content.addView(TextView(context).apply {
                 text = displayText.title
@@ -501,40 +504,70 @@ internal class SongsScreenController(private val activity: MainActivity) {
             }
             row.addView(content)
             addView(row)
+            // Icons are stacked vertically at overlayIconSizeDp (small visual footprint) and
+            // rely on a composite TouchDelegate, installed once layout settles, to grant each
+            // one an independent >=48x48dp touch target instead of a >=48dp view itself. A
+            // single android.view.TouchDelegate only supports one target Rect per parent, so
+            // MultiIconTouchDelegate below splits overlayRow's touch events by Y position
+            // (and forwards via performClick()) to cover both icons without one shadowing
+            // the other.
+            val overlayTouchTargetDp = 48
+            val overlayIconGapDp = 4
             val overlayRow = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                MainUiPolicy.songFavoriteIdentifier(song)?.let { identifier ->
-                    addView(TextView(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                val favoriteIdentifier = MainUiPolicy.songFavoriteIdentifier(song)
+                val starView = favoriteIdentifier?.let { identifier ->
+                    TextView(context).apply {
                         text = if (identifier in activity.songFavoriteIds) "★" else "☆"
-                        textSize = 24f
+                        textSize = 15f
                         gravity = Gravity.CENTER
                         setTextColor(activity.color(R.color.hub_text))
                         contentDescription = if (identifier in activity.songFavoriteIds) "즐겨찾기 해제" else "즐겨찾기 추가"
                         isClickable = true
                         isFocusable = true
-                        minWidth = activity.dp(48)
-                        minHeight = activity.dp(48)
-                        layoutParams = LinearLayout.LayoutParams(activity.dp(48), activity.dp(48)).apply {
-                            marginEnd = activity.dp(4)
+                        layoutParams = LinearLayout.LayoutParams(activity.dp(overlayIconSizeDp), activity.dp(overlayIconSizeDp)).apply {
+                            bottomMargin = activity.dp(overlayIconGapDp)
                         }
                         setOnClickListener {
                             activity.lifecycleScope.launch { activity.songFavoritesRepository.toggle(identifier) }
                         }
-                    })
+                    }
                 }
-                addView(TextView(context).apply {
+                starView?.let { addView(it) }
+                val dotsView = TextView(context).apply {
                     text = "⋮"
-                    textSize = 24f
+                    textSize = 15f
                     gravity = Gravity.CENTER
-                    minWidth = activity.dp(48)
-                    minHeight = activity.dp(48)
                     isClickable = true
                     isFocusable = true
                     contentDescription = "${displayText.title} 빠른 동작" +
                         if (SongLinkPolicy.videoUrl(song) == null) ", ${SongLinkPolicy.unavailableReason}" else ""
+                    layoutParams = LinearLayout.LayoutParams(activity.dp(overlayIconSizeDp), activity.dp(overlayIconSizeDp))
                     setOnClickListener { anchor -> showSongQuickMenu(anchor, song) }
-                })
+                }
+                addView(dotsView)
+
+                post {
+                    val touchPx = activity.dp(overlayTouchTargetDp)
+                    val expandPx = (touchPx - activity.dp(overlayIconSizeDp)) / 2
+                    val zones = if (starView != null) {
+                        // Split the shared boundary at the midpoint between the two icons, then
+                        // expand each zone's outer edge so its own touch height still reaches
+                        // overlayTouchTargetDp, even though the icons themselves are closer
+                        // together than that on screen.
+                        val boundaryY = (starView.bottom + dotsView.top) / 2
+                        listOf(
+                            Rect(starView.left - expandPx, boundaryY - touchPx, starView.right + expandPx, boundaryY) to starView,
+                            Rect(dotsView.left - expandPx, boundaryY, dotsView.right + expandPx, boundaryY + touchPx) to dotsView,
+                        )
+                    } else {
+                        listOf(
+                            Rect(dotsView.left - expandPx, dotsView.top - expandPx, dotsView.right + expandPx, dotsView.bottom + expandPx) to dotsView,
+                        )
+                    }
+                    touchDelegate = MultiIconTouchDelegate(zones)
+                }
             }
             addView(overlayRow, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
                 gravity = Gravity.TOP or Gravity.END
@@ -542,6 +575,44 @@ internal class SongsScreenController(private val activity: MainActivity) {
                 rightMargin = activity.dp(6)
             })
         }
+
+    // Routes overlayRow's touch events to whichever zone Rect contains them and forwards to
+    // that zone's View via performClick(), so several small stacked icons on one parent can
+    // each carry an independently-expanded touch target (stock android.view.TouchDelegate
+    // only supports a single target Rect per parent).
+    private class MultiIconTouchDelegate(
+        private val zones: List<Pair<Rect, View>>,
+    ) : TouchDelegate(zones.first().first, zones.first().second) {
+        private var activeTarget: View? = null
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            val x = event.x.toInt()
+            val y = event.y.toInt()
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    activeTarget = zones.firstOrNull { (rect, _) -> rect.contains(x, y) }?.second
+                    activeTarget?.isPressed = true
+                    return activeTarget != null
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val inside = activeTarget?.let { target -> zones.first { it.second == target }.first.contains(x, y) } ?: false
+                    activeTarget?.isPressed = inside
+                }
+                MotionEvent.ACTION_UP -> {
+                    val target = activeTarget
+                    val inside = target?.let { t -> zones.first { it.second == t }.first.contains(x, y) } ?: false
+                    target?.isPressed = false
+                    if (inside) target.performClick()
+                    activeTarget = null
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    activeTarget?.isPressed = false
+                    activeTarget = null
+                }
+            }
+            return true
+        }
+    }
 
     // endregion
 
