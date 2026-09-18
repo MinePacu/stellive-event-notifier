@@ -411,9 +411,14 @@ struct SettingsRouteDestinationView: View {
 
             Section("방해 금지 시간") {
                 Toggle("방해 금지 시간 사용", isOn: $store.settings.quietHours.enabled)
-                TextField("시작 시간", text: $store.settings.quietHours.start)
-                TextField("종료 시간", text: $store.settings.quietHours.end)
-                TextField("기준 시간대", text: $store.settings.quietHours.timezone)
+                DatePicker("시작 시간", selection: quietHoursTimeBinding(\.start, fallback: QuietHoursClock.fallbackStart), displayedComponents: .hourAndMinute)
+                DatePicker("종료 시간", selection: quietHoursTimeBinding(\.end, fallback: QuietHoursClock.fallbackEnd), displayedComponents: .hourAndMinute)
+                Picker("기준 시간대", selection: $store.settings.quietHours.timezone) {
+                    ForEach(QuietHoursClock.timeZoneOptions(including: store.settings.quietHours.timezone), id: \.self) { identifier in
+                        Text(identifier.isEmpty ? "미설정" : identifier).tag(identifier)
+                    }
+                }
+                .pickerStyle(.navigationLink)
             }
 
             Section("키워드 필터") {
@@ -588,6 +593,16 @@ struct SettingsRouteDestinationView: View {
 
     private func targetFilterDisplayName(id: String, defaultName: String) -> String {
         id == "gen4-upcoming" ? "합류 예정 멤버" : defaultName
+    }
+
+    /// Shows the stored "HH:mm" as a time; a malformed stored value displays `fallback` but is only
+    /// replaced once the user actually changes the picker.
+    private func quietHoursTimeBinding(_ keyPath: WritableKeyPath<QuietHoursState, String>, fallback: String) -> Binding<Date> {
+        Binding {
+            QuietHoursClock.displayDate(from: store.settings.quietHours[keyPath: keyPath], fallback: fallback)
+        } set: { newValue in
+            store.settings.quietHours[keyPath: keyPath] = QuietHoursClock.string(from: newValue)
+        }
     }
 
     private func generationBinding(_ id: String, defaultValue: Bool) -> Binding<Bool> {

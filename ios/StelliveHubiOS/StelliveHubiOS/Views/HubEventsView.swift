@@ -5,7 +5,11 @@ struct HubEventsView: View {
     @EnvironmentObject private var serverStore: ServerHubStore
     @State private var selectedFilter = "all"
     @State private var selectedCalendarMonth = Date()
+    @State private var filterRefreshTask: Task<Void, Never>?
     @SceneStorage("hubEvents.calendarExpanded") private var isCalendarExpanded = true
+
+    static let filterChipMinTapHeight: CGFloat = 44
+    static let filterRefreshDebounceNanoseconds: UInt64 = 250_000_000
 
     static let filterOptions: [(id: String, title: String)] = [
         ("all", "전체"),
@@ -57,13 +61,18 @@ struct HubEventsView: View {
                                         Capsule()
                                             .stroke(selectedFilter == filter.id ? Color.teal.opacity(0.28) : Color.clear, lineWidth: 1)
                                     )
+                                    // Keep the visual chip compact but make the tappable area meet the 44pt HIG minimum.
+                                    .frame(minHeight: Self.filterChipMinTapHeight)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .accessibilityAddTraits(selectedFilter == filter.id ? .isSelected : [])
                         }
                     }
+                    .padding(.horizontal, 14)
                 }
-                .listRowInsets(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
+                // Full-bleed scroll area: clipped chips reach the card edge, hinting the row scrolls horizontally.
+                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
             }
 
             Section("캘린더") {
@@ -121,7 +130,31 @@ struct HubEventsView: View {
             await refreshServerHubEvents()
         }
         .onChange(of: selectedFilter) { _ in
-            Task { await refreshServerHubEvents() }
+            // Coalesce rapid filter taps: a newer selection cancels the pending/in-flight refresh.
+            filterRefreshTask?.cancel()
+            filterRefreshTask = Task {
+                try? await Task.sleep(nanoseconds: Self.filterRefreshDebounceNanoseconds)
+                guard !Task.isCancelled else { return }
+                await refreshServerHubEvents()
+            }
+        }
+        .onDisappear {
+            filterRefreshTask?.cancel()
+        }
+        .alert(
+            "새로고침 실패",
+            isPresented: Binding(
+                get: { serverStore.hubEventsRefreshErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { serverStore.clearHubEventsRefreshError() }
+                }
+            )
+        ) {
+            Button("확인", role: .cancel) {
+                serverStore.clearHubEventsRefreshError()
+            }
+        } message: {
+            Text(serverStore.hubEventsRefreshErrorMessage ?? "")
         }
         .onChange(of: selectedCalendarMonth) { newMonth in
             Task { await serverStore.ensureCalendarLoaded(covering: newMonth) }
@@ -140,6 +173,7 @@ struct HubEventsView: View {
         let from = calendar.date(byAdding: .month, value: -1, to: now) ?? now
         let to = calendar.date(byAdding: .month, value: 3, to: now) ?? now
         await serverStore.refreshHubEvents(filter: selectedFilter, from: from, to: to)
+        guard !Task.isCancelled else { return }
         await serverStore.refreshCalendar(from: from, to: to, timezone: timezone)
     }
 
@@ -178,29 +212,35 @@ struct HubEventsView: View {
         let periodTitle: String?
         if row.entry.entryKind == .hubEvent,
            let event = serverStore.cachedHubEvent(id: row.entry.eventId) {
-            periodTitle = calendarEventDateTitle(startsAt: event.startsAt, endsAt: event.endsAt)
+            periodTitle = Self.calendarEventDateTitle(startsAt: event.startsAt, endsAt: event.endsAt)
         } else {
-            periodTitle = calendarPeriodTitle(startsAt: row.entry.startsAt, endsAt: row.entry.endsAt)
+            periodTitle = Self.calendarPeriodTitle(startsAt: row.entry.startsAt, endsAt: row.entry.endsAt)
         }
         guard let periodTitle else {
-            return row.day.date
+            return Self.feedDayTitle(isoDay: row.day.date)
         }
         return periodTitle
     }
 
-    private func calendarEventDateTitle(startsAt: Date?, endsAt: Date?) -> String? {
+    /// Localized section title for a `yyyy-MM-dd` day key (e.g. "9월 7일 (월)"); falls back to the raw key if unparsable.
+    static func feedDayTitle(isoDay: String) -> String {
+        guard let date = calendarDayFormatter.date(from: isoDay) else { return isoDay }
+        return feedPeriodDateFormatter.string(from: date)
+    }
+
+    static func calendarEventDateTitle(startsAt: Date?, endsAt: Date?) -> String? {
         guard let start = startsAt ?? endsAt else { return nil }
         let startDate = Self.feedCalendar.startOfDay(for: start)
         if let endsAt {
             let endDate = Self.feedCalendar.startOfDay(for: endsAt)
             if endDate > startDate {
-                return "\(Self.feedPeriodDateFormatter.string(from: startDate))~\(Self.feedPeriodDateFormatter.string(from: endDate))"
+                return "\(feedPeriodDateFormatter.string(from: startDate))~\(feedPeriodDateFormatter.string(from: endDate))"
             }
         }
-        return Self.feedPeriodDateFormatter.string(from: startDate)
+        return feedPeriodDateFormatter.string(from: startDate)
     }
 
-    private func calendarPeriodTitle(startsAt: Date?, endsAt: Date?) -> String? {
+    static func calendarPeriodTitle(startsAt: Date?, endsAt: Date?) -> String? {
         guard let startsAt, let endsAt else {
             return nil
         }
@@ -209,7 +249,7 @@ struct HubEventsView: View {
         guard endDate > startDate else {
             return nil
         }
-        return "\(Self.feedPeriodDateFormatter.string(from: startDate))~\(Self.feedPeriodDateFormatter.string(from: endDate))"
+        return "\(feedPeriodDateFormatter.string(from: startDate))~\(feedPeriodDateFormatter.string(from: endDate))"
     }
 
     private static let feedCalendar: Calendar = {
@@ -242,7 +282,7 @@ struct HubEventsView: View {
         formatter.calendar = feedCalendar
         formatter.locale = Locale(identifier: "ko_KR")
         formatter.timeZone = feedCalendar.timeZone
-        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.dateFormat = "M월 d일 (E)"
         return formatter
     }()
 }
@@ -503,16 +543,38 @@ struct HubEventRemoteImage: View {
 
     var body: some View {
         AsyncImage(url: url) { phase in
-            if case let .success(image) = phase {
+            switch phase {
+            case let .success(image):
                 image
                     .resizable()
                     .scaledToFill()
                     .frame(maxWidth: .infinity)
-                    .frame(height: 132)
+                    .frame(height: Self.imageHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .clipped()
+            case .failure:
+                placeholder {
+                    Image(systemName: "photo")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                }
+            default:
+                placeholder {
+                    ProgressView()
+                }
             }
         }
+    }
+
+    private static let imageHeight: CGFloat = 132
+
+    /// Fixed-size neutral placeholder so the row height matches the loaded image and doesn't jump.
+    private func placeholder<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(Color(.tertiarySystemFill))
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.imageHeight)
+            .overlay(content())
     }
 }
 
