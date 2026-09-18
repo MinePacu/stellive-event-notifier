@@ -1,7 +1,9 @@
 package dev.minepacu.stelliveeventnotifier.core.network
 
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Path
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -65,7 +67,8 @@ interface HubApi {
         @Query("from") from: String,
         @Query("to") to: String,
         @Query("timezone") timezone: String,
-    ): HubCalendarResponseDto
+        @Header("If-Modified-Since") ifModifiedSince: String? = null,
+    ): Response<HubCalendarResponseDto>
 
     @GET("v1/songs")
     suspend fun songs(

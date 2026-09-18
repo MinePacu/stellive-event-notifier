@@ -41,6 +41,7 @@ import dev.minepacu.stelliveeventnotifier.core.network.BootstrapResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementDto
 import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementListResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarEntryDto
+import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarFetchResult
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubApiClient
@@ -62,6 +63,7 @@ import dev.minepacu.stelliveeventnotifier.core.network.SongListResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.YoutubePremiereMetadataDto
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -81,10 +83,19 @@ class ServerHubRepository(
         const val MUSIC_PAGE_LIMIT = 100
         const val MUSIC_MAX_PAGES = 10
         const val MUSIC_MAX_ITEMS = 1000
+        const val CALENDAR_CACHE_TTL_SECONDS = 300L
+        const val CALENDAR_EXTENSION_CHUNK_MONTHS = 6L
     }
 
     private val eventCache = linkedMapOf<String, HubEvent>()
     private var calendarCache: List<HubCalendarDay> = emptyList()
+
+    /** The current in-memory calendar cache, as last populated by [hubCalendarDays] or [ensureCalendarLoaded]. */
+    val cachedCalendarDays: List<HubCalendarDay>
+        get() = calendarCache
+    private var calendarCachedRange: ClosedRange<LocalDate>? = null
+    private var calendarLastModified: String? = null
+    private var calendarCachedAt: Instant? = null
     private var songCache: SongListResult? = null
     private var songCacheKey: Pair<String?, String?>? = null
     private val songDetailCache = linkedMapOf<String, SongCatalogItem>()
@@ -209,13 +220,84 @@ class ServerHubRepository(
             from = from.format(DateTimeFormatter.ISO_LOCAL_DATE),
             to = to.format(DateTimeFormatter.ISO_LOCAL_DATE),
             timezone = timezone,
+            ifModifiedSince = null,
         )
         if (response is HubNetworkResult.Success) {
-            val days = response.value.toCalendarDays()
-            calendarCache = days
-            return days
+            when (val fetch = response.value) {
+                is HubCalendarFetchResult.NotModified -> calendarCachedAt = Instant.now()
+                is HubCalendarFetchResult.Fresh -> applyCalendarFetch(from..to, fetch)
+            }
+            return calendarCache
         }
         return calendarCache.takeIf { it.isNotEmpty() } ?: fallback.hubCalendarDays(from, to, timezone)
+    }
+
+    /**
+     * Ensures the in-memory calendar cache covers [month], refetching only when the cache is
+     * missing that month, or revalidating it (via conditional GET) when the cached range already
+     * covers it but has gone stale past [CALENDAR_CACHE_TTL_SECONDS].
+     */
+    suspend fun ensureCalendarLoaded(month: LocalDate, timezone: String = "Asia/Seoul") {
+        val cachedRange = calendarCachedRange
+        val containsMonth = cachedRange != null && YearMonth.from(month) in YearMonth.from(cachedRange.start)..YearMonth.from(cachedRange.endInclusive)
+        if (containsMonth) {
+            checkNotNull(cachedRange)
+            val cachedAt = calendarCachedAt
+            val isFresh = cachedAt != null && Instant.now().isBefore(cachedAt.plusSeconds(CALENDAR_CACHE_TTL_SECONDS))
+            if (isFresh) return
+            val response = remoteDataSource.hubEventsCalendar(
+                from = cachedRange.start.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                to = cachedRange.endInclusive.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                timezone = timezone,
+                ifModifiedSince = calendarLastModified,
+            )
+            if (response is HubNetworkResult.Success) {
+                when (val fetch = response.value) {
+                    is HubCalendarFetchResult.NotModified -> calendarCachedAt = Instant.now()
+                    is HubCalendarFetchResult.Fresh -> applyCalendarFetch(cachedRange, fetch)
+                }
+            }
+            return
+        }
+        val requestedRange = month.minusMonths(CALENDAR_EXTENSION_CHUNK_MONTHS)..month.plusMonths(CALENDAR_EXTENSION_CHUNK_MONTHS)
+        val unionRange = cachedRange?.let { existing ->
+            minOf(existing.start, requestedRange.start)..maxOf(existing.endInclusive, requestedRange.endInclusive)
+        } ?: requestedRange
+        val response = remoteDataSource.hubEventsCalendar(
+            from = unionRange.start.format(DateTimeFormatter.ISO_LOCAL_DATE),
+            to = unionRange.endInclusive.format(DateTimeFormatter.ISO_LOCAL_DATE),
+            timezone = timezone,
+            ifModifiedSince = null,
+        )
+        if (response is HubNetworkResult.Success) {
+            when (val fetch = response.value) {
+                is HubCalendarFetchResult.NotModified -> calendarCachedAt = Instant.now()
+                is HubCalendarFetchResult.Fresh -> applyCalendarFetch(unionRange, fetch)
+            }
+        }
+    }
+
+    /**
+     * Merges a freshly-fetched calendar response covering [range] into [calendarCache]: entries
+     * for dates inside [range] are replaced/added from [fetch], entries outside it are kept
+     * untouched. Also records the newly-cached range and revalidation bookkeeping.
+     */
+    private fun applyCalendarFetch(range: ClosedRange<LocalDate>, fetch: HubCalendarFetchResult.Fresh) {
+        val newDays = fetch.response.toCalendarDays()
+        val newDaysByDate = newDays.associateBy { it.date }
+        val merged = linkedMapOf<String, HubCalendarDay>()
+        calendarCache.forEach { day ->
+            val dayDate = runCatching { LocalDate.parse(day.date) }.getOrNull()
+            val insideRange = dayDate != null && dayDate >= range.start && dayDate <= range.endInclusive
+            if (!insideRange) merged[day.date] = day
+        }
+        newDaysByDate.forEach { (date, day) -> merged[date] = day }
+        calendarCache = merged.values.sortedBy { it.date }
+        calendarCachedRange = calendarCachedRange?.let { existing ->
+            minOf(existing.start, range.start)..maxOf(existing.endInclusive, range.endInclusive)
+        } ?: range
+        calendarLastModified = fetch.lastModified ?: calendarLastModified
+        calendarCachedAt = Instant.now()
     }
 
     override suspend fun songs(
@@ -685,7 +767,12 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
         suspend fun hubEvent(id: String): HubNetworkResult<HubEventDto>
         suspend fun announcements(cursor: String? = null): HubNetworkResult<ServiceAnnouncementListResponseDto>
         suspend fun announcement(id: String): HubNetworkResult<ServiceAnnouncementDto>
-        suspend fun hubEventsCalendar(from: String, to: String, timezone: String): HubNetworkResult<HubCalendarResponseDto>
+        suspend fun hubEventsCalendar(
+            from: String,
+            to: String,
+            timezone: String,
+            ifModifiedSince: String? = null,
+        ): HubNetworkResult<HubCalendarFetchResult>
         suspend fun songs(
             generationId: String? = null,
             memberId: String? = null,
@@ -757,7 +844,9 @@ private fun YoutubePremiereMetadataDto?.toYoutubePremiereMetadataOrNull(): Youtu
             from: String,
             to: String,
             timezone: String,
-        ): HubNetworkResult<HubCalendarResponseDto> = client.hubEventsCalendar(from = from, to = to, timezone = timezone)
+            ifModifiedSince: String?,
+        ): HubNetworkResult<HubCalendarFetchResult> =
+            client.hubEventsCalendar(from = from, to = to, timezone = timezone, ifModifiedSince = ifModifiedSince)
 
     override suspend fun songs(
         generationId: String?,

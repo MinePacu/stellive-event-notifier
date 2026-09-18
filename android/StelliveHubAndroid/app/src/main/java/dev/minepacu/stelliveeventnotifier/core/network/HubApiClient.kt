@@ -7,6 +7,11 @@ import retrofit2.Retrofit
 import retrofit2.HttpException
 import retrofit2.converter.moshi.MoshiConverterFactory
 
+sealed class HubCalendarFetchResult {
+    object NotModified : HubCalendarFetchResult()
+    data class Fresh(val response: HubCalendarResponseDto, val lastModified: String?) : HubCalendarFetchResult()
+}
+
 class HubApiClient(
     private val api: HubApi,
 ) {
@@ -88,9 +93,18 @@ class HubApiClient(
     suspend fun hubEventsCalendar(
         from: String,
         to: String,
-    timezone: String,
-    ): HubNetworkResult<HubCalendarResponseDto> = runCatchingNetwork {
-        api.hubEventsCalendar(from = from, to = to, timezone = timezone)
+        timezone: String,
+        ifModifiedSince: String? = null,
+    ): HubNetworkResult<HubCalendarFetchResult> = runCatchingNetwork {
+        val response = api.hubEventsCalendar(from = from, to = to, timezone = timezone, ifModifiedSince = ifModifiedSince)
+        when {
+            response.code() == 304 -> HubCalendarFetchResult.NotModified
+            response.isSuccessful -> HubCalendarFetchResult.Fresh(
+                response = response.body() ?: throw HttpException(response),
+                lastModified = response.headers()["Last-Modified"],
+            )
+            else -> throw HttpException(response)
+        }
     }
 
     suspend fun songs(

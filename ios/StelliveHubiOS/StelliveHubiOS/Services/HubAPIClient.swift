@@ -308,6 +308,11 @@ enum HubAPIError: Error, Equatable {
     case preferenceStaleUpdate
 }
 
+enum HubCalendarFetchResult {
+    case notModified
+    case fresh(HubCalendarResponse, lastModified: String?)
+}
+
 final class HubAPIClient {
     private let baseURL: URL
     private let session: URLSession
@@ -349,14 +354,36 @@ final class HubAPIClient {
         return try await send(URLRequest(url: components.url!), responseType: BootstrapResponse.self)
     }
 
-    func hubEventsCalendar(from: String, to: String, timezone: String) async throws -> HubCalendarResponse {
+    func hubEventsCalendar(
+        from: String,
+        to: String,
+        timezone: String,
+        ifModifiedSince: String? = nil
+    ) async throws -> HubCalendarFetchResult {
         var components = URLComponents(url: baseURL.appendingPathComponent("v1/hub-events/calendar"), resolvingAgainstBaseURL: false)!
         components.queryItems = [
             URLQueryItem(name: "from", value: from),
             URLQueryItem(name: "to", value: to),
             URLQueryItem(name: "timezone", value: timezone)
         ]
-        return try await send(URLRequest(url: components.url!), responseType: HubCalendarResponse.self)
+        var request = URLRequest(url: components.url!)
+        if let ifModifiedSince {
+            request.setValue(ifModifiedSince, forHTTPHeaderField: "If-Modified-Since")
+        }
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw HubAPIError.invalidResponse
+        }
+        if httpResponse.statusCode == 304 {
+            return .notModified
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw HubAPIError.httpStatus(httpResponse.statusCode)
+        }
+        let decoded = try decoder.decode(HubCalendarResponse.self, from: data)
+        let lastModified = httpResponse.value(forHTTPHeaderField: "Last-Modified")
+        return .fresh(decoded, lastModified: lastModified)
     }
 
     func hubEvents(

@@ -123,6 +123,9 @@ struct HubEventsView: View {
         .onChange(of: selectedFilter) { _ in
             Task { await refreshServerHubEvents() }
         }
+        .onChange(of: selectedCalendarMonth) { newMonth in
+            Task { await serverStore.ensureCalendarLoaded(covering: newMonth) }
+        }
     }
 
     private var isInitialHubEventsLoading: Bool {

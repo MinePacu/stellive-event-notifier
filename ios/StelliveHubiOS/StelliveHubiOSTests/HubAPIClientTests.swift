@@ -101,12 +101,16 @@ final class HubAPIClientTests: XCTestCase {
             )
         }
 
-        let response = try await client.hubEventsCalendar(
+        let result = try await client.hubEventsCalendar(
             from: "2026-06-01",
             to: "2026-06-30",
             timezone: "Asia/Seoul"
         )
 
+        guard case let .fresh(response, _) = result else {
+            XCTFail("Expected a fresh calendar response")
+            return
+        }
         XCTAssertEqual(response.timezone, "Asia/Seoul")
         XCTAssertEqual(response.days.first?.date, "2026-06-13")
         XCTAssertEqual(response.days.first?.entries.first?.title, "온라인 굿즈 판매")
@@ -668,6 +672,22 @@ final class ServerHubStoreTests: XCTestCase {
                           "displayTimeText": "종일",
                           "sourceLabel": "공식",
                           "appDeepLink": "stellivehub://hub-events/regular-ticket"
+                        }, {
+                          "id": "member-birthday:2026-06-18",
+                          "eventId": "member-birthday",
+                          "entryKind": "member_birthday",
+                          "specialDayKind": "member_birthday",
+                          "specialDayLabel": "생일",
+                          "title": "멤버 생일",
+                          "category": "online_goods",
+                          "tags": [],
+                          "status": "open",
+                          "participationMode": "online",
+                          "generationId": "official",
+                          "displayDate": "2026-06-18",
+                          "displayTimeText": "종일",
+                          "sourceLabel": "카탈로그",
+                          "appDeepLink": "stellivehub://calendar/special-days/member-birthday?date=2026-06-18"
                         }]
                       }]
                     }
@@ -744,6 +764,12 @@ final class ServerHubStoreTests: XCTestCase {
             store.calendarDays(for: "ticketing").flatMap(\.entries).map(\.eventId),
             ["album-ticket", "regular-ticket"]
         )
+        XCTAssertEqual(
+            store.calendarDays(for: "all").flatMap(\.entries).map(\.eventId),
+            ["regular-goods", "album-ticket", "regular-ticket", "member-birthday"]
+        )
+        XCTAssertEqual(store.calendarDays(for: "offline").flatMap(\.entries).map(\.eventId), [])
+        XCTAssertEqual(store.calendarDays(for: "closing").flatMap(\.entries).map(\.eventId), [])
     }
 
     func testRefreshHubEventsForwardsOptionalDateRange() async {

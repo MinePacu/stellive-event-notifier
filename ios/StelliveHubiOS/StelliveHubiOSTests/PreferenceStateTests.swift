@@ -305,7 +305,7 @@ final class PreferenceStateTests: XCTestCase {
         let goodsEvents = store.hubEvents(for: "goods")
         XCTAssertEqual(Set(goodsEvents.map(\.category)), [.onlineGoods, .onlineCollab])
         XCTAssertTrue(goodsEvents.allSatisfy { $0.category == .onlineGoods || $0.category == .onlineCollab })
-        XCTAssertEqual(goodsEvents.map(\.id), ["closing-official-goods", "open-gen3-goods"])
+        XCTAssertEqual(goodsEvents.map(\.id), ["closing-official-goods", "open-gen3-goods", "sakihane-huya-3d-debut"])
 
         let offlineEvents = store.hubEvents(for: "offline")
         XCTAssertTrue(offlineEvents.allSatisfy { $0.participationMode.isOffline })

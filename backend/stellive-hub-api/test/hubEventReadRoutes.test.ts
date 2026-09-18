@@ -214,6 +214,50 @@ describe("HubEvent read routes", () => {
     );
   });
 
+  it("returns a Last-Modified header on the calendar response", async () => {
+    const app = await buildRouteApp([hubEvent({ id: "calendar-event" })]);
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul",
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(typeof response.headers["last-modified"]).toBe("string");
+    expect(response.headers["last-modified"]).not.toBe("");
+  });
+
+  it("returns 304 when If-Modified-Since matches the calendar's Last-Modified", async () => {
+    const app = await buildRouteApp([hubEvent({ id: "calendar-event" })]);
+    const firstResponse = await app.inject({
+      method: "GET",
+      url: "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul",
+    });
+    const lastModified = firstResponse.headers["last-modified"] as string;
+
+    const secondResponse = await app.inject({
+      method: "GET",
+      url: "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul",
+      headers: { "if-modified-since": lastModified },
+    });
+    await app.close();
+
+    expect(secondResponse.statusCode).toBe(304);
+    expect(secondResponse.body).toBe("");
+  });
+
+  it("returns 200 when If-Modified-Since is older than the calendar's Last-Modified", async () => {
+    const app = await buildRouteApp([hubEvent({ id: "calendar-event" })]);
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/hub-events/calendar?from=2026-06-01T00:00:00.000Z&to=2026-06-30T23:59:59.999Z&timezone=Asia/Seoul",
+      headers: { "if-modified-since": "Mon, 01 Jan 2020 00:00:00 GMT" },
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+  });
+
   it("returns ended status for past special-day calendar entries", async () => {
     const app = await buildRouteApp(
       [hubEvent({ id: "calendar-event" })],

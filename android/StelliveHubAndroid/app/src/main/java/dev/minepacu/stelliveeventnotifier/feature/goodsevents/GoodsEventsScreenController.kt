@@ -35,6 +35,7 @@ import dev.minepacu.stelliveeventnotifier.feature.calendar.CalendarUiPolicy
 import dev.minepacu.stelliveeventnotifier.feature.calendar.HubEventsCalendarView
 import dev.minepacu.stelliveeventnotifier.feature.home.HubScreen
 import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
+import dev.minepacu.stelliveeventnotifier.feature.home.ServerHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.GoodsEventSelectionMode
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarCard
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarExpansionPolicy
@@ -341,8 +342,13 @@ internal class GoodsEventsScreenController(private val activity: MainActivity) {
                 onExpandedChanged = { expanded -> activity.goodsEventsCalendarExpanded = expanded },
                 onMonthChanged = { month ->
                     activity.goodsEventsSelectedMonth = month
-                    if (activity.navigationHistory.currentScreen == HubScreen.GOODS_EVENTS) {
-                        renderServerGoodsEvents(activity.goodsEventsDays, activity.goodsEvents)
+                    activity.lifecycleScope.launch {
+                        val serverRepository = activity.serverRepository as? ServerHubRepository
+                        serverRepository?.ensureCalendarLoaded(month.atDay(1))
+                        val refreshedDays = serverRepository?.cachedCalendarDays ?: activity.goodsEventsDays
+                        if (activity.navigationHistory.currentScreen == HubScreen.GOODS_EVENTS) {
+                            renderServerGoodsEvents(refreshedDays, activity.goodsEvents)
+                        }
                     }
                 },
             ) { entry -> onGoodsEventSelected(entry.eventId) }

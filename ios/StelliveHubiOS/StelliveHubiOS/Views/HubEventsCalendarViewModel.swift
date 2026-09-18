@@ -600,7 +600,7 @@ final class HubEventsCalendarViewModel: ObservableObject {
     }
 
     private func filteredEntries(from entries: [HubCalendarEntry]) -> [HubCalendarEntry] {
-        let filtered = entries.filter { HubEventFilterPolicy.matches($0, filterId: filterId) }
+        let filtered = entries.filter { HubEventFilterPolicy.matches(calendarEntry: $0, filterId: filterId) }
         return filtered.sorted(by: HubCalendarPolicy.areInDisplayOrder)
     }
 

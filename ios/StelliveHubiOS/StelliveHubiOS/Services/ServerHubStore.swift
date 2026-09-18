@@ -62,6 +62,11 @@ final class ServerHubStore: ObservableObject {
     @Published private(set) var announcementNextCursor: String?
     @Published private(set) var announcementDetailCache: [String: ServiceAnnouncement] = [:]
     @Published private(set) var announcementsErrorMessage: String?
+    private(set) var calendarCachedRange: ClosedRange<Date>?
+    private(set) var calendarLastModified: String?
+    private(set) var calendarCachedAt: Date?
+    private static let calendarCacheTTL: TimeInterval = 300
+    private static let calendarChunkMonths = 6
 
     init(
         api: HubAPIClient,
@@ -191,30 +196,85 @@ final class ServerHubStore: ObservableObject {
     }
 
     func refreshCalendar(from: Date, to: Date, timezone: TimeZone = .current) async {
+        await fetchAndMergeCalendar(range: from...to, timezone: timezone, ifModifiedSince: nil)
+    }
+
+    /// Ensures calendar data for `month` is loaded and reasonably fresh, fetching only
+    /// when the cache is missing that month or has gone stale (TTL-based conditional
+    /// revalidation), so month navigation doesn't require a full re-fetch of everything.
+    func ensureCalendarLoaded(
+        covering month: Date,
+        timezone: TimeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+    ) async {
+        if let cachedRange = calendarCachedRange, cachedRange.contains(month) {
+            let age = Date().timeIntervalSince(calendarCachedAt ?? .distantPast)
+            guard age >= Self.calendarCacheTTL else { return }
+            await fetchAndMergeCalendar(range: cachedRange, timezone: timezone, ifModifiedSince: calendarLastModified)
+            return
+        }
+
+        var utilityCalendar = Calendar(identifier: .gregorian)
+        utilityCalendar.timeZone = timezone
+        let chunkLower = utilityCalendar.date(byAdding: .month, value: -Self.calendarChunkMonths, to: month) ?? month
+        let chunkUpper = utilityCalendar.date(byAdding: .month, value: Self.calendarChunkMonths, to: month) ?? month
+        let lowerBound = calendarCachedRange.map { min($0.lowerBound, chunkLower) } ?? chunkLower
+        let upperBound = calendarCachedRange.map { max($0.upperBound, chunkUpper) } ?? chunkUpper
+        await fetchAndMergeCalendar(range: lowerBound...upperBound, timezone: timezone, ifModifiedSince: nil)
+    }
+
+    private func fetchAndMergeCalendar(
+        range: ClosedRange<Date>,
+        timezone: TimeZone,
+        ifModifiedSince: String?
+    ) async {
         isRefreshingCalendar = true
         defer { isRefreshingCalendar = false }
         let formatter = Self.calendarDateFormatter
         do {
-            let response = try await api.hubEventsCalendar(
-                from: formatter.string(from: from),
-                to: formatter.string(from: to),
-                timezone: timezone.identifier
+            let result = try await api.hubEventsCalendar(
+                from: formatter.string(from: range.lowerBound),
+                to: formatter.string(from: range.upperBound),
+                timezone: timezone.identifier,
+                ifModifiedSince: ifModifiedSince
             )
-            serverCalendarDays = response.days
-            let missingEventIDs = Set(
-                response.days
-                    .flatMap(\.entries)
-                    .filter { $0.entryKind == .hubEvent && cachedHubEvent(id: $0.eventId) == nil }
-                    .map(\.eventId)
-            )
-            for eventID in missingEventIDs.sorted() {
-                _ = await loadHubEventDetail(id: eventID)
+            switch result {
+            case .notModified:
+                calendarCachedAt = Date()
+            case let .fresh(response, lastModified):
+                mergeCalendarDays(response.days, coveringRange: range)
+                calendarCachedRange = range
+                calendarLastModified = lastModified
+                calendarCachedAt = Date()
+                let missingEventIDs = Set(
+                    response.days
+                        .flatMap(\.entries)
+                        .filter { $0.entryKind == .hubEvent && cachedHubEvent(id: $0.eventId) == nil }
+                        .map(\.eventId)
+                )
+                for eventID in missingEventIDs.sorted() {
+                    _ = await loadHubEventDetail(id: eventID)
+                }
             }
         } catch {
             if serverCalendarDays.isEmpty {
                 serverCalendarDays = fallback.calendarDays(for: "all")
             }
         }
+    }
+
+    /// Merges freshly-fetched days into `serverCalendarDays`, keeping any existing days
+    /// whose date falls outside `range` untouched and replacing/adding days inside it.
+    private func mergeCalendarDays(_ newDays: [HubCalendarDay], coveringRange range: ClosedRange<Date>) {
+        let formatter = Self.calendarDateFormatter
+        var byDateKey = Dictionary(uniqueKeysWithValues: serverCalendarDays.map { ($0.date, $0) })
+        byDateKey = byDateKey.filter { dateKey, _ in
+            guard let date = formatter.date(from: dateKey) else { return true }
+            return !range.contains(date)
+        }
+        for day in newDays {
+            byDateKey[day.date] = day
+        }
+        serverCalendarDays = byDateKey.values.sorted { $0.date < $1.date }
     }
 
     func refreshSongs(
@@ -370,7 +430,7 @@ final class ServerHubStore: ObservableObject {
         guard filter != "all" else { return days }
         return days.compactMap { day in
             let entries = day.entries.filter { entry in
-                entry.entryKind != .hubEvent || HubEventFilterPolicy.matches(entry, filterId: filter)
+                HubEventFilterPolicy.matches(calendarEntry: entry, filterId: filter)
             }
             return entries.isEmpty ? nil : HubCalendarDay(date: day.date, entries: entries)
         }
