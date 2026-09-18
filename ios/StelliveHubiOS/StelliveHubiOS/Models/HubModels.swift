@@ -1939,6 +1939,60 @@ struct QuietHoursState: Equatable {
     var timezone = "Asia/Seoul"
 }
 
+/// Converts quiet-hours clock times between the persisted/server string and `Date` for `DatePicker`.
+///
+/// The stored contract is unchanged: a zero-padded, 24-hour, ASCII `"HH:mm"` string, exactly what the
+/// backend `parseClockTime` accepts (`/^(\d{2}):(\d{2})$/`, hours 00-23, minutes 00-59). Strings are built
+/// from integer components rather than a `DateFormatter`, so device locale or 12-hour settings can never
+/// change what is stored. Malformed input yields `nil` so callers can fall back for display only.
+enum QuietHoursClock {
+    static let fallbackStart = QuietHoursState().start
+    static let fallbackEnd = QuietHoursState().end
+
+    /// Minutes since midnight for a strict `"HH:mm"` string, or `nil` if it is not one.
+    static func minutes(from value: String) -> Int? {
+        let scalars = Array(value.unicodeScalars)
+        guard scalars.count == 5, scalars[2] == ":" else { return nil }
+        let digits = [0, 1, 3, 4].map { scalars[$0] }
+        guard digits.allSatisfy({ $0.value >= 0x30 && $0.value <= 0x39 }) else { return nil }
+        let hours = Int(digits[0].value - 0x30) * 10 + Int(digits[1].value - 0x30)
+        let minutes = Int(digits[2].value - 0x30) * 10 + Int(digits[3].value - 0x30)
+        guard hours <= 23, minutes <= 59 else { return nil }
+        return hours * 60 + minutes
+    }
+
+    static func string(fromMinutes minutes: Int) -> String {
+        String(format: "%02d:%02d", minutes / 60, minutes % 60)
+    }
+
+    /// A `Date` on a fixed reference day (avoids DST-transition days) whose hour/minute match `value`.
+    /// `nil` when `value` is malformed.
+    static func date(from value: String, calendar: Calendar = .current) -> Date? {
+        guard let total = minutes(from: value) else { return nil }
+        return calendar.date(from: DateComponents(year: 2001, month: 1, day: 1, hour: total / 60, minute: total % 60))
+    }
+
+    /// Like `date(from:calendar:)` but shows `fallback` for a malformed `value`. Never writes back.
+    static func displayDate(from value: String, fallback: String, calendar: Calendar = .current) -> Date {
+        date(from: value, calendar: calendar) ?? date(from: fallback, calendar: calendar) ?? Date(timeIntervalSinceReferenceDate: 0)
+    }
+
+    /// `"HH:mm"` for the hour/minute of `date` in `calendar`.
+    static func string(from date: Date, calendar: Calendar = .current) -> String {
+        let parts = calendar.dateComponents([.hour, .minute], from: date)
+        return string(fromMinutes: (parts.hour ?? 0) * 60 + (parts.minute ?? 0))
+    }
+
+    private static let knownTimeZones = TimeZone.knownTimeZoneIdentifiers.sorted()
+    private static let knownTimeZoneSet = Set(knownTimeZones)
+
+    /// Time zone picker options. A stored value that is not a known identifier stays selectable
+    /// (listed first) so opening the screen never rewrites it.
+    static func timeZoneOptions(including stored: String) -> [String] {
+        knownTimeZoneSet.contains(stored) ? knownTimeZones : [stored] + knownTimeZones
+    }
+}
+
 struct KeywordFilterState: Equatable {
     var allowlistText = ""
     var blocklistText = ""
