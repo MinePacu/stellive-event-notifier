@@ -293,6 +293,7 @@ struct SettingsContentView: View {
                 }
             }
 
+            #if DEBUG
             Section("진단") {
                 Toggle("진단 모드", isOn: $debugModeEnabled)
                 Text("켜면 이 화면에 서버 연결 기록을 임시로 표시합니다.")
@@ -311,6 +312,7 @@ struct SettingsContentView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            #endif
         }
         .navigationTitle("설정")
     }

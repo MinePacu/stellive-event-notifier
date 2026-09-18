@@ -435,6 +435,7 @@ struct MemberRow: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(member.catalogRole == .officialChannel ? "공식" : (member.isLive ? "LIVE" : "OFF"))
                     .font(.caption.weight(.semibold))
+                    .foregroundStyle(member.catalogRole == .officialChannel ? Color.secondary : (member.isLive ? Color.red : Color.secondary))
                 if member.isLive {
                     if let elapsed = LiveStatusFormatter.elapsedClockText(startedAt: member.liveStartedAt, now: currentDate) {
                         LiveSideMetric(systemImage: "clock", value: elapsed, color: .secondary)

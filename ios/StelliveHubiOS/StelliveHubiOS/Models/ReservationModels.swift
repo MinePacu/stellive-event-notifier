@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum ReservationKind: String, Codable, CaseIterable, Hashable, Sendable {
     case ticket
@@ -78,6 +79,10 @@ enum ReservationPresentationPolicy {
             case .ticket, .reservation: "이용 완료"
             }
         }
+    }
+
+    static func statusColor(_ status: ReservationStatus) -> Color {
+        status == .confirmed ? Color.teal : Color.secondary
     }
 
     static func systemShortcutLabel(_ drafts: [ReservationDraft]) -> String {

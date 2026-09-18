@@ -18,7 +18,7 @@ struct ReservationDetailView: View {
                             Text(record.displayTitle).font(.title3.bold())
                             Text(ReservationPresentationPolicy.statusLabel(kind: record.kind, status: record.status))
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.teal)
+                                .foregroundStyle(ReservationPresentationPolicy.statusColor(record.status))
                             if let date = record.effectiveStartsAt {
                                 Label(date.formatted(date: .long, time: .shortened), systemImage: "calendar")
                             }
