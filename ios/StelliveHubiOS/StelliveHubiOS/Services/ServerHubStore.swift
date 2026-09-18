@@ -51,6 +51,7 @@ final class ServerHubStore: ObservableObject {
     @Published private(set) var songDetailCache: [String: SongCatalogItem] = [:]
     @Published private(set) var isRefreshingHubEvents = false
     @Published private(set) var isRefreshingCalendar = false
+    @Published private(set) var hubEventsRefreshErrorMessage: String?
     @Published private(set) var isRefreshingSongs = false
     @Published private(set) var songRefreshErrorMessage: String?
     @Published private(set) var isRefreshingRecentSongs = false
@@ -173,6 +174,7 @@ final class ServerHubStore: ObservableObject {
 
     func refreshHubEvents(filter: String = "all", from: Date? = nil, to: Date? = nil) async {
         isRefreshingHubEvents = true
+        hubEventsRefreshErrorMessage = nil
         defer { isRefreshingHubEvents = false }
         let formatter = Self.calendarDateFormatter
         do {
@@ -189,10 +191,23 @@ final class ServerHubStore: ObservableObject {
                 hubEventDetailCache[event.id] = event
             }
         } catch {
+            // A superseded refresh (rapid filter taps) is not a failure; stay silent.
+            if Self.isCancellation(error) { return }
+            hubEventsRefreshErrorMessage = Self.hubEventsRefreshFailureMessage
             if serverHubEvents.isEmpty {
                 serverHubEvents = fallback.hubEvents(for: filter)
             }
         }
+    }
+
+    func clearHubEventsRefreshError() {
+        hubEventsRefreshErrorMessage = nil
+    }
+
+    private static let hubEventsRefreshFailureMessage = "굿즈/행사를 새로고침하지 못했습니다. 기존 목록을 유지합니다."
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
     }
 
     func refreshCalendar(from: Date, to: Date, timezone: TimeZone = .current) async {
@@ -256,6 +271,8 @@ final class ServerHubStore: ObservableObject {
                 }
             }
         } catch {
+            if Self.isCancellation(error) { return }
+            hubEventsRefreshErrorMessage = Self.hubEventsRefreshFailureMessage
             if serverCalendarDays.isEmpty {
                 serverCalendarDays = fallback.calendarDays(for: "all")
             }
