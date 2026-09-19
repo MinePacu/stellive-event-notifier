@@ -393,18 +393,18 @@ class CalendarUiPolicyTest {
 
         val one = CalendarUiPolicy.dotStyleForEntries(listOf(calendarEntry("one")))
         assertTrue(one.visible)
-        assertEquals(5, one.sizeDp)
+        assertEquals(6, one.sizeDp)
         assertEquals(CalendarEventDotEmphasis.NORMAL, one.emphasis)
 
         val two = CalendarUiPolicy.dotStyleForEntries(
             listOf(calendarEntry("one"), calendarEntry("two")),
         )
-        assertEquals(6, two.sizeDp)
+        assertEquals(7, two.sizeDp)
 
         val many = CalendarUiPolicy.dotStyleForEntries(
             listOf(calendarEntry("one"), calendarEntry("two"), calendarEntry("three")),
         )
-        assertEquals(8, many.sizeDp)
+        assertEquals(9, many.sizeDp)
         assertEquals("3", many.countText)
 
         val closing = CalendarUiPolicy.dotStyleForEntries(

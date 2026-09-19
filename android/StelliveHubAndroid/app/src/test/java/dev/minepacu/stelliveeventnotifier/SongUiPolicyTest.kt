@@ -559,18 +559,15 @@ class SongUiPolicyTest {
             youtubeUrl = "https://www.youtube.com/watch?v=video-1",
         )
 
-        assertEquals(
-            "최초 공개 예정 · 6월 28일 17:00",
-            MainUiPolicy.songPremiereStatusLabel(
-                baseSong.copy(
-                    premiere = YoutubePremiereMetadata(
-                        classification = "assumed",
-                        state = "scheduled",
-                        scheduledStartAt = Instant.parse("2026-06-28T08:00:00Z"),
-                    ),
-                ),
+        val scheduledSong = baseSong.copy(
+            premiere = YoutubePremiereMetadata(
+                classification = "assumed",
+                state = "scheduled",
+                scheduledStartAt = Instant.parse("2026-06-28T08:00:00Z"),
             ),
         )
+        assertEquals("최초 공개 예정", MainUiPolicy.songPremiereStatusLabel(scheduledSong))
+        assertEquals("6월 28일 17:00", MainUiPolicy.songPremiereScheduledDateText(scheduledSong))
         assertEquals(
             "최초 공개 예정",
             MainUiPolicy.songPremiereStatusLabel(
@@ -677,7 +674,7 @@ class SongUiPolicyTest {
         assertEquals(112, MainUiPolicy.songThumbnailWidthDp(screenWidthDp = 412))
         assertEquals(54, MainUiPolicy.songThumbnailHeightDp(widthDp = 96))
         assertEquals(63, MainUiPolicy.songThumbnailHeightDp(widthDp = 112))
-        assertEquals(3, MainUiPolicy.SONG_TITLE_MAX_LINES)
+        assertEquals(2, MainUiPolicy.SONG_TITLE_MAX_LINES)
         assertEquals(2, MainUiPolicy.SONG_SUBTITLE_MAX_LINES)
     }
 
