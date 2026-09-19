@@ -91,9 +91,9 @@ jobs:
       - name: Make Gradle wrapper executable
         working-directory: android/StelliveHubAndroid
         run: chmod +x ./gradlew
-      - name: Android debug build
+      - name: Android lint, unit tests, and debug build
         working-directory: android/StelliveHubAndroid
-        run: ./gradlew --no-daemon assembleDebug
+        run: ./gradlew --no-daemon --continue lintDebug testDebugUnitTest assembleDebug
 
   ios-example:
     needs: changes
