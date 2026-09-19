@@ -584,6 +584,8 @@ private struct HubEventNavigationRow: View {
                 .opacity(0)
                 .accessibilityHidden(true)
             }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("상세 보기")
     }
 }
 
