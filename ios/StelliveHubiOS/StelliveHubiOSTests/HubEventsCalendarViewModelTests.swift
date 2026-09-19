@@ -1095,6 +1095,16 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         }
     }
 
+    func testWhiteTextOnHubFillsMeetsWCAGAAContrast() {
+        for (fill, name) in [(UIColor.hubTealFill, "hubTealFill"), (UIColor.hubNeutralFill, "hubNeutralFill")] {
+            for style in [UIUserInterfaceStyle.light, .dark] {
+                let resolved = fill.resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+                let ratio = Self.contrastRatio(.white, resolved)
+                XCTAssertGreaterThanOrEqual(ratio, 4.5, "white on \(name) (\(style.rawValue)): \(ratio)")
+            }
+        }
+    }
+
     private static func contrastRatio(_ a: UIColor, _ b: UIColor) -> Double {
         let la = relativeLuminance(a), lb = relativeLuminance(b)
         return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)

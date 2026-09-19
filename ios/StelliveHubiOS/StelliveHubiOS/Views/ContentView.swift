@@ -423,8 +423,18 @@ extension UIColor {
     static let hubTealText = UIColor { traits in
         traits.userInterfaceStyle == .dark ? .systemTeal : UIColor(red: 0, green: 0.42, blue: 0.5, alpha: 1)
     }
+
+    /// Fills that carry *white* text (avatar initials, selected-day capsule). Same dark teal in both
+    /// appearances: white on it is ~6:1, where white on system teal is only ~2.6:1.
+    static let hubTealFill = UIColor(red: 0, green: 0.42, blue: 0.5, alpha: 1)
+
+    /// Neutral gray fill for white text (official/placeholder avatars); white on it is ~6:1
+    /// (white on system gray is ~3.3:1, on systemGray3 ~1.7:1).
+    static let hubNeutralFill = UIColor(red: 0.39, green: 0.39, blue: 0.4, alpha: 1)
 }
 
 extension Color {
+    static let hubTealFill = Color(UIColor.hubTealFill)
+    static let hubNeutralFill = Color(UIColor.hubNeutralFill)
     static let hubTealText = Color(UIColor.hubTealText)
 }

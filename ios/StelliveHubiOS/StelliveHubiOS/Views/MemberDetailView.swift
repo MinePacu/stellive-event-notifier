@@ -13,7 +13,7 @@ struct MemberDetailView: View {
                         .font(.title2.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(width: 56, height: 56)
-                        .background(Circle().fill(Color.teal))
+                        .background(Circle().fill(Color.hubTealFill))
                     VStack(alignment: .leading) {
                         Text(member.koreanName).font(.headline)
                         Text([member.generationName, member.roleLabel].compactMap { $0 }.joined(separator: " · "))

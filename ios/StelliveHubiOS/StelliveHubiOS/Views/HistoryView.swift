@@ -177,7 +177,7 @@ private struct HistoryFallbackAvatarView: View {
             .lineLimit(1)
             .minimumScaleFactor(0.7)
             .frame(width: 40, height: 40)
-            .background(Circle().fill(Color(.systemGray3)))
+            .background(Circle().fill(Color.hubNeutralFill))
             .accessibilityHidden(true)
     }
 }

@@ -800,7 +800,7 @@ private struct CalendarDateCell: View {
         switch marker {
         case .selectedDay, .rangeStart, .rangeEnd:
             Capsule(style: .continuous)
-                .fill(Color.teal)
+                .fill(Color.hubTealFill)
         case .rangeMiddleWithEvent, .rangeMiddleEmpty:
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color.teal.opacity(0.14))
