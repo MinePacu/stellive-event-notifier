@@ -29,9 +29,6 @@ struct ReservationSummaryCard: View {
                         .lineLimit(2)
                 }
                 Spacer(minLength: 6)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
             }
             .padding(.vertical, 5)
         }
