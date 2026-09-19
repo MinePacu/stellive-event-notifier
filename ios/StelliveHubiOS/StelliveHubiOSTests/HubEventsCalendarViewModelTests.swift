@@ -726,6 +726,41 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(rows.map(\.label), ["장소", "시작", "기간", "참여 방식", "분류", "출처"])
     }
 
+    func testHubEventMapLinkRejectsBlankVenue() {
+        XCTAssertNil(HubEventMapLink.url(for: ""))
+        XCTAssertNil(HubEventMapLink.url(for: "  \n\t "))
+    }
+
+    func testHubEventMapLinkPercentEncodesKoreanVenue() {
+        let url = HubEventMapLink.url(for: " 더현대 서울 ")
+
+        XCTAssertEqual(
+            url?.absoluteString,
+            "http://maps.apple.com/?q=%EB%8D%94%ED%98%84%EB%8C%80%20%EC%84%9C%EC%9A%B8"
+        )
+    }
+
+    func testHubEventMapLinkEncodesReservedCharactersInQueryValue() {
+        let url = HubEventMapLink.url(for: "A&B #2 +1?x=y")
+
+        XCTAssertEqual(url?.absoluteString, "http://maps.apple.com/?q=A%26B%20%232%20%2B1%3Fx%3Dy")
+        XCTAssertEqual(
+            url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }?.queryItems?.first?.value,
+            "A&B #2 +1?x=y"
+        )
+    }
+
+    func testHubEventDetailVenueRowLinksToMapOnlyForOfflineEvents() {
+        let offline = detailEvent()
+        let offlineVenue = HubEventDetailFormatting.rows(for: offline).first { $0.label == "장소" }
+        XCTAssertEqual(offlineVenue?.mapURL, HubEventMapLink.url(for: "더현대 서울 B2 아이코닉 스퀘어"))
+
+        let online = detailEvent(participationMode: .online)
+        let onlineVenue = HubEventDetailFormatting.rows(for: online).first { $0.label == "장소" }
+        XCTAssertNotNil(onlineVenue)
+        XCTAssertNil(onlineVenue?.mapURL)
+    }
+
     func testHubEventDetailPeriodTextForStartOnlyEventDoesNotShowUnknownEnd() {
         let rows = HubEventDetailFormatting.rows(for: startOnlyDetailEvent())
         let period = rows.first { $0.label == "기간" }?.value
@@ -895,11 +930,11 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(HubEventDetailFormatting.linkActionLabel(for: .offlinePopup), "예약 링크")
     }
 
-    private func detailEvent() -> HubEvent {
+    private func detailEvent(participationMode: HubEventParticipationMode = .offline) -> HubEvent {
         HubEvent(
             id: "popup-store",
             category: .onlineGoods,
-            participationMode: .offline,
+            participationMode: participationMode,
             status: .open,
             title: "팝업 스토어 현장 입장 시작",
             summary: "현장 입장과 굿즈 판매가 함께 진행됩니다.",

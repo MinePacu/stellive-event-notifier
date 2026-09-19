@@ -411,21 +411,42 @@ struct HubEventDetailView: View {
                 if index > 0 {
                     Divider()
                 }
-                HStack(alignment: .top, spacing: 12) {
-                    Text(row.label)
-                        .font(.footnote)
-                        .foregroundStyle(HubEventDetailColors.muted)
-                        .frame(width: 72, alignment: .leading)
-                    Text(row.value)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(HubEventDetailColors.text)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                if let mapURL = row.mapURL {
+                    Button { openURL(mapURL) } label: {
+                        infoRowContent(row, showsMapAffordance: true)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isLink)
+                    .accessibilityHint("지도에서 열기")
+                } else {
+                    infoRowContent(row, showsMapAffordance: false)
                 }
-                .padding(.vertical, 12)
             }
         }
         .padding(16)
         .background(HubEventDetailColors.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func infoRowContent(_ row: HubEventDetailRow, showsMapAffordance: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(row.label)
+                .font(.footnote)
+                .foregroundStyle(HubEventDetailColors.muted)
+                .frame(width: 72, alignment: .leading)
+            Text(row.value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(HubEventDetailColors.text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if showsMapAffordance {
+                Image(systemName: "map")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 
     private var timelineCards: some View {
@@ -784,6 +805,28 @@ private extension HubEventLinkKind {
 struct HubEventDetailRow: Equatable {
     let label: String
     let value: String
+    /// Set only for rows that can be opened in Apple Maps (offline venue).
+    var mapURL: URL? = nil
+}
+
+enum HubEventMapLink {
+    /// Apple Maps search URL for `venue`; nil for blank text.
+    static func url(for venue: String) -> URL? {
+        let trimmed = venue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: queryValueAllowed)
+        else { return nil }
+        var components = URLComponents()
+        components.scheme = "http"
+        components.host = "maps.apple.com"
+        components.path = "/"
+        components.percentEncodedQuery = "q=\(encoded)"
+        return components.url
+    }
+
+    private static let queryValueAllowed = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    )
 }
 
 struct HubEventScheduleTimelineItem: Equatable {
@@ -823,7 +866,11 @@ enum HubEventDetailFormatting {
     static func rows(for event: HubEvent) -> [HubEventDetailRow] {
         var rows: [HubEventDetailRow] = []
         if let venueName = event.venueName, !venueName.isEmpty {
-            rows.append(HubEventDetailRow(label: "장소", value: venueName))
+            rows.append(HubEventDetailRow(
+                label: "장소",
+                value: venueName,
+                mapURL: event.participationMode.isOffline ? HubEventMapLink.url(for: venueName) : nil
+            ))
         }
         if showsParentPeriod(event) {
             rows.append(HubEventDetailRow(label: "시작", value: event.startsAt.map(format) ?? "미정"))

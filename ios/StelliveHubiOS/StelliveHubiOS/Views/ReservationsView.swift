@@ -88,11 +88,6 @@ struct ReservationsView: View {
                         message: "굿즈·행사의 티켓, 구매 또는 예약 링크를 열면 여기에서 완료 내역을 추가할 수 있습니다."
                     )
                     .listRowBackground(Color.clear)
-                    NavigationLink(value: ReservationRoute.listHelp) {
-                        Label("사용 방법 보기", systemImage: "questionmark.circle")
-                            .font(.body.weight(.semibold))
-                    }
-                    .accessibilityLabel("내 예약 및 구매 사용 방법 보기")
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .reservationHelpListFocusRequested)) { note in
