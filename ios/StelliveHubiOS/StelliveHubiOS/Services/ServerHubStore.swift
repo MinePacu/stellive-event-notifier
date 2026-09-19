@@ -211,7 +211,7 @@ final class ServerHubStore: ObservableObject {
     }
 
     func refreshCalendar(from: Date, to: Date, timezone: TimeZone = .current) async {
-        await fetchAndMergeCalendar(range: from...to, timezone: timezone, ifModifiedSince: nil)
+        await fetchAndMergeCalendar(range: from...to, timezone: timezone, ifModifiedSince: nil, reportsFailure: true)
     }
 
     /// Ensures calendar data for `month` is loaded and reasonably fresh, fetching only
@@ -224,7 +224,12 @@ final class ServerHubStore: ObservableObject {
         if let cachedRange = calendarCachedRange, cachedRange.contains(month) {
             let age = Date().timeIntervalSince(calendarCachedAt ?? .distantPast)
             guard age >= Self.calendarCacheTTL else { return }
-            await fetchAndMergeCalendar(range: cachedRange, timezone: timezone, ifModifiedSince: calendarLastModified)
+            await fetchAndMergeCalendar(
+                range: cachedRange,
+                timezone: timezone,
+                ifModifiedSince: calendarLastModified,
+                reportsFailure: false
+            )
             return
         }
 
@@ -234,13 +239,22 @@ final class ServerHubStore: ObservableObject {
         let chunkUpper = utilityCalendar.date(byAdding: .month, value: Self.calendarChunkMonths, to: month) ?? month
         let lowerBound = calendarCachedRange.map { min($0.lowerBound, chunkLower) } ?? chunkLower
         let upperBound = calendarCachedRange.map { max($0.upperBound, chunkUpper) } ?? chunkUpper
-        await fetchAndMergeCalendar(range: lowerBound...upperBound, timezone: timezone, ifModifiedSince: nil)
+        await fetchAndMergeCalendar(
+            range: lowerBound...upperBound,
+            timezone: timezone,
+            ifModifiedSince: nil,
+            reportsFailure: false
+        )
     }
 
+    /// `reportsFailure` is false for background window fetches triggered by month navigation, so an
+    /// unreachable server doesn't re-raise the refresh alert on every month change; the cached/fallback
+    /// calendar simply stays as is.
     private func fetchAndMergeCalendar(
         range: ClosedRange<Date>,
         timezone: TimeZone,
-        ifModifiedSince: String?
+        ifModifiedSince: String?,
+        reportsFailure: Bool
     ) async {
         isRefreshingCalendar = true
         defer { isRefreshingCalendar = false }
@@ -272,7 +286,9 @@ final class ServerHubStore: ObservableObject {
             }
         } catch {
             if Self.isCancellation(error) { return }
-            hubEventsRefreshErrorMessage = Self.hubEventsRefreshFailureMessage
+            if reportsFailure {
+                hubEventsRefreshErrorMessage = Self.hubEventsRefreshFailureMessage
+            }
             if serverCalendarDays.isEmpty {
                 serverCalendarDays = fallback.calendarDays(for: "all")
             }

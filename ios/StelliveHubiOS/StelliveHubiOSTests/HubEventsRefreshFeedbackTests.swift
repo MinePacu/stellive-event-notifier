@@ -62,6 +62,15 @@ final class HubEventsRefreshFeedbackTests: XCTestCase {
         XCTAssertNotNil(store.hubEventsRefreshErrorMessage)
     }
 
+    func testMonthNavigationCalendarFetchFailureDoesNotSurfaceErrorMessage() async {
+        let store = makeStore { _ in jsonResponse(statusCode: 500, body: "{}") }
+
+        await store.ensureCalendarLoaded(covering: Date())
+
+        XCTAssertNil(store.hubEventsRefreshErrorMessage)
+        XCTAssertFalse(store.calendarDays(for: "all").isEmpty, "falls back to the local calendar instead of going blank")
+    }
+
     func testSuccessfulHubEventsRefreshClearsPreviousError() async {
         var shouldFail = true
         let store = makeStore { _ in
