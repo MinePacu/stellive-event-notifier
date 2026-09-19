@@ -356,7 +356,7 @@ struct HubHeaderCard: View {
                         RoundedRectangle(cornerRadius: 15, style: .continuous)
                             .fill(
                                 LinearGradient(
-                                    colors: [.teal, .blue],
+                                    colors: [.hubTealFill, .blue],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -539,12 +539,10 @@ struct MemberAvatarView: View {
 
     private var backgroundColor: Color {
         switch member.catalogRole {
-        case .officialChannel:
-            return Color(.systemGray)
-        case .placeholder:
-            return Color(.systemGray3)
+        case .officialChannel, .placeholder:
+            return .hubNeutralFill
         default:
-            return .teal
+            return .hubTealFill
         }
     }
 

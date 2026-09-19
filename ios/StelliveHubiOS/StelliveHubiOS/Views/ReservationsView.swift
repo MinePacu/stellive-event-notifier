@@ -17,7 +17,7 @@ struct ReservationSummaryCard: View {
             HStack(spacing: 14) {
                 Image(systemName: "ticket")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(Color.hubTealText)
                     .frame(width: 42, height: 42)
                     .background(Color.teal.opacity(0.12), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 VStack(alignment: .leading, spacing: 4) {
