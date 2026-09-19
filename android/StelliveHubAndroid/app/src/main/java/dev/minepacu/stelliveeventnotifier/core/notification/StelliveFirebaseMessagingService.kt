@@ -1,6 +1,7 @@
 package dev.minepacu.stelliveeventnotifier.core.notification
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -35,6 +36,8 @@ class StelliveFirebaseMessagingService : FirebaseMessagingService() {
         }
     }
 
+    // notify() below is guarded by canPostNotifications(), which lint cannot see through.
+    @SuppressLint("MissingPermission")
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
         val payload = NotificationPayload.fromData(message.data)

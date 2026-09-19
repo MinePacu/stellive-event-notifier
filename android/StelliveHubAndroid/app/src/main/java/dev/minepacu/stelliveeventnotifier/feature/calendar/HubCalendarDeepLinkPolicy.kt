@@ -4,7 +4,6 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarEntry
 import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarEntryKind
 import java.net.URI
 import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
 
 object HubCalendarDeepLinkPolicy {
     private const val Scheme = "stellivehub"
@@ -30,7 +29,7 @@ object HubCalendarDeepLinkPolicy {
             ?.mapNotNull { part -> part.split('=', limit = 2).takeIf { it.size == 2 } }
             ?.firstOrNull { it[0] == "scheduleItemId" }
             ?.get(1)
-            ?.let { URLDecoder.decode(it, StandardCharsets.UTF_8) }
+            ?.let { URLDecoder.decode(it, "UTF-8") }
             ?.takeIf(String::isNotBlank)
     }
 
