@@ -158,18 +158,19 @@ struct LiveSideMetric: View {
     let systemImage: String
     let value: String?
     let color: Color
+    @ScaledMetric(relativeTo: .caption2) private var iconSize: CGFloat = 12
 
     var body: some View {
         if let value {
             HStack(spacing: 4) {
                 Image(systemName: systemImage)
-                    .frame(width: 12, height: 12)
+                    .frame(width: iconSize, height: iconSize)
                 Text(value)
-                    .frame(height: 12)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .font(.caption2.monospacedDigit())
             .foregroundStyle(color)
-            .frame(height: 14, alignment: .center)
         }
     }
 }

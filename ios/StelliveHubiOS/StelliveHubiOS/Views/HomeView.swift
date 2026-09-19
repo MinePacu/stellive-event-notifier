@@ -37,7 +37,7 @@ struct HomeView: View {
                             NavigationLink {
                                 LiveView()
                             } label: {
-                                Label("더보기", systemImage: "chevron.right")
+                                Text("더보기")
                             }
                         }
                     }
@@ -334,6 +334,14 @@ struct HubHeaderCard: View {
     let title: String
     let subtitle: String
     let metrics: [HubHeaderMetric]
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    @ViewBuilder
+    private var metricViews: some View {
+        ForEach(metrics) { metric in
+            HeaderMetric(value: metric.value, label: metric.label)
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -368,10 +376,10 @@ struct HubHeaderCard: View {
                 }
             }
 
-            HStack(spacing: 8) {
-                ForEach(metrics) { metric in
-                    HeaderMetric(value: metric.value, label: metric.label)
-                }
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: 8) { metricViews }
+            } else {
+                HStack(spacing: 8) { metricViews }
             }
         }
         .padding(16)
@@ -400,9 +408,10 @@ private struct HeaderMetric: View {
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
         .background(
