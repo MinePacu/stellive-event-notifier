@@ -10,16 +10,6 @@ private struct HubEventsCalendarContentHeightKey: PreferenceKey {
     }
 }
 
-private struct HubEventsCalendarChevronShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        return path
-    }
-}
-
 private struct HubEventsCalendarChevron: View {
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     let isExpanded: Bool
@@ -32,12 +22,9 @@ private struct HubEventsCalendarChevron: View {
 
     var body: some View {
         ZStack {
-            HubEventsCalendarChevronShape()
-                .stroke(
-                    Color.primary,
-                    style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
-                )
-                .frame(width: 12, height: 7)
+            Image(systemName: "chevron.down")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Color.primary)
                 .rotationEffect(.degrees(rotationDegrees), anchor: .center)
         }
         .frame(width: 48, height: 48, alignment: .center)
@@ -188,6 +175,7 @@ struct HubEventsCalendarView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+            .accessibilityLabel(previousMonthAccessibilityLabel)
 
             Spacer()
 
@@ -201,8 +189,19 @@ struct HubEventsCalendarView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+            .accessibilityLabel(nextMonthAccessibilityLabel)
         }
         .padding(.top, 2)
+    }
+
+    private var previousMonthAccessibilityLabel: String {
+        let target = Calendar.current.date(byAdding: .month, value: -1, to: viewModel.selectedMonth) ?? viewModel.selectedMonth
+        return "이전 달, \(monthFormatter.string(from: target))로 이동"
+    }
+
+    private var nextMonthAccessibilityLabel: String {
+        let target = Calendar.current.date(byAdding: .month, value: 1, to: viewModel.selectedMonth) ?? viewModel.selectedMonth
+        return "다음 달, \(monthFormatter.string(from: target))로 이동"
     }
 
     private var listDateNavigationHeader: some View {
@@ -751,10 +750,13 @@ private struct CalendarDateCell: View {
     private var dotView: some View {
         if let countText = dotStyle.countText {
             Text(countText)
-                .font(.system(size: 7, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundStyle(.white)
-                .frame(width: dotStyle.size, height: dotStyle.size)
-                .background(Circle().fill(dotColor))
+                .lineLimit(1)
+                .padding(.horizontal, 3)
+                .frame(minWidth: 14, minHeight: 14)
+                .background(Capsule().fill(dotColor))
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         } else {
             Circle()
                 .fill(dotColor)
