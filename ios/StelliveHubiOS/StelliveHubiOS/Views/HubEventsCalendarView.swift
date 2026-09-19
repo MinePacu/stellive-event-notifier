@@ -693,7 +693,7 @@ private struct CalendarEntryRow: View {
 
                 Text("\(HubCalendarPolicy.entryLabel(entry)) · \(periodDateText) · \(entry.displayTimeText)")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(Color.hubTealText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
             }

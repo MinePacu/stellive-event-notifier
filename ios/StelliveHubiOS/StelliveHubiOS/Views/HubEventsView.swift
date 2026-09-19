@@ -52,7 +52,7 @@ struct HubEventsView: View {
                             } label: {
                                 Text(filter.title)
                                     .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(selectedFilter == filter.id ? Color.teal : Color.secondary)
+                                    .foregroundStyle(selectedFilter == filter.id ? Color.hubTealText : Color.secondary)
                                     .lineLimit(1)
                                     .padding(.horizontal, 13)
                                     .padding(.vertical, 8)
@@ -200,7 +200,7 @@ struct HubEventsView: View {
                 Spacer(minLength: 8)
                 Text("월 전체 보기")
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color.teal)
+                    .foregroundStyle(Color.hubTealText)
             }
             .frame(maxWidth: .infinity, minHeight: Self.dayFilterClearMinTapHeight, alignment: .leading)
             .contentShape(Rectangle())

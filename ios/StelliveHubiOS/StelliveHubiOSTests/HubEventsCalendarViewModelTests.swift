@@ -1082,6 +1082,34 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         )
     }
 
+    func testHubTealTextMeetsWCAGAAContrastInLightAndDarkMode() {
+        let cases: [(UIUserInterfaceStyle, UIColor, String)] = [
+            (.light, .white, "light on white"),
+            (.light, UIColor(red: 0.87, green: 0.95, blue: 0.96, alpha: 1), "light on the selected-chip tint"),
+            (.dark, .black, "dark on black"),
+        ]
+        for (style, background, label) in cases {
+            let foreground = UIColor.hubTealText.resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+            let ratio = Self.contrastRatio(foreground, background)
+            XCTAssertGreaterThanOrEqual(ratio, 4.5, "hubTealText \(label): \(ratio)")
+        }
+    }
+
+    private static func contrastRatio(_ a: UIColor, _ b: UIColor) -> Double {
+        let la = relativeLuminance(a), lb = relativeLuminance(b)
+        return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+    }
+
+    private static func relativeLuminance(_ color: UIColor) -> Double {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        func linear(_ c: CGFloat) -> Double {
+            let v = Double(c)
+            return v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+    }
+
     private func date(_ value: String) -> Date {
         let formatter = DateFormatter()
         formatter.calendar = calendar
