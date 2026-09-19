@@ -27,7 +27,8 @@ struct AnnouncementBellLabel: View {
             .frame(width: 34, height: 34)
             .overlay(alignment: .topTrailing) {
                 if let text = AnnouncementPolicy.badgeText(unreadCount) {
-                    Text(text).font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                    Text(text).font(.caption2.weight(.bold)).foregroundStyle(.white).lineLimit(1)
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                         .padding(.horizontal, 4).frame(minWidth: 17, minHeight: 17).background(Color.red, in: Capsule())
                 }
             }

@@ -239,7 +239,8 @@ struct HubEventDetailCalendarCard: View {
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 0)
                 scheduleMarker(day, selected: isSelected)
-                    .frame(height: 13)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .frame(minHeight: 13)
             }
             .foregroundStyle(isSelected ? Color.white : HubEventDetailColors.text)
             .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 48)
@@ -276,10 +277,11 @@ struct HubEventDetailCalendarCard: View {
         if day.hasOnlyCancelledSchedules {
             HStack(spacing: 2) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                 if let badgeText = day.badgeText {
                     Text(badgeText)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.caption2.weight(.bold))
+                        .lineLimit(1)
                 }
             }
             .foregroundStyle(selected ? Color.white : Color(.systemRed))
@@ -291,7 +293,7 @@ struct HubEventDetailCalendarCard: View {
                 .accessibilityHidden(true)
         } else if let badgeText = day.badgeText {
             Text(badgeText)
-                .font(.system(size: 9, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundStyle(selected ? Color.accentColor : Color.white)
                 .padding(.horizontal, 4)
                 .frame(minWidth: 17, minHeight: 13)
