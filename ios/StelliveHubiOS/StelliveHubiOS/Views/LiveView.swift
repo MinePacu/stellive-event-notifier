@@ -134,7 +134,7 @@ private struct LiveMemberRow: View {
                         }
 
                         if let viewers = LiveStatusFormatter.viewerCountText(member.liveViewerCount) {
-                            LiveSideMetric(systemImage: "eye", value: viewers, color: .teal)
+                            LiveSideMetric(systemImage: "eye", value: viewers, color: .hubTealText)
                         }
                     }
                 }

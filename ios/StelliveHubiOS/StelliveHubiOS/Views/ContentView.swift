@@ -195,7 +195,7 @@ private struct ReservationReturnBannerView: View {
                     .frame(minHeight: 44)
                 Button(actionTitle, action: onConfirm)
                     .buttonStyle(.borderedProminent)
-                    .tint(.teal)
+                    .tint(Color.hubTealText)
                     .frame(minHeight: 44)
             }
         }
@@ -415,4 +415,16 @@ extension View {
     }
 
     func settingsToolbar(path: Binding<NavigationPath>) -> some View { globalToolbar(path: path) }
+}
+
+extension UIColor {
+    /// Teal for *text and glyphs*. System teal is ~2.6:1 on white in light mode (below WCAG AA 4.5:1),
+    /// so light mode uses a darker teal (~6:1); dark mode keeps system teal, which is already legible.
+    static let hubTealText = UIColor { traits in
+        traits.userInterfaceStyle == .dark ? .systemTeal : UIColor(red: 0, green: 0.42, blue: 0.5, alpha: 1)
+    }
+}
+
+extension Color {
+    static let hubTealText = Color(UIColor.hubTealText)
 }
