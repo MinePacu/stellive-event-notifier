@@ -4,8 +4,10 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import dev.minepacu.stelliveeventnotifier.feature.songs.DataStoreSongFavoritesRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -28,7 +30,7 @@ class SongFavoritesRepositoryTest {
         repository.toggle("")
         assertEquals(setOf("youtube:video-1", "song:catalog-only"), repository.favorites.first())
 
-        scope.cancel()
+        scope.coroutineContext[Job]!!.cancelAndJoin()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         repository = DataStoreSongFavoritesRepository(
             PreferenceDataStoreFactory.create(scope = scope, produceFile = { file }),

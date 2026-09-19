@@ -6,8 +6,10 @@ import dev.minepacu.stelliveeventnotifier.core.model.SongType
 import dev.minepacu.stelliveeventnotifier.feature.songs.DataStoreSongDiscoveryRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -32,7 +34,7 @@ class SongDiscoveryRepositoryTest {
         assertEquals(setOf("youtube:first"), repository.state.first().acknowledgedIds)
         repository.acknowledge(listOf(second), listOf(first, second))
         assertEquals(Instant.parse("2026-07-03T00:00:00Z"), repository.state.first().baselineAt)
-        scope.cancel()
+        scope.coroutineContext[Job]!!.cancelAndJoin()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         repository = DataStoreSongDiscoveryRepository(PreferenceDataStoreFactory.create(scope = scope, produceFile = { file }))
         assertTrue(repository.state.first().initialized)
