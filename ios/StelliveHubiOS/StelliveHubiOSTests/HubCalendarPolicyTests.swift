@@ -1,4 +1,5 @@
 import XCTest
+@testable import StelliveHubiOS
 
 final class HubCalendarDeepLinkPolicyTests: XCTestCase {
     func testBuildsAndParsesHubEventDeepLink() {
