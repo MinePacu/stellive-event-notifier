@@ -48,14 +48,21 @@ struct HubEventsCalendarView: View {
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     private let days: [HubCalendarDay]
     @Binding private var selectedMonth: Date
+    @Binding private var selectedFeedDay: Date?
     @Binding private var isExpanded: Bool
     @StateObject private var viewModel: HubEventsCalendarViewModel
     @State private var presentedPicker: CalendarPickerPresentation?
     @State private var calendarContentHeight: CGFloat = 0
 
-    init(days: [HubCalendarDay], selectedMonth: Binding<Date>, isExpanded: Binding<Bool>) {
+    init(
+        days: [HubCalendarDay],
+        selectedMonth: Binding<Date>,
+        selectedFeedDay: Binding<Date?>,
+        isExpanded: Binding<Bool>
+    ) {
         self.days = days
         _selectedMonth = selectedMonth
+        _selectedFeedDay = selectedFeedDay
         _isExpanded = isExpanded
         _viewModel = StateObject(wrappedValue: HubEventsCalendarViewModel(viewMode: .calendar, days: days))
     }
@@ -122,6 +129,16 @@ struct HubEventsCalendarView: View {
         }
         .onChange(of: days) { newDays in
             viewModel.replaceDays(newDays)
+            // replaceDays may auto-jump the highlight; keep it on the day the feed is filtered to.
+            if let feedDay = selectedFeedDay,
+               HubEventsFeedPolicy.dayFilter(
+                   feedDay,
+                   retainedForMonth: viewModel.selectedMonth,
+                   calendar: HubEventsView.feedCalendar
+               ) != nil,
+               viewModel.selectedDay != feedDay {
+                viewModel.selectDate(feedDay)
+            }
             selectedMonth = viewModel.selectedMonth
         }
         .onChange(of: viewModel.selectedMonth) { newMonth in
@@ -457,9 +474,16 @@ struct HubEventsCalendarView: View {
                                 entryCount: viewModel.entryCount(on: date),
                                 dotStyle: viewModel.dotStyle(on: date),
                                 hasMultiDayEntry: viewModel.hasMultiDayEntry(on: date),
-                                accessibilityLabel: viewModel.accessibilityLabel(for: date)
+                                accessibilityLabel: viewModel.accessibilityLabel(for: date),
+                                isFeedFiltered: isFeedFilteredDay(date)
                             ) {
                                 viewModel.selectDate(date)
+                                guard viewModel.scopeMode == .day else { return }
+                                selectedFeedDay = HubEventsFeedPolicy.toggledDayFilter(
+                                    current: selectedFeedDay,
+                                    tapped: viewModel.selectedDay,
+                                    calendar: HubEventsView.feedCalendar
+                                )
                             }
                         }
                     }
@@ -468,6 +492,11 @@ struct HubEventsCalendarView: View {
                 .frame(minHeight: 52 + CGFloat(durationLayout.laneCountsByWeek[weekIndex] ?? 0) * 7)
             }
         }
+    }
+
+    private func isFeedFilteredDay(_ date: Date) -> Bool {
+        guard let selectedFeedDay else { return false }
+        return HubEventsView.feedCalendar.isDate(date, inSameDayAs: selectedFeedDay)
     }
 
     private func durationBars(for segments: [HubCalendarDurationBarSegment]) -> some View {
@@ -713,6 +742,7 @@ private struct CalendarDateCell: View {
     let dotStyle: HubCalendarEventDotStyle
     let hasMultiDayEntry: Bool
     let accessibilityLabel: String
+    let isFeedFiltered: Bool
     let onTap: () -> Void
 
     var body: some View {
@@ -740,6 +770,7 @@ private struct CalendarDateCell: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint(isFeedFiltered ? "두 번 탭하여 월 전체 일정 보기" : "두 번 탭하여 이 날짜의 일정만 보기")
     }
 
     private var strongMarker: Bool {

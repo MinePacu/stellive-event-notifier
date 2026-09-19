@@ -185,6 +185,144 @@ final class HubEventsCalendarViewModelTests: XCTestCase {
         XCTAssertEqual(rows.map(\.entry.eventId), ["album"])
     }
 
+    func testFeedRowsForDayReturnsOnlySelectedDaySingleDayEntries() {
+        let rows = HubEventsFeedPolicy.rowsForDay(
+            days: [
+                day("2026-06-19", entries: [entry(id: "before")]),
+                day("2026-06-20", entries: [entry(id: "picked-b"), entry(id: "picked-a")]),
+                day("2026-06-21", entries: [entry(id: "after")])
+            ],
+            selectedDay: date("2026-06-20"),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(rows.map(\.entry.eventId), ["picked-a", "picked-b"])
+        XCTAssertEqual(Set(rows.map(\.day.date)), ["2026-06-20"])
+    }
+
+    func testFeedRowsForDayShowsMultiDayEventOnceOnEverySpannedDay() {
+        func spanning(_ dayKey: String) -> HubCalendarEntry {
+            entry(
+                id: "goods-range:\(dayKey)",
+                eventId: "goods-range",
+                startsAt: date("2026-06-19"),
+                endsAt: date("2026-06-21")
+            )
+        }
+        let days = [
+            day("2026-06-19", entries: [spanning("2026-06-19")]),
+            day("2026-06-20", entries: [spanning("2026-06-20"), entry(id: "ticket", category: .ticketing)]),
+            day("2026-06-21", entries: [spanning("2026-06-21")])
+        ]
+
+        for key in ["2026-06-19", "2026-06-20", "2026-06-21"] {
+            let rows = HubEventsFeedPolicy.rowsForDay(days: days, selectedDay: date(key), calendar: calendar)
+            XCTAssertEqual(rows.filter { $0.entry.eventId == "goods-range" }.count, 1, key)
+            XCTAssertEqual(rows.first { $0.entry.eventId == "goods-range" }?.day.date, key)
+        }
+        XCTAssertEqual(
+            HubEventsFeedPolicy.rowsForDay(days: days, selectedDay: date("2026-06-20"), calendar: calendar)
+                .map(\.entry.eventId),
+            ["goods-range", "ticket"]
+        )
+        XCTAssertTrue(
+            HubEventsFeedPolicy.rowsForDay(days: days, selectedDay: date("2026-06-22"), calendar: calendar).isEmpty
+        )
+    }
+
+    func testFeedRowsForDayCollapsesSiblingSchedulesOfOneRootEvent() {
+        let rows = HubEventsFeedPolicy.rowsForDay(
+            days: [day("2026-06-20", entries: [
+                entry(id: "album:tracks", eventId: "album", scheduleItemId: "tracks"),
+                entry(id: "album:release", eventId: "album", scheduleItemId: "release")
+            ])],
+            selectedDay: date("2026-06-20"),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(rows.map(\.entry.eventId), ["album"])
+    }
+
+    func testFeedRowsForDayReturnsEmptyForDayWithoutEntries() {
+        let days = [day("2026-06-19", entries: [entry(id: "goods")])]
+
+        XCTAssertTrue(
+            HubEventsFeedPolicy.rowsForDay(days: days, selectedDay: date("2026-06-20"), calendar: calendar).isEmpty
+        )
+        XCTAssertTrue(HubEventsFeedPolicy.rowsForDay(days: [], selectedDay: date("2026-06-20"), calendar: calendar).isEmpty)
+    }
+
+    func testFeedRowsForDayUsesSeoulDayBoundary() {
+        let days = [
+            day("2026-06-19", entries: [entry(id: "june-19")]),
+            day("2026-06-20", entries: [entry(id: "june-20")])
+        ]
+
+        // 2026-06-19T14:59:59Z == 2026-06-19 23:59:59 KST; 15:00:00Z == 2026-06-20 00:00:00 KST.
+        let lastSecondOf19th = HubEventsFeedPolicy.rowsForDay(
+            days: days,
+            selectedDay: dateTime("2026-06-19T14:59:59Z"),
+            calendar: calendar
+        )
+        let firstSecondOf20th = HubEventsFeedPolicy.rowsForDay(
+            days: days,
+            selectedDay: dateTime("2026-06-19T15:00:00Z"),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(lastSecondOf19th.map(\.entry.eventId), ["june-19"])
+        XCTAssertEqual(firstSecondOf20th.map(\.entry.eventId), ["june-20"])
+    }
+
+    func testFeedRowsForDayMatchesMonthRowsRestrictedToThatDay() {
+        let days = [
+            day("2026-06-19", entries: [entry(id: "b", title: "B"), entry(id: "a", title: "A")]),
+            day("2026-06-20", entries: [entry(id: "c", title: "C")])
+        ]
+
+        let monthRows = HubEventsFeedPolicy.rowsForMonth(days: days, selectedMonth: date("2026-06-01"), calendar: calendar)
+        let dayRows = HubEventsFeedPolicy.rowsForDay(days: days, selectedDay: date("2026-06-19"), calendar: calendar)
+
+        XCTAssertEqual(dayRows.map(\.id), monthRows.filter { $0.day.date == "2026-06-19" }.map(\.id))
+    }
+
+    func testToggledDayFilterSelectsThenClearsOnSameDayTap() {
+        let june20 = date("2026-06-20")
+        let june21 = date("2026-06-21")
+
+        XCTAssertEqual(HubEventsFeedPolicy.toggledDayFilter(current: nil, tapped: june20, calendar: calendar), june20)
+        XCTAssertNil(HubEventsFeedPolicy.toggledDayFilter(current: june20, tapped: june20, calendar: calendar))
+        XCTAssertNil(
+            HubEventsFeedPolicy.toggledDayFilter(
+                current: june20,
+                tapped: dateTime("2026-06-20T05:00:00Z"),
+                calendar: calendar
+            )
+        )
+        XCTAssertEqual(HubEventsFeedPolicy.toggledDayFilter(current: june20, tapped: june21, calendar: calendar), june21)
+    }
+
+    func testDayFilterIsClearedWhenDisplayedMonthChanges() {
+        let june20 = date("2026-06-20")
+
+        XCTAssertEqual(
+            HubEventsFeedPolicy.dayFilter(june20, retainedForMonth: date("2026-06-01"), calendar: calendar),
+            june20
+        )
+        // Same month, different reference date inside the month (e.g. the calendar auto-jumping to its first entry).
+        XCTAssertEqual(
+            HubEventsFeedPolicy.dayFilter(june20, retainedForMonth: date("2026-06-03"), calendar: calendar),
+            june20
+        )
+        XCTAssertNil(HubEventsFeedPolicy.dayFilter(june20, retainedForMonth: date("2026-07-01"), calendar: calendar))
+        XCTAssertNil(HubEventsFeedPolicy.dayFilter(june20, retainedForMonth: date("2026-05-01"), calendar: calendar))
+        XCTAssertNil(HubEventsFeedPolicy.dayFilter(nil, retainedForMonth: date("2026-06-01"), calendar: calendar))
+    }
+
+    func testFeedDayTitleUsesLocalizedShortDayFormat() {
+        XCTAssertEqual(HubEventsView.feedDayTitle(for: date("2026-09-18")), "9월 18일 (금)")
+    }
+
     func testCalendarEntryDecodesLegacyResponseWithoutDisplayTitle() throws {
         let data = Data(#"{"id":"album:tracks","eventId":"album","entryKind":"hub_event","scheduleItemId":"tracks","scheduleLabel":"트랙 리스트 공개","title":"부모 음반","category":"online_goods","status":"upcoming","participationMode":"online","generationId":"official","displayDate":"2026-06-20","displayTimeText":"18:00 시작","sourceLabel":"공식","appDeepLink":"stellivehub://hub-events/album?scheduleItemId=tracks"}"#.utf8)
 
