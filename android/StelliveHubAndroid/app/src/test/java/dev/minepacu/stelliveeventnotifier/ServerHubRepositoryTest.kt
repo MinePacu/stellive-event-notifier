@@ -6,6 +6,7 @@ import dev.minepacu.stelliveeventnotifier.core.network.BootstrapCatalogDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarDayDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarEntryDto
+import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarFetchResult
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventScheduleItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventsListResponseDto
@@ -773,11 +774,15 @@ class ServerHubRepositoryTest {
             from: String,
             to: String,
         timezone: String,
-        ): HubNetworkResult<HubCalendarResponseDto> =
+            ifModifiedSince: String?,
+        ): HubNetworkResult<HubCalendarFetchResult> =
             HubNetworkResult.Success(
-                hubCalendarResponse ?: HubCalendarResponseDto(
-                    timezone = timezone,
-                    generatedAt = "2026-06-11T03:00:00.000Z",
+                HubCalendarFetchResult.Fresh(
+                    response = hubCalendarResponse ?: HubCalendarResponseDto(
+                        timezone = timezone,
+                        generatedAt = "2026-06-11T03:00:00.000Z",
+                    ),
+                    lastModified = null,
                 ),
             )
 

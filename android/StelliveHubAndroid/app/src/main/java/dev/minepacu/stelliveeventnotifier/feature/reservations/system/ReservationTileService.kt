@@ -1,5 +1,6 @@
 package dev.minepacu.stelliveeventnotifier.feature.reservations.system
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
@@ -46,6 +47,7 @@ class ReservationTileService : TileService() {
             val pending = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             startActivityAndCollapse(pending)
         } else {
+            @SuppressLint("StartActivityAndCollapseDeprecated")
             @Suppress("DEPRECATION")
             startActivityAndCollapse(intent)
         }

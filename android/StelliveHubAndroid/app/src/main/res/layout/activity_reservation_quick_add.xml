@@ -32,7 +32,7 @@
                 android:contentDescription="@string/action_back"
                 android:padding="@dimen/hub_top_bar_icon_padding"
                 android:src="@drawable/ic_arrow_back"
-                android:tint="@color/hub_text" />
+                app:tint="@color/hub_text" />
 
             <TextView
                 android:id="@+id/quick_add_toolbar_title"
@@ -78,7 +78,7 @@
                     android:layout_height="40dp"
                     android:contentDescription="@string/reservation_quick_add_empty_icon_description"
                     android:src="@drawable/ic_reservation_ticket"
-                    android:tint="@color/hub_primary" />
+                    app:tint="@color/hub_primary" />
 
                 <TextView
                     android:layout_width="match_parent"
@@ -297,7 +297,7 @@
                             android:layout_height="20dp"
                             android:contentDescription="@string/reservation_quick_add_local_note_icon_description"
                             android:src="@drawable/ic_help_lock_outline"
-                            android:tint="@color/hub_primary" />
+                            app:tint="@color/hub_primary" />
 
                         <TextView
                             android:layout_width="0dp"

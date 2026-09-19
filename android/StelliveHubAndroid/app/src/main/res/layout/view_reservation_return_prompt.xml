@@ -28,7 +28,7 @@
                 android:layout_height="24dp"
                 android:contentDescription="@null"
                 android:src="@drawable/ic_reservation_ticket"
-                android:tint="@color/hub_primary" />
+                app:tint="@color/hub_primary" />
 
             <TextView
                 android:id="@+id/reservation_return_prompt_title"

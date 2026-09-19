@@ -5,6 +5,7 @@ import dev.minepacu.stelliveeventnotifier.core.network.HubApi
 import dev.minepacu.stelliveeventnotifier.core.network.HubApiClient
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarDayDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarEntryDto
+import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarFetchResult
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventsListResponseDto
@@ -210,7 +211,8 @@ class HubApiClientTest {
 
         assertEquals("server-event", (list as HubNetworkResult.Success).value.items.single().id)
         assertEquals("server-event", (detail as HubNetworkResult.Success).value.id)
-        assertEquals("server-event", (calendar as HubNetworkResult.Success).value.days.single().entries.single().eventId)
+        val calendarFetch = (calendar as HubNetworkResult.Success).value as HubCalendarFetchResult.Fresh
+        assertEquals("server-event", calendarFetch.response.days.single().entries.single().eventId)
     }
 
     @Test
@@ -581,9 +583,10 @@ class HubApiClientTest {
             from: String,
             to: String,
             timezone: String,
-        ): HubCalendarResponseDto {
+            ifModifiedSince: String?,
+        ): Response<HubCalendarResponseDto> {
             failure?.let { throw it }
-            return calendarResponse
+            return Response.success(calendarResponse)
         }
 
         override suspend fun songs(
