@@ -1,6 +1,5 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
-import { renderAdminConsoleHtml } from "../src/admin/adminConsoleHtml.js";
 import BootstrapService from "../src/mobile/bootstrapService.js";
 import { loadEnv } from "../src/config/env.js";
 import { ServiceAnnouncementAdminService } from "../src/announcements/serviceAnnouncementAdminService.js";
@@ -163,12 +162,6 @@ describe("service announcement publish flow", () => {
 });
 
 describe("service announcement admin deletion", () => {
-  it("renders a delete action for the selected announcement", () => {
-    const html = renderAdminConsoleHtml();
-    expect(html).toContain('id="announcement-delete"');
-    expect(html).toContain('method: "DELETE"');
-  });
-
   it("dispatches authenticated DELETE requests to the admin service", async () => {
     const remove = vi.fn(async () => ({ id: "notice-1", deletedAt: now.toISOString() }));
     const app = Fastify();

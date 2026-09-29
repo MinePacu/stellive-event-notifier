@@ -16,18 +16,22 @@ Docker는 로컬 재현과 선택적 셀프호스팅용이다. 운영 계획은 
 ADMIN_CONSOLE_ENABLED=true
 ADMIN_CONSOLE_TOKEN=
 ADMIN_CONSOLE_COOKIE_SECURE=true
+# 선택: 빌드된 SPA 경로. 기본값은 백엔드 작업 디렉터리 기준 ../../admin/stellive-hub-admin/dist
+ADMIN_CONSOLE_DIST_DIR=
 INTERNAL_API_TOKEN=
 ```
+
+`/admin`은 `admin/stellive-hub-admin` SPA 정적 파일을 인증 없이 제공하고(데이터 없음), 로그인은 `POST /v1/admin/session`(JSON `{ "token": ... }`)으로 HttpOnly 세션 쿠키를 발급한다. `index.html`이 없으면 503 `admin_console_not_built`를 반환한다.
 
 빈 문자열, `replace_with_*`, `verify_required` 같은 placeholder 값은 설정 완료로 보지 않는다. `/admin`과 `/v1/internal/*`는 같은 origin에서 통제된 접근만 전제로 하며, 임의의 브라우저 코드 호출용 CORS API가 아니다.
 
 로컬 접속:
 
 ```text
-http://localhost:4000/admin/login
+http://localhost:4000/admin/sign-in
 ```
 
-로그인 화면에는 `ADMIN_CONSOLE_TOKEN`을 입력하고, 내부 API 호출 필드에는 `INTERNAL_API_TOKEN`을 입력한다. 토큰을 URL query string에 넣지 않는다.
+로그인 화면에는 `ADMIN_CONSOLE_TOKEN`을 입력한다. `/v1/internal/*`를 호출하는 운영 기능에는 `INTERNAL_API_TOKEN`이 별도로 필요하다. 토큰을 URL query string에 넣지 않는다.
 
 ## CHZZK
 
