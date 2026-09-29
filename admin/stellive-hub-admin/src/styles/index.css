@@ -3,6 +3,13 @@
 @import './theme.css';
 
 @custom-variant dark (&:is(.dark *));
+/* Tauri desktop shell only (main.tsx adds `tauri` to <html>). */
+@custom-variant desktop (&:is(.tauri *));
+
+/* Height of the macOS overlay title bar that hosts the traffic lights. */
+html.tauri {
+  --titlebar-height: 2.75rem;
+}
 
 @layer base {
   * {

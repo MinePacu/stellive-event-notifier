@@ -15,7 +15,12 @@ export function AppSidebar() {
   const { collapsible, variant } = useLayout()
   const sidebarData = useSidebarData()
   return (
-    <Sidebar collapsible={collapsible} variant={variant}>
+    <Sidebar
+      collapsible={collapsible}
+      variant={variant}
+      // Desktop: start below the overlay title bar (traffic lights + toggle).
+      className='desktop:top-(--titlebar-height) desktop:h-auto'
+    >
       <SidebarHeader>
         <AppTitle />
       </SidebarHeader>

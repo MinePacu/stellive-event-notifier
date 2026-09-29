@@ -9,6 +9,7 @@ import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { describeApiError, isApiError, setUnauthorizedHandler } from '@/lib/api'
 import { t } from '@/lib/i18n'
+import { isTauri } from '@/lib/runtime'
 import { ThemeProvider } from './context/theme-provider'
 // Generated Routes
 import { routeTree } from './routeTree.gen'
@@ -85,6 +86,9 @@ declare module '@tanstack/react-query' {
     }
   }
 }
+
+// Desktop-only chrome (overlay title bar) is styled via the `desktop:` variant.
+if (isTauri()) document.documentElement.classList.add('tauri')
 
 // Render the app
 const rootElement = document.getElementById('root')!
