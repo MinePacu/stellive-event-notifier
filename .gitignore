@@ -38,3 +38,9 @@ scripts/.cache-root
 .dual-graph/
 .dual-graph-context/
 wiki-local
+
+# Admin web console (admin/stellive-hub-admin)
+admin/stellive-hub-admin/.npmrc
+admin/stellive-hub-admin/dist/
+admin/stellive-hub-admin/src-tauri/target/
+admin/stellive-hub-admin/src-tauri/gen/

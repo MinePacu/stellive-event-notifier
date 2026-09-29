@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAdminSessionCookie } from "../src/admin/adminAuth.js";
-import { renderAdminConsoleHtml } from "../src/admin/adminConsoleHtml.js";
 import { buildApp } from "../src/app.js";
 import type { AdminHubEvent, HubEventAdminValidationResult } from "../src/hub-events/hubEventAdminTypes.js";
 import { HubEventRevisionConflictException } from "../src/hub-events/hubEventAdminService.js";
@@ -65,145 +64,6 @@ async function buildTestApp(service = createFakeService(), dependencies: Record<
 }
 
 describe("admin hub event routes", () => {
-  it("renders hub event image metadata fields in the admin form", () => {
-    const html = renderAdminConsoleHtml();
-
-    expect(html).toContain('id="hub-event-image-policy-state"');
-    expect(html).toContain('id="hub-event-image-url"');
-    expect(html).toContain('id="hub-event-image-source-label"');
-    expect(html).toContain('id="hub-event-image-source-url"');
-    expect(html).toContain('value="official_runtime_url"');
-    expect(html).toContain('value="third_party_allowed"');
-  });
-
-  it("renders the redesigned hub event console layout", () => {
-    const html = renderAdminConsoleHtml();
-
-    expect(html).toContain("hub-event-editor-panel");
-    expect(html).toContain("hub-event-list-panel");
-    expect(html).toContain('id="hub-event-form"');
-    expect(html).toContain('class="event-list hub-events-list"');
-    expect(html).toContain('class="hub-event-pagination"');
-    expect(html).toContain("Basic information");
-    expect(html).toContain("Source and thumbnail");
-    expect(html).toContain("Schedule");
-    expect(html).toContain("Links and venue");
-    expect(html).toContain('class="form-section hub-events-section hub-events-links-venue-section"');
-    expect(html).toContain(".hub-events-links-venue-section {");
-    expect(html).toContain(".hub-event-link-row .field:nth-child(3)");
-
-    for (const anchors of [
-      ["hub-event-generation", "hub-event-member", "hub-event-source-type"],
-      ["hub-event-source-type", "hub-event-image-policy-state", "hub-event-source-url"],
-      ["hub-event-source-url", "hub-event-source-label", "hub-event-image-url"],
-      ["hub-event-image-url", "hub-event-image-source-label", "hub-event-image-source-url"],
-      ["hub-event-announced-at", "hub-event-starts-at", "hub-event-ends-at"],
-      ["hub-event-link-add", "hub-event-links", "hub-event-venue-name", "hub-event-venue-address"],
-    ]) {
-      const positions = anchors.map((anchor) => html.indexOf(`id="${anchor}"`));
-      expect(positions.every((position) => position >= 0)).toBe(true);
-      expect([...positions].sort((a, b) => a - b)).toEqual(positions);
-    }
-  });
-
-  it("preserves hub event ids used by admin console scripts", () => {
-    const html = renderAdminConsoleHtml();
-
-    for (const id of [
-      "hub-event-state-filter",
-      "hub-event-status-filter",
-      "hub-event-search",
-      "hub-event-list",
-      "hub-event-form",
-      "hub-event-generation",
-      "hub-event-member",
-      "hub-event-source-type",
-      "hub-event-image-policy-state",
-      "hub-event-source-url",
-      "hub-event-source-label",
-      "hub-event-image-url",
-      "hub-event-image-source-label",
-      "hub-event-image-source-url",
-      "hub-event-announced-at",
-      "hub-event-starts-at",
-      "hub-event-ends-at",
-      "hub-event-link-add",
-      "hub-event-links",
-      "hub-event-schedule-link-add",
-      "hub-event-schedule-links",
-      "hub-event-venue-name",
-      "hub-event-venue-address",
-      "hub-event-notification-eligible",
-      "hub-event-validation",
-      "hub-event-audit-log",
-      "recalculate-special-days"
-    ]) {
-      expect(html).toContain(`id="${id}"`);
-    }
-  });
-
-  it("renders repeated event and schedule link editors with a primary schedule radio", () => {
-    const html = renderAdminConsoleHtml();
-
-    expect(html).toContain('row.className = "hub-event-link-row"');
-    expect(html).toContain('kind.dataset.linkField = "kind"');
-    expect(html).toContain('label.dataset.linkField = "label"');
-    expect(html).toContain('url.dataset.linkField = "url"');
-    expect(html).toContain('primary.name = "hub-event-primary-schedule"');
-    expect(html).toContain("setPrimaryScheduleItem");
-    expect(html).toContain("collectLinkEditor(hubEventLinksRoot)");
-    expect(html).toContain("collectLinkEditor(hubEventScheduleLinksRoot)");
-    expect(html).toContain("moveLinkEditorRow(row, -1)");
-    expect(html).toContain("moveLinkEditorRow(row, 1)");
-    expect(html).toContain("updateLinkEditorCount(root)");
-    expect(html).toContain('t("hubEvent.scheduleLinkCount", { count: linkCount })');
-  });
-
-  it("defaults the hub event status filter to open while keeping all statuses and ended available", () => {
-    const html = renderAdminConsoleHtml();
-
-    expect(html).toContain('id="hub-event-status-filter"');
-    expect(html).toContain('<option value="open" selected>Open</option>');
-    expect(html).toContain('<option value="">All statuses</option>');
-    expect(html).toContain('<option value="ended">Ended</option>');
-  });
-
-  it("renders backend-supported hub event option values and operator guidance", () => {
-    const html = renderAdminConsoleHtml();
-
-    for (const value of ["online_goods", "online_collab", "offline_concert", "offline_collab", "offline_popup", "ticketing"]) {
-      expect(html).toContain(`value="${value}"`);
-    }
-    for (const value of ["official", "member", "official_collab"]) {
-      expect(html).toContain(`value="${value}"`);
-    }
-    for (const value of ["offline_event", "venue", "store"]) {
-      expect(html).not.toContain(`value="${value}"`);
-    }
-    expect(html).toContain("Use the member's matching generation");
-    expect(html).toContain("Example: akane-lize");
-  });
-
-  it("sends the collected hub event input directly for admin validation", () => {
-    const html = renderAdminConsoleHtml();
-
-    expect(html).toContain('const headers = init && init.body ? { "content-type": "application/json" } : undefined;');
-    expect(html).toContain("body: JSON.stringify(collectHubEventInput())");
-    expect(html).not.toContain("JSON.stringify({ mode, input: collectHubEventInput() })");
-  });
-
-  it("renders single-select checkboxes for hub event rows", () => {
-    const html = renderAdminConsoleHtml();
-
-    expect(html).toContain('data-hub-event-select="true"');
-    expect(html).toContain('className = "event-row"');
-    expect(html).toContain('classList.add("active")');
-    expect(html).toContain('hubEventListRoot.querySelectorAll(');
-    expect(html).toContain('selectedHubEventId');
-    expect(html).toContain('id="hub-event-prev-page"');
-    expect(html).toContain('id="hub-event-next-page"');
-  });
-
   it("rejects missing admin auth", async () => {
     const { app } = await buildTestApp();
     const response = await app.inject({ method: "GET", url: "/v1/admin/hub-events" });
@@ -436,39 +296,6 @@ describe("admin hub event routes", () => {
     expect(service.deleteScheduleItem).toHaveBeenCalledWith("event-1", "schedule-1", 1, expect.any(Object));
     expect(service.restoreScheduleItem).toHaveBeenCalledWith("event-1", "schedule-1", 1, expect.any(Object));
     expect(service.reorderScheduleItems).toHaveBeenCalledOnce();
-  });
-
-  it("renders tabbed schedule editing without expanded schedule arrays in the event form", () => {
-    const html = renderAdminConsoleHtml();
-
-    expect(html).toContain('data-hub-event-tab="info"');
-    expect(html).toContain('data-hub-event-tab="schedule"');
-    expect(html).toContain('data-hub-event-tab="history"');
-    expect(html).toContain('id="hub-event-schedule-dialog"');
-    expect(html).toContain('id="hub-event-schedule-save"');
-    expect(html).toContain('id="hub-event-schedule-title" autocomplete="off" required maxlength="160"');
-    expect(html).toContain('id="hub-event-schedule-description" rows="3" maxlength="2000"');
-    expect(html).toContain('id="hub-event-schedule-timing"');
-    expect(html).toContain('<option value="point">Single point</option>');
-    expect(html).toContain('<option value="period">Period</option>');
-    expect(html).toContain('id="hub-event-schedule-ends-at" type="datetime-local" disabled');
-    expect(html).toContain('function setScheduleTimingUi(timing)');
-    expect(html).toContain('endsAt: timing === "period"');
-    expect(html).toContain('id="hub-event-schedule-label" autocomplete="off" maxlength="80"');
-    expect(html).toContain('label: value("hub-event-schedule-label") || title');
-    expect(html).not.toContain('input.scheduleItems = collectScheduleItems()');
-  });
-
-  it("localizes required title and optional schedule fields", () => {
-    const html = renderAdminConsoleHtml("ko");
-
-    expect(html).toContain(">제목<");
-    expect(html).toContain(">설명 (선택 사항)<");
-    expect(html).toContain(">짧은 라벨 (선택 사항)<");
-    expect(html).toContain(">비우면 제목을 사용합니다<");
-    expect(html).toContain('<option value="point">단일 시점</option>');
-    expect(html).toContain('<option value="period">기간</option>');
-    expect(html).toContain('t("hubEvent.scheduleTitleRequired")');
   });
 
   it("returns schedule revision conflicts as 409 responses", async () => {
