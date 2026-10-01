@@ -527,21 +527,59 @@ class ReservationPoliciesTest {
         assertTrue(presentation.officialEventCancelled)
     }
 
-    @Test fun returnPromptRequiresTenSecondsAndPromptsEachSessionOnce() {
+    @Test fun returnPromptRequiresTenSecondsSinceOpen() {
         val now = Instant.parse("2026-07-22T00:00:20Z")
         val eligible = draft("eligible", now.plusSeconds(20)).copy(openedAt = now.minusSeconds(10))
         assertEquals(
             ReservationReturnPromptDecision.Single(eligible.sessionId),
-            ReservationReturnPromptPolicy.decision(listOf(eligible), setOf(eligible.sessionId), emptySet(), now),
-        )
-        assertEquals(
-            ReservationReturnPromptDecision.None,
-            ReservationReturnPromptPolicy.decision(listOf(eligible), setOf(eligible.sessionId), setOf(eligible.sessionId), now),
+            ReservationReturnPromptPolicy.decision(listOf(eligible), emptyMap(), null, now),
         )
         val tooSoon = eligible.copy(sessionId = UUID.randomUUID(), openedAt = now.minusSeconds(9))
         assertEquals(
             ReservationReturnPromptDecision.None,
-            ReservationReturnPromptPolicy.decision(listOf(tooSoon), setOf(tooSoon.sessionId), emptySet(), now),
+            ReservationReturnPromptPolicy.decision(listOf(tooSoon), emptyMap(), null, now),
+        )
+    }
+
+    @Test fun returnPromptStaysSilentAfterPromptUntilUserLeavesAgain() {
+        val now = Instant.parse("2026-07-22T00:10:00Z")
+        val opened = draft("prompted", now.plusSeconds(600)).copy(openedAt = now.minusSeconds(300))
+        val promptedAt = mapOf(opened.sessionId to now.minusSeconds(120))
+
+        assertEquals(
+            ReservationReturnPromptDecision.None,
+            ReservationReturnPromptPolicy.decision(listOf(opened), promptedAt, null, now),
+        )
+        assertEquals(
+            ReservationReturnPromptDecision.None,
+            ReservationReturnPromptPolicy.decision(listOf(opened), promptedAt, now.minusSeconds(200), now),
+        )
+        assertEquals(
+            ReservationReturnPromptDecision.Single(opened.sessionId),
+            ReservationReturnPromptPolicy.decision(listOf(opened), promptedAt, now.minusSeconds(60), now),
+        )
+        assertEquals(
+            ReservationReturnPromptDecision.None,
+            ReservationReturnPromptPolicy.decision(listOf(opened), promptedAt, now.minusSeconds(5), now),
+        )
+    }
+
+    @Test fun returnPromptAppearsAgainWhenLinkIsReopenedAfterPrompt() {
+        val now = Instant.parse("2026-07-22T00:10:00Z")
+        val reopened = draft("reopened", now.plusSeconds(600)).copy(openedAt = now.minusSeconds(30))
+        val promptedAt = mapOf(reopened.sessionId to now.minusSeconds(120))
+        assertEquals(
+            ReservationReturnPromptDecision.Single(reopened.sessionId),
+            ReservationReturnPromptPolicy.decision(listOf(reopened), promptedAt, null, now),
+        )
+    }
+
+    @Test fun returnPromptIgnoresExpiredDrafts() {
+        val now = Instant.parse("2026-07-22T00:10:00Z")
+        val expired = draft("expired", now.minusSeconds(1)).copy(openedAt = now.minusSeconds(300))
+        assertEquals(
+            ReservationReturnPromptDecision.None,
+            ReservationReturnPromptPolicy.decision(listOf(expired), emptyMap(), null, now),
         )
     }
 
@@ -564,8 +602,8 @@ class ReservationPoliciesTest {
         assertTrue(
             ReservationReturnPromptPolicy.decision(
                 drafts = listOf(first, second),
-                externallyOpenedSessionIds = setOf(first.sessionId, second.sessionId),
-                promptedSessionIds = emptySet(),
+                promptedAt = emptyMap(),
+                lastBackgroundedAt = null,
                 now = now,
             ) is ReservationReturnPromptDecision.Multiple,
         )
