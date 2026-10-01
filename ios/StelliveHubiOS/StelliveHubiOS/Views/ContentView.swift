@@ -74,7 +74,7 @@ struct ContentView: View {
     @State private var pendingAnnouncementId: String?
     @State private var pendingReservationRoute: ReservationRoute?
     @State private var reservationReturnBanner: ReservationReturnBanner?
-    @State private var promptedReservationSessionIDs = Set<UUID>()
+    private let reservationReturnPromptStore = ReservationReturnPromptStore()
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -123,12 +123,26 @@ struct ContentView: View {
             }
         }
         .onChange(of: scenePhase) { phase in
-            guard phase == .active else { return }
-            reservationStore.reload()
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 350_000_000)
-                evaluateReservationReturnBanner()
+            switch phase {
+            case .background:
+                reservationReturnPromptStore.setLastBackgroundedAt(Date())
+            case .active:
+                reloadAndEvaluateReservationReturnBanner()
+            default:
+                break
             }
+        }
+        .task {
+            // The initial .active phase on a cold launch does not trigger onChange.
+            reloadAndEvaluateReservationReturnBanner()
+        }
+    }
+
+    private func reloadAndEvaluateReservationReturnBanner() {
+        reservationStore.reload()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            evaluateReservationReturnBanner()
         }
     }
 
@@ -137,20 +151,23 @@ struct ContentView: View {
             reservationReturnBanner = .error(message)
             return
         }
+        let activeDrafts = reservationStore.activeDrafts
+        reservationReturnPromptStore.retainOnly(Set(activeDrafts.map(\.sessionID)))
+        let now = Date()
         let decision = ReservationReturnPromptPolicy.decision(
-            drafts: reservationStore.activeDrafts,
-            externallyOpenedSessionIDs: reservationStore.externallyOpenedSessionIDs,
-            promptedSessionIDs: promptedReservationSessionIDs,
-            now: Date()
+            drafts: activeDrafts,
+            promptedAt: reservationReturnPromptStore.promptedAt(),
+            lastBackgroundedAt: reservationReturnPromptStore.lastBackgroundedAt,
+            now: now
         )
         switch decision {
         case .none:
             break
         case .single(let sessionID):
-            promptedReservationSessionIDs.insert(sessionID)
+            reservationReturnPromptStore.markPrompted([sessionID], at: now)
             reservationReturnBanner = .single(sessionID)
         case .multiple(let sessionIDs):
-            promptedReservationSessionIDs.formUnion(sessionIDs)
+            reservationReturnPromptStore.markPrompted(Array(sessionIDs), at: now)
             reservationReturnBanner = .multiple
         }
     }

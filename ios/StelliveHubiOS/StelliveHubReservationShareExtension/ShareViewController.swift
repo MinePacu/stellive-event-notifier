@@ -66,7 +66,7 @@ final class ShareViewController: UIViewController {
             return
         }
         if drafts.count == 1 {
-            confirm(draft: drafts[0])
+            presentSingleDraftConfirmation(draft: drafts[0])
             return
         }
         let alert = UIAlertController(title: "추가할 내역 선택", message: "공유한 링크를 저장할 내역을 선택해 주세요.", preferredStyle: .actionSheet)
@@ -80,6 +80,24 @@ final class ShareViewController: UIViewController {
             popover.sourceView = view
             popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
         }
+        present(alert, animated: true)
+    }
+
+    private func presentSingleDraftConfirmation(draft: ReservationDraft) {
+        var lines = [draft.eventSnapshot.title, "판매처: \(draft.providerHost)"]
+        if let sharedURL {
+            let host = URL(string: sharedURL)?.host ?? sharedURL
+            lines.append("공유한 링크: \(host)")
+        }
+        let alert = UIAlertController(
+            title: sharedURL != nil ? "이 내역에 링크를 추가할까요?" : "링크 없이 내역에 추가할까요?",
+            message: lines.joined(separator: "\n"),
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: ReservationPresentationPolicy.addActionLabel(draft.kind), style: .default) { [weak self] _ in
+            self?.confirm(draft: draft)
+        })
+        alert.addAction(UIAlertAction(title: "취소", style: .cancel) { [weak self] _ in self?.complete() })
         present(alert, animated: true)
     }
 
