@@ -191,6 +191,7 @@ import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenNavigationMotion
 import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenTransitionController
 import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenTransitionPolicy
 import dev.minepacu.stelliveeventnotifier.ui.navigation.ScreenTransitionReason
+import dev.minepacu.stelliveeventnotifier.feature.reservations.data.ReservationReturnPromptStore
 import dev.minepacu.stelliveeventnotifier.feature.reservations.data.RoomReservationRepository
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationActionPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraft
@@ -417,10 +418,11 @@ internal var reservationDrafts: List<ReservationDraft> = emptyList()
 internal var reservationRecords: List<ReservationRecord> = emptyList()
 internal var selectedReservationId: UUID? = null
 internal var reservationEditHasUnsavedChanges: (() -> Boolean)? = null
-private val externallyOpenedReservationSessionIds = mutableSetOf<UUID>()
-private val promptedReservationSessionIds = mutableSetOf<UUID>()
-private var reservationExternalFlowActive = false
-private var reservationExternalFlowLeftApp = false
+private val reservationReturnPromptStore by lazy { ReservationReturnPromptStore(this) }
+private var reservationDraftsLoaded = false
+private val reservationReturnPromptEvaluator = Runnable { evaluateReservationReturnPrompt() }
+/** Set right before MainActivity starts ReservationQuickAddActivity so that hop is not counted as leaving the app. */
+internal var reservationInternalLaunchPending = false
 private var pendingReservationRecordingFailure = false
 private var reservationReturnPromptView: View? = null
 internal var pendingReservationHelpScrollAction: ReservationHelpAction? = null
@@ -521,6 +523,10 @@ private var notificationPermissionRequested = false
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 reservationRepository.drafts.collect { drafts ->
                     reservationDrafts = drafts
+                    if (!reservationDraftsLoaded) {
+                        reservationDraftsLoaded = true
+                        scheduleReservationReturnPromptEvaluation()
+                    }
                     ReservationTileService.requestRefresh(this@MainActivity)
                     updateNavigationChrome()
                     if (navigationHistory.currentScreen in setOf(HubScreen.GOODS_EVENTS, HubScreen.RESERVATIONS)) {
@@ -592,15 +598,22 @@ private var notificationPermissionRequested = false
     override fun onResume() {
         super.onResume()
         scheduleLiveClockRefresh()
-        if (reservationExternalFlowLeftApp) {
-            liveClockHandler.postDelayed(::evaluateReservationReturnPrompt, 350L)
-        }
+        scheduleReservationReturnPromptEvaluation()
     }
 
     override fun onPause() {
-        if (reservationExternalFlowActive) reservationExternalFlowLeftApp = true
         liveClockHandler.removeCallbacks(liveClockTicker)
         super.onPause()
+    }
+
+    override fun onStop() {
+        // onStop rather than onPause: dialogs and multi-window pause the activity without leaving the app.
+        val internalLaunch = reservationInternalLaunchPending
+        reservationInternalLaunchPending = false
+        if (!isChangingConfigurations && !internalLaunch) {
+            reservationReturnPromptStore.setLastBackgroundedAt(Instant.now())
+        }
+        super.onStop()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -834,6 +847,7 @@ private var notificationPermissionRequested = false
                 navigationHistory.select(HubScreen.RESERVATIONS)
             }
             is ReservationDeepLinkRoute.QuickAdd -> {
+                reservationInternalLaunchPending = true
                 startActivity(Intent(this, ReservationQuickAddActivity::class.java).apply {
                     route.sessionId?.let { putExtra(ReservationQuickAddActivity.EXTRA_SESSION_ID, it.toString()) }
                 })
@@ -1521,7 +1535,6 @@ internal fun startScreen(
             openExternalUrl(link.url)
             return
         }
-        reservationExternalFlowActive = true
         ReservationExternalLinkPolicy.openFailOpen(
             openExternal = { openExternalUrl(link.url) },
             recordBestEffort = {
@@ -1538,15 +1551,12 @@ internal fun startScreen(
                     )
                     runCatching {
                         reservationRepository.begin(event.id, scheduleItem?.id, kind, snapshot, link.url)
-                    }.onSuccess { draft ->
-                        externallyOpenedReservationSessionIds += draft.sessionId
+                    }.onSuccess {
                         ReservationTileService.requestRefresh(this@MainActivity)
-                        if (reservationExternalFlowLeftApp) {
-                            liveClockHandler.postDelayed(::evaluateReservationReturnPrompt, 350L)
-                        }
+                        scheduleReservationReturnPromptEvaluation()
                     }.onFailure {
                         pendingReservationRecordingFailure = true
-                        if (reservationExternalFlowLeftApp) evaluateReservationReturnPrompt()
+                        scheduleReservationReturnPromptEvaluation()
                     }
                 }
             },
@@ -1554,8 +1564,15 @@ internal fun startScreen(
         )
     }
 
+    private fun scheduleReservationReturnPromptEvaluation() {
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        liveClockHandler.removeCallbacks(reservationReturnPromptEvaluator)
+        liveClockHandler.postDelayed(reservationReturnPromptEvaluator, 350L)
+    }
+
     private fun evaluateReservationReturnPrompt() {
         if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        if (!reservationDraftsLoaded) return
         if (pendingReservationRecordingFailure) {
             pendingReservationRecordingFailure = false
             Snackbar.make(
@@ -1566,15 +1583,20 @@ internal fun startScreen(
                 pushScreen(HubScreen.RESERVATIONS)
             }.show()
         }
+        val now = Instant.now()
+        reservationReturnPromptStore.retainOnly(
+            ReservationDraftPolicy.active(reservationDrafts, now).mapTo(mutableSetOf(), ReservationDraft::sessionId),
+        )
         when (val decision = ReservationReturnPromptPolicy.decision(
             drafts = reservationDrafts,
-            externallyOpenedSessionIds = externallyOpenedReservationSessionIds,
-            promptedSessionIds = promptedReservationSessionIds,
+            promptedAt = reservationReturnPromptStore.promptedAt(),
+            lastBackgroundedAt = reservationReturnPromptStore.lastBackgroundedAt(),
+            now = now,
         )) {
             ReservationReturnPromptDecision.None -> Unit
             is ReservationReturnPromptDecision.Single -> {
                 val draft = reservationDrafts.firstOrNull { it.sessionId == decision.sessionId } ?: return
-                promptedReservationSessionIds += decision.sessionId
+                reservationReturnPromptStore.markPrompted(listOf(decision.sessionId), now)
                 showReservationReturnPrompt(
                     presentationKind = ReservationReturnPromptPresentationPolicy.single(draft.kind),
                     itemTitle = draft.eventSnapshot.title,
@@ -1582,6 +1604,7 @@ internal fun startScreen(
                     bodyRes = R.string.reservation_return_prompt_single_body,
                     secondaryLabelRes = R.string.reservation_return_prompt_not_yet,
                 ) {
+                    reservationInternalLaunchPending = true
                     startActivity(Intent(this, ReservationQuickAddActivity::class.java).putExtra(
                         ReservationQuickAddActivity.EXTRA_SESSION_ID,
                         decision.sessionId.toString(),
@@ -1589,7 +1612,7 @@ internal fun startScreen(
                 }
             }
             is ReservationReturnPromptDecision.Multiple -> {
-                promptedReservationSessionIds += decision.sessionIds
+                reservationReturnPromptStore.markPrompted(decision.sessionIds, now)
                 showReservationReturnPrompt(
                     presentationKind = ReservationReturnPromptPresentationKind.MULTIPLE,
                     itemTitle = null,

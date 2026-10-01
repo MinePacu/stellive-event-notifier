@@ -533,16 +533,23 @@ enum ReservationReturnPromptDecision: Equatable {
 enum ReservationReturnPromptPolicy {
     static let minimumExternalDuration: TimeInterval = 10
 
+    /// Prompting only snoozes a draft: it is asked about again after a relink or a fresh 10s+ absence.
     static func decision(
         drafts: [ReservationDraft],
-        externallyOpenedSessionIDs: Set<UUID>,
-        promptedSessionIDs: Set<UUID>,
+        promptedAt: [UUID: Date],
+        lastBackgroundedAt: Date?,
         now: Date
     ) -> ReservationReturnPromptDecision {
-        let eligible = ReservationDraftPolicy.active(drafts, now: now).filter {
-            externallyOpenedSessionIDs.contains($0.sessionID) &&
-                !promptedSessionIDs.contains($0.sessionID) &&
-                now.timeIntervalSince($0.openedAt) >= minimumExternalDuration
+        let eligible = ReservationDraftPolicy.active(drafts, now: now).filter { draft in
+            guard now.timeIntervalSince(draft.openedAt) >= minimumExternalDuration else { return false }
+            guard let prompted = promptedAt[draft.sessionID] else { return true }
+            if draft.openedAt > prompted { return true }
+            if let lastBackgroundedAt,
+               lastBackgroundedAt > prompted,
+               now.timeIntervalSince(lastBackgroundedAt) >= minimumExternalDuration {
+                return true
+            }
+            return false
         }
         switch eligible.count {
         case 0: return .none
