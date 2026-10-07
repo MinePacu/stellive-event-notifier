@@ -4,6 +4,7 @@ import {
   authenticateBearerToken,
   clearAdminSessionCookie,
   createAdminSessionCookie,
+  isSecureRequest,
   shouldEnableAdminConsole
 } from "../admin/adminAuth.js";
 import { renderAdminConsoleHtml } from "../admin/adminConsoleHtml.js";
@@ -212,10 +213,6 @@ function readLoginToken(body: unknown): string | undefined {
 
 function isAdminLoginRequestPath(url: string): boolean {
   return url === "/admin/login" || url.startsWith("/admin/login?");
-}
-
-function isSecureRequest(request: FastifyRequest, forceSecureCookie: boolean): boolean {
-  return forceSecureCookie || request.protocol === "https";
 }
 
 export function renderAdminLoginHtml(locale: AdminLocale = "en", errorMessage?: string): string {

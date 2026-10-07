@@ -1,5 +1,7 @@
+import { timingSafeEqual } from "node:crypto";
 import type { Prisma } from "@prisma/client";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import { authenticateAdminRequest, isSecureRequest, shouldEnableAdminConsole } from "../admin/adminAuth.js";
 import type { AdapterHealth } from "../admin/adminTypes.js";
 import type { ChzzkTokenResponse } from "../adapters/chzzk/chzzkAuthClient.js";
 import { ChzzkAuthClient } from "../adapters/chzzk/chzzkAuthClient.js";
@@ -26,6 +28,40 @@ export interface ChzzkAuthRouteOptions {
   authClient?: ChzzkAuthRouteAuthClient;
   stateRepository?: ChzzkAuthRouteStateRepository;
   now?: () => Date;
+}
+
+const oauthNonceCookieName = "chzzk_oauth_nonce";
+const oauthNonceCookiePath = "/v1/auth/chzzk";
+const oauthNonceMaxAgeSeconds = 10 * 60;
+
+function serializeOAuthNonceCookie(value: string, maxAgeSeconds: number, secure: boolean): string {
+  const attributes = [
+    `${oauthNonceCookieName}=${value}`,
+    `Path=${oauthNonceCookiePath}`,
+    `Max-Age=${maxAgeSeconds}`,
+    "HttpOnly",
+    // Lax (not Strict): the callback arrives via a cross-site top-level redirect from CHZZK.
+    "SameSite=Lax"
+  ];
+  if (secure) attributes.push("Secure");
+  return attributes.join("; ");
+}
+
+function readOAuthNonceCookie(request: FastifyRequest): string | undefined {
+  const header = request.headers.cookie;
+  if (!header) return undefined;
+  for (const part of header.split(";")) {
+    const [name, ...valueParts] = part.trim().split("=");
+    if (name === oauthNonceCookieName) return valueParts.join("=") || undefined;
+  }
+  return undefined;
+}
+
+function nonceMatches(expected: string, supplied: string | undefined): boolean {
+  if (!supplied) return false;
+  const expectedBuffer = Buffer.from(expected);
+  const suppliedBuffer = Buffer.from(supplied);
+  return expectedBuffer.length === suppliedBuffer.length && timingSafeEqual(expectedBuffer, suppliedBuffer);
 }
 
 function createDefaultAuthClient(env: AppEnv): ChzzkAuthClient | undefined {
@@ -85,12 +121,22 @@ export async function registerChzzkAuthRoutes(app: FastifyInstance, input: Chzzk
     now: input.now ?? (() => new Date())
   };
 
-  app.get("/v1/auth/chzzk/start", async (_request, reply) => {
+  app.get("/v1/auth/chzzk/start", async (request, reply) => {
     if (!isConfigured(options)) {
       return reply.code(503).send({ error: "chzzk_oauth_not_configured" });
     }
+    // Only an authenticated admin may mint a state; otherwise anyone could attach their own
+    // CHZZK account to this server (login CSRF).
+    if (!options.env.ADMIN_CONSOLE_ENABLED) return reply.callNotFound();
+    if (!shouldEnableAdminConsole(options.env)) return reply.code(503).send({ error: "admin_console_token_missing" });
+    const auth = authenticateAdminRequest(request.headers, options.env);
+    if (!auth.ok) return reply.code(401).send({ error: auth.reason });
 
-    const state = createChzzkOAuthState(options.env.CHZZK_AUTH_STATE_SECRET!, options.now());
+    const { state, nonce } = createChzzkOAuthState(options.env.CHZZK_AUTH_STATE_SECRET!, options.now());
+    reply.header(
+      "Set-Cookie",
+      serializeOAuthNonceCookie(nonce, oauthNonceMaxAgeSeconds, isSecureRequest(request, options.env.ADMIN_CONSOLE_COOKIE_SECURE))
+    );
     return reply.redirect(options.authClient!.buildAuthorizeUrl({ state }));
   });
 
@@ -105,8 +151,11 @@ export async function registerChzzkAuthRoutes(app: FastifyInstance, input: Chzzk
       return reply.code(400).send({ error: "invalid_oauth_state" });
     }
 
+    // The state is single-use per browser: clear the nonce cookie on every response from here on.
+    reply.header("Set-Cookie", serializeOAuthNonceCookie("", 0, isSecureRequest(request, options.env.ADMIN_CONSOLE_COOKIE_SECURE)));
+
     const state = verifyChzzkOAuthState(options.env.CHZZK_AUTH_STATE_SECRET!, request.query.state, options.now());
-    if (!state.ok) {
+    if (!state.ok || !nonceMatches(state.nonce, readOAuthNonceCookie(request))) {
       return reply.code(400).send({ error: "invalid_oauth_state" });
     }
 

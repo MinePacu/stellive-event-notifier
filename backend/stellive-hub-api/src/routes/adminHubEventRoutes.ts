@@ -1,9 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteShorthandOptions } from "fastify";
-import {
-  authenticateAdminSessionCookie,
-  authenticateBearerToken,
-  shouldEnableAdminConsole
-} from "../admin/adminAuth.js";
+import { authenticateAdminRequest, shouldEnableAdminConsole } from "../admin/adminAuth.js";
 import { CatalogService } from "../catalog/catalog.js";
 import type { AppEnv } from "../config/env.js";
 import { clearSpecialDayStatusSnapshotCache } from "../hub-events/hubCalendarSpecialDays.js";
@@ -51,10 +47,6 @@ const privilegedRouteOptions: RouteShorthandOptions = {
   } as unknown as RouteShorthandOptions["config"]
 };
 
-function readHeader(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value.join("; ") : value;
-}
-
 function parseLimit(value: unknown, defaultLimit: number): number {
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return defaultLimit;
@@ -72,12 +64,6 @@ function actorFromRequest(request: FastifyRequest): { actorId: string; reason?: 
 function applyNoStore(reply: FastifyReply) {
   reply.header("Cache-Control", "no-store");
   reply.header("Pragma", "no-cache");
-}
-
-function authenticateAdminRequest(request: FastifyRequest, env: AppEnv) {
-  const authorization = readHeader(request.headers.authorization);
-  if (authorization) return authenticateBearerToken(authorization, env.ADMIN_CONSOLE_TOKEN);
-  return authenticateAdminSessionCookie(readHeader(request.headers.cookie), env.ADMIN_CONSOLE_TOKEN);
 }
 
 function parseListFilters(query: Record<string, unknown>): AdminHubEventFilters {
@@ -131,7 +117,7 @@ export async function registerAdminHubEventRoutes(app: FastifyInstance, options:
     if (!options.env.ADMIN_CONSOLE_ENABLED) return reply.callNotFound();
     if (!shouldEnableAdminConsole(options.env)) return reply.code(503).send({ error: "admin_console_token_missing" });
 
-    const auth = authenticateAdminRequest(request, options.env);
+    const auth = authenticateAdminRequest(request.headers, options.env);
     if (!auth.ok) return reply.code(401).send({ error: auth.reason });
   });
 
