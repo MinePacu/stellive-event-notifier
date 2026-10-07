@@ -166,6 +166,7 @@ data class HubEventDto(
     val goodsItems: List<HubEventGoodsItemDto> = emptyList(),
     val goodsCount: Int? = null,
     val goodsListImages: List<HubEventGoodsGalleryImageDto?>? = null,
+    val goodsListLayout: String? = null,
 )
 
 data class HubEventGoodsItemDto(

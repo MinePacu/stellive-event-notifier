@@ -267,7 +267,36 @@ data class HubEvent(
     /** List/summary-only goods count (0 when the server omits it). */
     val goodsCount: Int = 0,
     /** Detail-only official MD list gallery images (notice order). Empty when absent or the server kill switch is on. */
-    val goodsListImages: List<HubEventImage> = emptyList(),
+    val goodsListImages: List<HubEventGoodsListImage> = emptyList(),
+    /** Detail-only, event-level gallery layout. Absent or unknown server values fall back to [HubEventGoodsListLayout.SPLIT]. */
+    val goodsListLayout: HubEventGoodsListLayout = HubEventGoodsListLayout.SPLIT,
+)
+
+/** Gallery image group: "공식 MD 리스트" or "특전". Absent or unknown server values are [MD]. */
+enum class HubEventGoodsListImageKind(val apiValue: String) {
+    MD("md"),
+    BONUS("bonus");
+
+    companion object {
+        fun fromApiValue(value: String?): HubEventGoodsListImageKind =
+            entries.firstOrNull { it.apiValue == value?.trim() } ?: MD
+    }
+}
+
+/** `split` shows an MD row and a bonus row; `single` shows every image in one row in notice order. */
+enum class HubEventGoodsListLayout(val apiValue: String) {
+    SPLIT("split"),
+    SINGLE("single");
+
+    companion object {
+        fun fromApiValue(value: String?): HubEventGoodsListLayout =
+            entries.firstOrNull { it.apiValue == value?.trim() } ?: SPLIT
+    }
+}
+
+data class HubEventGoodsListImage(
+    val image: HubEventImage,
+    val kind: HubEventGoodsListImageKind = HubEventGoodsListImageKind.MD,
 )
 
 enum class HubEventGoodsSalesChannel(val apiValue: String) {

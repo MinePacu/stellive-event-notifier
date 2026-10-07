@@ -1,5 +1,7 @@
 package dev.minepacu.stelliveeventnotifier
 
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsListImageKind
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsListLayout
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventImagePolicyState
 import dev.minepacu.stelliveeventnotifier.core.network.HubApiClient
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventDto
@@ -40,12 +42,12 @@ class HubEventGoodsGalleryDtoParsingTest {
             ]""",
         )
 
-        assertEquals(listOf("https://stellive.me/a/2.png", "https://pbs.twimg.com/media/1.png"), parsed.map { it.url })
-        assertEquals(HubEventImagePolicyState.OFFICIAL_RUNTIME_URL, parsed[0].policyState)
-        assertEquals("MD 리스트 2", parsed[0].altText)
-        assertEquals("공식 공지", parsed[0].sourceLabel)
-        assertEquals("https://stellive.me/notice/1", parsed[0].sourceUrl)
-        assertNull(parsed[1].altText)
+        assertEquals(listOf("https://stellive.me/a/2.png", "https://pbs.twimg.com/media/1.png"), parsed.map { it.image.url })
+        assertEquals(HubEventImagePolicyState.OFFICIAL_RUNTIME_URL, parsed[0].image.policyState)
+        assertEquals("MD 리스트 2", parsed[0].image.altText)
+        assertEquals("공식 공지", parsed[0].image.sourceLabel)
+        assertEquals("https://stellive.me/notice/1", parsed[0].image.sourceUrl)
+        assertNull(parsed[1].image.altText)
     }
 
     @Test
@@ -66,7 +68,7 @@ class HubEventGoodsGalleryDtoParsingTest {
             ]""",
         )
 
-        assertEquals(listOf("https://stellive.me/ok.png"), parsed.map { it.url })
+        assertEquals(listOf("https://stellive.me/ok.png"), parsed.map { it.image.url })
     }
 
     @Test
@@ -78,7 +80,43 @@ class HubEventGoodsGalleryDtoParsingTest {
         val parsed = images(""","goodsListImages":[$entries]""")
 
         assertEquals(20, parsed.size)
-        assertEquals("https://stellive.me/1.png", parsed.first().url)
-        assertEquals("https://stellive.me/20.png", parsed.last().url)
+        assertEquals("https://stellive.me/1.png", parsed.first().image.url)
+        assertEquals("https://stellive.me/20.png", parsed.last().image.url)
+    }
+
+    @Test
+    fun kindParsesAndAbsentOrUnknownFallsBackToMd() {
+        val parsed = images(
+            ""","goodsListImages":[
+              {"policyState":"official_runtime_url","url":"https://stellive.me/1.png","kind":"md"},
+              {"policyState":"official_runtime_url","url":"https://stellive.me/2.png","kind":"bonus"},
+              {"policyState":"official_runtime_url","url":"https://stellive.me/3.png"},
+              {"policyState":"official_runtime_url","url":"https://stellive.me/4.png","kind":"future"},
+              {"policyState":"official_runtime_url","url":"https://stellive.me/5.png","kind":null},
+              {"policyState":"official_runtime_url","url":"https://stellive.me/6.png","kind":" bonus "}
+            ]""",
+        )
+
+        assertEquals(
+            listOf(
+                HubEventGoodsListImageKind.MD,
+                HubEventGoodsListImageKind.BONUS,
+                HubEventGoodsListImageKind.MD,
+                HubEventGoodsListImageKind.MD,
+                HubEventGoodsListImageKind.MD,
+                HubEventGoodsListImageKind.BONUS,
+            ),
+            parsed.map { it.kind },
+        )
+    }
+
+    @Test
+    fun layoutParsesAndAbsentOrUnknownFallsBackToSplit() {
+        assertNull(parse("").goodsListLayout)
+        assertEquals(HubEventGoodsListLayout.SPLIT, HubEventGoodsListLayout.fromApiValue(parse("").goodsListLayout))
+        assertEquals(HubEventGoodsListLayout.SPLIT, HubEventGoodsListLayout.fromApiValue(parse(""","goodsListLayout":"split"""").goodsListLayout))
+        assertEquals(HubEventGoodsListLayout.SINGLE, HubEventGoodsListLayout.fromApiValue(parse(""","goodsListLayout":"single"""").goodsListLayout))
+        assertEquals(HubEventGoodsListLayout.SPLIT, HubEventGoodsListLayout.fromApiValue(parse(""","goodsListLayout":"grid"""").goodsListLayout))
+        assertEquals(HubEventGoodsListLayout.SPLIT, HubEventGoodsListLayout.fromApiValue(parse(""","goodsListLayout":null""").goodsListLayout))
     }
 }

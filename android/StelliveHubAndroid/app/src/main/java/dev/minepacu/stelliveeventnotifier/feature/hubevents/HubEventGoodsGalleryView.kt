@@ -15,77 +15,190 @@ import coil.size.Scale
 import dev.minepacu.stelliveeventnotifier.MainActivity
 import dev.minepacu.stelliveeventnotifier.R
 import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
-import dev.minepacu.stelliveeventnotifier.core.model.HubEventImage
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsListImage
 import dev.minepacu.stelliveeventnotifier.ui.components.HubCardStyle
 
 /**
- * "공식 MD 리스트" card shown on top of the goods section: title, notice link, horizontal thumbnail strip and
- * a source caption. With [showEmptyItemsNotice] it also carries the "goods list not registered yet" note and the
- * purchase button (image-only notices). Thumbnails are loaded by Coil at thumbnail size only; nothing is saved.
+ * "공식 MD 리스트" card shown on top of the goods section. Expanded: one row (single layout) or an MD row and a
+ * bonus row (split layout), each with a count and a horizontal thumbnail strip, then one source caption; the notice
+ * link appears once, on the first row. With [showEmptyItemsNotice] it also carries the "goods list not registered
+ * yet" note and the purchase button (image-only notices). When the event has goods items the card can collapse into
+ * one compact row; the starting state follows the local "expanded by default" setting and expansion is never
+ * persisted. Thumbnails are loaded by Coil at thumbnail size only; nothing is saved.
  */
 internal class HubEventGoodsGalleryView(private val activity: MainActivity) {
 
     fun build(
         event: HubEvent,
-        images: List<HubEventImage>,
+        images: List<HubEventGoodsListImage>,
         showEmptyItemsNotice: Boolean,
     ): View? {
         if (images.isEmpty()) return null
+        val hasGoodsItems = event.goodsItems.isNotEmpty()
+        val rows = HubEventGoodsGalleryPolicy.rows(images, event.goodsListLayout)
         val noticeUrl = HubEventGoodsGalleryPolicy.noticeUrl(event)
-        val viewer = HubEventGoodsGalleryViewer(activity, event, images)
+        val viewers = rows.associateWith { HubEventGoodsGalleryViewer(activity, event, HubEventGoodsGalleryPolicy.viewerImages(it)) }
+        // Per-view state only: the setting decides the starting point, expansion itself is never persisted.
+        var expanded = HubEventGoodsGalleryPolicy.initiallyExpanded(
+            hasGoodsItems = hasGoodsItems,
+            expandedByDefault = activity.goodsGalleryPreferenceStore.readExpandedByDefault(),
+        )
         return activity.baseCard(HubCardStyle.COMPACT).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { bottomMargin = activity.dp(10) }
-            addView(LinearLayout(context).apply {
+            val content = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(activity.dp(14), activity.dp(12), activity.dp(14), activity.dp(12))
-                addView(headerRow(images.size, noticeUrl))
-                addView(thumbnailStrip(images, viewer))
+            }
+            addView(content)
+            lateinit var render: () -> Unit
+            render = {
+                content.removeAllViews()
+                if (hasGoodsItems && !expanded) {
+                    content.addView(collapsedRow(images, event) {
+                        expanded = true
+                        render()
+                    })
+                } else {
+                    rows.forEachIndexed { rowIndex, row ->
+                        content.addView(
+                            rowView(row, viewers.getValue(row), if (rowIndex == 0) noticeUrl else null),
+                            LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT,
+                                LinearLayout.LayoutParams.WRAP_CONTENT,
+                            ).apply { if (rowIndex > 0) topMargin = activity.dp(8) },
+                        )
+                    }
+                    content.addView(TextView(context).apply {
+                        text = HubEventGoodsGalleryPolicy.stripCaption(images)
+                        textSize = 12f
+                        setTextColor(activity.color(R.color.hub_text_muted))
+                        setPadding(0, activity.dp(6), 0, 0)
+                    })
+                    if (showEmptyItemsNotice) content.addView(emptyItemsNotice(event))
+                    if (hasGoodsItems) {
+                        content.addView(
+                            activity.detailActionButton(HubEventGoodsGalleryPolicy.COLLAPSE_CONTROL_LABEL, primary = false) {
+                                expanded = false
+                                render()
+                            }.apply { contentDescription = "공식 MD 리스트 이미지 접기" },
+                            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, activity.dp(44)).apply {
+                                topMargin = activity.dp(10)
+                            },
+                        )
+                    }
+                }
+            }
+            render()
+        }
+    }
+
+    private fun rowView(
+        row: HubEventGoodsGalleryPolicy.Row,
+        viewer: HubEventGoodsGalleryViewer,
+        noticeUrl: String?,
+    ): View = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(headerRow(row.title, row.images.size, noticeUrl, includesNoticeLink = noticeUrl != null))
+        addView(thumbnailStrip(row, viewer))
+    }
+
+    /** Compact row: up to three overlapping mini thumbnails, title, subtitle and a trailing "보기 ⌄". */
+    private fun collapsedRow(images: List<HubEventGoodsListImage>, event: HubEvent, onExpand: () -> Unit): View {
+        val subtitle = HubEventGoodsGalleryPolicy.collapsedSubtitle(images, event.goodsListLayout)
+        return LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = activity.dp(48)
+            isClickable = true
+            isFocusable = true
+            contentDescription = "${HubEventGoodsGalleryPolicy.COLLAPSED_TITLE}, $subtitle, 펼쳐서 보기"
+            setOnClickListener { onExpand() }
+            val shown = images.take(HubEventGoodsGalleryPolicy.COLLAPSED_THUMBNAIL_COUNT)
+            val step = MINI_STEP_DP
+            addView(FrameLayout(context).apply {
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                // Added in reverse so the first image is drawn on top.
+                shown.indices.reversed().forEach { index ->
+                    addView(
+                        thumbnail(shown[index], label = "", contentDescription = null, widthDp = MINI_WIDTH_DP, heightDp = MINI_HEIGHT_DP, radiusDp = 6, onClick = null),
+                        FrameLayout.LayoutParams(activity.dp(MINI_WIDTH_DP), activity.dp(MINI_HEIGHT_DP)).apply {
+                            marginStart = activity.dp(index * step)
+                        },
+                    )
+                }
+            }, LinearLayout.LayoutParams(
+                activity.dp(MINI_WIDTH_DP + (shown.size - 1).coerceAtLeast(0) * step),
+                activity.dp(MINI_HEIGHT_DP),
+            ).apply { marginEnd = activity.dp(12) })
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
                 addView(TextView(context).apply {
-                    text = HubEventGoodsGalleryPolicy.stripCaption(images)
+                    text = HubEventGoodsGalleryPolicy.COLLAPSED_TITLE
+                    textSize = 15f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(activity.color(R.color.hub_text))
+                })
+                addView(TextView(context).apply {
+                    text = subtitle
                     textSize = 12f
                     setTextColor(activity.color(R.color.hub_text_muted))
-                    setPadding(0, activity.dp(6), 0, 0)
                 })
-                if (showEmptyItemsNotice) addView(emptyItemsNotice(event))
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(TextView(context).apply {
+                text = HubEventGoodsGalleryPolicy.EXPAND_CONTROL_LABEL
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(activity.color(R.color.hub_primary))
+                setPadding(activity.dp(8), 0, 0, 0)
             })
         }
     }
 
-    private fun headerRow(count: Int, noticeUrl: String?): View = LinearLayout(activity).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        addView(TextView(context).apply {
-            text = HubEventGoodsGalleryPolicy.SECTION_TITLE
-            textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(activity.color(R.color.hub_text))
-        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        addView(TextView(context).apply {
-            text = HubEventGoodsGalleryPolicy.countLabel(count)
-            textSize = 12f
-            gravity = Gravity.CENTER_VERTICAL or Gravity.END
-            setTextColor(activity.color(if (noticeUrl != null) R.color.hub_primary else R.color.hub_text_muted))
-            if (noticeUrl != null) {
-                isClickable = true
-                isFocusable = true
-                contentDescription = "공식 공지 열기, 외부 링크"
-                setOnClickListener { activity.openExternalUrl(noticeUrl) }
-            }
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, activity.dp(44)))
-    }
+    private fun headerRow(title: String, count: Int, noticeUrl: String?, includesNoticeLink: Boolean): View =
+        LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(context).apply {
+                text = title
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(activity.color(R.color.hub_text))
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(TextView(context).apply {
+                text = HubEventGoodsGalleryPolicy.countLabel(count, includesNoticeLink = includesNoticeLink && noticeUrl != null)
+                textSize = 12f
+                gravity = Gravity.CENTER_VERTICAL or Gravity.END
+                setTextColor(activity.color(if (noticeUrl != null) R.color.hub_primary else R.color.hub_text_muted))
+                if (noticeUrl != null) {
+                    isClickable = true
+                    isFocusable = true
+                    contentDescription = "${count}장, 공식 공지 열기, 외부 링크"
+                    setOnClickListener { activity.openExternalUrl(noticeUrl) }
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, activity.dp(44)))
+        }
 
-    private fun thumbnailStrip(images: List<HubEventImage>, viewer: HubEventGoodsGalleryViewer): View =
+    private fun thumbnailStrip(row: HubEventGoodsGalleryPolicy.Row, viewer: HubEventGoodsGalleryViewer): View =
         HorizontalScrollView(activity).apply {
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(LinearLayout(activity).apply {
                 orientation = LinearLayout.HORIZONTAL
-                images.forEachIndexed { index, image ->
+                row.images.forEachIndexed { index, entry ->
+                    val label = HubEventGoodsGalleryPolicy.thumbnailLabel(entry, index)
                     addView(
-                        thumbnail(image, index, images.size) { viewer.show(index) },
+                        thumbnail(
+                            entry,
+                            label = label,
+                            contentDescription = HubEventGoodsGalleryPolicy.thumbnailContentDescription(row.title, label, index, row.images.size),
+                            widthDp = THUMB_WIDTH_DP,
+                            heightDp = THUMB_HEIGHT_DP,
+                            radiusDp = 10,
+                            onClick = { viewer.show(index) },
+                        ),
                         LinearLayout.LayoutParams(activity.dp(THUMB_WIDTH_DP), activity.dp(THUMB_HEIGHT_DP)).apply {
                             marginEnd = activity.dp(8)
                         },
@@ -94,19 +207,30 @@ internal class HubEventGoodsGalleryView(private val activity: MainActivity) {
             })
         }
 
-    private fun thumbnail(image: HubEventImage, index: Int, total: Int, onClick: () -> Unit): View {
-        val label = HubEventGoodsGalleryPolicy.thumbnailLabel(image, index)
+    /** A rounded fixed-size tile; [onClick] null makes it a decorative (non-interactive) mini thumbnail. */
+    private fun thumbnail(
+        entry: HubEventGoodsListImage,
+        label: String,
+        contentDescription: String?,
+        widthDp: Int,
+        heightDp: Int,
+        radiusDp: Int,
+        onClick: (() -> Unit)?,
+    ): View {
+        val image = entry.image
         return FrameLayout(activity).apply {
             background = activity.rounded(
                 fill = activity.color(R.color.hub_surface),
-                radius = activity.dp(10),
+                radius = activity.dp(radiusDp),
                 stroke = activity.color(R.color.hub_line),
             )
             clipToOutline = true
-            isClickable = true
-            isFocusable = true
-            contentDescription = HubEventGoodsGalleryPolicy.thumbnailContentDescription(label, index, total)
-            setOnClickListener { onClick() }
+            if (onClick != null) {
+                isClickable = true
+                isFocusable = true
+                this.contentDescription = contentDescription
+                setOnClickListener { onClick() }
+            }
             val labelView = TextView(context).apply {
                 text = label
                 textSize = 11f
@@ -193,5 +317,8 @@ internal class HubEventGoodsGalleryView(private val activity: MainActivity) {
     private companion object {
         const val THUMB_WIDTH_DP = 62
         const val THUMB_HEIGHT_DP = 84
+        const val MINI_WIDTH_DP = 30
+        const val MINI_HEIGHT_DP = 40
+        const val MINI_STEP_DP = 14
     }
 }

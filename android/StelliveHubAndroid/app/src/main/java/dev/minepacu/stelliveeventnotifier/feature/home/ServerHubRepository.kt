@@ -9,6 +9,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarSpecialDayKind
 import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsItem
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsListLayout
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsSalesChannel
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventImage
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsGalleryPolicy
@@ -587,6 +588,7 @@ class ServerHubRepository(
                 .sortedWith(compareBy<HubEventGoodsItem> { it.sortOrder }.thenBy { it.id }),
             goodsCount = goodsCount?.coerceAtLeast(0) ?: 0,
             goodsListImages = HubEventGoodsGalleryPolicy.fromDtos(goodsListImages),
+            goodsListLayout = HubEventGoodsListLayout.fromApiValue(goodsListLayout),
         )
     }
 

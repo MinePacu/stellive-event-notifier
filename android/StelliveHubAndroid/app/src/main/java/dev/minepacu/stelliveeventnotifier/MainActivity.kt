@@ -137,6 +137,7 @@ import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalend
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarMode
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarPolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailFormatting
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsGalleryPreferenceStore
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventHeroTagTone
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventImagePolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventLinkPolicy
@@ -375,6 +376,7 @@ internal var songDiscoveryState = SongDiscoveryStateV1()
 internal lateinit var songDiscoveryRepository: SongDiscoveryRepository
 internal lateinit var songFavoritesRepository: SongFavoritesRepository
 internal val songOpenPreferenceStore by lazy { SongOpenPreferenceStore(this) }
+internal val goodsGalleryPreferenceStore by lazy { HubEventGoodsGalleryPreferenceStore(this) }
 internal var selectedSongSortId: String
     get() = songBrowseSession.sortId
     set(value) { songBrowseSession.sortId = value }

@@ -10,4 +10,6 @@ data class HubEventGoodsGalleryImageDto(
     val sourceLabel: String? = null,
     val sourceUrl: String? = null,
     val altText: String? = null,
+    /** "md" | "bonus"; absent or unknown is treated as md by `HubEventGoodsGalleryPolicy.fromDtos`. */
+    val kind: String? = null,
 )
