@@ -10,6 +10,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventImagePolicyState
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventSourceType
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailFormatting
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsGalleryPolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsSectionMode
 import java.time.Instant
@@ -228,5 +229,14 @@ class HubEventGoodsGalleryPolicyTest {
         assertTrue(HubEventGoodsGalleryPolicy.initiallyExpanded(hasGoodsItems = true, expandedByDefault = true))
         assertTrue(HubEventGoodsGalleryPolicy.initiallyExpanded(hasGoodsItems = false, expandedByDefault = false))
         assertTrue(HubEventGoodsGalleryPolicy.initiallyExpanded(hasGoodsItems = false, expandedByDefault = true))
+    }
+
+    @Test
+    fun detailNoticeAddsImageSourceReasonOnlyWithGallery() {
+        assertEquals(HubEventDetailFormatting.NoticeText, HubEventGoodsGalleryPolicy.detailNoticeText(event()))
+        val text = HubEventGoodsGalleryPolicy.detailNoticeText(event(images = listOf(entry())))
+        assertTrue(text.startsWith(HubEventDetailFormatting.NoticeText))
+        assertTrue(text.endsWith(HubEventGoodsGalleryPolicy.IMAGE_SOURCE_NOTICE))
+        assertTrue(HubEventGoodsGalleryPolicy.IMAGE_SOURCE_NOTICE.contains("이용약관"))
     }
 }

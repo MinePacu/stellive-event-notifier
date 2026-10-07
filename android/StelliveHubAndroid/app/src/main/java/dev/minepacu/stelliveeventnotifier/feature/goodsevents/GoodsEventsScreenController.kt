@@ -38,6 +38,7 @@ import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
 import dev.minepacu.stelliveeventnotifier.feature.home.ServerHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.GoodsEventSelectionMode
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarCard
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsGalleryPolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsSection
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarExpansionPolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarMode
@@ -584,7 +585,7 @@ internal class GoodsEventsScreenController(private val activity: MainActivity) {
                 }
             ).let { if (fullScreen) it.withDetailHorizontalMargins() else it }
         )
-        container.addView(activity.noticeCard(HubEventDetailFormatting.NoticeText).let { if (fullScreen) it.withDetailHorizontalMargins() else it })
+        container.addView(activity.noticeCard(HubEventGoodsGalleryPolicy.detailNoticeText(event)).let { if (fullScreen) it.withDetailHorizontalMargins() else it })
     }
 
     private fun hubEventScheduleCard(

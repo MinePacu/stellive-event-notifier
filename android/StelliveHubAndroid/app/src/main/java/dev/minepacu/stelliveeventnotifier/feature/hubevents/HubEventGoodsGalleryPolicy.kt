@@ -81,6 +81,14 @@ object HubEventGoodsGalleryPolicy {
 
     fun displayableImages(event: HubEvent): List<HubEventGoodsListImage> = sanitize(event.goodsListImages)
 
+    /** Why goods photos come from official notice images; appended to the detail notice only when the gallery shows. */
+    const val IMAGE_SOURCE_NOTICE = "굿즈 사진은 공식 공지에 올라온 MD·특전 리스트 이미지를 원본 그대로 보여줍니다. 판매처 상품 페이지는 이용약관상 자동 수집이 금지되어 있어 사용하지 않으며, 이미지를 잘라내거나 저장하지 않고 공식 사이트에서 직접 불러옵니다. 공지가 수정·삭제되면 이미지가 바뀌거나 보이지 않을 수 있으니 정확한 구성과 가격은 공식 공지에서 확인하세요."
+
+    fun detailNoticeText(event: HubEvent): String {
+        val base = HubEventDetailFormatting.NoticeText
+        return if (displayableImages(event).isEmpty()) base else base + "\n\n" + IMAGE_SOURCE_NOTICE
+    }
+
     /**
      * split: an "공식 MD 리스트" row (md) then a "특전" row (bonus), empty rows omitted.
      * single: one "공식 MD 리스트" row with every image in notice order.
