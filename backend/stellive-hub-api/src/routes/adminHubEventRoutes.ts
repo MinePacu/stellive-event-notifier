@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteShorthandOptions } from "fastify";
 import { authenticateAdminRequest, shouldEnableAdminConsole } from "../admin/adminAuth.js";
+import { AuthFailureLimiter, sendAuthRateLimited } from "../admin/authFailureLimiter.js";
 import { CatalogService } from "../catalog/catalog.js";
 import type { AppEnv } from "../config/env.js";
 import { clearSpecialDayStatusSnapshotCache } from "../hub-events/hubCalendarSpecialDays.js";
@@ -39,6 +40,7 @@ export interface AdminHubEventRouteDependencies {
 export interface AdminHubEventRouteOptions {
   env: AppEnv;
   dependencies?: Partial<AdminHubEventRouteDependencies>;
+  authFailureLimiter?: AuthFailureLimiter;
 }
 
 const privilegedRouteOptions: RouteShorthandOptions = {
@@ -107,6 +109,7 @@ async function sendServiceError(error: unknown, reply: FastifyReply) {
 
 export async function registerAdminHubEventRoutes(app: FastifyInstance, options: AdminHubEventRouteOptions): Promise<void> {
   const service = options.dependencies?.service ?? new HubEventAdminService({ catalog: new CatalogService() });
+  const authFailureLimiter = options.authFailureLimiter ?? new AuthFailureLimiter();
   const clearSpecialDayStatusCache =
     options.dependencies?.clearSpecialDayStatusCache ?? clearSpecialDayStatusSnapshotCache;
 
@@ -117,7 +120,11 @@ export async function registerAdminHubEventRoutes(app: FastifyInstance, options:
     if (!options.env.ADMIN_CONSOLE_ENABLED) return reply.callNotFound();
     if (!shouldEnableAdminConsole(options.env)) return reply.code(503).send({ error: "admin_console_token_missing" });
 
+    const retryAfterSeconds = authFailureLimiter.retryAfterSeconds(request.ip);
+    if (retryAfterSeconds !== undefined) return sendAuthRateLimited(reply, retryAfterSeconds);
+
     const auth = authenticateAdminRequest(request.headers, options.env);
+    authFailureLimiter.recordResult(request.ip, auth);
     if (!auth.ok) return reply.code(401).send({ error: auth.reason });
   });
 

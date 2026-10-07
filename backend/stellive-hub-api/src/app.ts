@@ -22,6 +22,7 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyRequest } from "fastify";
 import { Redis } from "ioredis";
+import { AuthFailureLimiter } from "./admin/authFailureLimiter.js";
 import { isConfiguredSecret, loadEnv } from "./config/env.js";
 import { HubEventRepository } from "./hub-events/hubEventRepository.js";
 import { ServiceAnnouncementRepository } from "./announcements/serviceAnnouncementRepository.js";
@@ -71,6 +72,7 @@ export interface BuildAppOptions {
   env?: EnvOverrides;
   useProcessEnv?: boolean;
   chzzkLiveApiFetch?: typeof fetch;
+  authFailureLimiter?: AuthFailureLimiter;
   chzzkObservationWriter?: ChzzkObservationWriter;
   chzzkAuthRoutes?: {
     dependencies?: Partial<Omit<ChzzkAuthRouteOptions, "env">>;
@@ -132,6 +134,25 @@ export function musicConfigurationWarnings(
   }
   if (env.MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED && !services.channelDiscoveryServiceConfigured) {
     warnings.push("music_channel_discovery_service_not_configured");
+  }
+  return warnings;
+}
+
+export type AdminAuthConfigurationWarning = "admin_console_token_weak" | "internal_api_token_weak";
+
+const minRecommendedTokenLength = 32;
+
+export function adminAuthConfigurationWarnings(env: AppEnv): AdminAuthConfigurationWarning[] {
+  const warnings: AdminAuthConfigurationWarning[] = [];
+  if (
+    env.ADMIN_CONSOLE_ENABLED &&
+    isConfiguredSecret(env.ADMIN_CONSOLE_TOKEN) &&
+    env.ADMIN_CONSOLE_TOKEN!.length < minRecommendedTokenLength
+  ) {
+    warnings.push("admin_console_token_weak");
+  }
+  if (isConfiguredSecret(env.INTERNAL_API_TOKEN) && env.INTERNAL_API_TOKEN!.length < minRecommendedTokenLength) {
+    warnings.push("internal_api_token_weak");
   }
   return warnings;
 }
@@ -571,7 +592,8 @@ function resolveEnvInput(options: BuildAppOptions): NodeJS.ProcessEnv | Record<s
 
 export async function buildApp(options: BuildAppOptions = {}) {
   const env = loadEnv(resolveEnvInput(options));
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: true, trustProxy: env.TRUST_PROXY });
+  const authFailureLimiter = options.authFailureLimiter ?? new AuthFailureLimiter();
   app.setErrorHandler((error, request, reply) => {
     const status = (error as { statusCode?: unknown }).statusCode;
     const statusCode = typeof status === "number" && status >= 400 && status <= 599 ? status : 500;
@@ -675,6 +697,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   });
   await registerChzzkAuthRoutes(app, {
     env,
+    authFailureLimiter,
     ...options.chzzkAuthRoutes?.dependencies
   });
   const internalRouteDependencies: Partial<InternalRouteDependencies> = options.internalRoutes?.dependencies
@@ -706,18 +729,22 @@ export async function buildApp(options: BuildAppOptions = {}) {
   })) {
     app.log.warn({ code }, "music configuration warning");
   }
+  for (const code of adminAuthConfigurationWarnings(env)) {
+    app.log.warn({ code }, "admin auth configuration warning");
+  }
   await registerInternalRoutes(app, {
     env,
     dependencies: internalRouteDependencies,
     invalidateMusicCatalogCache,
+    authFailureLimiter,
   });
-  await registerAdminRoutes(app, { env });
-  await registerAdminHubEventRoutes(app, { env, dependencies: options.adminHubEventRoutes?.dependencies });
+  await registerAdminRoutes(app, { env, authFailureLimiter });
+  await registerAdminHubEventRoutes(app, { env, dependencies: options.adminHubEventRoutes?.dependencies, authFailureLimiter });
   const announcementAdminService = options.adminServiceAnnouncementRoutes?.service ?? new ServiceAnnouncementAdminService({
     repository: announcementRepository,
     dispatchUnitOfWork: new PrismaServiceAnnouncementDispatchUnitOfWork(),
     invalidateCache: () => announcementReads.invalidate(),
   });
-  await registerAdminServiceAnnouncementRoutes(app, { env, service: announcementAdminService });
+  await registerAdminServiceAnnouncementRoutes(app, { env, service: announcementAdminService, authFailureLimiter });
   return app;
 }

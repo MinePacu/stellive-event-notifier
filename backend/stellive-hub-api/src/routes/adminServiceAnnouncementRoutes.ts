@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteShorthandOptions } from "fastify";
 import { ServiceAnnouncementAdminService, ServiceAnnouncementValidationError } from "../announcements/serviceAnnouncementAdminService.js";
 import { authenticateAdminSessionCookie, authenticateBearerToken, shouldEnableAdminConsole } from "../admin/adminAuth.js";
+import { AuthFailureLimiter, sendAuthRateLimited } from "../admin/authFailureLimiter.js";
 import type { AppEnv } from "../config/env.js";
 
 const privileged: RouteShorthandOptions = { config: { cors: false } as never };
@@ -20,16 +21,20 @@ async function handle(error: unknown, reply: FastifyReply) {
   throw error;
 }
 
-export async function registerAdminServiceAnnouncementRoutes(app: FastifyInstance, options: { env: AppEnv; service: ServiceAnnouncementAdminService }) {
+export async function registerAdminServiceAnnouncementRoutes(app: FastifyInstance, options: { env: AppEnv; service: ServiceAnnouncementAdminService; authFailureLimiter?: AuthFailureLimiter }) {
+  const authFailureLimiter = options.authFailureLimiter ?? new AuthFailureLimiter();
   app.addHook("preHandler", async (request, reply) => {
     const routeUrl = request.routeOptions.url ?? "";
     if (!routeUrl.startsWith("/v1/admin/announcements") || request.method === "OPTIONS") return;
     if (!options.env.ADMIN_CONSOLE_ENABLED) return reply.callNotFound();
     if (!shouldEnableAdminConsole(options.env)) return reply.code(503).send({ error: "admin_console_token_missing" });
+    const retryAfterSeconds = authFailureLimiter.retryAfterSeconds(request.ip);
+    if (retryAfterSeconds !== undefined) return sendAuthRateLimited(reply, retryAfterSeconds);
     const authorization = header(request.headers.authorization);
     const auth = authorization
       ? authenticateBearerToken(authorization, options.env.ADMIN_CONSOLE_TOKEN)
       : authenticateAdminSessionCookie(header(request.headers.cookie), options.env.ADMIN_CONSOLE_TOKEN);
+    authFailureLimiter.recordResult(request.ip, auth);
     if (!auth.ok) return reply.code(401).send({ error: auth.reason });
   });
 

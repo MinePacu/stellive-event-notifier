@@ -17,10 +17,12 @@ import {
   renderAdminThemeInitScript,
   renderAdminThemeStyle
 } from "../admin/adminThemeHtml.js";
+import { AuthFailureLimiter, sendAuthRateLimited } from "../admin/authFailureLimiter.js";
 import type { AppEnv } from "../config/env.js";
 
 export interface AdminRoutesOptions {
   env: AppEnv;
+  authFailureLimiter?: AuthFailureLimiter;
 }
 
 const privilegedRouteOptions: RouteShorthandOptions = {
@@ -42,6 +44,8 @@ const adminConsoleContentSecurityPolicy = [
 ].join("; ");
 
 export async function registerAdminRoutes(app: FastifyInstance, options: AdminRoutesOptions) {
+  const authFailureLimiter = options.authFailureLimiter ?? new AuthFailureLimiter();
+
   app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (request, body, done) => {
     if (!isAdminLoginRequestPath(request.url)) {
       const error = new Error("Unsupported Media Type") as Error & { statusCode: number };
@@ -66,7 +70,11 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     applyAdminLocaleHeaders(request, reply, options.env, locale);
     const authorizationHeader = readAuthorizationHeader(request.headers.authorization);
     if (authorizationHeader) {
+      const retryAfterSeconds = authFailureLimiter.retryAfterSeconds(request.ip);
+      if (retryAfterSeconds !== undefined) return sendAuthRateLimited(reply, retryAfterSeconds);
+
       const auth = authenticateBearerToken(authorizationHeader, options.env.ADMIN_CONSOLE_TOKEN);
+      authFailureLimiter.recordResult(request.ip, auth);
       if (!auth.ok) {
         return reply.code(401).send({ error: auth.reason });
       }
@@ -109,8 +117,20 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     }
 
     const locale = resolveAdminRequestLocale(request);
+    const retryAfterSeconds = authFailureLimiter.retryAfterSeconds(request.ip);
+    if (retryAfterSeconds !== undefined) {
+      applyAdminConsoleHeaders(reply);
+      applyAdminLocaleHeaders(request, reply, options.env, locale);
+      return reply
+        .code(429)
+        .header("Retry-After", String(retryAfterSeconds))
+        .type("text/html; charset=utf-8")
+        .send(renderAdminLoginHtml(locale, translateAdmin(locale, "error.authRateLimited")));
+    }
+
     const token = readLoginToken(request.body);
     const auth = authenticateBearerToken(token ? `Bearer ${token}` : undefined, options.env.ADMIN_CONSOLE_TOKEN);
+    authFailureLimiter.recordResult(request.ip, auth);
     if (!auth.ok) {
       applyAdminConsoleHeaders(reply);
       applyAdminLocaleHeaders(request, reply, options.env, locale);

@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { authenticateAdminRequest, isSecureRequest, shouldEnableAdminConsole } from "../admin/adminAuth.js";
+import { AuthFailureLimiter, sendAuthRateLimited } from "../admin/authFailureLimiter.js";
 import type { AdapterHealth } from "../admin/adminTypes.js";
 import type { ChzzkTokenResponse } from "../adapters/chzzk/chzzkAuthClient.js";
 import { ChzzkAuthClient } from "../adapters/chzzk/chzzkAuthClient.js";
@@ -28,6 +29,7 @@ export interface ChzzkAuthRouteOptions {
   authClient?: ChzzkAuthRouteAuthClient;
   stateRepository?: ChzzkAuthRouteStateRepository;
   now?: () => Date;
+  authFailureLimiter?: AuthFailureLimiter;
 }
 
 const oauthNonceCookieName = "chzzk_oauth_nonce";
@@ -118,7 +120,8 @@ export async function registerChzzkAuthRoutes(app: FastifyInstance, input: Chzzk
     ...input,
     authClient: input.authClient ?? createDefaultAuthClient(input.env),
     stateRepository: input.stateRepository ?? new PlatformApiStateRepository(),
-    now: input.now ?? (() => new Date())
+    now: input.now ?? (() => new Date()),
+    authFailureLimiter: input.authFailureLimiter ?? new AuthFailureLimiter()
   };
 
   app.get("/v1/auth/chzzk/start", async (request, reply) => {
@@ -129,7 +132,10 @@ export async function registerChzzkAuthRoutes(app: FastifyInstance, input: Chzzk
     // CHZZK account to this server (login CSRF).
     if (!options.env.ADMIN_CONSOLE_ENABLED) return reply.callNotFound();
     if (!shouldEnableAdminConsole(options.env)) return reply.code(503).send({ error: "admin_console_token_missing" });
+    const retryAfterSeconds = options.authFailureLimiter.retryAfterSeconds(request.ip);
+    if (retryAfterSeconds !== undefined) return sendAuthRateLimited(reply, retryAfterSeconds);
     const auth = authenticateAdminRequest(request.headers, options.env);
+    options.authFailureLimiter.recordResult(request.ip, auth);
     if (!auth.ok) return reply.code(401).send({ error: auth.reason });
 
     const { state, nonce } = createChzzkOAuthState(options.env.CHZZK_AUTH_STATE_SECRET!, options.now());

@@ -61,7 +61,8 @@ const routeEnv = {
   ADMIN_CONSOLE_TOKEN: "admin-token",
   ADMIN_OVERVIEW_CACHE_TTL_SECONDS: 15,
   EXTERNAL_API_LOG_RETENTION_DAYS: 31,
-  ADMIN_CONSOLE_COOKIE_SECURE: false
+  ADMIN_CONSOLE_COOKIE_SECURE: false,
+  TRUST_PROXY: false
 };
 
 describe("CHZZK OAuth state signing", () => {
