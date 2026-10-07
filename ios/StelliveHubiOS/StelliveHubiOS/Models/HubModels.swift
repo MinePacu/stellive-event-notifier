@@ -392,6 +392,25 @@ struct HubEventImage: Codable, Hashable {
     let altText: String?
 }
 
+/// Which official notice list an image belongs to. Absent or unknown wire values decode as `.md`.
+enum HubEventGoodsListImageKind: String, Hashable {
+    case md
+    case bonus
+}
+
+/// How the gallery groups its images. Absent or unknown wire values decode as `.split`.
+enum HubEventGoodsListLayout: String, Hashable {
+    case split
+    case single
+}
+
+/// One official MD/bonus list image. Kept here (not in the gallery files) because `HubEvent` is also compiled
+/// into the widget target, which only sees this file.
+struct HubEventGoodsListImage: Hashable {
+    let image: HubEventImage
+    var kind: HubEventGoodsListImageKind = .md
+}
+
 enum HubEventGoodsSalesChannel: String, Hashable {
     case onsite
     case online
@@ -469,6 +488,9 @@ struct HubEvent: Identifiable, Hashable {
     var goodsItems: [HubEventGoodsItem] = []
     /// List/summary preview count; only present on the wire when > 0.
     var goodsCount: Int? = nil
+    /// Detail-only official MD/bonus list images; empty when the server omitted the field. See HubEventGoodsGallery.swift.
+    var goodsListImages: [HubEventGoodsListImage] = []
+    var goodsListLayout: HubEventGoodsListLayout = .split
     let notificationEligible: Bool
     let updatedAt: Date
 }

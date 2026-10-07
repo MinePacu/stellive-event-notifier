@@ -591,6 +591,8 @@ private extension HubEventResponse {
             image: image,
             goodsItems: HubEventGoodsPolicy.sorted((goodsItems?.items ?? []).map { $0.toDomain() }),
             goodsCount: goodsCount.flatMap { $0 > 0 ? $0 : nil },
+            goodsListImages: HubEventGoodsGalleryPolicy.domainImages(from: goodsListImages),
+            goodsListLayout: goodsListLayout?.layout ?? .split,
             notificationEligible: notificationEligible,
             updatedAt: Self.parseDate(updatedAt) ?? Date(timeIntervalSince1970: 0)
         )

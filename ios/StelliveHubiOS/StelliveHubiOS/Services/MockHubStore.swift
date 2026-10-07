@@ -218,6 +218,15 @@ final class MockHubStore: ObservableObject {
                     sortOrder: 2
                 ),
             ],
+            goodsListImages: (1...3).map { number in
+                HubEventGoodsListImage(image: HubEventImage(
+                    policyState: .officialRuntimeUrl,
+                    url: "https://stellive.me/placeholder/md-list-0\(number).png",
+                    sourceLabel: "스텔라이브 공식 공지",
+                    sourceUrl: nil,
+                    altText: "MD 리스트 \(number)"
+                ))
+            },
             notificationEligible: true,
             updatedAt: Date(timeIntervalSince1970: 1_780_120_000)
         ),

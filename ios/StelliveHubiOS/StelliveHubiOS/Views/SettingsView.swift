@@ -237,6 +237,7 @@ struct SettingsContentView: View {
     @EnvironmentObject private var serverStore: ServerHubStore
     @EnvironmentObject private var songOpenPreferenceStore: SongOpenPreferenceStore
     @State private var debugModeEnabled = false
+    @AppStorage(HubEventGoodsGalleryPolicy.expandedByDefaultKey) private var goodsGalleryExpandedByDefault = false
 
     var body: some View {
         let hubRows = SettingsNavigationPolicy.hubRows(settings: store.settings, members: store.members)
@@ -285,6 +286,7 @@ struct SettingsContentView: View {
                 Text("노래 상세 화면의 ‘열기’ 버튼에서 사용할 앱입니다. 공유와 링크 복사에는 YouTube 주소를 사용합니다.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                Toggle(HubEventGoodsGalleryPolicy.settingToggleTitle, isOn: $goodsGalleryExpandedByDefault)
             }
 
             Section("기록 및 정보") {

@@ -287,9 +287,9 @@ struct HubEventDetailView: View {
                 }
             }
         case .goods:
-            if !event.goodsItems.isEmpty {
+            if HubEventGoodsGalleryPolicy.sectionMode(for: event) != .hidden {
                 detailSection("굿즈") {
-                    HubEventGoodsSectionView(eventId: event.id, items: event.goodsItems)
+                    HubEventGoodsGallerySectionView(event: event)
                         .id(event.id)
                 }
             }
