@@ -204,17 +204,22 @@ JSON 컬럼 대신 자식 테이블을 쓰는 이유: 기존 `scheduleItems`/`li
 ### 화면 (기본안)
 
 - 굿즈 섹션 맨 위에 "공식 MD 리스트" 줄: 장수, 공지 링크, 가로 썸네일 스트립, 출처 문구. 기본 펼침.
-- MD 리스트와 특전 리스트는 공지 순서대로 한 스트립에 이어서 표시한다.
+- 특전은 별도 줄로 나눈다 (기본 `split`): 1줄 "MD 리스트"(`kind: md`), 2줄 "특전"(`kind: bonus`). 이미지가 없는 줄은 숨긴다. 서버 환경 변수 `HUB_EVENT_GOODS_GALLERY_LAYOUT=single`로 바꾸면 공지 순서대로 한 줄에 표시한다 (앱 배포 없이 전환).
+- 뷰어는 누른 줄의 이미지 안에서 넘긴다 (`single`이면 전체).
+- 상품 목록이 있는 행사의 시작 상태(펼침/접음)는 미정이며, 결정 전까지 펼침으로 둔다. 이미지 전용 공지는 항상 펼친다.
 - 썸네일을 누르면 전체 화면 뷰어: 위치 표시(`altText` 또는 "이미지 n / N"), 공지 열기, 핀치 확대, 좌우 넘기기, 출처 표시.
 - `goodsItems`가 비어 있고 갤러리만 있으면 "상품 목록은 아직 등록되지 않았어요" 안내와 구매 페이지 버튼을 표시한다.
 - 썸네일은 축소 디코딩하고 원본 크기는 뷰어에서 해당 장을 볼 때만 불러온다.
 
 ### 데이터 계약
 
-- `HubEvent.goodsListImages?: HubEventImage[]` — 공지 순서, 최대 20장. 상세 응답에만 포함하고 목록·캘린더·위젯·부트스트랩에는 넣지 않는다.
+- `HubEvent.goodsListImages?: HubEventGoodsListImage[]` (`HubEventImage` + 선택 `kind: "md" | "bonus"`, 없으면 md) — 공지 순서, 최대 20장. 상세 응답에만 포함하고 목록·캘린더·위젯·부트스트랩에는 넣지 않는다.
+- 상세 응답에는 갤러리가 있을 때만 `goodsListLayout: "split" | "single"`을 함께 보낸다 (환경 변수 `HUB_EVENT_GOODS_GALLERY_LAYOUT`, 기본 split).
 - 저장: `HubEvent.goodsListImages Json?` (nullable 컬럼 추가만 하는 additive 마이그레이션).
 - 검증: 장마다 기존 이미지 정책 검증을 재사용한다. `official_runtime_url`은 호스트 허용 목록(`stellive.me`와 그 하위 도메인, `pbs.twimg.com`)만 받는다. 이 허용 목록은 갤러리 이미지에만 적용하고 기존 이벤트 이미지 동작은 바꾸지 않는다.
 - 공개 응답은 표시 가능한 이미지(`canDisplayHubEventImage`)만 남기고, 하나도 없으면 필드를 생략한다.
+- 이미지별 그룹: `goodsListImages[].kind?: "md" | "bonus"` (선택, 없으면 없는 그대로 저장·반환, 앱은 md로 취급). 잘못된 값은 `goodsListImages.N.kind` / `goods_list_image_kind_invalid`.
+- 레이아웃(서버 주도, 앱 재배포 없이 전환): 환경 변수 `HUB_EVENT_GOODS_GALLERY_LAYOUT=split|single`(기본 `split`, 잘못된 값은 `split`). 공개 상세 응답에 갤러리가 있을 때만 이벤트 수준 `goodsListLayout`을 추가한다(킬 스위치로 숨겨지면 생략, 어드민 응답에는 없음).
 
 ### 롤백 설계
 
@@ -222,6 +227,7 @@ JSON 컬럼 대신 자식 테이블을 쓰는 이유: 기존 `scheduleItems`/`li
 
 | 단계 | 방법 | 효과 | 앱 배포 필요 |
 |---|---|---|---|
+| L0 레이아웃 되돌리기 | `HUB_EVENT_GOODS_GALLERY_LAYOUT=single` 후 컨테이너 재생성 | 두 줄 → 한 줄 | 없음 |
 | L1 즉시 끄기 | 서버 환경 변수 `HUB_EVENT_GOODS_GALLERY_ENABLED=false` 후 재시작 | 공개 상세 응답에서 `goodsListImages` 제거 → 앱이 갤러리를 숨김. 어드민 저장 데이터는 유지 | 없음 |
 | L2 코드 되돌리기 | `git revert` 갤러리 커밋들, 또는 배포 전이면 `git reset --hard goods-gallery-baseline` | 갤러리 코드 전체 제거 | 앱은 다음 릴리스 |
 | L3 DB 정리 | L2 배포 후 `ALTER TABLE "HubEvent" DROP COLUMN "goodsListImages";` 실행 및 해당 마이그레이션 폴더 제거 | 컬럼 삭제 | 없음 |
