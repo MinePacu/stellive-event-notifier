@@ -572,6 +572,16 @@ function resolveEnvInput(options: BuildAppOptions): NodeJS.ProcessEnv | Record<s
 export async function buildApp(options: BuildAppOptions = {}) {
   const env = loadEnv(resolveEnvInput(options));
   const app = Fastify({ logger: true });
+  app.setErrorHandler((error, request, reply) => {
+    const status = (error as { statusCode?: unknown }).statusCode;
+    const statusCode = typeof status === "number" && status >= 400 && status <= 599 ? status : 500;
+    if (statusCode >= 500) {
+      request.log.error({ err: error }, "request_failed");
+      return reply.code(statusCode).send({ error: "internal_error" });
+    }
+    // Rethrow so Fastify's default (parent) error handler builds the unchanged 4xx response.
+    throw error;
+  });
   const youtubeWebSubTargetBuild = createDefaultYoutubeWebSubTargetBuild(env);
   for (const diagnostic of youtubeWebSubTargetBuild.diagnostics) {
     app.log.warn(diagnostic, "youtube WebSub target disabled due to duplicate channel");
