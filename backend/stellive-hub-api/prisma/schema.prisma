@@ -505,6 +505,7 @@ model HubEvent {
   venueName             String?
   venueAddress          String?
   image                 Json?
+  goodsListImages       Json?
   notificationEligible  Boolean  @default(true)
   publicationState      String   @default("draft")
   publishedAt           DateTime?

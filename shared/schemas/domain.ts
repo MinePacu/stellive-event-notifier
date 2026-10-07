@@ -459,6 +459,12 @@ export interface HubEvent {
   image?: HubEventImage;
   /** Detail responses (and admin responses) only. Never present on list, calendar, widget or bootstrap payloads. */
   goodsItems?: HubEventGoodsItem[];
+  /**
+   * Official MD/bonus list page images (one image per notice page), ordered as in the notice, max 20.
+   * Detail and admin responses only; never on list, calendar, widget or bootstrap payloads.
+   * Public detail keeps only displayable images and omits the field when none remain (or when the server kill switch is off).
+   */
+  goodsListImages?: HubEventImage[];
   /** List responses only: number of non-cancelled goods items, present only when greater than zero. */
   goodsCount?: number;
   notificationEligible: boolean;

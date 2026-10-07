@@ -28,6 +28,7 @@ import {
   type ReplaceHubEventGoodsItemsInput
 } from "./hubEventRepository.js";
 import { validateHubEventForAdmin } from "./hubEventPolicy.js";
+import { validateHubEventGoodsListImages } from "./hubEventGoodsGalleryPolicy.js";
 import { normalizeHubEventLinks } from "./hubEventLinkPolicy.js";
 import { normalizeHubEventTags } from "./hubEventTagPolicy.js";
 import { PrismaHubEventAdminUnitOfWork } from "./hubEventAdminUnitOfWork.js";
@@ -168,7 +169,10 @@ export class HubEventAdminService {
   }
 
   validate(input: unknown, mode: "draft" | "publish"): HubEventAdminValidationResult {
-    return validateHubEventForAdmin(input, this.options.catalog, mode);
+    const result = validateHubEventForAdmin(input, this.options.catalog, mode);
+    const galleryErrors = validateHubEventGoodsListImages(input);
+    if (galleryErrors.length === 0) return result;
+    return { valid: false, errors: [...result.errors, ...galleryErrors] };
   }
 
   async createDraft(input: AdminHubEventWriteInput, actor: HubEventAdminActor = {}): Promise<AdminHubEvent> {

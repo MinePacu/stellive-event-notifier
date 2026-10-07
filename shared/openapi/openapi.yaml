@@ -2635,6 +2635,17 @@ components:
             Public detail excludes cancelled items and lists them in sortOrder.
           items:
             $ref: "#/components/schemas/HubEventGoodsItem"
+        goodsListImages:
+          type: array
+          maxItems: 20
+          description: >-
+            Official MD/bonus list page images, ordered as in the notice. Detail and admin responses only;
+            never on list, calendar, widget-snapshot or bootstrap payloads. Public detail keeps only displayable
+            images and omits the field when none remain or when the server kill switch
+            (HUB_EVENT_GOODS_GALLERY_ENABLED=false) is off. Runtime URLs are limited to stellive.me
+            (and subdomains) or pbs.twimg.com.
+          items:
+            $ref: "#/components/schemas/HubEventImage"
         goodsCount:
           type: integer
           minimum: 1

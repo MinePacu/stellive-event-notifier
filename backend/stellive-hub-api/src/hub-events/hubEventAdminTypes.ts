@@ -81,6 +81,9 @@ export type HubEventValidationReason =
   | "goods_purchase_limit_invalid"
   | "goods_schedule_item_invalid"
   | "goods_sort_order_invalid"
+  | "goods_list_images_invalid"
+  | "goods_list_images_too_many"
+  | "goods_list_image_host_not_allowed"
   | "url_not_https"
   | "official_youtube_live_excluded"
   | "routine_platform_activity_excluded";

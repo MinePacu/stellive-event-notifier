@@ -1,6 +1,7 @@
 import type { CatalogService } from "../catalog/catalog.js";
 import { validateHubEvent } from "./hubEventPolicy.js";
 import { withGoodsCountOnly, withPublicGoodsItems } from "./hubEventGoodsPolicy.js";
+import { withPublicGoodsListImages, withoutGoodsListImages } from "./hubEventGoodsGalleryPolicy.js";
 import { resolveEffectiveHubEventStatus, withEffectiveHubEventStatus } from "./hubEventStatus.js";
 import type {
   HubEvent,
@@ -140,6 +141,13 @@ function defaultHubEvents(): HubEvent[] {
           sortOrder: 2
         }
       ],
+      goodsListImages: [1, 2, 3].map((page) => ({
+        policyState: "official_runtime_url" as const,
+        url: `https://stellive.me/placeholder/md-list-0${page}.png`,
+        sourceLabel: "공식 공지",
+        sourceUrl: "https://stellive.me/news/0",
+        altText: `MD 리스트 ${page}`
+      })),
       notificationEligible: true,
       createdAt: "2026-06-01T00:00:00Z",
       updatedAt: "2026-06-01T00:00:00Z"
@@ -185,7 +193,7 @@ export class HubEventService {
 
   getById(id: string): HubEvent | undefined {
     const event = this.events.find((event) => event.id === id);
-    return event ? withPublicGoodsItems(withEffectiveHubEventStatus(event)) : undefined;
+    return event ? withPublicGoodsListImages(withPublicGoodsItems(withEffectiveHubEventStatus(event))) : undefined;
   }
 
   effectiveStatus(event: HubEvent, now: Date = new Date()): HubEventStatus {
@@ -203,7 +211,7 @@ export class HubEventService {
       ? Math.max(1, filters.limit ?? filtered.length ?? 1)
       : Math.min(100, Math.max(1, filters.limit ?? 50));
 
-    const items = filtered.slice(0, limit).map((event) => withGoodsCountOnly(withEffectiveHubEventStatus(event, now)));
+    const items = filtered.slice(0, limit).map((event) => withoutGoodsListImages(withGoodsCountOnly(withEffectiveHubEventStatus(event, now))));
     const nextCursor = filtered.length > limit ? items[items.length - 1]?.id : undefined;
 
     return nextCursor ? { items, nextCursor } : { items };
@@ -220,7 +228,7 @@ export class HubEventService {
         return status === "closing_soon" || status === "open" || status === "upcoming";
       })
       .slice(0, 3)
-      .map((event) => withGoodsCountOnly(withEffectiveHubEventStatus(event, now)));
+      .map((event) => withoutGoodsListImages(withGoodsCountOnly(withEffectiveHubEventStatus(event, now))));
 
     return { openCount, closingSoonCount, upcomingCount, preview };
   }

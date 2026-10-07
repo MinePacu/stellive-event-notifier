@@ -5,6 +5,7 @@ import {
   type CalendarResponseOptions,
   type WidgetSnapshotOptions
 } from "../hub-events/hubEventCalendar.js";
+import { applyGoodsGalleryKillSwitch } from "../hub-events/hubEventGoodsGalleryPolicy.js";
 import type { HubEventFilters, HubEventReadPort } from "../hub-events/hubEventService.js";
 import type { SpecialDayOccurrence } from "../hub-events/hubCalendarSpecialDayMaterializer.js";
 import type {
@@ -33,6 +34,8 @@ const hubCalendarEntryKinds = new Set<HubCalendarEntryKind>(["hub_event", "membe
 
 export interface RegisterHubEventReadRouteOptions {
   hubEvents: HubEventReadPort;
+  /** HUB_EVENT_GOODS_GALLERY_ENABLED kill switch; defaults to true. When false, detail omits goodsListImages. */
+  goodsGalleryEnabled?: boolean;
   hubCalendarSpecialDays?: HubCalendarSpecialDay[];
   hubCalendarSpecialDayOccurrences?: {
     listRange(filters: {
@@ -276,7 +279,7 @@ function specialDayStatusesChanged(
 }
 
 export default function registerHubEventReadRoutes(app: FastifyInstance, options: RegisterHubEventReadRouteOptions): void {
-  const { hubEvents, hubCalendarSpecialDays = [], hubCalendarSpecialDayOccurrences } = options;
+  const { hubEvents, goodsGalleryEnabled = true, hubCalendarSpecialDays = [], hubCalendarSpecialDayOccurrences } = options;
 
   async function listOptionalSpecialDayOccurrences(
     filters: { from: Date; to: Date; generationId?: string; memberId?: string; kind?: string },
@@ -382,6 +385,6 @@ export default function registerHubEventReadRoutes(app: FastifyInstance, options
     const { id } = request.params as { id: string };
     const event = await hubEvents.getById(id);
     if (!event) return reply.code(404).send({ error: "hub_event_not_found" });
-    return event;
+    return applyGoodsGalleryKillSwitch(event, goodsGalleryEnabled);
   });
 }

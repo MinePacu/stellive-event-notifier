@@ -17,6 +17,7 @@ import { koreaDateKey, resolveEffectiveHubEventStatus, withEffectiveHubEventStat
 import { deriveHubEventScheduleMode, normalizeHubEventScheduleText } from "./hubEventSchedulePolicy.js";
 import { isHubEventTag } from "./hubEventTagPolicy.js";
 import { withPublicGoodsItems, type AdminHubEventGoodsItemWriteInput } from "./hubEventGoodsPolicy.js";
+import { normalizeGoodsListImages, withPublicGoodsListImages } from "./hubEventGoodsGalleryPolicy.js";
 import {
   firstEventLegacyProjection,
   firstScheduleLegacyProjection,
@@ -48,6 +49,7 @@ interface HubEventRecord {
   venueName: string | null;
   venueAddress: string | null;
   image?: unknown | null;
+  goodsListImages?: unknown | null;
   notificationEligible: boolean;
   publicationState: string;
   publishedAt: Date | null;
@@ -391,16 +393,18 @@ function toPublicHubEvent(record: HubEventRecord): HubEvent {
 
 /** Public detail: non-cancelled goods only, images only when displayable. */
 function toPublicDetailHubEvent(record: HubEventRecord): HubEvent {
-  return withPublicGoodsItems({
+  return withPublicGoodsListImages(withPublicGoodsItems({
     ...toPublicHubEvent(record),
-    goodsItems: (record.goodsItems ?? []).map(toGoodsItem)
-  });
+    goodsItems: (record.goodsItems ?? []).map(toGoodsItem),
+    goodsListImages: normalizeGoodsListImages(record.goodsListImages)
+  }));
 }
 
 function toAdminHubEvent(record: HubEventRecord): AdminHubEvent {
   return stripUndefined({
     ...toPublicHubEvent(record),
     goodsItems: record.goodsItems?.map(toGoodsItem),
+    goodsListImages: normalizeGoodsListImages(record.goodsListImages),
     publicationState: record.publicationState,
     publishedAt: toIso(record.publishedAt),
     cancelledAt: toIso(record.cancelledAt),
@@ -457,6 +461,12 @@ function toScheduleDate(
   return toDate(value);
 }
 
+/** undefined = leave untouched; null (HTTP body) or an empty list clears the column. */
+function toGoodsListImagesWriteValue(value: HubEventImage[] | null | undefined) {
+  if (value === undefined) return undefined;
+  return (value === null ? undefined : normalizeGoodsListImages(value)) ?? Prisma.DbNull;
+}
+
 function toWriteData(input: AdminHubEventWriteInput): Record<string, unknown> {
   const activeSchedules = input.scheduleItems?.filter((item) => !item.cancelledAt) ?? [];
   const projectedSchedule = activeSchedules.find((item) => item.isPrimary);
@@ -488,6 +498,7 @@ function toWriteData(input: AdminHubEventWriteInput): Record<string, unknown> {
     venueName: input.venueName,
     venueAddress: input.venueAddress,
     image: input.image,
+    goodsListImages: toGoodsListImagesWriteValue(input.goodsListImages),
     notificationEligible: input.notificationEligible
   });
 }
