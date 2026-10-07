@@ -533,6 +533,12 @@ enum HubEventLinkPolicy {
         return HubEventLink(id: id, kind: kind, label: label, url: url, sortOrder: sortOrder)
     }
 
+    /// Returns a URL only for server-provided `https://` links that have a host; every other scheme is rejected.
+    static func httpsURL(from rawValue: String?) -> URL? {
+        guard let value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines), isHTTPS(value) else { return nil }
+        return URL(string: value)
+    }
+
     private static func isHTTPS(_ value: String) -> Bool {
         guard let components = URLComponents(string: value) else { return false }
         return components.scheme?.lowercased() == "https" && components.host?.isEmpty == false

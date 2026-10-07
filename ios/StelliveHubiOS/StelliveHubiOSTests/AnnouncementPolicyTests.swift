@@ -24,4 +24,25 @@ final class AnnouncementPolicyTests: XCTestCase {
         XCTAssertEqual(AnnouncementDeepLinkPolicy.id(from: URL(string: "stellivehub://announcements/notice-1")!), "notice-1")
         XCTAssertNil(AnnouncementDeepLinkPolicy.id(from: URL(string: "stellivehub://hub-events/notice-1")!))
     }
+
+    func testSafeAppDeepLinkAcceptsOnlyRecognizedAppRoutes() {
+        XCTAssertNotNil(AnnouncementDeepLinkPolicy.safeAppDeepLink("stellivehub://announcements/notice-1"))
+        XCTAssertNotNil(AnnouncementDeepLinkPolicy.safeAppDeepLink("stellivehub://hub-events/event-1"))
+        XCTAssertNotNil(AnnouncementDeepLinkPolicy.safeAppDeepLink("stellivehub://reservations"))
+        XCTAssertNil(AnnouncementDeepLinkPolicy.safeAppDeepLink(nil))
+        XCTAssertNil(AnnouncementDeepLinkPolicy.safeAppDeepLink("stellivehub://unknown/x"))
+        XCTAssertNil(AnnouncementDeepLinkPolicy.safeAppDeepLink("tel:112"))
+        XCTAssertNil(AnnouncementDeepLinkPolicy.safeAppDeepLink("https://example.com/announcements/x"))
+        XCTAssertNil(AnnouncementDeepLinkPolicy.safeAppDeepLink("otherapp://announcements/x"))
+    }
+
+    func testHttpsURLRejectsNonHttpsAndHostless() {
+        XCTAssertEqual(HubEventLinkPolicy.httpsURL(from: "https://chzzk.naver.com/live/x"), URL(string: "https://chzzk.naver.com/live/x"))
+        XCTAssertNil(HubEventLinkPolicy.httpsURL(from: nil))
+        XCTAssertNil(HubEventLinkPolicy.httpsURL(from: ""))
+        XCTAssertNil(HubEventLinkPolicy.httpsURL(from: "http://example.com"))
+        XCTAssertNil(HubEventLinkPolicy.httpsURL(from: "javascript:alert(1)"))
+        XCTAssertNil(HubEventLinkPolicy.httpsURL(from: "tel:112"))
+        XCTAssertNil(HubEventLinkPolicy.httpsURL(from: "https://"))
+    }
 }

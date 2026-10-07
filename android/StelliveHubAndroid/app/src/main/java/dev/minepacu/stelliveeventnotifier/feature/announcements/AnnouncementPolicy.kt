@@ -44,6 +44,13 @@ object AnnouncementPolicy {
 
 object AnnouncementDeepLinkPolicy {
     private const val PREFIX = "stellivehub://announcements/"
+    private const val APP_SCHEME_PREFIX = "stellivehub://"
+
+    /** Returns [value] only when it is an app-owned `stellivehub://` link; other schemes from server JSON are rejected. */
+    fun safeAppDeepLink(value: String?): String? = value
+        ?.trim()
+        ?.takeIf { it.startsWith(APP_SCHEME_PREFIX, ignoreCase = true) && it.length > APP_SCHEME_PREFIX.length }
+
     fun idFromAppDeepLink(value: String?): String? = value
         ?.takeIf { it.startsWith(PREFIX) }
         ?.removePrefix(PREFIX)

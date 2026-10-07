@@ -162,6 +162,29 @@ describe("service announcement publish flow", () => {
   });
 });
 
+describe("service announcement link validation", () => {
+  const service = new ServiceAnnouncementAdminService({ repository: {} as never, invalidateCache: vi.fn(), now: () => now });
+  const base = {
+    type: "general", severity: "info", title: "공지", summary: "요약", body: "본문", targetPlatforms: ["android"],
+  };
+
+  it("accepts only https externalUrl and keeps empty/null handling", () => {
+    expect(service.validate({ ...base, externalUrl: "https://stellive.me/notice/1" }).externalUrl).toBe("https://stellive.me/notice/1");
+    expect(service.validate({ ...base, externalUrl: "" }).externalUrl).toBe("");
+    expect(service.validate({ ...base, externalUrl: null }).externalUrl).toBeNull();
+    for (const externalUrl of ["javascript:alert(1)", "http://stellive.me/notice/1", "tel:112", "data:text/html,x", "file:///etc/passwd"]) {
+      expect(() => service.validate({ ...base, externalUrl }), externalUrl).toThrow("service_announcement_validation_failed");
+    }
+  });
+
+  it("accepts only stellivehub:// appDeepLink", () => {
+    expect(service.validate({ ...base, appDeepLink: "stellivehub://announcements/notice-1" }).appDeepLink).toBe("stellivehub://announcements/notice-1");
+    for (const appDeepLink of ["https://stellive.me", "tel:112", "market://details?id=x"]) {
+      expect(() => service.validate({ ...base, appDeepLink }), appDeepLink).toThrow("service_announcement_validation_failed");
+    }
+  });
+});
+
 describe("service announcement admin deletion", () => {
   it("renders a delete action for the selected announcement", () => {
     const html = renderAdminConsoleHtml();

@@ -84,7 +84,7 @@ final class MockHubStore: ObservableObject {
             updatedMember.liveCategory = displayLive ? LiveStatusFormatter.liveCategoryText(status.liveCategory) : nil
             updatedMember.liveViewerCount = displayLive ? status.viewerCount : nil
             updatedMember.channelImageURL = status.channelImageUrl.flatMap(URL.init(string:))
-            updatedMember.livePlatformURL = displayLive ? status.platformUrl.flatMap(URL.init(string:)) : nil
+            updatedMember.livePlatformURL = displayLive ? HubEventLinkPolicy.httpsURL(from: status.platformUrl) : nil
             updatedMember.liveLastCheckedAt = Self.parseInstant(status.lastCheckedAt)
             return updatedMember
         }

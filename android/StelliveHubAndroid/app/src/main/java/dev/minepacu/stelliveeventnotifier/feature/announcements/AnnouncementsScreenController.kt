@@ -137,8 +137,9 @@ internal class AnnouncementsScreenController(private val activity: MainActivity)
                 isClickable = true
                 isFocusable = true
                 setOnClickListener {
-                    announcement.appDeepLink?.let { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) }
-                        ?: activity.openExternalUrl(announcement.externalUrl)
+                    AnnouncementDeepLinkPolicy.safeAppDeepLink(announcement.appDeepLink)?.let {
+                        activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it), activity, MainActivity::class.java))
+                    } ?: activity.openExternalUrl(announcement.externalUrl)
                 }
             })
         }

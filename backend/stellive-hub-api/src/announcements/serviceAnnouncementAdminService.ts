@@ -13,7 +13,10 @@ import {
 } from "./serviceAnnouncementRepository.js";
 import { isValidAppVersion } from "./serviceAnnouncementTargetPolicy.js";
 
-const optionalUrl = z.union([z.string().url(), z.literal(""), z.null()]).optional();
+const httpsUrl = z.string().url().refine((value) => {
+  try { return new URL(value).protocol === "https:"; } catch { return false; }
+}, "https URL만 사용할 수 있습니다.");
+const optionalUrl = z.union([httpsUrl, z.literal(""), z.null()]).optional();
 const writeSchema = z.object({
   type: z.enum(["general", "incident", "maintenance", "version_update"]),
   severity: z.enum(["info", "important", "critical"]),
