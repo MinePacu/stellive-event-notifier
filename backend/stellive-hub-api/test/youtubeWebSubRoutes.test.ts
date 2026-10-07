@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import Fastify from "fastify";
 import { loadEnv } from "../src/config/env.js";
@@ -9,7 +10,15 @@ const routeEnv = loadEnv({
   YOUTUBE_DATA_API_FALLBACK_ENABLED: false,
   YOUTUBE_WEBSUB_CALLBACK_URL: "https://example.com/v1/webhooks/youtube",
   YOUTUBE_WEBSUB_VERIFY_TOKEN: "verify-token",
+  YOUTUBE_WEBSUB_SECRET: "websub-secret",
 });
+
+function signedHeaders(body: string, algorithm: "sha1" | "sha256" = "sha1", secret = "websub-secret") {
+  return {
+    "content-type": "application/atom+xml",
+    "x-hub-signature": `${algorithm}=${createHmac(algorithm, secret).update(body, "utf8").digest("hex")}`,
+  };
+}
 
 const sampleAtom = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns:yt="http://www.youtube.com/xml/schemas/2015">
@@ -110,7 +119,7 @@ describe("registerWebhookRoutes", () => {
     const response = await app.inject({
       method: "POST",
       url: "/v1/webhooks/youtube",
-      headers: { "content-type": "application/atom+xml" },
+      headers: signedHeaders(sampleAtom, "sha256"),
       payload: sampleAtom,
     });
 
@@ -168,7 +177,7 @@ it("passes WebSub video notifications to the required upload hook before song in
   const response = await app.inject({
     method: "POST",
     url: "/v1/webhooks/youtube",
-    headers: { "content-type": "application/atom+xml" },
+    headers: signedHeaders(sampleAtom),
     payload: sampleAtom,
   });
   await app.close();
@@ -199,7 +208,7 @@ it("returns a retryable 5xx when upload notification persistence fails", async (
   const response = await app.inject({
     method: "POST",
     url: "/v1/webhooks/youtube",
-    headers: { "content-type": "application/atom+xml" },
+    headers: signedHeaders(sampleAtom),
     payload: sampleAtom,
   });
   await app.close();
@@ -207,4 +216,124 @@ it("returns a retryable 5xx when upload notification persistence fails", async (
   expect(response.statusCode).toBe(500);
   expect(ingestYoutubeUpload).not.toHaveBeenCalled();
 });
+});
+
+function newPostApp(envOverrides: Record<string, unknown>) {
+  const handleYoutubeUpload = vi.fn(async () => undefined);
+  const ingestYoutubeUpload = vi.fn(async () => ({ ingested: true as const, songId: "song-1" }));
+  const env = loadEnv({
+    DATABASE_URL: "postgresql://stellive:stellive@localhost:5432/stellive_hub_test",
+    YOUTUBE_WEBSUB_ENABLED: true,
+    YOUTUBE_DATA_API_FALLBACK_ENABLED: false,
+    YOUTUBE_WEBSUB_CALLBACK_URL: "https://example.com/v1/webhooks/youtube",
+    YOUTUBE_WEBSUB_VERIFY_TOKEN: "verify-token",
+    ...envOverrides,
+  });
+  const subscriptions = subscriptionDouble(vi.fn(async () => undefined));
+  const app = Fastify();
+  return {
+    app,
+    handleYoutubeUpload,
+    ingestYoutubeUpload,
+    subscriptions,
+    register: () => registerWebhookRoutes(app, {
+      env,
+      subscriptions,
+      songIngestion: { ingestYoutubeUpload },
+      uploadNotification: { handleYoutubeUpload },
+      targetResolver,
+    }),
+  };
+}
+
+const verifyUrl = (token?: string) =>
+  "/v1/webhooks/youtube?hub.mode=subscribe&hub.topic=https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC123&hub.challenge=challenge-token"
+  + (token === undefined ? "" : `&hub.verify_token=${token}`);
+
+describe("registerWebhookRoutes hardening", () => {
+  it("rejects POST with 503 when WebSub is enabled but the secret is unset", async () => {
+    const t = newPostApp({});
+    await t.register();
+    const response = await t.app.inject({ method: "POST", url: "/v1/webhooks/youtube", headers: { "content-type": "application/atom+xml" }, payload: sampleAtom });
+    await t.app.close();
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: "youtube_websub_secret_not_configured" });
+    expect(t.handleYoutubeUpload).not.toHaveBeenCalled();
+    expect(t.ingestYoutubeUpload).not.toHaveBeenCalled();
+  });
+
+  it("rejects POST with 503 when the secret is the .env.example placeholder, even if signed with it", async () => {
+    const t = newPostApp({ YOUTUBE_WEBSUB_SECRET: "replace_with_websub_secret" });
+    await t.register();
+    const response = await t.app.inject({
+      method: "POST",
+      url: "/v1/webhooks/youtube",
+      headers: signedHeaders(sampleAtom, "sha1", "replace_with_websub_secret"),
+      payload: sampleAtom,
+    });
+    await t.app.close();
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: "youtube_websub_secret_not_configured" });
+    expect(t.handleYoutubeUpload).not.toHaveBeenCalled();
+  });
+
+  it("rejects POST with 403 when the signature is missing or invalid", async () => {
+    const t = newPostApp({ YOUTUBE_WEBSUB_SECRET: "websub-secret" });
+    await t.register();
+    const missing = await t.app.inject({ method: "POST", url: "/v1/webhooks/youtube", headers: { "content-type": "application/atom+xml" }, payload: sampleAtom });
+    const invalid = await t.app.inject({
+      method: "POST",
+      url: "/v1/webhooks/youtube",
+      headers: signedHeaders(sampleAtom, "sha1", "wrong-secret"),
+      payload: sampleAtom,
+    });
+    await t.app.close();
+
+    expect(missing.statusCode).toBe(403);
+    expect(invalid.statusCode).toBe(403);
+    expect(invalid.json()).toEqual({ error: "invalid_websub_signature" });
+    expect(t.handleYoutubeUpload).not.toHaveBeenCalled();
+    expect(t.ingestYoutubeUpload).not.toHaveBeenCalled();
+  });
+
+  it("rejects GET verification with 503 when the verify token env is unset and the request omits the token", async () => {
+    const t = newPostApp({ YOUTUBE_WEBSUB_VERIFY_TOKEN: undefined, YOUTUBE_WEBSUB_SECRET: "websub-secret" });
+    await t.register();
+    const response = await t.app.inject({ method: "GET", url: verifyUrl() });
+    await t.app.close();
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: "youtube_websub_verify_token_not_configured" });
+    expect(t.subscriptions.upsertSubscription).not.toHaveBeenCalled();
+    expect(t.subscriptions.upsertVerifiedSubscription).not.toHaveBeenCalled();
+  });
+
+  it("rejects GET verification with 503 when the verify token env is the .env.example placeholder", async () => {
+    const t = newPostApp({ YOUTUBE_WEBSUB_VERIFY_TOKEN: "replace_with_websub_verify_token", YOUTUBE_WEBSUB_SECRET: "websub-secret" });
+    await t.register();
+    const response = await t.app.inject({ method: "GET", url: verifyUrl("replace_with_websub_verify_token") });
+    await t.app.close();
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: "youtube_websub_verify_token_not_configured" });
+    expect(t.subscriptions.upsertVerifiedSubscription).not.toHaveBeenCalled();
+  });
+
+  it("rejects GET verification with 401 for a missing or wrong token and echoes the challenge for the right one", async () => {
+    const t = newPostApp({ YOUTUBE_WEBSUB_SECRET: "websub-secret" });
+    await t.register();
+    const missing = await t.app.inject({ method: "GET", url: verifyUrl() });
+    const wrong = await t.app.inject({ method: "GET", url: verifyUrl("wrong-token") });
+    const correct = await t.app.inject({ method: "GET", url: verifyUrl("verify-token") });
+    await t.app.close();
+
+    expect(missing.statusCode).toBe(401);
+    expect(wrong.statusCode).toBe(401);
+    expect(wrong.json()).toEqual({ error: "invalid_websub_verify_token" });
+    expect(correct.statusCode).toBe(200);
+    expect(correct.body).toBe("challenge-token");
+    expect(t.subscriptions.upsertVerifiedSubscription).toHaveBeenCalledTimes(1);
+  });
 });

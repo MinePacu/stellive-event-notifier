@@ -105,6 +105,7 @@ type BootstrapHubEventsPort = Pick<HubEventRepository, "summary">;
 export type MusicConfigurationWarning =
   | "music_sync_youtube_api_not_configured"
   | "youtube_websub_official_channel_disabled"
+  | "youtube_websub_secret_not_configured"
   | "music_channel_discovery_requires_music_sync"
   | "music_channel_discovery_internal_token_not_configured"
   | "music_channel_discovery_service_not_configured";
@@ -122,6 +123,9 @@ export function musicConfigurationWarnings(
   }
   if (env.YOUTUBE_WEBSUB_ENABLED && env.YOUTUBE_WEBSUB_CALLBACK_URL && env.YOUTUBE_WEBSUB_VERIFY_TOKEN && !isConfiguredSecret(env.YOUTUBE_API_KEY)) {
     warnings.push("youtube_websub_official_channel_disabled");
+  }
+  if (env.YOUTUBE_WEBSUB_ENABLED && !isConfiguredSecret(env.YOUTUBE_WEBSUB_SECRET)) {
+    warnings.push("youtube_websub_secret_not_configured");
   }
   if (env.MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED && !isConfiguredSecret(env.INTERNAL_API_TOKEN)) {
     warnings.push("music_channel_discovery_internal_token_not_configured");
@@ -309,6 +313,7 @@ function createDefaultYoutubeSubscriptionScheduler(
 ): Pick<InternalRouteDependencies, "youtubeSubscriptionScheduler"> {
   if (dependencies?.youtubeSubscriptionScheduler) return {};
   if (!env.YOUTUBE_WEBSUB_CALLBACK_URL || !env.YOUTUBE_WEBSUB_VERIFY_TOKEN) return {};
+  if (!isConfiguredSecret(env.YOUTUBE_WEBSUB_VERIFY_TOKEN) || !isConfiguredSecret(env.YOUTUBE_WEBSUB_SECRET)) return {};
 
   return {
     youtubeSubscriptionScheduler: new YoutubeWebSubSubscriptionService({

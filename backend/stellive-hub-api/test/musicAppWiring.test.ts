@@ -73,6 +73,7 @@ describe("music app wiring", () => {
       MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED: "true",
       YOUTUBE_API_KEY: "replace_with_super_secret_key",
       INTERNAL_API_TOKEN: "replace_with_super_secret_token",
+      YOUTUBE_WEBSUB_SECRET: "websub-secret",
     });
 
     const warnings = musicConfigurationWarnings(env, {
