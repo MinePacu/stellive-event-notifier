@@ -74,6 +74,26 @@ function parsePushTokenProvider(value: string | undefined): PushTokenProvider | 
   return undefined;
 }
 
+const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const MINTED_DEVICE_ID_PATTERN = /^device_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const MAX_METADATA_LENGTH = 64;
+const MAX_PUSH_TOKEN_LENGTH = 4096;
+// The catalog allows at most ~460 distinct rules (13 members, 6 generations, 5 sources, 17 event types
+// across every scope combination); 2000 leaves >4x headroom while bounding request size.
+const MAX_PREFERENCE_RULES = 2000;
+
+function isValidDeviceId(value: unknown): value is string {
+  return typeof value === "string" && DEVICE_ID_PATTERN.test(value);
+}
+
+function mintedDeviceIdOrUndefined(value: unknown): string | undefined {
+  return typeof value === "string" && MINTED_DEVICE_ID_PATTERN.test(value) ? value : undefined;
+}
+
+function metadataOrUndefined(value: unknown): string | undefined {
+  return typeof value === "string" && value.length <= MAX_METADATA_LENGTH ? value : undefined;
+}
+
 function latestPreferenceUpdatedAt(preferences: UserNotificationPreference[]): string {
   return (
     preferences
@@ -104,21 +124,26 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
 
   app.get("/v1/bootstrap", async (request) => {
     const query = request.query as {
-      deviceId?: string;
-      platform?: string;
-      appVersion?: string;
-      locale?: string;
-      timezone?: string;
+      deviceId?: unknown;
+      platform?: unknown;
+      appVersion?: unknown;
+      locale?: unknown;
+      timezone?: unknown;
     };
 
-    if (!options.dependencies?.bootstrap) return options.fallbackBootstrap?.(query);
+    const sanitized = {
+      deviceId: isValidDeviceId(query.deviceId) ? query.deviceId : undefined,
+      platform: typeof query.platform === "string" ? query.platform : undefined,
+      appVersion: metadataOrUndefined(query.appVersion),
+      locale: metadataOrUndefined(query.locale),
+      timezone: metadataOrUndefined(query.timezone),
+    };
+
+    if (!options.dependencies?.bootstrap) return options.fallbackBootstrap?.(sanitized);
 
     return options.dependencies.bootstrap.getBootstrap({
-      deviceId: query.deviceId,
-      platform: parsePlatform(query.platform),
-      appVersion: query.appVersion,
-      locale: query.locale,
-      timezone: query.timezone,
+      ...sanitized,
+      platform: parsePlatform(typeof query.platform === "string" ? query.platform : undefined),
     });
   });
 
@@ -133,14 +158,14 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     const devices = options.dependencies?.devices;
     const result = devices?.register
       ? await devices.register({
-          deviceId: body.deviceId,
+          deviceId: mintedDeviceIdOrUndefined(body.deviceId),
           platform: parsePlatform(body.platform),
-          locale: body.locale,
-          timezone: body.timezone,
-          appVersion: body.appVersion,
+          locale: metadataOrUndefined(body.locale),
+          timezone: metadataOrUndefined(body.timezone),
+          appVersion: metadataOrUndefined(body.appVersion),
         })
       : {
-          deviceId: body.deviceId ?? `device_${Date.now()}`,
+          deviceId: mintedDeviceIdOrUndefined(body.deviceId) ?? `device_${Date.now()}`,
           registered: true as const,
         };
     return { ...result, serverTime: new Date().toISOString() };
@@ -156,7 +181,12 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       timezone?: string;
       appVersion?: string;
     };
-    if (!body.deviceId || !body.token) {
+    if (
+      !isValidDeviceId(body.deviceId) ||
+      typeof body.token !== "string" ||
+      body.token.length < 1 ||
+      body.token.length > MAX_PUSH_TOKEN_LENGTH
+    ) {
       const error = mobileError("device_token_invalid", 400);
       return reply.code(error.statusCode).send(error.payload);
     }
@@ -176,9 +206,9 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
             platform: parsePlatform(body.platform),
             provider,
             token: body.token,
-            locale: body.locale,
-            timezone: body.timezone,
-            appVersion: body.appVersion,
+            locale: metadataOrUndefined(body.locale),
+            timezone: metadataOrUndefined(body.timezone),
+            appVersion: metadataOrUndefined(body.appVersion),
           })
         : { updated: true as const, tokenStatus: "active" as const };
     } catch (error) {
@@ -192,8 +222,8 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
   });
 
   app.get("/v1/preferences", async (request, reply) => {
-    const deviceId = (request.query as { deviceId?: string }).deviceId;
-    if (!deviceId) {
+    const deviceId = (request.query as { deviceId?: unknown }).deviceId;
+    if (!isValidDeviceId(deviceId)) {
       const error = mobileError("device_not_registered", 400);
       return reply.code(error.statusCode).send(error.payload);
     }
@@ -223,14 +253,14 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
       expectedRevision?: number;
       clientUpdatedAt?: string;
     };
-    if (!body.deviceId) {
+    if (!isValidDeviceId(body.deviceId)) {
       const error = mobileError("device_not_registered", 400);
       return reply.code(error.statusCode).send(error.payload);
     }
     if (!Number.isInteger(body.expectedRevision) || (body.expectedRevision ?? -1) < 0) {
       return reply.code(400).send({ error: "preference_revision_invalid" });
     }
-    if (!Array.isArray(body.preferences)) {
+    if (!Array.isArray(body.preferences) || body.preferences.length > MAX_PREFERENCE_RULES) {
       return reply.code(400).send({ error: "preferences_invalid" });
     }
     const rules = body.preferences;

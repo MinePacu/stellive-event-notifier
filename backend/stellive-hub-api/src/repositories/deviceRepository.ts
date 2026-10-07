@@ -111,6 +111,7 @@ export class DeviceRepository {
 
   async register(input: DeviceRegistrationInput): Promise<{ deviceId: string; registered: true }> {
     if (!this.prisma.device.upsert) throw new Error("device_upsert_unavailable");
+    if (input.deviceId !== undefined && typeof input.deviceId !== "string") throw new Error("device_id_invalid");
     const deviceId = input.deviceId ?? this.createDeviceId();
     await this.prisma.device.upsert({
       where: { id: deviceId },
@@ -138,6 +139,7 @@ export class DeviceRepository {
   }
 
   async updateToken(input: DeviceTokenInput): Promise<{ updated: true; tokenStatus: "active" }> {
+    if (typeof input.deviceId !== "string" || typeof input.token !== "string") throw new Error("device_token_input_invalid");
     if (!this.prisma.$transaction) throw new Error("device_transaction_unavailable");
 
     for (let attempt = 0; attempt < 3; attempt += 1) {

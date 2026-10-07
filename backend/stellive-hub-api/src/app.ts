@@ -624,6 +624,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
   if (!appRouteDependencies.hubCalendarSpecialDayOccurrences && env.HUB_EVENTS_STORAGE_MODE === "prisma") {
     appRouteDependencies.hubCalendarSpecialDayOccurrences = createHubCalendarSpecialDayOccurrenceRepositoryIfAvailable();
   }
+  if (env.HUB_EVENTS_STORAGE_MODE === "prisma") {
+    appRouteDependencies.devices ??= new DeviceRepository();
+    appRouteDependencies.preferences ??= new PreferenceRepository();
+  }
   if (env.HUB_EVENTS_STORAGE_MODE === "prisma" && !appRouteDependencies.bootstrap) {
     const devices = hasBootstrapDevicePort(appRouteDependencies.devices)
       ? appRouteDependencies.devices
