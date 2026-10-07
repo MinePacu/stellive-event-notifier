@@ -152,6 +152,14 @@ enum HubEventGoodsGalleryPolicy {
         sanitize(event.goodsListImages)
     }
 
+    /// Why goods photos come from official notice images; appended to the detail notice only when the gallery shows.
+    static let imageSourceNotice = "굿즈 사진은 공식 공지에 올라온 MD·특전 리스트 이미지를 원본 그대로 보여줍니다. 판매처 상품 페이지는 이용약관상 자동 수집이 금지되어 있어 사용하지 않으며, 이미지를 잘라내거나 저장하지 않고 공식 사이트에서 직접 불러옵니다. 공지가 수정·삭제되면 이미지가 바뀌거나 보이지 않을 수 있으니 정확한 구성과 가격은 공식 공지에서 확인하세요."
+
+    static func detailNoticeText(for event: HubEvent) -> String {
+        let base = HubEventDetailFormatting.noticeText
+        return displayableImages(event).isEmpty ? base : base + "\n\n" + imageSourceNotice
+    }
+
     private static func cleaned(_ entry: HubEventGoodsListImage) -> HubEventGoodsListImage? {
         let image = entry.image
         let trimmedImage = HubEventImage(

@@ -520,7 +520,7 @@ struct HubEventDetailView: View {
     }
 
     private var noticeCard: some View {
-        Text(HubEventDetailFormatting.noticeText)
+        Text(HubEventGoodsGalleryPolicy.detailNoticeText(for: event))
             .font(.footnote)
             .foregroundStyle(HubEventDetailColors.muted)
             .lineSpacing(3)

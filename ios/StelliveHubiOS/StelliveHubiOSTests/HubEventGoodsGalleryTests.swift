@@ -235,6 +235,18 @@ final class HubEventGoodsGalleryTests: XCTestCase {
         XCTAssertEqual(HubEventGoodsGalleryPolicy.displayableImages(event).count, 1)
     }
 
+    @MainActor
+    func testDetailNoticeAddsImageSourceReasonOnlyWithGallery() async throws {
+        var event = try await loadEvent()
+        event.goodsListImages = []
+        XCTAssertEqual(HubEventGoodsGalleryPolicy.detailNoticeText(for: event), HubEventDetailFormatting.noticeText)
+        event.goodsListImages = [image("https://stellive.me/a.png")]
+        let text = HubEventGoodsGalleryPolicy.detailNoticeText(for: event)
+        XCTAssertTrue(text.hasPrefix(HubEventDetailFormatting.noticeText))
+        XCTAssertTrue(text.hasSuffix(HubEventGoodsGalleryPolicy.imageSourceNotice))
+        XCTAssertTrue(HubEventGoodsGalleryPolicy.imageSourceNotice.contains("이용약관"))
+    }
+
     // MARK: - Rows / viewer sequence
 
     func testSplitRowsGroupByKindAndKeepOrder() {
