@@ -163,6 +163,27 @@ data class HubEventDto(
     val notificationEligible: Boolean = true,
     val updatedAt: String? = null,
     val tags: List<String> = emptyList(),
+    val goodsItems: List<HubEventGoodsItemDto> = emptyList(),
+    val goodsCount: Int? = null,
+)
+
+data class HubEventGoodsItemDto(
+    val id: String? = null,
+    val scheduleItemId: String? = null,
+    val name: String? = null,
+    val groupLabel: String? = null,
+    val memberIds: List<String> = emptyList(),
+    val priceKrw: Int? = null,
+    val priceNote: String? = null,
+    val salesChannel: String? = null,
+    val purchaseLimit: Int? = null,
+    val limitNote: String? = null,
+    val isBonus: Boolean = false,
+    val purchaseUrl: String? = null,
+    val image: HubEventImageDto? = null,
+    val sortOrder: Int = 0,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
 )
 
 data class HubEventScheduleItemDto(

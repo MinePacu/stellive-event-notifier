@@ -262,6 +262,39 @@ data class HubEvent(
     val notificationEligible: Boolean = true,
     val updatedAt: Instant,
     val tags: List<HubEventTag> = emptyList(),
+    /** Detail-only goods list (non-cancelled, server order). Empty on list/summary payloads. */
+    val goodsItems: List<HubEventGoodsItem> = emptyList(),
+    /** List/summary-only goods count (0 when the server omits it). */
+    val goodsCount: Int = 0,
+)
+
+enum class HubEventGoodsSalesChannel(val apiValue: String) {
+    ONSITE("onsite"),
+    ONLINE("online"),
+    BOTH("both");
+
+    companion object {
+        fun fromApiValue(value: String?): HubEventGoodsSalesChannel? =
+            entries.firstOrNull { it.apiValue == value }
+    }
+}
+
+data class HubEventGoodsItem(
+    val id: String,
+    val scheduleItemId: String? = null,
+    val name: String,
+    val groupLabel: String? = null,
+    val memberIds: List<String> = emptyList(),
+    val priceKrw: Int? = null,
+    val priceNote: String? = null,
+    /** Null when the server sends a channel this app version does not know. */
+    val salesChannel: HubEventGoodsSalesChannel? = null,
+    val purchaseLimit: Int? = null,
+    val limitNote: String? = null,
+    val isBonus: Boolean = false,
+    val purchaseUrl: String? = null,
+    val image: HubEventImage? = null,
+    val sortOrder: Int = 0,
 )
 
 data class HubEventsSummary(

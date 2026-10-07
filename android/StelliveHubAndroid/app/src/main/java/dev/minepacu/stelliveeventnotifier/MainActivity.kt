@@ -149,6 +149,8 @@ import dev.minepacu.stelliveeventnotifier.feature.announcements.AnnouncementPoli
 import dev.minepacu.stelliveeventnotifier.feature.announcements.AnnouncementReadStore
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongMemberSelectionMode
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongsPanePolicy
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsChecklistStore
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsPolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.DataStoreSongFavoritesRepository
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongFavoritesRepository
 import dev.minepacu.stelliveeventnotifier.feature.songs.DataStoreSongDiscoveryRepository
@@ -439,6 +441,10 @@ internal var announcementItems: List<ServiceAnnouncement> = emptyList()
 internal var announcementNextCursor: String? = null
 internal var announcementReadKeys: Set<String> = emptySet()
 internal lateinit var announcementReadStore: AnnouncementReadStore
+internal lateinit var goodsChecklistStore: HubEventGoodsChecklistStore
+/** eventId -> (goodsItemId -> quantity); mirrors [goodsChecklistStore] so the goods section can render synchronously. */
+internal var goodsChecklistSnapshot: Map<String, Map<String, Int>> = emptyMap()
+internal var goodsChecklistListener: ((Map<String, Map<String, Int>>) -> Unit)? = null
     internal var goodsEventsDays: List<HubCalendarDay> = emptyList()
     internal var goodsEvents: List<HubEvent> = emptyList()
     internal var goodsEventsSelectedMonth: YearMonth = YearMonth.now()
@@ -517,6 +523,15 @@ private var notificationPermissionRequested = false
         songFavoritesRepository = DataStoreSongFavoritesRepository(this)
         songDiscoveryRepository = DataStoreSongDiscoveryRepository(this)
         announcementReadStore = AnnouncementReadStore(this)
+        goodsChecklistStore = HubEventGoodsChecklistStore(this)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                goodsChecklistStore.snapshot.collect { snapshot ->
+                    goodsChecklistSnapshot = snapshot
+                    goodsChecklistListener?.invoke(snapshot)
+                }
+            }
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 reservationRepository.drafts.collect { drafts ->
@@ -2396,7 +2411,7 @@ internal fun compactEventCard(title: String, body: String, pills: List<String>, 
                 event.category,
                 event.participationMode,
                 event.tags,
-            ),
+            ) + listOfNotNull(HubEventGoodsPolicy.goodsCountLabel(event)),
             thumbnailUrl = event.image?.takeIf(HubEventImagePolicy::canDisplay)?.url,
         ).apply {
             isClickable = true
