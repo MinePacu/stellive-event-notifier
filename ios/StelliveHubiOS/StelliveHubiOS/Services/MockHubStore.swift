@@ -188,6 +188,36 @@ final class MockHubStore: ObservableObject {
             ticketUrl: nil,
             venueName: "서울 팝업 스토어",
             venueAddress: nil,
+            goodsItems: [
+                .init(
+                    id: "mock-popup-goods-1",
+                    name: "아크릴 스탠드",
+                    groupLabel: "스탠드",
+                    memberIds: ["ayatsuno-yuni", "sakihane-huya", "shirayuki-hina", "neneko-mashiro"],
+                    priceKrw: 12_000,
+                    salesChannel: .both,
+                    purchaseLimit: 3,
+                    limitNote: "재고 소진 시 판매 종료",
+                    sortOrder: 0
+                ),
+                .init(
+                    id: "mock-popup-goods-2",
+                    name: "포토카드 세트",
+                    groupLabel: "스탠드",
+                    memberIds: ["akane-lize"],
+                    priceNote: "현장 공지 예정",
+                    salesChannel: .onsite,
+                    sortOrder: 1
+                ),
+                .init(
+                    id: "mock-popup-goods-3",
+                    name: "구매 특전 엽서",
+                    memberIds: [],
+                    salesChannel: .onsite,
+                    isBonus: true,
+                    sortOrder: 2
+                ),
+            ],
             notificationEligible: true,
             updatedAt: Date(timeIntervalSince1970: 1_780_120_000)
         ),

@@ -392,6 +392,39 @@ struct HubEventImage: Codable, Hashable {
     let altText: String?
 }
 
+enum HubEventGoodsSalesChannel: String, Hashable {
+    case onsite
+    case online
+    case both
+
+    var displayName: String {
+        switch self {
+        case .onsite: "현장"
+        case .online: "온라인"
+        case .both: "현장·온라인"
+        }
+    }
+}
+
+struct HubEventGoodsItem: Identifiable, Hashable {
+    let id: String
+    var scheduleItemId: String? = nil
+    let name: String
+    var groupLabel: String? = nil
+    var memberIds: [String] = []
+    var priceKrw: Int? = nil
+    var priceNote: String? = nil
+    var salesChannel: HubEventGoodsSalesChannel? = nil
+    var purchaseLimit: Int? = nil
+    var limitNote: String? = nil
+    var isBonus: Bool = false
+    var purchaseUrl: String? = nil
+    var image: HubEventImage? = nil
+    var sortOrder: Int = 0
+    var createdAt: Date? = nil
+    var updatedAt: Date? = nil
+}
+
 enum HubEventImagePolicy {
     static func displayURL(for image: HubEventImage?) -> URL? {
         guard
@@ -432,6 +465,10 @@ struct HubEvent: Identifiable, Hashable {
     let venueName: String?
     let venueAddress: String?
     var image: HubEventImage? = nil
+    /// Detail-only. Sorted by sortOrder; empty when the server omitted the field.
+    var goodsItems: [HubEventGoodsItem] = []
+    /// List/summary preview count; only present on the wire when > 0.
+    var goodsCount: Int? = nil
     let notificationEligible: Bool
     let updatedAt: Date
 }

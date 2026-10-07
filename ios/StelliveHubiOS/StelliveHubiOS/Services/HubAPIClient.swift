@@ -208,6 +208,8 @@ struct HubEventResponse: Codable, Equatable {
     let venueName: String?
     let venueAddress: String?
     let image: HubEventImage?
+    var goodsItems: LenientGoodsItemList? = nil
+    var goodsCount: Int? = nil
     let notificationEligible: Bool
     let updatedAt: String
 }
