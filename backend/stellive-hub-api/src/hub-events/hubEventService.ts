@@ -1,5 +1,6 @@
 import type { CatalogService } from "../catalog/catalog.js";
 import { validateHubEvent } from "./hubEventPolicy.js";
+import { withGoodsCountOnly, withPublicGoodsItems } from "./hubEventGoodsPolicy.js";
 import { resolveEffectiveHubEventStatus, withEffectiveHubEventStatus } from "./hubEventStatus.js";
 import type {
   HubEvent,
@@ -104,6 +105,41 @@ function defaultHubEvents(): HubEvent[] {
       sourceType: "member",
       startsAt: "2026-06-12T00:00:00Z",
       endsAt: "2026-06-18T00:00:00Z",
+      goodsItems: [
+        {
+          id: "gen3-collab-popup-goods-acrylic-stand",
+          name: "Sample acrylic stand",
+          groupLabel: "Acrylic",
+          memberIds: ["tenko-shibuki"],
+          priceKrw: 12000,
+          priceNote: "Random 1 of 2 designs",
+          salesChannel: "onsite",
+          purchaseLimit: 3,
+          limitNote: "Up to 3 per person",
+          isBonus: false,
+          sortOrder: 0
+        },
+        {
+          id: "gen3-collab-popup-goods-photo-card-set",
+          name: "Sample photo card set",
+          groupLabel: "Paper goods",
+          memberIds: ["tenko-shibuki", "aokumo-rin"],
+          priceKrw: 6000,
+          salesChannel: "both",
+          isBonus: false,
+          sortOrder: 1
+        },
+        {
+          id: "gen3-collab-popup-goods-bonus-sticker",
+          name: "Sample purchase bonus sticker",
+          groupLabel: "Bonus",
+          memberIds: [],
+          priceNote: "Given with any purchase",
+          salesChannel: "onsite",
+          isBonus: true,
+          sortOrder: 2
+        }
+      ],
       notificationEligible: true,
       createdAt: "2026-06-01T00:00:00Z",
       updatedAt: "2026-06-01T00:00:00Z"
@@ -149,7 +185,7 @@ export class HubEventService {
 
   getById(id: string): HubEvent | undefined {
     const event = this.events.find((event) => event.id === id);
-    return event ? withEffectiveHubEventStatus(event) : undefined;
+    return event ? withPublicGoodsItems(withEffectiveHubEventStatus(event)) : undefined;
   }
 
   effectiveStatus(event: HubEvent, now: Date = new Date()): HubEventStatus {
@@ -167,7 +203,7 @@ export class HubEventService {
       ? Math.max(1, filters.limit ?? filtered.length ?? 1)
       : Math.min(100, Math.max(1, filters.limit ?? 50));
 
-    const items = filtered.slice(0, limit).map((event) => withEffectiveHubEventStatus(event, now));
+    const items = filtered.slice(0, limit).map((event) => withGoodsCountOnly(withEffectiveHubEventStatus(event, now)));
     const nextCursor = filtered.length > limit ? items[items.length - 1]?.id : undefined;
 
     return nextCursor ? { items, nextCursor } : { items };
@@ -184,7 +220,7 @@ export class HubEventService {
         return status === "closing_soon" || status === "open" || status === "upcoming";
       })
       .slice(0, 3)
-      .map((event) => withEffectiveHubEventStatus(event, now));
+      .map((event) => withGoodsCountOnly(withEffectiveHubEventStatus(event, now)));
 
     return { openCount, closingSoonCount, upcomingCount, preview };
   }

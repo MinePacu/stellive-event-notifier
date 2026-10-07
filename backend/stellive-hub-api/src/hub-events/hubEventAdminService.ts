@@ -12,13 +12,20 @@ import type {
   HubEventPublicationState
 } from "./hubEventAdminTypes.js";
 import {
+  validateHubEventGoodsItem,
+  validateHubEventGoodsItems,
+  maxHubEventGoodsItems,
+  type AdminHubEventGoodsItemWriteInput
+} from "./hubEventGoodsPolicy.js";
+import {
   HubEventRepository,
   type AdminHubEventFilters,
   type AdminHubEventListResult,
   type AdminHubEventScheduleItemWriteInput,
   type AdminHubEventWriteInput,
   type HubEventAuditLogEntry,
-  type HubEventAuditLogInput
+  type HubEventAuditLogInput,
+  type ReplaceHubEventGoodsItemsInput
 } from "./hubEventRepository.js";
 import { validateHubEventForAdmin } from "./hubEventPolicy.js";
 import { normalizeHubEventLinks } from "./hubEventLinkPolicy.js";
@@ -40,6 +47,7 @@ export interface HubEventAdminRepository {
   createDraft(input: AdminHubEventWriteInput): Promise<AdminHubEvent>;
   update(id: string, input: AdminHubEventWriteInput): Promise<AdminHubEvent>;
   hardDeleteScheduleItem?(id: string, scheduleItemId: string, input: AdminHubEventWriteInput): Promise<AdminHubEvent>;
+  replaceGoodsItems?(id: string, input: ReplaceHubEventGoodsItemsInput): Promise<AdminHubEvent>;
   setPublicationState(input: {
     id: string;
     publicationState: HubEventPublicationState;
@@ -105,6 +113,27 @@ export interface HubEventScheduleMutationInput extends AdminHubEventScheduleItem
 export interface HubEventScheduleOrderInput {
   expectedRevision: number;
   scheduleItemIds: string[];
+}
+
+/** Single goods item write body: item fields plus the optimistic-lock revision. */
+export interface HubEventGoodsMutationInput extends Record<string, unknown> {
+  expectedRevision: number;
+}
+
+export interface HubEventGoodsOrderInput {
+  expectedRevision: number;
+  goodsItemIds: string[];
+}
+
+export interface HubEventGoodsReplaceInput {
+  expectedRevision: number;
+  items: unknown;
+}
+
+export class HubEventGoodsItemNotFoundException extends Error {
+  constructor() {
+    super("hub_event_goods_item_not_found");
+  }
 }
 
 export interface HubEventScheduleDeleteResult {
@@ -380,6 +409,218 @@ export class HubEventAdminService {
     const order = new Map(input.scheduleItemIds.map((itemId, index) => [itemId, index]));
     const items = current.map((item) => ({ ...item, sortOrder: order.get(item.id ?? "") ?? item.sortOrder ?? 0 }));
     return this.persistScheduleMutation(before, items, input.expectedRevision, "schedule_reorder", actor);
+  }
+
+  async createGoodsItem(
+    id: string,
+    input: HubEventGoodsMutationInput,
+    actor: HubEventAdminActor = {}
+  ): Promise<AdminHubEvent> {
+    const { expectedRevision, raw } = this.splitGoodsMutationBody(input);
+    const before = await this.getScheduleMutableEvent(id, expectedRevision);
+    const current = this.goodsWriteItems(before);
+    if (current.length >= maxHubEventGoodsItems) {
+      throw new HubEventAdminValidationException([{
+        field: "goodsItems",
+        reason: "goods_items_too_many",
+        message: `A hub event can contain at most ${maxHubEventGoodsItems} goods items.`
+      }]);
+    }
+    const { id: _ignoredGoodsItemId, ...rawWithoutId } = raw;
+    const created = this.validateSingleGoodsItem(rawWithoutId, before);
+    return this.persistGoodsMutation(
+      before,
+      [...current, { ...created, sortOrder: created.sortOrder ?? current.length }],
+      expectedRevision,
+      "goods_create",
+      actor
+    );
+  }
+
+  async updateGoodsItem(
+    id: string,
+    goodsItemId: string,
+    input: HubEventGoodsMutationInput,
+    actor: HubEventAdminActor = {}
+  ): Promise<AdminHubEvent> {
+    const { expectedRevision, raw } = this.splitGoodsMutationBody(input);
+    const before = await this.getScheduleMutableEvent(id, expectedRevision);
+    const current = this.goodsWriteItems(before);
+    const existing = current.find((item) => item.id === goodsItemId);
+    if (!existing) throw new HubEventGoodsItemNotFoundException();
+    const { id: _ignoredGoodsItemId, ...patch } = raw;
+    const merged = this.validateSingleGoodsItem({ ...existing, ...patch, id: goodsItemId }, before);
+    return this.persistGoodsMutation(
+      before,
+      current.map((item) => item.id === goodsItemId ? { ...merged, id: goodsItemId } : item),
+      expectedRevision,
+      "goods_update",
+      actor
+    );
+  }
+
+  async deleteGoodsItem(
+    id: string,
+    goodsItemId: string,
+    expectedRevision: number,
+    actor: HubEventAdminActor = {}
+  ): Promise<AdminHubEvent> {
+    const before = await this.getScheduleMutableEvent(id, expectedRevision);
+    const current = this.goodsWriteItems(before);
+    const existing = current.find((item) => item.id === goodsItemId);
+    if (!existing) throw new HubEventGoodsItemNotFoundException();
+    if (existing.cancelledAt) return before;
+    const cancelledAt = this.now().toISOString();
+    return this.persistGoodsMutation(
+      before,
+      current.map((item) => item.id === goodsItemId ? { ...item, cancelledAt } : item),
+      expectedRevision,
+      "goods_cancel",
+      actor
+    );
+  }
+
+  async restoreGoodsItem(
+    id: string,
+    goodsItemId: string,
+    expectedRevision: number,
+    actor: HubEventAdminActor = {}
+  ): Promise<AdminHubEvent> {
+    const before = await this.getScheduleMutableEvent(id, expectedRevision);
+    const current = this.goodsWriteItems(before);
+    const existing = current.find((item) => item.id === goodsItemId);
+    if (!existing) throw new HubEventGoodsItemNotFoundException();
+    if (!existing.cancelledAt) return before;
+    return this.persistGoodsMutation(
+      before,
+      current.map((item) => item.id === goodsItemId ? { ...item, cancelledAt: null } : item),
+      expectedRevision,
+      "goods_restore",
+      actor
+    );
+  }
+
+  async reorderGoodsItems(
+    id: string,
+    input: HubEventGoodsOrderInput,
+    actor: HubEventAdminActor = {}
+  ): Promise<AdminHubEvent> {
+    const before = await this.getScheduleMutableEvent(id, input.expectedRevision);
+    const current = this.goodsWriteItems(before);
+    const currentIds = new Set(current.map((item) => item.id));
+    const orderedIds = Array.isArray(input.goodsItemIds) ? input.goodsItemIds : [];
+    if (orderedIds.length !== current.length ||
+        new Set(orderedIds).size !== current.length ||
+        orderedIds.some((itemId) => !currentIds.has(itemId))) {
+      throw new HubEventAdminValidationException([{
+        field: "goodsItemIds",
+        reason: "goods_item_invalid",
+        message: "goodsItemIds must contain every goods item exactly once."
+      }]);
+    }
+    const order = new Map(orderedIds.map((itemId, index) => [itemId, index]));
+    return this.persistGoodsMutation(
+      before,
+      current.map((item) => ({ ...item, sortOrder: order.get(item.id ?? "") ?? item.sortOrder })),
+      input.expectedRevision,
+      "goods_reorder",
+      actor
+    );
+  }
+
+  /** Bulk replace: validates every item first (index-based error paths) and writes nothing on failure. */
+  async replaceGoodsItems(
+    id: string,
+    input: HubEventGoodsReplaceInput,
+    actor: HubEventAdminActor = {}
+  ): Promise<AdminHubEvent> {
+    const before = await this.getScheduleMutableEvent(id, input.expectedRevision);
+    const validation = validateHubEventGoodsItems(input.items, this.goodsValidationContext(before), "items");
+    const errors = validation.valid ? [] : [...validation.errors];
+    if (validation.valid) {
+      const knownIds = new Set((before.goodsItems ?? []).map((item) => item.id));
+      validation.items.forEach((item, index) => {
+        if (item.id && !knownIds.has(item.id)) {
+          errors.push({
+            field: `items[${index}].id`,
+            reason: "goods_item_invalid",
+            message: "Goods item id does not belong to this event; omit id to create a new item."
+          });
+        }
+      });
+    }
+    if (!validation.valid || errors.length > 0) throw new HubEventAdminValidationException(errors);
+    return this.persistGoodsMutation(
+      before,
+      validation.items.map((item, index) => ({ ...item, sortOrder: item.sortOrder ?? index })),
+      input.expectedRevision,
+      "goods_replace",
+      actor
+    );
+  }
+
+  private splitGoodsMutationBody(input: HubEventGoodsMutationInput) {
+    const { expectedRevision, changeReason: _changeReason, reason: _reason, ...raw } = (input ?? {}) as HubEventGoodsMutationInput & {
+      changeReason?: unknown;
+      reason?: unknown;
+    };
+    return { expectedRevision, raw };
+  }
+
+  private goodsValidationContext(event: AdminHubEvent) {
+    return {
+      catalog: this.options.catalog,
+      scheduleItemIds: new Set((event.scheduleItems ?? []).map((item) => item.id))
+    };
+  }
+
+  private validateSingleGoodsItem(raw: Record<string, unknown>, event: AdminHubEvent): AdminHubEventGoodsItemWriteInput {
+    const errors: HubEventValidationError[] = [];
+    const item = validateHubEventGoodsItem(raw, "goodsItem", this.goodsValidationContext(event), errors);
+    if (!item || errors.length > 0) {
+      throw new HubEventAdminValidationException(
+        errors.map((error) => ({ ...error, field: error.field.replace(/^goodsItem\.?/, "") || "goodsItem" }))
+      );
+    }
+    return item;
+  }
+
+  private goodsWriteItems(event: AdminHubEvent): AdminHubEventGoodsItemWriteInput[] {
+    return (event.goodsItems ?? []).map((item) => ({
+      id: item.id,
+      scheduleItemId: item.scheduleItemId ?? null,
+      name: item.name,
+      groupLabel: item.groupLabel ?? null,
+      memberIds: [...item.memberIds],
+      priceKrw: item.priceKrw ?? null,
+      priceNote: item.priceNote ?? null,
+      salesChannel: item.salesChannel,
+      purchaseLimit: item.purchaseLimit ?? null,
+      limitNote: item.limitNote ?? null,
+      isBonus: item.isBonus,
+      purchaseUrl: item.purchaseUrl ?? null,
+      image: item.image ?? null,
+      sortOrder: item.sortOrder,
+      cancelledAt: item.cancelledAt ?? null
+    }));
+  }
+
+  private async persistGoodsMutation(
+    before: AdminHubEvent,
+    items: AdminHubEventGoodsItemWriteInput[],
+    expectedRevision: number,
+    action: Extract<HubEventAdminAction, `goods_${string}`>,
+    actor: HubEventAdminActor
+  ): Promise<AdminHubEvent> {
+    return this.unitOfWork.run(async ({ hubEvents }) => {
+      const replaceGoodsItems = hubEvents.replaceGoodsItems?.bind(hubEvents);
+      if (!replaceGoodsItems) throw new Error("hub_event_goods_unavailable");
+      const updated = await this.runRevisionWrite(hubEvents, before, expectedRevision, () =>
+        replaceGoodsItems(before.id, { items, expectedRevision, actorId: actor.actorId })
+      );
+      await this.audit(hubEvents, action, before.id, actor, before, updated);
+      return updated;
+    });
   }
 
   private assertValid(input: unknown, mode: "draft" | "publish") {

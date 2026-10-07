@@ -14,7 +14,13 @@ export type HubEventAdminAction =
   | "schedule_cancel"
   | "schedule_restore"
   | "schedule_delete"
-  | "schedule_reorder";
+  | "schedule_reorder"
+  | "goods_create"
+  | "goods_update"
+  | "goods_cancel"
+  | "goods_restore"
+  | "goods_reorder"
+  | "goods_replace";
 
 export interface AdminHubEvent extends HubEvent {
   publicationState: HubEventPublicationState;
@@ -63,6 +69,18 @@ export type HubEventValidationReason =
   | "link_label_too_long"
   | "link_url_duplicate"
   | "link_sort_order_invalid"
+  | "goods_items_too_many"
+  | "goods_item_invalid"
+  | "goods_item_required"
+  | "goods_item_too_long"
+  | "goods_field_not_allowed"
+  | "goods_sales_channel_invalid"
+  | "goods_member_not_allowed"
+  | "goods_member_duplicate"
+  | "goods_price_invalid"
+  | "goods_purchase_limit_invalid"
+  | "goods_schedule_item_invalid"
+  | "goods_sort_order_invalid"
   | "url_not_https"
   | "official_youtube_live_excluded"
   | "routine_platform_activity_excluded";

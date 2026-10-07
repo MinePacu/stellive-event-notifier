@@ -12,6 +12,8 @@ export type {
   HubCalendarWidgetSnapshot,
   HubEvent,
   HubEventCategory,
+  HubEventGoodsItem,
+  HubEventGoodsSalesChannel,
   HubEventImage,
   HubEventImagePolicyState,
   HubEventLink,
