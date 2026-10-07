@@ -7,6 +7,7 @@ import {
 import { localizeAdminDocument, serializeAdminCatalog, t, tAttr, tScript, translateAdmin, type AdminLocale } from "./adminI18n.js";
 import { renderAdminLanguageHtml } from "./adminLanguageHtml.js";
 import { adminIntlLocale } from "./adminLocale.js";
+import { renderAdminGoodsGalleryScript, renderAdminGoodsGalleryStyle } from "./adminGoodsGallery.js";
 import { renderAdminGoodsImportScript } from "./adminGoodsImport.js";
 
 export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
@@ -1371,6 +1372,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     .hub-event-goods-preview-errors td { border-color: var(--danger); }
     .hub-event-goods-dialog-errors { margin: 0; padding-left: 18px; color: var(--danger); font-size: 12px; }
     #hub-event-goods-form [aria-invalid="true"] { outline: 2px solid var(--danger); outline-offset: 1px; }
+    ${renderAdminGoodsGalleryStyle()}
     .hub-event-primary-choice { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--admin-muted); }
 
     .hub-events-section-body {
@@ -2086,6 +2088,22 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
             <div class="hub-events-section-body"><div id="hub-event-schedule-items" class="hub-event-schedule-list"></div></div>
           </section>
           <section id="hub-event-goods-fields" class="hub-events-section panel" data-hub-event-tab-panel="goods" hidden>
+            <div id="hub-event-goods-gallery" class="hub-event-goods-gallery">
+              <div class="section-head">
+                <div><h4>${t("goodsGallery.title")}</h4><p class="subtle">${t("goodsGallery.help")}</p></div>
+                <div class="hub-event-goods-actions"><strong id="hub-event-goods-gallery-count" aria-live="polite"></strong><button id="hub-event-goods-gallery-add" type="button">${t("goodsGallery.add")}</button></div>
+              </div>
+              <ul id="hub-event-goods-gallery-errors" class="hub-event-gallery-messages" aria-live="polite"></ul>
+              <p id="hub-event-goods-gallery-empty" class="subtle">${t("goodsGallery.empty")}</p>
+              <div id="hub-event-goods-gallery-list" class="hub-event-gallery-list"></div>
+              <div class="hub-event-gallery-import">
+                <strong>${t("goodsGallery.importTitle")}</strong>
+                <p class="subtle">${t("goodsGallery.importHelp")}</p>
+                <textarea id="hub-event-goods-gallery-import-text" rows="5" spellcheck="false" placeholder="${tAttr("goodsGallery.importPlaceholder")}"></textarea>
+                <div class="hub-event-goods-actions"><button id="hub-event-goods-gallery-import-append" type="button">${t("goodsGallery.importAppend")}</button><button id="hub-event-goods-gallery-import-replace" class="is-danger" type="button">${t("goodsGallery.importReplace")}</button></div>
+                <div id="hub-event-goods-gallery-import-result" aria-live="polite"></div>
+              </div>
+            </div>
             <div class="section-head">
               <div><h3>${t("goods.title")}</h3><p class="subtle">${t("goods.help")}</p></div>
               <div class="hub-event-goods-actions"><button id="hub-event-goods-toggle" type="button" hidden>${t("goods.show")}</button><button id="hub-event-goods-add" type="button">${t("goods.add")}</button></div>
@@ -3928,6 +3946,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
 
     // ---- Goods list editor (parser source below is shared with unit tests) ----
     ${renderAdminGoodsImportScript()}
+    ${renderAdminGoodsGalleryScript()}
     const goodsDefaultCategories = ["online_goods", "offline_popup", "online_collab", "offline_collab", "offline_concert"];
     const hubEventGoodsPanel = document.getElementById("hub-event-goods-fields");
     const hubEventGoodsTab = document.getElementById("hub-event-goods-tab");
@@ -4416,6 +4435,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         input.image = image;
       }
       input.links = collectLinkEditor(hubEventLinksRoot);
+      collectGoodsGalleryInput(input);
       return input;
     }
 
@@ -4439,6 +4459,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
 
     function renderHubEventValidation(result) {
       const errors = result && result.errors ? result.errors : [];
+      showGoodsGalleryServerErrors(errors);
       document.querySelectorAll('#hub-event-form [aria-invalid="true"]').forEach(function (element) { element.removeAttribute("aria-invalid"); });
       hubEventScheduleItemsRoot.querySelectorAll('[aria-invalid="true"]').forEach(function (element) { element.removeAttribute("aria-invalid"); });
       hubEventValidationRoot.replaceChildren();
@@ -4500,6 +4521,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       renderScheduleItems(event.scheduleItems || []);
       updateScheduleModeUi();
       bindGoodsForEvent(event);
+      bindGoodsGalleryForEvent(event);
     }
 
     function renderHubEvents(events) {
