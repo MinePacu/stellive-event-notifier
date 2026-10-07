@@ -22,7 +22,8 @@ async function handle(error: unknown, reply: FastifyReply) {
 
 export async function registerAdminServiceAnnouncementRoutes(app: FastifyInstance, options: { env: AppEnv; service: ServiceAnnouncementAdminService }) {
   app.addHook("preHandler", async (request, reply) => {
-    if (!request.url.startsWith("/v1/admin/announcements") || request.method === "OPTIONS") return;
+    const routeUrl = request.routeOptions.url ?? "";
+    if (!routeUrl.startsWith("/v1/admin/announcements") || request.method === "OPTIONS") return;
     if (!options.env.ADMIN_CONSOLE_ENABLED) return reply.callNotFound();
     if (!shouldEnableAdminConsole(options.env)) return reply.code(503).send({ error: "admin_console_token_missing" });
     const authorization = header(request.headers.authorization);

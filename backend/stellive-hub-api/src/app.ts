@@ -535,7 +535,6 @@ function hasBootstrapHubEventsPort(value: unknown): value is BootstrapHubEventsP
 function isPrivilegedRoutePath(url: string): boolean {
   return (
     url === "/admin" ||
-    url.startsWith("/admin?") ||
     url.startsWith("/admin/") ||
     url.startsWith("/v1/admin/") ||
     url.startsWith("/v1/internal/")
@@ -543,7 +542,15 @@ function isPrivilegedRoutePath(url: string): boolean {
 }
 
 function corsDelegator(request: FastifyRequest, callback: (error: Error | null, options?: { origin: string | boolean }) => void) {
-  callback(null, isPrivilegedRoutePath(request.url) ? privilegedCorsOptions : publicCorsOptions);
+  // Decode so percent-encoded variants of privileged paths (e.g. /v1/%61dmin/) cannot get public CORS.
+  const rawPath = request.url.split("?")[0] ?? "";
+  let path = rawPath;
+  try {
+    path = decodeURIComponent(rawPath);
+  } catch {
+    // keep the raw path when it is not valid percent-encoding
+  }
+  callback(null, isPrivilegedRoutePath(path) ? privilegedCorsOptions : publicCorsOptions);
 }
 
 function resolveEnvInput(options: BuildAppOptions): NodeJS.ProcessEnv | Record<string, string | boolean | number | undefined> {

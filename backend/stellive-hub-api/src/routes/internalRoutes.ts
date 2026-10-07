@@ -357,7 +357,9 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
   };
 
   app.addHook("preHandler", async (request, reply) => {
-    if (!request.url.startsWith("/v1/internal/")) return;
+    // Match the registered route pattern, not the raw URL: percent-encoded paths are decoded before routing.
+    const routeUrl = request.routeOptions.url ?? "";
+    if (!routeUrl.startsWith("/v1/internal/")) return;
     if (request.method === "OPTIONS") return;
 
     const auth = authenticateBearerToken(readAuthorizationHeader(request.headers.authorization), options.env.INTERNAL_API_TOKEN);

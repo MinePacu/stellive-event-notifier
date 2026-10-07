@@ -125,7 +125,8 @@ export async function registerAdminHubEventRoutes(app: FastifyInstance, options:
     options.dependencies?.clearSpecialDayStatusCache ?? clearSpecialDayStatusSnapshotCache;
 
   app.addHook("preHandler", async (request, reply) => {
-    if (!request.url.startsWith("/v1/admin/hub-events")) return;
+    const routeUrl = request.routeOptions.url ?? "";
+    if (!routeUrl.startsWith("/v1/admin/hub-events")) return;
     if (request.method === "OPTIONS") return;
     if (!options.env.ADMIN_CONSOLE_ENABLED) return reply.callNotFound();
     if (!shouldEnableAdminConsole(options.env)) return reply.code(503).send({ error: "admin_console_token_missing" });
