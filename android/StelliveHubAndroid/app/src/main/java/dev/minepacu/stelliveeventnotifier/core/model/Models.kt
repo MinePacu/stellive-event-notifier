@@ -266,6 +266,8 @@ data class HubEvent(
     val goodsItems: List<HubEventGoodsItem> = emptyList(),
     /** List/summary-only goods count (0 when the server omits it). */
     val goodsCount: Int = 0,
+    /** Detail-only official MD list gallery images (notice order). Empty when absent or the server kill switch is on. */
+    val goodsListImages: List<HubEventImage> = emptyList(),
 )
 
 enum class HubEventGoodsSalesChannel(val apiValue: String) {

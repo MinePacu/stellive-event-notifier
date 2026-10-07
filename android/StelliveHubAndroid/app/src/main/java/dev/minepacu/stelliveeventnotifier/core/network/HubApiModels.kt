@@ -165,6 +165,7 @@ data class HubEventDto(
     val tags: List<String> = emptyList(),
     val goodsItems: List<HubEventGoodsItemDto> = emptyList(),
     val goodsCount: Int? = null,
+    val goodsListImages: List<HubEventGoodsGalleryImageDto?>? = null,
 )
 
 data class HubEventGoodsItemDto(

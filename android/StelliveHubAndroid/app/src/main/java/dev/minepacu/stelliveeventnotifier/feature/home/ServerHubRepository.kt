@@ -11,6 +11,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsItem
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsSalesChannel
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventImage
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsGalleryPolicy
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventImagePolicyState
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleItem
@@ -585,6 +586,7 @@ class ServerHubRepository(
             goodsItems = goodsItems.mapNotNull { it.toGoodsItemOrNull() }
                 .sortedWith(compareBy<HubEventGoodsItem> { it.sortOrder }.thenBy { it.id }),
             goodsCount = goodsCount?.coerceAtLeast(0) ?: 0,
+            goodsListImages = HubEventGoodsGalleryPolicy.fromDtos(goodsListImages),
         )
     }
 

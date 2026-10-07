@@ -25,7 +25,9 @@ import kotlinx.coroutines.launch
 internal class HubEventGoodsSection(private val activity: MainActivity) {
 
     fun build(event: HubEvent, fullScreen: Boolean): View? {
-        if (event.goodsItems.isEmpty()) return null
+        val galleryImages = HubEventGoodsGalleryPolicy.displayableImages(event)
+        val mode = HubEventGoodsGalleryPolicy.sectionMode(event.goodsItems.isNotEmpty(), galleryImages.size)
+        if (mode == HubEventGoodsSectionMode.HIDDEN) return null
         val members = activity.serverMembers ?: activity.repository.members
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
@@ -41,6 +43,12 @@ internal class HubEventGoodsSection(private val activity: MainActivity) {
         }
         val body = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
         root.addView(activity.sectionLabel("굿즈"))
+        if (HubEventGoodsGalleryPolicy.showsGallery(mode)) {
+            HubEventGoodsGalleryView(activity)
+                .build(event, galleryImages, HubEventGoodsGalleryPolicy.showsEmptyItemsNotice(mode))
+                ?.let(root::addView)
+        }
+        if (!HubEventGoodsGalleryPolicy.showsChecklist(mode)) return root
         root.addView(body)
 
         var quantities: Map<String, Int> = activity.goodsChecklistSnapshot[event.id].orEmpty()
