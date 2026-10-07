@@ -206,7 +206,8 @@ JSON 컬럼 대신 자식 테이블을 쓰는 이유: 기존 `scheduleItems`/`li
 - 굿즈 섹션 맨 위에 "공식 MD 리스트" 줄: 장수, 공지 링크, 가로 썸네일 스트립, 출처 문구. 기본 펼침.
 - 특전은 별도 줄로 나눈다 (기본 `split`): 1줄 "MD 리스트"(`kind: md`), 2줄 "특전"(`kind: bonus`). 이미지가 없는 줄은 숨긴다. 서버 환경 변수 `HUB_EVENT_GOODS_GALLERY_LAYOUT=single`로 바꾸면 공지 순서대로 한 줄에 표시한다 (앱 배포 없이 전환).
 - 뷰어는 누른 줄의 이미지 안에서 넘긴다 (`single`이면 전체).
-- 상품 목록이 있는 행사의 시작 상태(펼침/접음)는 미정이며, 결정 전까지 펼침으로 둔다. 이미지 전용 공지는 항상 펼친다.
+- 상품 목록이 있는 행사는 기본적으로 접힌 한 줄("공식 MD 리스트 이미지 · MD 7장 · 특전 2장 · 보기 ⌄")로 시작하고, 누르면 펼친다 (화면 단위 상태, 저장하지 않음). 이미지 전용 공지는 항상 펼친다.
+- 앱 설정 "굿즈 MD 리스트 이미지 펼쳐서 보기" (기본 꺼짐, 기기 로컬 저장)를 켜면 상품 목록이 있는 행사도 펼친 상태로 시작한다.
 - 썸네일을 누르면 전체 화면 뷰어: 위치 표시(`altText` 또는 "이미지 n / N"), 공지 열기, 핀치 확대, 좌우 넘기기, 출처 표시.
 - `goodsItems`가 비어 있고 갤러리만 있으면 "상품 목록은 아직 등록되지 않았어요" 안내와 구매 페이지 버튼을 표시한다.
 - 썸네일은 축소 디코딩하고 원본 크기는 뷰어에서 해당 장을 볼 때만 불러온다.
@@ -239,4 +240,11 @@ JSON 컬럼 대신 자식 테이블을 쓰는 이유: 기존 `scheduleItems`/`li
 - 모바일은 필드가 없으면 갤러리를 렌더링하지 않는다 (L1 이 그대로 동작하는 조건).
 - 영역별(백엔드, 어드민, Android, iOS) 커밋을 분리해 부분 되돌리기가 가능하게 한다.
 
-기존 파일 접점 목록: 구현 후 기록한다.
+기존 파일 접점 목록 (갤러리 커밋 기준):
+
+- 백엔드: `src/config/env.ts`(환경 변수 2개), `src/routes/routes.ts`, `src/routes/hubEventReadRoutes.ts`(상세 라우트), `src/hub-events/hubEventService.ts`(getById/list/summary, 시드), `src/hub-events/hubEventRepository.ts`(상세·어드민 투영, 쓰기 값), `src/hub-events/hubEventAdminService.ts`(validate), `src/hub-events/hubEventAdminTypes.ts`(사유 코드), `src/types.ts`, `prisma/schema.prisma`, `shared/schemas/domain.ts`, `shared/openapi/openapi.yaml`, `test/chzzkAuthRoutes.test.ts`(env 픽스처). 신규: `hubEventGoodsGalleryPolicy.ts`, 마이그레이션 `20261007180000_add_hub_event_goods_list_images`.
+- 어드민 콘솔: `adminConsoleHtml.ts`(import, style, 마크업, 스크립트 삽입, `collectHubEventInput`, `renderHubEventValidation`, `bindHubEventForm`), `adminI18n.ts`(`goodsGallery.*`). 신규: `adminGoodsGallery.ts`.
+- Android: `core/model/Models.kt`(HubEvent 필드), `core/network/HubApiModels.kt`(HubEventDto 필드), `feature/home/ServerHubRepository.kt`(toHubEvent), `feature/hubevents/HubEventGoodsSection.kt`(build), 설정 화면 토글. 신규: `HubEventGoodsGallery*.kt`.
+- iOS: `Models/HubModels.swift`(위젯 타깃 공유 타입), `Services/HubAPIClient.swift`, `Services/ServerHubStore.swift`(toHubEvent), `Services/MockHubStore.swift`, `Views/HubEventDetailView.swift`(goods 섹션), `Views/SettingsView.swift`(토글), `project.pbxproj`. 신규: `HubEventGoodsGallery*.swift`.
+
+테스트 서버 검증 (2026-10-07): `~/StelLiveNoti-backups/2026-10-07-pre-goods/`에 DB 덤프·기존 소스·`.env`를 백업한 뒤 배포했다. API 검증 11건 통과, L0(`single`)·L1(끄기) 전환 후 원복까지 확인했다.
