@@ -141,13 +141,24 @@ function defaultHubEvents(): HubEvent[] {
           sortOrder: 2
         }
       ],
-      goodsListImages: [1, 2, 3].map((page) => ({
-        policyState: "official_runtime_url" as const,
-        url: `https://stellive.me/placeholder/md-list-0${page}.png`,
-        sourceLabel: "공식 공지",
-        sourceUrl: "https://stellive.me/news/0",
-        altText: `MD 리스트 ${page}`
-      })),
+      goodsListImages: [
+        ...[1, 2].map((page) => ({
+          policyState: "official_runtime_url" as const,
+          url: `https://stellive.me/placeholder/md-list-0${page}.png`,
+          sourceLabel: "공식 공지",
+          sourceUrl: "https://stellive.me/news/0",
+          altText: `MD 리스트 ${page}`,
+          kind: "md" as const
+        })),
+        {
+          policyState: "official_runtime_url" as const,
+          url: "https://stellive.me/placeholder/bonus-list-01.png",
+          sourceLabel: "공식 공지",
+          sourceUrl: "https://stellive.me/news/0",
+          altText: "특전 리스트 1",
+          kind: "bonus" as const
+        }
+      ],
       notificationEligible: true,
       createdAt: "2026-06-01T00:00:00Z",
       updatedAt: "2026-06-01T00:00:00Z"

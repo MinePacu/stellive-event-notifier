@@ -36,6 +36,8 @@ export interface RegisterHubEventReadRouteOptions {
   hubEvents: HubEventReadPort;
   /** HUB_EVENT_GOODS_GALLERY_ENABLED kill switch; defaults to true. When false, detail omits goodsListImages. */
   goodsGalleryEnabled?: boolean;
+  /** HUB_EVENT_GOODS_GALLERY_LAYOUT; defaults to "split". Added to detail only when goodsListImages is present. */
+  goodsGalleryLayout?: "split" | "single";
   hubCalendarSpecialDays?: HubCalendarSpecialDay[];
   hubCalendarSpecialDayOccurrences?: {
     listRange(filters: {
@@ -279,7 +281,7 @@ function specialDayStatusesChanged(
 }
 
 export default function registerHubEventReadRoutes(app: FastifyInstance, options: RegisterHubEventReadRouteOptions): void {
-  const { hubEvents, goodsGalleryEnabled = true, hubCalendarSpecialDays = [], hubCalendarSpecialDayOccurrences } = options;
+  const { hubEvents, goodsGalleryEnabled = true, goodsGalleryLayout = "split", hubCalendarSpecialDays = [], hubCalendarSpecialDayOccurrences } = options;
 
   async function listOptionalSpecialDayOccurrences(
     filters: { from: Date; to: Date; generationId?: string; memberId?: string; kind?: string },
@@ -385,6 +387,6 @@ export default function registerHubEventReadRoutes(app: FastifyInstance, options
     const { id } = request.params as { id: string };
     const event = await hubEvents.getById(id);
     if (!event) return reply.code(404).send({ error: "hub_event_not_found" });
-    return applyGoodsGalleryKillSwitch(event, goodsGalleryEnabled);
+    return applyGoodsGalleryKillSwitch(event, goodsGalleryEnabled, goodsGalleryLayout);
   });
 }

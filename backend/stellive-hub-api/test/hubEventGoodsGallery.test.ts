@@ -8,12 +8,13 @@ import {
   isAllowedGoodsGalleryImageHost,
   maxHubEventGoodsListImages,
   validateHubEventGoodsListImages,
+  normalizeGoodsListImages,
   withPublicGoodsListImages
 } from "../src/hub-events/hubEventGoodsGalleryPolicy.js";
 import { validateHubEventForAdmin } from "../src/hub-events/hubEventPolicy.js";
 import { HubEventRepository } from "../src/hub-events/hubEventRepository.js";
 import { HubEventService } from "../src/hub-events/hubEventService.js";
-import type { HubEvent, HubEventImage } from "../src/types.js";
+import type { HubEvent, HubEventGoodsListImage, HubEventImage } from "../src/types.js";
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -26,7 +27,7 @@ const env = {
 const auth = { authorization: "Bearer admin-token" };
 const EVENT_ID = "popup-1";
 
-function image(page: number, overrides: Partial<HubEventImage> = {}): HubEventImage {
+function image(page: number, overrides: Partial<HubEventGoodsListImage> = {}): HubEventGoodsListImage {
   return {
     policyState: "official_runtime_url",
     url: `https://stellive.me/placeholder/md-list-${String(page).padStart(2, "0")}.png`,
@@ -47,6 +48,72 @@ describe("HUB_EVENT_GOODS_GALLERY_ENABLED", () => {
     expect(loadEnv(base).HUB_EVENT_GOODS_GALLERY_ENABLED).toBe(true);
     expect(loadEnv({ ...base, HUB_EVENT_GOODS_GALLERY_ENABLED: "true" }).HUB_EVENT_GOODS_GALLERY_ENABLED).toBe(true);
     expect(loadEnv({ ...base, HUB_EVENT_GOODS_GALLERY_ENABLED: "false" }).HUB_EVENT_GOODS_GALLERY_ENABLED).toBe(false);
+  });
+});
+
+describe("HUB_EVENT_GOODS_GALLERY_LAYOUT", () => {
+  const base = { DATABASE_URL: env.DATABASE_URL };
+
+  it("defaults to split, accepts single, and falls back to split on invalid values without crashing", () => {
+    expect(loadEnv(base).HUB_EVENT_GOODS_GALLERY_LAYOUT).toBe("split");
+    expect(loadEnv({ ...base, HUB_EVENT_GOODS_GALLERY_LAYOUT: "split" }).HUB_EVENT_GOODS_GALLERY_LAYOUT).toBe("split");
+    expect(loadEnv({ ...base, HUB_EVENT_GOODS_GALLERY_LAYOUT: "single" }).HUB_EVENT_GOODS_GALLERY_LAYOUT).toBe("single");
+    for (const value of ["grid", "", "  ", "SINGLE2"]) {
+      expect(loadEnv({ ...base, HUB_EVENT_GOODS_GALLERY_LAYOUT: value }).HUB_EVENT_GOODS_GALLERY_LAYOUT, value).toBe("split");
+    }
+  });
+});
+
+describe("goodsListImages kind", () => {
+  it("accepts md, bonus and an absent kind", () => {
+    expect(
+      validateHubEventGoodsListImages({ goodsListImages: [image(1, { kind: "md" }), image(2, { kind: "bonus" }), image(3)] })
+    ).toEqual([]);
+  });
+
+  it("rejects an unknown, non-string or null kind with the indexed field", () => {
+    const errors = validateHubEventGoodsListImages({
+      goodsListImages: [
+        image(1),
+        image(2, { kind: "extra" as never }),
+        image(3, { kind: 7 as never }),
+        image(4, { kind: null as never }),
+        image(5, { kind: "MD" as never })
+      ]
+    });
+    expect(errors.map((error) => `${error.field}:${error.reason}`)).toEqual([
+      "goodsListImages.1.kind:goods_list_image_kind_invalid",
+      "goodsListImages.2.kind:goods_list_image_kind_invalid",
+      "goodsListImages.3.kind:goods_list_image_kind_invalid",
+      "goodsListImages.4.kind:goods_list_image_kind_invalid"
+    ]);
+  });
+
+  it("reports an invalid kind alongside other image errors on the same entry", () => {
+    const errors = validateHubEventGoodsListImages({
+      goodsListImages: [image(1, { url: "http://stellive.me/a.png", kind: "x" as never })]
+    });
+    expect(errors.map((error) => `${error.field}:${error.reason}`).sort()).toEqual([
+      "goodsListImages.0.kind:goods_list_image_kind_invalid",
+      "goodsListImages.0.url:image_url_not_https"
+    ]);
+  });
+
+  it("normalizes and projects kind, keeping absent kind absent and dropping unknown stored kinds", () => {
+    const normalized = normalizeGoodsListImages([
+      image(1, { kind: "md" }),
+      image(2, { kind: "bonus" }),
+      image(3),
+      { ...image(4), kind: "junk" }
+    ]);
+    expect(normalized?.map((entry) => entry.kind)).toEqual(["md", "bonus", undefined, undefined]);
+    expect(normalized?.map((entry) => "kind" in entry)).toEqual([true, true, false, false]);
+
+    const projected = withPublicGoodsListImages(
+      hubEvent({ goodsListImages: [image(1, { kind: "bonus" }), image(2), image(3, { policyState: "blocked", kind: "md" })] })
+    );
+    expect(projected.goodsListImages).toEqual([image(1, { kind: "bonus" }), image(2)]);
+    expect("kind" in projected.goodsListImages![1]!).toBe(false);
   });
 });
 
@@ -232,6 +299,7 @@ describe("goodsListImages over the public routes (memory mode)", () => {
     for (const response of [list, summary, calendar, widget]) {
       expect(response.status).toBe(200);
       expect(response.text).not.toContain("goodsListImages");
+      expect(response.text).not.toContain("goodsListLayout");
     }
   });
 
@@ -242,7 +310,52 @@ describe("goodsListImages over the public routes (memory mode)", () => {
 
     expect(detail.status).toBe(200);
     expect(detail.text).not.toContain("goodsListImages");
+    expect(detail.text).not.toContain("goodsListLayout");
     expect(detail.body.id).toBe("gallery-event");
+  });
+
+  it("adds goodsListLayout (default split) to detail only when the gallery is present", async () => {
+    const app = await buildWith();
+    const detail = await getJson(app, "/v1/hub-events/gallery-event");
+    const plain = await getJson(app, "/v1/hub-events/plain-event");
+    await app.close();
+
+    expect(detail.body.goodsListLayout).toBe("split");
+    expect("goodsListLayout" in plain.body).toBe(false);
+  });
+
+  it("serves goodsListLayout single when HUB_EVENT_GOODS_GALLERY_LAYOUT=single and falls back to split when invalid", async () => {
+    const single = await buildWith({ HUB_EVENT_GOODS_GALLERY_LAYOUT: "single" });
+    const singleDetail = await getJson(single, "/v1/hub-events/gallery-event");
+    await single.close();
+    const invalid = await buildWith({ HUB_EVENT_GOODS_GALLERY_LAYOUT: "carousel" });
+    const invalidDetail = await getJson(invalid, "/v1/hub-events/gallery-event");
+    await invalid.close();
+
+    expect(singleDetail.body.goodsListLayout).toBe("single");
+    expect(urls(singleDetail.body.goodsListImages)).toEqual([image(1).url, image(3).url]);
+    expect(invalidDetail.status).toBe(200);
+    expect(invalidDetail.body.goodsListLayout).toBe("split");
+  });
+
+  it("omits goodsListLayout when every gallery image is filtered out or the kill switch is off", async () => {
+    const blockedOnly = hubEvent({ id: "blocked-event", goodsListImages: [image(1, { policyState: "blocked" })] });
+    const app = await buildApp({
+      env,
+      useProcessEnv: false,
+      appRoutes: { dependencies: { hubEvents: new HubEventService(new CatalogService(), [blockedOnly]) } }
+    });
+    const filtered = await getJson(app, "/v1/hub-events/blocked-event");
+    await app.close();
+    const off = await buildWith({ HUB_EVENT_GOODS_GALLERY_ENABLED: "false", HUB_EVENT_GOODS_GALLERY_LAYOUT: "single" });
+    const killed = await getJson(off, "/v1/hub-events/gallery-event");
+    await off.close();
+
+    expect(filtered.status).toBe(200);
+    expect(filtered.text).not.toContain("goodsListLayout");
+    expect(filtered.text).not.toContain("goodsListImages");
+    expect(killed.text).not.toContain("goodsListLayout");
+    expect(killed.text).not.toContain("goodsListImages");
   });
 
   it("ships placeholder gallery entries on the gen3-collab-popup seed event only on detail", async () => {
@@ -252,14 +365,27 @@ describe("goodsListImages over the public routes (memory mode)", () => {
     const list = await getJson(app, "/v1/hub-events");
     await app.close();
 
-    expect(detail.body.goodsListImages).toEqual([1, 2, 3].map((page) => ({
-      policyState: "official_runtime_url",
-      url: `https://stellive.me/placeholder/md-list-0${page}.png`,
-      sourceLabel: "공식 공지",
-      sourceUrl: "https://stellive.me/news/0",
-      altText: `MD 리스트 ${page}`
-    })));
+    expect(detail.body.goodsListImages).toEqual([
+      ...[1, 2].map((page) => ({
+        policyState: "official_runtime_url",
+        url: `https://stellive.me/placeholder/md-list-0${page}.png`,
+        sourceLabel: "공식 공지",
+        sourceUrl: "https://stellive.me/news/0",
+        altText: `MD 리스트 ${page}`,
+        kind: "md"
+      })),
+      {
+        policyState: "official_runtime_url",
+        url: "https://stellive.me/placeholder/bonus-list-01.png",
+        sourceLabel: "공식 공지",
+        sourceUrl: "https://stellive.me/news/0",
+        altText: "특전 리스트 1",
+        kind: "bonus"
+      }
+    ]);
+    expect(detail.body.goodsListLayout).toBe("split");
     expect("goodsListImages" in other.body).toBe(false);
+    expect("goodsListLayout" in other.body).toBe(false);
     expect(list.text).not.toContain("goodsListImages");
   });
 });
@@ -390,6 +516,41 @@ describe("goodsListImages admin write path (real service + repository over a fak
     expect(adminGet.body.goodsListImages).toHaveLength(3);
     expect(urls(publicDetail.body.goodsListImages)).toEqual([image(1).url, image(3).url]);
     expect(publicList.text).not.toContain("goodsListImages");
+  });
+
+  it("persists kind, returns it on admin and public responses, and keeps layout off admin responses", async () => {
+    const { appPromise, events } = setup({ HUB_EVENT_GOODS_GALLERY_LAYOUT: "single" });
+    const app = await appPromise;
+    const gallery = [image(1, { kind: "md" }), image(2, { kind: "bonus" }), image(3)];
+
+    const updated = await put(app, { goodsListImages: gallery });
+    const adminGet = await getJson(app, `/v1/admin/hub-events/${EVENT_ID}`, auth);
+    const publicDetail = await getJson(app, `/v1/hub-events/${EVENT_ID}`);
+    await app.close();
+
+    expect(updated.status).toBe(200);
+    expect(events.get(EVENT_ID)!.goodsListImages).toEqual(gallery);
+    expect("kind" in (events.get(EVENT_ID)!.goodsListImages as object[])[2]!).toBe(false);
+    expect(updated.body.goodsListImages.map((entry: HubEventGoodsListImage) => entry.kind)).toEqual(["md", "bonus", undefined]);
+    expect(adminGet.body.goodsListImages.map((entry: HubEventGoodsListImage) => entry.kind)).toEqual(["md", "bonus", undefined]);
+    expect(publicDetail.body.goodsListImages.map((entry: HubEventGoodsListImage) => entry.kind)).toEqual(["md", "bonus", undefined]);
+    expect(publicDetail.body.goodsListLayout).toBe("single");
+    expect("goodsListLayout" in adminGet.body).toBe(false);
+    expect("goodsListLayout" in updated.body).toBe(false);
+  });
+
+  it("rejects an invalid kind with the indexed field and changes nothing", async () => {
+    const { appPromise, events, audits } = setup();
+    const app = await appPromise;
+    const response = await put(app, { goodsListImages: [image(1), image(2, { kind: "extra" as never })] });
+    await app.close();
+
+    expect(response.status).toBe(400);
+    expect(
+      response.body.errors.map((error: { field: string; reason: string }) => `${error.field}:${error.reason}`)
+    ).toContain("goodsListImages.1.kind:goods_list_image_kind_invalid");
+    expect(audits).toEqual([]);
+    expect(events.get(EVENT_ID)!.goodsListImages).toBeNull();
   });
 
   it("clears the column with null (Prisma.DbNull) and with an empty list, and leaves it alone when omitted", async () => {

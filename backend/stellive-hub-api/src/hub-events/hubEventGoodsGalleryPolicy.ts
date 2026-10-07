@@ -1,4 +1,4 @@
-import type { HubEvent, HubEventImage } from "../types.js";
+import type { HubEvent, HubEventGoodsGalleryLayout, HubEventGoodsListImage, HubEventGoodsListImageKind } from "../types.js";
 import type { HubEventValidationError, HubEventValidationReason } from "./hubEventAdminTypes.js";
 import { canDisplayHubEventImage, hasHttpsUrl, validateHubEventImageForAdmin } from "./hubEventPolicy.js";
 
@@ -14,6 +14,8 @@ export const maxHubEventGoodsListImages = 20;
 /** Exact host or any subdomain of these; runtime URLs from any other host are rejected for the gallery only. */
 const allowedGalleryDomains = ["stellive.me"] as const;
 const allowedGalleryExactHosts = ["pbs.twimg.com"] as const;
+
+const goodsListImageKinds = new Set<string>(["md", "bonus"]);
 
 const imagePolicyStates = new Set(["none", "official_runtime_url", "third_party_allowed", "verify_required", "blocked"]);
 
@@ -69,7 +71,11 @@ export function validateHubEventGoodsListImages(input: unknown): HubEventValidat
     }
     const before = errors.length;
     validateHubEventImageForAdmin(errors, { image: entry }, path);
-    if (errors.length > before) return;
+    const imageInvalid = errors.length > before;
+    if (entry.kind !== undefined && !(typeof entry.kind === "string" && goodsListImageKinds.has(entry.kind))) {
+      addError(errors, `${path}.kind`, "goods_list_image_kind_invalid", 'Goods list image kind must be "md" or "bonus".');
+    }
+    if (imageInvalid) return;
 
     if (entry.policyState === "official_runtime_url") {
       const url = trimmedString(entry.url);
@@ -91,9 +97,9 @@ export function validateHubEventGoodsListImages(input: unknown): HubEventValidat
  * Lenient normalizer for stored/written values: keeps only known image fields on well-formed entries.
  * Returns undefined when the input is not an array or nothing usable remains.
  */
-export function normalizeGoodsListImages(value: unknown): HubEventImage[] | undefined {
+export function normalizeGoodsListImages(value: unknown): HubEventGoodsListImage[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const images: HubEventImage[] = [];
+  const images: HubEventGoodsListImage[] = [];
   for (const entry of value) {
     if (!isRecord(entry)) continue;
     const policyState = trimmedString(entry.policyState);
@@ -103,7 +109,9 @@ export function normalizeGoodsListImages(value: unknown): HubEventImage[] | unde
       const text = trimmedString(entry[key]);
       if (text !== undefined) image[key] = text;
     }
-    images.push(image as unknown as HubEventImage);
+    // Absent kind stays absent; an unknown stored kind is dropped rather than failing the whole entry.
+    if (typeof entry.kind === "string" && goodsListImageKinds.has(entry.kind)) image.kind = entry.kind as HubEventGoodsListImageKind;
+    images.push(image as unknown as HubEventGoodsListImage);
   }
   return images.length > 0 ? images : undefined;
 }
@@ -117,12 +125,28 @@ export function withPublicGoodsListImages<T extends HubEvent>(event: T): T {
 
 /** List/calendar/widget/summary payloads: never carry goodsListImages. */
 export function withoutGoodsListImages<T extends HubEvent>(event: T): T {
-  if (!("goodsListImages" in event)) return event;
-  const { goodsListImages: _goodsListImages, ...rest } = event;
+  if (!("goodsListImages" in event) && !("goodsListLayout" in event)) return event;
+  const { goodsListImages: _goodsListImages, goodsListLayout: _goodsListLayout, ...rest } = event;
   return rest as T;
 }
 
-/** Kill switch (HUB_EVENT_GOODS_GALLERY_ENABLED=false): public responses omit goodsListImages. */
-export function applyGoodsGalleryKillSwitch<T extends HubEvent>(event: T, enabled: boolean): T {
-  return enabled ? event : withoutGoodsListImages(event);
+/**
+ * Kill switch (HUB_EVENT_GOODS_GALLERY_ENABLED=false): public responses omit goodsListImages (and the layout).
+ * When enabled, the server-driven layout (HUB_EVENT_GOODS_GALLERY_LAYOUT) is added to the public detail
+ * only if goodsListImages is present in that response.
+ */
+export function applyGoodsGalleryKillSwitch<T extends HubEvent>(
+  event: T,
+  enabled: boolean,
+  layout: HubEventGoodsGalleryLayout = "split"
+): T {
+  if (!enabled) return withoutGoodsListImages(event);
+  if (!event.goodsListImages?.length) return withoutGoodsListLayout(event);
+  return { ...event, goodsListLayout: layout };
+}
+
+function withoutGoodsListLayout<T extends HubEvent>(event: T): T {
+  if (!("goodsListLayout" in event)) return event;
+  const { goodsListLayout: _goodsListLayout, ...rest } = event;
+  return rest as T;
 }

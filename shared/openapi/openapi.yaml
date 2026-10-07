@@ -2502,6 +2502,17 @@ components:
           format: uri
         altText:
           type: string
+    HubEventGoodsListImageKind:
+      type: string
+      enum: [md, bonus]
+    HubEventGoodsListImage:
+      allOf:
+        - $ref: "#/components/schemas/HubEventImage"
+        - type: object
+          properties:
+            kind:
+              $ref: "#/components/schemas/HubEventGoodsListImageKind"
+              description: Optional group; absent means unspecified (clients treat it as md).
     HubEventLinkKind:
       type: string
       enum:
@@ -2645,7 +2656,14 @@ components:
             (HUB_EVENT_GOODS_GALLERY_ENABLED=false) is off. Runtime URLs are limited to stellive.me
             (and subdomains) or pbs.twimg.com.
           items:
-            $ref: "#/components/schemas/HubEventImage"
+            $ref: "#/components/schemas/HubEventGoodsListImage"
+        goodsListLayout:
+          type: string
+          enum: [split, single]
+          description: >-
+            Public detail only, present only when goodsListImages is present in the same response. "split" shows
+            MD and bonus pages as separate groups, "single" as one strip. Server-driven via
+            HUB_EVENT_GOODS_GALLERY_LAYOUT (default split).
         goodsCount:
           type: integer
           minimum: 1

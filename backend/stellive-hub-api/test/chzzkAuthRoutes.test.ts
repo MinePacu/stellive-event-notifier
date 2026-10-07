@@ -9,6 +9,7 @@ const routeEnv = {
   DATABASE_URL: "postgresql://stellive:stellive@localhost:5432/stellive_hub_test",
   HUB_EVENTS_STORAGE_MODE: "memory" as const,
   HUB_EVENT_GOODS_GALLERY_ENABLED: true,
+  HUB_EVENT_GOODS_GALLERY_LAYOUT: "split" as const,
   BOOTSTRAP_CATALOG_CACHE_TTL_SECONDS: 30,
   BOOTSTRAP_LIVE_STATUS_CACHE_TTL_SECONDS: 10,
   BOOTSTRAP_HUB_EVENTS_SUMMARY_CACHE_TTL_SECONDS: 30,

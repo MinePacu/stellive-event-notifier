@@ -402,6 +402,16 @@ export interface HubEventImage {
   altText?: string;
 }
 
+/** Which group a goods list page belongs to. Absent means unspecified (clients treat it as "md"). */
+export type HubEventGoodsListImageKind = "md" | "bonus";
+
+/** One official MD/bonus notice page image. */
+export interface HubEventGoodsListImage extends HubEventImage {
+  kind?: HubEventGoodsListImageKind;
+}
+
+export type HubEventGoodsGalleryLayout = "split" | "single";
+
 export type HubEventGoodsSalesChannel = "onsite" | "online" | "both";
 
 /**
@@ -464,7 +474,12 @@ export interface HubEvent {
    * Detail and admin responses only; never on list, calendar, widget or bootstrap payloads.
    * Public detail keeps only displayable images and omits the field when none remain (or when the server kill switch is off).
    */
-  goodsListImages?: HubEventImage[];
+  goodsListImages?: HubEventGoodsListImage[];
+  /**
+   * Public detail only, and only when goodsListImages is present in that response: how clients should lay out the
+   * gallery ("split" = separate MD and bonus groups, "single" = one strip). Server-driven (HUB_EVENT_GOODS_GALLERY_LAYOUT).
+   */
+  goodsListLayout?: HubEventGoodsGalleryLayout;
   /** List responses only: number of non-cancelled goods items, present only when greater than zero. */
   goodsCount?: number;
   notificationEligible: boolean;
