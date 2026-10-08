@@ -406,7 +406,6 @@ internal var songRefreshJob: Job? = null
     internal var hubEventDetailJob: Job? = null
     internal var serverHubEventDetailJob: Job? = null
     internal var homeRecentSongsJob: Job? = null
-    internal var persistSettingsJob: Job? = null
 internal var songSearchResultsContainer: LinearLayout? = null
 internal var songSearchResultsAdapter: SongResultsAdapter? = null
 internal var homeRecentSongs: List<SongCatalogItem>? = null
@@ -613,6 +612,7 @@ private var notificationPermissionRequested = false
         if (!isChangingConfigurations && !internalLaunch) {
             reservationReturnPromptStore.setLastBackgroundedAt(Instant.now())
         }
+        settingsScreenController.flushPendingSettingsSync()
         super.onStop()
     }
 
@@ -643,7 +643,6 @@ private var notificationPermissionRequested = false
         hubEventDetailJob?.cancel()
         serverHubEventDetailJob?.cancel()
         homeRecentSongsJob?.cancel()
-        persistSettingsJob?.cancel()
         super.onDestroy()
     }
 

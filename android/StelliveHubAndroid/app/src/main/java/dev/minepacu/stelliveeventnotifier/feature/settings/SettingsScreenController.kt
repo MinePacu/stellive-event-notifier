@@ -31,7 +31,6 @@ import dev.minepacu.stelliveeventnotifier.toNightMode
 import dev.minepacu.stelliveeventnotifier.ui.components.HubCardStyle
 import dev.minepacu.stelliveeventnotifier.ui.components.SettingsRowStyle
 import dev.minepacu.stelliveeventnotifier.ui.components.SettingsRowView
-import kotlinx.coroutines.launch
 
 /**
  * Owns all Settings-screen VIEW-BUILDING logic that previously lived directly on
@@ -839,21 +838,24 @@ internal class SettingsScreenController(private val activity: MainActivity) {
             style = SettingsRowStyle.GROUPED,
         )
 
-    private fun persistSettings(settings: dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState) {
-        activity.persistSettingsJob?.cancel()
-        activity.persistSettingsJob = activity.lifecycleScope.launch {
-            try {
-                activity.serverRepository.updatePreferences(settings)
-                val screen = activity.navigationHistory.currentScreen
-                activity.refreshScreenWhenIdle(screen) { activity.replaceScreenWithoutAnimation(screen) }
-            } catch (_: PreferenceSyncConflictException) {
-                Snackbar.make(
-                    activity.binding.root,
-                    "설정 동기화가 충돌했습니다. 다시 시도해 주세요.",
-                    Snackbar.LENGTH_LONG,
-                ).show()
-            }
+    private val settingsSync = DebouncedSettingsSync(activity.lifecycleScope) { settings ->
+        try {
+            activity.serverRepository.updatePreferences(settings)
+            val screen = activity.navigationHistory.currentScreen
+            activity.refreshScreenWhenIdle(screen) { activity.replaceScreenWithoutAnimation(screen) }
+        } catch (_: PreferenceSyncConflictException) {
+            Snackbar.make(
+                activity.binding.root,
+                "설정 동기화가 충돌했습니다. 다시 시도해 주세요.",
+                Snackbar.LENGTH_LONG,
+            ).show()
         }
+    }
+
+    internal fun flushPendingSettingsSync() = settingsSync.flush()
+
+    private fun persistSettings(settings: dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState) {
+        settingsSync.submit(settings)
     }
 
     private fun settingsInfoCard(title: String, body: String, pills: List<String>): MaterialCardView =
