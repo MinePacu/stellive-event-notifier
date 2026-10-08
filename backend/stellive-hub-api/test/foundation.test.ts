@@ -117,6 +117,20 @@ describe("foundation configuration", () => {
     expect(loadEnv({ ...baseEnv, CHZZK_LIVE_LIST_MAX_PAGES: "invalid" }).CHZZK_LIVE_LIST_MAX_PAGES).toBe(5);
   });
 
+  it("bounds log retention configuration", () => {
+    const defaults = loadEnv(baseEnv);
+    expect(defaults.DELIVERY_ATTEMPT_RETENTION_DAYS).toBe(30);
+    expect(defaults.LOG_RETENTION_INTERVAL_MINUTES).toBe(60);
+    expect(defaults.LOG_RETENTION_ENABLED).toBe(true);
+
+    expect(loadEnv({ ...baseEnv, DELIVERY_ATTEMPT_RETENTION_DAYS: "1" }).DELIVERY_ATTEMPT_RETENTION_DAYS).toBe(14);
+    expect(loadEnv({ ...baseEnv, DELIVERY_ATTEMPT_RETENTION_DAYS: "9999" }).DELIVERY_ATTEMPT_RETENTION_DAYS).toBe(365);
+    expect(loadEnv({ ...baseEnv, DELIVERY_ATTEMPT_RETENTION_DAYS: "invalid" }).DELIVERY_ATTEMPT_RETENTION_DAYS).toBe(30);
+    expect(loadEnv({ ...baseEnv, LOG_RETENTION_INTERVAL_MINUTES: "0" }).LOG_RETENTION_INTERVAL_MINUTES).toBe(5);
+    expect(loadEnv({ ...baseEnv, LOG_RETENTION_INTERVAL_MINUTES: "99999" }).LOG_RETENTION_INTERVAL_MINUTES).toBe(1440);
+    expect(loadEnv({ ...baseEnv, LOG_RETENTION_ENABLED: "false" }).LOG_RETENTION_ENABLED).toBe(false);
+  });
+
   it("parses CHZZK OAuth configuration without enabling placeholders", () => {
     const configured = loadEnv({
       ...baseEnv,

@@ -1047,6 +1047,79 @@ describe("DeliveryAttemptRepository worker writes", () => {
   });
 });
 
+describe("DeliveryAttemptRepository retention prune", () => {
+  function createRawPrisma(results: number[]) {
+    const calls: Array<{ sql: string; values: unknown[] }> = [];
+    const executeRaw = vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      calls.push({ sql: strings.join("?"), values });
+      return results[calls.length - 1] ?? 0;
+    });
+    return { calls, prisma: { deliveryAttempt: {}, $executeRaw: executeRaw } };
+  }
+
+  it("deletes rows older than the cutoff in batches with parameterized tagged raw SQL", async () => {
+    const { calls, prisma } = createRawPrisma([5000, 5000, 120]);
+    const repository = new DeliveryAttemptRepository(prisma as never);
+
+    const result = await repository.pruneOlderThan({ days: 30, now: new Date("2026-07-31T01:00:00.000Z") });
+
+    expect(result).toEqual({ deleted: 10_120 });
+    expect(calls).toHaveLength(3);
+    expect(calls[0]?.sql).toContain('DELETE FROM "DeliveryAttempt"');
+    expect(calls[0]?.sql).toContain('"attemptedAt" <');
+    expect(calls[0]?.sql).toContain("LIMIT");
+    expect(calls[0]?.values).toEqual([new Date("2026-07-01T01:00:00.000Z"), 5000]);
+  });
+
+  it("stops after the first short batch", async () => {
+    const { calls, prisma } = createRawPrisma([42]);
+    const repository = new DeliveryAttemptRepository(prisma as never);
+
+    await expect(repository.pruneOlderThan({ days: 30, now: new Date("2026-07-31T01:00:00.000Z"), batchSize: 100 }))
+      .resolves.toEqual({ deleted: 42 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.values[1]).toBe(100);
+  });
+
+  it("respects maxBatches so one run stays bounded", async () => {
+    const { calls, prisma } = createRawPrisma([100, 100, 100, 100]);
+    const repository = new DeliveryAttemptRepository(prisma as never);
+
+    await expect(repository.pruneOlderThan({ days: 30, now: new Date("2026-07-31T01:00:00.000Z"), batchSize: 100, maxBatches: 2 }))
+      .resolves.toEqual({ deleted: 200 });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("stops between batches when shouldContinue turns false", async () => {
+    const { calls, prisma } = createRawPrisma([100, 100, 100]);
+    const repository = new DeliveryAttemptRepository(prisma as never);
+    let remaining = 1;
+
+    await expect(repository.pruneOlderThan({
+      days: 30,
+      now: new Date("2026-07-31T01:00:00.000Z"),
+      batchSize: 100,
+      shouldContinue: () => remaining-- > 0
+    })).resolves.toEqual({ deleted: 100 });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("never prunes inside the 14 day dashboard window", async () => {
+    const { calls, prisma } = createRawPrisma([0]);
+    const repository = new DeliveryAttemptRepository(prisma as never);
+
+    await repository.pruneOlderThan({ days: 1, now: new Date("2026-07-31T01:00:00.000Z") });
+
+    expect(calls[0]?.values[0]).toEqual(new Date("2026-07-17T01:00:00.000Z"));
+  });
+
+  it("returns zero when raw execution is unavailable", async () => {
+    const repository = new DeliveryAttemptRepository({ deliveryAttempt: {} } as never);
+
+    await expect(repository.pruneOlderThan({ days: 30 })).resolves.toEqual({ deleted: 0 });
+  });
+});
+
 describe("NotificationJobRepository", () => {
   it("enqueues notification jobs with queued status", async () => {
     const calls: unknown[] = [];

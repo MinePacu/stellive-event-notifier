@@ -74,6 +74,7 @@ export interface InternalRouteDependencies {
   };
   deliveryAttempts: {
     listRecent(limit: number): MaybePromise<DeliveryAttemptDiagnostic[]>;
+    pruneOlderThan(input?: { days?: number; now?: Date }): MaybePromise<{ deleted: number }>;
   };
   externalApiCallLogs: {
     listRecent(input?: {
@@ -391,6 +392,13 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
   app.post("/v1/internal/admin/external-api-calls/prune", async () =>
     dependencies.externalApiCallLogs.pruneOlderThan({
       days: options.env.EXTERNAL_API_LOG_RETENTION_DAYS,
+      now: dependencies.now?.() ?? new Date()
+    })
+  );
+
+  app.post("/v1/internal/admin/delivery-attempts/prune", async () =>
+    dependencies.deliveryAttempts.pruneOlderThan({
+      days: options.env.DELIVERY_ATTEMPT_RETENTION_DAYS,
       now: dependencies.now?.() ?? new Date()
     })
   );

@@ -33,6 +33,7 @@ import { ServiceAnnouncementAdminService } from "./announcements/serviceAnnounce
 import { PrismaServiceAnnouncementDispatchUnitOfWork } from "./announcements/serviceAnnouncementDispatchUnitOfWork.js";
 import { createHubCalendarSpecialDayOccurrenceRepositoryIfAvailable } from "./hub-events/hubCalendarSpecialDayOccurrenceRepository.js";
 import NotificationJobRepository from "./jobs/notificationJobRepository.js";
+import { LogRetentionScheduler, createPrismaAdvisoryLockRunner, shouldStartLogRetention } from "./jobs/logRetentionScheduler.js";
 import NotificationWorker from "./jobs/notificationWorker.js";
 import SummaryNotificationRepository from "./jobs/summaryNotificationRepository.js";
 import SummaryNotificationWorker from "./jobs/summaryNotificationWorker.js";
@@ -758,5 +759,18 @@ export async function buildApp(options: BuildAppOptions = {}) {
     invalidateCache: () => announcementReads.invalidate(),
   });
   await registerAdminServiceAnnouncementRoutes(app, { env, service: announcementAdminService, authFailureLimiter });
+  if (shouldStartLogRetention(env, { dependenciesInjected: Boolean(options.internalRoutes?.dependencies) })) {
+    const logRetention = new LogRetentionScheduler({
+      deliveryAttempts: new DeliveryAttemptRepository(),
+      externalApiCallLogs: new ExternalApiCallLogRepository(),
+      withLock: createPrismaAdvisoryLockRunner(),
+      deliveryAttemptRetentionDays: env.DELIVERY_ATTEMPT_RETENTION_DAYS,
+      externalApiLogRetentionDays: env.EXTERNAL_API_LOG_RETENTION_DAYS,
+      intervalMs: env.LOG_RETENTION_INTERVAL_MINUTES * 60_000,
+      logger: app.log
+    });
+    app.addHook("onReady", async () => logRetention.start());
+    registerClose(() => logRetention.stop());
+  }
   return app;
 }

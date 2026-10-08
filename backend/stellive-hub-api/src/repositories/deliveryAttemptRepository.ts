@@ -56,6 +56,7 @@ interface DeliveryAttemptDiagnosticSelect {
 
 interface DeliveryAttemptDelegate {
   $queryRaw?<T = unknown>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T>;
+  $executeRaw?(strings: TemplateStringsArray, ...values: unknown[]): Promise<number>;
   deliveryAttempt: {
     create?(args: { data: Record<string, unknown> }): Promise<unknown>;
     createMany?(args: { data: Record<string, unknown>[] }): Promise<unknown>;
@@ -112,6 +113,14 @@ export interface CountSentByDeviceInWindowInput {
   deviceIds: string[];
   since: Date;
   until: Date;
+}
+
+export interface PruneDeliveryAttemptsInput {
+  days?: number;
+  now?: Date;
+  batchSize?: number;
+  maxBatches?: number;
+  shouldContinue?: () => boolean;
 }
 
 export interface SkippedSummaryCandidate {
@@ -174,6 +183,12 @@ type DeliveryAttemptKnownStatus = (typeof deliveryAttemptStatuses)[number];
 
 function isDeliveryAttemptKnownStatus(status: string): status is DeliveryAttemptKnownStatus {
   return deliveryAttemptStatuses.includes(status as DeliveryAttemptKnownStatus);
+}
+
+// The admin dashboard reads 14 days of daily buckets, so never prune inside that window.
+function clampRetentionDays(days: number | undefined): number {
+  if (!Number.isFinite(days)) return 30;
+  return Math.min(Math.max(Math.trunc(days ?? 30), 14), 365);
 }
 
 function clampTrendDays(days: number | undefined): number {
@@ -311,6 +326,33 @@ export class DeliveryAttemptRepository {
         ? [{ eventId: record.eventId, deviceId: record.deviceId, attemptedAt: record.attemptedAt }]
         : []
     );
+  }
+
+  async pruneOlderThan(input: PruneDeliveryAttemptsInput = {}): Promise<{ deleted: number }> {
+    if (!this.prisma.$executeRaw) return { deleted: 0 };
+    const days = clampRetentionDays(input.days);
+    const batchSize = Math.min(Math.max(Math.trunc(input.batchSize ?? 5_000), 1), 50_000);
+    const maxBatches = Math.max(Math.trunc(input.maxBatches ?? 200), 1);
+    const cutoff = addUtcDays(input.now ?? new Date(), -days);
+    let deleted = 0;
+    for (let batch = 0; batch < maxBatches; batch += 1) {
+      if (input.shouldContinue && !input.shouldContinue()) break;
+      // Small committed batches avoid long locks and WAL spikes; SKIP LOCKED keeps concurrent prunes from blocking each other.
+      // Deleting by ctid of the locked rows uses a TID scan instead of re-scanning the whole table per batch.
+      const count = await this.prisma.$executeRaw`
+        DELETE FROM "DeliveryAttempt"
+        WHERE ctid = ANY (ARRAY(
+          SELECT ctid FROM "DeliveryAttempt"
+          WHERE "attemptedAt" < ${cutoff}
+          ORDER BY "attemptedAt"
+          LIMIT ${batchSize}
+          FOR UPDATE SKIP LOCKED
+        ))
+      `;
+      deleted += count;
+      if (count < batchSize) break;
+    }
+    return { deleted };
   }
 
   private toRecord(input: CreateDeliveryAttemptInput): Record<string, unknown> {

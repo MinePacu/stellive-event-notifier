@@ -68,6 +68,9 @@ const envSchema = z
     CHANNEL_IMAGE_REFRESH_WAIT_MS: z.coerce.number().int().positive().default(1500),
     ADMIN_OVERVIEW_CACHE_TTL_SECONDS: boundedInteger(15, 0, 60),
     EXTERNAL_API_LOG_RETENTION_DAYS: boundedInteger(31, 14, 365),
+    DELIVERY_ATTEMPT_RETENTION_DAYS: boundedInteger(30, 14, 365),
+    LOG_RETENTION_INTERVAL_MINUTES: boundedInteger(60, 5, 1440),
+    LOG_RETENTION_ENABLED: booleanFlag(true),
 
     FCM_SERVICE_ACCOUNT_FILE: optionalString(),
     FCM_PROJECT_ID: optionalString(),

@@ -47,7 +47,7 @@ function createFakeDependencies(overrides: Partial<InternalRouteDependencies> = 
     },
     webhookSubscriptions: { listDiagnostics: async () => [] },
     liveStatus: { listDiagnostics: async () => [] },
-    deliveryAttempts: { listRecent: async () => [] },
+    deliveryAttempts: { listRecent: async () => [], pruneOlderThan: async () => ({ deleted: 0 }) },
     externalApiCallLogs: { listRecent: async () => ({ items: [] }), pruneOlderThan: async () => ({ deleted: 0 }) },
     adapterHealth: { getState: async () => null, listAdapterHealth: async () => [] },
     specialDayYearMaterializer: {
@@ -409,6 +409,36 @@ describe("internal admin routes", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ deleted: 3 });
     expect(pruneOlderThan).toHaveBeenCalledWith({ days: 45, now: new Date("2026-07-02T01:00:00.000Z") });
+  });
+
+  it("prunes old delivery attempts through the internal admin route", async () => {
+    const pruneOlderThan = vi.fn(async () => ({ deleted: 7 }));
+    const app = await buildApp({
+      env: { ...testEnv, DELIVERY_ATTEMPT_RETENTION_DAYS: "45" },
+      useProcessEnv: false,
+      internalRoutes: {
+        dependencies: createFakeDependencies({
+          deliveryAttempts: { listRecent: async () => [], pruneOlderThan },
+          now: () => new Date("2026-07-02T01:00:00.000Z")
+        })
+      }
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/internal/admin/delivery-attempts/prune",
+      headers: authHeaders
+    });
+    const unauthorized = await app.inject({
+      method: "POST",
+      url: "/v1/internal/admin/delivery-attempts/prune"
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ deleted: 7 });
+    expect(pruneOlderThan).toHaveBeenCalledTimes(1);
+    expect(pruneOlderThan).toHaveBeenCalledWith({ days: 45, now: new Date("2026-07-02T01:00:00.000Z") });
+    expect(unauthorized.statusCode).toBe(401);
   });
 
   it("rejects requests when the internal token is not configured", async () => {
