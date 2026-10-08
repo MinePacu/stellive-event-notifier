@@ -37,6 +37,8 @@ import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementDto
 import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementListResponseDto
 import dev.minepacu.stelliveeventnotifier.feature.home.MockHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.home.PreferenceSyncConflictException
+import dev.minepacu.stelliveeventnotifier.feature.home.PreferenceSyncResult
+import dev.minepacu.stelliveeventnotifier.feature.home.RemoteGlobalPreferences
 import dev.minepacu.stelliveeventnotifier.feature.home.ServerHubRepository
 import java.time.LocalDate
 import kotlinx.coroutines.test.runTest
@@ -121,6 +123,66 @@ class ServerHubRepositoryTest {
         assertTrue(conflict != null)
         assertEquals(2, remote.preferenceCalls)
         assertEquals(2, remote.updatePreferenceRequests.size)
+    }
+
+    @Test
+    fun updatePreferencesReportsServerNewerWithItsGlobalRuleOnStaleUpdate() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            preferenceSnapshots += preferenceSnapshot(revision = 7)
+            preferenceSnapshots += preferenceSnapshot(
+                revision = 8,
+                scoped = preference(scope = "global").copy(enabled = false, serviceAnnouncementsEnabled = false),
+            )
+            updatePreferenceResults += HubNetworkResult.Failure(code = "preference_stale_update")
+        }
+        val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()).apply { saveDeviceId("device-1") }
+        val repository = ServerHubRepository(remote, deviceIdStore, MockHubRepository())
+
+        val result = repository.updatePreferences(NotificationSettingState())
+
+        assertEquals(PreferenceSyncResult.ServerNewer(RemoteGlobalPreferences(false, false)), result)
+    }
+
+    @Test
+    fun updatePreferencesReportsFailureForNetworkErrorsAndMissingDevice() = runTest {
+        val rateLimited = RecordingRemoteDataSource().apply {
+            updatePreferenceResults += HubNetworkResult.Failure(code = "rate_limited")
+        }
+        val registered = DeviceIdStore(DeviceIdStore.InMemoryStorage()).apply { saveDeviceId("device-1") }
+        assertEquals(
+            PreferenceSyncResult.Failed,
+            ServerHubRepository(rateLimited, registered, MockHubRepository()).updatePreferences(NotificationSettingState()),
+        )
+
+        val unregistered = RecordingRemoteDataSource()
+        val result = ServerHubRepository(
+            unregistered,
+            DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            MockHubRepository(),
+        ).updatePreferences(NotificationSettingState())
+        assertEquals(PreferenceSyncResult.Failed, result)
+        assertEquals(0, unregistered.preferenceCalls)
+    }
+
+    @Test
+    fun globalPreferencesReadsServerGlobalRuleOrNullWhenAbsent() = runTest {
+        val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()).apply { saveDeviceId("device-1") }
+        val withRule = RecordingRemoteDataSource().apply {
+            preferenceSnapshots += preferenceSnapshot(
+                revision = 7,
+                scoped = preference(scope = "global").copy(enabled = false),
+            )
+        }
+        assertEquals(
+            HubNetworkResult.Success<RemoteGlobalPreferences?>(RemoteGlobalPreferences(false, true)),
+            ServerHubRepository(withRule, deviceIdStore, MockHubRepository()).globalPreferences(),
+        )
+
+        val withoutRule = RecordingRemoteDataSource()
+        assertEquals(
+            HubNetworkResult.Success<RemoteGlobalPreferences?>(null),
+            ServerHubRepository(withoutRule, deviceIdStore, MockHubRepository()).globalPreferences(),
+        )
     }
 
     @Test

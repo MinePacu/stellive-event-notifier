@@ -649,6 +649,7 @@ private var notificationPermissionRequested = false
     private fun loadServerBootstrap() {
         lifecycleScope.launch {
             val state = serverRepository.bootstrap()
+            settingsScreenController.reconcileSettingsOnLaunch()
             serverMembers = state.members
             announcementsSummary = state.announcementsSummary
             announcementReadStore.initializeSummary(announcementsSummary.items)

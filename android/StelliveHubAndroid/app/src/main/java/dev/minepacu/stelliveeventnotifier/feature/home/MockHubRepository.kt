@@ -1,5 +1,6 @@
 package dev.minepacu.stelliveeventnotifier.feature.home
 
+import dev.minepacu.stelliveeventnotifier.core.network.HubNetworkResult
 import dev.minepacu.stelliveeventnotifier.core.model.ActiveStatus
 import dev.minepacu.stelliveeventnotifier.core.model.CatalogRole
 import dev.minepacu.stelliveeventnotifier.core.model.DeliveryMode
@@ -312,8 +313,11 @@ class MockHubRepository : HubRepository {
             hubEventsSummary = hubEventsSummary,
         )
 
-    override suspend fun updatePreferences(settings: dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState): HubDataState =
-        bootstrap()
+    override suspend fun updatePreferences(settings: dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState): PreferenceSyncResult =
+        PreferenceSyncResult.Pushed
+
+    override suspend fun globalPreferences(): HubNetworkResult<RemoteGlobalPreferences?> =
+        HubNetworkResult.Success(null)
 
     override suspend fun hubEvents(filterId: String, from: LocalDate?, to: LocalDate?): List<HubEvent> =
         (if (filterId in setOf("all", "goods", "album", "ticketing", "offline", "closing")) {

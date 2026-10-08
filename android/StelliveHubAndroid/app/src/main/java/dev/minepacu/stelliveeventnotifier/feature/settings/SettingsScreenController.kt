@@ -16,21 +16,26 @@ import com.google.android.material.switchmaterial.SwitchMaterial
 import dev.minepacu.stelliveeventnotifier.BuildConfig
 import dev.minepacu.stelliveeventnotifier.MainActivity
 import dev.minepacu.stelliveeventnotifier.R
+import dev.minepacu.stelliveeventnotifier.core.device.DeviceIdStore
 import dev.minepacu.stelliveeventnotifier.core.model.AppearanceMode
 import dev.minepacu.stelliveeventnotifier.core.model.CatalogRole
 import dev.minepacu.stelliveeventnotifier.core.model.DeliveryMode
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationEventType
+import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationPlatform
+import dev.minepacu.stelliveeventnotifier.core.network.HubNetworkResult
 import dev.minepacu.stelliveeventnotifier.core.notification.NotificationPermissionPromptMoment
 import dev.minepacu.stelliveeventnotifier.feature.home.HubScreen
 import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
-import dev.minepacu.stelliveeventnotifier.feature.home.PreferenceSyncConflictException
+import dev.minepacu.stelliveeventnotifier.feature.home.PreferenceSyncResult
+import dev.minepacu.stelliveeventnotifier.feature.home.RemoteGlobalPreferences
 import dev.minepacu.stelliveeventnotifier.feature.home.SettingsHubRow
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenTarget
 import dev.minepacu.stelliveeventnotifier.toNightMode
 import dev.minepacu.stelliveeventnotifier.ui.components.HubCardStyle
 import dev.minepacu.stelliveeventnotifier.ui.components.SettingsRowStyle
 import dev.minepacu.stelliveeventnotifier.ui.components.SettingsRowView
+import kotlinx.coroutines.launch
 
 /**
  * Owns all Settings-screen VIEW-BUILDING logic that previously lived directly on
@@ -176,7 +181,7 @@ internal class SettingsScreenController(private val activity: MainActivity) {
     }
 
     private fun renderSettingsHubInto(container: LinearLayout) {
-        val settings = activity.repository.settings
+        val settings = effectiveSettings()
         container.addView(activity.sectionLabel("알림 기본 설정"))
         container.addView(
             settingsPanel(
@@ -189,7 +194,7 @@ internal class SettingsScreenController(private val activity: MainActivity) {
                             if (enabled) {
                                 activity.requestNotificationPermissionIfNeeded(NotificationPermissionPromptMoment.GLOBAL_NOTIFICATION_TOGGLE)
                             }
-                            persistSettings(settings.copy(globalEnabled = enabled))
+                            persistSettings(effectiveSettings().copy(globalEnabled = enabled))
                         },
                     ),
                     SettingRow(
@@ -197,7 +202,7 @@ internal class SettingsScreenController(private val activity: MainActivity) {
                         "서비스 전체 공지와 장애, 점검, 새 버전 안내를 받습니다. 전체 알림이 꺼져 있으면 받지 않습니다.",
                         settings.serviceAnnouncementsEnabled,
                         enabled = settings.globalEnabled,
-                        onCheckedChange = { enabled -> persistSettings(settings.copy(serviceAnnouncementsEnabled = enabled)) },
+                        onCheckedChange = { enabled -> persistSettings(effectiveSettings().copy(serviceAnnouncementsEnabled = enabled)) },
                     )
                 )
             )
@@ -259,7 +264,7 @@ internal class SettingsScreenController(private val activity: MainActivity) {
     }
 
     private fun renderSettingsDeliveryInto(container: LinearLayout) {
-        val settings = activity.repository.settings
+        val settings = effectiveSettings()
         container.addView(activity.sectionLabel("알림 수신 방식"))
         container.addView(
             settingsPanel(
@@ -287,7 +292,7 @@ internal class SettingsScreenController(private val activity: MainActivity) {
     }
 
     private fun renderSettingsTargetsInto(container: LinearLayout) {
-        val settings = activity.repository.settings
+        val settings = effectiveSettings()
         container.addView(activity.sectionLabel("분류별 알림"))
         container.addView(
             settingsPanel(
@@ -320,7 +325,7 @@ internal class SettingsScreenController(private val activity: MainActivity) {
     }
 
     private fun renderSettingsPlatformsInto(container: LinearLayout) {
-        val settings = activity.repository.settings
+        val settings = effectiveSettings()
         container.addView(activity.sectionLabel("플랫폼별 알림"))
         container.addView(
             settingsPanel(
@@ -343,7 +348,7 @@ internal class SettingsScreenController(private val activity: MainActivity) {
     }
 
     private fun renderSettingsEventTypesInto(container: LinearLayout) {
-        val settings = activity.repository.settings
+        val settings = effectiveSettings()
         container.addView(activity.sectionLabel("알림 종류별 설정"))
         container.addView(
             settingsPanel(
@@ -382,7 +387,7 @@ internal class SettingsScreenController(private val activity: MainActivity) {
     }
 
     private fun renderSettingsHubEventsInto(container: LinearLayout) {
-        val settings = activity.repository.settings
+        val settings = effectiveSettings()
         container.addView(activity.sectionLabel("굿즈/행사"))
         container.addView(
             settingsPanel(
@@ -397,7 +402,7 @@ internal class SettingsScreenController(private val activity: MainActivity) {
     }
 
     private fun renderSettingsAdvancedInto(container: LinearLayout) {
-        val settings = activity.repository.settings
+        val settings = effectiveSettings()
         container.addView(activity.sectionLabel("알림 우선순위"))
         container.addView(
             settingsPanel(
@@ -838,12 +843,22 @@ internal class SettingsScreenController(private val activity: MainActivity) {
             style = SettingsRowStyle.GROUPED,
         )
 
+    private val settingsReconciler = NotificationSettingsReconciler(
+        store = NotificationSettingsStore(activity),
+        remote = object : NotificationSettingsReconciler.Remote {
+            override suspend fun push(settings: NotificationSettingState): PreferenceSyncResult =
+                activity.serverRepository.updatePreferences(settings)
+
+            override suspend fun fetchGlobal(): HubNetworkResult<RemoteGlobalPreferences?> =
+                activity.serverRepository.globalPreferences()
+        },
+        deviceId = DeviceIdStore(activity)::getDeviceId,
+    )
+
     private val settingsSync = DebouncedSettingsSync(activity.lifecycleScope) { settings ->
-        try {
-            activity.serverRepository.updatePreferences(settings)
-            val screen = activity.navigationHistory.currentScreen
-            activity.refreshScreenWhenIdle(screen) { activity.replaceScreenWithoutAnimation(screen) }
-        } catch (_: PreferenceSyncConflictException) {
+        val outcome = settingsReconciler.sync(settings)
+        refreshCurrentScreen()
+        if (outcome == NotificationSettingsReconciler.SyncOutcome.CONFLICT) {
             Snackbar.make(
                 activity.binding.root,
                 "설정 동기화가 충돌했습니다. 다시 시도해 주세요.",
@@ -854,7 +869,30 @@ internal class SettingsScreenController(private val activity: MainActivity) {
 
     internal fun flushPendingSettingsSync() = settingsSync.flush()
 
-    private fun persistSettings(settings: dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState) {
+    /** Notification settings as shown in the UI: the stored global toggles over the repository defaults. */
+    private fun effectiveSettings(): NotificationSettingState =
+        settingsReconciler.effective(activity.repository.settings)
+
+    /** Called after each server bootstrap: pushes unsynced toggles, otherwise adopts the server's. */
+    internal fun reconcileSettingsOnLaunch() {
+        activity.lifecycleScope.launch {
+            val outcome = settingsReconciler.reconcileOnLaunch(activity.repository.settings)
+            if (outcome == NotificationSettingsReconciler.SyncOutcome.SERVER_APPLIED ||
+                outcome == NotificationSettingsReconciler.SyncOutcome.CONFLICT
+            ) {
+                refreshCurrentScreen()
+            }
+        }
+    }
+
+    private fun refreshCurrentScreen() {
+        val screen = activity.navigationHistory.currentScreen
+        activity.refreshScreenWhenIdle(screen) { activity.replaceScreenWithoutAnimation(screen) }
+    }
+
+    private fun persistSettings(settings: NotificationSettingState) {
+        settingsReconciler.saveLocal(settings)
+        refreshCurrentScreen()
         settingsSync.submit(settings)
     }
 

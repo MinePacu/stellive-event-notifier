@@ -12,6 +12,7 @@ import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
 import dev.minepacu.stelliveeventnotifier.core.model.SongFacets
 import dev.minepacu.stelliveeventnotifier.core.model.SongCatalogItem
 import dev.minepacu.stelliveeventnotifier.core.model.SongListResult
+import dev.minepacu.stelliveeventnotifier.core.network.HubNetworkResult
 import java.time.LocalDate
 
 data class HubDataState(
@@ -23,10 +24,31 @@ data class HubDataState(
     val liveStatusSourceLabel: String = "앱 내 목업",
 )
 
+/** The server-synced subset of the global preference rule. */
+data class RemoteGlobalPreferences(
+    val globalEnabled: Boolean,
+    val serviceAnnouncementsEnabled: Boolean,
+)
+
+sealed interface PreferenceSyncResult {
+    /** The server accepted the local settings. */
+    object Pushed : PreferenceSyncResult
+
+    /** The server held a newer snapshot, so the local settings were not applied; [remote] is its global rule. */
+    data class ServerNewer(val remote: RemoteGlobalPreferences?) : PreferenceSyncResult
+
+    /** The settings did not reach the server (no device id, network error, rate limit, ...). */
+    object Failed : PreferenceSyncResult
+}
+
 interface HubRepository {
     suspend fun bootstrap(): HubDataState
     suspend fun refresh(): HubDataState = bootstrap()
-    suspend fun updatePreferences(settings: NotificationSettingState): HubDataState
+    /** Throws [PreferenceSyncConflictException] after two consecutive conflicts. */
+    suspend fun updatePreferences(settings: NotificationSettingState): PreferenceSyncResult
+
+    /** Success(null) means the server has no global rule yet. */
+    suspend fun globalPreferences(): HubNetworkResult<RemoteGlobalPreferences?>
     suspend fun hubEvents(
         filterId: String = "all",
         from: LocalDate? = null,

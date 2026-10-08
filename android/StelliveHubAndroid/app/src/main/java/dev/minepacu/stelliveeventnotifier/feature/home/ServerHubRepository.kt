@@ -117,32 +117,56 @@ class ServerHubRepository(
         return fallback.bootstrap().copy(liveStatusSourceLabel = "서버 연결 실패 · 앱 내 목업")
     }
 
-    override suspend fun updatePreferences(settings: NotificationSettingState): HubDataState {
-        val deviceId = deviceIdStore.getDeviceId()
-        if (deviceId != null) {
-            val clientUpdatedAt = Instant.now().toString()
-            val initial = remoteDataSource.preferences(deviceId)
-            if (initial is HubNetworkResult.Success) {
-                val firstUpdate = remoteDataSource.updatePreferences(
-                    preferenceUpdateRequest(deviceId, settings, initial.value, clientUpdatedAt),
-                )
-                if (firstUpdate.isPreferenceStaleUpdate()) {
-                    remoteDataSource.preferences(deviceId)
-                } else if (firstUpdate.isPreferenceConflict()) {
-                    val refreshed = remoteDataSource.preferences(deviceId)
-                    if (refreshed is HubNetworkResult.Success) {
-                        val retry = remoteDataSource.updatePreferences(
-                            preferenceUpdateRequest(deviceId, settings, refreshed.value, clientUpdatedAt),
-                        )
-                        if (retry.isPreferenceConflict()) {
-                            throw PreferenceSyncConflictException()
-                        }
-                    }
+    override suspend fun updatePreferences(settings: NotificationSettingState): PreferenceSyncResult {
+        val deviceId = deviceIdStore.getDeviceId() ?: return PreferenceSyncResult.Failed
+        val clientUpdatedAt = Instant.now().toString()
+        val initial = remoteDataSource.preferences(deviceId)
+        if (initial !is HubNetworkResult.Success) return PreferenceSyncResult.Failed
+        val firstUpdate = remoteDataSource.updatePreferences(
+            preferenceUpdateRequest(deviceId, settings, initial.value, clientUpdatedAt),
+        )
+        return when {
+            firstUpdate is HubNetworkResult.Success -> PreferenceSyncResult.Pushed
+            firstUpdate.isPreferenceStaleUpdate() -> {
+                val refreshed = remoteDataSource.preferences(deviceId)
+                if (refreshed is HubNetworkResult.Success) {
+                    PreferenceSyncResult.ServerNewer(refreshed.value.globalPreferencesOrNull())
+                } else {
+                    PreferenceSyncResult.Failed
                 }
             }
+            firstUpdate.isPreferenceConflict() -> {
+                val refreshed = remoteDataSource.preferences(deviceId)
+                if (refreshed !is HubNetworkResult.Success) return PreferenceSyncResult.Failed
+                val retry = remoteDataSource.updatePreferences(
+                    preferenceUpdateRequest(deviceId, settings, refreshed.value, clientUpdatedAt),
+                )
+                when {
+                    retry is HubNetworkResult.Success -> PreferenceSyncResult.Pushed
+                    retry.isPreferenceConflict() -> throw PreferenceSyncConflictException()
+                    else -> PreferenceSyncResult.Failed
+                }
+            }
+            else -> PreferenceSyncResult.Failed
         }
-        return fallback.updatePreferences(settings)
     }
+
+    override suspend fun globalPreferences(): HubNetworkResult<RemoteGlobalPreferences?> {
+        val deviceId = deviceIdStore.getDeviceId() ?: return HubNetworkResult.Failure(code = "device_not_registered")
+        return when (val response = remoteDataSource.preferences(deviceId)) {
+            is HubNetworkResult.Success -> HubNetworkResult.Success(response.value.globalPreferencesOrNull())
+            is HubNetworkResult.Failure -> response
+        }
+    }
+
+    private fun PreferencesResponseDto.globalPreferencesOrNull(): RemoteGlobalPreferences? =
+        preferences.firstOrNull { it.scope == "global" }?.let { rule ->
+            RemoteGlobalPreferences(
+                globalEnabled = rule.enabled,
+                serviceAnnouncementsEnabled = rule.serviceAnnouncementsEnabled
+                    ?: NotificationSettingState().serviceAnnouncementsEnabled,
+            )
+        }
 
     private fun preferenceUpdateRequest(
         deviceId: String,
