@@ -32,5 +32,6 @@ COPY --from=build /app/backend/stellive-hub-api/prisma ./backend/stellive-hub-ap
 COPY --from=build /app/shared ./shared
 
 WORKDIR /app/backend/stellive-hub-api
+USER node
 EXPOSE 4000
 CMD ["npm", "start"]
