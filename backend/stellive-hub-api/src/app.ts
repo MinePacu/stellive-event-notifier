@@ -24,6 +24,7 @@ import Fastify, { type FastifyRequest } from "fastify";
 import { Redis } from "ioredis";
 import { AuthFailureLimiter } from "./admin/authFailureLimiter.js";
 import { isConfiguredSecret, loadEnv } from "./config/env.js";
+import { serializeRequestForLog } from "./logging/requestSerializer.js";
 import { HubEventRepository } from "./hub-events/hubEventRepository.js";
 import { ServiceAnnouncementRepository } from "./announcements/serviceAnnouncementRepository.js";
 import { ServiceAnnouncementReadService } from "./announcements/serviceAnnouncementReadService.js";
@@ -592,7 +593,10 @@ function resolveEnvInput(options: BuildAppOptions): NodeJS.ProcessEnv | Record<s
 
 export async function buildApp(options: BuildAppOptions = {}) {
   const env = loadEnv(resolveEnvInput(options));
-  const app = Fastify({ logger: true, trustProxy: env.TRUST_PROXY });
+  const app = Fastify({
+    logger: { serializers: { req: serializeRequestForLog } },
+    trustProxy: env.TRUST_PROXY
+  });
   const authFailureLimiter = options.authFailureLimiter ?? new AuthFailureLimiter();
   app.setErrorHandler((error, request, reply) => {
     const status = (error as { statusCode?: unknown }).statusCode;
@@ -620,12 +624,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
   };
   await app.register(cors, { delegator: corsDelegator });
   await app.register(sensible);
-  await app.register(swagger, {
-    openapi: {
-      info: { title: "Stellive Notification Hub API", version: "0.1.0" }
-    }
-  });
-  await app.register(swaggerUi, { routePrefix: "/docs" });
+  if (env.NODE_ENV !== "production") {
+    await app.register(swagger, {
+      openapi: {
+        info: { title: "Stellive Notification Hub API", version: "0.1.0" }
+      }
+    });
+    await app.register(swaggerUi, { routePrefix: "/docs" });
+  }
   const sharedFcmClient = createDefaultFcmClient(env);
   const announcementRepository = new ServiceAnnouncementRepository();
   const announcementReads = options.appRoutes?.dependencies?.announcements ?? new ServiceAnnouncementReadService(announcementRepository);
