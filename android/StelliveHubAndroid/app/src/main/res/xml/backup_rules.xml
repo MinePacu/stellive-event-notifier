@@ -3,4 +3,6 @@
     <exclude domain="database" path="reservations-v1.db" />
     <exclude domain="database" path="reservations-v1.db-shm" />
     <exclude domain="database" path="reservations-v1.db-wal" />
+    <exclude domain="sharedpref" path="hub_device.xml" />
+    <exclude domain="sharedpref" path="hub_push_token.xml" />
 </full-backup-content>
