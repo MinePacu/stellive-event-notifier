@@ -39,13 +39,15 @@ function createFakePrisma() {
           return records.get(args.where.id) ?? null;
         },
         async updateMany(args: {
-          where: { deviceToken?: string; id?: { not: string } };
+          where: { deviceToken?: string; id?: string | { not: string }; tokenStatus?: string };
           data: Partial<FakeDeviceRecord>;
         }) {
           let count = 0;
           for (const [id, record] of records) {
             if (args.where.deviceToken !== undefined && record.deviceToken !== args.where.deviceToken) continue;
-            if (args.where.id?.not === id) continue;
+            if (typeof args.where.id === "string" && args.where.id !== id) continue;
+            if (typeof args.where.id === "object" && args.where.id.not === id) continue;
+            if (args.where.tokenStatus !== undefined && record.tokenStatus !== args.where.tokenStatus) continue;
             records.set(id, { ...record, ...args.data });
             count += 1;
           }

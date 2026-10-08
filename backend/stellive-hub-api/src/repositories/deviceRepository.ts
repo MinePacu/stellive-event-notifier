@@ -142,6 +142,22 @@ export class DeviceRepository {
     if (typeof input.deviceId !== "string" || typeof input.token !== "string") throw new Error("device_token_input_invalid");
     if (!this.prisma.$transaction) throw new Error("device_transaction_unavailable");
 
+    // Fast path: the device already owns this active token (the unique constraint guarantees
+    // no other row holds it), so skip the Serializable claim transaction.
+    if (this.prisma.device.updateMany) {
+      const { count } = await this.prisma.device.updateMany({
+        where: { id: input.deviceId, deviceToken: input.token, tokenStatus: "active" },
+        data: {
+          platform: input.platform,
+          locale: input.locale ?? null,
+          timezone: input.timezone ?? null,
+          appVersion: input.appVersion ?? null,
+          lastSeenAt: this.now(),
+        },
+      });
+      if (count === 1) return { updated: true, tokenStatus: "active" };
+    }
+
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         return await this.prisma.$transaction(

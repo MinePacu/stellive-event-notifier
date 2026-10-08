@@ -695,6 +695,72 @@ describe("DeviceRepository push targets", () => {
     });
   });
 
+  describe("updateToken fast path", () => {
+    const input = {
+      deviceId: "device-1",
+      platform: "android" as const,
+      provider: "fcm" as const,
+      token: "private-token",
+      locale: "ko-KR",
+      timezone: "Asia/Seoul",
+      appVersion: "1.0.0",
+    };
+
+    it("skips the transaction when the device already owns the active token", async () => {
+      const now = new Date("2026-06-11T03:00:00.000Z");
+      const updateMany = vi.fn(async () => ({ count: 1 }));
+      const transaction = vi.fn();
+      const repository = new DeviceRepository({ device: { updateMany }, $transaction: transaction as never }, () => now);
+
+      await expect(repository.updateToken(input)).resolves.toEqual({ updated: true, tokenStatus: "active" });
+
+      expect(transaction).not.toHaveBeenCalled();
+      expect(updateMany).toHaveBeenCalledTimes(1);
+      expect(updateMany).toHaveBeenCalledWith({
+        where: { id: "device-1", deviceToken: "private-token", tokenStatus: "active" },
+        data: {
+          platform: "android",
+          locale: "ko-KR",
+          timezone: "Asia/Seoul",
+          appVersion: "1.0.0",
+          lastSeenAt: now,
+        },
+      });
+    });
+
+    it("falls through to the claim transaction for a different token", async () => {
+      const updateMany = vi.fn(async () => ({ count: 0 }));
+      const transactionClient = {
+        device: { updateMany: vi.fn(async () => ({ count: 0 })), upsert: vi.fn(async () => ({})) },
+      };
+      const transaction = vi.fn(async (operation: (client: typeof transactionClient) => Promise<unknown>) => operation(transactionClient));
+      const repository = new DeviceRepository({ device: { updateMany }, $transaction: transaction as never });
+
+      await expect(repository.updateToken({ ...input, token: "rotated-token" })).resolves.toEqual({ updated: true, tokenStatus: "active" });
+
+      expect(updateMany).toHaveBeenCalledTimes(1);
+      expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: "device-1", deviceToken: "rotated-token", tokenStatus: "active" },
+      }));
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(transactionClient.device.upsert).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls through to the claim transaction when the same token is not active", async () => {
+      const updateMany = vi.fn(async () => ({ count: 0 }));
+      const transactionClient = {
+        device: { updateMany: vi.fn(async () => ({ count: 0 })), upsert: vi.fn(async () => ({})) },
+      };
+      const transaction = vi.fn(async (operation: (client: typeof transactionClient) => Promise<unknown>) => operation(transactionClient));
+      const repository = new DeviceRepository({ device: { updateMany }, $transaction: transaction as never });
+
+      await expect(repository.updateToken(input)).resolves.toEqual({ updated: true, tokenStatus: "active" });
+
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(transactionClient.device.upsert).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("resolves concurrent same-token claims with the retried last successful claimant as owner", async () => {
     const records = new Map<string, { id: string; deviceToken: string | null; tokenStatus: string }>([
       ["device-old", { id: "device-old", deviceToken: "shared-token", tokenStatus: "active" }],
