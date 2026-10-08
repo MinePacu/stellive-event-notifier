@@ -577,6 +577,72 @@ final class ServerHubStoreTests: XCTestCase {
         XCTAssertNil(store.preferenceSyncErrorMessage)
     }
 
+    func testSchedulePreferenceSyncCoalescesRapidChangesIntoOneWriteOfLatestSettings() async throws {
+        let recorder = PreferenceRequestRecorder()
+        let store = makeStore(sleep: { _ in }, handler: recorder.handle)
+
+        var settings = NotificationSettingsState()
+        settings.globalEnabled = false
+        store.schedulePreferenceSync(settings)
+        settings.globalEnabled = true
+        store.schedulePreferenceSync(settings)
+        settings.globalEnabled = false
+        settings.serviceAnnouncementsEnabled = false
+        store.schedulePreferenceSync(settings)
+        await store.preferenceSyncTask?.value
+
+        XCTAssertEqual(recorder.methods, ["GET", "PUT"])
+        let request = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: try XCTUnwrap(recorder.putBodies.first))
+        XCTAssertEqual(request.preferences.last?.enabled, false)
+        XCTAssertEqual(request.preferences.last?.serviceAnnouncementsEnabled, false)
+    }
+
+    func testFlushPendingPreferenceSyncSendsImmediatelyAndLaterDebounceDoesNotResend() async throws {
+        let recorder = PreferenceRequestRecorder()
+        let store = makeStore(sleep: { _ in }, handler: recorder.handle)
+
+        var settings = NotificationSettingsState()
+        settings.globalEnabled = false
+        store.schedulePreferenceSync(settings)
+        let debounceTask = store.preferenceSyncTask
+        await store.flushPendingPreferenceSync()
+
+        XCTAssertEqual(recorder.methods, ["GET", "PUT"])
+
+        await debounceTask?.value
+        await store.flushPendingPreferenceSync()
+
+        XCTAssertEqual(recorder.methods, ["GET", "PUT"])
+    }
+
+    func testSchedulePreferenceSyncSendsEachChangeSeparatedByMoreThanTheDebounce() async throws {
+        let recorder = PreferenceRequestRecorder()
+        let store = makeStore(sleep: { _ in }, handler: recorder.handle)
+
+        var settings = NotificationSettingsState()
+        settings.globalEnabled = false
+        store.schedulePreferenceSync(settings)
+        await store.preferenceSyncTask?.value
+        settings.globalEnabled = true
+        store.schedulePreferenceSync(settings)
+        await store.preferenceSyncTask?.value
+
+        XCTAssertEqual(recorder.methods, ["GET", "PUT", "GET", "PUT"])
+        let first = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: recorder.putBodies[0])
+        let second = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: recorder.putBodies[1])
+        XCTAssertEqual(first.preferences.last?.enabled, false)
+        XCTAssertEqual(second.preferences.last?.enabled, true)
+    }
+
+    func testFlushPendingPreferenceSyncWithNothingPendingSendsNothing() async {
+        let recorder = PreferenceRequestRecorder()
+        let store = makeStore(sleep: { _ in }, handler: recorder.handle)
+
+        await store.flushPendingPreferenceSync()
+
+        XCTAssertTrue(recorder.methods.isEmpty)
+    }
+
     private static func readAll(from stream: InputStream) -> Data? {
         stream.open()
         defer { stream.close() }
@@ -1166,6 +1232,7 @@ final class ServerHubStoreTests: XCTestCase {
     }
 
     private func makeStore(
+        sleep: (@Sendable (Duration) async throws -> Void)? = nil,
         handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)
     ) -> ServerHubStore {
         StubURLProtocol.requestHandler = handler
@@ -1178,11 +1245,52 @@ final class ServerHubStoreTests: XCTestCase {
         let defaults = UserDefaults(suiteName: "ServerHubStoreTests-\(UUID().uuidString)")!
         let deviceIDStore = DeviceIDStore(defaults: defaults)
         deviceIDStore.saveDeviceID("device-1")
+        guard let sleep else {
+            return ServerHubStore(
+                api: client,
+                deviceIDStore: deviceIDStore,
+                fallback: MockHubStore()
+            )
+        }
         return ServerHubStore(
             api: client,
             deviceIDStore: deviceIDStore,
-            fallback: MockHubStore()
+            fallback: MockHubStore(),
+            preferenceSyncSleep: sleep
         )
+    }
+}
+
+private final class PreferenceRequestRecorder: @unchecked Sendable {
+    private(set) var methods: [String] = []
+    private(set) var putBodies: [Data] = []
+
+    func handle(_ request: URLRequest) -> (HTTPURLResponse, Data) {
+        methods.append(request.httpMethod ?? "")
+        if request.httpMethod == "GET" {
+            return jsonResponse(statusCode: 200, body: """
+                {"deviceId":"device-1","preferences":[],"updatedAt":"2026-07-06T00:00:00Z","revision":1}
+                """)
+        }
+        if let body = request.httpBody ?? request.httpBodyStream.flatMap(Self.readAll) {
+            putBodies.append(body)
+        }
+        return jsonResponse(statusCode: 200, body: """
+            {"deviceId":"device-1","preferences":[],"updatedAt":"2026-07-06T00:00:01Z","revision":2}
+            """)
+    }
+
+    private static func readAll(from stream: InputStream) -> Data? {
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return data
     }
 }
 

@@ -346,7 +346,7 @@ struct SettingsContentView: View {
             set: { value in
                 store.settings[keyPath: keyPath] = value
                 let settings = store.settings
-                Task { await serverStore.updatePreferences(settings) }
+                serverStore.schedulePreferenceSync(settings)
             }
         )
     }

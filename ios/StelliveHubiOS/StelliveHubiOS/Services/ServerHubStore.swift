@@ -68,15 +68,22 @@ final class ServerHubStore: ObservableObject {
     private(set) var calendarCachedAt: Date?
     private static let calendarCacheTTL: TimeInterval = 300
     private static let calendarChunkMonths = 6
+    private static let preferenceSyncDebounce: Duration = .milliseconds(600)
+    private let preferenceSyncSleep: @Sendable (Duration) async throws -> Void
+    private var pendingPreferenceSettings: NotificationSettingsState?
+    private var preferenceSendTask: Task<Void, Never>?
+    private(set) var preferenceSyncTask: Task<Void, Never>?
 
     init(
         api: HubAPIClient,
         deviceIDStore: DeviceIDStore = DeviceIDStore(),
-        fallback: MockHubStore
+        fallback: MockHubStore,
+        preferenceSyncSleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
         self.api = api
         self.deviceIDStore = deviceIDStore
         self.fallback = fallback
+        self.preferenceSyncSleep = preferenceSyncSleep
     }
 
     func bootstrap() async -> MockHubStore {
@@ -108,6 +115,38 @@ final class ServerHubStore: ObservableObject {
             )
         )
         deviceIDStore.saveDeviceID(response.deviceId)
+    }
+
+    /// Coalesces rapid settings changes into a single server write of the latest state.
+    func schedulePreferenceSync(_ settings: NotificationSettingsState) {
+        pendingPreferenceSettings = settings
+        preferenceSyncTask?.cancel()
+        preferenceSyncTask = Task { [preferenceSyncSleep] in
+            try? await preferenceSyncSleep(Self.preferenceSyncDebounce)
+            guard !Task.isCancelled else { return }
+            await self.sendPendingPreferenceSync()
+        }
+    }
+
+    /// Sends any debounced settings immediately, e.g. before the app is suspended.
+    func flushPendingPreferenceSync() async {
+        preferenceSyncTask?.cancel()
+        preferenceSyncTask = nil
+        await sendPendingPreferenceSync()
+    }
+
+    private func sendPendingPreferenceSync() async {
+        guard let settings = pendingPreferenceSettings else { return }
+        pendingPreferenceSettings = nil
+        // Unstructured and chained so a newer schedule never cancels an in-flight write
+        // and writes stay ordered.
+        let previous = preferenceSendTask
+        let task = Task {
+            await previous?.value
+            await self.updatePreferences(settings)
+        }
+        preferenceSendTask = task
+        await task.value
     }
 
     func updatePreferences(_ settings: NotificationSettingsState) async {

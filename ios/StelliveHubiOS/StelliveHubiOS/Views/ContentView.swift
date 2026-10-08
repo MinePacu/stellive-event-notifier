@@ -68,6 +68,7 @@ struct IOSPrimaryNavigationPolicy {
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var reservationStore: ReservationStore
+    @EnvironmentObject private var serverStore: ServerHubStore
     @State private var selectedTab = "home"
     @State private var pendingHubEventId: String?
     @State private var pendingHubEventScheduleItemId: String?
@@ -126,6 +127,7 @@ struct ContentView: View {
             switch phase {
             case .background:
                 reservationReturnPromptStore.setLastBackgroundedAt(Date())
+                flushPreferenceSyncInBackground()
             case .active:
                 reloadAndEvaluateReservationReturnBanner()
             default:
@@ -135,6 +137,19 @@ struct ContentView: View {
         .task {
             // The initial .active phase on a cold launch does not trigger onChange.
             reloadAndEvaluateReservationReturnBanner()
+        }
+    }
+
+    private func flushPreferenceSyncInBackground() {
+        var backgroundTaskID = UIBackgroundTaskIdentifier.invalid
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "flush-preference-sync") {
+            UIApplication.shared.endBackgroundTask(backgroundTaskID)
+            backgroundTaskID = .invalid
+        }
+        Task { @MainActor in
+            await serverStore.flushPendingPreferenceSync()
+            UIApplication.shared.endBackgroundTask(backgroundTaskID)
+            backgroundTaskID = .invalid
         }
     }
 
