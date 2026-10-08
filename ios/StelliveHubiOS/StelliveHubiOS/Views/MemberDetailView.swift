@@ -4,6 +4,7 @@ struct MemberDetailView: View {
     let member: HubMember
 
     @EnvironmentObject private var store: MockHubStore
+    @EnvironmentObject private var serverStore: ServerHubStore
 
     var body: some View {
         Form {
@@ -24,7 +25,7 @@ struct MemberDetailView: View {
 
             Section("알림") {
                 Toggle("항목 알림", isOn: memberBinding(member.id, defaultValue: member.notificationEnabled))
-                Toggle("최대한 실시간 모드", isOn: $store.settings.realtimeEnabled)
+                Toggle("최대한 실시간 모드", isOn: serverSyncedBinding(store: store, serverStore: serverStore, \.realtimeEnabled))
                 LabeledContent("YouTube 업로드", value: member.youtubeHandle != nil ? "지원함" : "지원 안 함")
                 if member.catalogRole == .officialChannel {
                     LabeledContent("공식 YouTube 라이브", value: "지원하지 않음")

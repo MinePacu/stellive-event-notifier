@@ -232,6 +232,23 @@ struct SettingsView: View {
     }
 }
 
+/// A binding to one of the global-rule settings (global/service-announcement/realtime/tap action) that
+/// also schedules a debounced server sync; other settings stay local.
+@MainActor
+func serverSyncedBinding<Value>(
+    store: MockHubStore,
+    serverStore: ServerHubStore,
+    _ keyPath: WritableKeyPath<NotificationSettingsState, Value>
+) -> Binding<Value> {
+    Binding(
+        get: { store.settings[keyPath: keyPath] },
+        set: { value in
+            store.settings[keyPath: keyPath] = value
+            serverStore.schedulePreferenceSync(store.settings)
+        }
+    )
+}
+
 struct SettingsContentView: View {
     @EnvironmentObject private var store: MockHubStore
     @EnvironmentObject private var serverStore: ServerHubStore
@@ -271,7 +288,7 @@ struct SettingsContentView: View {
             }
 
             Section("앱 사용") {
-                Picker("알림을 눌렀을 때", selection: $store.settings.tapAction) {
+                Picker("알림을 눌렀을 때", selection: serverSyncedBinding(store: store, serverStore: serverStore, \.tapAction)) {
                     Text("앱에서 열기").tag(TapAction.openApp)
                     Text("원본 플랫폼에서 열기").tag(TapAction.openPlatform)
                 }
@@ -341,14 +358,7 @@ struct SettingsContentView: View {
     }
 
     private func persistedToggle(_ keyPath: WritableKeyPath<NotificationSettingsState, Bool>) -> Binding<Bool> {
-        Binding(
-            get: { store.settings[keyPath: keyPath] },
-            set: { value in
-                store.settings[keyPath: keyPath] = value
-                let settings = store.settings
-                serverStore.schedulePreferenceSync(settings)
-            }
-        )
+        serverSyncedBinding(store: store, serverStore: serverStore, keyPath)
     }
 
     private var appearanceModePicker: some View {
@@ -376,6 +386,7 @@ struct SettingsRouteDestinationView: View {
     let route: SettingsRoute
 
     @EnvironmentObject private var store: MockHubStore
+    @EnvironmentObject private var serverStore: ServerHubStore
 
     var body: some View {
         switch route {
@@ -401,7 +412,7 @@ struct SettingsRouteDestinationView: View {
     private var deliverySettings: some View {
         Form {
             Section("알림 수신 방식") {
-                Toggle("최대한 실시간으로 받기", isOn: $store.settings.realtimeEnabled)
+                Toggle("최대한 실시간으로 받기", isOn: serverSyncedBinding(store: store, serverStore: serverStore, \.realtimeEnabled))
                 ForEach(NotificationSettingsState.realtimeDisclosureLines, id: \.self) { line in
                     Text(line)
                         .font(.footnote)

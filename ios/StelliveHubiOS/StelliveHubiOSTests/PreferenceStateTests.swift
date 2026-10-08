@@ -422,4 +422,121 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertEqual(SettingsNavigationPolicy.debugServerConnectionLogs(debugModeEnabled: true, logs: logs), logs)
     }
 
+    // MARK: - Local persistence
+
+    private func makeSettingsPersistence() -> NotificationSettingsPersistence {
+        let suiteName = "PreferenceStateTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        return NotificationSettingsPersistence(defaults: defaults)
+    }
+
+    func testSettingsRoundTripThroughLocalPersistenceAcrossStoreInstances() {
+        let persistence = makeSettingsPersistence()
+        let store = MockHubStore(settingsPersistence: persistence)
+        store.settings.globalEnabled = false
+        store.settings.serviceAnnouncementsEnabled = false
+        store.settings.realtimeEnabled = true
+        store.settings.tapAction = .openPlatform
+        store.settings.appearanceMode = .dark
+        store.settings.chzzkChatEnabled = true
+        store.settings.generationEnabled["gen2"] = false
+        store.settings.memberEnabled["gangzi"] = false
+        store.settings.platformEnabled[.naverCafe] = true
+        store.settings.eventTypeEnabled[.eventUpdated] = true
+        store.settings.combinationPreferences[0].enabled = false
+        store.settings.quietHours = QuietHoursState(enabled: true, start: "22:30", end: "07:15", timezone: "UTC")
+        store.settings.keywordFilters = KeywordFilterState(allowlistText: "굿즈", blocklistText: "스포")
+        store.settings.rateLimit.maxNotificationsPerMinute = 3
+
+        let reloaded = MockHubStore(settingsPersistence: persistence)
+
+        XCTAssertEqual(reloaded.settings, store.settings)
+        XCTAssertTrue(reloaded.isGlobalRuleDirty)
+    }
+
+    func testCorruptOrMissingPersistedSettingsFallBackToDefaults() {
+        let persistence = makeSettingsPersistence()
+        XCTAssertEqual(MockHubStore(settingsPersistence: persistence).settings, NotificationSettingsState())
+
+        persistence.defaults.set(Data("not json".utf8), forKey: NotificationSettingsPersistence.settingsKey)
+        let store = MockHubStore(settingsPersistence: persistence)
+
+        XCTAssertEqual(store.settings, NotificationSettingsState())
+        XCTAssertFalse(store.isGlobalRuleDirty)
+    }
+
+    func testPartialOrUnknownPersistedFieldsKeepDefaultsForTheRest() {
+        let persistence = makeSettingsPersistence()
+        let blob = """
+        {"globalEnabled":false,"tapAction":"future_action","platformEnabled":{"chzzk":false,"future_platform":true},
+         "generationEnabled":{"gen1":false},"quietHours":{"enabled":true}}
+        """
+        persistence.defaults.set(Data(blob.utf8), forKey: NotificationSettingsPersistence.settingsKey)
+
+        let settings = MockHubStore(settingsPersistence: persistence).settings
+
+        XCTAssertFalse(settings.globalEnabled)
+        XCTAssertEqual(settings.tapAction, .openApp)
+        XCTAssertTrue(settings.serviceAnnouncementsEnabled)
+        XCTAssertEqual(settings.platformEnabled[.chzzk], false)
+        XCTAssertEqual(settings.platformEnabled[.youtube], true)
+        XCTAssertEqual(settings.platformEnabled.count, NotificationSettingsState().platformEnabled.count)
+        XCTAssertEqual(settings.generationEnabled["gen1"], false)
+        XCTAssertEqual(settings.generationEnabled["gen2"], true)
+        XCTAssertTrue(settings.quietHours.enabled)
+        XCTAssertEqual(settings.quietHours.start, QuietHoursState().start)
+        XCTAssertEqual(settings.eventTypeEnabled, NotificationSettingsState().eventTypeEnabled)
+    }
+
+    func testOnlyGlobalRuleChangesMarkTheSettingsDirty() {
+        let persistence = makeSettingsPersistence()
+        let store = MockHubStore(settingsPersistence: persistence)
+
+        store.settings.quietHours.enabled = true
+        store.settings.memberEnabled["gangzi"] = false
+        store.settings.appearanceMode = .light
+        XCTAssertFalse(store.isGlobalRuleDirty)
+        XCTAssertFalse(persistence.loadGlobalRuleDirty())
+
+        let globalRuleChanges: [(inout NotificationSettingsState) -> Void] = [
+            { $0.globalEnabled = false },
+            { $0.serviceAnnouncementsEnabled = false },
+            { $0.realtimeEnabled = true },
+            { $0.tapAction = .openPlatform }
+        ]
+        for change in globalRuleChanges {
+            let isolated = MockHubStore(settingsPersistence: makeSettingsPersistence())
+            change(&isolated.settings)
+            XCTAssertTrue(isolated.isGlobalRuleDirty)
+        }
+    }
+
+    func testAdoptingServerGlobalRuleDoesNotMarkDirtyAndClearsExistingDirtyFlag() throws {
+        let store = MockHubStore(settingsPersistence: makeSettingsPersistence())
+        store.settings.realtimeEnabled = true
+        XCTAssertTrue(store.isGlobalRuleDirty)
+        let preference = try JSONDecoder().decode(PreferenceResponse.self, from: Data("""
+            {"scope":"global","enabled":false,"explicitOverride":true,"tapAction":"open_platform","deliveryMode":"standard","serviceAnnouncementsEnabled":false,"updatedAt":"2026-07-06T00:00:00Z"}
+            """.utf8))
+
+        store.adoptServerGlobalRule(preference)
+
+        XCTAssertFalse(store.settings.globalEnabled)
+        XCTAssertEqual(store.settings.tapAction, .openPlatform)
+        XCTAssertFalse(store.settings.realtimeEnabled)
+        XCTAssertFalse(store.isGlobalRuleDirty)
+
+        let clean = MockHubStore(settingsPersistence: makeSettingsPersistence())
+        clean.adoptServerGlobalRule(preference)
+        XCTAssertFalse(clean.isGlobalRuleDirty)
+    }
+
+    func testStoreWithoutPersistenceStaysInMemory() {
+        let first = MockHubStore()
+        first.settings.globalEnabled = false
+
+        XCTAssertTrue(MockHubStore().settings.globalEnabled)
+    }
+
 }

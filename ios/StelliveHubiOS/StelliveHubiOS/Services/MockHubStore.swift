@@ -1,5 +1,35 @@
 import Foundation
 
+/// Local persistence for `NotificationSettingsState` and the "global rule not yet confirmed by the
+/// server" flag. A missing or unreadable blob falls back to the defaults.
+struct NotificationSettingsPersistence {
+    static let settingsKey = "dev.minepacu.stelliveeventnotifier.notificationSettings"
+    static let globalRuleDirtyKey = "dev.minepacu.stelliveeventnotifier.notificationGlobalRuleDirty"
+    static let standard = NotificationSettingsPersistence(defaults: .standard)
+
+    let defaults: UserDefaults
+
+    func loadSettings() -> NotificationSettingsState {
+        guard let data = defaults.data(forKey: Self.settingsKey),
+              let settings = try? JSONDecoder().decode(NotificationSettingsState.self, from: data)
+        else { return NotificationSettingsState() }
+        return settings
+    }
+
+    func saveSettings(_ settings: NotificationSettingsState) {
+        guard let data = try? JSONEncoder().encode(settings) else { return }
+        defaults.set(data, forKey: Self.settingsKey)
+    }
+
+    func loadGlobalRuleDirty() -> Bool {
+        defaults.bool(forKey: Self.globalRuleDirtyKey)
+    }
+
+    func saveGlobalRuleDirty(_ isDirty: Bool) {
+        defaults.set(isDirty, forKey: Self.globalRuleDirtyKey)
+    }
+}
+
 @MainActor
 final class MockHubStore: ObservableObject {
     private static let calendarTimeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
@@ -21,7 +51,18 @@ final class MockHubStore: ObservableObject {
     }()
 
     @Published var selectedFilter = "all"
-    @Published var settings = NotificationSettingsState()
+    @Published var settings: NotificationSettingsState {
+        didSet { settingsDidChange(from: oldValue) }
+    }
+    /// True while the device's global rule (`NotificationGlobalRule`) was changed locally and the
+    /// server has not confirmed it yet. Persisted so it survives a relaunch.
+    private(set) var isGlobalRuleDirty: Bool {
+        didSet {
+            if isGlobalRuleDirty != oldValue { settingsPersistence?.saveGlobalRuleDirty(isGlobalRuleDirty) }
+        }
+    }
+    private let settingsPersistence: NotificationSettingsPersistence?
+    private var isApplyingServerGlobalRule = false
 
     let filters: [GenerationFilter] = [
         .init(id: "all", displayName: "전체", notificationDefaultEnabled: true),
@@ -48,6 +89,44 @@ final class MockHubStore: ObservableObject {
         .init(id: "stellive-official", koreanName: "스텔라이브 공식", englishName: "Stellive Official", generationId: "official", generationName: "기타", unitName: "공식 채널", catalogRole: .officialChannel, roleLabel: "스텔라이브 공식 채널", isPerson: false, chzzkChannelId: nil, youtubeHandle: "@stellive_official", isLive: false, notificationEnabled: true, realtimeEnabled: true),
         .init(id: "gen4-placeholder", koreanName: "4기생 placeholder", englishName: "Generation 4 Placeholder", generationId: "gen4-upcoming", generationName: "4기생", unitName: "upcoming", catalogRole: .placeholder, roleLabel: nil, activeStatus: .upcoming, isPerson: false, chzzkChannelId: nil, youtubeHandle: nil, isLive: false, notificationEnabled: false, realtimeEnabled: false)
     ]
+    /// `settingsPersistence` is nil by default so previews and tests stay in memory; the app passes
+    /// `.standard`.
+    init(settingsPersistence: NotificationSettingsPersistence? = nil) {
+        self.settingsPersistence = settingsPersistence
+        settings = settingsPersistence?.loadSettings() ?? NotificationSettingsState()
+        isGlobalRuleDirty = settingsPersistence?.loadGlobalRuleDirty() ?? false
+    }
+
+    private func settingsDidChange(from oldValue: NotificationSettingsState) {
+        guard settings != oldValue else { return }
+        settingsPersistence?.saveSettings(settings)
+        if !isApplyingServerGlobalRule, settings.globalRule != oldValue.globalRule {
+            isGlobalRuleDirty = true
+        }
+    }
+
+    /// Adopts the server's `global` rule (nil when the server has none) and clears the dirty flag.
+    /// A missing `serviceAnnouncementsEnabled` keeps the current local value.
+    func adoptServerGlobalRule(_ preference: PreferenceResponse?) {
+        if let preference {
+            isApplyingServerGlobalRule = true
+            settings.globalEnabled = preference.enabled
+            if let serviceAnnouncementsEnabled = preference.serviceAnnouncementsEnabled {
+                settings.serviceAnnouncementsEnabled = serviceAnnouncementsEnabled
+            }
+            settings.tapAction = preference.tapAction == "open_platform" ? .openPlatform : .openApp
+            settings.realtimeEnabled = preference.deliveryMode == "realtime_best_effort"
+            isApplyingServerGlobalRule = false
+        }
+        isGlobalRuleDirty = false
+    }
+
+    /// Clears the dirty flag once the server accepted `sent`, unless the user has changed the global
+    /// rule again since it was sent (that newer value is still unconfirmed).
+    func confirmGlobalRuleSynced(sent: NotificationGlobalRule) {
+        if settings.globalRule == sent { isGlobalRuleDirty = false }
+    }
+
     @Published var liveMemberPriorityIDs: [String] = []
     @Published private(set) var liveStatusSourceLabel = "앱 내 목업"
     @Published private(set) var serverConnectionDebugLogs = ["bootstrap: 대기 중"]
