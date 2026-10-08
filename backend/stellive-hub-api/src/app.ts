@@ -23,6 +23,7 @@ import swaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyRequest } from "fastify";
 import { Redis } from "ioredis";
 import { AuthFailureLimiter } from "./admin/authFailureLimiter.js";
+import { RequestRateLimiter, type MobileRateLimiters } from "./mobile/requestRateLimiter.js";
 import { isConfiguredSecret, loadEnv } from "./config/env.js";
 import { serializeRequestForLog } from "./logging/requestSerializer.js";
 import { HubEventRepository } from "./hub-events/hubEventRepository.js";
@@ -74,6 +75,7 @@ export interface BuildAppOptions {
   useProcessEnv?: boolean;
   chzzkLiveApiFetch?: typeof fetch;
   authFailureLimiter?: AuthFailureLimiter;
+  mobileRateLimiters?: MobileRateLimiters;
   chzzkObservationWriter?: ChzzkObservationWriter;
   chzzkAuthRoutes?: {
     dependencies?: Partial<Omit<ChzzkAuthRouteOptions, "env">>;
@@ -692,7 +694,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
       }
     });
   }
-  await registerRoutes(app, { dependencies: appRouteDependencies, env });
+  const mobileRateLimiters: MobileRateLimiters = {
+    write: options.mobileRateLimiters?.write ?? new RequestRateLimiter({ maxRequests: env.DEVICE_WRITE_RATE_LIMIT_PER_MINUTE }),
+    read: options.mobileRateLimiters?.read ?? new RequestRateLimiter({ maxRequests: env.DEVICE_READ_RATE_LIMIT_PER_MINUTE }),
+  };
+  await registerRoutes(app, { dependencies: appRouteDependencies, env, mobileRateLimiters });
   await registerWebhookRoutes(app, {
     env,
     subscriptions: options.webhookRoutes?.dependencies?.subscriptions ?? new WebhookSubscriptionRepository(),

@@ -23,6 +23,7 @@ import type { Member } from "../types.js";
 import { ShortTtlAsyncCache } from "../utils/shortTtlAsyncCache.js";
 import { ResponseCache } from "../cache/responseCache.js";
 import type { AppEnv } from "../config/env.js";
+import type { MobileRateLimiters } from "../mobile/requestRateLimiter.js";
 import type { ServiceTopicSyncResult } from "../push/serviceTopicSubscription.js";
 
 const catalog = new CatalogService();
@@ -115,6 +116,7 @@ export interface AppRouteDependencies {
 export interface AppRouteOptions {
   dependencies?: AppRouteDependencies;
   env?: Pick<AppEnv, "MUSIC_CACHE_TTL_SECONDS" | "MUSIC_CACHE_STALE_SECONDS" | "MUSIC_CACHE_MAX_ENTRIES">;
+  mobileRateLimiters?: MobileRateLimiters;
 }
 
 function sampleEvent(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
@@ -187,6 +189,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
 
   await registerAppRoutes(app, {
     dependencies: options.dependencies,
+    rateLimiters: options.mobileRateLimiters,
     fallbackPreferences: preferences,
     fallbackBootstrap: async (query) => {
       const deviceId = String(query.deviceId ?? "dev-device");

@@ -134,7 +134,9 @@ const envSchema = z
     ADMIN_CONSOLE_ENABLED: booleanFlag(false),
     ADMIN_CONSOLE_TOKEN: optionalString(),
     ADMIN_CONSOLE_COOKIE_SECURE: booleanFlag(false),
-    TRUST_PROXY: booleanFlag(false)
+    TRUST_PROXY: booleanFlag(false),
+    DEVICE_WRITE_RATE_LIMIT_PER_MINUTE: boundedInteger(60, 0, 100_000),
+    DEVICE_READ_RATE_LIMIT_PER_MINUTE: boundedInteger(240, 0, 100_000)
   })
   .superRefine((env, context) => {
     if (env.MUSIC_CHANNEL_DISCOVERY_PEAK_START_HOUR >= env.MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR) {

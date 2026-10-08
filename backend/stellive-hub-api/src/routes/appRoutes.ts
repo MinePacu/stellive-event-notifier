@@ -5,6 +5,7 @@ import type {
   PushTokenProvider
 } from "../../../../shared/schemas/mobileApi.js";
 import { mobileError } from "../mobile/mobileError.js";
+import { rateLimitHook, type MobileRateLimiters } from "../mobile/requestRateLimiter.js";
 import {
   PreferenceConflictError,
   PreferenceStaleUpdateError,
@@ -40,6 +41,7 @@ export interface MobileAppRouteDependencies {
       timezone?: string;
       appVersion?: string;
     }): Promise<{ updated: true; tokenStatus: "active" }>;
+    getDevice?(deviceId: string): Promise<{ deviceId: string } | undefined>;
   };
   preferences?: {
     listForDevice?(deviceId: string): Promise<UserNotificationPreference[]>;
@@ -55,6 +57,7 @@ export interface MobileAppRouteDependencies {
 
 export interface RegisterAppRouteOptions {
   dependencies?: MobileAppRouteDependencies;
+  rateLimiters?: MobileRateLimiters;
   fallbackPreferences?: Map<string, UserNotificationPreference[]>;
   fallbackBootstrap?: (query: {
     deviceId?: string;
@@ -79,8 +82,8 @@ const MINTED_DEVICE_ID_PATTERN = /^device_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0
 const MAX_METADATA_LENGTH = 64;
 const MAX_PUSH_TOKEN_LENGTH = 4096;
 // The catalog allows at most ~460 distinct rules (13 members, 6 generations, 5 sources, 17 event types
-// across every scope combination); 2000 leaves >4x headroom while bounding request size.
-const MAX_PREFERENCE_RULES = 2000;
+// across every scope combination); 500 leaves a little headroom while bounding the delete+reinsert per request.
+const MAX_PREFERENCE_RULES = 500;
 
 function isValidDeviceId(value: unknown): value is string {
   return typeof value === "string" && DEVICE_ID_PATTERN.test(value);
@@ -122,7 +125,10 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
   const fallbackPreferences = options.fallbackPreferences ?? new Map<string, UserNotificationPreference[]>();
   const fallbackPreferenceMetadata = new Map<string, { revision: number; updatedAt: string; lastClientUpdatedAt?: string }>();
 
-  app.get("/v1/bootstrap", async (request) => {
+  const writeRateLimit = rateLimitHook(options.rateLimiters?.write);
+  const readRateLimit = rateLimitHook(options.rateLimiters?.read);
+
+  app.get("/v1/bootstrap", { onRequest: readRateLimit }, async (request) => {
     const query = request.query as {
       deviceId?: unknown;
       platform?: unknown;
@@ -147,7 +153,7 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     });
   });
 
-  app.post("/v1/devices/register", async (request) => {
+  app.post("/v1/devices/register", { onRequest: writeRateLimit }, async (request) => {
     const body = request.body as {
       deviceId?: string;
       platform?: string;
@@ -171,7 +177,7 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     return { ...result, serverTime: new Date().toISOString() };
   });
 
-  app.put("/v1/devices/token", async (request, reply) => {
+  app.put("/v1/devices/token", { onRequest: writeRateLimit }, async (request, reply) => {
     const body = request.body as {
       deviceId?: string;
       platform?: string;
@@ -221,7 +227,7 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     return { ...result, serverTime: new Date().toISOString() };
   });
 
-  app.get("/v1/preferences", async (request, reply) => {
+  app.get("/v1/preferences", { onRequest: readRateLimit }, async (request, reply) => {
     const deviceId = (request.query as { deviceId?: unknown }).deviceId;
     if (!isValidDeviceId(deviceId)) {
       const error = mobileError("device_not_registered", 400);
@@ -246,7 +252,7 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     };
   });
 
-  app.put("/v1/preferences", async (request, reply) => {
+  app.put("/v1/preferences", { onRequest: writeRateLimit }, async (request, reply) => {
     const body = request.body as {
       deviceId?: string;
       preferences?: UserNotificationPreference[];
@@ -273,6 +279,12 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
 
     const preferences = options.dependencies?.preferences;
     if (preferences?.replaceForDevice) {
+      // NotificationPreference has no FK to Device; require a registered device so arbitrary ids cannot create rows.
+      const devices = options.dependencies?.devices;
+      if (devices?.getDevice && !(await devices.getDevice(body.deviceId))) {
+        const error = mobileError("device_not_registered", 400);
+        return reply.code(error.statusCode).send(error.payload);
+      }
       let result: PreferenceSnapshot;
       try {
         result = await preferences.replaceForDevice({
