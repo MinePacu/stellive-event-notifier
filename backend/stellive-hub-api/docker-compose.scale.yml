@@ -1,4 +1,9 @@
 x-api-worker: &api-worker
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
   image: stellive-hub-api:local
   env_file:
     - .env.example
@@ -48,6 +53,11 @@ services:
         aliases: [stellive-api]
 
   nginx:
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     image: nginx:1.27-alpine
     ports:
       - "4000:4000"

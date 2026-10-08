@@ -1,5 +1,12 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
+    logging: *default-logging
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: stellive
@@ -11,11 +18,13 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
   redis:
+    logging: *default-logging
     image: redis:7-alpine
     ports:
       - "127.0.0.1:6379:6379"
 
   api:
+    logging: *default-logging
     image: stellive-hub-api:local
     build:
       context: ../..
@@ -36,6 +45,7 @@ services:
       - redis
 
   chzzk-live-worker:
+    logging: *default-logging
     image: stellive-hub-api:local
     env_file:
       - .env.example
@@ -56,6 +66,7 @@ services:
         condition: service_started
 
   hub-event-status-worker:
+    logging: *default-logging
     image: stellive-hub-api:local
     env_file:
       - .env.example
@@ -76,6 +87,7 @@ services:
         condition: service_started
 
   music-channel-discovery-worker:
+    logging: *default-logging
     image: stellive-hub-api:local
     env_file:
       - .env.example
