@@ -85,7 +85,7 @@ export interface Generation {
 export const songTypeValues = ["original", "cover", "unknown"] as const;
 export type SongType = (typeof songTypeValues)[number];
 
-export const songGenerationFilterValues = ["all", "gen1", "gen2", "gen3"] as const;
+export const songGenerationFilterValues = ["all", "gen1", "gen2", "gen3", "gen4"] as const;
 export type SongGenerationFilterId = (typeof songGenerationFilterValues)[number];
 export type SongCatalogGenerationId = Exclude<SongGenerationFilterId, "all">;
 export type MobileSongType = Exclude<SongType, "unknown">;
@@ -376,7 +376,7 @@ export interface HubCalendarSpecialDay {
   id: string;
   kind: HubCalendarSpecialDayKind;
   title: string;
-  generationId: "gen1" | "gen2" | "gen3" | "gamja" | "gen4-upcoming";
+  generationId: "gen1" | "gen2" | "gen3" | "gen4" | "gamja";
   memberId?: string;
   month: number;
   day: number;

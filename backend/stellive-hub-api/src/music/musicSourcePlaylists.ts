@@ -22,6 +22,10 @@ export const TARGET_MUSIC_MEMBER_IDS = [
   "aokumo-rin",
   "yuzuha-riko",
   "hanako-nana",
+  "shizuki-toa",
+  "cogane-rang",
+  "hanayo-hiyori",
+  "tokino-mary",
 ] as const;
 
 export const musicSourcePlaylistSeeds: MusicSourcePlaylistSeed[] = [

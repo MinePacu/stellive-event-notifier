@@ -1118,7 +1118,8 @@ enum IOSSongPagePolicy {
         .init(id: "all", label: "전체"),
         .init(id: "gen1", label: "1기생"),
         .init(id: "gen2", label: "2기생"),
-        .init(id: "gen3", label: "3기생")
+        .init(id: "gen3", label: "3기생"),
+        .init(id: "gen4", label: "4기생")
     ]
 
     static let typeFilters: [SongFilterOption] = [
@@ -1169,7 +1170,7 @@ enum IOSSongPagePolicy {
 
     static func memberFilters(from members: [HubMember]) -> [SongFilterOption] {
         members
-            .filter { $0.catalogRole == .member && ["gen1", "gen2", "gen3"].contains($0.generationId) }
+            .filter { $0.catalogRole == .member && ["gen1", "gen2", "gen3", "gen4"].contains($0.generationId) }
             .map { SongFilterOption(id: $0.id, label: $0.koreanName.isEmpty ? $0.englishName : $0.koreanName) }
     }
 
@@ -1208,7 +1209,7 @@ enum IOSSongPagePolicy {
     }
 
     static func generationPresetLabel(_ members: [HubMember], state: SongMemberFilterState) -> String? {
-        for (id, label) in [("gen1", "1기생"), ("gen2", "2기생"), ("gen3", "3기생")] {
+        for (id, label) in [("gen1", "1기생"), ("gen2", "2기생"), ("gen3", "3기생"), ("gen4", "4기생")] {
             let ids = generationMemberIds(members, generationId: id)
             if !ids.isEmpty && ids == state.normalized().selectedMemberIds { return "\(label) 전원 참여" }
         }
@@ -2030,9 +2031,9 @@ struct NotificationSettingsState: Equatable {
         "gen1": true,
         "gen2": true,
         "gen3": true,
+        "gen4": true,
         "gamja": true,
-        "official": true,
-        "gen4-upcoming": false
+        "official": true
     ]
     var memberEnabled: [String: Bool] = [:]
     var platformEnabled: [NotificationPlatform: Bool] = [
@@ -2164,7 +2165,12 @@ extension NotificationSettingsState: Codable {
         if let stored = container.decodeTolerantly([String: Bool].self, forKey: .generationEnabled) {
             generationEnabled.merge(stored) { _, stored in stored }
         }
+        // The placeholder "gen4-upcoming" generation became the real "gen4". Its stored false was
+        // only the old default, never an opt-out, so gen4 keeps its default (on) and the legacy
+        // key is dropped; only an explicit true carries over.
+        if generationEnabled.removeValue(forKey: "gen4-upcoming") == true { generationEnabled["gen4"] = true }
         memberEnabled = container.decodeTolerantly([String: Bool].self, forKey: .memberEnabled) ?? memberEnabled
+        memberEnabled.removeValue(forKey: "gen4-placeholder")
         if let stored = container.decodeTolerantly([String: Bool].self, forKey: .platformEnabled) {
             for (rawValue, enabled) in stored {
                 if let platform = NotificationPlatform(rawValue: rawValue) { platformEnabled[platform] = enabled }

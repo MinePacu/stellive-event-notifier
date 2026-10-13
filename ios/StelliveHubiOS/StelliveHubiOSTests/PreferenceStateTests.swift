@@ -21,8 +21,8 @@ final class PreferenceStateTests: XCTestCase {
     func testSettingsExposeRequiredPreferencePolicyStructures() {
         let settings = NotificationSettingsState()
 
-        XCTAssertEqual(Set(settings.generationEnabled.keys), ["gen1", "gen2", "gen3", "gamja", "official", "gen4-upcoming"])
-        XCTAssertEqual(settings.generationEnabled["gen4-upcoming"], false)
+        XCTAssertEqual(Set(settings.generationEnabled.keys), ["gen1", "gen2", "gen3", "gen4", "gamja", "official"])
+        XCTAssertEqual(settings.generationEnabled["gen4"], true)
         XCTAssertEqual(Set(settings.platformEnabled.keys), Set(NotificationPlatform.allCases))
         XCTAssertEqual(NotificationPlatform.hubEvent.displayName, "굿즈/행사")
         XCTAssertEqual(NotificationEventType.eventAnnounced.displayName, "굿즈/행사 공개")
@@ -464,6 +464,28 @@ final class PreferenceStateTests: XCTestCase {
 
         XCTAssertEqual(store.settings, NotificationSettingsState())
         XCTAssertFalse(store.isGlobalRuleDirty)
+    }
+
+    func testLegacyGen4UpcomingSettingsMigrateToGen4() throws {
+        func decode(_ json: String) throws -> NotificationSettingsState {
+            try JSONDecoder().decode(NotificationSettingsState.self, from: Data(json.utf8))
+        }
+
+        // The old false was only the default, not an opt-out, so gen4 stays on.
+        let legacyOff = try decode(#"{"generationEnabled":{"gen1":false,"gen4-upcoming":false},"memberEnabled":{"gen4-placeholder":false,"gangzi":false}}"#)
+        XCTAssertEqual(legacyOff.generationEnabled["gen4"], true)
+        XCTAssertNil(legacyOff.generationEnabled["gen4-upcoming"])
+        XCTAssertEqual(legacyOff.generationEnabled["gen1"], false)
+        XCTAssertNil(legacyOff.memberEnabled["gen4-placeholder"])
+        XCTAssertEqual(legacyOff.memberEnabled["gangzi"], false)
+
+        let legacyOn = try decode(#"{"generationEnabled":{"gen4-upcoming":true}}"#)
+        XCTAssertEqual(legacyOn.generationEnabled["gen4"], true)
+        XCTAssertNil(legacyOn.generationEnabled["gen4-upcoming"])
+
+        // An explicit gen4 choice made after the migration is preserved.
+        let explicitOff = try decode(#"{"generationEnabled":{"gen4":false}}"#)
+        XCTAssertEqual(explicitOff.generationEnabled["gen4"], false)
     }
 
     func testPartialOrUnknownPersistedFieldsKeepDefaultsForTheRest() {

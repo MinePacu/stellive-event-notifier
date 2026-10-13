@@ -15,10 +15,9 @@ describe("mobile song API contract", () => {
   });
 
   it("limits mobile song generation filters to active member generations", () => {
-    expect(songGenerationFilterValues).toEqual(["all", "gen1", "gen2", "gen3"]);
+    expect(songGenerationFilterValues).toEqual(["all", "gen1", "gen2", "gen3", "gen4"]);
     expect(songGenerationFilterValues).not.toContain("gamja");
     expect(songGenerationFilterValues).not.toContain("official");
-    expect(songGenerationFilterValues).not.toContain("gen4-upcoming");
   });
 
   it("models song facets without exposing non-song categories", () => {
@@ -29,6 +28,7 @@ describe("mobile song API contract", () => {
         { id: "gen1", label: "1기생", count: 38 },
         { id: "gen2", label: "2기생", count: 45 },
         { id: "gen3", label: "3기생", count: 45 },
+        { id: "gen4", label: "4기생", count: 0 },
       ],
       memberFilters: [
         { id: "all", label: "전체", generationId: "all", count: 128 },
@@ -45,7 +45,7 @@ describe("mobile song API contract", () => {
       serverTime: "2026-06-22T00:00:00.000Z",
     } satisfies SongFacetsResponse;
 
-    expect(response.generationFilters.map((filter) => filter.id)).toEqual(["all", "gen1", "gen2", "gen3"]);
+    expect(response.generationFilters.map((filter) => filter.id)).toEqual(["all", "gen1", "gen2", "gen3", "gen4"]);
     expect(JSON.stringify(response)).not.toContain("gamja");
     expect(JSON.stringify(response)).not.toContain("official");
   });

@@ -34,8 +34,8 @@ class SongUiPolicyTest {
 
     @Test
     fun songFiltersExposeOnlySupportedGenerationAndTypeValues() {
-        assertEquals(listOf("all", "gen1", "gen2", "gen3"), MainUiPolicy.songGenerationFilters().map { it.id })
-        assertEquals(listOf("전체", "1기생", "2기생", "3기생"), MainUiPolicy.songGenerationFilters().map { it.label })
+        assertEquals(listOf("all", "gen1", "gen2", "gen3", "gen4"), MainUiPolicy.songGenerationFilters().map { it.id })
+        assertEquals(listOf("전체", "1기생", "2기생", "3기생", "4기생"), MainUiPolicy.songGenerationFilters().map { it.label })
         assertEquals(listOf("all", "original", "cover"), MainUiPolicy.songTypeFilters().map { it.id })
         assertEquals(1, MainUiPolicy.songGenerationFilters().count { it.id == "all" })
         assertEquals(1, MainUiPolicy.songTypeFilters().count { it.id == "all" })

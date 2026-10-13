@@ -1,8 +1,28 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { shouldDropEventBeforeStorage } from "../src/events/eventGuards.js";
 import { PreferenceResolutionService } from "../src/preferences/preferenceResolution.js";
 import type { PlatformEvent, UserNotificationPreference } from "../src/types.js";
+
+// The real catalog has no default-off generation since gen4 (ABYSS) debuted, so the default-off gate is
+// exercised through a synthetic generation injected into the seed this module reads.
+const DEFAULT_OFF_GENERATION_ID = "test-default-off-generation";
+vi.mock("../../../shared/member-catalog/generations.seed.json", async (importOriginal) => {
+  const original = await importOriginal<{ default: Array<Record<string, unknown>> }>();
+  return {
+    default: [
+      ...original.default,
+      {
+        id: "test-default-off-generation",
+        displayName: "test",
+        unitName: "test",
+        sortOrder: 999,
+        type: "upcoming",
+        notificationDefaultEnabled: false
+      }
+    ]
+  };
+});
 
 const now = "2026-06-01T00:00:00.000Z";
 const preferenceResolution = new PreferenceResolutionService();
@@ -142,6 +162,7 @@ describe("PreferenceResolutionService", () => {
 
     it("allows default-on and unknown generations without stored preferences", () => {
       expect(service.resolve(event({ generationId: "gen3" }), "device-1", []).reason).toBe("allowed");
+      expect(service.resolve(event({ generationId: "gen4" }), "device-1", []).reason).toBe("allowed");
       expect(service.resolve(event({ generationId: "unknown-generation" }), "device-1", []).reason).toBe("allowed");
     });
 
@@ -150,8 +171,8 @@ describe("PreferenceResolutionService", () => {
       { label: "global on", preferences: [pref({ scope: "global", enabled: true })] },
       { label: "platform on", preferences: [pref({ scope: "platform", source: "youtube", enabled: true })] },
       { label: "event type on", preferences: [pref({ scope: "event_type", eventType: "youtube_upload", enabled: true })] }
-    ])("keeps gen4-upcoming off with $label", ({ preferences }) => {
-      const result = service.resolve(event({ generationId: "gen4-upcoming" }), "device-1", preferences);
+    ])("keeps a default-off generation off with $label", ({ preferences }) => {
+      const result = service.resolve(event({ generationId: DEFAULT_OFF_GENERATION_ID }), "device-1", preferences);
 
       expect(result.shouldNotify).toBe(false);
       expect(result.reason).toBe("preference_default_off");
@@ -176,8 +197,8 @@ describe("PreferenceResolutionService", () => {
     });
 
     it("allows each default-off axis only through a matching opt-in", () => {
-      const generationAllowed = service.resolve(event({ generationId: "gen4-upcoming" }), "device-1", [
-        pref({ scope: "generation", generationId: "gen4-upcoming", enabled: true })
+      const generationAllowed = service.resolve(event({ generationId: DEFAULT_OFF_GENERATION_ID }), "device-1", [
+        pref({ scope: "generation", generationId: DEFAULT_OFF_GENERATION_ID, enabled: true })
       ]);
       const eventTypeAllowed = service.resolve(updatedEvent(), "device-1", [
         pref({ scope: "event_type", eventType: "event_updated", enabled: true })
@@ -188,16 +209,16 @@ describe("PreferenceResolutionService", () => {
     });
 
     it("requires both opt-ins when generation and event type default to off", () => {
-      const combinedEvent = updatedEvent({ generationId: "gen4-upcoming", memberId: "upcoming-member" });
+      const combinedEvent = updatedEvent({ generationId: DEFAULT_OFF_GENERATION_ID, memberId: "upcoming-member" });
       const noOptIn = service.resolve(combinedEvent, "device-1", []);
       const generationOnly = service.resolve(combinedEvent, "device-1", [
-        pref({ scope: "generation", generationId: "gen4-upcoming", enabled: true })
+        pref({ scope: "generation", generationId: DEFAULT_OFF_GENERATION_ID, enabled: true })
       ]);
       const eventTypeOnly = service.resolve(combinedEvent, "device-1", [
         pref({ scope: "event_type", eventType: "event_updated", enabled: true })
       ]);
       const both = service.resolve(combinedEvent, "device-1", [
-        pref({ scope: "generation", generationId: "gen4-upcoming", enabled: true }),
+        pref({ scope: "generation", generationId: DEFAULT_OFF_GENERATION_ID, enabled: true }),
         pref({ scope: "event_type", eventType: "event_updated", enabled: true })
       ]);
 
@@ -210,11 +231,11 @@ describe("PreferenceResolutionService", () => {
     });
 
     it("lets exact generation and member event opt-ins satisfy both default-off axes", () => {
-      const combinedEvent = updatedEvent({ generationId: "gen4-upcoming", memberId: "upcoming-member" });
+      const combinedEvent = updatedEvent({ generationId: DEFAULT_OFF_GENERATION_ID, memberId: "upcoming-member" });
       const generationEvent = service.resolve(combinedEvent, "device-1", [
         pref({
           scope: "generation_event_type",
-          generationId: "gen4-upcoming",
+          generationId: DEFAULT_OFF_GENERATION_ID,
           eventType: "event_updated",
           enabled: true
         })
@@ -245,12 +266,12 @@ describe("PreferenceResolutionService", () => {
     });
 
     it("preserves global and explicit off reasons ahead of default-off gates", () => {
-      const combinedEvent = updatedEvent({ generationId: "gen4-upcoming", memberId: "upcoming-member" });
+      const combinedEvent = updatedEvent({ generationId: DEFAULT_OFF_GENERATION_ID, memberId: "upcoming-member" });
       const globalOff = service.resolve(combinedEvent, "device-1", [pref({ scope: "global", enabled: false })]);
       const explicitOff = service.resolve(combinedEvent, "device-1", [
         pref({
           scope: "generation_event_type",
-          generationId: "gen4-upcoming",
+          generationId: DEFAULT_OFF_GENERATION_ID,
           eventType: "event_updated",
           enabled: false
         })

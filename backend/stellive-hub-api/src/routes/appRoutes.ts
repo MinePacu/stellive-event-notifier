@@ -81,9 +81,9 @@ const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const MINTED_DEVICE_ID_PATTERN = /^device_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MAX_METADATA_LENGTH = 64;
 const MAX_PUSH_TOKEN_LENGTH = 4096;
-// The catalog allows at most ~460 distinct rules (13 members, 6 generations, 5 sources, 17 event types
-// across every scope combination); 500 leaves a little headroom while bounding the delete+reinsert per request.
-const MAX_PREFERENCE_RULES = 500;
+// The catalog allows at most ~529 distinct rules (16 members, 6 generations, 5 sources, 17 event types
+// across every scope combination); 600 leaves a little headroom while bounding the delete+reinsert per request.
+const MAX_PREFERENCE_RULES = 600;
 
 function isValidDeviceId(value: unknown): value is string {
   return typeof value === "string" && DEVICE_ID_PATTERN.test(value);
@@ -119,6 +119,13 @@ function isValidPreferenceRule(rule: unknown): rule is UserNotificationPreferenc
     typeof r.deliveryMode === "string" &&
     typeof r.updatedAt === "string"
   );
+}
+
+// Pre-gen4 app builds still send the retired placeholder ids; map them onto the real gen4 catalog.
+function normalizeLegacyGen4Rules(rules: UserNotificationPreference[]): UserNotificationPreference[] {
+  return rules
+    .filter((rule) => rule.memberId !== "gen4-placeholder")
+    .map((rule) => (rule.generationId === "gen4-upcoming" ? { ...rule, generationId: "gen4" } : rule));
 }
 
 export async function registerAppRoutes(app: FastifyInstance, options: RegisterAppRouteOptions = {}) {
@@ -269,10 +276,10 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     if (!Array.isArray(body.preferences) || body.preferences.length > MAX_PREFERENCE_RULES) {
       return reply.code(400).send({ error: "preferences_invalid" });
     }
-    const rules = body.preferences;
-    if (!rules.every(isValidPreferenceRule)) {
+    if (!body.preferences.every(isValidPreferenceRule)) {
       return reply.code(400).send({ error: "preferences_invalid" });
     }
+    const rules = normalizeLegacyGen4Rules(body.preferences);
     if (body.clientUpdatedAt !== undefined && (typeof body.clientUpdatedAt !== "string" || Number.isNaN(new Date(body.clientUpdatedAt).getTime()))) {
       return reply.code(400).send({ error: "preference_client_updated_at_invalid" });
     }

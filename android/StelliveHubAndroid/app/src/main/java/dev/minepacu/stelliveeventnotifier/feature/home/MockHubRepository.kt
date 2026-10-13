@@ -1,7 +1,6 @@
 package dev.minepacu.stelliveeventnotifier.feature.home
 
 import dev.minepacu.stelliveeventnotifier.core.network.HubNetworkResult
-import dev.minepacu.stelliveeventnotifier.core.model.ActiveStatus
 import dev.minepacu.stelliveeventnotifier.core.model.CatalogRole
 import dev.minepacu.stelliveeventnotifier.core.model.DeliveryMode
 import dev.minepacu.stelliveeventnotifier.core.model.GenerationFilter
@@ -42,9 +41,9 @@ class MockHubRepository : HubRepository {
         GenerationFilter("gen1", "1기생", true),
         GenerationFilter("gen2", "2기생", true),
         GenerationFilter("gen3", "3기생", true),
+        GenerationFilter("gen4", "4기생", true),
         GenerationFilter("gamja", "감자", true),
-        GenerationFilter("official", "기타", true),
-        GenerationFilter("gen4-upcoming", "upcoming", false)
+        GenerationFilter("official", "기타", true)
     )
 
     val members = listOf(
@@ -58,9 +57,12 @@ class MockHubRepository : HubRepository {
         HubMember("aokumo-rin", "아오쿠모 린", "Aokumo Rin", "gen3", "3기생", "Cliche", CatalogRole.MEMBER, chzzkChannelId = "516937b5f85cbf2249ce31b0ad046b0f", isPerson = true),
         HubMember("hanako-nana", "하나코 나나", "Hanako Nana", "gen3", "3기생", "Cliche", CatalogRole.MEMBER, chzzkChannelId = "4d812b586ff63f8a2946e64fa860bbf5", isPerson = true),
         HubMember("yuzuha-riko", "유즈하 리코", "Yuzuha Riko", "gen3", "3기생", "Cliche", CatalogRole.MEMBER, chzzkChannelId = "8fd39bb8de623317de90654718638b10", isPerson = true),
+        HubMember("shizuki-toa", "시즈키 토아", "Shizuki Toa", "gen4", "4기생", "ABYSS", CatalogRole.MEMBER, isPerson = true),
+        HubMember("cogane-rang", "코가네 랑", "Cogane Rang", "gen4", "4기생", "ABYSS", CatalogRole.MEMBER, isPerson = true),
+        HubMember("hanayo-hiyori", "하나요 히요리", "Hanayo Hiyori", "gen4", "4기생", "ABYSS", CatalogRole.MEMBER, isPerson = true),
+        HubMember("tokino-mary", "토키노 메리", "Tokino Mary", "gen4", "4기생", "ABYSS", CatalogRole.MEMBER, isPerson = true),
         HubMember("gangzi", "강지", "Gangzi", "gamja", "감자", "감자", CatalogRole.REPRESENTATIVE, roleLabel = "스텔라이브 대표", chzzkChannelId = "b5ed5db484d04faf4d150aedd362f34b", youtubeHandle = "@GANGZI1", isPerson = true),
-        HubMember("stellive-official", "스텔라이브 공식", "Stellive Official", "official", "기타", "공식 채널", CatalogRole.OFFICIAL_CHANNEL, roleLabel = "스텔라이브 공식 채널", youtubeHandle = "@stellive_official", isPerson = false, realtimeEnabled = true),
-        HubMember("gen4-placeholder", "4기생 placeholder", "Generation 4 Placeholder", "gen4-upcoming", "4기생", "upcoming", CatalogRole.PLACEHOLDER, activeStatus = ActiveStatus.UPCOMING, isPerson = false, notificationEnabled = false)
+        HubMember("stellive-official", "스텔라이브 공식", "Stellive Official", "official", "기타", "공식 채널", CatalogRole.OFFICIAL_CHANNEL, roleLabel = "스텔라이브 공식 채널", youtubeHandle = "@stellive_official", isPerson = false, realtimeEnabled = true)
     )
 
     val hubEvents = listOf(

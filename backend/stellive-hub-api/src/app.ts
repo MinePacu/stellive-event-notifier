@@ -363,7 +363,7 @@ function createDefaultYoutubeSongBackfillScheduler(
   const catalog = new CatalogService();
   const targets = catalog
     .getMembers()
-    .filter((member) => member.generationId === "gen1" || member.generationId === "gen2" || member.generationId === "gen3")
+    .filter((member) => member.generationId === "gen1" || member.generationId === "gen2" || member.generationId === "gen3" || member.generationId === "gen4")
     .flatMap((member) => {
       const channelId = member.platforms?.youtubeChannelId;
       if (!channelId) return [];
@@ -468,7 +468,8 @@ function createDefaultMusicSyncService(
       member.id === "stellive-official" ||
       member.generationId === "gen1" ||
       member.generationId === "gen2" ||
-      member.generationId === "gen3"
+      member.generationId === "gen3" ||
+      member.generationId === "gen4"
     )
     .flatMap((member) => {
       const channelId = member.platforms?.youtubeChannelId;

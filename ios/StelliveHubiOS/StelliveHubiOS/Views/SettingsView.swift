@@ -453,7 +453,7 @@ struct SettingsRouteDestinationView: View {
         Form {
             Section("분류별 알림") {
                 ForEach(store.filters.filter { $0.id != "all" && $0.id != "gamja" }) { filter in
-                    Toggle(targetFilterDisplayName(id: filter.id, defaultName: filter.displayName), isOn: generationBinding(filter.id, defaultValue: filter.notificationDefaultEnabled))
+                    Toggle(filter.displayName, isOn: generationBinding(filter.id, defaultValue: filter.notificationDefaultEnabled))
                 }
             }
 
@@ -600,10 +600,6 @@ struct SettingsRouteDestinationView: View {
         let version = info?["CFBundleShortVersionString"] as? String ?? "-"
         let build = info?["CFBundleVersion"] as? String ?? "-"
         return "\(version) (\(build))"
-    }
-
-    private func targetFilterDisplayName(id: String, defaultName: String) -> String {
-        id == "gen4-upcoming" ? "합류 예정 멤버" : defaultName
     }
 
     /// Shows the stored "HH:mm" as a time; a malformed stored value displays `fallback` but is only

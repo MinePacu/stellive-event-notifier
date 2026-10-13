@@ -130,6 +130,58 @@
     "platforms": { "chzzkChannelId": "8fd39bb8de623317de90654718638b10", "youtubeChannelId": "UCj0c1jUr91dTetIQP2pFeLA", "externalUrls": {} }
   },
   {
+    "id": "shizuki-toa",
+    "koreanName": "시즈키 토아",
+    "englishName": "Shizuki Toa",
+    "generationId": "gen4",
+    "generationName": "4기생",
+    "unitName": "ABYSS",
+    "catalogRole": "member",
+    "activeStatus": "active",
+    "isPerson": true,
+    "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
+    "platforms": { "chzzkChannelId": "2299fad4bebb504b0978e1ec08b2f7d3", "youtubeChannelId": "UClcSEuDF_g_6g4snw_nAavw", "youtubeHandle": "@ShizukiToa", "externalUrls": { "x": "https://x.com/ShizukiToa_" } }
+  },
+  {
+    "id": "cogane-rang",
+    "koreanName": "코가네 랑",
+    "englishName": "Cogane Rang",
+    "generationId": "gen4",
+    "generationName": "4기생",
+    "unitName": "ABYSS",
+    "catalogRole": "member",
+    "activeStatus": "active",
+    "isPerson": true,
+    "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
+    "platforms": { "chzzkChannelId": "c657aa3592260a2b59669a72ec151936", "youtubeChannelId": "UCQ6LlsI7Bbj2yhSqLMI1gGA", "youtubeHandle": "@coganerang", "externalUrls": { "x": "https://x.com/CoganeRang" } }
+  },
+  {
+    "id": "hanayo-hiyori",
+    "koreanName": "하나요 히요리",
+    "englishName": "Hanayo Hiyori",
+    "generationId": "gen4",
+    "generationName": "4기생",
+    "unitName": "ABYSS",
+    "catalogRole": "member",
+    "activeStatus": "active",
+    "isPerson": true,
+    "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
+    "platforms": { "chzzkChannelId": "49d2c3cf8f0b2843d934ec15e82bb54c", "youtubeChannelId": "UCHAr9pWGS30akL4MQCQT4uQ", "youtubeHandle": "@HanayoHiyori", "externalUrls": { "x": "https://x.com/HanayoHiyori" } }
+  },
+  {
+    "id": "tokino-mary",
+    "koreanName": "토키노 메리",
+    "englishName": "Tokino Mary",
+    "generationId": "gen4",
+    "generationName": "4기생",
+    "unitName": "ABYSS",
+    "catalogRole": "member",
+    "activeStatus": "active",
+    "isPerson": true,
+    "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
+    "platforms": { "chzzkChannelId": "792acf9ca28b42918710327e14b06b68", "youtubeChannelId": "UCGSt1yNG5l-jpYRLpJ5oNtA", "youtubeHandle": "@TokinoMaryChannel", "externalUrls": { "x": "https://x.com/TokinoMary" } }
+  },
+  {
     "id": "gangzi",
     "koreanName": "강지",
     "englishName": "Gangzi",
@@ -158,19 +210,5 @@
     "platforms": { "chzzkChannelId": null, "youtubeChannelId": "UC2b4WRE5BZ6SIUWBeJU8rwg", "youtubeHandle": "@stellive_official", "naverCafeQuery": "verify_required", "externalUrls": {} },
     "supportedEventTypes": ["official_youtube_upload"],
     "excludedEventTypes": ["official_youtube_live_scheduled", "official_youtube_live_started", "official_youtube_live_ended", "youtube_live_scheduled", "youtube_live_started", "youtube_live_ended"]
-  },
-  {
-    "id": "gen4-placeholder",
-    "koreanName": "4기생 placeholder",
-    "englishName": "Generation 4 Placeholder",
-    "generationId": "gen4-upcoming",
-    "generationName": "4기생",
-    "unitName": "upcoming",
-    "catalogRole": "placeholder",
-    "activeStatus": "upcoming",
-    "isPerson": false,
-    "avatar": { "preferredSource": "placeholder", "licenseStatus": "unknown" },
-    "platforms": { "externalUrls": {} },
-    "supportedEventTypes": []
   }
 ]

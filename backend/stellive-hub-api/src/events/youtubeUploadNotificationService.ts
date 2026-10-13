@@ -37,7 +37,7 @@ export class YoutubeUploadMetadataRetryableError extends Error {
   }
 }
 
-const memberGenerations = new Set(["gen1", "gen2", "gen3"]);
+const memberGenerations = new Set(["gen1", "gen2", "gen3", "gen4"]);
 
 function targetForCandidate(
   catalog: YoutubeUploadNotificationCatalogPort,

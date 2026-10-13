@@ -213,6 +213,7 @@ const emptyGenerationFilters: SongFilterCount[] = [
   { id: "gen1", label: "1기생", count: 0 },
   { id: "gen2", label: "2기생", count: 0 },
   { id: "gen3", label: "3기생", count: 0 },
+  { id: "gen4", label: "4기생", count: 0 },
 ];
 
 const emptyTypeFilters: SongFilterCount[] = [

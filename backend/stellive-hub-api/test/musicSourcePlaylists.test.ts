@@ -10,7 +10,7 @@ import {
 } from "../src/music/musicSourcePlaylists.js";
 
 describe("music source playlist seeds", () => {
-  it("defines only 10 target active Stellive member ids", () => {
+  it("defines only 14 target active Stellive member ids", () => {
     expect(TARGET_MUSIC_MEMBER_IDS).toEqual([
       "ayatsuno-yuni",
       "sakihane-huya",
@@ -22,11 +22,14 @@ describe("music source playlist seeds", () => {
       "aokumo-rin",
       "yuzuha-riko",
       "hanako-nana",
+      "shizuki-toa",
+      "cogane-rang",
+      "hanayo-hiyori",
+      "tokino-mary",
     ]);
 
     expect(TARGET_MUSIC_MEMBER_IDS).not.toContain("gangzi");
     expect(TARGET_MUSIC_MEMBER_IDS).not.toContain("stellive-official");
-    expect(TARGET_MUSIC_MEMBER_IDS).not.toContain("gen4-placeholder");
   });
 
   it("keeps legacy placeholder source playlist metadata inactive", () => {

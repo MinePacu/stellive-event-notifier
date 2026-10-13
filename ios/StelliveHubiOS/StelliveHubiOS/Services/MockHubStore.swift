@@ -69,9 +69,9 @@ final class MockHubStore: ObservableObject {
         .init(id: "gen1", displayName: "1기생", notificationDefaultEnabled: true),
         .init(id: "gen2", displayName: "2기생", notificationDefaultEnabled: true),
         .init(id: "gen3", displayName: "3기생", notificationDefaultEnabled: true),
+        .init(id: "gen4", displayName: "4기생", notificationDefaultEnabled: true),
         .init(id: "gamja", displayName: "감자", notificationDefaultEnabled: true),
-        .init(id: "official", displayName: "기타", notificationDefaultEnabled: true),
-        .init(id: "gen4-upcoming", displayName: "upcoming", notificationDefaultEnabled: false)
+        .init(id: "official", displayName: "기타", notificationDefaultEnabled: true)
     ]
 
     private(set) var members: [HubMember] = [
@@ -85,9 +85,12 @@ final class MockHubStore: ObservableObject {
         .init(id: "aokumo-rin", koreanName: "아오쿠모 린", englishName: "Aokumo Rin", generationId: "gen3", generationName: "3기생", unitName: "Cliche", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: "516937b5f85cbf2249ce31b0ad046b0f", youtubeHandle: nil, isLive: false, notificationEnabled: true, realtimeEnabled: false),
         .init(id: "hanako-nana", koreanName: "하나코 나나", englishName: "Hanako Nana", generationId: "gen3", generationName: "3기생", unitName: "Cliche", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: "4d812b586ff63f8a2946e64fa860bbf5", youtubeHandle: nil, isLive: false, notificationEnabled: true, realtimeEnabled: false),
         .init(id: "yuzuha-riko", koreanName: "유즈하 리코", englishName: "Yuzuha Riko", generationId: "gen3", generationName: "3기생", unitName: "Cliche", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: "8fd39bb8de623317de90654718638b10", youtubeHandle: nil, isLive: false, notificationEnabled: true, realtimeEnabled: false),
+        .init(id: "shizuki-toa", koreanName: "시즈키 토아", englishName: "Shizuki Toa", generationId: "gen4", generationName: "4기생", unitName: "ABYSS", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: nil, youtubeHandle: nil, isLive: false, notificationEnabled: true, realtimeEnabled: false),
+        .init(id: "cogane-rang", koreanName: "코가네 랑", englishName: "Cogane Rang", generationId: "gen4", generationName: "4기생", unitName: "ABYSS", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: nil, youtubeHandle: nil, isLive: false, notificationEnabled: true, realtimeEnabled: false),
+        .init(id: "hanayo-hiyori", koreanName: "하나요 히요리", englishName: "Hanayo Hiyori", generationId: "gen4", generationName: "4기생", unitName: "ABYSS", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: nil, youtubeHandle: nil, isLive: false, notificationEnabled: true, realtimeEnabled: false),
+        .init(id: "tokino-mary", koreanName: "토키노 메리", englishName: "Tokino Mary", generationId: "gen4", generationName: "4기생", unitName: "ABYSS", catalogRole: .member, roleLabel: nil, isPerson: true, chzzkChannelId: nil, youtubeHandle: nil, isLive: false, notificationEnabled: true, realtimeEnabled: false),
         .init(id: "gangzi", koreanName: "강지", englishName: "Gangzi", generationId: "gamja", generationName: "감자", unitName: "감자", catalogRole: .representative, roleLabel: "스텔라이브 대표", isPerson: true, chzzkChannelId: "b5ed5db484d04faf4d150aedd362f34b", youtubeHandle: "@GANGZI1", isLive: false, notificationEnabled: true, realtimeEnabled: false),
-        .init(id: "stellive-official", koreanName: "스텔라이브 공식", englishName: "Stellive Official", generationId: "official", generationName: "기타", unitName: "공식 채널", catalogRole: .officialChannel, roleLabel: "스텔라이브 공식 채널", isPerson: false, chzzkChannelId: nil, youtubeHandle: "@stellive_official", isLive: false, notificationEnabled: true, realtimeEnabled: true),
-        .init(id: "gen4-placeholder", koreanName: "4기생 placeholder", englishName: "Generation 4 Placeholder", generationId: "gen4-upcoming", generationName: "4기생", unitName: "upcoming", catalogRole: .placeholder, roleLabel: nil, activeStatus: .upcoming, isPerson: false, chzzkChannelId: nil, youtubeHandle: nil, isLive: false, notificationEnabled: false, realtimeEnabled: false)
+        .init(id: "stellive-official", koreanName: "스텔라이브 공식", englishName: "Stellive Official", generationId: "official", generationName: "기타", unitName: "공식 채널", catalogRole: .officialChannel, roleLabel: "스텔라이브 공식 채널", isPerson: false, chzzkChannelId: nil, youtubeHandle: "@stellive_official", isLive: false, notificationEnabled: true, realtimeEnabled: true)
     ]
     /// `settingsPersistence` is nil by default so previews and tests stay in memory; the app passes
     /// `.standard`.

@@ -20,17 +20,17 @@ function member(input: Partial<Member>): Member {
 }
 
 describe("buildYoutubeWebSubTargets", () => {
-  it("includes gen1-3 and official targets while excluding representative and upcoming placeholders", () => {
+  it("includes gen1-4 and official targets while excluding the representative", () => {
     const result = buildYoutubeWebSubTargets([
       member({ id: "gen1-member", generationId: "gen1", platforms: { youtubeChannelId: "UC_GEN1", externalUrls: {} } }),
       member({ id: "gen2-member", generationId: "gen2", platforms: { youtubeChannelId: "UC_GEN2", externalUrls: {} } }),
       member({ id: "gen3-member", generationId: "gen3", platforms: { youtubeChannelId: "UC_GEN3", externalUrls: {} } }),
+      member({ id: "gen4-member", generationId: "gen4", generationName: "4기생", unitName: "ABYSS", platforms: { youtubeChannelId: "UC_GEN4", externalUrls: {} } }),
       member({ id: "official", generationId: "official", catalogRole: "official_channel", platforms: { youtubeChannelId: "UC_OFFICIAL", externalUrls: {} }, supportedEventTypes: ["official_youtube_upload"] }),
       member({ id: "gamja", generationId: "gamja", catalogRole: "representative", platforms: { youtubeChannelId: "UC_GAMJA", externalUrls: {} } }),
-      member({ id: "gen4", generationId: "gen4-upcoming", catalogRole: "placeholder", activeStatus: "upcoming", platforms: { youtubeChannelId: "UC_GEN4", externalUrls: {} } }),
     ]);
 
-    expect(result.targets.map((target) => target.targetId)).toEqual(["gen1-member", "gen2-member", "gen3-member", "official"]);
+    expect(result.targets.map((target) => target.targetId)).toEqual(["gen1-member", "gen2-member", "gen3-member", "gen4-member", "official"]);
     expect(result.diagnostics).toEqual([]);
   });
 

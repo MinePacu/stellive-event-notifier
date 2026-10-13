@@ -24,11 +24,15 @@ describe("music app wiring", () => {
       "aokumo-rin",
       "arahashi-tabi",
       "ayatsuno-yuni",
+      "cogane-rang",
       "hanako-nana",
+      "hanayo-hiyori",
       "neneko-mashiro",
       "sakihane-huya",
       "shirayuki-hina",
+      "shizuki-toa",
       "tenko-shibuki",
+      "tokino-mary",
       "yuzuha-riko",
     ]);
     expect(inputs.every((input) => typeof input.youtubeChannelId === "string" && input.youtubeChannelId.startsWith("UC"))).toBe(true);

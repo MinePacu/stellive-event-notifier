@@ -13,13 +13,13 @@ Supported preference scopes:
 - `member_platform`
 - `member_event_type`
 
-Generations/categories include `gen1`, `gen2`, `gen3`, `gamja`, `official`, and `gen4-upcoming`.
+Generations/categories include `gen1`, `gen2`, `gen3`, `gen4`, `gamja`, and `official`.
 
 ## Defaults
 
 - Global notifications: on
-- 1기생/2기생/3기생/감자/기타: on
-- upcoming: off
+- 1기생/2기생/3기생/4기생/감자/기타: on
+- A generation whose catalog default is off: off
 - Delivery mode: standard
 - Realtime mode: off until user enables it
 - CHZZK chat: off
@@ -42,7 +42,7 @@ Hub event admin changes commit their audit record and every notification candida
 
 Global off blocks all notifications. Member explicit overrides can override generation/category settings. Platform and event-type settings apply to the event. More specific member/generation platform and event-type rules can override broader platform/event-type rules.
 
-After explicit preference rules resolve, the backend independently enforces generation and event-type defaults. `gen4-upcoming` requires an enabled matching generation/member rule or a matching generation/member platform/event-type rule. `event_updated` requires an enabled matching event-type, generation-event-type, or explicit member-event-type rule. When an event is both `gen4-upcoming` and `event_updated`, both opt-ins are required; one exact enabled `generation_event_type` or explicit `member_event_type` rule satisfies both axes. A missing opt-in resolves as `preference_default_off`, while an explicit disabled rule remains `preference_off`.
+After explicit preference rules resolve, the backend independently enforces generation and event-type defaults. A generation whose catalog default is off requires an enabled matching generation/member rule or a matching generation/member platform/event-type rule. `event_updated` requires an enabled matching event-type, generation-event-type, or explicit member-event-type rule. When an event is both from a default-off generation and `event_updated`, both opt-ins are required; one exact enabled `generation_event_type` or explicit `member_event_type` rule satisfies both axes. A missing opt-in resolves as `preference_default_off`, while an explicit disabled rule remains `preference_off`.
 
 Quiet hours, keyword block, and rate limit apply after preference and default resolution.
 

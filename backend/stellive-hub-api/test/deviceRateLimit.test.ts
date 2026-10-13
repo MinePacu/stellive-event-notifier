@@ -242,7 +242,7 @@ describe("PUT /v1/preferences rule cap", () => {
     const tooMany = await app.inject({
       method: "PUT",
       url: "/v1/preferences",
-      payload: { deviceId: "device-1", expectedRevision: 0, preferences: Array.from({ length: 501 }, () => validRule()) },
+      payload: { deviceId: "device-1", expectedRevision: 0, preferences: Array.from({ length: 601 }, () => validRule()) },
     });
     expect(tooMany.statusCode).toBe(400);
     expect(tooMany.json()).toEqual({ error: "preferences_invalid" });
@@ -251,7 +251,7 @@ describe("PUT /v1/preferences rule cap", () => {
     const ok = await app.inject({
       method: "PUT",
       url: "/v1/preferences",
-      payload: { deviceId: "device-1", expectedRevision: 0, preferences: Array.from({ length: 500 }, () => validRule()) },
+      payload: { deviceId: "device-1", expectedRevision: 0, preferences: Array.from({ length: 600 }, () => validRule()) },
     });
     await app.close();
     expect(ok.statusCode).toBe(200);

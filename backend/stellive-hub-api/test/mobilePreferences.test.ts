@@ -802,6 +802,33 @@ describe("mobile preference routes", () => {
     expect(read.json()).toMatchObject({ revision: 2, preferences: [] });
   });
 
+  it("maps legacy gen4 placeholder ids sent by older app builds onto the gen4 catalog", async () => {
+    const app = await buildApp({ env: routeEnv, useProcessEnv: false });
+
+    const put = await app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: {
+        deviceId: "device-1",
+        expectedRevision: 0,
+        preferences: [
+          preference({ scope: "generation", generationId: "gen4-upcoming", enabled: true }),
+          preference({ scope: "member", memberId: "gen4-placeholder", generationId: "gen4-upcoming", enabled: true }),
+          preference({ scope: "generation", generationId: "gen3", enabled: false }),
+        ],
+      },
+    });
+    const read = await app.inject({ method: "GET", url: "/v1/preferences?deviceId=device-1" });
+
+    await app.close();
+    expect(put.statusCode).toBe(200);
+    const stored = read.json().preferences as UserNotificationPreference[];
+    expect(stored.map((rule) => [rule.scope, rule.generationId])).toEqual([
+      ["generation", "gen4"],
+      ["generation", "gen3"],
+    ]);
+  });
+
   it("preserves the fallback snapshot and revision when preferences are omitted", async () => {
     const app = await buildApp({ env: routeEnv, useProcessEnv: false });
     const rules = [preference({ enabled: false })];

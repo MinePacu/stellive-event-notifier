@@ -350,7 +350,7 @@ internal class SongsScreenController(private val activity: MainActivity) {
             addView(ChipGroup(context).apply {
                 isSingleLine = true
                 chipSpacingHorizontal = activity.dp(8)
-                listOf("gen1" to "1기생 전원", "gen2" to "2기생 전원", "gen3" to "3기생 전원").forEach { (id, label) ->
+                listOf("gen1" to "1기생 전원", "gen2" to "2기생 전원", "gen3" to "3기생 전원", "gen4" to "4기생 전원").forEach { (id, label) ->
                     val preset = SongMemberFilterPolicy.generationPreset(members, id)
                     addView(activity.centerChipText(Chip(context).apply {
                         val selected = draft == preset
