@@ -71,6 +71,9 @@ const envSchema = z
     DELIVERY_ATTEMPT_RETENTION_DAYS: boundedInteger(30, 14, 365),
     LOG_RETENTION_INTERVAL_MINUTES: boundedInteger(60, 5, 1440),
     LOG_RETENTION_ENABLED: booleanFlag(true),
+    YOUTUBE_WEBSUB_AUTO_RENEW_ENABLED: booleanFlag(true),
+    YOUTUBE_WEBSUB_RENEW_CHECK_INTERVAL_MINUTES: boundedInteger(60, 5, 1440),
+    YOUTUBE_WEBSUB_RENEW_BEFORE_HOURS: boundedInteger(48, 1, 96),
 
     FCM_SERVICE_ACCOUNT_FILE: optionalString(),
     FCM_PROJECT_ID: optionalString(),

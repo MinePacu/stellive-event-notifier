@@ -122,6 +122,9 @@ describe("foundation configuration", () => {
     expect(defaults.DELIVERY_ATTEMPT_RETENTION_DAYS).toBe(30);
     expect(defaults.LOG_RETENTION_INTERVAL_MINUTES).toBe(60);
     expect(defaults.LOG_RETENTION_ENABLED).toBe(true);
+    expect(defaults.YOUTUBE_WEBSUB_AUTO_RENEW_ENABLED).toBe(true);
+    expect(defaults.YOUTUBE_WEBSUB_RENEW_CHECK_INTERVAL_MINUTES).toBe(60);
+    expect(defaults.YOUTUBE_WEBSUB_RENEW_BEFORE_HOURS).toBe(48);
 
     expect(loadEnv({ ...baseEnv, DELIVERY_ATTEMPT_RETENTION_DAYS: "1" }).DELIVERY_ATTEMPT_RETENTION_DAYS).toBe(14);
     expect(loadEnv({ ...baseEnv, DELIVERY_ATTEMPT_RETENTION_DAYS: "9999" }).DELIVERY_ATTEMPT_RETENTION_DAYS).toBe(365);

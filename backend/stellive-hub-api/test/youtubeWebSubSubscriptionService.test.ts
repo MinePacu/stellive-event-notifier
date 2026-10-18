@@ -16,13 +16,14 @@ describe("YoutubeWebSubSubscriptionService", () => {
   it("subscribes supported topics and records pending verification state", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response("", { status: 202 }));
     const upsertSubscription = vi.fn(async () => undefined);
+    const markPendingVerification = vi.fn(async () => undefined);
 
     const service = new YoutubeWebSubSubscriptionService({
       callbackUrl: "https://example.com/v1/webhooks/youtube",
       verifyToken: "verify-token",
       targets,
       fetch: fetchImpl,
-      subscriptions: { upsertSubscription },
+      subscriptions: { upsertSubscription, markPendingVerification },
       now: () => new Date("2026-06-22T00:00:00.000Z"),
     });
 
@@ -36,26 +37,27 @@ describe("YoutubeWebSubSubscriptionService", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const firstCall = fetchImpl.mock.calls.at(0);
     expect(firstCall?.[0]).toBe("https://pubsubhubbub.appspot.com/subscribe");
-    expect(upsertSubscription).toHaveBeenCalledWith(
-      expect.objectContaining({
-        source: "youtube",
-        targetId: "akane-lize",
-        topicUrl: "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC123",
-        status: "pending_verification",
-      }),
-    );
+    expect(markPendingVerification).toHaveBeenCalledWith({
+      source: "youtube",
+      targetId: "akane-lize",
+      callbackUrl: "https://example.com/v1/webhooks/youtube",
+      topicUrl: "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC123",
+      requestedAt: new Date("2026-06-22T00:00:00.000Z"),
+    });
+    expect(upsertSubscription).not.toHaveBeenCalled();
   });
 
   it("records renewal failures without leaking raw responses", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response("bad request", { status: 500, statusText: "Internal Server Error" }));
     const upsertSubscription = vi.fn(async () => undefined);
+    const markPendingVerification = vi.fn(async () => undefined);
 
     const service = new YoutubeWebSubSubscriptionService({
       callbackUrl: "https://example.com/v1/webhooks/youtube",
       verifyToken: "verify-token",
       targets,
       fetch: fetchImpl,
-      subscriptions: { upsertSubscription },
+      subscriptions: { upsertSubscription, markPendingVerification },
     });
 
     await expect(service.renewSubscriptions()).resolves.toEqual({

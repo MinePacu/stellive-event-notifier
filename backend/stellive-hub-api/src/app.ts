@@ -33,6 +33,11 @@ import { ServiceAnnouncementAdminService } from "./announcements/serviceAnnounce
 import { PrismaServiceAnnouncementDispatchUnitOfWork } from "./announcements/serviceAnnouncementDispatchUnitOfWork.js";
 import { createHubCalendarSpecialDayOccurrenceRepositoryIfAvailable } from "./hub-events/hubCalendarSpecialDayOccurrenceRepository.js";
 import NotificationJobRepository from "./jobs/notificationJobRepository.js";
+import {
+  YoutubeWebSubRenewalScheduler,
+  createYoutubeWebSubRenewalLockRunner,
+  shouldStartYoutubeWebSubRenewal,
+} from "./jobs/youtubeWebSubRenewalScheduler.js";
 import { LogRetentionScheduler, createPrismaAdvisoryLockRunner, shouldStartLogRetention } from "./jobs/logRetentionScheduler.js";
 import NotificationWorker from "./jobs/notificationWorker.js";
 import SummaryNotificationRepository from "./jobs/summaryNotificationRepository.js";
@@ -772,6 +777,23 @@ export async function buildApp(options: BuildAppOptions = {}) {
     });
     app.addHook("onReady", async () => logRetention.start());
     registerClose(() => logRetention.stop());
+  }
+  const youtubeRenewalTarget = internalRouteDependencies.youtubeSubscriptionScheduler;
+  if (
+    youtubeRenewalTarget &&
+    shouldStartYoutubeWebSubRenewal(env, { dependenciesInjected: Boolean(options.internalRoutes?.dependencies) })
+  ) {
+    const renewal = new YoutubeWebSubRenewalScheduler({
+      targets: youtubeWebSubTargetBuild.targets,
+      subscriptions: new WebhookSubscriptionRepository(),
+      renewer: youtubeRenewalTarget,
+      withLock: createYoutubeWebSubRenewalLockRunner(),
+      intervalMs: env.YOUTUBE_WEBSUB_RENEW_CHECK_INTERVAL_MINUTES * 60_000,
+      renewBeforeMs: env.YOUTUBE_WEBSUB_RENEW_BEFORE_HOURS * 3_600_000,
+      logger: app.log,
+    });
+    app.addHook("onReady", async () => renewal.start());
+    registerClose(() => renewal.stop());
   }
   return app;
 }
