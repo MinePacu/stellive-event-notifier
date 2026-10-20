@@ -351,7 +351,7 @@ class MockHubRepository : HubRepository {
     override suspend fun updatePreferences(settings: dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState): PreferenceSyncResult =
         PreferenceSyncResult.Pushed
 
-    override suspend fun globalPreferences(): HubNetworkResult<RemoteGlobalPreferences?> =
+    override suspend fun notificationPreferences(): HubNetworkResult<RemoteNotificationPreferences?> =
         HubNetworkResult.Success(null)
 
     override suspend fun hubEvents(filterId: String, from: LocalDate?, to: LocalDate?): List<HubEvent> =

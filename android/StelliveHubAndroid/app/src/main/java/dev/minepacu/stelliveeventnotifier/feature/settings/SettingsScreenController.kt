@@ -28,7 +28,7 @@ import dev.minepacu.stelliveeventnotifier.core.notification.NotificationPermissi
 import dev.minepacu.stelliveeventnotifier.feature.home.HubScreen
 import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
 import dev.minepacu.stelliveeventnotifier.feature.home.PreferenceSyncResult
-import dev.minepacu.stelliveeventnotifier.feature.home.RemoteGlobalPreferences
+import dev.minepacu.stelliveeventnotifier.feature.home.RemoteNotificationPreferences
 import dev.minepacu.stelliveeventnotifier.feature.home.SettingsHubRow
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsGalleryPolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenTarget
@@ -891,8 +891,8 @@ internal class SettingsScreenController(private val activity: MainActivity) {
             override suspend fun push(settings: NotificationSettingState): PreferenceSyncResult =
                 activity.serverRepository.updatePreferences(settings)
 
-            override suspend fun fetchGlobal(): HubNetworkResult<RemoteGlobalPreferences?> =
-                activity.serverRepository.globalPreferences()
+            override suspend fun fetchRemote(): HubNetworkResult<RemoteNotificationPreferences?> =
+                activity.serverRepository.notificationPreferences()
         },
         deviceId = DeviceIdStore(activity)::getDeviceId,
     )

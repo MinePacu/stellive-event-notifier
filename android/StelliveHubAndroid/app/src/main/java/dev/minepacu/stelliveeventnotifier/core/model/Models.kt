@@ -18,12 +18,12 @@ enum class SongType(val apiValue: String, val displayName: String) {
     }
 }
 
-enum class NotificationPlatform(val displayName: String) {
-    CHZZK("CHZZK"),
-    YOUTUBE("YouTube"),
-    HUB_EVENT("굿즈/행사"),
-    NAVER_CAFE("Naver Cafe"),
-    SERVICE_ANNOUNCEMENT("서비스 공지")
+enum class NotificationPlatform(val wireName: String, val displayName: String) {
+    CHZZK("chzzk", "CHZZK"),
+    YOUTUBE("youtube", "YouTube"),
+    HUB_EVENT("hub_event", "굿즈/행사"),
+    NAVER_CAFE("naver_cafe", "Naver Cafe"),
+    SERVICE_ANNOUNCEMENT("service_announcement", "서비스 공지")
 }
 
 enum class NotificationEventType(val wireName: String, val displayName: String) {
