@@ -373,6 +373,8 @@ struct HubHeaderCard: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+                        // List rows otherwise keep one line and cut the status suffix.
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 

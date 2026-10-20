@@ -76,6 +76,9 @@ internal class LiveScreenController(private val activity: MainActivity) {
             renderLive()
         })
         activity.binding.contentList.addView(activity.serverStatusStrip())
+        activity.liveStatusNotice?.let {
+            activity.binding.contentList.addView(activity.compactEventCard("라이브 상태 안내", it, listOf("안내")))
+        }
         val members = liveStatusFilteredMembersForUi()
         if (members.isEmpty()) {
             activity.binding.contentList.addView(activity.compactEventCard("조건에 맞는 멤버 없음", "다른 라이브 상태 필터를 선택해 확인할 수 있습니다.", listOf("필터")))

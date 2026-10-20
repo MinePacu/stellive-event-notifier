@@ -72,7 +72,8 @@ function toAdapterHealth(record: Pick<PlatformApiStateRecord, "source" | "value"
     status,
     reason: typeof value.reason === "string" ? value.reason : "adapter_health_state_recorded",
     lastCheckedAt:
-      typeof value.lastCheckedAt === "string" ? value.lastCheckedAt : record.updatedAt.toISOString()
+      typeof value.lastCheckedAt === "string" ? value.lastCheckedAt : record.updatedAt.toISOString(),
+    ...(typeof value.lastSuccessfulAt === "string" ? { lastSuccessfulAt: value.lastSuccessfulAt } : {})
   };
 }
 
@@ -112,7 +113,7 @@ export class PlatformApiStateRepository {
         })
       );
       if (health) {
-        const value = { reason: health.health.reason, lastCheckedAt: health.health.lastCheckedAt };
+        const value = await this.healthValue(health.source, health.health);
         ops.push(
           this.prisma.platformApiState.upsert({
             where: { source_key: { source: health.source, key: "health" } },
@@ -145,16 +146,21 @@ export class PlatformApiStateRepository {
     });
   }
 
+  // lastSuccessfulAt is set on "enabled" writes and carried over from the stored state otherwise.
+  private async healthValue(source: AdapterHealthSource, health: AdapterHealth) {
+    const lastSuccessfulAt =
+      health.status === "enabled"
+        ? health.lastCheckedAt
+        : health.lastSuccessfulAt ?? (await this.getLatestAdapterHealth(source).catch(() => null))?.lastSuccessfulAt;
+    return {
+      reason: health.reason,
+      lastCheckedAt: health.lastCheckedAt,
+      ...(lastSuccessfulAt ? { lastSuccessfulAt } : {})
+    };
+  }
+
   async upsertAdapterHealth(source: AdapterHealthSource, health: AdapterHealth) {
-    return this.upsertState(
-      source,
-      "health",
-      {
-        reason: health.reason,
-        lastCheckedAt: health.lastCheckedAt
-      },
-      health.status
-    );
+    return this.upsertState(source, "health", await this.healthValue(source, health), health.status);
   }
 
   async getLatestAdapterHealth(source: AdapterHealthSource): Promise<AdapterHealth | null> {

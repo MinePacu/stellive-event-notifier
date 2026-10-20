@@ -117,6 +117,7 @@ class ServerHubRepository(
             return fallback.bootstrap()
                 .mergeCatalogProfileImages(response.value.effectiveCatalog.members)
                 .mergeLiveStatus(response.value.liveStatus)
+                .withLiveStatusHealth(response.value)
                 .copy(announcementsSummary = response.value.announcementsSummary?.toModel() ?: AnnouncementsSummary())
         }
         return fallback.bootstrap().copy(liveStatusSourceLabel = "서버 연결 실패 · 앱 내 목업")
@@ -463,6 +464,14 @@ class ServerHubRepository(
             deviceIdStore.saveDeviceId(response.value.deviceId)
             runCatching { flushPendingPushToken() }
         }
+    }
+
+    private fun HubDataState.withLiveStatusHealth(response: BootstrapResponseDto): HubDataState {
+        val now = Instant.now()
+        return copy(
+            liveStatusSourceLabel = LiveStatusHealthPolicy.label(response.liveStatus.isEmpty(), response.liveStatusHealth, response.serverTime, now),
+            liveStatusNotice = LiveStatusHealthPolicy.notice(response.liveStatusHealth, response.serverTime, now),
+        )
     }
 
     private fun HubDataState.mergeLiveStatus(liveStatus: List<LiveStatusDto>): HubDataState {

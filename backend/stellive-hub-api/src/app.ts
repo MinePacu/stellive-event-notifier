@@ -689,6 +689,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
             platform: "chzzk" as const
           }))
       },
+      liveStatusHealth: new PlatformApiStateRepository(),
       hubEvents: {
         summary: async () => hubEvents.summary()
       },

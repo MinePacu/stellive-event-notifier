@@ -30,6 +30,14 @@ struct LiveContentView: View {
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
 
+            if let notice = store.liveStatusNotice {
+                Section {
+                    Label(notice, systemImage: "exclamationmark.triangle")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("치지직 방송 상태") {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     ForEach(store.chzzkLiveTargets) { member in
