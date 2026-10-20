@@ -114,7 +114,8 @@ export interface AppRouteDependencies {
 
 export interface AppRouteOptions {
   dependencies?: AppRouteDependencies;
-  env?: Pick<AppEnv, "MUSIC_CACHE_TTL_SECONDS" | "MUSIC_CACHE_STALE_SECONDS" | "MUSIC_CACHE_MAX_ENTRIES">;
+  env?: Pick<AppEnv, "MUSIC_CACHE_TTL_SECONDS" | "MUSIC_CACHE_STALE_SECONDS" | "MUSIC_CACHE_MAX_ENTRIES"> &
+    Partial<Pick<AppEnv, "HUB_EVENT_GOODS_GALLERY_ENABLED" | "HUB_EVENT_GOODS_GALLERY_LAYOUT">>;
 }
 
 function sampleEvent(overrides: Partial<PlatformEvent> = {}): PlatformEvent {
@@ -274,6 +275,8 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
 
   registerHubEventReadRoutes(app, {
     hubEvents,
+    goodsGalleryEnabled: options.env?.HUB_EVENT_GOODS_GALLERY_ENABLED ?? true,
+    goodsGalleryLayout: options.env?.HUB_EVENT_GOODS_GALLERY_LAYOUT ?? "split",
     hubCalendarSpecialDays: options.dependencies?.hubCalendarSpecialDays ?? productionHubCalendarSpecialDays,
     hubCalendarSpecialDayOccurrences: options.dependencies?.hubCalendarSpecialDayOccurrences
   });

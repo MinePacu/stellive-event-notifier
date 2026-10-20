@@ -7,4 +7,5 @@ object PreferenceKeys {
     const val APPEARANCE_MODE = "appearance_mode"
     const val SONG_OPEN_TARGET = "song_open_target"
     const val LIVE_MEMBER_ORDER = "live_member_order"
+    const val GOODS_GALLERY_EXPANDED_BY_DEFAULT = "goods_gallery_expanded_by_default"
 }

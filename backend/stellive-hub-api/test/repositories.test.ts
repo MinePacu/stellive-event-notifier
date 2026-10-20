@@ -1516,7 +1516,8 @@ describe("HubEventRepository", () => {
           scheduleItems: {
             include: { links: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] } },
             orderBy: [{ sortOrder: "asc" }, { startsAt: "asc" }, { id: "asc" }]
-          }
+          },
+          goodsItems: { where: { cancelledAt: null }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }
         }
       }
     ]);

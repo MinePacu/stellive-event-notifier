@@ -402,6 +402,47 @@ export interface HubEventImage {
   altText?: string;
 }
 
+/** Which group a goods list page belongs to. Absent means unspecified (clients treat it as "md"). */
+export type HubEventGoodsListImageKind = "md" | "bonus";
+
+/** One official MD/bonus notice page image. */
+export interface HubEventGoodsListImage extends HubEventImage {
+  kind?: HubEventGoodsListImageKind;
+}
+
+export type HubEventGoodsGalleryLayout = "split" | "single";
+
+export type HubEventGoodsSalesChannel = "onsite" | "online" | "both";
+
+/**
+ * A curated, static goods list entry attached to a HubEvent. There is intentionally no
+ * availability / sold-out field: operators update the list only when an official notice changes.
+ */
+export interface HubEventGoodsItem {
+  id: string;
+  /** Only set when the notice splits sales into rounds that match one of the event's schedule items. */
+  scheduleItemId?: string;
+  name: string;
+  groupLabel?: string;
+  /** Catalog member ids (active/upcoming only). Empty means not member-specific. */
+  memberIds: string[];
+  priceKrw?: number;
+  priceNote?: string;
+  salesChannel: HubEventGoodsSalesChannel;
+  purchaseLimit?: number;
+  limitNote?: string;
+  /** Purchase bonus (구매 특전) rather than a purchasable product. */
+  isBonus: boolean;
+  purchaseUrl?: string;
+  /** Present on public responses only when the image is displayable (HTTPS + allowed policy state). */
+  image?: HubEventImage;
+  sortOrder: number;
+  /** Only present on admin responses; public responses never include cancelled items. */
+  cancelledAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface HubEvent {
   id: string;
   category: HubEventCategory;
@@ -426,6 +467,21 @@ export interface HubEvent {
   venueName?: string;
   venueAddress?: string;
   image?: HubEventImage;
+  /** Detail responses (and admin responses) only. Never present on list, calendar, widget or bootstrap payloads. */
+  goodsItems?: HubEventGoodsItem[];
+  /**
+   * Official MD/bonus list page images (one image per notice page), ordered as in the notice, max 20.
+   * Detail and admin responses only; never on list, calendar, widget or bootstrap payloads.
+   * Public detail keeps only displayable images and omits the field when none remain (or when the server kill switch is off).
+   */
+  goodsListImages?: HubEventGoodsListImage[];
+  /**
+   * Public detail only, and only when goodsListImages is present in that response: how clients should lay out the
+   * gallery ("split" = separate MD and bonus groups, "single" = one strip). Server-driven (HUB_EVENT_GOODS_GALLERY_LAYOUT).
+   */
+  goodsListLayout?: HubEventGoodsGalleryLayout;
+  /** List responses only: number of non-cancelled goods items, present only when greater than zero. */
+  goodsCount?: number;
   notificationEligible: boolean;
   createdAt: string;
   updatedAt: string;
