@@ -26,9 +26,11 @@ struct StelliveHubApp: App {
         }
         let goodsChecklist = GoodsChecklistStore()
         _goodsChecklistStore = StateObject(wrappedValue: goodsChecklist)
+        let deviceIDStore = DeviceIDStore()
         _serverStore = StateObject(
             wrappedValue: ServerHubStore(
-                api: HubAPIClient(baseURL: resolvedHubBaseURL),
+                api: HubAPIClient(baseURL: resolvedHubBaseURL, deviceSecret: deviceIDStore.loadDeviceSecret),
+                deviceIDStore: deviceIDStore,
                 fallback: fallback,
                 goodsChecklist: goodsChecklist
             )

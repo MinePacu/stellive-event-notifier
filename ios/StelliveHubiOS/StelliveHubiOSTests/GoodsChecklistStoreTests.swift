@@ -142,7 +142,7 @@ final class GoodsChecklistStoreTests: XCTestCase {
         )
         return ServerHubStore(
             api: client,
-            deviceIDStore: DeviceIDStore(defaults: defaults),
+            deviceIDStore: DeviceIDStore(defaults: defaults, secureStore: InMemorySecureValueStore()),
             fallback: MockHubStore(),
             goodsChecklist: checklist
         )

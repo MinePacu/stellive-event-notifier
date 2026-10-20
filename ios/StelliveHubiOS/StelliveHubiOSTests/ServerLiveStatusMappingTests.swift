@@ -93,7 +93,7 @@ final class ServerLiveStatusMappingTests: XCTestCase {
                     """
                 )
             },
-            deviceIDStore: DeviceIDStore(defaults: defaults, key: "deviceID"),
+            deviceIDStore: DeviceIDStore(defaults: defaults, key: "deviceID", secureStore: InMemorySecureValueStore()),
             fallback: store
         )
 

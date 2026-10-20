@@ -107,7 +107,7 @@ final class HubEventsRefreshFeedbackTests: XCTestCase {
             session: URLSession(configuration: configuration)
         )
         let defaults = UserDefaults(suiteName: "HubEventsRefreshFeedbackTests-\(UUID().uuidString)")!
-        let deviceIDStore = DeviceIDStore(defaults: defaults)
+        let deviceIDStore = DeviceIDStore(defaults: defaults, secureStore: InMemorySecureValueStore())
         deviceIDStore.saveDeviceID("device-1")
         return ServerHubStore(api: client, deviceIDStore: deviceIDStore, fallback: MockHubStore())
     }

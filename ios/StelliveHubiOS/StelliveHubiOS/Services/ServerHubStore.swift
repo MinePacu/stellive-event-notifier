@@ -103,11 +103,19 @@ final class ServerHubStore: ObservableObject {
 
     func bootstrap() async -> MockHubStore {
         do {
-            let response = try await api.bootstrap(deviceId: deviceIDStore.loadDeviceID())
-            // Registration is idempotent and refreshes the server-side app version
-            // for existing devices. Keep it best-effort so a registration outage
-            // does not discard an otherwise usable bootstrap response.
-            try? await registerDevice()
+            let response: BootstrapResponse
+            do {
+                response = try await api.bootstrap(deviceId: deviceIDStore.loadDeviceID())
+                // Registration is idempotent and refreshes the server-side app version
+                // for existing devices. Keep it best-effort so a registration outage
+                // does not discard an otherwise usable bootstrap response.
+                try? await registerDevice()
+            } catch HubAPIError.deviceAuthFailed {
+                // Stale stored credentials would otherwise fail every bootstrap before
+                // registration runs: re-register first, then retry once.
+                try await registerDevice()
+                response = try await api.bootstrap(deviceId: deviceIDStore.loadDeviceID())
+            }
             fallback.applyBootstrap(response)
             announcementsSummary = response.announcementsSummary
             try? HubCalendarWidgetStore.saveToSharedContainer(fallback.calendarWidgetSnapshot())
@@ -119,7 +127,22 @@ final class ServerHubStore: ObservableObject {
     }
 
     private func registerDevice() async throws {
-        let response = try await api.registerDevice(
+        let response: RegisterDeviceResponse
+        do {
+            response = try await requestRegistration()
+        } catch HubAPIError.deviceAuthFailed {
+            // Stored id/secret no longer match the server: start over as a new device.
+            deviceIDStore.clearCredentials()
+            response = try await requestRegistration()
+        }
+        deviceIDStore.saveDeviceID(response.deviceId)
+        if let secret = response.deviceSecret {
+            deviceIDStore.saveDeviceSecret(secret)
+        }
+    }
+
+    private func requestRegistration() async throws -> RegisterDeviceResponse {
+        try await api.registerDevice(
             RegisterDeviceRequest(
                 deviceId: deviceIDStore.loadDeviceID(),
                 platform: "ios",
@@ -129,7 +152,6 @@ final class ServerHubStore: ObservableObject {
                 installationId: nil
             )
         )
-        deviceIDStore.saveDeviceID(response.deviceId)
     }
 
     /// Coalesces rapid settings changes into a single server write of the latest state.

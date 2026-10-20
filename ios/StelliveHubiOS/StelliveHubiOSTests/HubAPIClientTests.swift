@@ -1720,7 +1720,7 @@ final class ServerHubStoreTests: XCTestCase {
             session: URLSession(configuration: configuration)
         )
         let defaults = UserDefaults(suiteName: "ServerHubStoreTests-\(UUID().uuidString)")!
-        let deviceIDStore = DeviceIDStore(defaults: defaults)
+        let deviceIDStore = DeviceIDStore(defaults: defaults, secureStore: InMemorySecureValueStore())
         if let deviceID { deviceIDStore.saveDeviceID(deviceID) }
         guard let sleep else {
             return ServerHubStore(
@@ -1747,6 +1747,291 @@ final class ServerHubStoreTests: XCTestCase {
     private func decodeGlobalRule(_ body: Data?) throws -> PreferenceResponse {
         let request = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: try XCTUnwrap(body))
         return try XCTUnwrap(request.preferences.first { $0.scope == "global" })
+    }
+}
+
+final class DeviceCredentialStoreTests: XCTestCase {
+    private let legacyKey = "legacy.deviceID"
+
+    private func makeDefaults() -> UserDefaults {
+        let suite = "DeviceCredentialStoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
+        return defaults
+    }
+
+    func testLoadMigratesLegacyUserDefaultsIDIntoSecureStore() {
+        let defaults = makeDefaults()
+        defaults.set("legacy-id", forKey: legacyKey)
+        let secure = InMemorySecureValueStore()
+        let store = DeviceIDStore(defaults: defaults, key: legacyKey, secureStore: secure)
+
+        XCTAssertEqual(store.loadDeviceID(), "legacy-id")
+        XCTAssertEqual(secure.get("deviceID"), "legacy-id")
+        XCTAssertNil(defaults.string(forKey: legacyKey))
+        XCTAssertEqual(store.loadDeviceID(), "legacy-id")
+    }
+
+    func testMigrationKeepsUserDefaultsValueWhenSecureWriteFails() {
+        let defaults = makeDefaults()
+        defaults.set("legacy-id", forKey: legacyKey)
+        let secure = InMemorySecureValueStore()
+        secure.failsWrites = true
+        let store = DeviceIDStore(defaults: defaults, key: legacyKey, secureStore: secure)
+
+        XCTAssertEqual(store.loadDeviceID(), "legacy-id")
+        XCTAssertEqual(defaults.string(forKey: legacyKey), "legacy-id")
+
+        secure.failsWrites = false
+        XCTAssertEqual(store.loadDeviceID(), "legacy-id")
+        XCTAssertNil(defaults.string(forKey: legacyKey))
+    }
+
+    func testSaveDeviceIDFallsBackToUserDefaultsWhenSecureWriteFails() {
+        let defaults = makeDefaults()
+        let secure = InMemorySecureValueStore()
+        secure.failsWrites = true
+        let store = DeviceIDStore(defaults: defaults, key: legacyKey, secureStore: secure)
+
+        store.saveDeviceID("device-1")
+
+        XCTAssertEqual(store.loadDeviceID(), "device-1")
+    }
+
+    func testClearCredentialsRemovesIDSecretAndLegacyValue() {
+        let defaults = makeDefaults()
+        defaults.set("legacy-id", forKey: legacyKey)
+        let store = DeviceIDStore(defaults: defaults, key: legacyKey, secureStore: InMemorySecureValueStore())
+        store.saveDeviceID("device-1")
+        store.saveDeviceSecret("secret-1")
+        defaults.set("legacy-id", forKey: legacyKey)
+
+        store.clearCredentials()
+
+        XCTAssertNil(store.loadDeviceID())
+        XCTAssertNil(store.loadDeviceSecret())
+    }
+}
+
+final class DeviceSecretHeaderTests: XCTestCase {
+    override func tearDown() {
+        StubURLProtocol.requestHandler = nil
+        super.tearDown()
+    }
+
+    private func makeClient(secret: String?, onRequest: @escaping (URLRequest) -> Void) -> HubAPIClient {
+        StubURLProtocol.requestHandler = { request in
+            onRequest(request)
+            return jsonResponse(statusCode: 500, body: "{}")
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        return HubAPIClient(
+            baseURL: URL(string: "https://example.invalid")!,
+            session: URLSession(configuration: configuration),
+            deviceSecret: { secret }
+        )
+    }
+
+    private func callAllEndpoints(_ client: HubAPIClient) async {
+        _ = try? await client.bootstrap(deviceId: "device-1")
+        _ = try? await client.registerDevice(
+            RegisterDeviceRequest(deviceId: "device-1", platform: "ios", appVersion: nil, locale: "ko_KR", timezone: "Asia/Seoul", installationId: nil)
+        )
+        _ = try? await client.updateDeviceToken(
+            UpdateDeviceTokenRequest(deviceId: "device-1", platform: "ios", provider: "apns_via_fcm", token: "t", appVersion: nil, locale: "ko_KR", timezone: "Asia/Seoul")
+        )
+        _ = try? await client.preferences(deviceId: "device-1")
+        _ = try? await client.updatePreferences(UpdatePreferencesRequest(deviceId: "device-1", preferences: [], expectedRevision: 0))
+        _ = try? await client.hubEvent(id: "e1")
+    }
+
+    func testSecretHeaderSentOnExactlyTheFiveDeviceEndpoints() async {
+        var headers: [String: String?] = [:]
+        let client = makeClient(secret: "secret-1") { request in
+            headers["\(request.httpMethod ?? "") \(request.url?.path ?? "")"] = request.value(forHTTPHeaderField: "X-Device-Secret")
+        }
+
+        await callAllEndpoints(client)
+
+        XCTAssertEqual(headers.count, 6)
+        let withSecret = Set(headers.filter { $0.value == "secret-1" }.keys)
+        XCTAssertEqual(
+            withSecret,
+            ["GET /v1/bootstrap", "POST /v1/devices/register", "PUT /v1/devices/token", "GET /v1/preferences", "PUT /v1/preferences"]
+        )
+        XCTAssertNil(headers["GET /v1/hub-events/e1"] ?? nil)
+    }
+
+    func testNoSecretMeansNoHeader() async {
+        var headers: [String?] = []
+        let client = makeClient(secret: nil) { request in
+            headers.append(request.value(forHTTPHeaderField: "X-Device-Secret"))
+        }
+
+        await callAllEndpoints(client)
+
+        XCTAssertEqual(headers.count, 6)
+        XCTAssertTrue(headers.allSatisfy { $0 == nil })
+    }
+
+    func test401DeviceAuthFailedMapsToDeviceAuthFailed() async {
+        StubURLProtocol.requestHandler = { _ in jsonResponse(statusCode: 401, body: #"{"error":{"code":"device_auth_failed"}}"#) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        let client = HubAPIClient(baseURL: URL(string: "https://example.invalid")!, session: URLSession(configuration: configuration))
+
+        do {
+            _ = try await client.preferences(deviceId: "device-1")
+            XCTFail("expected deviceAuthFailed")
+        } catch {
+            XCTAssertEqual(error as? HubAPIError, .deviceAuthFailed)
+        }
+    }
+}
+
+@MainActor
+final class ServerHubStoreRegistrationTests: XCTestCase {
+    override func tearDown() {
+        StubURLProtocol.requestHandler = nil
+        super.tearDown()
+    }
+
+    private let bootstrapBody = """
+        {"config":{"unofficialProject":true,"catalogVersion":"seed","officialYoutubeLiveExcluded":true,"hubCalendarEnabled":true,"foregroundRealtimeEnabled":false},
+         "preferences":[],"catalog":{"generations":[],"members":[]},"liveStatus":[],
+         "hubEventsSummary":{"openCount":0,"upcomingCount":0,"closingSoonCount":0,"preview":[]},
+         "serverTime":"2026-06-11T03:00:00.000Z"}
+        """
+
+    private func makeStore(
+        deviceIDStore: DeviceIDStore,
+        handler: @escaping (URLRequest) -> (HTTPURLResponse, Data)
+    ) -> ServerHubStore {
+        StubURLProtocol.requestHandler = handler
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        let client = HubAPIClient(
+            baseURL: URL(string: "https://example.invalid")!,
+            session: URLSession(configuration: configuration),
+            deviceSecret: deviceIDStore.loadDeviceSecret
+        )
+        return ServerHubStore(api: client, deviceIDStore: deviceIDStore, fallback: MockHubStore())
+    }
+
+    private func makeDeviceIDStore() -> DeviceIDStore {
+        let suite = "ServerHubStoreRegistrationTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
+        return DeviceIDStore(defaults: defaults, secureStore: InMemorySecureValueStore())
+    }
+
+    private static func bodyData(_ request: URLRequest) -> Data {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { return Data() }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
+
+    func testRegistrationSavesDeviceSecretFromResponse() async {
+        let ids = makeDeviceIDStore()
+        let store = makeStore(deviceIDStore: ids) { [bootstrapBody] request in
+            if request.url?.path == "/v1/devices/register" {
+                return jsonResponse(statusCode: 200, body: #"{"deviceId":"device-1","registered":true,"serverTime":"t","deviceSecret":"secret-1"}"#)
+            }
+            return jsonResponse(statusCode: 200, body: bootstrapBody)
+        }
+
+        _ = await store.bootstrap()
+
+        XCTAssertEqual(ids.loadDeviceID(), "device-1")
+        XCTAssertEqual(ids.loadDeviceSecret(), "secret-1")
+    }
+
+    func testRegistrationWithoutDeviceSecretStillWorksOnOldServers() async {
+        let ids = makeDeviceIDStore()
+        var registerHeaders: [String?] = []
+        let store = makeStore(deviceIDStore: ids) { [bootstrapBody] request in
+            if request.url?.path == "/v1/devices/register" {
+                registerHeaders.append(request.value(forHTTPHeaderField: "X-Device-Secret"))
+                return jsonResponse(statusCode: 200, body: #"{"deviceId":"device-1","registered":true,"serverTime":"t"}"#)
+            }
+            return jsonResponse(statusCode: 200, body: bootstrapBody)
+        }
+
+        _ = await store.bootstrap()
+
+        XCTAssertEqual(ids.loadDeviceID(), "device-1")
+        XCTAssertNil(ids.loadDeviceSecret())
+        XCTAssertEqual(registerHeaders.count, 1)
+        XCTAssertNil(registerHeaders[0])
+    }
+
+    func testRegisterAuthFailureClearsCredentialsAndRegistersAgainWithoutDeviceID() async {
+        let ids = makeDeviceIDStore()
+        ids.saveDeviceID("old-device")
+        ids.saveDeviceSecret("old-secret")
+        var registerBodies: [Data] = []
+        var registerHeaders: [String?] = []
+        let store = makeStore(deviceIDStore: ids) { [bootstrapBody] request in
+            if request.url?.path == "/v1/devices/register" {
+                registerBodies.append(Self.bodyData(request))
+                registerHeaders.append(request.value(forHTTPHeaderField: "X-Device-Secret"))
+                if registerBodies.count == 1 {
+                    return jsonResponse(statusCode: 401, body: #"{"error":{"code":"device_auth_failed"}}"#)
+                }
+                return jsonResponse(statusCode: 200, body: #"{"deviceId":"new-device","registered":true,"serverTime":"t","deviceSecret":"new-secret"}"#)
+            }
+            return jsonResponse(statusCode: 200, body: bootstrapBody)
+        }
+
+        _ = await store.bootstrap()
+
+        XCTAssertEqual(registerBodies.count, 2)
+        XCTAssertTrue(String(decoding: registerBodies[0], as: UTF8.self).contains("old-device"))
+        for body in registerBodies {
+            let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
+            XCTAssertEqual(json?["deviceSecretSupported"] as? Bool, true)
+        }
+        XCTAssertEqual(registerHeaders[0], "old-secret")
+        XCTAssertFalse(String(decoding: registerBodies[1], as: UTF8.self).contains("deviceId"))
+        XCTAssertNil(registerHeaders[1])
+        XCTAssertEqual(ids.loadDeviceID(), "new-device")
+        XCTAssertEqual(ids.loadDeviceSecret(), "new-secret")
+    }
+
+    func testBootstrapAuthFailureReRegistersAndRetries() async {
+        let ids = makeDeviceIDStore()
+        ids.saveDeviceID("old-device")
+        ids.saveDeviceSecret("old-secret")
+        var bootstrapCalls = 0
+        let store = makeStore(deviceIDStore: ids) { [bootstrapBody] request in
+            if request.url?.path == "/v1/devices/register" {
+                if request.value(forHTTPHeaderField: "X-Device-Secret") != nil {
+                    return jsonResponse(statusCode: 401, body: #"{"error":{"code":"device_auth_failed"}}"#)
+                }
+                return jsonResponse(statusCode: 200, body: #"{"deviceId":"new-device","registered":true,"serverTime":"t","deviceSecret":"new-secret"}"#)
+            }
+            bootstrapCalls += 1
+            if request.value(forHTTPHeaderField: "X-Device-Secret") == "old-secret" {
+                return jsonResponse(statusCode: 401, body: #"{"error":{"code":"device_auth_failed"}}"#)
+            }
+            return jsonResponse(statusCode: 200, body: bootstrapBody)
+        }
+
+        _ = await store.bootstrap()
+
+        XCTAssertEqual(bootstrapCalls, 2)
+        XCTAssertEqual(ids.loadDeviceID(), "new-device")
+        XCTAssertEqual(ids.loadDeviceSecret(), "new-secret")
     }
 }
 
