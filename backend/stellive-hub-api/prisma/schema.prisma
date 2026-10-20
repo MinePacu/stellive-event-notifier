@@ -18,6 +18,8 @@ model Device {
   realtimeEnabled    Boolean  @default(false)
   realtimeAcknowledged Boolean @default(false)
   lastSeenAt         DateTime?
+  /// SHA-256 hex of the per-device secret; NULL for rows registered before device secrets existed.
+  secretHash         String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

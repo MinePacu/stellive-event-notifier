@@ -92,6 +92,78 @@ describe("PUT /v1/preferences input validation", () => {
   });
 });
 
+describe("PUT /v1/preferences rule field validation", () => {
+  const quietHours = { enabled: true, start: "23:00", end: "07:00", timezone: "Asia/Seoul" };
+
+  async function put(rule: Record<string, unknown>) {
+    const ctx = await buildWithFakes();
+    const response = await ctx.app.inject({
+      method: "PUT",
+      url: "/v1/preferences",
+      payload: { deviceId: "device-1", expectedRevision: 0, preferences: [validRule(rule)] },
+    });
+    await ctx.app.close();
+    return { response, replaceForDevice: ctx.replaceForDevice };
+  }
+
+  it.each([
+    { keywordsAllowlist: "spoiler" },
+    { keywordsBlocklist: [1] },
+    { keywordsBlocklist: Array.from({ length: 51 }, () => "k") },
+    { keywordsAllowlist: ["k".repeat(101)] },
+    { quietHours: "23:00-07:00" },
+    { quietHours: [] },
+    { quietHours: { ...quietHours, enabled: "yes" } },
+    { quietHours: { ...quietHours, start: "7:00" } },
+    { quietHours: { ...quietHours, end: 700 } },
+    { quietHours: { ...quietHours, timezone: "x".repeat(65) } },
+    { quietHours: { enabled: true, start: "23:00", end: "07:00" } },
+    { maxNotificationsPerMinute: 0 },
+    { maxNotificationsPerMinute: 1001 },
+    { maxNotificationsPerMinute: 1.5 },
+    { maxNotificationsPerMinute: "5" },
+    { generationId: 4 },
+    { memberId: "m".repeat(65) },
+    { source: { not: "x" } },
+    { eventType: ["youtube_upload"] },
+    { serviceAnnouncementsEnabled: "false" },
+  ])("rejects %j", async (rule) => {
+    const { response, replaceForDevice } = await put(rule);
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "preferences_invalid" });
+    expect(replaceForDevice).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {},
+    {
+      keywordsAllowlist: ["k".repeat(100)],
+      keywordsBlocklist: Array.from({ length: 50 }, () => "b"),
+      quietHours,
+      maxNotificationsPerMinute: 1000,
+      generationId: "gen1",
+      memberId: "m".repeat(64),
+      source: "youtube",
+      eventType: "youtube_upload",
+      serviceAnnouncementsEnabled: false,
+    },
+    {
+      keywordsAllowlist: null,
+      keywordsBlocklist: null,
+      quietHours: null,
+      maxNotificationsPerMinute: null,
+      generationId: null,
+      memberId: null,
+      source: null,
+      eventType: null,
+      serviceAnnouncementsEnabled: null,
+    },
+  ])("accepts %j", async (rule) => {
+    const { response } = await put(rule);
+    expect(response.statusCode).toBe(200);
+  });
+});
+
 describe("GET /v1/preferences input validation", () => {
   it("rejects repeated deviceId query values", async () => {
     const { app, getSnapshotForDevice } = await buildWithFakes();

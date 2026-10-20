@@ -14,6 +14,7 @@ interface FakeDeviceRecord {
   realtimeEnabled: boolean;
   realtimeAcknowledged: boolean;
   lastSeenAt: Date | null;
+  secretHash?: string | null;
 }
 
 function createFakePrisma() {
@@ -23,6 +24,10 @@ function createFakePrisma() {
     records,
     prisma: {
       device: {
+        async create(args: { data: FakeDeviceRecord }) {
+          records.set(args.data.id, { ...args.data });
+          return args.data;
+        },
         async upsert(args: {
           where: { id: string };
           create: FakeDeviceRecord;
@@ -39,7 +44,7 @@ function createFakePrisma() {
           return records.get(args.where.id) ?? null;
         },
         async updateMany(args: {
-          where: { deviceToken?: string; id?: string | { not: string }; tokenStatus?: string };
+          where: { deviceToken?: string; id?: string | { not: string }; tokenStatus?: string; secretHash?: null };
           data: Partial<FakeDeviceRecord>;
         }) {
           let count = 0;
@@ -48,6 +53,7 @@ function createFakePrisma() {
             if (typeof args.where.id === "string" && args.where.id !== id) continue;
             if (typeof args.where.id === "object" && args.where.id.not === id) continue;
             if (args.where.tokenStatus !== undefined && record.tokenStatus !== args.where.tokenStatus) continue;
+            if (args.where.secretHash === null && record.secretHash) continue;
             records.set(id, { ...record, ...args.data });
             count += 1;
           }
@@ -126,6 +132,7 @@ describe("DeviceRepository", () => {
     await expect(repository.getDevice("device-1")).resolves.toEqual({
       deviceId: "device-1",
       tokenStatus: "active",
+      secretHash: null,
     });
   });
 

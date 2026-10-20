@@ -12,6 +12,12 @@ import {
   type PreferenceSnapshot,
 } from "../repositories/preferenceRepository.js";
 import { DeviceTokenClaimUnavailableError } from "../repositories/deviceRepository.js";
+import {
+  checkDeviceSecret,
+  DEVICE_SECRET_HEADER,
+  DeviceAuthFailedError,
+  type DeviceSecretCheck,
+} from "../mobile/deviceSecret.js";
 import type { UserNotificationPreference } from "../types.js";
 
 export interface MobileAppRouteDependencies {
@@ -22,6 +28,7 @@ export interface MobileAppRouteDependencies {
       appVersion?: string;
       locale?: string;
       timezone?: string;
+      deviceSecret?: string;
     }): Promise<BootstrapResponse>;
   };
   devices?: {
@@ -31,7 +38,9 @@ export interface MobileAppRouteDependencies {
       locale?: string;
       timezone?: string;
       appVersion?: string;
-    }): Promise<{ deviceId: string; registered: true }>;
+      deviceSecret?: string;
+      deviceSecretSupported?: boolean;
+    }): Promise<{ deviceId: string; registered: true; deviceSecret?: string }>;
     updateToken?(input: {
       deviceId: string;
       platform: MobilePlatform;
@@ -41,7 +50,8 @@ export interface MobileAppRouteDependencies {
       timezone?: string;
       appVersion?: string;
     }): Promise<{ updated: true; tokenStatus: "active" }>;
-    getDevice?(deviceId: string): Promise<{ deviceId: string } | undefined>;
+    getDevice?(deviceId: string): Promise<{ deviceId: string; secretHash?: string | null } | undefined>;
+    verifyDeviceSecret?(deviceId: string, provided: unknown): Promise<DeviceSecretCheck | "missing">;
   };
   preferences?: {
     listForDevice?(deviceId: string): Promise<UserNotificationPreference[]>;
@@ -97,6 +107,23 @@ function metadataOrUndefined(value: unknown): string | undefined {
   return typeof value === "string" && value.length <= MAX_METADATA_LENGTH ? value : undefined;
 }
 
+function deviceSecretHeader(request: FastifyRequest): string | undefined {
+  const value = request.headers[DEVICE_SECRET_HEADER];
+  return typeof value === "string" ? value : undefined;
+}
+
+// Unknown and legacy (secret-less) devices keep the pre-secret behaviour for old app builds.
+async function deviceSecretRejected(
+  devices: MobileAppRouteDependencies["devices"],
+  deviceId: string,
+  request: FastifyRequest,
+): Promise<boolean> {
+  if (!devices?.verifyDeviceSecret) return false;
+  return (await devices.verifyDeviceSecret(deviceId, deviceSecretHeader(request))) === "mismatch";
+}
+
+const deviceAuthFailed = mobileError("device_auth_failed", 401);
+
 function latestPreferenceUpdatedAt(preferences: UserNotificationPreference[]): string {
   return (
     preferences
@@ -107,17 +134,63 @@ function latestPreferenceUpdatedAt(preferences: UserNotificationPreference[]): s
   );
 }
 
+const MAX_PREFERENCE_KEYWORDS = 50;
+const MAX_PREFERENCE_KEYWORD_LENGTH = 100;
+const CLOCK_TIME_PATTERN = /^\d{2}:\d{2}$/;
+
+// null/undefined mean "not set"; everything else must match the shape preference resolution dereferences.
+function isAbsent(value: unknown): boolean {
+  return value === undefined || value === null;
+}
+
+function isOptionalShortString(value: unknown, maxLength = MAX_METADATA_LENGTH): boolean {
+  return isAbsent(value) || (typeof value === "string" && value.length <= maxLength);
+}
+
+function isOptionalKeywordList(value: unknown): boolean {
+  return isAbsent(value) || (
+    Array.isArray(value) &&
+    value.length <= MAX_PREFERENCE_KEYWORDS &&
+    value.every((keyword) => typeof keyword === "string" && keyword.length <= MAX_PREFERENCE_KEYWORD_LENGTH)
+  );
+}
+
+function isOptionalQuietHours(value: unknown): boolean {
+  if (isAbsent(value)) return true;
+  if (typeof value !== "object" || Array.isArray(value)) return false;
+  const q = value as Record<string, unknown>;
+  return (
+    typeof q.enabled === "boolean" &&
+    typeof q.start === "string" && CLOCK_TIME_PATTERN.test(q.start) &&
+    typeof q.end === "string" && CLOCK_TIME_PATTERN.test(q.end) &&
+    typeof q.timezone === "string" && q.timezone.length <= MAX_METADATA_LENGTH
+  );
+}
+
 function isValidPreferenceRule(rule: unknown): rule is UserNotificationPreference {
   if (typeof rule !== "object" || rule === null) return false;
   const r = rule as Record<string, unknown>;
-  // Validate the fields dereferenced downstream (e.g. updatedAt sorting, enabled/scope gating)
-  // so a malformed element cannot crash preference resolution after being persisted.
+  // Validate the fields dereferenced downstream (e.g. updatedAt sorting, enabled/scope gating, keyword.trim(),
+  // quiet-hours parsing) so a malformed element cannot crash preference resolution after being persisted.
   return (
     typeof r.scope === "string" && r.scope.length > 0 &&
     typeof r.enabled === "boolean" &&
     typeof r.tapAction === "string" &&
     typeof r.deliveryMode === "string" &&
-    typeof r.updatedAt === "string"
+    typeof r.updatedAt === "string" &&
+    isOptionalShortString(r.generationId) &&
+    isOptionalShortString(r.memberId) &&
+    isOptionalShortString(r.source) &&
+    isOptionalShortString(r.eventType) &&
+    isOptionalKeywordList(r.keywordsAllowlist) &&
+    isOptionalKeywordList(r.keywordsBlocklist) &&
+    isOptionalQuietHours(r.quietHours) &&
+    (isAbsent(r.maxNotificationsPerMinute) || (
+      Number.isInteger(r.maxNotificationsPerMinute) &&
+      (r.maxNotificationsPerMinute as number) >= 1 &&
+      (r.maxNotificationsPerMinute as number) <= 1000
+    )) &&
+    (isAbsent(r.serviceAnnouncementsEnabled) || typeof r.serviceAnnouncementsEnabled === "boolean")
   );
 }
 
@@ -135,7 +208,7 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
   const writeRateLimit = rateLimitHook(options.rateLimiters?.write);
   const readRateLimit = rateLimitHook(options.rateLimiters?.read);
 
-  app.get("/v1/bootstrap", { onRequest: readRateLimit }, async (request) => {
+  app.get("/v1/bootstrap", { onRequest: readRateLimit }, async (request, reply) => {
     const query = request.query as {
       deviceId?: unknown;
       platform?: unknown;
@@ -154,33 +227,52 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
 
     if (!options.dependencies?.bootstrap) return options.fallbackBootstrap?.(sanitized);
 
-    return options.dependencies.bootstrap.getBootstrap({
-      ...sanitized,
-      platform: parsePlatform(typeof query.platform === "string" ? query.platform : undefined),
-    });
+    try {
+      return await options.dependencies.bootstrap.getBootstrap({
+        ...sanitized,
+        platform: parsePlatform(typeof query.platform === "string" ? query.platform : undefined),
+        deviceSecret: deviceSecretHeader(request),
+      });
+    } catch (error) {
+      if (error instanceof DeviceAuthFailedError) {
+        return reply.code(deviceAuthFailed.statusCode).send(deviceAuthFailed.payload);
+      }
+      throw error;
+    }
   });
 
-  app.post("/v1/devices/register", { onRequest: writeRateLimit }, async (request) => {
+  app.post("/v1/devices/register", { onRequest: writeRateLimit }, async (request, reply) => {
     const body = request.body as {
       deviceId?: string;
       platform?: string;
       locale?: string;
       timezone?: string;
       appVersion?: string;
+      deviceSecretSupported?: unknown;
     };
     const devices = options.dependencies?.devices;
-    const result = devices?.register
-      ? await devices.register({
-          deviceId: mintedDeviceIdOrUndefined(body.deviceId),
-          platform: parsePlatform(body.platform),
-          locale: metadataOrUndefined(body.locale),
-          timezone: metadataOrUndefined(body.timezone),
-          appVersion: metadataOrUndefined(body.appVersion),
-        })
-      : {
-          deviceId: mintedDeviceIdOrUndefined(body.deviceId) ?? `device_${Date.now()}`,
-          registered: true as const,
-        };
+    let result: { deviceId: string; registered: true; deviceSecret?: string };
+    try {
+      result = devices?.register
+        ? await devices.register({
+            deviceId: mintedDeviceIdOrUndefined(body.deviceId),
+            platform: parsePlatform(body.platform),
+            locale: metadataOrUndefined(body.locale),
+            timezone: metadataOrUndefined(body.timezone),
+            appVersion: metadataOrUndefined(body.appVersion),
+            deviceSecret: deviceSecretHeader(request),
+            deviceSecretSupported: body.deviceSecretSupported === true,
+          })
+        : {
+            deviceId: mintedDeviceIdOrUndefined(body.deviceId) ?? `device_${Date.now()}`,
+            registered: true as const,
+          };
+    } catch (error) {
+      if (error instanceof DeviceAuthFailedError) {
+        return reply.code(deviceAuthFailed.statusCode).send(deviceAuthFailed.payload);
+      }
+      throw error;
+    }
     return { ...result, serverTime: new Date().toISOString() };
   });
 
@@ -211,6 +303,9 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     }
 
     const devices = options.dependencies?.devices;
+    if (await deviceSecretRejected(devices, body.deviceId, request)) {
+      return reply.code(deviceAuthFailed.statusCode).send(deviceAuthFailed.payload);
+    }
     let result: { updated: true; tokenStatus: "active" };
     try {
       result = devices?.updateToken
@@ -239,6 +334,10 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     if (!isValidDeviceId(deviceId)) {
       const error = mobileError("device_not_registered", 400);
       return reply.code(error.statusCode).send(error.payload);
+    }
+
+    if (await deviceSecretRejected(options.dependencies?.devices, deviceId, request)) {
+      return reply.code(deviceAuthFailed.statusCode).send(deviceAuthFailed.payload);
     }
 
     const preferences = options.dependencies?.preferences;
@@ -288,9 +387,15 @@ export async function registerAppRoutes(app: FastifyInstance, options: RegisterA
     if (preferences?.replaceForDevice) {
       // NotificationPreference has no FK to Device; require a registered device so arbitrary ids cannot create rows.
       const devices = options.dependencies?.devices;
-      if (devices?.getDevice && !(await devices.getDevice(body.deviceId))) {
-        const error = mobileError("device_not_registered", 400);
-        return reply.code(error.statusCode).send(error.payload);
+      if (devices?.getDevice) {
+        const device = await devices.getDevice(body.deviceId);
+        if (!device) {
+          const error = mobileError("device_not_registered", 400);
+          return reply.code(error.statusCode).send(error.payload);
+        }
+        if (checkDeviceSecret(device.secretHash, deviceSecretHeader(request)) === "mismatch") {
+          return reply.code(deviceAuthFailed.statusCode).send(deviceAuthFailed.payload);
+        }
       }
       let result: PreferenceSnapshot;
       try {
