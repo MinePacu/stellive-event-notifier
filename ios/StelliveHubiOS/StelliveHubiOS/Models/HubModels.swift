@@ -2136,22 +2136,37 @@ struct NotificationSettingsState: Equatable {
     }
 }
 
-/// The notification settings the server stores as the device's single `global` preference rule.
-/// A local change to any of these must be pushed to the server; see `MockHubStore.isGlobalRuleDirty`.
-struct NotificationGlobalRule: Equatable {
+/// The notification settings the server stores as the device's preference rules (global rule plus
+/// generation/member/platform/event-type rules). A local change to any of these must be pushed to
+/// the server; see `MockHubStore.isServerSyncDirty`.
+struct NotificationServerSyncedSettings: Equatable {
     var globalEnabled: Bool
     var serviceAnnouncementsEnabled: Bool
     var realtimeEnabled: Bool
     var tapAction: TapAction
+    var quietHours: QuietHoursState
+    var keywordFilters: KeywordFilterState
+    var rateLimit: RateLimitState
+    var generationEnabled: [String: Bool]
+    var memberEnabled: [String: Bool]
+    var platformEnabled: [NotificationPlatform: Bool]
+    var eventTypeEnabled: [NotificationEventType: Bool]
 }
 
 extension NotificationSettingsState {
-    var globalRule: NotificationGlobalRule {
-        NotificationGlobalRule(
+    var serverSyncedSettings: NotificationServerSyncedSettings {
+        NotificationServerSyncedSettings(
             globalEnabled: globalEnabled,
             serviceAnnouncementsEnabled: serviceAnnouncementsEnabled,
             realtimeEnabled: realtimeEnabled,
-            tapAction: tapAction
+            tapAction: tapAction,
+            quietHours: quietHours,
+            keywordFilters: keywordFilters,
+            rateLimit: rateLimit,
+            generationEnabled: generationEnabled,
+            memberEnabled: memberEnabled,
+            platformEnabled: platformEnabled,
+            eventTypeEnabled: eventTypeEnabled
         )
     }
 }

@@ -54,6 +54,10 @@ struct StelliveHubApp: App {
                 .environmentObject(reservationStore)
                 .environmentObject(goodsChecklistStore)
                 .preferredColorScheme(store.settings.appearanceMode.preferredColorScheme)
+                .onChange(of: store.settings) { settings in
+                    // Detailed settings (quiet hours, filters, toggles) are bound straight to the store.
+                    if store.isServerSyncDirty { serverStore.schedulePreferenceSync(settings) }
+                }
                 .task {
                     _ = await serverStore.bootstrap()
                     await serverStore.reconcileNotificationSettingsOnLaunch()

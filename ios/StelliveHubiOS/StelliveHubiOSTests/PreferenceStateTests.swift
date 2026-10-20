@@ -452,7 +452,7 @@ final class PreferenceStateTests: XCTestCase {
         let reloaded = MockHubStore(settingsPersistence: persistence)
 
         XCTAssertEqual(reloaded.settings, store.settings)
-        XCTAssertTrue(reloaded.isGlobalRuleDirty)
+        XCTAssertTrue(reloaded.isServerSyncDirty)
     }
 
     func testCorruptOrMissingPersistedSettingsFallBackToDefaults() {
@@ -463,7 +463,7 @@ final class PreferenceStateTests: XCTestCase {
         let store = MockHubStore(settingsPersistence: persistence)
 
         XCTAssertEqual(store.settings, NotificationSettingsState())
-        XCTAssertFalse(store.isGlobalRuleDirty)
+        XCTAssertFalse(store.isServerSyncDirty)
     }
 
     func testLegacyGen4UpcomingSettingsMigrateToGen4() throws {
@@ -511,47 +511,105 @@ final class PreferenceStateTests: XCTestCase {
         XCTAssertEqual(settings.eventTypeEnabled, NotificationSettingsState().eventTypeEnabled)
     }
 
-    func testOnlyGlobalRuleChangesMarkTheSettingsDirty() {
+    func testOnlyServerSyncedSettingsChangesMarkTheSettingsDirty() {
         let persistence = makeSettingsPersistence()
         let store = MockHubStore(settingsPersistence: persistence)
 
-        store.settings.quietHours.enabled = true
-        store.settings.memberEnabled["gangzi"] = false
         store.settings.appearanceMode = .light
-        XCTAssertFalse(store.isGlobalRuleDirty)
-        XCTAssertFalse(persistence.loadGlobalRuleDirty())
+        store.settings.chzzkChatEnabled = true
+        store.settings.combinationPreferences[0].enabled = false
+        XCTAssertFalse(store.isServerSyncDirty)
+        XCTAssertFalse(persistence.loadServerSyncDirty())
 
-        let globalRuleChanges: [(inout NotificationSettingsState) -> Void] = [
+        let serverSyncedChanges: [(inout NotificationSettingsState) -> Void] = [
             { $0.globalEnabled = false },
             { $0.serviceAnnouncementsEnabled = false },
             { $0.realtimeEnabled = true },
-            { $0.tapAction = .openPlatform }
+            { $0.tapAction = .openPlatform },
+            { $0.quietHours.enabled = true },
+            { $0.keywordFilters.blocklistText = "스포" },
+            { $0.rateLimit.maxNotificationsPerMinute = 3 },
+            { $0.generationEnabled["gen2"] = false },
+            { $0.memberEnabled["gangzi"] = false },
+            { $0.platformEnabled[.naverCafe] = true },
+            { $0.eventTypeEnabled[.eventUpdated] = true }
         ]
-        for change in globalRuleChanges {
+        for change in serverSyncedChanges {
             let isolated = MockHubStore(settingsPersistence: makeSettingsPersistence())
             change(&isolated.settings)
-            XCTAssertTrue(isolated.isGlobalRuleDirty)
+            XCTAssertTrue(isolated.isServerSyncDirty)
         }
     }
 
-    func testAdoptingServerGlobalRuleDoesNotMarkDirtyAndClearsExistingDirtyFlag() throws {
+    func testAdoptingServerSettingsDoesNotMarkDirtyAndClearsExistingDirtyFlag() throws {
         let store = MockHubStore(settingsPersistence: makeSettingsPersistence())
         store.settings.realtimeEnabled = true
-        XCTAssertTrue(store.isGlobalRuleDirty)
+        XCTAssertTrue(store.isServerSyncDirty)
         let preference = try JSONDecoder().decode(PreferenceResponse.self, from: Data("""
             {"scope":"global","enabled":false,"explicitOverride":true,"tapAction":"open_platform","deliveryMode":"standard","serviceAnnouncementsEnabled":false,"updatedAt":"2026-07-06T00:00:00Z"}
             """.utf8))
 
-        store.adoptServerGlobalRule(preference)
+        store.adoptServerSettings(from: [preference])
 
         XCTAssertFalse(store.settings.globalEnabled)
         XCTAssertEqual(store.settings.tapAction, .openPlatform)
         XCTAssertFalse(store.settings.realtimeEnabled)
-        XCTAssertFalse(store.isGlobalRuleDirty)
+        XCTAssertFalse(store.isServerSyncDirty)
 
         let clean = MockHubStore(settingsPersistence: makeSettingsPersistence())
-        clean.adoptServerGlobalRule(preference)
-        XCTAssertFalse(clean.isGlobalRuleDirty)
+        clean.adoptServerSettings(from: [preference])
+        XCTAssertFalse(clean.isServerSyncDirty)
+    }
+
+    func testAdoptingOnlyAGlobalRuleKeepsLocalDetailSettings() throws {
+        var local = NotificationSettingsState()
+        local.quietHours = QuietHoursState(enabled: true, start: "22:00", end: "06:00", timezone: "UTC")
+        local.keywordFilters = KeywordFilterState(allowlistText: "굿즈", blocklistText: "스포")
+        local.rateLimit.maxNotificationsPerMinute = 4
+        local.generationEnabled["gen2"] = false
+        local.memberEnabled["gangzi"] = false
+        local.platformEnabled[.chzzk] = false
+        local.eventTypeEnabled[.eventUpdated] = true
+        let persistence = makeSettingsPersistence()
+        persistence.saveSettings(local)
+        let store = MockHubStore(settingsPersistence: persistence)
+        let preference = try JSONDecoder().decode(PreferenceResponse.self, from: Data("""
+            {"scope":"global","enabled":false,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","updatedAt":"2026-07-06T00:00:00Z"}
+            """.utf8))
+
+        store.adoptServerSettings(from: [preference])
+
+        XCTAssertFalse(store.settings.globalEnabled)
+        var expected = local
+        expected.globalEnabled = false
+        XCTAssertEqual(store.settings, expected)
+    }
+
+    func testAdoptingScopedRulesOverlaysOnlyKnownKeys() throws {
+        func rule(_ fields: String) throws -> PreferenceResponse {
+            try JSONDecoder().decode(PreferenceResponse.self, from: Data("""
+                {"enabled":false,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","updatedAt":"2026-07-06T00:00:00Z",\(fields)}
+                """.utf8))
+        }
+        let store = MockHubStore(settingsPersistence: makeSettingsPersistence())
+
+        store.adoptServerSettings(from: [
+            try rule(#""scope":"generation","generationId":"gen1""#),
+            try rule(#""scope":"member","memberId":"gangzi""#),
+            try rule(#""scope":"platform","source":"youtube""#),
+            try rule(#""scope":"platform","source":"future_platform""#),
+            try rule(#""scope":"event_type","eventType":"chzzk_live_started""#),
+            try rule(#""scope":"event_type","eventType":"future_event""#),
+            try rule(#""scope":"member_platform","memberId":"akane-lize","source":"chzzk""#)
+        ])
+
+        var expected = NotificationSettingsState()
+        expected.generationEnabled["gen1"] = false
+        expected.memberEnabled["gangzi"] = false
+        expected.platformEnabled[.youtube] = false
+        expected.eventTypeEnabled[.chzzkLiveStarted] = false
+        XCTAssertEqual(store.settings, expected)
+        XCTAssertFalse(store.isServerSyncDirty)
     }
 
     func testStoreWithoutPersistenceStaysInMemory() {

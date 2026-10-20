@@ -47,12 +47,6 @@ enum PreferenceSyncResult: Equatable {
     case staleUpdate(server: PreferencesResponse?)
 }
 
-extension PreferencesResponse {
-    var globalPreference: PreferenceResponse? {
-        preferences.first { $0.scope == "global" }
-    }
-}
-
 @MainActor
 final class ServerHubStore: ObservableObject {
     private let api: HubAPIClient
@@ -171,16 +165,16 @@ final class ServerHubStore: ObservableObject {
     }
 
     /// Sends `settings` and reconciles the local dirty flag with the outcome: success confirms the
-    /// sent global rule; a conflict or stale update adopts the server's global rule (only if the user
-    /// has not changed it again meanwhile). Failures keep the local values and the dirty flag.
+    /// sent settings; a conflict or stale update adopts the server's rules (only if the user
+    /// has not changed them again meanwhile). Failures keep the local values and the dirty flag.
     private func syncPreferences(_ settings: NotificationSettingsState) async {
-        let sent = settings.globalRule
+        let sent = settings.serverSyncedSettings
         switch await updatePreferences(settings) {
         case .synced:
-            fallback.confirmGlobalRuleSynced(sent: sent)
+            fallback.confirmServerSyncedSettings(sent: sent)
         case .conflict(let server?), .staleUpdate(let server?):
-            if fallback.settings.globalRule == sent {
-                fallback.adoptServerGlobalRule(server.globalPreference)
+            if fallback.settings.serverSyncedSettings == sent {
+                fallback.adoptServerSettings(from: server.preferences)
             }
         case .conflict(nil), .staleUpdate(nil), .skipped, .failed:
             break
@@ -188,19 +182,26 @@ final class ServerHubStore: ObservableObject {
     }
 
     /// Call once per launch after the device is registered. Pushes unconfirmed local values;
-    /// otherwise adopts the server's global rule. Offline or without a device id the local values stay.
+    /// otherwise adopts the server's rules, or pushes the local ones when the server holds no detailed
+    /// rules yet. Offline or without a device id the local values stay.
     func reconcileNotificationSettingsOnLaunch() async {
         guard let deviceId = deviceIDStore.loadDeviceID() else { return }
-        if fallback.isGlobalRuleDirty {
+        if fallback.isServerSyncDirty {
             pendingPreferenceSettings = fallback.settings
             await flushPendingPreferenceSync()
             return
         }
         guard let response = try? await api.preferences(deviceId: deviceId),
-              !fallback.isGlobalRuleDirty,
-              let global = response.globalPreference
+              !fallback.isServerSyncDirty
         else { return }
-        fallback.adoptServerGlobalRule(global)
+        // Only a global rule (or nothing) means an older build or a new device: the detailed local
+        // settings were never uploaded, so push them instead of adopting the server's defaults.
+        if !response.preferences.contains(where: { Self.detailedPreferenceScopes.contains($0.scope) }) {
+            pendingPreferenceSettings = fallback.settings
+            await flushPendingPreferenceSync()
+            return
+        }
+        fallback.adoptServerSettings(from: response.preferences)
     }
 
     @discardableResult
@@ -231,14 +232,68 @@ final class ServerHubStore: ObservableObject {
         return .failed
     }
 
-    private func preferenceUpdateRequest(
+    /// Scopes whose rules the app generates from local settings; the server's rules for any other
+    /// scope (e.g. combination scopes) are sent back untouched.
+    private static let clientOwnedPreferenceScopes: Set<String> = ["global", "generation", "member", "platform", "event_type"]
+
+    private static let detailedPreferenceScopes: Set<String> = ["generation", "member", "platform", "event_type"]
+
+    /// Comma-separated keyword text as a trimmed term list, nil when it has no terms.
+    static func keywordTerms(_ text: String) -> [String]? {
+        let terms = text.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return terms.isEmpty ? nil : terms
+    }
+
+    func preferenceUpdateRequest(
         deviceId: String,
         settings: NotificationSettingsState,
         current: PreferencesResponse,
         clientUpdatedAt: String
     ) -> UpdatePreferencesRequest {
         let updatedAt = ISO8601DateFormatter().string(from: Date())
-        let preserved = current.preferences.filter { $0.scope != "global" }
+        let preserved = current.preferences.filter { !Self.clientOwnedPreferenceScopes.contains($0.scope) }
+        // Scoped rules override the global tapAction/deliveryMode while resolving, so they must repeat them.
+        let tapAction = settings.tapAction == .openApp ? "open_app" : "open_platform"
+        let deliveryMode = settings.realtimeEnabled ? "realtime_best_effort" : "standard"
+        func rule(
+            _ scope: String,
+            generationId: String? = nil,
+            memberId: String? = nil,
+            source: String? = nil,
+            eventType: String? = nil,
+            enabled: Bool
+        ) -> PreferenceResponse {
+            PreferenceResponse(
+                deviceId: deviceId,
+                scope: scope,
+                generationId: generationId,
+                memberId: memberId,
+                source: source,
+                eventType: eventType,
+                enabled: enabled,
+                explicitOverride: true,
+                tapAction: tapAction,
+                deliveryMode: deliveryMode,
+                realtimePreference: nil,
+                quietHours: nil,
+                keywordsAllowlist: nil,
+                keywordsBlocklist: nil,
+                maxNotificationsPerMinute: nil,
+                serviceAnnouncementsEnabled: nil,
+                updatedAt: updatedAt
+            )
+        }
+        let scoped = (
+            settings.generationEnabled.map { rule("generation", generationId: $0.key, enabled: $0.value) } +
+            settings.memberEnabled.map { rule("member", memberId: $0.key, enabled: $0.value) } +
+            settings.platformEnabled.map { rule("platform", source: $0.key.rawValue, enabled: $0.value) } +
+            settings.eventTypeEnabled.map { rule("event_type", eventType: $0.key.rawValue, enabled: $0.value) }
+        ).sorted {
+            ($0.scope, $0.generationId ?? $0.memberId ?? $0.source ?? $0.eventType ?? "") <
+                ($1.scope, $1.generationId ?? $1.memberId ?? $1.source ?? $1.eventType ?? "")
+        }
         let global = PreferenceResponse(
             deviceId: deviceId,
             scope: "global",
@@ -248,19 +303,24 @@ final class ServerHubStore: ObservableObject {
             eventType: nil,
             enabled: settings.globalEnabled,
             explicitOverride: true,
-            tapAction: settings.tapAction == .openApp ? "open_app" : "open_platform",
-            deliveryMode: settings.realtimeEnabled ? "realtime_best_effort" : "standard",
+            tapAction: tapAction,
+            deliveryMode: deliveryMode,
             realtimePreference: nil,
-            quietHours: nil,
-            keywordsAllowlist: nil,
-            keywordsBlocklist: nil,
-            maxNotificationsPerMinute: nil,
+            quietHours: PreferenceQuietHoursResponse(
+                enabled: settings.quietHours.enabled,
+                start: settings.quietHours.start,
+                end: settings.quietHours.end,
+                timezone: settings.quietHours.timezone
+            ),
+            keywordsAllowlist: Self.keywordTerms(settings.keywordFilters.allowlistText),
+            keywordsBlocklist: Self.keywordTerms(settings.keywordFilters.blocklistText),
+            maxNotificationsPerMinute: settings.rateLimit.maxNotificationsPerMinute,
             serviceAnnouncementsEnabled: settings.serviceAnnouncementsEnabled,
             updatedAt: updatedAt
         )
         return UpdatePreferencesRequest(
             deviceId: deviceId,
-            preferences: preserved + [global],
+            preferences: preserved + scoped + [global],
             expectedRevision: current.revision,
             clientUpdatedAt: clientUpdatedAt
         )
