@@ -27,6 +27,7 @@ Archived and historical documents, including `docs/superpowers/**` and `docs/han
 - `docs/ARCHITECTURE.md` - High-level architecture boundaries for mobile apps, backend, storage, external APIs, and push delivery.
 - `docs/CHZZK_LIVE_API_STATUS.md` - CHZZK live API verification state and current integration constraints.
 - `docs/CHZZK_LIVE_STATUS_REFRESH_DESIGN.md` - Design for refreshing and caching CHZZK live status.
+- `docs/FCM_TOPIC_AUDIT_DESIGN.md` - Design (not implemented) for FCM topic send and subscription audit records, retention, and admin lookup.
 - `docs/FIREBASE_FCM_BOUNDARY_DESIGN.md` - Boundary design for Firebase Cloud Messaging ownership and safety rules.
 - `docs/FIREBASE_FCM_CODE_DESIGN.md` - Implementation design for FCM client, payloads, push sender, and tests.
 - `docs/HUB_EVENTS_LIST_DATE_NAVIGATION_DESIGN.md` - Design notes for hub event list date navigation.
