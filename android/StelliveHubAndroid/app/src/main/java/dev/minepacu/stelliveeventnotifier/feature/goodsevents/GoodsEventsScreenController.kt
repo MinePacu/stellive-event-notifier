@@ -207,17 +207,7 @@ internal class GoodsEventsScreenController(private val activity: MainActivity) {
             val to = today.plusMonths(3)
             val days = activity.serverRepository.hubCalendarDays(from, to, "Asia/Seoul")
             val listedEvents = activity.serverRepository.hubEvents("all", from, to)
-            val listedEventIds = listedEvents.mapTo(mutableSetOf()) { it.id }
-            val missingEventIds = days
-                .flatMap { it.entries }
-                .asSequence()
-                .filter { it.entryKind == HubCalendarEntryKind.HUB_EVENT }
-                .map { it.eventId }
-                .filterNot(listedEventIds::contains)
-                .distinct()
-                .toList()
-            val resolvedMissingEvents = missingEventIds.mapNotNull { activity.serverRepository.hubEventDetail(it) }
-            val events = (listedEvents + resolvedMissingEvents).distinctBy { it.id }
+            val events = withMissingCalendarEvents(days, listedEvents)
             activity.goodsEventsSelectedMonth = YearMonth.from(today)
             activity.goodsEventsDays = days
             activity.goodsEvents = events
@@ -227,6 +217,28 @@ internal class GoodsEventsScreenController(private val activity: MainActivity) {
                 }
             }
         }
+    }
+
+    /**
+     * The feed drops calendar hub_event entries that have no canonical [HubEvent], so every
+     * calendar entry outside [knownEvents] (e.g. months reached by navigating past the initial
+     * window) is resolved through the detail endpoint.
+     */
+    private suspend fun withMissingCalendarEvents(
+        days: List<HubCalendarDay>,
+        knownEvents: List<HubEvent>,
+    ): List<HubEvent> {
+        val knownEventIds = knownEvents.mapTo(mutableSetOf()) { it.id }
+        val missingEventIds = days
+            .flatMap { it.entries }
+            .asSequence()
+            .filter { it.entryKind == HubCalendarEntryKind.HUB_EVENT }
+            .map { it.eventId }
+            .filterNot(knownEventIds::contains)
+            .distinct()
+            .toList()
+        val resolvedMissingEvents = missingEventIds.mapNotNull { activity.serverRepository.hubEventDetail(it) }
+        return (knownEvents + resolvedMissingEvents).distinctBy { it.id }
     }
 
     private fun renderServerGoodsEvents(days: List<HubCalendarDay>, events: List<HubEvent>) {
@@ -346,8 +358,9 @@ internal class GoodsEventsScreenController(private val activity: MainActivity) {
                         val serverRepository = activity.serverRepository as? ServerHubRepository
                         serverRepository?.ensureCalendarLoaded(month.atDay(1))
                         val refreshedDays = serverRepository?.cachedCalendarDays ?: activity.goodsEventsDays
+                        val refreshedEvents = withMissingCalendarEvents(refreshedDays, activity.goodsEvents)
                         if (activity.navigationHistory.currentScreen == HubScreen.GOODS_EVENTS) {
-                            renderServerGoodsEvents(refreshedDays, activity.goodsEvents)
+                            renderServerGoodsEvents(refreshedDays, refreshedEvents)
                         }
                     }
                 },

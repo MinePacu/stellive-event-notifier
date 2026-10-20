@@ -1,5 +1,6 @@
 package dev.minepacu.stelliveeventnotifier.feature.reservations.domain
 
+import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
 import java.net.URI
 import java.time.Instant
 
@@ -34,22 +35,24 @@ object ReservationDetailPresentationPolicy {
     fun presentation(
         record: ReservationRecord,
         formatDateTime: (Instant) -> String,
-        officialEventAvailable: Boolean = false,
-        latestOfficialTitle: String? = null,
-        latestOfficialStartsAt: Instant? = null,
-        officialEventCancelled: Boolean = false,
+        latestEvent: HubEvent? = null,
     ): ReservationDetailPresentation {
-        val startsAt = record.effectiveStartsAt
-        val endsAt = record.effectiveEndsAt
+        val timezone = record.eventSnapshot.timezone
+        val startsAtLabel = record.effectiveStartsAt?.let {
+            ReservationDateFormat.label(it, record.effectiveStartsAtIsDateOnly, timezone, formatDateTime)
+        }
+        val endsAtLabel = record.effectiveEndsAt?.let {
+            ReservationDateFormat.label(it, record.effectiveEndsAtIsDateOnly, timezone, formatDateTime)
+        }
         val dateTimeLabel = when {
-            startsAt != null && endsAt != null -> "${formatDateTime(startsAt)} – ${formatDateTime(endsAt)}"
-            startsAt != null -> formatDateTime(startsAt)
-            endsAt != null -> "종료 ${formatDateTime(endsAt)}"
+            startsAtLabel != null && endsAtLabel != null -> "$startsAtLabel – $endsAtLabel"
+            startsAtLabel != null -> startsAtLabel
+            endsAtLabel != null -> "종료 $endsAtLabel"
             else -> null
         }
         val informationRows = buildList {
-            startsAt?.let { add(ReservationDetailRow("시작", formatDateTime(it))) }
-            endsAt?.let { add(ReservationDetailRow("종료", formatDateTime(it))) }
+            startsAtLabel?.let { add(ReservationDetailRow("시작", it)) }
+            endsAtLabel?.let { add(ReservationDetailRow("종료", it)) }
             record.effectiveVenue.nonBlank()?.let { add(ReservationDetailRow("장소", it)) }
             record.optionText.nonBlank()?.let { add(ReservationDetailRow("옵션", it)) }
             record.quantity?.takeIf { it > 0 }?.let { add(ReservationDetailRow("수량", "${it}개")) }
@@ -79,13 +82,9 @@ object ReservationDetailPresentationPolicy {
             links = links,
             note = record.note.nonBlank(),
             recordRows = recordRows,
-            canOpenOfficialEvent = officialEventAvailable && record.eventId != null,
-            officialEventChanged = ReservationDisplayPolicy.officialEventChanged(
-                record = record,
-                latestTitle = latestOfficialTitle,
-                latestStartsAt = latestOfficialStartsAt,
-            ),
-            officialEventCancelled = officialEventAvailable && officialEventCancelled,
+            canOpenOfficialEvent = latestEvent != null && record.eventId != null,
+            officialEventChanged = ReservationDisplayPolicy.officialEventChanged(record, latestEvent),
+            officialEventCancelled = ReservationDisplayPolicy.officialEventCancelled(record, latestEvent),
         )
     }
 

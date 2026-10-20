@@ -20,7 +20,10 @@ struct ReservationDetailView: View {
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(ReservationPresentationPolicy.statusColor(record.status))
                             if let date = record.effectiveStartsAt {
-                                Label(date.formatted(date: .long, time: .shortened), systemImage: "calendar")
+                                Label(
+                                    ReservationDateDisplayPolicy.startText(record: record, date, dateStyle: .long),
+                                    systemImage: "calendar"
+                                )
                             }
                             if let venue = record.effectiveVenue {
                                 Label(venue, systemImage: "mappin.and.ellipse")
@@ -30,7 +33,7 @@ struct ReservationDetailView: View {
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.orange)
                             }
-                            if latestEvent(for: record)?.status == .cancelled {
+                            if ReservationDisplayPolicy.officialEventCancelled(record: record, latestEvent: latestEvent(for: record)) {
                                 Text("공식 행사가 취소되었습니다. 사용자의 내역 상태는 자동으로 변경하지 않습니다.")
                                     .font(.caption)
                                     .foregroundStyle(.red)
@@ -59,7 +62,13 @@ struct ReservationDetailView: View {
                             "연결 일정",
                             ReservationDisplayPolicy.linkedScheduleLabel(
                                 record: record,
-                                format: { $0.formatted(date: .abbreviated, time: .shortened) }
+                                format: {
+                                    ReservationDateDisplayPolicy.snapshotText(
+                                        snapshot: record.eventSnapshot,
+                                        $0,
+                                        dateStyle: .abbreviated
+                                    )
+                                }
                             )
                         )
                         detailRow("추가일", record.createdAt.formatted(date: .abbreviated, time: .shortened))
