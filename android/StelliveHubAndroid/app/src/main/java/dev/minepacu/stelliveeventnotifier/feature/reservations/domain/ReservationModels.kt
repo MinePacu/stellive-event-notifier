@@ -1,5 +1,6 @@
 package dev.minepacu.stelliveeventnotifier.feature.reservations.domain
 
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventTimePrecision
 import java.time.Instant
 import java.util.UUID
 
@@ -18,7 +19,13 @@ data class ReservationEventSnapshot(
     val venueAddress: String? = null,
     val sourceLabel: String,
     val imageUrl: String? = null,
-)
+    val timePrecision: HubEventTimePrecision = HubEventTimePrecision.DATETIME,
+    val timezone: String = ReservationEventSnapshot.DefaultTimezone,
+) {
+    companion object {
+        const val DefaultTimezone = "Asia/Seoul"
+    }
+}
 
 data class ReservationDraft(
     val sessionId: UUID,
@@ -62,6 +69,10 @@ data class ReservationRecord(
     val displayTitle: String get() = displayTitleOverride?.takeIf(String::isNotBlank) ?: eventSnapshot.title
     val effectiveStartsAt: Instant? get() = startsAtOverride ?: eventSnapshot.startsAt
     val effectiveEndsAt: Instant? get() = endsAtOverride ?: eventSnapshot.endsAt
+    val effectiveStartsAtIsDateOnly: Boolean
+        get() = startsAtOverride == null && eventSnapshot.startsAt != null && eventSnapshot.timePrecision == HubEventTimePrecision.DATE
+    val effectiveEndsAtIsDateOnly: Boolean
+        get() = endsAtOverride == null && eventSnapshot.endsAt != null && eventSnapshot.timePrecision == HubEventTimePrecision.DATE
     val effectiveVenue: String? get() = venueOverride?.takeIf(String::isNotBlank) ?: eventSnapshot.venueName
     val preferredOpenUrl: String? get() = reservationDetailUrl ?: providerHistoryUrl ?: originalActionUrl
 }

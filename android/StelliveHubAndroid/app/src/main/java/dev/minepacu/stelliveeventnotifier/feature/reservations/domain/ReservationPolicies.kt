@@ -1,8 +1,15 @@
 package dev.minepacu.stelliveeventnotifier.feature.reservations.domain
 
+import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventLinkKind
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleItem
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleKind
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventTimePrecision
 import java.net.URI
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 object ReservationActionPolicy {
     fun kindFor(linkKind: HubEventLinkKind, cancelledAt: Instant? = null): ReservationKind? {
@@ -147,9 +154,74 @@ object ReservationEditStatusPresentationPolicy {
     )
 }
 
-object ReservationDisplayPolicy {
-    fun officialEventChanged(record: ReservationRecord, latestTitle: String?, latestStartsAt: Instant?): Boolean =
-        latestTitle != null && (
-            latestTitle != record.eventSnapshot.title || latestStartsAt != record.eventSnapshot.startsAt
+data class ReservationScheduleWindow(
+    val startsAt: Instant?,
+    val endsAt: Instant?,
+    val timePrecision: HubEventTimePrecision,
+    val timezone: String,
+)
+
+object ReservationSchedulePolicy {
+    /** Picks the official event window for a reservation snapshot; auxiliary items such as ticket open are never used. */
+    fun window(event: HubEvent, scheduleItem: HubEventScheduleItem?): ReservationScheduleWindow? {
+        val item = scheduleItem?.takeIf { it.kind == HubEventScheduleKind.MAIN_WINDOW }
+            ?: event.scheduleItems.firstOrNull { it.isPrimary && it.cancelledAt == null }
+        if (item != null) return ReservationScheduleWindow(item.startsAt, item.endsAt, item.timePrecision, item.timezone)
+        if (event.startsAt == null && event.endsAt == null) return null
+        return ReservationScheduleWindow(
+            event.startsAt,
+            event.endsAt,
+            HubEventTimePrecision.DATETIME,
+            ReservationEventSnapshot.DefaultTimezone,
         )
+    }
+
+    fun snapshot(event: HubEvent, scheduleItem: HubEventScheduleItem?, imageUrl: String?): ReservationEventSnapshot {
+        val window = window(event, scheduleItem)
+        return ReservationEventSnapshot(
+            title = event.title,
+            category = event.category.name,
+            startsAt = window?.startsAt,
+            endsAt = window?.endsAt,
+            venueName = event.venueName,
+            venueAddress = event.venueAddress,
+            sourceLabel = event.sourceLabel,
+            imageUrl = imageUrl,
+            timePrecision = window?.timePrecision ?: HubEventTimePrecision.DATETIME,
+            timezone = window?.timezone ?: ReservationEventSnapshot.DefaultTimezone,
+        )
+    }
+}
+
+object ReservationDisplayPolicy {
+    fun officialEventChanged(record: ReservationRecord, latestEvent: HubEvent?): Boolean {
+        if (latestEvent == null) return false
+        val window = ReservationSchedulePolicy.window(latestEvent, linkedScheduleItem(record, latestEvent))
+        val snapshot = record.eventSnapshot
+        return latestEvent.title != snapshot.title ||
+            window?.startsAt != snapshot.startsAt ||
+            window?.endsAt != snapshot.endsAt ||
+            latestEvent.venueName != snapshot.venueName
+    }
+
+    fun officialEventCancelled(record: ReservationRecord, latestEvent: HubEvent?): Boolean {
+        if (latestEvent == null) return false
+        if (latestEvent.status == HubEventStatus.CANCELLED) return true
+        val item = linkedScheduleItem(record, latestEvent)
+        return item?.kind == HubEventScheduleKind.MAIN_WINDOW && item.cancelledAt != null
+    }
+
+    private fun linkedScheduleItem(record: ReservationRecord, latestEvent: HubEvent): HubEventScheduleItem? =
+        record.scheduleItemId?.let { id -> latestEvent.scheduleItems.firstOrNull { it.id == id } }
+}
+
+object ReservationDateFormat {
+    private val dateOnlyPattern: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy. M. d.")
+
+    /** Date-precision snapshot values are shown without a time, in the snapshot timezone. */
+    fun label(instant: Instant, isDateOnly: Boolean, timezone: String, formatDateTime: (Instant) -> String): String =
+        if (isDateOnly) dateOnlyPattern.withZone(zone(timezone)).format(instant) else formatDateTime(instant)
+
+    fun zone(timezone: String): ZoneId =
+        runCatching { ZoneId.of(timezone) }.getOrElse { ZoneId.of(ReservationEventSnapshot.DefaultTimezone) }
 }

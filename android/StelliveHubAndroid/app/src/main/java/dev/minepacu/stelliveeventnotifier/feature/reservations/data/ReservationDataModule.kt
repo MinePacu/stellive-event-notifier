@@ -15,5 +15,7 @@ object ReservationDataModule {
     @Provides
     @Singleton
     fun provideReservationDatabase(@ApplicationContext context: Context): ReservationDatabase =
-        Room.databaseBuilder(context, ReservationDatabase::class.java, "reservations-v1.db").build()
+        Room.databaseBuilder(context, ReservationDatabase::class.java, "reservations-v1.db")
+            .addMigrations(ReservationMigrations.MIGRATION_1_2)
+            .build()
 }

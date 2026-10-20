@@ -119,7 +119,16 @@ enum ReservationLinkSource: String, Codable, Hashable {
     case control
 }
 
+/// Mirrors `HubEventTimePrecision` raw values. Kept separate because the share extension
+/// compiles this file without the Hub event models.
+enum ReservationTimePrecision: String, Codable, Hashable {
+    case date
+    case datetime
+}
+
 struct ReservationEventSnapshot: Codable, Hashable {
+    static let defaultTimezone = "Asia/Seoul"
+
     let title: String
     let category: String
     let startsAt: Date?
@@ -128,6 +137,17 @@ struct ReservationEventSnapshot: Codable, Hashable {
     let venueAddress: String?
     let sourceLabel: String
     let imageURL: String?
+    /// nil in snapshots saved before precision was recorded; read through `resolvedTimePrecision`.
+    var timePrecision: ReservationTimePrecision? = nil
+    /// nil in snapshots saved before timezone was recorded; read through `resolvedTimeZone`.
+    var timezone: String? = nil
+
+    var resolvedTimePrecision: ReservationTimePrecision { timePrecision ?? .datetime }
+    var resolvedTimeZone: TimeZone {
+        timezone.flatMap(TimeZone.init(identifier:))
+            ?? TimeZone(identifier: Self.defaultTimezone)
+            ?? .current
+    }
 }
 
 struct ReservationDraft: Codable, Identifiable, Hashable {

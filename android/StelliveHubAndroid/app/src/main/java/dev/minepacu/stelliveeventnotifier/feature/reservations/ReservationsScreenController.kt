@@ -247,10 +247,7 @@ internal class ReservationsScreenController(private val activity: MainActivity) 
         val presentation = ReservationDetailPresentationPolicy.presentation(
             record = record,
             formatDateTime = activity.reservationDateFormatter::format,
-            officialEventAvailable = latestEvent != null,
-            latestOfficialTitle = latestEvent?.title,
-            latestOfficialStartsAt = latestEvent?.startsAt,
-            officialEventCancelled = latestEvent?.status == dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus.CANCELLED,
+            latestEvent = latestEvent,
         )
 
         activity.binding.contentList.addView(reservationDetailSummaryCard(presentation, record.status))
