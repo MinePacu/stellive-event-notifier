@@ -1942,6 +1942,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/LiveStatusDiagnostic"
+        liveStatusHealth:
+          $ref: "#/components/schemas/LiveStatusHealth"
         hubEventsSummary:
           $ref: "#/components/schemas/HubEventsSummary"
         hubCalendarWidgetSnapshot:
@@ -1949,6 +1951,26 @@ components:
         announcementsSummary:
           $ref: "#/components/schemas/AnnouncementsSummary"
         serverTime:
+          type: string
+          format: date-time
+    LiveStatusHealth:
+      type: object
+      description: >-
+        Optional (additive) CHZZK live-polling health. Clients should treat live status as stale
+        when lastSuccessfulAt is missing or older than 5 minutes. Omitted when health cannot be read.
+      required:
+        - state
+      properties:
+        state:
+          type: string
+          enum: [ok, rate_limited, unavailable, disabled]
+        reason:
+          type: string
+          description: Normalized reason code only; never a raw provider message.
+        lastCheckedAt:
+          type: string
+          format: date-time
+        lastSuccessfulAt:
           type: string
           format: date-time
     RegisterDeviceRequest:

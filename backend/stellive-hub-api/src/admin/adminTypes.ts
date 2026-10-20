@@ -9,6 +9,7 @@ export interface AdapterHealth {
   status: AdapterHealthStatus;
   reason: string;
   lastCheckedAt: string;
+  lastSuccessfulAt?: string;
 }
 
 export interface NotificationJobSummary {

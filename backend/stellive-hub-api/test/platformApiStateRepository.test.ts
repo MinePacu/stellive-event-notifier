@@ -91,4 +91,42 @@ describe("PlatformApiStateRepository", () => {
       lastCheckedAt: "2026-06-11T00:10:00.000Z"
     });
   });
+
+  it("keeps lastSuccessfulAt across a failed health write", async () => {
+    const records = new Map<string, FakeStateRecord>();
+    const repository = new PlatformApiStateRepository({
+      platformApiState: {
+        upsert: async ({ where, create, update }) => {
+          const key = `${where.source_key.source}:${where.source_key.key}`;
+          const existing = records.get(key);
+          const record = {
+            source: where.source_key.source as AdapterHealthSource,
+            key: where.source_key.key,
+            value: (existing ? update.value : create.value) as Prisma.JsonValue,
+            status: existing ? update.status : create.status,
+            updatedAt: new Date("2026-06-11T00:10:00.000Z")
+          };
+          records.set(key, record);
+          return record;
+        },
+        findUnique: async ({ where }) => records.get(`${where.source_key.source}:${where.source_key.key}`) ?? null,
+        findMany: async () => []
+      }
+    });
+
+    await repository.upsertAdapterHealth("chzzk", {
+      source: "chzzk", status: "enabled", reason: "chzzk_live_api_verified", lastCheckedAt: "2026-06-11T00:00:00.000Z"
+    });
+    await repository.upsertAdapterHealth("chzzk", {
+      source: "chzzk", status: "verify_required", reason: "chzzk_live_api_auth_required", lastCheckedAt: "2026-06-11T00:05:00.000Z"
+    });
+
+    await expect(repository.getLatestAdapterHealth("chzzk")).resolves.toEqual({
+      source: "chzzk",
+      status: "verify_required",
+      reason: "chzzk_live_api_auth_required",
+      lastCheckedAt: "2026-06-11T00:05:00.000Z",
+      lastSuccessfulAt: "2026-06-11T00:00:00.000Z"
+    });
+  });
 });

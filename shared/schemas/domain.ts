@@ -292,6 +292,13 @@ export interface LiveStatus {
   sourceVerificationState?: string;
 }
 
+export interface LiveStatusHealth {
+  state: "ok" | "rate_limited" | "unavailable" | "disabled";
+  reason?: string;
+  lastCheckedAt?: string;
+  lastSuccessfulAt?: string;
+}
+
 export type HubEventCategory =
   | "online_goods"
   | "online_collab"

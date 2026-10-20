@@ -4,6 +4,7 @@ import type {
   HubCalendarWidgetSnapshot,
   HubEventsSummary,
   LiveStatus,
+  LiveStatusHealth,
   MusicCatalogItem,
   Member,
   SongCatalogItem,
@@ -39,6 +40,7 @@ export interface BootstrapResponse {
   };
   preferences: UserNotificationPreference[];
   liveStatus: LiveStatus[];
+  liveStatusHealth?: LiveStatusHealth;
   hubEventsSummary: HubEventsSummary;
   hubCalendarWidgetSnapshot?: HubCalendarWidgetSnapshot;
   announcementsSummary?: AnnouncementsSummary;

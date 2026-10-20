@@ -228,8 +228,8 @@ Expected deployment state:
 6. Verify `/v1/live-status`, `/v1/bootstrap`, Android Live page, and iOS Live page.
 7. Record adapter health, cache freshness, and mobile screenshots in handoff notes.
 
-## Open Questions
+## Decisions (2026-10-20)
 
-- Should Docker-hosted test backend use a dedicated worker container by default, or should scheduled polling stay disabled unless explicitly requested?
-- What freshness threshold should mobile use before showing stale status: 2 minutes, 5 minutes, or 10 minutes?
-- Should `/v1/bootstrap` include adapter health summary so mobile can distinguish disabled polling from empty live rows without another endpoint?
+- Q1: The Docker compose stack already runs a dedicated `chzzk-live-worker` container by default. Keep it.
+- Q2: Mobile shows live status as stale when `lastSuccessfulAt` is older than 5 minutes.
+- Q3: `/v1/bootstrap` includes an optional `liveStatusHealth` object: `{ state: "ok" | "rate_limited" | "unavailable" | "disabled", reason?, lastCheckedAt?, lastSuccessfulAt? }`. It is mapped from the CHZZK adapter health: `enabled` -> `ok`, `rate_limited` -> `rate_limited`, `verify_required` -> `unavailable`, `disabled` or no record -> `disabled`. `reason` is the normalized reason code only. It is cached with the live status TTL and omitted if health cannot be read.
