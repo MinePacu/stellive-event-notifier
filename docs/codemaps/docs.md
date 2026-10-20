@@ -33,7 +33,7 @@ Archived and historical documents, including `docs/superpowers/**` and `docs/han
 - `docs/HUB_EVENTS_READ_API_DESIGN.md` - Public hub event read API design and DTO behavior.
 - `docs/HUB_EVENT_ANNIVERSARY_CALENDAR_CODE_DESIGN.md` - Code design for projecting member birthdays and generation anniversaries into the calendar.
 - `docs/HUB_EVENT_ANNIVERSARY_CALENDAR_DESIGN.md` - Product design for special-day calendar entries.
-- `docs/HUB_EVENT_GOODS_ITEMS_DESIGN.md` - Planned goods-item lists for hub events, collection path, and official store (Fanding) ToS/robots review.
+- `docs/HUB_EVENT_GOODS_ITEMS_DESIGN.md` - Goods-item lists, purchase checklist, and official MD list gallery for hub events, collection path, and official store (Fanding) ToS/robots review.
 - `docs/NOTIFICATION_LOAD_REDUCTION_POLICY.md` - Notification throttling, spike downgrade, collapse, and delivery reduction policy.
 - `docs/NOTIFICATION_POLICY.md` - Authoritative notification preference, delivery, and event-type policy.
 - `docs/PRIVACY_AND_TERMS.md` - Privacy, platform terms, asset, and data handling constraints.
