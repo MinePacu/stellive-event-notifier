@@ -8,6 +8,27 @@ struct MobileConfigResponse: Codable, Equatable {
     let foregroundRealtimeEnabled: Bool?
 }
 
+struct LiveStatusHealthResponse: Codable, Equatable {
+    enum State: String, Codable, Equatable {
+        case ok
+        case rateLimited = "rate_limited"
+        case unavailable
+        case disabled
+    }
+
+    let state: State
+    let reason: String?
+    let lastCheckedAt: String?
+    let lastSuccessfulAt: String?
+
+    init(state: State, reason: String? = nil, lastCheckedAt: String? = nil, lastSuccessfulAt: String? = nil) {
+        self.state = state
+        self.reason = reason
+        self.lastCheckedAt = lastCheckedAt
+        self.lastSuccessfulAt = lastSuccessfulAt
+    }
+}
+
 struct BootstrapResponse: Codable, Equatable {
     let config: MobileConfigResponse
     let catalog: BootstrapCatalogResponse?
@@ -19,6 +40,7 @@ struct BootstrapResponse: Codable, Equatable {
     let hubCalendarWidgetSnapshot: HubCalendarWidgetSnapshot?
     let announcementsSummary: AnnouncementsSummaryResponse?
     let serverTime: String?
+    let liveStatusHealth: LiveStatusHealthResponse?
 
     var effectiveCatalog: BootstrapCatalogResponse {
         catalog ?? BootstrapCatalogResponse(generations: generations, members: members)
@@ -35,6 +57,7 @@ struct BootstrapResponse: Codable, Equatable {
         case hubCalendarWidgetSnapshot
         case announcementsSummary
         case serverTime
+        case liveStatusHealth
     }
 
     init(
@@ -47,7 +70,8 @@ struct BootstrapResponse: Codable, Equatable {
         hubEventsSummary: HubEventsSummaryResponse? = nil,
         hubCalendarWidgetSnapshot: HubCalendarWidgetSnapshot? = nil,
         announcementsSummary: AnnouncementsSummaryResponse? = nil,
-        serverTime: String? = nil
+        serverTime: String? = nil,
+        liveStatusHealth: LiveStatusHealthResponse? = nil
     ) {
         self.config = config
         self.catalog = catalog
@@ -59,6 +83,7 @@ struct BootstrapResponse: Codable, Equatable {
         self.hubCalendarWidgetSnapshot = hubCalendarWidgetSnapshot
         self.announcementsSummary = announcementsSummary
         self.serverTime = serverTime
+        self.liveStatusHealth = liveStatusHealth
     }
 
     init(from decoder: Decoder) throws {
@@ -73,6 +98,8 @@ struct BootstrapResponse: Codable, Equatable {
         self.hubCalendarWidgetSnapshot = try container.decodeIfPresent(HubCalendarWidgetSnapshot.self, forKey: .hubCalendarWidgetSnapshot)
         self.announcementsSummary = try container.decodeIfPresent(AnnouncementsSummaryResponse.self, forKey: .announcementsSummary)
         self.serverTime = try container.decodeIfPresent(String.self, forKey: .serverTime)
+        // Unknown health states must not fail the whole bootstrap decode.
+        self.liveStatusHealth = (try? container.decodeIfPresent(LiveStatusHealthResponse.self, forKey: .liveStatusHealth)) ?? nil
     }
 }
 
