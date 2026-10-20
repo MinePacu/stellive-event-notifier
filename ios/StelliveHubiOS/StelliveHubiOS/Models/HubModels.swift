@@ -1969,6 +1969,27 @@ enum LiveStatusFormatter {
     }
 }
 
+struct LiveStatusHealthResponse: Codable, Equatable {
+    enum State: String, Codable, Equatable {
+        case ok
+        case rateLimited = "rate_limited"
+        case unavailable
+        case disabled
+    }
+
+    let state: State
+    let reason: String?
+    let lastCheckedAt: String?
+    let lastSuccessfulAt: String?
+
+    init(state: State, reason: String? = nil, lastCheckedAt: String? = nil, lastSuccessfulAt: String? = nil) {
+        self.state = state
+        self.reason = reason
+        self.lastCheckedAt = lastCheckedAt
+        self.lastSuccessfulAt = lastSuccessfulAt
+    }
+}
+
 enum LiveStatusHealthPolicy {
     static let staleThreshold: TimeInterval = 5 * 60
 

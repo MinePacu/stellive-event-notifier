@@ -8,27 +8,6 @@ struct MobileConfigResponse: Codable, Equatable {
     let foregroundRealtimeEnabled: Bool?
 }
 
-struct LiveStatusHealthResponse: Codable, Equatable {
-    enum State: String, Codable, Equatable {
-        case ok
-        case rateLimited = "rate_limited"
-        case unavailable
-        case disabled
-    }
-
-    let state: State
-    let reason: String?
-    let lastCheckedAt: String?
-    let lastSuccessfulAt: String?
-
-    init(state: State, reason: String? = nil, lastCheckedAt: String? = nil, lastSuccessfulAt: String? = nil) {
-        self.state = state
-        self.reason = reason
-        self.lastCheckedAt = lastCheckedAt
-        self.lastSuccessfulAt = lastSuccessfulAt
-    }
-}
-
 struct BootstrapResponse: Codable, Equatable {
     let config: MobileConfigResponse
     let catalog: BootstrapCatalogResponse?
