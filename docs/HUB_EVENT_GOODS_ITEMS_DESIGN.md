@@ -1,6 +1,6 @@
 # 굿즈/행사 굿즈 목록(Goods Items) 설계
 
-상태: **구현 완료, 미커밋** (브랜치 `feat/hub-event-goods-items`, 2026-10-07). 결정 사항은 아래 "확정된 결정" 참고. 단위 테스트로 검증했으며 모바일 UI는 실제 화면 확인 전이다.
+상태: **구현 완료** (PR #180으로 main 머지, 2026-10-20). 결정 사항은 아래 "확정된 결정" 참고. 단위 테스트와 CI(backend, Android, iOS 빌드)로 검증했으며 모바일 UI는 실제 화면 확인 전이다.
 
 후속 확인 필요:
 
@@ -78,7 +78,7 @@
 
 공지가 판매 차수(1차/2차 MD, 사전예약 등)를 명시적으로 나눈 경우에만 해당 `scheduleItemId`로 분류한다. 일반적인 경우에는 분류하지 않는다(`scheduleItemId` 비움).
 
-## 데이터 모델 (계획)
+## 데이터 모델
 
 ```prisma
 model HubEventGoodsItem {
@@ -109,14 +109,14 @@ model HubEventGoodsItem {
 
 JSON 컬럼 대신 자식 테이블을 쓰는 이유: 기존 `scheduleItems`/`links` 패턴과 일관되고, 항목별 검증·정렬·차수 연결·감사 로그가 쉽다.
 
-### 검증 정책 (`hubEventGoodsPolicy.ts`, 계획)
+### 검증 정책 (`hubEventGoodsPolicy.ts`)
 
 - `memberIds`는 카탈로그의 `active`/`upcoming` 멤버만 허용한다. 전 멤버는 거부한다. Gangzi는 `gamja`의 representative로 취급한다.
 - `image`는 기존 이미지 정책 검증을 그대로 쓰고 바이너리 필드를 거부한다. 팬딩 CDN URL은 운영 정책상 쓰지 않는다.
 - `purchaseUrl`은 HTTPS만, `priceKrw`·`purchaseLimit`는 0 이상, `scheduleItemId`는 같은 행사의 일정이어야 한다.
 - 이름·메모는 사실 정보만 받고 길이 제한을 둔다 (값은 구현 시 기존 schedule label 제한에 맞춘다).
 
-## API 계약 (계획)
+## API 계약
 
 공개:
 
@@ -132,14 +132,14 @@ JSON 컬럼 대신 자식 테이블을 쓰는 이유: 기존 `scheduleItems`/`li
 
 동기화 대상: `shared/schemas/domain.ts`, `shared/openapi/openapi.yaml`, memory 모드 시드 (실제 이미지 없이 예시만).
 
-## 어드민 콘솔 (계획)
+## 어드민 콘솔
 
 - 행사 편집 화면에 "굿즈 목록" 섹션 추가. 기본 노출 분류: `online_goods`, `offline_popup`, `online_collab`, `offline_collab`, `offline_concert`.
 - 표 편집기: 이름, 그룹, 멤버, 가격, 채널, 제한, 특전 여부, 판매 차수(선택).
 - 붙여넣기 가져오기: TSV 또는 JSON → 미리보기 → 검증 → 일괄 교체.
 - `stellive-event-brief` 스킬이 공지 텍스트에서 `goodsItems` JSON 초안을 만들도록 확장한다 (출처 허용 범위는 그대로).
 
-## 모바일 (계획)
+## 모바일
 
 - 상세 화면에 "굿즈" 섹션: `groupLabel` 또는 멤버별 그룹, 가격·채널(현장/온라인)·구매 제한·특전 배지, 8개 초과 시 접기, 멤버 필터 칩.
 - 이미지가 없거나 정책상 표시할 수 없으면 플레이스홀더.
@@ -195,7 +195,7 @@ JSON 컬럼 대신 자식 테이블을 쓰는 이유: 기존 `scheduleItems`/`li
 
 ## 공식 MD 리스트 이미지 갤러리 (방식 A)
 
-상태: 구현 진행 중 (브랜치 `feat/hub-event-goods-gallery`, 기준 태그 `goods-gallery-baseline`).
+상태: 구현 완료 (PR #180으로 main 머지, 2026-10-20). 롤백 기준 태그는 `goods-gallery-baseline`.
 
 ### 목적
 
