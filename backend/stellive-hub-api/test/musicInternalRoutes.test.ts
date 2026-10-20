@@ -47,7 +47,7 @@ function createInternalDeps(overrides: Partial<InternalRouteDependencies> = {}):
     },
     webhookSubscriptions: { listDiagnostics: async () => [] },
     liveStatus: { listDiagnostics: async () => [] },
-    deliveryAttempts: { listRecent: async () => [] },
+    deliveryAttempts: { listRecent: async () => [], pruneOlderThan: async () => ({ deleted: 0 }) },
     externalApiCallLogs: { listRecent: async () => ({ items: [] }), pruneOlderThan: async () => ({ deleted: 0 }) },
     adapterHealth: { getState: async () => null, listAdapterHealth: async () => [] },
     specialDayYearMaterializer: {

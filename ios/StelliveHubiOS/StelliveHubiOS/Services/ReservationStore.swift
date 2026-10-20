@@ -6,7 +6,6 @@ final class ReservationStore: ObservableObject {
     @Published private(set) var records: [ReservationRecord]
     @Published private(set) var drafts: [ReservationDraft]
     @Published private(set) var lastErrorMessage: String?
-    @Published private(set) var externallyOpenedSessionIDs = Set<UUID>()
     @Published private(set) var lastDeletedRecord: ReservationRecord?
 
     private let sharedStore: ReservationSharedStore?
@@ -106,7 +105,6 @@ final class ReservationStore: ObservableObject {
         records = state.records
         drafts = ReservationDraftPolicy.active(state.drafts, now: current)
         lastErrorMessage = nil
-        externallyOpenedSessionIDs.insert(draft.sessionID)
         return draft
     }
 
@@ -191,6 +189,56 @@ final class ReservationStore: ObservableObject {
         records = state.records
         drafts = ReservationDraftPolicy.active(state.drafts, now: now())
         lastErrorMessage = nil
+    }
+}
+
+/// App-local memory of when each draft was last prompted, so return prompts survive app termination.
+struct ReservationReturnPromptStore {
+    private static let promptedAtKey = "reservation.returnPrompt.promptedAt"
+    private static let lastBackgroundedAtKey = "reservation.returnPrompt.lastBackgroundedAt"
+
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func promptedAt() -> [UUID: Date] {
+        let stored = defaults.dictionary(forKey: Self.promptedAtKey) as? [String: Double] ?? [:]
+        var result: [UUID: Date] = [:]
+        for (key, value) in stored {
+            if let id = UUID(uuidString: key) {
+                result[id] = Date(timeIntervalSince1970: value)
+            }
+        }
+        return result
+    }
+
+    func markPrompted(_ ids: [UUID], at date: Date) {
+        var stored = defaults.dictionary(forKey: Self.promptedAtKey) as? [String: Double] ?? [:]
+        for id in ids {
+            stored[id.uuidString] = date.timeIntervalSince1970
+        }
+        defaults.set(stored, forKey: Self.promptedAtKey)
+    }
+
+    var lastBackgroundedAt: Date? {
+        guard let value = defaults.object(forKey: Self.lastBackgroundedAtKey) as? Double else { return nil }
+        return Date(timeIntervalSince1970: value)
+    }
+
+    func setLastBackgroundedAt(_ date: Date) {
+        defaults.set(date.timeIntervalSince1970, forKey: Self.lastBackgroundedAtKey)
+    }
+
+    func retainOnly(_ activeIDs: Set<UUID>) {
+        let stored = defaults.dictionary(forKey: Self.promptedAtKey) as? [String: Double] ?? [:]
+        let retained = stored.filter { key, _ in
+            UUID(uuidString: key).map(activeIDs.contains) ?? false
+        }
+        if retained.count != stored.count {
+            defaults.set(retained, forKey: Self.promptedAtKey)
+        }
     }
 }
 

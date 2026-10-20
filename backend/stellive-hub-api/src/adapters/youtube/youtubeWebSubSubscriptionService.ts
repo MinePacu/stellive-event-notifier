@@ -15,6 +15,13 @@ interface YoutubeWebSubSubscriptionWritePort {
     lastVerifiedAt?: Date | null;
     lastError?: string | null;
   }): Promise<void>;
+  markPendingVerification(input: {
+    source: string;
+    targetId: string;
+    callbackUrl: string;
+    topicUrl: string;
+    requestedAt: Date;
+  }): Promise<void>;
 }
 
 interface YoutubeWebSubSubscriptionServiceOptions {
@@ -62,6 +69,7 @@ export class YoutubeWebSubSubscriptionService {
         body.set("hub.secret", this.options.secret);
       }
 
+      const requestedAt = this.options.now?.() ?? new Date();
       try {
         const response = await this.fetchImpl("https://pubsubhubbub.appspot.com/subscribe", {
           method: "POST",
@@ -85,14 +93,12 @@ export class YoutubeWebSubSubscriptionService {
         }
 
         renewed += 1;
-        await this.options.subscriptions.upsertSubscription({
+        await this.options.subscriptions.markPendingVerification({
           source: "youtube",
           targetId: target.targetId,
           callbackUrl: this.options.callbackUrl,
           topicUrl: target.topicUrl,
-          status: "pending_verification",
-          lastVerifiedAt: this.options.now?.() ?? new Date(),
-          lastError: null,
+          requestedAt,
         });
       } catch {
         failed += 1;

@@ -1,9 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteShorthandOptions } from "fastify";
-import {
-  authenticateAdminSessionCookie,
-  authenticateBearerToken,
-  shouldEnableAdminConsole
-} from "../admin/adminAuth.js";
+import { authenticateAdminRequest, shouldEnableAdminConsole } from "../admin/adminAuth.js";
+import { AuthFailureLimiter, sendAuthRateLimited } from "../admin/authFailureLimiter.js";
 import { CatalogService } from "../catalog/catalog.js";
 import type { AppEnv } from "../config/env.js";
 import { clearSpecialDayStatusSnapshotCache } from "../hub-events/hubCalendarSpecialDays.js";
@@ -52,6 +49,7 @@ export interface AdminHubEventRouteDependencies {
 export interface AdminHubEventRouteOptions {
   env: AppEnv;
   dependencies?: Partial<AdminHubEventRouteDependencies>;
+  authFailureLimiter?: AuthFailureLimiter;
 }
 
 const privilegedRouteOptions: RouteShorthandOptions = {
@@ -59,10 +57,6 @@ const privilegedRouteOptions: RouteShorthandOptions = {
     cors: false
   } as unknown as RouteShorthandOptions["config"]
 };
-
-function readHeader(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value.join("; ") : value;
-}
 
 function parseLimit(value: unknown, defaultLimit: number): number {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -81,12 +75,6 @@ function actorFromRequest(request: FastifyRequest): { actorId: string; reason?: 
 function applyNoStore(reply: FastifyReply) {
   reply.header("Cache-Control", "no-store");
   reply.header("Pragma", "no-cache");
-}
-
-function authenticateAdminRequest(request: FastifyRequest, env: AppEnv) {
-  const authorization = readHeader(request.headers.authorization);
-  if (authorization) return authenticateBearerToken(authorization, env.ADMIN_CONSOLE_TOKEN);
-  return authenticateAdminSessionCookie(readHeader(request.headers.cookie), env.ADMIN_CONSOLE_TOKEN);
 }
 
 function parseListFilters(query: Record<string, unknown>): AdminHubEventFilters {
@@ -133,16 +121,22 @@ async function sendServiceError(error: unknown, reply: FastifyReply) {
 
 export async function registerAdminHubEventRoutes(app: FastifyInstance, options: AdminHubEventRouteOptions): Promise<void> {
   const service = options.dependencies?.service ?? new HubEventAdminService({ catalog: new CatalogService() });
+  const authFailureLimiter = options.authFailureLimiter ?? new AuthFailureLimiter();
   const clearSpecialDayStatusCache =
     options.dependencies?.clearSpecialDayStatusCache ?? clearSpecialDayStatusSnapshotCache;
 
   app.addHook("preHandler", async (request, reply) => {
-    if (!request.url.startsWith("/v1/admin/hub-events")) return;
+    const routeUrl = request.routeOptions.url ?? "";
+    if (!routeUrl.startsWith("/v1/admin/hub-events")) return;
     if (request.method === "OPTIONS") return;
     if (!options.env.ADMIN_CONSOLE_ENABLED) return reply.callNotFound();
     if (!shouldEnableAdminConsole(options.env)) return reply.code(503).send({ error: "admin_console_token_missing" });
 
-    const auth = authenticateAdminRequest(request, options.env);
+    const retryAfterSeconds = authFailureLimiter.retryAfterSeconds(request.ip);
+    if (retryAfterSeconds !== undefined) return sendAuthRateLimited(reply, retryAfterSeconds);
+
+    const auth = authenticateAdminRequest(request.headers, options.env);
+    authFailureLimiter.recordResult(request.ip, auth);
     if (!auth.ok) return reply.code(401).send({ error: auth.reason });
   });
 

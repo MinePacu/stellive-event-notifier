@@ -1,4 +1,9 @@
 x-api-worker: &api-worker
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
   image: stellive-hub-api:local
   env_file:
     - .env.example
@@ -8,6 +13,7 @@ x-api-worker: &api-worker
     DATABASE_URL: postgresql://stellive:stellive@postgres:5432/stellive_hub
     REDIS_URL: redis://redis:6379
     HUB_EVENTS_STORAGE_MODE: prisma
+    TRUST_PROXY: "true"
   expose:
     - "4000"
   depends_on:
@@ -47,6 +53,11 @@ services:
         aliases: [stellive-api]
 
   nginx:
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     image: nginx:1.27-alpine
     ports:
       - "4000:4000"

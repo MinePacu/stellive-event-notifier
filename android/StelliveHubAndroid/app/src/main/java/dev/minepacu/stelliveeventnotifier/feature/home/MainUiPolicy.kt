@@ -302,7 +302,8 @@ object MainUiPolicy {
         SongFilterOption("all", "전체"),
         SongFilterOption("gen1", "1기생"),
         SongFilterOption("gen2", "2기생"),
-        SongFilterOption("gen3", "3기생")
+        SongFilterOption("gen3", "3기생"),
+        SongFilterOption("gen4", "4기생")
     )
 
     fun songTypeFilters(): List<SongFilterOption> = listOf(
@@ -413,7 +414,7 @@ object MainUiPolicy {
     fun songMemberFilters(members: List<HubMember>): List<SongFilterOption> =
         listOf(SongFilterOption("all", "전체")) + members
             .filter { it.catalogRole == CatalogRole.MEMBER }
-            .filter { it.generationId in setOf("gen1", "gen2", "gen3") }
+            .filter { it.generationId in setOf("gen1", "gen2", "gen3", "gen4") }
             .map { SongFilterOption(it.id, it.koreanName.ifBlank { it.englishName }) }
 
     fun songMatchesMember(song: SongCatalogItem, state: SongMemberFilterState): Boolean =

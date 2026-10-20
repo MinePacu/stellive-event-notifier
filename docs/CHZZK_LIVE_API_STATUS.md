@@ -28,7 +28,7 @@
 
 ## 현재 구현
 
-- 백엔드에는 CHZZK OAuth 연결 라우트가 있다: `/v1/auth/chzzk/connect`, `/v1/auth/chzzk/callback`.
+- 백엔드에는 CHZZK OAuth 연결 라우트가 있다: `/v1/auth/chzzk/start`(admin 로그인 필요), `/v1/auth/chzzk/callback`.
 - `ChzzkApiClient`는 `https://openapi.chzzk.naver.com/open/v1/lives/{channelId}`를 호출하고, 401 시 refresh token으로 1회 재시도하며, 429/HTTP 오류는 adapter health에 기록한다.
 - `ChzzkOpenApiAdapter`는 catalog의 `active`/`upcoming` `member` 또는 Gangzi `representative` 중 `chzzkChannelId`가 있는 대상만 polling한다. Former/official channel은 제외된다.
 - live cache는 `LiveStatusRepository`가 Prisma `LiveStatus`에 저장한다. 저장 DTO에는 `memberId`, `generationId`, `isLive`, `title`, `viewerCount`, `startedAt`, `platformUrl`, `sourceVerificationState`, `lastCheckedAt`가 포함된다.
@@ -64,7 +64,7 @@
    - 서버 실패 시 기존 mock 상태 유지, 성공 시 live page가 서버 live status를 표시하도록 테스트한다.
 
 5. 운영 절차
-   - backend-only env 설정 후 `/v1/auth/chzzk/connect`로 OAuth 연결.
+   - backend-only env 설정 후 admin console에 로그인한 브라우저에서 `/v1/auth/chzzk/start`를 열어 OAuth 연결.
    - `PlatformApiState` token metadata 확인.
    - `POST /v1/internal/schedulers/chzzk/live-status` 수동 실행 후 `GET /v1/live-status`와 bootstrap 응답 확인.
    - health가 `verify_required`가 아니고 cache freshness가 확인된 뒤에만 scheduler와 `CHZZK_LIVE_POLLING_ENABLED=true`를 켠다.

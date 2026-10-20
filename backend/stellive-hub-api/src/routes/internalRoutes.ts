@@ -6,6 +6,7 @@ import type {
   RouteShorthandOptions
 } from "fastify";
 import { authenticateBearerToken } from "../admin/adminAuth.js";
+import { AuthFailureLimiter, sendAuthRateLimited } from "../admin/authFailureLimiter.js";
 import { AdminHealthService } from "../admin/adminHealthService.js";
 import type {
   AdapterHealth,
@@ -73,6 +74,7 @@ export interface InternalRouteDependencies {
   };
   deliveryAttempts: {
     listRecent(limit: number): MaybePromise<DeliveryAttemptDiagnostic[]>;
+    pruneOlderThan(input?: { days?: number; now?: Date }): MaybePromise<{ deleted: number }>;
   };
   externalApiCallLogs: {
     listRecent(input?: {
@@ -169,6 +171,7 @@ export interface InternalRouteOptions {
   env: AppEnv;
   dependencies?: Partial<InternalRouteDependencies>;
   invalidateMusicCatalogCache?: () => void;
+  authFailureLimiter?: AuthFailureLimiter;
 }
 
 const neverCheckedAt = new Date(0).toISOString();
@@ -355,12 +358,19 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
     ...defaultDependencies(options.env),
     ...options.dependencies
   };
+  const authFailureLimiter = options.authFailureLimiter ?? new AuthFailureLimiter();
 
   app.addHook("preHandler", async (request, reply) => {
-    if (!request.url.startsWith("/v1/internal/")) return;
+    // Match the registered route pattern, not the raw URL: percent-encoded paths are decoded before routing.
+    const routeUrl = request.routeOptions.url ?? "";
+    if (!routeUrl.startsWith("/v1/internal/")) return;
     if (request.method === "OPTIONS") return;
 
+    const retryAfterSeconds = authFailureLimiter.retryAfterSeconds(request.ip);
+    if (retryAfterSeconds !== undefined) return sendAuthRateLimited(reply, retryAfterSeconds);
+
     const auth = authenticateBearerToken(readAuthorizationHeader(request.headers.authorization), options.env.INTERNAL_API_TOKEN);
+    authFailureLimiter.recordResult(request.ip, auth);
     if (!auth.ok) {
       return reply.code(401).send({ error: auth.reason });
     }
@@ -382,6 +392,13 @@ export async function registerInternalRoutes(app: FastifyInstance, options: Inte
   app.post("/v1/internal/admin/external-api-calls/prune", async () =>
     dependencies.externalApiCallLogs.pruneOlderThan({
       days: options.env.EXTERNAL_API_LOG_RETENTION_DAYS,
+      now: dependencies.now?.() ?? new Date()
+    })
+  );
+
+  app.post("/v1/internal/admin/delivery-attempts/prune", async () =>
+    dependencies.deliveryAttempts.pruneOlderThan({
+      days: options.env.DELIVERY_ATTEMPT_RETENTION_DAYS,
       now: dependencies.now?.() ?? new Date()
     })
   );

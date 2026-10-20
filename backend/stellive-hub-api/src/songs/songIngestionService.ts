@@ -31,7 +31,7 @@ export interface SongIngestionServiceDependencies {
   songs: SongUpsertPort;
 }
 
-const supportedSongGenerations = new Set(["gen1", "gen2", "gen3"]);
+const supportedSongGenerations = new Set(["gen1", "gen2", "gen3", "gen4"]);
 
 function isSongGeneration(value: string): value is SongCatalogGenerationId {
   return supportedSongGenerations.has(value);

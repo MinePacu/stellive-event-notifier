@@ -98,8 +98,10 @@ class PreferenceResolutionStateTest {
     fun settingsExposeRequiredPreferencePolicyStructures() {
         val settings = NotificationSettingState()
 
-        assertEquals(setOf("gen1", "gen2", "gen3", "gamja", "official", "gen4-upcoming"), settings.generationEnabled.keys)
-        assertFalse(settings.generationEnabled.getValue("gen4-upcoming"))
+        assertEquals(setOf("gen1", "gen2", "gen3", "gen4", "gamja", "official"), settings.generationEnabled.keys)
+        assertTrue(settings.generationEnabled.getValue("gen4"))
+        assertTrue(settings.memberEnabled.keys.containsAll(listOf("shizuki-toa", "cogane-rang", "hanayo-hiyori", "tokino-mary")))
+        assertFalse(settings.memberEnabled.containsKey("gen4-placeholder"))
         assertEquals(NotificationPlatform.entries.toSet(), settings.platformEnabled.keys)
         assertEquals(NotificationEventType.entries.toSet(), settings.eventTypeEnabled.keys)
         assertTrue(settings.eventTypeEnabled.getValue(NotificationEventType.OFFICIAL_YOUTUBE_UPLOAD))

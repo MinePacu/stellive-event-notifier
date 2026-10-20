@@ -106,10 +106,11 @@ struct AnnouncementDetailView: View {
                     }
                     Section { Text(announcement.body).textSelection(.enabled) }
                     if announcement.resolvedAt != nil { Section { Label("해결됨", systemImage: "checkmark.circle") } }
-                    if let label = announcement.actionLabel, let raw = announcement.appDeepLink ?? announcement.externalUrl, let url = URL(string: raw) {
+                    if let label = announcement.actionLabel,
+                       let url = AnnouncementDeepLinkPolicy.safeAppDeepLink(announcement.appDeepLink) ?? HubEventLinkPolicy.httpsURL(from: announcement.externalUrl) {
                         Section { Button(label) { openURL(url) } }
                     }
-                    if let raw = announcement.externalUrl, let url = URL(string: raw) { Section { Link("외부 링크 열기", destination: url) } }
+                    if let url = HubEventLinkPolicy.httpsURL(from: announcement.externalUrl) { Section { Link("외부 링크 열기", destination: url) } }
                 }
                 .onAppear { readStore.markRead(announcement) }
             } else if loadFailed {

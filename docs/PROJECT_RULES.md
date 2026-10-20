@@ -36,7 +36,7 @@ Do not commit profile images, official logos, fan art, captured images, or copie
 
 Users can configure:
 - Global notifications.
-- Generation/category notifications: `gen1`, `gen2`, `gen3`, `gamja`, `official`, `gen4-upcoming`.
+- Generation/category notifications: `gen1`, `gen2`, `gen3`, `gen4`, `gamja`, `official`.
 - Individual item notifications: members, Gangzi, and Stellive official channel.
 - Platform notifications.
 - Event-type notifications.

@@ -842,7 +842,7 @@ private struct SongMemberFilterView: View {
             Section("빠른 선택") {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach([("gen1", "1기생 전원"), ("gen2", "2기생 전원"), ("gen3", "3기생 전원")], id: \.0) { id, label in
+                        ForEach([("gen1", "1기생 전원"), ("gen2", "2기생 전원"), ("gen3", "3기생 전원"), ("gen4", "4기생 전원")], id: \.0) { id, label in
                             let preset = IOSSongPagePolicy.generationPreset(members, generationId: id)
                             Button(label) { draft = preset }
                                 .buttonStyle(.bordered)
@@ -853,7 +853,7 @@ private struct SongMemberFilterView: View {
                     .padding(.vertical, 2)
                 }
             }
-            ForEach([("gen1", "1기생"), ("gen2", "2기생"), ("gen3", "3기생")], id: \.0) { generationId, title in
+            ForEach([("gen1", "1기생"), ("gen2", "2기생"), ("gen3", "3기생"), ("gen4", "4기생")], id: \.0) { generationId, title in
                 Section(title) {
                     ForEach(members.filter { member in
                         validMemberIds.contains(member.id) && member.generationId == generationId

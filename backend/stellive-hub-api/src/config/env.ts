@@ -70,6 +70,12 @@ const envSchema = z
     CHANNEL_IMAGE_REFRESH_WAIT_MS: z.coerce.number().int().positive().default(1500),
     ADMIN_OVERVIEW_CACHE_TTL_SECONDS: boundedInteger(15, 0, 60),
     EXTERNAL_API_LOG_RETENTION_DAYS: boundedInteger(31, 14, 365),
+    DELIVERY_ATTEMPT_RETENTION_DAYS: boundedInteger(30, 14, 365),
+    LOG_RETENTION_INTERVAL_MINUTES: boundedInteger(60, 5, 1440),
+    LOG_RETENTION_ENABLED: booleanFlag(true),
+    YOUTUBE_WEBSUB_AUTO_RENEW_ENABLED: booleanFlag(true),
+    YOUTUBE_WEBSUB_RENEW_CHECK_INTERVAL_MINUTES: boundedInteger(60, 5, 1440),
+    YOUTUBE_WEBSUB_RENEW_BEFORE_HOURS: boundedInteger(48, 1, 96),
 
     FCM_SERVICE_ACCOUNT_FILE: optionalString(),
     FCM_PROJECT_ID: optionalString(),
@@ -135,7 +141,10 @@ const envSchema = z
     INTERNAL_API_TOKEN: optionalString(),
     ADMIN_CONSOLE_ENABLED: booleanFlag(false),
     ADMIN_CONSOLE_TOKEN: optionalString(),
-    ADMIN_CONSOLE_COOKIE_SECURE: booleanFlag(false)
+    ADMIN_CONSOLE_COOKIE_SECURE: booleanFlag(false),
+    TRUST_PROXY: booleanFlag(false),
+    DEVICE_WRITE_RATE_LIMIT_PER_MINUTE: boundedInteger(60, 0, 100_000),
+    DEVICE_READ_RATE_LIMIT_PER_MINUTE: boundedInteger(240, 0, 100_000)
   })
   .superRefine((env, context) => {
     if (env.MUSIC_CHANNEL_DISCOVERY_PEAK_START_HOUR >= env.MUSIC_CHANNEL_DISCOVERY_PEAK_END_HOUR) {

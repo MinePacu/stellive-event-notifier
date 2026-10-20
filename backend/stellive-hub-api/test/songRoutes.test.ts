@@ -20,7 +20,7 @@ describe("song read routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers["cache-control"]).toBe("private, max-age=60");
-    expect(response.json().generationFilters.map((filter: { id: string }) => filter.id)).toEqual(["all", "gen1", "gen2", "gen3"]);
+    expect(response.json().generationFilters.map((filter: { id: string }) => filter.id)).toEqual(["all", "gen1", "gen2", "gen3", "gen4"]);
   });
 
   it("rejects unsupported mobile song generation filters", async () => {

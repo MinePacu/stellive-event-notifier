@@ -695,6 +695,72 @@ describe("DeviceRepository push targets", () => {
     });
   });
 
+  describe("updateToken fast path", () => {
+    const input = {
+      deviceId: "device-1",
+      platform: "android" as const,
+      provider: "fcm" as const,
+      token: "private-token",
+      locale: "ko-KR",
+      timezone: "Asia/Seoul",
+      appVersion: "1.0.0",
+    };
+
+    it("skips the transaction when the device already owns the active token", async () => {
+      const now = new Date("2026-06-11T03:00:00.000Z");
+      const updateMany = vi.fn(async () => ({ count: 1 }));
+      const transaction = vi.fn();
+      const repository = new DeviceRepository({ device: { updateMany }, $transaction: transaction as never }, () => now);
+
+      await expect(repository.updateToken(input)).resolves.toEqual({ updated: true, tokenStatus: "active" });
+
+      expect(transaction).not.toHaveBeenCalled();
+      expect(updateMany).toHaveBeenCalledTimes(1);
+      expect(updateMany).toHaveBeenCalledWith({
+        where: { id: "device-1", deviceToken: "private-token", tokenStatus: "active" },
+        data: {
+          platform: "android",
+          locale: "ko-KR",
+          timezone: "Asia/Seoul",
+          appVersion: "1.0.0",
+          lastSeenAt: now,
+        },
+      });
+    });
+
+    it("falls through to the claim transaction for a different token", async () => {
+      const updateMany = vi.fn(async () => ({ count: 0 }));
+      const transactionClient = {
+        device: { updateMany: vi.fn(async () => ({ count: 0 })), upsert: vi.fn(async () => ({})) },
+      };
+      const transaction = vi.fn(async (operation: (client: typeof transactionClient) => Promise<unknown>) => operation(transactionClient));
+      const repository = new DeviceRepository({ device: { updateMany }, $transaction: transaction as never });
+
+      await expect(repository.updateToken({ ...input, token: "rotated-token" })).resolves.toEqual({ updated: true, tokenStatus: "active" });
+
+      expect(updateMany).toHaveBeenCalledTimes(1);
+      expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: "device-1", deviceToken: "rotated-token", tokenStatus: "active" },
+      }));
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(transactionClient.device.upsert).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls through to the claim transaction when the same token is not active", async () => {
+      const updateMany = vi.fn(async () => ({ count: 0 }));
+      const transactionClient = {
+        device: { updateMany: vi.fn(async () => ({ count: 0 })), upsert: vi.fn(async () => ({})) },
+      };
+      const transaction = vi.fn(async (operation: (client: typeof transactionClient) => Promise<unknown>) => operation(transactionClient));
+      const repository = new DeviceRepository({ device: { updateMany }, $transaction: transaction as never });
+
+      await expect(repository.updateToken(input)).resolves.toEqual({ updated: true, tokenStatus: "active" });
+
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(transactionClient.device.upsert).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("resolves concurrent same-token claims with the retried last successful claimant as owner", async () => {
     const records = new Map<string, { id: string; deviceToken: string | null; tokenStatus: string }>([
       ["device-old", { id: "device-old", deviceToken: "shared-token", tokenStatus: "active" }],
@@ -978,6 +1044,79 @@ describe("DeliveryAttemptRepository worker writes", () => {
       { date: "2026-07-02", sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 }
     ]);
     expect(summary.totals).toEqual({ sent: 0, queued: 0, skipped: 0, failed: 0, total: 0 });
+  });
+});
+
+describe("DeliveryAttemptRepository retention prune", () => {
+  function createRawPrisma(results: number[]) {
+    const calls: Array<{ sql: string; values: unknown[] }> = [];
+    const executeRaw = vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      calls.push({ sql: strings.join("?"), values });
+      return results[calls.length - 1] ?? 0;
+    });
+    return { calls, prisma: { deliveryAttempt: {}, $executeRaw: executeRaw } };
+  }
+
+  it("deletes rows older than the cutoff in batches with parameterized tagged raw SQL", async () => {
+    const { calls, prisma } = createRawPrisma([5000, 5000, 120]);
+    const repository = new DeliveryAttemptRepository(prisma as never);
+
+    const result = await repository.pruneOlderThan({ days: 30, now: new Date("2026-07-31T01:00:00.000Z") });
+
+    expect(result).toEqual({ deleted: 10_120 });
+    expect(calls).toHaveLength(3);
+    expect(calls[0]?.sql).toContain('DELETE FROM "DeliveryAttempt"');
+    expect(calls[0]?.sql).toContain('"attemptedAt" <');
+    expect(calls[0]?.sql).toContain("LIMIT");
+    expect(calls[0]?.values).toEqual([new Date("2026-07-01T01:00:00.000Z"), 5000]);
+  });
+
+  it("stops after the first short batch", async () => {
+    const { calls, prisma } = createRawPrisma([42]);
+    const repository = new DeliveryAttemptRepository(prisma as never);
+
+    await expect(repository.pruneOlderThan({ days: 30, now: new Date("2026-07-31T01:00:00.000Z"), batchSize: 100 }))
+      .resolves.toEqual({ deleted: 42 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.values[1]).toBe(100);
+  });
+
+  it("respects maxBatches so one run stays bounded", async () => {
+    const { calls, prisma } = createRawPrisma([100, 100, 100, 100]);
+    const repository = new DeliveryAttemptRepository(prisma as never);
+
+    await expect(repository.pruneOlderThan({ days: 30, now: new Date("2026-07-31T01:00:00.000Z"), batchSize: 100, maxBatches: 2 }))
+      .resolves.toEqual({ deleted: 200 });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("stops between batches when shouldContinue turns false", async () => {
+    const { calls, prisma } = createRawPrisma([100, 100, 100]);
+    const repository = new DeliveryAttemptRepository(prisma as never);
+    let remaining = 1;
+
+    await expect(repository.pruneOlderThan({
+      days: 30,
+      now: new Date("2026-07-31T01:00:00.000Z"),
+      batchSize: 100,
+      shouldContinue: () => remaining-- > 0
+    })).resolves.toEqual({ deleted: 100 });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("never prunes inside the 14 day dashboard window", async () => {
+    const { calls, prisma } = createRawPrisma([0]);
+    const repository = new DeliveryAttemptRepository(prisma as never);
+
+    await repository.pruneOlderThan({ days: 1, now: new Date("2026-07-31T01:00:00.000Z") });
+
+    expect(calls[0]?.values[0]).toEqual(new Date("2026-07-17T01:00:00.000Z"));
+  });
+
+  it("returns zero when raw execution is unavailable", async () => {
+    const repository = new DeliveryAttemptRepository({ deliveryAttempt: {} } as never);
+
+    await expect(repository.pruneOlderThan({ days: 30 })).resolves.toEqual({ deleted: 0 });
   });
 });
 

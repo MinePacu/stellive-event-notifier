@@ -24,11 +24,15 @@ describe("music app wiring", () => {
       "aokumo-rin",
       "arahashi-tabi",
       "ayatsuno-yuni",
+      "cogane-rang",
       "hanako-nana",
+      "hanayo-hiyori",
       "neneko-mashiro",
       "sakihane-huya",
       "shirayuki-hina",
+      "shizuki-toa",
       "tenko-shibuki",
+      "tokino-mary",
       "yuzuha-riko",
     ]);
     expect(inputs.every((input) => typeof input.youtubeChannelId === "string" && input.youtubeChannelId.startsWith("UC"))).toBe(true);
@@ -73,6 +77,7 @@ describe("music app wiring", () => {
       MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED: "true",
       YOUTUBE_API_KEY: "replace_with_super_secret_key",
       INTERNAL_API_TOKEN: "replace_with_super_secret_token",
+      YOUTUBE_WEBSUB_SECRET: "websub-secret",
     });
 
     const warnings = musicConfigurationWarnings(env, {

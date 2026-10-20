@@ -551,16 +551,23 @@ object ReservationReturnPromptPresentationPolicy {
 object ReservationReturnPromptPolicy {
     val minimumExternalDuration: Duration = Duration.ofSeconds(10)
 
+    /**
+     * "Prompted" only snoozes a draft: it is asked about again after the user leaves the app for
+     * [minimumExternalDuration] or reopens the link, so "아직" never means "never".
+     */
     fun decision(
         drafts: List<ReservationDraft>,
-        externallyOpenedSessionIds: Set<UUID>,
-        promptedSessionIds: Set<UUID>,
+        promptedAt: Map<UUID, Instant>,
+        lastBackgroundedAt: Instant?,
         now: Instant = Instant.now(),
     ): ReservationReturnPromptDecision {
-        val eligible = ReservationDraftPolicy.active(drafts, now).filter {
-            it.sessionId in externallyOpenedSessionIds &&
-                it.sessionId !in promptedSessionIds &&
-                Duration.between(it.openedAt, now) >= minimumExternalDuration
+        val eligible = ReservationDraftPolicy.active(drafts, now).filter { draft ->
+            if (Duration.between(draft.openedAt, now) < minimumExternalDuration) return@filter false
+            val prompted = promptedAt[draft.sessionId] ?: return@filter true
+            draft.openedAt > prompted ||
+                (lastBackgroundedAt != null &&
+                    lastBackgroundedAt > prompted &&
+                    Duration.between(lastBackgroundedAt, now) >= minimumExternalDuration)
         }
         return when (eligible.size) {
             0 -> ReservationReturnPromptDecision.None

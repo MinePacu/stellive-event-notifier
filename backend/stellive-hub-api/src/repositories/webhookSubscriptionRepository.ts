@@ -34,8 +34,38 @@ interface WebhookSubscriptionWriteInput {
   lastError?: string | null;
 }
 
+export interface WebhookSubscriptionLeaseRecord {
+  targetId: string;
+  topicUrl: string;
+  status: string;
+  leaseExpiresAt: Date | null;
+  updatedAt: Date;
+}
+
+export interface PendingVerificationInput {
+  source: string;
+  targetId: string;
+  callbackUrl: string;
+  topicUrl: string;
+  /** Time captured before the subscribe request was sent. */
+  requestedAt: Date;
+}
+
 interface WebhookSubscriptionDelegate {
   webhookSubscription: {
+    findMany(args: {
+      where: { source: string };
+      select: { targetId: true; topicUrl: true; status: true; leaseExpiresAt: true; updatedAt: true };
+    }): Promise<WebhookSubscriptionLeaseRecord[]>;
+    updateMany(args: {
+      where: Record<string, unknown>;
+      data: { callbackUrl: string; status: string; lastError: string | null };
+    }): Promise<{ count: number }>;
+    findUnique(args: {
+      where: { source_targetId_topicUrl: { source: string; targetId: string; topicUrl: string } };
+      select: { id: true };
+    }): Promise<{ id: string } | null>;
+    create(args: { data: WebhookSubscriptionWriteInput }): Promise<unknown>;
     findMany(args: {
       orderBy: { updatedAt: "desc" };
       take: number;
@@ -94,6 +124,45 @@ export class WebhookSubscriptionRepository {
       select: webhookSubscriptionDiagnosticSelect,
     });
     return records.map(toDiagnostic);
+  }
+
+  async listLeases(source: string): Promise<WebhookSubscriptionLeaseRecord[]> {
+    return this.prisma.webhookSubscription.findMany({
+      where: { source },
+      select: { targetId: true, topicUrl: true, status: true, leaseExpiresAt: true, updatedAt: true },
+    });
+  }
+
+  /**
+   * Marks a subscription pending after a subscribe request, without downgrading a row the hub already verified
+   * during or after that request (verification callbacks often arrive before the subscribe POST returns).
+   * Existing leaseExpiresAt/lastVerifiedAt are always preserved.
+   */
+  async markPendingVerification(input: PendingVerificationInput): Promise<void> {
+    const key = { source: input.source, targetId: input.targetId, topicUrl: input.topicUrl };
+    const { count } = await this.prisma.webhookSubscription.updateMany({
+      where: {
+        ...key,
+        NOT: { status: "active", lastVerifiedAt: { gte: input.requestedAt } },
+      },
+      data: { callbackUrl: input.callbackUrl, status: "pending_verification", lastError: null },
+    });
+    if (count > 0) return;
+
+    const existing = await this.prisma.webhookSubscription.findUnique({
+      where: { source_targetId_topicUrl: key },
+      select: { id: true },
+    });
+    if (existing) return; // freshly verified row: keep it as-is
+
+    try {
+      await this.prisma.webhookSubscription.create({
+        data: { ...key, callbackUrl: input.callbackUrl, status: "pending_verification", lastError: null },
+      });
+    } catch (error) {
+      // A concurrent verification callback created the row first; it is at least as fresh as ours.
+      if ((error as { code?: string } | null)?.code !== "P2002") throw error;
+    }
   }
 
   async upsertSubscription(input: WebhookSubscriptionWriteInput): Promise<void> {

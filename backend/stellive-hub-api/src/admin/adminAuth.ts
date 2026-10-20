@@ -86,6 +86,24 @@ export function authenticateAdminSessionCookie(
   return timingSafeStringEqual(suppliedSignature, expectedSignature) ? { ok: true } : { ok: false, reason: "invalid_token" };
 }
 
+/** Authenticates an admin request by bearer token (when an Authorization header is present) or session cookie. */
+export function authenticateAdminRequest(
+  headers: { authorization?: string | string[]; cookie?: string | string[] },
+  env: Pick<AppEnv, "ADMIN_CONSOLE_TOKEN">
+): AuthResult {
+  const authorization = joinHeader(headers.authorization);
+  if (authorization) return authenticateBearerToken(authorization, env.ADMIN_CONSOLE_TOKEN);
+  return authenticateAdminSessionCookie(joinHeader(headers.cookie), env.ADMIN_CONSOLE_TOKEN);
+}
+
+function joinHeader(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value.join("; ") : value;
+}
+
+export function isSecureRequest(request: { protocol: string }, forceSecureCookie: boolean): boolean {
+  return forceSecureCookie || request.protocol === "https";
+}
+
 export function clearAdminSessionCookie(secure: boolean): string {
   return serializeAdminSessionCookie("", 0, secure);
 }

@@ -21,8 +21,8 @@ final class PreferenceStateTests: XCTestCase {
     func testSettingsExposeRequiredPreferencePolicyStructures() {
         let settings = NotificationSettingsState()
 
-        XCTAssertEqual(Set(settings.generationEnabled.keys), ["gen1", "gen2", "gen3", "gamja", "official", "gen4-upcoming"])
-        XCTAssertEqual(settings.generationEnabled["gen4-upcoming"], false)
+        XCTAssertEqual(Set(settings.generationEnabled.keys), ["gen1", "gen2", "gen3", "gen4", "gamja", "official"])
+        XCTAssertEqual(settings.generationEnabled["gen4"], true)
         XCTAssertEqual(Set(settings.platformEnabled.keys), Set(NotificationPlatform.allCases))
         XCTAssertEqual(NotificationPlatform.hubEvent.displayName, "굿즈/행사")
         XCTAssertEqual(NotificationEventType.eventAnnounced.displayName, "굿즈/행사 공개")
@@ -420,6 +420,145 @@ final class PreferenceStateTests: XCTestCase {
 
         XCTAssertTrue(SettingsNavigationPolicy.debugServerConnectionLogs(debugModeEnabled: false, logs: logs).isEmpty)
         XCTAssertEqual(SettingsNavigationPolicy.debugServerConnectionLogs(debugModeEnabled: true, logs: logs), logs)
+    }
+
+    // MARK: - Local persistence
+
+    private func makeSettingsPersistence() -> NotificationSettingsPersistence {
+        let suiteName = "PreferenceStateTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        return NotificationSettingsPersistence(defaults: defaults)
+    }
+
+    func testSettingsRoundTripThroughLocalPersistenceAcrossStoreInstances() {
+        let persistence = makeSettingsPersistence()
+        let store = MockHubStore(settingsPersistence: persistence)
+        store.settings.globalEnabled = false
+        store.settings.serviceAnnouncementsEnabled = false
+        store.settings.realtimeEnabled = true
+        store.settings.tapAction = .openPlatform
+        store.settings.appearanceMode = .dark
+        store.settings.chzzkChatEnabled = true
+        store.settings.generationEnabled["gen2"] = false
+        store.settings.memberEnabled["gangzi"] = false
+        store.settings.platformEnabled[.naverCafe] = true
+        store.settings.eventTypeEnabled[.eventUpdated] = true
+        store.settings.combinationPreferences[0].enabled = false
+        store.settings.quietHours = QuietHoursState(enabled: true, start: "22:30", end: "07:15", timezone: "UTC")
+        store.settings.keywordFilters = KeywordFilterState(allowlistText: "굿즈", blocklistText: "스포")
+        store.settings.rateLimit.maxNotificationsPerMinute = 3
+
+        let reloaded = MockHubStore(settingsPersistence: persistence)
+
+        XCTAssertEqual(reloaded.settings, store.settings)
+        XCTAssertTrue(reloaded.isGlobalRuleDirty)
+    }
+
+    func testCorruptOrMissingPersistedSettingsFallBackToDefaults() {
+        let persistence = makeSettingsPersistence()
+        XCTAssertEqual(MockHubStore(settingsPersistence: persistence).settings, NotificationSettingsState())
+
+        persistence.defaults.set(Data("not json".utf8), forKey: NotificationSettingsPersistence.settingsKey)
+        let store = MockHubStore(settingsPersistence: persistence)
+
+        XCTAssertEqual(store.settings, NotificationSettingsState())
+        XCTAssertFalse(store.isGlobalRuleDirty)
+    }
+
+    func testLegacyGen4UpcomingSettingsMigrateToGen4() throws {
+        func decode(_ json: String) throws -> NotificationSettingsState {
+            try JSONDecoder().decode(NotificationSettingsState.self, from: Data(json.utf8))
+        }
+
+        // The old false was only the default, not an opt-out, so gen4 stays on.
+        let legacyOff = try decode(#"{"generationEnabled":{"gen1":false,"gen4-upcoming":false},"memberEnabled":{"gen4-placeholder":false,"gangzi":false}}"#)
+        XCTAssertEqual(legacyOff.generationEnabled["gen4"], true)
+        XCTAssertNil(legacyOff.generationEnabled["gen4-upcoming"])
+        XCTAssertEqual(legacyOff.generationEnabled["gen1"], false)
+        XCTAssertNil(legacyOff.memberEnabled["gen4-placeholder"])
+        XCTAssertEqual(legacyOff.memberEnabled["gangzi"], false)
+
+        let legacyOn = try decode(#"{"generationEnabled":{"gen4-upcoming":true}}"#)
+        XCTAssertEqual(legacyOn.generationEnabled["gen4"], true)
+        XCTAssertNil(legacyOn.generationEnabled["gen4-upcoming"])
+
+        // An explicit gen4 choice made after the migration is preserved.
+        let explicitOff = try decode(#"{"generationEnabled":{"gen4":false}}"#)
+        XCTAssertEqual(explicitOff.generationEnabled["gen4"], false)
+    }
+
+    func testPartialOrUnknownPersistedFieldsKeepDefaultsForTheRest() {
+        let persistence = makeSettingsPersistence()
+        let blob = """
+        {"globalEnabled":false,"tapAction":"future_action","platformEnabled":{"chzzk":false,"future_platform":true},
+         "generationEnabled":{"gen1":false},"quietHours":{"enabled":true}}
+        """
+        persistence.defaults.set(Data(blob.utf8), forKey: NotificationSettingsPersistence.settingsKey)
+
+        let settings = MockHubStore(settingsPersistence: persistence).settings
+
+        XCTAssertFalse(settings.globalEnabled)
+        XCTAssertEqual(settings.tapAction, .openApp)
+        XCTAssertTrue(settings.serviceAnnouncementsEnabled)
+        XCTAssertEqual(settings.platformEnabled[.chzzk], false)
+        XCTAssertEqual(settings.platformEnabled[.youtube], true)
+        XCTAssertEqual(settings.platformEnabled.count, NotificationSettingsState().platformEnabled.count)
+        XCTAssertEqual(settings.generationEnabled["gen1"], false)
+        XCTAssertEqual(settings.generationEnabled["gen2"], true)
+        XCTAssertTrue(settings.quietHours.enabled)
+        XCTAssertEqual(settings.quietHours.start, QuietHoursState().start)
+        XCTAssertEqual(settings.eventTypeEnabled, NotificationSettingsState().eventTypeEnabled)
+    }
+
+    func testOnlyGlobalRuleChangesMarkTheSettingsDirty() {
+        let persistence = makeSettingsPersistence()
+        let store = MockHubStore(settingsPersistence: persistence)
+
+        store.settings.quietHours.enabled = true
+        store.settings.memberEnabled["gangzi"] = false
+        store.settings.appearanceMode = .light
+        XCTAssertFalse(store.isGlobalRuleDirty)
+        XCTAssertFalse(persistence.loadGlobalRuleDirty())
+
+        let globalRuleChanges: [(inout NotificationSettingsState) -> Void] = [
+            { $0.globalEnabled = false },
+            { $0.serviceAnnouncementsEnabled = false },
+            { $0.realtimeEnabled = true },
+            { $0.tapAction = .openPlatform }
+        ]
+        for change in globalRuleChanges {
+            let isolated = MockHubStore(settingsPersistence: makeSettingsPersistence())
+            change(&isolated.settings)
+            XCTAssertTrue(isolated.isGlobalRuleDirty)
+        }
+    }
+
+    func testAdoptingServerGlobalRuleDoesNotMarkDirtyAndClearsExistingDirtyFlag() throws {
+        let store = MockHubStore(settingsPersistence: makeSettingsPersistence())
+        store.settings.realtimeEnabled = true
+        XCTAssertTrue(store.isGlobalRuleDirty)
+        let preference = try JSONDecoder().decode(PreferenceResponse.self, from: Data("""
+            {"scope":"global","enabled":false,"explicitOverride":true,"tapAction":"open_platform","deliveryMode":"standard","serviceAnnouncementsEnabled":false,"updatedAt":"2026-07-06T00:00:00Z"}
+            """.utf8))
+
+        store.adoptServerGlobalRule(preference)
+
+        XCTAssertFalse(store.settings.globalEnabled)
+        XCTAssertEqual(store.settings.tapAction, .openPlatform)
+        XCTAssertFalse(store.settings.realtimeEnabled)
+        XCTAssertFalse(store.isGlobalRuleDirty)
+
+        let clean = MockHubStore(settingsPersistence: makeSettingsPersistence())
+        clean.adoptServerGlobalRule(preference)
+        XCTAssertFalse(clean.isGlobalRuleDirty)
+    }
+
+    func testStoreWithoutPersistenceStaysInMemory() {
+        let first = MockHubStore()
+        first.settings.globalEnabled = false
+
+        XCTAssertTrue(MockHubStore().settings.globalEnabled)
     }
 
 }

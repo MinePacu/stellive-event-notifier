@@ -39,8 +39,18 @@
 	<string>행사 일정을 기기 캘린더에 추가하기 위해 캘린더 쓰기 권한이 필요합니다.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
+		<key>NSAllowsLocalNetworking</key>
 		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<false/>
+			</dict>
+		</dict>
 	</dict>
 	<key>HubBaseURL</key>
 	<string>$(HUB_BASE_URL)</string>

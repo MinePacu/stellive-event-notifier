@@ -565,16 +565,405 @@ final class ServerHubStoreTests: XCTestCase {
 
         await store.updatePreferences(NotificationSettingsState())
 
-        XCTAssertEqual(getCount, 2)
+        // The second conflict re-fetches once more so the caller can adopt the server global rule.
+        XCTAssertEqual(getCount, 3)
         XCTAssertEqual(putCount, 2)
         XCTAssertNotNil(store.preferenceSyncErrorMessage)
 
         shouldConflict = false
         await store.updatePreferences(NotificationSettingsState())
 
-        XCTAssertEqual(getCount, 3)
+        XCTAssertEqual(getCount, 4)
         XCTAssertEqual(putCount, 3)
         XCTAssertNil(store.preferenceSyncErrorMessage)
+    }
+
+    func testSchedulePreferenceSyncCoalescesRapidChangesIntoOneWriteOfLatestSettings() async throws {
+        let recorder = PreferenceRequestRecorder()
+        let store = makeStore(sleep: { _ in }, handler: recorder.handle)
+
+        var settings = NotificationSettingsState()
+        settings.globalEnabled = false
+        store.schedulePreferenceSync(settings)
+        settings.globalEnabled = true
+        store.schedulePreferenceSync(settings)
+        settings.globalEnabled = false
+        settings.serviceAnnouncementsEnabled = false
+        store.schedulePreferenceSync(settings)
+        await store.preferenceSyncTask?.value
+
+        XCTAssertEqual(recorder.methods, ["GET", "PUT"])
+        let request = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: try XCTUnwrap(recorder.putBodies.first))
+        XCTAssertEqual(request.preferences.last?.enabled, false)
+        XCTAssertEqual(request.preferences.last?.serviceAnnouncementsEnabled, false)
+    }
+
+    func testFlushPendingPreferenceSyncSendsImmediatelyAndLaterDebounceDoesNotResend() async throws {
+        let recorder = PreferenceRequestRecorder()
+        let store = makeStore(sleep: { _ in }, handler: recorder.handle)
+
+        var settings = NotificationSettingsState()
+        settings.globalEnabled = false
+        store.schedulePreferenceSync(settings)
+        let debounceTask = store.preferenceSyncTask
+        await store.flushPendingPreferenceSync()
+
+        XCTAssertEqual(recorder.methods, ["GET", "PUT"])
+
+        await debounceTask?.value
+        await store.flushPendingPreferenceSync()
+
+        XCTAssertEqual(recorder.methods, ["GET", "PUT"])
+    }
+
+    func testSchedulePreferenceSyncSendsEachChangeSeparatedByMoreThanTheDebounce() async throws {
+        let recorder = PreferenceRequestRecorder()
+        let store = makeStore(sleep: { _ in }, handler: recorder.handle)
+
+        var settings = NotificationSettingsState()
+        settings.globalEnabled = false
+        store.schedulePreferenceSync(settings)
+        await store.preferenceSyncTask?.value
+        settings.globalEnabled = true
+        store.schedulePreferenceSync(settings)
+        await store.preferenceSyncTask?.value
+
+        XCTAssertEqual(recorder.methods, ["GET", "PUT", "GET", "PUT"])
+        let first = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: recorder.putBodies[0])
+        let second = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: recorder.putBodies[1])
+        XCTAssertEqual(first.preferences.last?.enabled, false)
+        XCTAssertEqual(second.preferences.last?.enabled, true)
+    }
+
+    func testFlushPendingPreferenceSyncWithNothingPendingSendsNothing() async {
+        let recorder = PreferenceRequestRecorder()
+        let store = makeStore(sleep: { _ in }, handler: recorder.handle)
+
+        await store.flushPendingPreferenceSync()
+
+        XCTAssertTrue(recorder.methods.isEmpty)
+    }
+
+    // MARK: - Global rule persistence and reconciliation
+
+    func testServerSyncedBindingChangeSchedulesSyncForTapActionAndRealtime() async throws {
+        let stub = PreferenceServerStub()
+        let mock = MockHubStore(settingsPersistence: makeSettingsPersistence())
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        serverSyncedBinding(store: mock, serverStore: store, \.tapAction).wrappedValue = .openPlatform
+        await store.preferenceSyncTask?.value
+        serverSyncedBinding(store: mock, serverStore: store, \.realtimeEnabled).wrappedValue = true
+        await store.preferenceSyncTask?.value
+
+        XCTAssertEqual(stub.methods, ["GET", "PUT", "GET", "PUT"])
+        let first = try decodeGlobalRule(stub.putBodies[0])
+        XCTAssertEqual(first.tapAction, "open_platform")
+        XCTAssertEqual(first.deliveryMode, "standard")
+        let second = try decodeGlobalRule(stub.putBodies[1])
+        XCTAssertEqual(second.tapAction, "open_platform")
+        XCTAssertEqual(second.deliveryMode, "realtime_best_effort")
+        XCTAssertFalse(mock.isGlobalRuleDirty)
+    }
+
+    func testSuccessfulSyncClearsDirtyFlag() async {
+        let stub = PreferenceServerStub()
+        let persistence = makeSettingsPersistence()
+        let mock = MockHubStore(settingsPersistence: persistence)
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        mock.settings.globalEnabled = false
+        XCTAssertTrue(mock.isGlobalRuleDirty)
+        XCTAssertTrue(persistence.loadGlobalRuleDirty())
+        store.schedulePreferenceSync(mock.settings)
+        await store.preferenceSyncTask?.value
+
+        XCTAssertEqual(stub.methods, ["GET", "PUT"])
+        XCTAssertFalse(mock.isGlobalRuleDirty)
+        XCTAssertFalse(persistence.loadGlobalRuleDirty())
+    }
+
+    func testFailedSyncKeepsLocalValuesAndDirtyFlag() async {
+        for status in [500, 429] {
+            let stub = PreferenceServerStub()
+            stub.putStatus = status
+            let mock = MockHubStore(settingsPersistence: makeSettingsPersistence())
+            let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+            mock.settings.globalEnabled = false
+            store.schedulePreferenceSync(mock.settings)
+            await store.preferenceSyncTask?.value
+
+            XCTAssertEqual(stub.methods, ["GET", "PUT"], "status \(status)")
+            XCTAssertTrue(mock.isGlobalRuleDirty, "status \(status)")
+            XCTAssertFalse(mock.settings.globalEnabled, "status \(status)")
+        }
+    }
+
+    func testNetworkFailureKeepsLocalValuesAndDirtyFlag() async {
+        let stub = PreferenceServerStub()
+        stub.getSucceedsBeforeFailing = 0
+        let mock = MockHubStore(settingsPersistence: makeSettingsPersistence())
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        mock.settings.serviceAnnouncementsEnabled = false
+        store.schedulePreferenceSync(mock.settings)
+        await store.preferenceSyncTask?.value
+
+        XCTAssertTrue(mock.isGlobalRuleDirty)
+        XCTAssertFalse(mock.settings.serviceAnnouncementsEnabled)
+    }
+
+    func testNewerChangeMadeWhileSyncWasPendingStaysDirty() async throws {
+        let stub = PreferenceServerStub()
+        let mock = MockHubStore(settingsPersistence: makeSettingsPersistence())
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        mock.settings.tapAction = .openPlatform
+        store.schedulePreferenceSync(mock.settings)
+        // The user changes the rule again before the write for the previous value is confirmed.
+        mock.settings.realtimeEnabled = true
+        await store.preferenceSyncTask?.value
+
+        XCTAssertEqual(try decodeGlobalRule(stub.putBodies.first).deliveryMode, "standard")
+        XCTAssertTrue(mock.isGlobalRuleDirty)
+        XCTAssertTrue(mock.settings.realtimeEnabled)
+    }
+
+    func testSecondConflictPullsServerGlobalRuleAndClearsDirty() async {
+        let stub = PreferenceServerStub()
+        stub.getBody = preferencesJSON(global: globalPreferenceJSON(
+            enabled: false, tapAction: "open_platform", deliveryMode: "standard", serviceAnnouncements: "false"
+        ))
+        stub.putStatus = 409
+        let mock = MockHubStore(settingsPersistence: makeSettingsPersistence())
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        mock.settings.realtimeEnabled = true
+        store.schedulePreferenceSync(mock.settings)
+        await store.preferenceSyncTask?.value
+
+        XCTAssertEqual(stub.methods, ["GET", "PUT", "GET", "PUT", "GET"])
+        XCTAssertNotNil(store.preferenceSyncErrorMessage)
+        XCTAssertFalse(mock.settings.globalEnabled)
+        XCTAssertFalse(mock.settings.serviceAnnouncementsEnabled)
+        XCTAssertFalse(mock.settings.realtimeEnabled)
+        XCTAssertEqual(mock.settings.tapAction, .openPlatform)
+        XCTAssertFalse(mock.isGlobalRuleDirty)
+    }
+
+    func testSecondConflictKeepsDirtyWhenServerRuleCannotBeFetched() async {
+        let stub = PreferenceServerStub()
+        stub.putStatus = 409
+        stub.getSucceedsBeforeFailing = 2
+        let mock = MockHubStore(settingsPersistence: makeSettingsPersistence())
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        mock.settings.realtimeEnabled = true
+        store.schedulePreferenceSync(mock.settings)
+        await store.preferenceSyncTask?.value
+
+        XCTAssertNotNil(store.preferenceSyncErrorMessage)
+        XCTAssertTrue(mock.settings.realtimeEnabled)
+        XCTAssertTrue(mock.isGlobalRuleDirty)
+    }
+
+    func testStaleUpdateAdoptsServerGlobalRuleAndClearsDirty() async {
+        let stub = PreferenceServerStub()
+        stub.getBody = preferencesJSON(global: globalPreferenceJSON(
+            enabled: true, tapAction: "open_platform", deliveryMode: "realtime_best_effort", serviceAnnouncements: "true"
+        ))
+        stub.putStatus = 409
+        stub.putErrorBody = #"{"error":"preference_stale_update"}"#
+        let mock = MockHubStore(settingsPersistence: makeSettingsPersistence())
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        mock.settings.globalEnabled = false
+        store.schedulePreferenceSync(mock.settings)
+        await store.preferenceSyncTask?.value
+
+        XCTAssertEqual(stub.methods, ["GET", "PUT", "GET"])
+        XCTAssertTrue(mock.settings.globalEnabled)
+        XCTAssertEqual(mock.settings.tapAction, .openPlatform)
+        XCTAssertTrue(mock.settings.realtimeEnabled)
+        XCTAssertFalse(mock.isGlobalRuleDirty)
+    }
+
+    func testUpdatePreferencesReportsEachOutcome() async {
+        let synced = PreferenceServerStub()
+        let store = makeStore(handler: synced.handle)
+        let syncedResult = await store.updatePreferences(NotificationSettingsState())
+        XCTAssertEqual(syncedResult, .synced)
+
+        let failing = PreferenceServerStub()
+        failing.putStatus = 500
+        let failingStore = makeStore(handler: failing.handle)
+        let failedResult = await failingStore.updatePreferences(NotificationSettingsState())
+        XCTAssertEqual(failedResult, .failed)
+
+        let noDeviceStore = makeStore(deviceID: nil, handler: synced.handle)
+        let skippedResult = await noDeviceStore.updatePreferences(NotificationSettingsState())
+        XCTAssertEqual(skippedResult, .skipped)
+    }
+
+    func testLaunchWithDirtyFlagPushesLocalValuesAndClearsDirty() async throws {
+        let persistence = makeSettingsPersistence()
+        var local = NotificationSettingsState()
+        local.tapAction = .openPlatform
+        local.realtimeEnabled = true
+        local.globalEnabled = false
+        persistence.saveSettings(local)
+        persistence.saveGlobalRuleDirty(true)
+        let stub = PreferenceServerStub()
+        // The server still holds an older global rule; unconfirmed local values must win.
+        stub.getBody = preferencesJSON(global: globalPreferenceJSON(
+            enabled: true, tapAction: "open_app", deliveryMode: "standard", serviceAnnouncements: "true"
+        ))
+        let mock = MockHubStore(settingsPersistence: persistence)
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        await store.reconcileNotificationSettingsOnLaunch()
+
+        XCTAssertEqual(stub.methods, ["GET", "PUT"])
+        let global = try decodeGlobalRule(stub.putBodies.first)
+        XCTAssertFalse(global.enabled)
+        XCTAssertEqual(global.tapAction, "open_platform")
+        XCTAssertEqual(global.deliveryMode, "realtime_best_effort")
+        XCTAssertEqual(mock.settings, local)
+        XCTAssertFalse(mock.isGlobalRuleDirty)
+    }
+
+    func testLaunchWithDirtyFlagKeepsItWhenPushFails() async {
+        let persistence = makeSettingsPersistence()
+        var local = NotificationSettingsState()
+        local.globalEnabled = false
+        persistence.saveSettings(local)
+        persistence.saveGlobalRuleDirty(true)
+        let stub = PreferenceServerStub()
+        stub.putStatus = 500
+        let mock = MockHubStore(settingsPersistence: persistence)
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        await store.reconcileNotificationSettingsOnLaunch()
+
+        XCTAssertEqual(stub.methods, ["GET", "PUT"])
+        XCTAssertTrue(mock.isGlobalRuleDirty)
+        XCTAssertFalse(mock.settings.globalEnabled)
+    }
+
+    func testLaunchWithoutDirtyFlagAppliesServerGlobalRule() async {
+        let stub = PreferenceServerStub()
+        stub.getBody = preferencesJSON(global: globalPreferenceJSON(
+            enabled: false, tapAction: "open_platform", deliveryMode: "realtime_best_effort", serviceAnnouncements: "false"
+        ))
+        let persistence = makeSettingsPersistence()
+        let mock = MockHubStore(settingsPersistence: persistence)
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        await store.reconcileNotificationSettingsOnLaunch()
+
+        XCTAssertEqual(stub.methods, ["GET"])
+        XCTAssertFalse(mock.settings.globalEnabled)
+        XCTAssertFalse(mock.settings.serviceAnnouncementsEnabled)
+        XCTAssertEqual(mock.settings.tapAction, .openPlatform)
+        XCTAssertTrue(mock.settings.realtimeEnabled)
+        XCTAssertFalse(mock.isGlobalRuleDirty)
+        XCTAssertEqual(persistence.loadSettings(), mock.settings)
+    }
+
+    func testLaunchServerRuleWithNullServiceAnnouncementsKeepsLocalValueAndMapsStandardDelivery() async {
+        let stub = PreferenceServerStub()
+        stub.getBody = preferencesJSON(global: globalPreferenceJSON(
+            enabled: true, tapAction: "open_app", deliveryMode: "standard", serviceAnnouncements: "null"
+        ))
+        let persistence = makeSettingsPersistence()
+        var local = NotificationSettingsState()
+        local.serviceAnnouncementsEnabled = false
+        local.realtimeEnabled = true
+        persistence.saveSettings(local)
+        let mock = MockHubStore(settingsPersistence: persistence)
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        await store.reconcileNotificationSettingsOnLaunch()
+
+        XCTAssertFalse(mock.settings.serviceAnnouncementsEnabled)
+        XCTAssertFalse(mock.settings.realtimeEnabled)
+        XCTAssertEqual(mock.settings.tapAction, .openApp)
+        XCTAssertFalse(mock.isGlobalRuleDirty)
+    }
+
+    func testLaunchWithoutDirtyFlagAndNoServerGlobalRuleKeepsLocalAndSendsNothing() async {
+        let stub = PreferenceServerStub()
+        stub.getBody = preferencesJSON(global: nil)
+        let persistence = makeSettingsPersistence()
+        var local = NotificationSettingsState()
+        local.tapAction = .openPlatform
+        persistence.saveSettings(local)
+        let mock = MockHubStore(settingsPersistence: persistence)
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        await store.reconcileNotificationSettingsOnLaunch()
+
+        XCTAssertEqual(stub.methods, ["GET"])
+        XCTAssertEqual(mock.settings, local)
+        XCTAssertFalse(mock.isGlobalRuleDirty)
+    }
+
+    func testLaunchOfflineKeepsLocalSettingsAndDirtyFlag() async {
+        let persistence = makeSettingsPersistence()
+        var local = NotificationSettingsState()
+        local.globalEnabled = false
+        persistence.saveSettings(local)
+        persistence.saveGlobalRuleDirty(true)
+        let stub = PreferenceServerStub()
+        stub.getSucceedsBeforeFailing = 0
+        let mock = MockHubStore(settingsPersistence: persistence)
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        await store.reconcileNotificationSettingsOnLaunch()
+
+        XCTAssertEqual(mock.settings, local)
+        XCTAssertTrue(mock.isGlobalRuleDirty)
+
+        let cleanPersistence = makeSettingsPersistence()
+        cleanPersistence.saveSettings(local)
+        let cleanMock = MockHubStore(settingsPersistence: cleanPersistence)
+        let cleanStore = makeStore(sleep: { _ in }, fallback: cleanMock, handler: stub.handle)
+
+        await cleanStore.reconcileNotificationSettingsOnLaunch()
+
+        XCTAssertEqual(cleanMock.settings, local)
+        XCTAssertFalse(cleanMock.isGlobalRuleDirty)
+    }
+
+    func testLaunchWithoutDeviceIDSendsNothingAndKeepsDirtyFlag() async {
+        let persistence = makeSettingsPersistence()
+        persistence.saveGlobalRuleDirty(true)
+        let stub = PreferenceServerStub()
+        let mock = MockHubStore(settingsPersistence: persistence)
+        let store = makeStore(sleep: { _ in }, fallback: mock, deviceID: nil, handler: stub.handle)
+
+        await store.reconcileNotificationSettingsOnLaunch()
+
+        XCTAssertTrue(stub.methods.isEmpty)
+        XCTAssertTrue(mock.isGlobalRuleDirty)
+    }
+
+    private func globalPreferenceJSON(
+        enabled: Bool,
+        tapAction: String,
+        deliveryMode: String,
+        serviceAnnouncements: String
+    ) -> String {
+        """
+        {"deviceId":"device-1","scope":"global","enabled":\(enabled),"explicitOverride":true,"tapAction":"\(tapAction)","deliveryMode":"\(deliveryMode)","serviceAnnouncementsEnabled":\(serviceAnnouncements),"updatedAt":"2026-07-06T00:00:00Z"}
+        """
+    }
+
+    private func preferencesJSON(global: String?) -> String {
+        """
+        {"deviceId":"device-1","preferences":[\(global ?? "")],"updatedAt":"2026-07-06T00:00:00Z","revision":3}
+        """
     }
 
     private static func readAll(from stream: InputStream) -> Data? {
@@ -1166,8 +1555,12 @@ final class ServerHubStoreTests: XCTestCase {
     }
 
     private func makeStore(
+        sleep: (@Sendable (Duration) async throws -> Void)? = nil,
+        fallback: MockHubStore? = nil,
+        deviceID: String? = "device-1",
         handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)
     ) -> ServerHubStore {
+        let fallback = fallback ?? MockHubStore()
         StubURLProtocol.requestHandler = handler
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubURLProtocol.self]
@@ -1177,12 +1570,109 @@ final class ServerHubStoreTests: XCTestCase {
         )
         let defaults = UserDefaults(suiteName: "ServerHubStoreTests-\(UUID().uuidString)")!
         let deviceIDStore = DeviceIDStore(defaults: defaults)
-        deviceIDStore.saveDeviceID("device-1")
+        if let deviceID { deviceIDStore.saveDeviceID(deviceID) }
+        guard let sleep else {
+            return ServerHubStore(
+                api: client,
+                deviceIDStore: deviceIDStore,
+                fallback: fallback
+            )
+        }
         return ServerHubStore(
             api: client,
             deviceIDStore: deviceIDStore,
-            fallback: MockHubStore()
+            fallback: fallback,
+            preferenceSyncSleep: sleep
         )
+    }
+
+    private func makeSettingsPersistence() -> NotificationSettingsPersistence {
+        let suiteName = "ServerHubStoreTests-settings-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        return NotificationSettingsPersistence(defaults: defaults)
+    }
+
+    private func decodeGlobalRule(_ body: Data?) throws -> PreferenceResponse {
+        let request = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: try XCTUnwrap(body))
+        return try XCTUnwrap(request.preferences.first { $0.scope == "global" })
+    }
+}
+
+private final class PreferenceRequestRecorder: @unchecked Sendable {
+    private(set) var methods: [String] = []
+    private(set) var putBodies: [Data] = []
+
+    func handle(_ request: URLRequest) -> (HTTPURLResponse, Data) {
+        methods.append(request.httpMethod ?? "")
+        if request.httpMethod == "GET" {
+            return jsonResponse(statusCode: 200, body: """
+                {"deviceId":"device-1","preferences":[],"updatedAt":"2026-07-06T00:00:00Z","revision":1}
+                """)
+        }
+        if let body = request.httpBody ?? request.httpBodyStream.flatMap(Self.readAll) {
+            putBodies.append(body)
+        }
+        return jsonResponse(statusCode: 200, body: """
+            {"deviceId":"device-1","preferences":[],"updatedAt":"2026-07-06T00:00:01Z","revision":2}
+            """)
+    }
+
+    private static func readAll(from stream: InputStream) -> Data? {
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
+}
+
+private final class PreferenceServerStub: @unchecked Sendable {
+    var getBody = """
+        {"deviceId":"device-1","preferences":[],"updatedAt":"2026-07-06T00:00:00Z","revision":1}
+        """
+    /// Number of GETs answered before every later GET fails with a network error (nil: never fail).
+    var getSucceedsBeforeFailing: Int?
+    var putStatus = 200
+    var putErrorBody = #"{"error":"preference_conflict"}"#
+    private(set) var methods: [String] = []
+    private(set) var putBodies: [Data] = []
+    private var getCount = 0
+
+    func handle(_ request: URLRequest) throws -> (HTTPURLResponse, Data) {
+        methods.append(request.httpMethod ?? "")
+        if request.httpMethod == "GET" {
+            getCount += 1
+            if let limit = getSucceedsBeforeFailing, getCount > limit {
+                throw URLError(.notConnectedToInternet)
+            }
+            return jsonResponse(statusCode: 200, body: getBody)
+        }
+        if let body = request.httpBody ?? request.httpBodyStream.flatMap(Self.readAll) {
+            putBodies.append(body)
+        }
+        guard putStatus == 200 else { return jsonResponse(statusCode: putStatus, body: putErrorBody) }
+        return jsonResponse(statusCode: 200, body: """
+            {"deviceId":"device-1","preferences":[],"updatedAt":"2026-07-06T00:00:01Z","revision":2}
+            """)
+    }
+
+    private static func readAll(from stream: InputStream) -> Data? {
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return data
     }
 }
 

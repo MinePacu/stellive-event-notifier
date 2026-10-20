@@ -220,6 +220,7 @@ export default class PreferenceRepository {
     expectedRevision: number;
     clientUpdatedAt?: string;
   }): Promise<PreferenceSnapshot> {
+    if (typeof input.deviceId !== "string") throw new Error("device_id_invalid");
     const clientUpdatedAt = input.clientUpdatedAt ? new Date(input.clientUpdatedAt) : undefined;
     if (input.clientUpdatedAt && (!clientUpdatedAt || Number.isNaN(clientUpdatedAt.getTime()))) {
       throw new PreferenceStaleUpdateError();

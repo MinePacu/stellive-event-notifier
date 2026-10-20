@@ -32,7 +32,7 @@ data class SongMemberFilterState(
 
 object SongMemberFilterPolicy {
     fun selectableMembers(members: List<HubMember>): List<HubMember> = members.filter {
-        it.catalogRole == CatalogRole.MEMBER && it.generationId in setOf("gen1", "gen2", "gen3") &&
+        it.catalogRole == CatalogRole.MEMBER && it.generationId in setOf("gen1", "gen2", "gen3", "gen4") &&
             it.activeStatus in setOf(ActiveStatus.ACTIVE, ActiveStatus.UPCOMING)
     }
 
@@ -66,7 +66,7 @@ object SongMemberFilterPolicy {
     ).normalized()
 
     fun generationPresetLabel(members: List<HubMember>, state: SongMemberFilterState): String? =
-        listOf("gen1" to "1기생", "gen2" to "2기생", "gen3" to "3기생").firstNotNullOfOrNull { (id, label) ->
+        listOf("gen1" to "1기생", "gen2" to "2기생", "gen3" to "3기생", "gen4" to "4기생").firstNotNullOfOrNull { (id, label) ->
             generationMemberIds(members, id).takeIf { it.isNotEmpty() && it == state.normalized().selectedMemberIds }?.let { "$label 전원 참여" }
         }
 

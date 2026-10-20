@@ -393,7 +393,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [all, gen1, gen2, gen3]
+            enum: [all, gen1, gen2, gen3, gen4]
         - name: memberId
           in: query
           schema:
@@ -433,7 +433,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [all, gen1, gen2, gen3]
+            enum: [all, gen1, gen2, gen3, gen4]
         - name: memberId
           in: query
           schema:
@@ -1591,7 +1591,7 @@ components:
           type: string
         generationId:
           type: string
-          enum: [gen1, gen2, gen3]
+          enum: [gen1, gen2, gen3, gen4]
         generationName:
           type: string
         type:
@@ -1641,7 +1641,7 @@ components:
           type: string
         generationId:
           type: string
-          enum: [all, gen1, gen2, gen3]
+          enum: [all, gen1, gen2, gen3, gen4]
         count:
           type: integer
           minimum: 0

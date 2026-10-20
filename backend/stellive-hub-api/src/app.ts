@@ -22,7 +22,10 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyRequest } from "fastify";
 import { Redis } from "ioredis";
+import { AuthFailureLimiter } from "./admin/authFailureLimiter.js";
+import { RequestRateLimiter, type MobileRateLimiters } from "./mobile/requestRateLimiter.js";
 import { isConfiguredSecret, loadEnv } from "./config/env.js";
+import { serializeRequestForLog } from "./logging/requestSerializer.js";
 import { HubEventRepository } from "./hub-events/hubEventRepository.js";
 import { ServiceAnnouncementRepository } from "./announcements/serviceAnnouncementRepository.js";
 import { ServiceAnnouncementReadService } from "./announcements/serviceAnnouncementReadService.js";
@@ -30,6 +33,12 @@ import { ServiceAnnouncementAdminService } from "./announcements/serviceAnnounce
 import { PrismaServiceAnnouncementDispatchUnitOfWork } from "./announcements/serviceAnnouncementDispatchUnitOfWork.js";
 import { createHubCalendarSpecialDayOccurrenceRepositoryIfAvailable } from "./hub-events/hubCalendarSpecialDayOccurrenceRepository.js";
 import NotificationJobRepository from "./jobs/notificationJobRepository.js";
+import {
+  YoutubeWebSubRenewalScheduler,
+  createYoutubeWebSubRenewalLockRunner,
+  shouldStartYoutubeWebSubRenewal,
+} from "./jobs/youtubeWebSubRenewalScheduler.js";
+import { LogRetentionScheduler, createPrismaAdvisoryLockRunner, shouldStartLogRetention } from "./jobs/logRetentionScheduler.js";
 import NotificationWorker from "./jobs/notificationWorker.js";
 import SummaryNotificationRepository from "./jobs/summaryNotificationRepository.js";
 import SummaryNotificationWorker from "./jobs/summaryNotificationWorker.js";
@@ -71,6 +80,8 @@ export interface BuildAppOptions {
   env?: EnvOverrides;
   useProcessEnv?: boolean;
   chzzkLiveApiFetch?: typeof fetch;
+  authFailureLimiter?: AuthFailureLimiter;
+  mobileRateLimiters?: MobileRateLimiters;
   chzzkObservationWriter?: ChzzkObservationWriter;
   chzzkAuthRoutes?: {
     dependencies?: Partial<Omit<ChzzkAuthRouteOptions, "env">>;
@@ -105,6 +116,7 @@ type BootstrapHubEventsPort = Pick<HubEventRepository, "summary">;
 export type MusicConfigurationWarning =
   | "music_sync_youtube_api_not_configured"
   | "youtube_websub_official_channel_disabled"
+  | "youtube_websub_secret_not_configured"
   | "music_channel_discovery_requires_music_sync"
   | "music_channel_discovery_internal_token_not_configured"
   | "music_channel_discovery_service_not_configured";
@@ -123,11 +135,33 @@ export function musicConfigurationWarnings(
   if (env.YOUTUBE_WEBSUB_ENABLED && env.YOUTUBE_WEBSUB_CALLBACK_URL && env.YOUTUBE_WEBSUB_VERIFY_TOKEN && !isConfiguredSecret(env.YOUTUBE_API_KEY)) {
     warnings.push("youtube_websub_official_channel_disabled");
   }
+  if (env.YOUTUBE_WEBSUB_ENABLED && !isConfiguredSecret(env.YOUTUBE_WEBSUB_SECRET)) {
+    warnings.push("youtube_websub_secret_not_configured");
+  }
   if (env.MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED && !isConfiguredSecret(env.INTERNAL_API_TOKEN)) {
     warnings.push("music_channel_discovery_internal_token_not_configured");
   }
   if (env.MUSIC_CHANNEL_DISCOVERY_SYNC_ENABLED && !services.channelDiscoveryServiceConfigured) {
     warnings.push("music_channel_discovery_service_not_configured");
+  }
+  return warnings;
+}
+
+export type AdminAuthConfigurationWarning = "admin_console_token_weak" | "internal_api_token_weak";
+
+const minRecommendedTokenLength = 32;
+
+export function adminAuthConfigurationWarnings(env: AppEnv): AdminAuthConfigurationWarning[] {
+  const warnings: AdminAuthConfigurationWarning[] = [];
+  if (
+    env.ADMIN_CONSOLE_ENABLED &&
+    isConfiguredSecret(env.ADMIN_CONSOLE_TOKEN) &&
+    env.ADMIN_CONSOLE_TOKEN!.length < minRecommendedTokenLength
+  ) {
+    warnings.push("admin_console_token_weak");
+  }
+  if (isConfiguredSecret(env.INTERNAL_API_TOKEN) && env.INTERNAL_API_TOKEN!.length < minRecommendedTokenLength) {
+    warnings.push("internal_api_token_weak");
   }
   return warnings;
 }
@@ -309,6 +343,7 @@ function createDefaultYoutubeSubscriptionScheduler(
 ): Pick<InternalRouteDependencies, "youtubeSubscriptionScheduler"> {
   if (dependencies?.youtubeSubscriptionScheduler) return {};
   if (!env.YOUTUBE_WEBSUB_CALLBACK_URL || !env.YOUTUBE_WEBSUB_VERIFY_TOKEN) return {};
+  if (!isConfiguredSecret(env.YOUTUBE_WEBSUB_VERIFY_TOKEN) || !isConfiguredSecret(env.YOUTUBE_WEBSUB_SECRET)) return {};
 
   return {
     youtubeSubscriptionScheduler: new YoutubeWebSubSubscriptionService({
@@ -333,7 +368,7 @@ function createDefaultYoutubeSongBackfillScheduler(
   const catalog = new CatalogService();
   const targets = catalog
     .getMembers()
-    .filter((member) => member.generationId === "gen1" || member.generationId === "gen2" || member.generationId === "gen3")
+    .filter((member) => member.generationId === "gen1" || member.generationId === "gen2" || member.generationId === "gen3" || member.generationId === "gen4")
     .flatMap((member) => {
       const channelId = member.platforms?.youtubeChannelId;
       if (!channelId) return [];
@@ -438,7 +473,8 @@ function createDefaultMusicSyncService(
       member.id === "stellive-official" ||
       member.generationId === "gen1" ||
       member.generationId === "gen2" ||
-      member.generationId === "gen3"
+      member.generationId === "gen3" ||
+      member.generationId === "gen4"
     )
     .flatMap((member) => {
       const channelId = member.platforms?.youtubeChannelId;
@@ -535,7 +571,6 @@ function hasBootstrapHubEventsPort(value: unknown): value is BootstrapHubEventsP
 function isPrivilegedRoutePath(url: string): boolean {
   return (
     url === "/admin" ||
-    url.startsWith("/admin?") ||
     url.startsWith("/admin/") ||
     url.startsWith("/v1/admin/") ||
     url.startsWith("/v1/internal/")
@@ -543,7 +578,15 @@ function isPrivilegedRoutePath(url: string): boolean {
 }
 
 function corsDelegator(request: FastifyRequest, callback: (error: Error | null, options?: { origin: string | boolean }) => void) {
-  callback(null, isPrivilegedRoutePath(request.url) ? privilegedCorsOptions : publicCorsOptions);
+  // Decode so percent-encoded variants of privileged paths (e.g. /v1/%61dmin/) cannot get public CORS.
+  const rawPath = request.url.split("?")[0] ?? "";
+  let path = rawPath;
+  try {
+    path = decodeURIComponent(rawPath);
+  } catch {
+    // keep the raw path when it is not valid percent-encoding
+  }
+  callback(null, isPrivilegedRoutePath(path) ? privilegedCorsOptions : publicCorsOptions);
 }
 
 function resolveEnvInput(options: BuildAppOptions): NodeJS.ProcessEnv | Record<string, string | boolean | number | undefined> {
@@ -559,7 +602,21 @@ function resolveEnvInput(options: BuildAppOptions): NodeJS.ProcessEnv | Record<s
 
 export async function buildApp(options: BuildAppOptions = {}) {
   const env = loadEnv(resolveEnvInput(options));
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: { serializers: { req: serializeRequestForLog } },
+    trustProxy: env.TRUST_PROXY
+  });
+  const authFailureLimiter = options.authFailureLimiter ?? new AuthFailureLimiter();
+  app.setErrorHandler((error, request, reply) => {
+    const status = (error as { statusCode?: unknown }).statusCode;
+    const statusCode = typeof status === "number" && status >= 400 && status <= 599 ? status : 500;
+    if (statusCode >= 500) {
+      request.log.error({ err: error }, "request_failed");
+      return reply.code(statusCode).send({ error: "internal_error" });
+    }
+    // Rethrow so Fastify's default (parent) error handler builds the unchanged 4xx response.
+    throw error;
+  });
   const youtubeWebSubTargetBuild = createDefaultYoutubeWebSubTargetBuild(env);
   for (const diagnostic of youtubeWebSubTargetBuild.diagnostics) {
     app.log.warn(diagnostic, "youtube WebSub target disabled due to duplicate channel");
@@ -576,12 +633,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
   };
   await app.register(cors, { delegator: corsDelegator });
   await app.register(sensible);
-  await app.register(swagger, {
-    openapi: {
-      info: { title: "Stellive Notification Hub API", version: "0.1.0" }
-    }
-  });
-  await app.register(swaggerUi, { routePrefix: "/docs" });
+  if (env.NODE_ENV !== "production") {
+    await app.register(swagger, {
+      openapi: {
+        info: { title: "Stellive Notification Hub API", version: "0.1.0" }
+      }
+    });
+    await app.register(swaggerUi, { routePrefix: "/docs" });
+  }
   const sharedFcmClient = createDefaultFcmClient(env);
   const announcementRepository = new ServiceAnnouncementRepository();
   const announcementReads = options.appRoutes?.dependencies?.announcements ?? new ServiceAnnouncementReadService(announcementRepository);
@@ -601,6 +660,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
   }
   if (!appRouteDependencies.hubCalendarSpecialDayOccurrences && env.HUB_EVENTS_STORAGE_MODE === "prisma") {
     appRouteDependencies.hubCalendarSpecialDayOccurrences = createHubCalendarSpecialDayOccurrenceRepositoryIfAvailable();
+  }
+  if (env.HUB_EVENTS_STORAGE_MODE === "prisma") {
+    appRouteDependencies.devices ??= new DeviceRepository();
+    appRouteDependencies.preferences ??= new PreferenceRepository();
   }
   if (env.HUB_EVENTS_STORAGE_MODE === "prisma" && !appRouteDependencies.bootstrap) {
     const devices = hasBootstrapDevicePort(appRouteDependencies.devices)
@@ -638,7 +701,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
       }
     });
   }
-  await registerRoutes(app, { dependencies: appRouteDependencies, env });
+  const mobileRateLimiters: MobileRateLimiters = {
+    write: options.mobileRateLimiters?.write ?? new RequestRateLimiter({ maxRequests: env.DEVICE_WRITE_RATE_LIMIT_PER_MINUTE }),
+    read: options.mobileRateLimiters?.read ?? new RequestRateLimiter({ maxRequests: env.DEVICE_READ_RATE_LIMIT_PER_MINUTE }),
+  };
+  await registerRoutes(app, { dependencies: appRouteDependencies, env, mobileRateLimiters });
   await registerWebhookRoutes(app, {
     env,
     subscriptions: options.webhookRoutes?.dependencies?.subscriptions ?? new WebhookSubscriptionRepository(),
@@ -649,6 +716,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   });
   await registerChzzkAuthRoutes(app, {
     env,
+    authFailureLimiter,
     ...options.chzzkAuthRoutes?.dependencies
   });
   const internalRouteDependencies: Partial<InternalRouteDependencies> = options.internalRoutes?.dependencies
@@ -680,18 +748,52 @@ export async function buildApp(options: BuildAppOptions = {}) {
   })) {
     app.log.warn({ code }, "music configuration warning");
   }
+  for (const code of adminAuthConfigurationWarnings(env)) {
+    app.log.warn({ code }, "admin auth configuration warning");
+  }
   await registerInternalRoutes(app, {
     env,
     dependencies: internalRouteDependencies,
     invalidateMusicCatalogCache,
+    authFailureLimiter,
   });
-  await registerAdminRoutes(app, { env });
-  await registerAdminHubEventRoutes(app, { env, dependencies: options.adminHubEventRoutes?.dependencies });
+  await registerAdminRoutes(app, { env, authFailureLimiter });
+  await registerAdminHubEventRoutes(app, { env, dependencies: options.adminHubEventRoutes?.dependencies, authFailureLimiter });
   const announcementAdminService = options.adminServiceAnnouncementRoutes?.service ?? new ServiceAnnouncementAdminService({
     repository: announcementRepository,
     dispatchUnitOfWork: new PrismaServiceAnnouncementDispatchUnitOfWork(),
     invalidateCache: () => announcementReads.invalidate(),
   });
-  await registerAdminServiceAnnouncementRoutes(app, { env, service: announcementAdminService });
+  await registerAdminServiceAnnouncementRoutes(app, { env, service: announcementAdminService, authFailureLimiter });
+  if (shouldStartLogRetention(env, { dependenciesInjected: Boolean(options.internalRoutes?.dependencies) })) {
+    const logRetention = new LogRetentionScheduler({
+      deliveryAttempts: new DeliveryAttemptRepository(),
+      externalApiCallLogs: new ExternalApiCallLogRepository(),
+      withLock: createPrismaAdvisoryLockRunner(),
+      deliveryAttemptRetentionDays: env.DELIVERY_ATTEMPT_RETENTION_DAYS,
+      externalApiLogRetentionDays: env.EXTERNAL_API_LOG_RETENTION_DAYS,
+      intervalMs: env.LOG_RETENTION_INTERVAL_MINUTES * 60_000,
+      logger: app.log
+    });
+    app.addHook("onReady", async () => logRetention.start());
+    registerClose(() => logRetention.stop());
+  }
+  const youtubeRenewalTarget = internalRouteDependencies.youtubeSubscriptionScheduler;
+  if (
+    youtubeRenewalTarget &&
+    shouldStartYoutubeWebSubRenewal(env, { dependenciesInjected: Boolean(options.internalRoutes?.dependencies) })
+  ) {
+    const renewal = new YoutubeWebSubRenewalScheduler({
+      targets: youtubeWebSubTargetBuild.targets,
+      subscriptions: new WebhookSubscriptionRepository(),
+      renewer: youtubeRenewalTarget,
+      withLock: createYoutubeWebSubRenewalLockRunner(),
+      intervalMs: env.YOUTUBE_WEBSUB_RENEW_CHECK_INTERVAL_MINUTES * 60_000,
+      renewBeforeMs: env.YOUTUBE_WEBSUB_RENEW_BEFORE_HOURS * 3_600_000,
+      logger: app.log,
+    });
+    app.addHook("onReady", async () => renewal.start());
+    registerClose(() => renewal.stop());
+  }
   return app;
 }

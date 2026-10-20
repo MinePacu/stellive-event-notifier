@@ -564,9 +564,9 @@ private fun defaultGenerationEnabled(): Map<String, Boolean> = linkedMapOf(
     "gen1" to true,
     "gen2" to true,
     "gen3" to true,
+    "gen4" to true,
     "gamja" to true,
-    "official" to true,
-    "gen4-upcoming" to false
+    "official" to true
 )
 
 private fun defaultMemberEnabled(): Map<String, Boolean> = linkedMapOf(
@@ -580,9 +580,12 @@ private fun defaultMemberEnabled(): Map<String, Boolean> = linkedMapOf(
     "aokumo-rin" to true,
     "hanako-nana" to true,
     "yuzuha-riko" to true,
+    "shizuki-toa" to true,
+    "cogane-rang" to true,
+    "hanayo-hiyori" to true,
+    "tokino-mary" to true,
     "gangzi" to true,
-    "stellive-official" to true,
-    "gen4-placeholder" to false
+    "stellive-official" to true
 )
 
 private fun defaultPlatformEnabled(): Map<NotificationPlatform, Boolean> = linkedMapOf(

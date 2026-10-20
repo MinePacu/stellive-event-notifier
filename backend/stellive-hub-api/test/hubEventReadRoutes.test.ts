@@ -525,7 +525,7 @@ describe("HubEvent read routes", () => {
 
     const body = response.json();
     const ids = body.items.map((event: HubEvent) => event.id).join(" ");
-    const allowedGenerationIds = new Set(["gen1", "gen2", "gen3", "gamja", "official", "gen4-upcoming"]);
+    const allowedGenerationIds = new Set(["gen1", "gen2", "gen3", "gamja", "official", "gen4"]);
     expect(ids).not.toContain("livestream");
     expect(ids).not.toContain("upload");
     expect(ids).not.toContain("fan-hosted");

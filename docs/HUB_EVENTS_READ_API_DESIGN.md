@@ -26,7 +26,7 @@
 ## 도메인 원칙
 - 굿즈/행사 feed는 공식 출처 기반의 time-bound goods, ticketing, offline event, collaboration 정보만 포함한다.
 - 이미지가 없어도 API 응답과 모바일 UI가 정상 동작해야 한다.
-- `generationId`는 `gen1`, `gen2`, `gen3`, `gamja`, `official`, `gen4-upcoming` 등 허용된 카탈로그 범위를 따른다.
+- `generationId`는 `gen1`, `gen2`, `gen3`, `gen4`, `gamja`, `official` 등 허용된 카탈로그 범위를 따른다.
 - Gangzi는 `gamja` category의 `representative`로만 취급하며 generation member로 취급하지 않는다.
 - `official` category는 UI에서 `기타`로 표시된다.
 - 캘린더/위젯 응답은 livestream, upload, ordinary post, fan-hosted event를 굿즈/행사에 섞지 않는다.

@@ -1,6 +1,6 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import type { AppEnv } from "../config/env.js";
+import { isConfiguredSecret, type AppEnv } from "../config/env.js";
 import { parseYoutubeAtomFeed } from "../adapters/youtube/youtubeAtomParser.js";
 import { YoutubeUploadMetadataRetryableError } from "../events/youtubeUploadNotificationService.js";
 import type { SongIngestionResult } from "../songs/songIngestionService.js";
@@ -25,6 +25,13 @@ function verifyWebSubSignature(secret: string, rawBody: string, signatureHeader:
   const expectedBuffer = Buffer.from(expectedHex, "hex");
   if (providedBuffer.length !== expectedBuffer.length) return false;
   return timingSafeEqual(providedBuffer, expectedBuffer);
+}
+
+/** Constant-time string comparison: compares sha256 digests so length differences do not leak. */
+function timingSafeStringEqual(actual: string, expected: string): boolean {
+  const actualDigest = createHash("sha256").update(actual).digest();
+  const expectedDigest = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(actualDigest, expectedDigest);
 }
 
 export interface YoutubeWebhookSubscriptionPort {
@@ -125,7 +132,12 @@ export async function registerWebhookRoutes(app: FastifyInstance, options: Webho
       return reply.code(400).send({ error: "invalid_websub_verification_request" });
     }
 
-    if (verifyToken !== options.env.YOUTUBE_WEBSUB_VERIFY_TOKEN) {
+    const expectedVerifyToken = options.env.YOUTUBE_WEBSUB_VERIFY_TOKEN;
+    if (!isConfiguredSecret(expectedVerifyToken)) {
+      return reply.code(503).send({ error: "youtube_websub_verify_token_not_configured" });
+    }
+
+    if (verifyToken === undefined || !timingSafeStringEqual(verifyToken, expectedVerifyToken as string)) {
       return reply.code(401).send({ error: "invalid_websub_verify_token" });
     }
 
@@ -160,15 +172,17 @@ export async function registerWebhookRoutes(app: FastifyInstance, options: Webho
       return reply.code(503).send({ error: "youtube_websub_disabled" });
     }
 
+    const secret = options.env.YOUTUBE_WEBSUB_SECRET;
+    if (!isConfiguredSecret(secret)) {
+      return reply.code(503).send({ error: "youtube_websub_secret_not_configured" });
+    }
+
     const body = typeof request.body === "string" ? request.body : "";
 
-    const secret = options.env.YOUTUBE_WEBSUB_SECRET;
-    if (secret) {
-      const signatureHeader = request.headers["x-hub-signature"];
-      const headerValue = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
-      if (!verifyWebSubSignature(secret, body, headerValue)) {
-        return reply.code(403).send({ error: "invalid_websub_signature" });
-      }
+    const signatureHeader = request.headers["x-hub-signature"];
+    const headerValue = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
+    if (!verifyWebSubSignature(secret as string, body, headerValue)) {
+      return reply.code(403).send({ error: "invalid_websub_signature" });
     }
 
     const parsed = parseYoutubeAtomFeed(body);

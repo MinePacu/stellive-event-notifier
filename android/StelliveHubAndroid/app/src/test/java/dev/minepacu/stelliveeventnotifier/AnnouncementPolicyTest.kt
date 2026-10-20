@@ -39,4 +39,16 @@ class AnnouncementPolicyTest {
         assertEquals("notice-1", AnnouncementDeepLinkPolicy.idFromAppDeepLink("stellivehub://announcements/notice-1"))
         assertNull(AnnouncementDeepLinkPolicy.idFromAppDeepLink("stellivehub://hub-events/notice-1"))
     }
+
+    @Test fun safeAppDeepLinkAcceptsOnlyAppScheme() {
+        assertEquals("stellivehub://announcements/a", AnnouncementDeepLinkPolicy.safeAppDeepLink("stellivehub://announcements/a"))
+        assertEquals("StelliveHub://live", AnnouncementDeepLinkPolicy.safeAppDeepLink(" StelliveHub://live "))
+        assertNull(AnnouncementDeepLinkPolicy.safeAppDeepLink(null))
+        assertNull(AnnouncementDeepLinkPolicy.safeAppDeepLink("stellivehub://"))
+        assertNull(AnnouncementDeepLinkPolicy.safeAppDeepLink("tel:112"))
+        assertNull(AnnouncementDeepLinkPolicy.safeAppDeepLink("sms:112?body=x"))
+        assertNull(AnnouncementDeepLinkPolicy.safeAppDeepLink("market://details?id=evil"))
+        assertNull(AnnouncementDeepLinkPolicy.safeAppDeepLink("https://example.com/stellivehub://x"))
+        assertNull(AnnouncementDeepLinkPolicy.safeAppDeepLink("javascript:alert(1)"))
+    }
 }

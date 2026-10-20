@@ -35,6 +35,24 @@ struct MusicPageCollector {
     }
 }
 
+/// Outcome of one `ServerHubStore.updatePreferences` attempt. `conflict` and `staleUpdate` carry the
+/// server's preferences re-fetched afterwards (nil when that fetch failed).
+enum PreferenceSyncResult: Equatable {
+    case synced
+    /// No registered device id yet, so nothing can be sent.
+    case skipped
+    /// Network, rate-limit (429) or other non-conflict failure.
+    case failed
+    case conflict(server: PreferencesResponse?)
+    case staleUpdate(server: PreferencesResponse?)
+}
+
+extension PreferencesResponse {
+    var globalPreference: PreferenceResponse? {
+        preferences.first { $0.scope == "global" }
+    }
+}
+
 @MainActor
 final class ServerHubStore: ObservableObject {
     private let api: HubAPIClient
@@ -69,16 +87,23 @@ final class ServerHubStore: ObservableObject {
     private(set) var calendarCachedAt: Date?
     private static let calendarCacheTTL: TimeInterval = 300
     private static let calendarChunkMonths = 6
+    private static let preferenceSyncDebounce: Duration = .milliseconds(600)
+    private let preferenceSyncSleep: @Sendable (Duration) async throws -> Void
+    private var pendingPreferenceSettings: NotificationSettingsState?
+    private var preferenceSendTask: Task<Void, Never>?
+    private(set) var preferenceSyncTask: Task<Void, Never>?
 
     init(
         api: HubAPIClient,
         deviceIDStore: DeviceIDStore = DeviceIDStore(),
         fallback: MockHubStore,
+        preferenceSyncSleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
         goodsChecklist: GoodsChecklistStore? = nil
     ) {
         self.api = api
         self.deviceIDStore = deviceIDStore
         self.fallback = fallback
+        self.preferenceSyncSleep = preferenceSyncSleep
         self.goodsChecklist = goodsChecklist
     }
 
@@ -113,8 +138,74 @@ final class ServerHubStore: ObservableObject {
         deviceIDStore.saveDeviceID(response.deviceId)
     }
 
-    func updatePreferences(_ settings: NotificationSettingsState) async {
+    /// Coalesces rapid settings changes into a single server write of the latest state.
+    func schedulePreferenceSync(_ settings: NotificationSettingsState) {
+        pendingPreferenceSettings = settings
+        preferenceSyncTask?.cancel()
+        preferenceSyncTask = Task { [preferenceSyncSleep] in
+            try? await preferenceSyncSleep(Self.preferenceSyncDebounce)
+            guard !Task.isCancelled else { return }
+            await self.sendPendingPreferenceSync()
+        }
+    }
+
+    /// Sends any debounced settings immediately, e.g. before the app is suspended.
+    func flushPendingPreferenceSync() async {
+        preferenceSyncTask?.cancel()
+        preferenceSyncTask = nil
+        await sendPendingPreferenceSync()
+    }
+
+    private func sendPendingPreferenceSync() async {
+        guard let settings = pendingPreferenceSettings else { return }
+        pendingPreferenceSettings = nil
+        // Unstructured and chained so a newer schedule never cancels an in-flight write
+        // and writes stay ordered.
+        let previous = preferenceSendTask
+        let task = Task {
+            await previous?.value
+            await self.syncPreferences(settings)
+        }
+        preferenceSendTask = task
+        await task.value
+    }
+
+    /// Sends `settings` and reconciles the local dirty flag with the outcome: success confirms the
+    /// sent global rule; a conflict or stale update adopts the server's global rule (only if the user
+    /// has not changed it again meanwhile). Failures keep the local values and the dirty flag.
+    private func syncPreferences(_ settings: NotificationSettingsState) async {
+        let sent = settings.globalRule
+        switch await updatePreferences(settings) {
+        case .synced:
+            fallback.confirmGlobalRuleSynced(sent: sent)
+        case .conflict(let server?), .staleUpdate(let server?):
+            if fallback.settings.globalRule == sent {
+                fallback.adoptServerGlobalRule(server.globalPreference)
+            }
+        case .conflict(nil), .staleUpdate(nil), .skipped, .failed:
+            break
+        }
+    }
+
+    /// Call once per launch after the device is registered. Pushes unconfirmed local values;
+    /// otherwise adopts the server's global rule. Offline or without a device id the local values stay.
+    func reconcileNotificationSettingsOnLaunch() async {
         guard let deviceId = deviceIDStore.loadDeviceID() else { return }
+        if fallback.isGlobalRuleDirty {
+            pendingPreferenceSettings = fallback.settings
+            await flushPendingPreferenceSync()
+            return
+        }
+        guard let response = try? await api.preferences(deviceId: deviceId),
+              !fallback.isGlobalRuleDirty,
+              let global = response.globalPreference
+        else { return }
+        fallback.adoptServerGlobalRule(global)
+    }
+
+    @discardableResult
+    func updatePreferences(_ settings: NotificationSettingsState) async -> PreferenceSyncResult {
+        guard let deviceId = deviceIDStore.loadDeviceID() else { return .skipped }
         preferenceSyncErrorMessage = nil
         do {
             var current = try await api.preferences(deviceId: deviceId)
@@ -124,20 +215,20 @@ final class ServerHubStore: ObservableObject {
                     _ = try await api.updatePreferences(
                         preferenceUpdateRequest(deviceId: deviceId, settings: settings, current: current, clientUpdatedAt: clientUpdatedAt)
                     )
-                    return
+                    return .synced
                 } catch HubAPIError.httpStatus(409) where attempt == 0 {
                     current = try await api.preferences(deviceId: deviceId)
                 } catch HubAPIError.httpStatus(409) {
                     preferenceSyncErrorMessage = "설정 동기화가 충돌했습니다. 다시 시도해 주세요."
-                    return
+                    return .conflict(server: try? await api.preferences(deviceId: deviceId))
                 } catch HubAPIError.preferenceStaleUpdate {
-                    _ = try? await api.preferences(deviceId: deviceId)
-                    return
+                    return .staleUpdate(server: try? await api.preferences(deviceId: deviceId))
                 }
             }
         } catch {
             // Local settings remain usable while the next change retries server synchronization.
         }
+        return .failed
     }
 
     private func preferenceUpdateRequest(

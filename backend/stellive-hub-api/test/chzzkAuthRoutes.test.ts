@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import Fastify from "fastify";
 import { createChzzkOAuthState, verifyChzzkOAuthState } from "../src/adapters/chzzk/chzzkOAuthState.js";
+import { createAdminSessionCookie } from "../src/admin/adminAuth.js";
 import { registerChzzkAuthRoutes } from "../src/routes/chzzkAuthRoutes.js";
 
 const routeEnv = {
@@ -59,24 +60,35 @@ const routeEnv = {
   NOTIFICATION_PREFERENCE_BATCH_SIZE: 500,
   DELIVERY_ATTEMPT_BATCH_SIZE: 500,
   ADMIN_CONSOLE_ENABLED: false,
+  ADMIN_CONSOLE_TOKEN: "admin-token",
   ADMIN_OVERVIEW_CACHE_TTL_SECONDS: 15,
   EXTERNAL_API_LOG_RETENTION_DAYS: 31,
-  ADMIN_CONSOLE_COOKIE_SECURE: false
+  DELIVERY_ATTEMPT_RETENTION_DAYS: 30,
+  LOG_RETENTION_INTERVAL_MINUTES: 60,
+  LOG_RETENTION_ENABLED: true,
+  YOUTUBE_WEBSUB_AUTO_RENEW_ENABLED: true,
+  YOUTUBE_WEBSUB_RENEW_CHECK_INTERVAL_MINUTES: 60,
+  YOUTUBE_WEBSUB_RENEW_BEFORE_HOURS: 48,
+  ADMIN_CONSOLE_COOKIE_SECURE: false,
+  TRUST_PROXY: false,
+  DEVICE_WRITE_RATE_LIMIT_PER_MINUTE: 60,
+  DEVICE_READ_RATE_LIMIT_PER_MINUTE: 240
 };
 
 describe("CHZZK OAuth state signing", () => {
   const secret = "local-state-secret";
   const now = new Date("2026-06-11T00:00:00.000Z");
 
-  it("creates and verifies a URL-safe signed state", () => {
-    const state = createChzzkOAuthState(secret, now);
+  it("creates and verifies a URL-safe signed state that carries its nonce", () => {
+    const { state, nonce } = createChzzkOAuthState(secret, now);
 
     expect(state).toMatch(/^[A-Za-z0-9_-]+$/);
-    expect(verifyChzzkOAuthState(secret, state, now)).toEqual({ ok: true });
+    expect(nonce).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(verifyChzzkOAuthState(secret, state, now)).toEqual({ ok: true, nonce });
   });
 
   it("rejects a tampered state", () => {
-    const state = createChzzkOAuthState(secret, now);
+    const { state } = createChzzkOAuthState(secret, now);
     const decoded = Buffer.from(state, "base64url").toString("utf8");
     const [payload] = decoded.split(".");
     const tampered = Buffer.from(`${payload}.invalid-signature`, "utf8").toString("base64url");
@@ -85,12 +97,67 @@ describe("CHZZK OAuth state signing", () => {
   });
 
   it("rejects an expired state", () => {
-    const state = createChzzkOAuthState(secret, now);
+    const { state } = createChzzkOAuthState(secret, now);
     const tooLate = new Date(now.getTime() + 10 * 60 * 1000 + 1);
 
     expect(verifyChzzkOAuthState(secret, state, tooLate)).toEqual({ ok: false, reason: "expired" });
   });
+
+  it("rejects a state issued more than 60 seconds in the future", () => {
+    const { state } = createChzzkOAuthState(secret, new Date(now.getTime() + 5 * 60 * 1000));
+
+    expect(verifyChzzkOAuthState(secret, state, now)).toEqual({ ok: false, reason: "future" });
+  });
 });
+
+const fixedNow = new Date("2026-06-11T00:00:00.000Z");
+const adminEnv = { ...routeEnv, ADMIN_CONSOLE_ENABLED: true };
+
+function adminCookieHeader(): string {
+  const cookie = createAdminSessionCookie({ adminToken: "admin-token", secure: false });
+  return `${cookie!.name}=${cookie!.value}`;
+}
+
+function readSetCookie(response: { headers: Record<string, unknown> }): string[] {
+  const value = response.headers["set-cookie"];
+  if (!value) return [];
+  return Array.isArray(value) ? (value as string[]) : [String(value)];
+}
+
+function createStateRepository(stored: Array<{ source: string; key: string; value: unknown; status: string }> = []) {
+  return {
+    upsertState: async (source: string, key: string, value: unknown, status: string) => {
+      stored.push({ source, key, value, status });
+    },
+    upsertAdapterHealth: async (source: string, health: { status: string }) => {
+      stored.push({ source, key: "health", value: health, status: health.status });
+    }
+  };
+}
+
+async function buildCallbackApp(options: { exchange?: () => Promise<never> | Promise<any>; stored?: Array<{ source: string; key: string; value: unknown; status: string }>; env?: typeof routeEnv } = {}) {
+  const app = Fastify();
+  const exchange = vi.fn(
+    options.exchange ??
+      (async () => ({
+        accessToken: "access-token",
+        refreshToken: "refresh-token",
+        tokenType: "Bearer",
+        expiresIn: 86400,
+        scope: "channel"
+      }))
+  );
+  await registerChzzkAuthRoutes(app, {
+    env: options.env ?? routeEnv,
+    authClient: {
+      buildAuthorizeUrl: () => "https://chzzk.naver.com/account-interlock",
+      exchangeCodeForToken: exchange
+    },
+    stateRepository: createStateRepository(options.stored),
+    now: () => fixedNow
+  });
+  return { app, exchange };
+}
 
 describe("CHZZK OAuth routes", () => {
   it("returns 503 when OAuth is disabled or not configured", async () => {
@@ -103,11 +170,8 @@ describe("CHZZK OAuth routes", () => {
           throw new Error("should_not_exchange");
         }
       },
-      stateRepository: {
-        upsertState: async () => undefined,
-        upsertAdapterHealth: async () => undefined
-      },
-      now: () => new Date("2026-06-11T00:00:00.000Z")
+      stateRepository: createStateRepository(),
+      now: () => fixedNow
     });
 
     const response = await app.inject({ method: "GET", url: "/v1/auth/chzzk/start" });
@@ -117,7 +181,98 @@ describe("CHZZK OAuth routes", () => {
     expect(response.json()).toEqual({ error: "chzzk_oauth_not_configured" });
   });
 
-  it("redirects to the CHZZK authorization URL when configured", async () => {
+  it("redirects to the CHZZK authorization URL for an admin session and binds the state to a nonce cookie", async () => {
+    const app = Fastify();
+    await registerChzzkAuthRoutes(app, {
+      env: adminEnv,
+      authClient: {
+        buildAuthorizeUrl: ({ state }) => `https://chzzk.naver.com/account-interlock?state=${state}`,
+        exchangeCodeForToken: async () => {
+          throw new Error("should_not_exchange");
+        }
+      },
+      stateRepository: createStateRepository(),
+      now: () => fixedNow
+    });
+
+    const response = await app.inject({ method: "GET", url: "/v1/auth/chzzk/start", headers: { cookie: adminCookieHeader() } });
+    await app.close();
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toContain("https://chzzk.naver.com/account-interlock?state=");
+
+    const nonceCookie = readSetCookie(response).find((cookie) => cookie.startsWith("chzzk_oauth_nonce="));
+    expect(nonceCookie).toBeDefined();
+    expect(nonceCookie).toContain("HttpOnly");
+    expect(nonceCookie).toContain("SameSite=Lax");
+    expect(nonceCookie).toContain("Path=/v1/auth/chzzk");
+    expect(nonceCookie).toContain("Max-Age=600");
+    expect(nonceCookie).not.toContain("Secure");
+
+    const stateParam = new URL(response.headers.location as string).searchParams.get("state")!;
+    const verified = verifyChzzkOAuthState(adminEnv.CHZZK_AUTH_STATE_SECRET, stateParam, fixedNow);
+    expect(verified.ok).toBe(true);
+    const cookieNonce = nonceCookie!.split(";")[0].split("=")[1];
+    expect(verified.ok && verified.nonce).toBe(cookieNonce);
+  });
+
+  it("accepts an admin bearer token on start and marks the nonce cookie Secure when forced", async () => {
+    const app = Fastify();
+    await registerChzzkAuthRoutes(app, {
+      env: { ...adminEnv, ADMIN_CONSOLE_COOKIE_SECURE: true },
+      authClient: {
+        buildAuthorizeUrl: ({ state }) => `https://chzzk.naver.com/account-interlock?state=${state}`,
+        exchangeCodeForToken: async () => {
+          throw new Error("should_not_exchange");
+        }
+      },
+      stateRepository: createStateRepository(),
+      now: () => fixedNow
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/auth/chzzk/start",
+      headers: { authorization: "Bearer admin-token" }
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(302);
+    const nonceCookie = readSetCookie(response).find((cookie) => cookie.startsWith("chzzk_oauth_nonce="));
+    expect(nonceCookie).toContain("Secure");
+  });
+
+  it("rejects start without admin authentication and does not redirect", async () => {
+    const app = Fastify();
+    await registerChzzkAuthRoutes(app, {
+      env: adminEnv,
+      authClient: {
+        buildAuthorizeUrl: ({ state }) => `https://chzzk.naver.com/account-interlock?state=${state}`,
+        exchangeCodeForToken: async () => {
+          throw new Error("should_not_exchange");
+        }
+      },
+      stateRepository: createStateRepository(),
+      now: () => fixedNow
+    });
+
+    const anonymous = await app.inject({ method: "GET", url: "/v1/auth/chzzk/start" });
+    const wrongToken = await app.inject({
+      method: "GET",
+      url: "/v1/auth/chzzk/start",
+      headers: { authorization: "Bearer wrong" }
+    });
+    await app.close();
+
+    expect(anonymous.statusCode).toBe(401);
+    expect(anonymous.headers.location).toBeUndefined();
+    expect(readSetCookie(anonymous)).toEqual([]);
+    expect(anonymous.json()).toEqual({ error: "missing_authorization" });
+    expect(wrongToken.statusCode).toBe(401);
+    expect(wrongToken.json()).toEqual({ error: "invalid_token" });
+  });
+
+  it("returns 404 on start when the admin console is disabled", async () => {
     const app = Fastify();
     await registerChzzkAuthRoutes(app, {
       env: routeEnv,
@@ -127,32 +282,47 @@ describe("CHZZK OAuth routes", () => {
           throw new Error("should_not_exchange");
         }
       },
-      stateRepository: {
-        upsertState: async () => undefined,
-        upsertAdapterHealth: async () => undefined
+      stateRepository: createStateRepository(),
+      now: () => fixedNow
+    });
+
+    const response = await app.inject({ method: "GET", url: "/v1/auth/chzzk/start", headers: { cookie: adminCookieHeader() } });
+    await app.close();
+
+    expect(response.statusCode).toBe(404);
+    expect(response.headers.location).toBeUndefined();
+  });
+
+  it("returns 503 on start when the admin token is not configured", async () => {
+    const app = Fastify();
+    await registerChzzkAuthRoutes(app, {
+      env: { ...adminEnv, ADMIN_CONSOLE_TOKEN: undefined },
+      authClient: {
+        buildAuthorizeUrl: ({ state }) => `https://chzzk.naver.com/account-interlock?state=${state}`,
+        exchangeCodeForToken: async () => {
+          throw new Error("should_not_exchange");
+        }
       },
-      now: () => new Date("2026-06-11T00:00:00.000Z")
+      stateRepository: createStateRepository(),
+      now: () => fixedNow
     });
 
     const response = await app.inject({ method: "GET", url: "/v1/auth/chzzk/start" });
     await app.close();
 
-    expect(response.statusCode).toBe(302);
-    expect(response.headers.location).toContain("https://chzzk.naver.com/account-interlock?state=");
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: "admin_console_token_missing" });
   });
 
   it("adds configured OAuth scopes to the default authorization redirect", async () => {
     const app = Fastify();
     await registerChzzkAuthRoutes(app, {
-      env: { ...routeEnv, CHZZK_OAUTH_SCOPES: "user:read channel:read live:read" },
-      stateRepository: {
-        upsertState: async () => undefined,
-        upsertAdapterHealth: async () => undefined
-      },
-      now: () => new Date("2026-06-11T00:00:00.000Z")
+      env: { ...adminEnv, CHZZK_OAUTH_SCOPES: "user:read channel:read live:read" },
+      stateRepository: createStateRepository(),
+      now: () => fixedNow
     });
 
-    const response = await app.inject({ method: "GET", url: "/v1/auth/chzzk/start" });
+    const response = await app.inject({ method: "GET", url: "/v1/auth/chzzk/start", headers: { cookie: adminCookieHeader() } });
     await app.close();
 
     const location = new URL(response.headers.location as string);
@@ -161,21 +331,7 @@ describe("CHZZK OAuth routes", () => {
   });
 
   it("rejects callback requests with missing code or invalid state", async () => {
-    const app = Fastify();
-    await registerChzzkAuthRoutes(app, {
-      env: routeEnv,
-      authClient: {
-        buildAuthorizeUrl: () => "https://chzzk.naver.com/account-interlock",
-        exchangeCodeForToken: async () => {
-          throw new Error("should_not_exchange");
-        }
-      },
-      stateRepository: {
-        upsertState: async () => undefined,
-        upsertAdapterHealth: async () => undefined
-      },
-      now: () => new Date("2026-06-11T00:00:00.000Z")
-    });
+    const { app, exchange } = await buildCallbackApp();
 
     const missingCode = await app.inject({ method: "GET", url: "/v1/auth/chzzk/callback?state=invalid" });
     const invalidState = await app.inject({ method: "GET", url: "/v1/auth/chzzk/callback?code=auth-code&state=invalid" });
@@ -185,44 +341,60 @@ describe("CHZZK OAuth routes", () => {
     expect(missingCode.json()).toEqual({ error: "chzzk_oauth_code_missing" });
     expect(invalidState.statusCode).toBe(400);
     expect(invalidState.json()).toEqual({ error: "invalid_oauth_state" });
+    expect(exchange).not.toHaveBeenCalled();
   });
 
-  it("exchanges valid callbacks and stores token metadata", async () => {
-    const app = Fastify();
-    const stored: Array<{ source: string; key: string; value: unknown; status: string }> = [];
-    const state = createChzzkOAuthState(routeEnv.CHZZK_AUTH_STATE_SECRET, new Date("2026-06-11T00:00:00.000Z"));
+  it("rejects a callback with a valid state but no nonce cookie", async () => {
+    const { app, exchange } = await buildCallbackApp();
+    const { state } = createChzzkOAuthState(routeEnv.CHZZK_AUTH_STATE_SECRET, fixedNow);
 
-    await registerChzzkAuthRoutes(app, {
-      env: routeEnv,
-      authClient: {
-        buildAuthorizeUrl: () => "https://chzzk.naver.com/account-interlock",
-        exchangeCodeForToken: async () => ({
-          accessToken: "access-token",
-          refreshToken: "refresh-token",
-          tokenType: "Bearer",
-          expiresIn: 86400,
-          scope: "channel"
-        })
-      },
-      stateRepository: {
-        upsertState: async (source, key, value, status) => {
-          stored.push({ source, key, value, status });
-        },
-        upsertAdapterHealth: async (source, health) => {
-          stored.push({ source, key: "health", value: health, status: health.status });
-        }
-      },
-      now: () => new Date("2026-06-11T00:00:00.000Z")
-    });
+    const response = await app.inject({ method: "GET", url: `/v1/auth/chzzk/callback?code=auth-code&state=${state}` });
+    await app.close();
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "invalid_oauth_state" });
+    expect(exchange).not.toHaveBeenCalled();
+  });
+
+  it("rejects a callback whose nonce cookie does not match the state nonce", async () => {
+    const { app, exchange } = await buildCallbackApp();
+    const { state } = createChzzkOAuthState(routeEnv.CHZZK_AUTH_STATE_SECRET, fixedNow);
 
     const response = await app.inject({
       method: "GET",
-      url: `/v1/auth/chzzk/callback?code=auth-code&state=${state}`
+      url: `/v1/auth/chzzk/callback?code=auth-code&state=${state}`,
+      headers: { cookie: "chzzk_oauth_nonce=some-other-nonce" }
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "invalid_oauth_state" });
+    expect(exchange).not.toHaveBeenCalled();
+    const cleared = readSetCookie(response).find((cookie) => cookie.startsWith("chzzk_oauth_nonce="));
+    expect(cleared).toContain("Max-Age=0");
+  });
+
+  it("exchanges valid callbacks, stores token metadata, and clears the nonce cookie", async () => {
+    const stored: Array<{ source: string; key: string; value: unknown; status: string }> = [];
+    const { app, exchange } = await buildCallbackApp({ stored });
+    const { state, nonce } = createChzzkOAuthState(routeEnv.CHZZK_AUTH_STATE_SECRET, fixedNow);
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/auth/chzzk/callback?code=auth-code&state=${state}`,
+      headers: { cookie: `other=1; chzzk_oauth_nonce=${nonce}` }
     });
     await app.close();
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ connected: true, source: "chzzk" });
+    expect(exchange).toHaveBeenCalledTimes(1);
+    const cleared = readSetCookie(response).find((cookie) => cookie.startsWith("chzzk_oauth_nonce="));
+    expect(cleared).toContain("chzzk_oauth_nonce=;");
+    expect(cleared).toContain("Max-Age=0");
+    expect(cleared).toContain("Path=/v1/auth/chzzk");
+    expect(cleared).toContain("HttpOnly");
+    expect(cleared).toContain("SameSite=Lax");
     expect(stored).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ source: "chzzk", key: "oauth.accessToken", status: "enabled" }),

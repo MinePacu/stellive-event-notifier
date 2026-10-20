@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   calculateRetryDelayMs,
   NotificationWorker,
@@ -15,6 +15,26 @@ import type {
   ResolvedNotificationPreference,
   UserNotificationPreference
 } from "../src/types.js";
+
+// The real catalog has no default-off generation since gen4 (ABYSS) debuted, so the default-off gate is
+// exercised through a synthetic generation injected into the seed the preference resolver reads.
+const DEFAULT_OFF_GENERATION_ID = "test-default-off-generation";
+vi.mock("../../../shared/member-catalog/generations.seed.json", async (importOriginal) => {
+  const original = await importOriginal<{ default: Array<Record<string, unknown>> }>();
+  return {
+    default: [
+      ...original.default,
+      {
+        id: "test-default-off-generation",
+        displayName: "test",
+        unitName: "test",
+        sortOrder: 999,
+        type: "upcoming",
+        notificationDefaultEnabled: false
+      }
+    ]
+  };
+});
 
 const now = new Date("2026-06-12T00:00:00.000Z");
 
@@ -532,7 +552,7 @@ describe("NotificationWorker", () => {
     const preferenceResolution = new PreferenceResolutionService();
     const defaultOffEvent = event({
       type: "event_updated",
-      generationId: "gen4-upcoming",
+      generationId: DEFAULT_OFF_GENERATION_ID,
       memberId: "upcoming-member",
       title: "4기 일정 변경"
     });
@@ -570,7 +590,7 @@ describe("NotificationWorker", () => {
         {
           deviceId: "device-1",
           scope: "generation_event_type",
-          generationId: "gen4-upcoming",
+          generationId: DEFAULT_OFF_GENERATION_ID,
           eventType: "event_updated",
           enabled: true,
           explicitOverride: false,

@@ -83,6 +83,22 @@ enum AnnouncementDeepLinkPolicy {
         let id = url.pathComponents.dropFirst().first ?? ""
         return id.isEmpty ? nil : id
     }
+
+    /// Returns a server-provided deep link only when an app-owned route (announcement, reservation, hub event)
+    /// recognizes it; any other scheme or unrecognized `stellivehub://` URL is rejected.
+    static func safeAppDeepLink(_ rawValue: String?) -> URL? {
+        guard
+            let value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+            let url = URL(string: value),
+            url.scheme == "stellivehub"
+        else { return nil }
+        guard
+            id(from: url) != nil
+                || ReservationDeepLinkPolicy.route(from: url) != nil
+                || HubCalendarDeepLinkPolicy.eventId(from: url) != nil
+        else { return nil }
+        return url
+    }
 }
 
 @MainActor

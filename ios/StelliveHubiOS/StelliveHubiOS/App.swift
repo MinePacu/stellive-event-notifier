@@ -14,7 +14,7 @@ struct StelliveHubApp: App {
     @StateObject private var goodsChecklistStore: GoodsChecklistStore
 
     init() {
-        let fallback = MockHubStore()
+        let fallback = MockHubStore(settingsPersistence: .standard)
         _store = StateObject(wrappedValue: fallback)
         let resolvedHubBaseURL: URL
         if let configuredHubBaseURL = Bundle.main.hubBaseURL {
@@ -56,6 +56,7 @@ struct StelliveHubApp: App {
                 .preferredColorScheme(store.settings.appearanceMode.preferredColorScheme)
                 .task {
                     _ = await serverStore.bootstrap()
+                    await serverStore.reconcileNotificationSettingsOnLaunch()
                     if let summary = serverStore.announcementsSummary { announcementReadStore.initialize(summaryItems: summary.items) }
                     try? HubCalendarWidgetStore.saveToSharedContainer(store.calendarWidgetSnapshot())
                 }

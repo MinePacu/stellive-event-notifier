@@ -592,6 +592,12 @@ enum HubEventLinkPolicy {
         return HubEventLink(id: id, kind: kind, label: label, url: url, sortOrder: sortOrder)
     }
 
+    /// Returns a URL only for server-provided `https://` links that have a host; every other scheme is rejected.
+    static func httpsURL(from rawValue: String?) -> URL? {
+        guard let value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines), isHTTPS(value) else { return nil }
+        return URL(string: value)
+    }
+
     private static func isHTTPS(_ value: String) -> Bool {
         guard let components = URLComponents(string: value) else { return false }
         return components.scheme?.lowercased() == "https" && components.host?.isEmpty == false
@@ -1171,7 +1177,8 @@ enum IOSSongPagePolicy {
         .init(id: "all", label: "전체"),
         .init(id: "gen1", label: "1기생"),
         .init(id: "gen2", label: "2기생"),
-        .init(id: "gen3", label: "3기생")
+        .init(id: "gen3", label: "3기생"),
+        .init(id: "gen4", label: "4기생")
     ]
 
     static let typeFilters: [SongFilterOption] = [
@@ -1222,7 +1229,7 @@ enum IOSSongPagePolicy {
 
     static func memberFilters(from members: [HubMember]) -> [SongFilterOption] {
         members
-            .filter { $0.catalogRole == .member && ["gen1", "gen2", "gen3"].contains($0.generationId) }
+            .filter { $0.catalogRole == .member && ["gen1", "gen2", "gen3", "gen4"].contains($0.generationId) }
             .map { SongFilterOption(id: $0.id, label: $0.koreanName.isEmpty ? $0.englishName : $0.koreanName) }
     }
 
@@ -1261,7 +1268,7 @@ enum IOSSongPagePolicy {
     }
 
     static func generationPresetLabel(_ members: [HubMember], state: SongMemberFilterState) -> String? {
-        for (id, label) in [("gen1", "1기생"), ("gen2", "2기생"), ("gen3", "3기생")] {
+        for (id, label) in [("gen1", "1기생"), ("gen2", "2기생"), ("gen3", "3기생"), ("gen4", "4기생")] {
             let ids = generationMemberIds(members, generationId: id)
             if !ids.isEmpty && ids == state.normalized().selectedMemberIds { return "\(label) 전원 참여" }
         }
@@ -1991,7 +1998,7 @@ struct CombinationPreference: Identifiable, Hashable {
     var enabled: Bool
 }
 
-struct QuietHoursState: Equatable {
+struct QuietHoursState: Equatable, Codable {
     var enabled = false
     var start = "23:00"
     var end = "08:00"
@@ -2052,7 +2059,7 @@ enum QuietHoursClock {
     }
 }
 
-struct KeywordFilterState: Equatable {
+struct KeywordFilterState: Equatable, Codable {
     var allowlistText = ""
     var blocklistText = ""
 
@@ -2062,7 +2069,7 @@ struct KeywordFilterState: Equatable {
     }
 }
 
-struct RateLimitState: Equatable {
+struct RateLimitState: Equatable, Codable {
     var maxNotificationsPerMinute = 10
 }
 
@@ -2083,9 +2090,9 @@ struct NotificationSettingsState: Equatable {
         "gen1": true,
         "gen2": true,
         "gen3": true,
+        "gen4": true,
         "gamja": true,
-        "official": true,
-        "gen4-upcoming": false
+        "official": true
     ]
     var memberEnabled: [String: Bool] = [:]
     var platformEnabled: [NotificationPlatform: Bool] = [
@@ -2126,5 +2133,147 @@ struct NotificationSettingsState: Equatable {
 
     var canEnableChzzkChatPush: Bool {
         chzzkChatEnabled && keywordFilters.hasExplicitFilters
+    }
+}
+
+/// The notification settings the server stores as the device's single `global` preference rule.
+/// A local change to any of these must be pushed to the server; see `MockHubStore.isGlobalRuleDirty`.
+struct NotificationGlobalRule: Equatable {
+    var globalEnabled: Bool
+    var serviceAnnouncementsEnabled: Bool
+    var realtimeEnabled: Bool
+    var tapAction: TapAction
+}
+
+extension NotificationSettingsState {
+    var globalRule: NotificationGlobalRule {
+        NotificationGlobalRule(
+            globalEnabled: globalEnabled,
+            serviceAnnouncementsEnabled: serviceAnnouncementsEnabled,
+            realtimeEnabled: realtimeEnabled,
+            tapAction: tapAction
+        )
+    }
+}
+
+// MARK: - Local persistence
+//
+// Decoding is tolerant: a missing or unreadable field keeps its default, so an older or partially
+// corrupt blob (or one written before a field existed) never discards the other stored settings.
+
+private extension KeyedDecodingContainer {
+    func decodeTolerantly<Value: Decodable>(_ type: Value.Type, forKey key: Key) -> Value? {
+        try? decodeIfPresent(type, forKey: key)
+    }
+}
+
+extension KeywordFilterState {
+    enum CodingKeys: String, CodingKey { case allowlistText, blocklistText }
+
+    init(from decoder: Decoder) throws {
+        self.init()
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        allowlistText = container.decodeTolerantly(String.self, forKey: .allowlistText) ?? allowlistText
+        blocklistText = container.decodeTolerantly(String.self, forKey: .blocklistText) ?? blocklistText
+    }
+}
+
+extension RateLimitState {
+    enum CodingKeys: String, CodingKey { case maxNotificationsPerMinute }
+
+    init(from decoder: Decoder) throws {
+        self.init()
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        maxNotificationsPerMinute = container.decodeTolerantly(Int.self, forKey: .maxNotificationsPerMinute)
+            ?? maxNotificationsPerMinute
+    }
+}
+
+extension QuietHoursState {
+    enum CodingKeys: String, CodingKey { case enabled, start, end, timezone }
+
+    init(from decoder: Decoder) throws {
+        self.init()
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = container.decodeTolerantly(Bool.self, forKey: .enabled) ?? enabled
+        start = container.decodeTolerantly(String.self, forKey: .start) ?? start
+        end = container.decodeTolerantly(String.self, forKey: .end) ?? end
+        timezone = container.decodeTolerantly(String.self, forKey: .timezone) ?? timezone
+    }
+}
+
+extension NotificationSettingsState: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case globalEnabled, serviceAnnouncementsEnabled, realtimeEnabled, tapAction, appearanceMode
+        case chzzkChatEnabled, generationEnabled, memberEnabled, platformEnabled, eventTypeEnabled
+        case combinationPreferences, quietHours, keywordFilters, rateLimit
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init()
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        globalEnabled = container.decodeTolerantly(Bool.self, forKey: .globalEnabled) ?? globalEnabled
+        serviceAnnouncementsEnabled = container.decodeTolerantly(Bool.self, forKey: .serviceAnnouncementsEnabled)
+            ?? serviceAnnouncementsEnabled
+        realtimeEnabled = container.decodeTolerantly(Bool.self, forKey: .realtimeEnabled) ?? realtimeEnabled
+        tapAction = container.decodeTolerantly(TapAction.self, forKey: .tapAction) ?? tapAction
+        appearanceMode = container.decodeTolerantly(AppearanceMode.self, forKey: .appearanceMode) ?? appearanceMode
+        chzzkChatEnabled = container.decodeTolerantly(Bool.self, forKey: .chzzkChatEnabled) ?? chzzkChatEnabled
+        // Stored values overlay the defaults so a newly added generation/platform/event type keeps
+        // its default, and a stored key this build no longer knows is dropped.
+        if let stored = container.decodeTolerantly([String: Bool].self, forKey: .generationEnabled) {
+            generationEnabled.merge(stored) { _, stored in stored }
+        }
+        // The placeholder "gen4-upcoming" generation became the real "gen4". Its stored false was
+        // only the old default, never an opt-out, so gen4 keeps its default (on) and the legacy
+        // key is dropped; only an explicit true carries over.
+        if generationEnabled.removeValue(forKey: "gen4-upcoming") == true { generationEnabled["gen4"] = true }
+        memberEnabled = container.decodeTolerantly([String: Bool].self, forKey: .memberEnabled) ?? memberEnabled
+        memberEnabled.removeValue(forKey: "gen4-placeholder")
+        if let stored = container.decodeTolerantly([String: Bool].self, forKey: .platformEnabled) {
+            for (rawValue, enabled) in stored {
+                if let platform = NotificationPlatform(rawValue: rawValue) { platformEnabled[platform] = enabled }
+            }
+        }
+        if let stored = container.decodeTolerantly([String: Bool].self, forKey: .eventTypeEnabled) {
+            for (rawValue, enabled) in stored {
+                if let eventType = NotificationEventType(rawValue: rawValue) { eventTypeEnabled[eventType] = enabled }
+            }
+        }
+        if let stored = container.decodeTolerantly([String: Bool].self, forKey: .combinationPreferences) {
+            for index in combinationPreferences.indices {
+                if let enabled = stored[combinationPreferences[index].id] { combinationPreferences[index].enabled = enabled }
+            }
+        }
+        quietHours = container.decodeTolerantly(QuietHoursState.self, forKey: .quietHours) ?? quietHours
+        keywordFilters = container.decodeTolerantly(KeywordFilterState.self, forKey: .keywordFilters) ?? keywordFilters
+        rateLimit = container.decodeTolerantly(RateLimitState.self, forKey: .rateLimit) ?? rateLimit
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(globalEnabled, forKey: .globalEnabled)
+        try container.encode(serviceAnnouncementsEnabled, forKey: .serviceAnnouncementsEnabled)
+        try container.encode(realtimeEnabled, forKey: .realtimeEnabled)
+        try container.encode(tapAction, forKey: .tapAction)
+        try container.encode(appearanceMode, forKey: .appearanceMode)
+        try container.encode(chzzkChatEnabled, forKey: .chzzkChatEnabled)
+        try container.encode(generationEnabled, forKey: .generationEnabled)
+        try container.encode(memberEnabled, forKey: .memberEnabled)
+        try container.encode(
+            Dictionary(uniqueKeysWithValues: platformEnabled.map { ($0.key.rawValue, $0.value) }),
+            forKey: .platformEnabled
+        )
+        try container.encode(
+            Dictionary(uniqueKeysWithValues: eventTypeEnabled.map { ($0.key.rawValue, $0.value) }),
+            forKey: .eventTypeEnabled
+        )
+        try container.encode(
+            Dictionary(uniqueKeysWithValues: combinationPreferences.map { ($0.id, $0.enabled) }),
+            forKey: .combinationPreferences
+        )
+        try container.encode(quietHours, forKey: .quietHours)
+        try container.encode(keywordFilters, forKey: .keywordFilters)
+        try container.encode(rateLimit, forKey: .rateLimit)
     }
 }

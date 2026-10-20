@@ -1,7 +1,7 @@
 import type { Member } from "../../types.js";
 import type { YoutubeWebSubSubscriptionTarget } from "./youtubeWebSubSubscriptionService.js";
 
-const supportedMemberGenerations = new Set(["gen1", "gen2", "gen3"]);
+const supportedMemberGenerations = new Set(["gen1", "gen2", "gen3", "gen4"]);
 
 export interface YoutubeWebSubTargetDiagnostic {
   code: "youtube_websub_target_duplicate_channel";

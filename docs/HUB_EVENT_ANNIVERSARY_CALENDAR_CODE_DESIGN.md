@@ -60,7 +60,7 @@ export type HubCalendarSpecialDay = {
   id: string;
   kind: HubCalendarSpecialDayKind;
   title: string;
-  generationId: "gen1" | "gen2" | "gen3" | "gamja" | "gen4-upcoming";
+  generationId: "gen1" | "gen2" | "gen3" | "gen4" | "gamja";
   memberId?: string;
   month: number;
   day: number;
