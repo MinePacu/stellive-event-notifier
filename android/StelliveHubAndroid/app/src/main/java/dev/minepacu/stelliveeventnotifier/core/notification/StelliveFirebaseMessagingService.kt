@@ -16,6 +16,7 @@ import com.google.firebase.messaging.RemoteMessage
 import dev.minepacu.stelliveeventnotifier.BuildConfig
 import dev.minepacu.stelliveeventnotifier.MainActivity
 import dev.minepacu.stelliveeventnotifier.R
+import dev.minepacu.stelliveeventnotifier.core.device.DeviceIdStore
 import dev.minepacu.stelliveeventnotifier.core.device.PushTokenSyncer
 import dev.minepacu.stelliveeventnotifier.core.network.HubApiClient
 import kotlinx.coroutines.CoroutineScope
@@ -31,7 +32,10 @@ class StelliveFirebaseMessagingService : FirebaseMessagingService() {
         serviceScope.launch {
             PushTokenSyncer(
                 context = this@StelliveFirebaseMessagingService,
-                apiClient = HubApiClient.create(baseUrl = defaultHubBaseUrl()),
+                apiClient = HubApiClient.create(
+                    baseUrl = defaultHubBaseUrl(),
+                    deviceSecret = DeviceIdStore(this@StelliveFirebaseMessagingService)::getDeviceSecret,
+                ),
             ).syncToken(token)
         }
     }

@@ -113,13 +113,19 @@ class ServerHubRepository(
     private var songFacetCache: SongFacets? = null
 
     override suspend fun bootstrap(): HubDataState {
-        val deviceId = deviceIdStore.getDeviceId()
-        val response = remoteDataSource.bootstrap(deviceId)
+        var response = remoteDataSource.bootstrap(deviceIdStore.getDeviceId())
+        var registered = false
+        if (response.isDeviceAuthFailed()) {
+            // Stale device secret: registration heals the credentials, then retry bootstrap once.
+            runCatching { registerDevice() }
+            registered = true
+            response = remoteDataSource.bootstrap(deviceIdStore.getDeviceId())
+        }
         if (response is HubNetworkResult.Success) {
             // Refresh server-side device metadata on every successful startup. The
             // registration endpoint is idempotent, and failures must not prevent
             // the bootstrap response from reaching the local fallback.
-            runCatching { registerDevice() }
+            if (!registered) runCatching { registerDevice() }
             return fallback.bootstrap()
                 .mergeCatalogProfileImages(response.value.effectiveCatalog.members)
                 .mergeLiveStatus(response.value.liveStatus)
@@ -515,18 +521,28 @@ class ServerHubRepository(
     }
 
     private suspend fun registerDevice() {
-        val response = remoteDataSource.registerDevice(
+        suspend fun register() = remoteDataSource.registerDevice(
             RegisterDeviceRequestDto(
                 deviceId = deviceIdStore.getDeviceId(),
                 platform = "android",
                 appVersion = BuildConfig.VERSION_NAME,
             ),
         )
+        var response = register()
+        if (response.isDeviceAuthFailed()) {
+            // Secret lost or stale (or a concurrent-register race): start over as a new device.
+            deviceIdStore.clearCredentials()
+            response = register()
+        }
         if (response is HubNetworkResult.Success) {
             deviceIdStore.saveDeviceId(response.value.deviceId)
+            response.value.deviceSecret?.let(deviceIdStore::saveDeviceSecret)
             runCatching { flushPendingPushToken() }
         }
     }
+
+    private fun HubNetworkResult<*>.isDeviceAuthFailed() =
+        this is HubNetworkResult.Failure && code == HubApiClient.DEVICE_AUTH_FAILED
 
     private fun HubDataState.mergeLiveStatus(liveStatus: List<LiveStatusDto>): HubDataState {
         if (liveStatus.isEmpty()) return copy(liveStatusSourceLabel = "서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음")

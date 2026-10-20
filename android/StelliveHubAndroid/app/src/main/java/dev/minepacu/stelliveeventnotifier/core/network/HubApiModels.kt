@@ -400,12 +400,14 @@ data class RegisterDeviceRequestDto(
     val locale: String? = null,
     val timezone: String? = null,
     val installationId: String? = null,
+    val deviceSecretSupported: Boolean = true,
 )
 
 data class RegisterDeviceResponseDto(
     val deviceId: String,
     val registered: Boolean,
     val serverTime: String,
+    val deviceSecret: String? = null,
 )
 
 data class UpdateDeviceTokenRequestDto(

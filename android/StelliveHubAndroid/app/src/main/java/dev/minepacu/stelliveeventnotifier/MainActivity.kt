@@ -709,11 +709,12 @@ private var notificationPermissionRequested = false
     }
 
     private fun createServerRepository(): HubRepository {
-        val apiClient = HubApiClient.create(BuildConfig.HUB_BASE_URL)
+        val deviceIdStore = DeviceIdStore(this)
+        val apiClient = HubApiClient.create(BuildConfig.HUB_BASE_URL, deviceSecret = deviceIdStore::getDeviceSecret)
         pushTokenSyncer = PushTokenSyncer(context = this, apiClient = apiClient)
         return ServerHubRepository(
             remoteDataSource = ServerHubRepository.HubApiRemoteDataSource(apiClient),
-            deviceIdStore = DeviceIdStore(this),
+            deviceIdStore = deviceIdStore,
             fallback = repository,
             flushPendingPushToken = { pushTokenSyncer.flushPendingToken() },
         )

@@ -1,5 +1,6 @@
 package dev.minepacu.stelliveeventnotifier.core.network
 
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -181,7 +182,11 @@ class HubApiClient(
             HubNetworkResult.Success(block())
         } catch (throwable: Throwable) {
             HubNetworkResult.Failure(
-                code = if (preferenceConflictAware && throwable is HttpException && throwable.code() == 409) {
+                code = if (throwable is HttpException && throwable.code() == 401 &&
+                    throwable.response()?.errorBody()?.string()?.contains(DEVICE_AUTH_FAILED) == true
+                ) {
+                    DEVICE_AUTH_FAILED
+                } else if (preferenceConflictAware && throwable is HttpException && throwable.code() == 409) {
                     if (throwable.response()?.errorBody()?.string()?.contains("preference_stale_update") == true) {
                         "preference_stale_update"
                     } else {
@@ -195,13 +200,40 @@ class HubApiClient(
         }
 
     companion object {
+        const val DEVICE_AUTH_FAILED = "device_auth_failed"
+
+        // The only requests that carry X-Device-Secret.
+        private val deviceSecretRequests = listOf(
+            "POST" to "/v1/devices/register",
+            "PUT" to "/v1/devices/token",
+            "GET" to "/v1/preferences",
+            "PUT" to "/v1/preferences",
+            "GET" to "/v1/bootstrap",
+        )
+
+        fun deviceSecretInterceptor(deviceSecret: () -> String?) = Interceptor { chain ->
+            val request = chain.request()
+            val secret = deviceSecret()
+            val needsSecret = secret != null && deviceSecretRequests.any { (method, path) ->
+                request.method == method && request.url.encodedPath.endsWith(path)
+            }
+            chain.proceed(
+                if (needsSecret) request.newBuilder().header("X-Device-Secret", secret!!).build() else request,
+            )
+        }
+
         fun create(
             baseUrl: String,
             okHttpClient: OkHttpClient = OkHttpClient(),
+            deviceSecret: () -> String? = { null },
         ): HubApiClient {
             val retrofit = Retrofit.Builder()
                 .baseUrl(baseUrl)
-                .client(okHttpClient)
+                .client(
+                    okHttpClient.newBuilder()
+                        .apply { interceptors().add(0, deviceSecretInterceptor(deviceSecret)) }
+                        .build(),
+                )
                 .addConverterFactory(MoshiConverterFactory.create(moshi()))
                 .build()
             return HubApiClient(retrofit.create(HubApi::class.java))
