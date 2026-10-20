@@ -8,6 +8,7 @@ import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarDayDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarEntryDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarFetchResult
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventDto
+import dev.minepacu.stelliveeventnotifier.core.network.HubEventGoodsItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventScheduleItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventsListResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubNetworkResult
@@ -25,6 +26,7 @@ import dev.minepacu.stelliveeventnotifier.core.network.RegisterDeviceResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.UpdatePreferencesRequestDto
 import dev.minepacu.stelliveeventnotifier.core.network.UpdatePreferencesResponseDto
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsSalesChannel
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventTag
 import dev.minepacu.stelliveeventnotifier.core.network.SongCatalogItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.SongFacetSummaryDto
@@ -346,6 +348,134 @@ class ServerHubRepositoryTest {
     }
 
     @Test
+    fun hubEventDetailMapsGoodsItemsSortedAndSkipsInvalidOnes() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            hubEventResult = HubNetworkResult.Success(
+                goodsEventDto(
+                    goodsItems = listOf(
+                        HubEventGoodsItemDto(id = "b", name = " 포스터 ", salesChannel = "online", sortOrder = 2, purchaseUrl = "https://shop.example/b"),
+                        HubEventGoodsItemDto(
+                            id = "a", name = "아크릴", groupLabel = " 아크릴 ", memberIds = listOf("ayatsuno-yuni", "ayatsuno-yuni", " "),
+                            priceKrw = 12000, salesChannel = "both", purchaseLimit = 3, isBonus = false, sortOrder = 1,
+                        ),
+                        HubEventGoodsItemDto(id = "future", name = "미래 채널", salesChannel = "teleport", sortOrder = 3, purchaseUrl = "http://insecure.example"),
+                        HubEventGoodsItemDto(id = null, name = "id 없음"),
+                        HubEventGoodsItemDto(id = "noname", name = "  "),
+                        HubEventGoodsItemDto(id = "bad-numbers", name = "음수", priceKrw = -5, purchaseLimit = 0, sortOrder = 4),
+                    ),
+                    goodsCount = 6,
+                ),
+            )
+        }
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val result = repository.hubEventDetailResult("event-goods")
+
+        assertTrue(result.isFresh)
+        val event = result.event!!
+        assertEquals(6, event.goodsCount)
+        assertEquals(listOf("a", "b", "future", "bad-numbers"), event.goodsItems.map { it.id })
+        val a = event.goodsItems[0]
+        assertEquals("아크릴", a.groupLabel)
+        assertEquals(listOf("ayatsuno-yuni"), a.memberIds)
+        assertEquals(12000, a.priceKrw)
+        assertEquals(HubEventGoodsSalesChannel.BOTH, a.salesChannel)
+        assertEquals(3, a.purchaseLimit)
+        val b = event.goodsItems[1]
+        assertEquals("포스터", b.name)
+        assertEquals("https://shop.example/b", b.purchaseUrl)
+        val future = event.goodsItems[2]
+        assertNull(future.salesChannel)
+        assertNull(future.purchaseUrl)
+        val bad = event.goodsItems[3]
+        assertNull(bad.priceKrw)
+        assertNull(bad.purchaseLimit)
+    }
+
+    @Test
+    fun hubEventDetailWithoutGoodsFieldsHasEmptyGoods() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            hubEventResult = HubNetworkResult.Success(goodsEventDto())
+        }
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val event = repository.hubEventDetailResult("event-goods").event!!
+
+        assertEquals(emptyList<Any>(), event.goodsItems)
+        assertEquals(0, event.goodsCount)
+    }
+
+    @Test
+    fun hubEventListMapsGoodsCountWithoutItems() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            hubEventsResponse = HubEventsListResponseDto(items = listOf(goodsEventDto(goodsCount = 32)))
+        }
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+
+        val event = repository.hubEvents("all", null, null).single()
+
+        assertEquals(32, event.goodsCount)
+        assertTrue(event.goodsItems.isEmpty())
+    }
+
+    @Test
+    fun hubEventDetailResultIsNotFreshForCachedDataOrFailure() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            hubEventsResponse = HubEventsListResponseDto(items = listOf(goodsEventDto(goodsCount = 2)))
+        }
+        val repository = ServerHubRepository(
+            remoteDataSource = remote,
+            deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()),
+            fallback = MockHubRepository(),
+        )
+        repository.hubEvents("all", null, null)
+
+        // Detail request fails -> cached list entry is returned and must not count as a fresh 200.
+        val cached = repository.hubEventDetailResult("event-goods")
+        assertFalse(cached.isFresh)
+        assertEquals("event-goods", cached.event?.id)
+
+        // Nothing cached for an unknown id.
+        val missing = repository.hubEventDetailResult("unknown")
+        assertFalse(missing.isFresh)
+        assertNull(missing.event)
+
+        // A successful response is fresh.
+        remote.hubEventResult = HubNetworkResult.Success(goodsEventDto())
+        assertTrue(repository.hubEventDetailResult("event-goods").isFresh)
+    }
+
+    private fun goodsEventDto(
+        goodsItems: List<HubEventGoodsItemDto> = emptyList(),
+        goodsCount: Int? = null,
+    ) = HubEventDto(
+        id = "event-goods",
+        category = "online_goods",
+        participationMode = "online",
+        status = "open",
+        title = "굿즈 행사",
+        generationId = "official",
+        sourceUrl = "https://example.com/source",
+        sourceLabel = "공식 공지",
+        sourceType = "official",
+        updatedAt = "2026-07-19T00:00:00.000Z",
+        goodsItems = goodsItems,
+        goodsCount = goodsCount,
+    )
+
+    @Test
     fun hubCalendarTagMappingKeepsAlbumAndIgnoresUnknownValues() = runTest {
         val remote = RecordingRemoteDataSource().apply {
             hubCalendarResponse = HubCalendarResponseDto(
@@ -654,6 +784,7 @@ class ServerHubRepositoryTest {
         var lastHubEventsFrom: String? = null
         var lastHubEventsTo: String? = null
         var hubEventsResponse = HubEventsListResponseDto()
+        var hubEventResult: HubNetworkResult<HubEventDto> = HubNetworkResult.Failure("not_found", "not found")
         var hubCalendarResponse: HubCalendarResponseDto? = null
         var lastSongGenerationId: String? = null
         var lastSongMemberId: String? = null
@@ -829,8 +960,7 @@ class ServerHubRepositoryTest {
             return HubNetworkResult.Success(hubEventsResponse)
         }
 
-        override suspend fun hubEvent(id: String): HubNetworkResult<HubEventDto> =
-            HubNetworkResult.Failure("not_found", "not found")
+        override suspend fun hubEvent(id: String): HubNetworkResult<HubEventDto> = hubEventResult
 
         override suspend fun hubEventsCalendar(
             from: String,

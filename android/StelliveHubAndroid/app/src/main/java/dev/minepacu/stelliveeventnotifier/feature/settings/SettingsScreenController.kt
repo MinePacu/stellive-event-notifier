@@ -30,6 +30,7 @@ import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
 import dev.minepacu.stelliveeventnotifier.feature.home.PreferenceSyncResult
 import dev.minepacu.stelliveeventnotifier.feature.home.RemoteGlobalPreferences
 import dev.minepacu.stelliveeventnotifier.feature.home.SettingsHubRow
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsGalleryPolicy
 import dev.minepacu.stelliveeventnotifier.feature.songs.SongOpenTarget
 import dev.minepacu.stelliveeventnotifier.toNightMode
 import dev.minepacu.stelliveeventnotifier.ui.components.HubCardStyle
@@ -248,6 +249,7 @@ internal class SettingsScreenController(private val activity: MainActivity) {
         )
         container.addView(appearanceModePanel())
         container.addView(songOpenPreferencePanel())
+        container.addView(goodsGalleryExpandedPanel())
         container.addView(activity.sectionLabel("기록 및 정보"))
         addNavigationRows("기록 및 정보")
         container.addView(activity.sectionLabel("진단"))
@@ -734,6 +736,47 @@ internal class SettingsScreenController(private val activity: MainActivity) {
                     setPadding(0, activity.dp(8), 0, 0)
                 })
             })
+        }
+
+    /** Local-only toggle (never sent to the server): events with goods items start with the MD list gallery expanded. */
+    private fun goodsGalleryExpandedPanel(): MaterialCardView =
+        activity.baseCard().apply {
+            layoutParams = settingsCardLayoutParams()
+            val content = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                applySettingsCardContentPadding()
+            }
+            content.addView(
+                LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(TextView(context).apply {
+                        text = HubEventGoodsGalleryPolicy.SETTING_TOGGLE_TITLE
+                        setTextColor(activity.color(R.color.hub_text))
+                        textSize = 15f
+                        typeface = Typeface.DEFAULT_BOLD
+                    })
+                    addView(TextView(context).apply {
+                        text = HubEventGoodsGalleryPolicy.SETTING_TOGGLE_BODY
+                        setTextColor(activity.color(R.color.hub_text_muted))
+                        textSize = 12f
+                        setPadding(0, activity.dp(MainUiPolicy.settingsCardSpacing.titleBodySpacingDp), 0, 0)
+                    })
+                },
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = activity.dp(12)
+                }
+            )
+            content.addView(SwitchMaterial(context).apply {
+                isChecked = activity.goodsGalleryPreferenceStore.readExpandedByDefault()
+                contentDescription = HubEventGoodsGalleryPolicy.SETTING_TOGGLE_TITLE
+                thumbTintList = ContextCompat.getColorStateList(context, R.color.hub_switch_thumb_selector)
+                trackTintList = ContextCompat.getColorStateList(context, R.color.hub_switch_track_selector)
+                setOnCheckedChangeListener { _, checked ->
+                    activity.goodsGalleryPreferenceStore.writeExpandedByDefault(checked)
+                }
+            })
+            addView(content)
         }
 
     private fun debugModePanel(): MaterialCardView =

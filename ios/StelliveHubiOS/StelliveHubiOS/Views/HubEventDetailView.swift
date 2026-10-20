@@ -14,12 +14,13 @@ enum HubEventDetailContentSection: Hashable {
     case summary
     case eventSchedule
     case timeline
+    case goods
     case info
     case notice
 }
 
 enum HubEventDetailLayoutPolicy {
-    static let contentOrder: [HubEventDetailContentSection] = [.actions, .summary, .eventSchedule, .timeline, .info, .notice]
+    static let contentOrder: [HubEventDetailContentSection] = [.actions, .summary, .eventSchedule, .timeline, .goods, .info, .notice]
 }
 
 enum HubEventHeroLayoutPolicy {
@@ -285,6 +286,13 @@ struct HubEventDetailView: View {
                     timelineCards
                 }
             }
+        case .goods:
+            if HubEventGoodsGalleryPolicy.sectionMode(for: event) != .hidden {
+                detailSection("굿즈") {
+                    HubEventGoodsGallerySectionView(event: event)
+                        .id(event.id)
+                }
+            }
         case .info:
             detailSection("행사 정보") {
                 infoCard
@@ -512,7 +520,7 @@ struct HubEventDetailView: View {
     }
 
     private var noticeCard: some View {
-        Text(HubEventDetailFormatting.noticeText)
+        Text(HubEventGoodsGalleryPolicy.detailNoticeText(for: event))
             .font(.footnote)
             .foregroundStyle(HubEventDetailColors.muted)
             .lineSpacing(3)

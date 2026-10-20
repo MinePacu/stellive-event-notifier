@@ -58,6 +58,7 @@ final class ServerHubStore: ObservableObject {
     private let api: HubAPIClient
     private let deviceIDStore: DeviceIDStore
     private let fallback: MockHubStore
+    private let goodsChecklist: GoodsChecklistStore?
     @Published private(set) var serverHubEvents: [HubEvent] = []
     @Published private(set) var serverCalendarDays: [HubCalendarDay] = []
     @Published private(set) var serverSongs: [SongCatalogItem] = []
@@ -96,12 +97,14 @@ final class ServerHubStore: ObservableObject {
         api: HubAPIClient,
         deviceIDStore: DeviceIDStore = DeviceIDStore(),
         fallback: MockHubStore,
-        preferenceSyncSleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        preferenceSyncSleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        goodsChecklist: GoodsChecklistStore? = nil
     ) {
         self.api = api
         self.deviceIDStore = deviceIDStore
         self.fallback = fallback
         self.preferenceSyncSleep = preferenceSyncSleep
+        self.goodsChecklist = goodsChecklist
     }
 
     func bootstrap() async -> MockHubStore {
@@ -486,6 +489,8 @@ final class ServerHubStore: ObservableObject {
         do {
             let event = try await api.hubEvent(id: id).toHubEvent()
             hubEventDetailCache[id] = event
+            // Only a successful (HTTP 2xx, decoded) detail fetch is authoritative enough to prune the local checklist.
+            goodsChecklist?.prune(eventId: event.id, freshItems: event.goodsItems)
             return event
         } catch HubAPIError.httpStatus(404) {
             return nil
@@ -675,6 +680,10 @@ private extension HubEventResponse {
             venueName: venueName,
             venueAddress: venueAddress,
             image: image,
+            goodsItems: HubEventGoodsPolicy.sorted((goodsItems?.items ?? []).map { $0.toDomain() }),
+            goodsCount: goodsCount.flatMap { $0 > 0 ? $0 : nil },
+            goodsListImages: HubEventGoodsGalleryPolicy.domainImages(from: goodsListImages),
+            goodsListLayout: goodsListLayout?.layout ?? .split,
             notificationEligible: notificationEligible,
             updatedAt: Self.parseDate(updatedAt) ?? Date(timeIntervalSince1970: 0)
         )

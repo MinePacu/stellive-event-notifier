@@ -7,6 +7,8 @@ import {
 import { localizeAdminDocument, serializeAdminCatalog, t, tAttr, tScript, translateAdmin, type AdminLocale } from "./adminI18n.js";
 import { renderAdminLanguageHtml } from "./adminLanguageHtml.js";
 import { adminIntlLocale } from "./adminLocale.js";
+import { renderAdminGoodsGalleryScript, renderAdminGoodsGalleryStyle } from "./adminGoodsGallery.js";
+import { renderAdminGoodsImportScript } from "./adminGoodsImport.js";
 
 export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
   const themeLabels = {
@@ -1338,7 +1340,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     .hub-event-editor-tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--admin-border); margin-bottom: 14px; }
     .hub-event-editor-tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 2px; background: transparent; color: var(--admin-muted); }
     .hub-event-editor-tab[aria-selected="true"] { border-bottom-color: var(--admin-primary); color: var(--admin-text); }
-    [data-hub-event-tab-panel][hidden] { display: none !important; }
+    [data-hub-event-tab-panel][hidden], #hub-event-form[hidden] { display: none !important; }
     .hub-event-schedule-list { display: grid; gap: 8px; margin-top: 12px; }
     .hub-event-schedule-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--surface-soft); }
     .hub-event-schedule-row.is-cancelled { opacity: .62; }
@@ -1360,6 +1362,17 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     .hub-event-link-remove { min-height: 38px; }
     .hub-event-link-actions { display: flex; gap: 6px; }
     .hub-event-link-actions button { min-width: 38px; min-height: 38px; }
+    #hub-event-goods-fields [hidden] { display: none !important; }
+    .hub-event-goods-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .hub-event-goods-members { min-height: 140px; }
+    .hub-event-goods-import textarea { width: 100%; min-height: 140px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .hub-event-goods-preview { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .hub-event-goods-preview th, .hub-event-goods-preview td { border: 1px solid var(--admin-border); padding: 4px 6px; text-align: left; vertical-align: top; }
+    .hub-event-goods-preview tr[aria-invalid="true"] td { background: rgba(220, 53, 69, .10); }
+    .hub-event-goods-preview-errors td { border-color: var(--danger); }
+    .hub-event-goods-dialog-errors { margin: 0; padding-left: 18px; color: var(--danger); font-size: 12px; }
+    #hub-event-goods-form [aria-invalid="true"] { outline: 2px solid var(--danger); outline-offset: 1px; }
+    ${renderAdminGoodsGalleryStyle()}
     .hub-event-primary-choice { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--admin-muted); }
 
     .hub-events-section-body {
@@ -2003,6 +2016,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
           <div class="hub-event-editor-tabs" role="tablist" aria-label="Hub event editor">
             <button class="hub-event-editor-tab" data-hub-event-tab="info" role="tab" aria-selected="true" type="button">${t("hubEvent.infoTab")}</button>
             <button class="hub-event-editor-tab" id="hub-event-schedule-tab" data-hub-event-tab="schedule" role="tab" aria-selected="false" type="button">Detailed schedule (0)</button>
+            <button class="hub-event-editor-tab" id="hub-event-goods-tab" data-hub-event-tab="goods" role="tab" aria-selected="false" type="button">${t("goods.tab", { count: 0 })}</button>
             <button class="hub-event-editor-tab" data-hub-event-tab="history" role="tab" aria-selected="false" type="button">${t("hubEvent.historyTab")}</button>
           </div>
           <form id="hub-event-form" class="hub-event-form-wide hub-events-editor-grid">
@@ -2073,6 +2087,40 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
             </div>
             <div class="hub-events-section-body"><div id="hub-event-schedule-items" class="hub-event-schedule-list"></div></div>
           </section>
+          <section id="hub-event-goods-fields" class="hub-events-section panel" data-hub-event-tab-panel="goods" hidden>
+            <div id="hub-event-goods-gallery" class="hub-event-goods-gallery">
+              <div class="section-head">
+                <div><h4>${t("goodsGallery.title")}</h4><p class="subtle">${t("goodsGallery.help")}</p></div>
+                <div class="hub-event-goods-actions"><strong id="hub-event-goods-gallery-count" aria-live="polite"></strong><button id="hub-event-goods-gallery-add" type="button">${t("goodsGallery.add")}</button></div>
+              </div>
+              <ul id="hub-event-goods-gallery-errors" class="hub-event-gallery-messages" aria-live="polite"></ul>
+              <p id="hub-event-goods-gallery-empty" class="subtle">${t("goodsGallery.empty")}</p>
+              <div id="hub-event-goods-gallery-list" class="hub-event-gallery-list"></div>
+              <div class="hub-event-gallery-import">
+                <strong>${t("goodsGallery.importTitle")}</strong>
+                <p class="subtle">${t("goodsGallery.importHelp")}</p>
+                <textarea id="hub-event-goods-gallery-import-text" rows="5" spellcheck="false" placeholder="${tAttr("goodsGallery.importPlaceholder")}"></textarea>
+                <div class="hub-event-goods-actions"><button id="hub-event-goods-gallery-import-append" type="button">${t("goodsGallery.importAppend")}</button><button id="hub-event-goods-gallery-import-replace" class="is-danger" type="button">${t("goodsGallery.importReplace")}</button></div>
+                <div id="hub-event-goods-gallery-import-result" aria-live="polite"></div>
+              </div>
+            </div>
+            <div class="section-head">
+              <div><h3>${t("goods.title")}</h3><p class="subtle">${t("goods.help")}</p></div>
+              <div class="hub-event-goods-actions"><button id="hub-event-goods-toggle" type="button" hidden>${t("goods.show")}</button><button id="hub-event-goods-add" type="button">${t("goods.add")}</button></div>
+            </div>
+            <p id="hub-event-goods-collapsed-note" class="subtle" hidden>${t("goods.collapsedHelp")}</p>
+            <p id="hub-event-goods-members-warning" class="message error" hidden>${t("goods.membersUnavailable")}</p>
+            <div id="hub-event-goods-body" class="hub-events-section-body">
+              <div id="hub-event-goods-items" class="hub-event-schedule-list"></div>
+              <div class="hub-event-goods-import">
+                <strong>${t("goods.importTitle")}</strong>
+                <p class="subtle">${t("goods.importHelp")}</p>
+                <textarea id="hub-event-goods-import-text" rows="8" spellcheck="false" placeholder="${tAttr("goods.importPlaceholder")}"></textarea>
+                <div class="hub-event-goods-actions"><button id="hub-event-goods-import-preview" type="button">${t("goods.importPreview")}</button><button id="hub-event-goods-import-apply" class="is-danger" type="button" hidden>${t("goods.importApply")}</button></div>
+                <div id="hub-event-goods-import-result" aria-live="polite"></div>
+              </div>
+            </div>
+          </section>
           <div class="hub-events-footer">
             <div class="hub-events-section panel validation-panel"><h3>${t("hubEvent.validation")}</h3><ul id="hub-event-validation" class="message-list"></ul></div>
             <div class="hub-events-section panel audit-log-panel" data-hub-event-tab-panel="history" hidden><h3>${t("announcement.auditLog")}</h3><ul id="hub-event-audit-log" class="message-list"></ul></div>
@@ -2104,6 +2152,31 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
                 </div>
               </details>
               <div class="hub-event-schedule-dialog-actions"><span></span><button id="hub-event-schedule-save" type="submit">${t("hubEvent.scheduleSave")}</button></div>
+            </form>
+          </dialog>
+          <dialog id="hub-event-goods-dialog" class="hub-event-schedule-dialog">
+            <form id="hub-event-goods-form" method="dialog" class="hub-event-schedule-dialog-body">
+              <div class="hub-event-schedule-dialog-head"><h3 id="hub-event-goods-dialog-title">${t("goods.dialogCreate")}</h3><button id="hub-event-goods-dialog-close" type="button">${t("common.cancel")}</button></div>
+              <input id="hub-event-goods-edit-id" type="hidden">
+              <div class="field"><label for="hub-event-goods-name">${t("goods.name")}</label><input id="hub-event-goods-name" autocomplete="off" required maxlength="160"></div>
+              <div class="hub-events-two">
+                <div class="field"><label for="hub-event-goods-group">${t("goods.groupLabel")}</label><input id="hub-event-goods-group" autocomplete="off" maxlength="80"></div>
+                <div class="field"><label for="hub-event-goods-channel">${t("goods.salesChannel")}</label><select id="hub-event-goods-channel"><option value="onsite">${t("goods.channelOnsite")}</option><option value="online">${t("goods.channelOnline")}</option><option value="both">${t("goods.channelBoth")}</option></select></div>
+              </div>
+              <div class="field"><label for="hub-event-goods-members">${t("goods.members")}</label><select id="hub-event-goods-members" class="hub-event-goods-members" multiple size="8"></select><span class="subtle">${t("goods.membersHelp")}</span></div>
+              <div class="hub-events-two">
+                <div class="field"><label for="hub-event-goods-price">${t("goods.price")}</label><input id="hub-event-goods-price" type="number" min="0" step="1" inputmode="numeric"></div>
+                <div class="field"><label for="hub-event-goods-price-note">${t("goods.priceNote")}</label><input id="hub-event-goods-price-note" autocomplete="off" maxlength="120"></div>
+              </div>
+              <div class="hub-events-two">
+                <div class="field"><label for="hub-event-goods-limit">${t("goods.purchaseLimit")}</label><input id="hub-event-goods-limit" type="number" min="1" max="9999" step="1" inputmode="numeric"></div>
+                <div class="field"><label for="hub-event-goods-limit-note">${t("goods.limitNote")}</label><input id="hub-event-goods-limit-note" autocomplete="off" maxlength="200"></div>
+              </div>
+              <div class="field"><label for="hub-event-goods-url">${t("goods.purchaseUrl")}</label><input id="hub-event-goods-url" type="url" autocomplete="off" maxlength="2048" pattern="https://.*"></div>
+              <div class="field"><label for="hub-event-goods-phase">${t("goods.salesPhase")}</label><select id="hub-event-goods-phase"><option value="">${t("goods.salesPhaseNone")}</option></select></div>
+              <div class="hub-event-schedule-flags"><label class="switch-control"><input id="hub-event-goods-bonus" type="checkbox"> ${t("goods.isBonus")}</label></div>
+              <ul id="hub-event-goods-dialog-errors" class="hub-event-goods-dialog-errors" aria-live="polite"></ul>
+              <div class="hub-event-schedule-dialog-actions"><span></span><button id="hub-event-goods-save" type="submit">${t("goods.save")}</button></div>
             </form>
           </dialog>
           </div>
@@ -3871,6 +3944,450 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       openScheduleDialog(null);
     }
 
+    // ---- Goods list editor (parser source below is shared with unit tests) ----
+    ${renderAdminGoodsImportScript()}
+    ${renderAdminGoodsGalleryScript()}
+    const goodsDefaultCategories = ["online_goods", "offline_popup", "online_collab", "offline_collab", "offline_concert"];
+    const hubEventGoodsPanel = document.getElementById("hub-event-goods-fields");
+    const hubEventGoodsTab = document.getElementById("hub-event-goods-tab");
+    const hubEventGoodsItemsRoot = document.getElementById("hub-event-goods-items");
+    const hubEventGoodsBody = document.getElementById("hub-event-goods-body");
+    const hubEventGoodsCollapsedNote = document.getElementById("hub-event-goods-collapsed-note");
+    const hubEventGoodsToggle = document.getElementById("hub-event-goods-toggle");
+    const hubEventGoodsAdd = document.getElementById("hub-event-goods-add");
+    const hubEventGoodsMembersWarning = document.getElementById("hub-event-goods-members-warning");
+    const hubEventGoodsDialog = document.getElementById("hub-event-goods-dialog");
+    const hubEventGoodsForm = document.getElementById("hub-event-goods-form");
+    const hubEventGoodsDialogErrors = document.getElementById("hub-event-goods-dialog-errors");
+    const goodsImportText = document.getElementById("hub-event-goods-import-text");
+    const goodsImportRoot = document.getElementById("hub-event-goods-import-result");
+    const goodsImportApply = document.getElementById("hub-event-goods-import-apply");
+    const goodsFields = {
+      editId: document.getElementById("hub-event-goods-edit-id"),
+      name: document.getElementById("hub-event-goods-name"),
+      groupLabel: document.getElementById("hub-event-goods-group"),
+      memberIds: document.getElementById("hub-event-goods-members"),
+      priceKrw: document.getElementById("hub-event-goods-price"),
+      priceNote: document.getElementById("hub-event-goods-price-note"),
+      salesChannel: document.getElementById("hub-event-goods-channel"),
+      purchaseLimit: document.getElementById("hub-event-goods-limit"),
+      limitNote: document.getElementById("hub-event-goods-limit-note"),
+      isBonus: document.getElementById("hub-event-goods-bonus"),
+      purchaseUrl: document.getElementById("hub-event-goods-url"),
+      scheduleItemId: document.getElementById("hub-event-goods-phase")
+    };
+    let hubEventGoodsItems = [];
+    let goodsForceOpen = false;
+    let goodsMembers = null;
+    let goodsMembersPromise = null;
+    let goodsImportState = null;
+
+    function goodsBasePath() {
+      return endpoints.hubEvents + "/" + encodeURIComponent(currentHubEvent.id) + "/goods-items";
+    }
+
+    function loadGoodsMembers() {
+      if (!goodsMembersPromise) {
+        goodsMembersPromise = fetch("/v1/members", { credentials: "same-origin" }).then(function (response) {
+          if (!response.ok) throw new Error("members_" + response.status);
+          return response.json();
+        }).then(function (list) {
+          goodsMembers = (Array.isArray(list) ? list : []).filter(function (member) {
+            return member && member.isPerson !== false && member.id !== "gangzi" && (member.activeStatus === "active" || member.activeStatus === "upcoming");
+          });
+          hubEventGoodsMembersWarning.hidden = true;
+          return goodsMembers;
+        }).catch(function () {
+          goodsMembersPromise = null;
+          goodsMembers = null;
+          hubEventGoodsMembersWarning.hidden = false;
+          return null;
+        });
+      }
+      return goodsMembersPromise;
+    }
+
+    function goodsMemberName(id) {
+      const member = (goodsMembers || []).find(function (candidate) { return candidate.id === id; });
+      return member ? member.koreanName : id;
+    }
+
+    function goodsScheduleOptions() {
+      return hubEventScheduleItems.filter(function (item) { return !item.cancelledAt; }).map(function (item) {
+        return { id: item.id, label: String(item.label || "").trim() || String(item.title || "").trim() || item.id };
+      });
+    }
+
+    function goodsScheduleLabel(id) {
+      const found = hubEventScheduleItems.find(function (item) { return item.id === id; });
+      return found ? (String(found.label || "").trim() || String(found.title || "").trim() || id) : id;
+    }
+
+    function goodsChannelLabel(channel) {
+      if (channel === "onsite") return t("goods.channelOnsite");
+      if (channel === "online") return t("goods.channelOnline");
+      if (channel === "both") return t("goods.channelBoth");
+      return channel || "-";
+    }
+
+    function formatGoodsPrice(value) {
+      return typeof value === "number" ? "₩" + adminNumberFormatter.format(value) : "";
+    }
+
+    function updateGoodsVisibility() {
+      const optional = goodsDefaultCategories.indexOf(hubEventFields.category.value) < 0 && hubEventGoodsItems.length === 0;
+      const open = !optional || goodsForceOpen;
+      hubEventGoodsToggle.hidden = !optional;
+      hubEventGoodsToggle.textContent = goodsForceOpen ? t("goods.hide") : t("goods.show");
+      hubEventGoodsCollapsedNote.hidden = open;
+      hubEventGoodsBody.hidden = !open;
+      hubEventGoodsAdd.hidden = !open;
+    }
+
+    function createGoodsRow(item) {
+      const row = document.createElement("div");
+      row.className = "hub-event-schedule-row";
+      row.dataset.goodsItemId = item.id || "";
+      row.classList.toggle("is-cancelled", Boolean(item.cancelledAt));
+      const summary = document.createElement("div");
+      summary.className = "hub-event-schedule-summary";
+      const title = document.createElement("strong");
+      title.textContent = String(item.name || "").trim() || t("goods.untitled");
+      const detail = document.createElement("span");
+      detail.className = "subtle";
+      detail.textContent = [
+        item.groupLabel || "",
+        (item.memberIds || []).map(goodsMemberName).join(", "),
+        formatGoodsPrice(item.priceKrw) || t("goods.priceUnset"),
+        item.priceNote || ""
+      ].filter(Boolean).join(" · ");
+      const meta = document.createElement("div");
+      meta.className = "hub-event-schedule-meta";
+      [
+        goodsChannelLabel(item.salesChannel),
+        item.isBonus ? t("goods.bonus") : "",
+        item.purchaseLimit ? t("goods.limitBadge", { count: item.purchaseLimit }) : "",
+        item.scheduleItemId ? goodsScheduleLabel(item.scheduleItemId) : "",
+        item.cancelledAt ? t("goods.cancelled") : ""
+      ].filter(Boolean).forEach(function (label) {
+        const pill = document.createElement("span"); pill.textContent = label; meta.appendChild(pill);
+      });
+      summary.append(title, detail, meta);
+      const actions = document.createElement("div");
+      actions.className = "hub-event-schedule-row-actions";
+      const edit = document.createElement("button"); edit.type = "button"; edit.textContent = t("common.edit");
+      edit.addEventListener("click", function () { return openGoodsDialog(item); });
+      const up = document.createElement("button"); up.type = "button"; up.textContent = "↑"; up.setAttribute("aria-label", t("hubEvent.moveUp"));
+      up.addEventListener("click", function () { return runHubEventUiAction(t("hubEvent.moveUp"), function () { return reorderGoodsItem(item.id, -1); }); });
+      const down = document.createElement("button"); down.type = "button"; down.textContent = "↓"; down.setAttribute("aria-label", t("hubEvent.moveDown"));
+      down.addEventListener("click", function () { return runHubEventUiAction(t("hubEvent.moveDown"), function () { return reorderGoodsItem(item.id, 1); }); });
+      const lifecycle = document.createElement("button"); lifecycle.type = "button";
+      lifecycle.textContent = item.cancelledAt ? t("goods.restore") : t("goods.cancel");
+      lifecycle.addEventListener("click", function () {
+        return runHubEventUiAction(lifecycle.textContent, function () { return item.cancelledAt ? restoreGoodsItem(item.id) : cancelGoodsItem(item.id); });
+      });
+      actions.append(edit, up, down, lifecycle);
+      row.append(summary, actions);
+      return row;
+    }
+
+    function renderGoodsItems(items) {
+      hubEventGoodsItems = (items || []).slice();
+      hubEventGoodsItemsRoot.replaceChildren();
+      if (hubEventGoodsItems.length === 0) {
+        const empty = document.createElement("p"); empty.className = "subtle"; empty.textContent = t("goods.empty"); hubEventGoodsItemsRoot.appendChild(empty);
+      } else {
+        hubEventGoodsItems.forEach(function (item) { hubEventGoodsItemsRoot.appendChild(createGoodsRow(item)); });
+      }
+      hubEventGoodsTab.textContent = t("goods.tab", { count: hubEventGoodsItems.filter(function (item) { return !item.cancelledAt; }).length });
+      updateGoodsVisibility();
+    }
+
+    function acceptGoodsMutation(updated) {
+      currentHubEvent = updated;
+      renderGoodsItems(updated.goodsItems || []);
+    }
+
+    async function bindGoodsForEvent(event) {
+      goodsForceOpen = false;
+      goodsImportState = null;
+      goodsImportText.value = "";
+      renderGoodsImportResult();
+      if (Array.isArray(event.goodsItems)) {
+        renderGoodsItems(event.goodsItems);
+        return;
+      }
+      renderGoodsItems([]);
+      if (!event.id) return;
+      // List and create/update responses do not always carry goodsItems; the admin detail endpoint does.
+      const loading = document.createElement("p"); loading.className = "subtle"; loading.textContent = t("goods.loading");
+      hubEventGoodsItemsRoot.replaceChildren(loading);
+      try {
+        const detail = await adminApi(endpoints.hubEvents + "/" + encodeURIComponent(event.id));
+        if (!currentHubEvent || currentHubEvent.id !== detail.id) return;
+        currentHubEvent = { ...currentHubEvent, goodsItems: detail.goodsItems || [], revision: detail.revision };
+        renderGoodsItems(detail.goodsItems || []);
+      } catch (error) {
+        if (!currentHubEvent || currentHubEvent.id !== event.id) return;
+        const failed = document.createElement("p"); failed.className = "message error";
+        failed.textContent = t("goods.loadFailed", { reason: error instanceof Error ? error.message : "unknown_error" });
+        hubEventGoodsItemsRoot.replaceChildren(failed);
+      }
+    }
+
+    function fillGoodsMemberOptions(selectedIds) {
+      const select = goodsFields.memberIds;
+      select.replaceChildren();
+      const groups = new Map();
+      (goodsMembers || []).forEach(function (member) {
+        const key = member.generationName || member.generationId || "";
+        if (!groups.has(key)) {
+          const group = document.createElement("optgroup"); group.label = key; groups.set(key, group); select.appendChild(group);
+        }
+        const option = document.createElement("option"); option.value = member.id; option.textContent = member.koreanName;
+        option.selected = selectedIds.indexOf(member.id) >= 0;
+        groups.get(key).appendChild(option);
+      });
+      selectedIds.filter(function (id) { return !(goodsMembers || []).some(function (member) { return member.id === id; }); }).forEach(function (id) {
+        const option = document.createElement("option"); option.value = id; option.textContent = id; option.selected = true; select.appendChild(option);
+      });
+    }
+
+    async function openGoodsDialog(item) {
+      const value = item || {};
+      await loadGoodsMembers();
+      hubEventGoodsDialogErrors.replaceChildren();
+      goodsFields.editId.value = value.id || "";
+      document.getElementById("hub-event-goods-dialog-title").textContent = value.id ? t("goods.dialogEdit") : t("goods.dialogCreate");
+      goodsFields.name.value = value.name || "";
+      goodsFields.groupLabel.value = value.groupLabel || "";
+      fillGoodsMemberOptions(value.memberIds || []);
+      goodsFields.priceKrw.value = typeof value.priceKrw === "number" ? String(value.priceKrw) : "";
+      goodsFields.priceNote.value = value.priceNote || "";
+      goodsFields.salesChannel.value = value.salesChannel || "online";
+      goodsFields.purchaseLimit.value = typeof value.purchaseLimit === "number" ? String(value.purchaseLimit) : "";
+      goodsFields.limitNote.value = value.limitNote || "";
+      goodsFields.isBonus.checked = value.isBonus === true;
+      goodsFields.purchaseUrl.value = value.purchaseUrl || "";
+      const phase = goodsFields.scheduleItemId;
+      phase.replaceChildren();
+      const none = document.createElement("option"); none.value = ""; none.textContent = t("goods.salesPhaseNone"); phase.appendChild(none);
+      goodsScheduleOptions().forEach(function (option) {
+        const element = document.createElement("option"); element.value = option.id; element.textContent = option.label; phase.appendChild(element);
+      });
+      if (value.scheduleItemId && !goodsScheduleOptions().some(function (option) { return option.id === value.scheduleItemId; })) {
+        const stale = document.createElement("option"); stale.value = value.scheduleItemId; stale.textContent = goodsScheduleLabel(value.scheduleItemId); phase.appendChild(stale);
+      }
+      phase.value = value.scheduleItemId || "";
+      Object.values(goodsFields).forEach(function (field) { field.removeAttribute("aria-invalid"); });
+      hubEventGoodsDialog.showModal();
+    }
+
+    function collectGoodsDialogInput() {
+      const text = function (field) { const value = field.value.trim(); return value === "" ? null : value; };
+      const number = function (field) { const value = field.value.trim(); return value === "" ? null : Number(value); };
+      return {
+        name: goodsFields.name.value.trim(),
+        groupLabel: text(goodsFields.groupLabel),
+        memberIds: Array.from(goodsFields.memberIds.selectedOptions).map(function (option) { return option.value; }),
+        priceKrw: number(goodsFields.priceKrw),
+        priceNote: text(goodsFields.priceNote),
+        salesChannel: goodsFields.salesChannel.value,
+        purchaseLimit: number(goodsFields.purchaseLimit),
+        limitNote: text(goodsFields.limitNote),
+        isBonus: goodsFields.isBonus.checked,
+        purchaseUrl: text(goodsFields.purchaseUrl),
+        scheduleItemId: text(goodsFields.scheduleItemId),
+        expectedRevision: currentHubEvent?.revision
+      };
+    }
+
+    function renderGoodsDialogErrors(error) {
+      hubEventGoodsDialogErrors.replaceChildren();
+      const payload = error && error.validationPayload;
+      const errors = payload && Array.isArray(payload.errors) ? payload.errors : [];
+      Object.values(goodsFields).forEach(function (field) { field.removeAttribute("aria-invalid"); });
+      errors.forEach(function (entry) {
+        const item = document.createElement("li");
+        item.textContent = [entry.field, entry.reason, entry.message].filter(Boolean).join(" - ");
+        hubEventGoodsDialogErrors.appendChild(item);
+        const control = goodsFields[goodsFieldControlName(entry.field)];
+        if (control && control !== goodsFields.editId) control.setAttribute("aria-invalid", "true");
+      });
+      if (errors.length === 0 && error instanceof Error) {
+        const item = document.createElement("li"); item.textContent = error.message; hubEventGoodsDialogErrors.appendChild(item);
+      }
+    }
+
+    async function saveGoodsDialog() {
+      if (!currentHubEvent?.id) throw new Error("hub_event_required");
+      const editId = goodsFields.editId.value;
+      const updated = await adminApi(goodsBasePath() + (editId ? "/" + encodeURIComponent(editId) : ""), {
+        method: editId ? "PATCH" : "POST",
+        body: JSON.stringify(collectGoodsDialogInput())
+      });
+      acceptGoodsMutation(updated);
+      hubEventGoodsDialog.close();
+      await loadHubEventAuditLog(updated.id);
+    }
+
+    async function cancelGoodsItem(goodsItemId) {
+      if (!currentHubEvent?.id) return;
+      const updated = await adminApi(goodsBasePath() + "/" + encodeURIComponent(goodsItemId), {
+        method: "DELETE",
+        body: JSON.stringify({ expectedRevision: currentHubEvent.revision })
+      });
+      acceptGoodsMutation(updated);
+      await loadHubEventAuditLog(updated.id);
+    }
+
+    async function restoreGoodsItem(goodsItemId) {
+      if (!currentHubEvent?.id) return;
+      const updated = await adminApi(goodsBasePath() + "/" + encodeURIComponent(goodsItemId) + "/restore", {
+        method: "POST",
+        body: JSON.stringify({ expectedRevision: currentHubEvent.revision })
+      });
+      acceptGoodsMutation(updated);
+      await loadHubEventAuditLog(updated.id);
+    }
+
+    async function reorderGoodsItem(goodsItemId, delta) {
+      if (!currentHubEvent?.id) return;
+      const ids = hubEventGoodsItems.map(function (item) { return item.id; });
+      const index = ids.indexOf(goodsItemId);
+      const nextIndex = index + delta;
+      if (index < 0 || nextIndex < 0 || nextIndex >= ids.length) return;
+      const temporary = ids[index]; ids[index] = ids[nextIndex]; ids[nextIndex] = temporary;
+      const updated = await adminApi(goodsBasePath() + "/order", {
+        method: "PUT",
+        body: JSON.stringify({ expectedRevision: currentHubEvent.revision, goodsItemIds: ids })
+      });
+      acceptGoodsMutation(updated);
+      await loadHubEventAuditLog(updated.id);
+    }
+
+    async function addGoodsItem() {
+      if (!currentHubEvent?.id) {
+        if (!window.confirm(t("goods.saveBeforeAdd"))) return;
+        await saveHubEventDraft();
+        if (!currentHubEvent?.id) return;
+      }
+      await openGoodsDialog(null);
+    }
+
+    function goodsImportErrorText(error) {
+      const key = "goods.err." + error.code;
+      const base = Object.prototype.hasOwnProperty.call(adminCatalog, key) ? t(key, { detail: error.detail }) : t("goods.err.unknown");
+      return error.field && error.code !== "unknown_column" && error.code !== "duplicate_column" ? error.field + ": " + base : base;
+    }
+
+    function goodsImportRowErrors() {
+      const byRow = new Map();
+      const global = [];
+      const push = function (row, text) {
+        if (row < 0) { global.push(text); return; }
+        if (!byRow.has(row)) byRow.set(row, []);
+        byRow.get(row).push(text);
+      };
+      goodsImportState.errors.forEach(function (error) { push(error.row, goodsImportErrorText(error)); });
+      goodsImportState.serverErrors.forEach(function (error) {
+        const parsed = parseGoodsServerErrorField(error.field);
+        const text = [parsed ? parsed.field : error.field, error.reason, error.message].filter(Boolean).join(" - ");
+        push(parsed ? parsed.row : -1, text);
+      });
+      return { byRow: byRow, global: global };
+    }
+
+    function renderGoodsImportResult() {
+      goodsImportRoot.replaceChildren();
+      goodsImportApply.hidden = true;
+      if (!goodsImportState) return;
+      const state = goodsImportState;
+      const problems = goodsImportRowErrors();
+      const errorCount = state.errors.length + state.serverErrors.length;
+      const summary = document.createElement("p");
+      summary.className = errorCount > 0 ? "message error" : "message";
+      summary.textContent = [
+        state.format ? t("goods.importFormat", { format: state.format.toUpperCase() }) : "",
+        t("goods.importRows", { count: state.items.length }),
+        state.serverErrors.length > 0 ? t("goods.importServerErrors") : "",
+        state.errors.length > 0 ? t("goods.importHasErrors", { count: state.errors.length }) : (state.serverErrors.length === 0 ? t("goods.importReady") : "")
+      ].filter(Boolean).join(" ");
+      goodsImportRoot.appendChild(summary);
+      if (problems.global.length > 0) {
+        const heading = document.createElement("strong"); heading.textContent = t("goods.globalErrors");
+        const list = document.createElement("ul"); list.className = "message-list";
+        problems.global.forEach(function (text) { const item = document.createElement("li"); item.textContent = text; list.appendChild(item); });
+        goodsImportRoot.append(heading, list);
+      }
+      if (state.items.length > 0) {
+        const wrapper = document.createElement("div"); wrapper.className = "table-scroll";
+        const table = document.createElement("table"); table.className = "hub-event-goods-preview";
+        const head = document.createElement("thead"); const headRow = document.createElement("tr");
+        [t("goods.rowNumber"), t("goods.name"), t("goods.groupLabel"), t("goods.members"), t("goods.price"), t("goods.salesChannel"), t("goods.purchaseLimit"), t("goods.bonus"), t("goods.salesPhase"), t("goods.purchaseUrl")].forEach(function (label) {
+          const cell = document.createElement("th"); cell.textContent = label; headRow.appendChild(cell);
+        });
+        head.appendChild(headRow); table.appendChild(head);
+        const body = document.createElement("tbody");
+        state.items.forEach(function (item, index) {
+          const row = document.createElement("tr");
+          const rowProblems = problems.byRow.get(index) || [];
+          if (rowProblems.length > 0) row.setAttribute("aria-invalid", "true");
+          [
+            String(index + 1), item.name || "", item.groupLabel || "", (item.memberIds || []).map(goodsMemberName).join(", "),
+            typeof item.priceKrw === "number" ? formatGoodsPrice(item.priceKrw) : "", item.salesChannel ? goodsChannelLabel(item.salesChannel) : "",
+            item.purchaseLimit === undefined || item.purchaseLimit === null ? "" : String(item.purchaseLimit), item.isBonus ? t("common.yes") : "",
+            item.scheduleItemId ? goodsScheduleLabel(item.scheduleItemId) : "", item.purchaseUrl || ""
+          ].forEach(function (value) { const cell = document.createElement("td"); cell.textContent = value; row.appendChild(cell); });
+          body.appendChild(row);
+          if (rowProblems.length > 0) {
+            const errorRow = document.createElement("tr"); errorRow.className = "hub-event-goods-preview-errors";
+            const cell = document.createElement("td"); cell.colSpan = 10;
+            const label = document.createElement("strong"); label.textContent = t("goods.rowErrors", { row: index + 1 });
+            const list = document.createElement("ul"); list.className = "message-list";
+            rowProblems.forEach(function (text) { const entry = document.createElement("li"); entry.textContent = text; list.appendChild(entry); });
+            cell.append(label, list); errorRow.appendChild(cell); body.appendChild(errorRow);
+          }
+        });
+        table.appendChild(body); wrapper.appendChild(table); goodsImportRoot.appendChild(wrapper);
+      }
+      goodsImportApply.hidden = !(errorCount === 0 && state.items.length > 0);
+    }
+
+    async function previewGoodsImport() {
+      await loadGoodsMembers();
+      const text = goodsImportText.value;
+      const result = parseGoodsImport(text, { scheduleItems: hubEventScheduleItems, members: goodsMembers });
+      goodsImportState = { text: text, format: result.format, items: result.items, errors: result.errors, serverErrors: [] };
+      renderGoodsImportResult();
+    }
+
+    async function applyGoodsImport() {
+      if (!goodsImportState) { setMessage(t("goods.importNothing"), true); return; }
+      if (goodsImportText.value !== goodsImportState.text) { setMessage(t("goods.importStale"), true); return; }
+      if (goodsImportState.errors.length > 0 || goodsImportState.items.length === 0) { setMessage(t("goods.importHasErrors", { count: goodsImportState.errors.length }), true); return; }
+      if (!currentHubEvent?.id) { setMessage(t("goods.saveFirst"), true); return; }
+      if (!window.confirm(t("goods.importConfirm", { existing: hubEventGoodsItems.length, count: goodsImportState.items.length }))) return;
+      try {
+        const updated = await adminApi(goodsBasePath(), {
+          method: "PUT",
+          body: JSON.stringify({ expectedRevision: currentHubEvent.revision, items: goodsImportState.items })
+        });
+        acceptGoodsMutation(updated);
+        goodsImportState = null;
+        goodsImportText.value = "";
+        renderGoodsImportResult();
+        await loadHubEventAuditLog(updated.id);
+      } catch (error) {
+        const payload = error && error.validationPayload;
+        if (payload && Array.isArray(payload.errors)) {
+          goodsImportState.serverErrors = payload.errors;
+          renderGoodsImportResult();
+        }
+        throw error;
+      }
+    }
+
     function setSelectedHubEventId(id) {
       selectedHubEventId = id || "";
       hubEventListRoot.querySelectorAll('input[data-hub-event-select="true"]').forEach(function (checkbox) {
@@ -3918,6 +4435,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         input.image = image;
       }
       input.links = collectLinkEditor(hubEventLinksRoot);
+      collectGoodsGalleryInput(input);
       return input;
     }
 
@@ -3941,6 +4459,7 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
 
     function renderHubEventValidation(result) {
       const errors = result && result.errors ? result.errors : [];
+      showGoodsGalleryServerErrors(errors);
       document.querySelectorAll('#hub-event-form [aria-invalid="true"]').forEach(function (element) { element.removeAttribute("aria-invalid"); });
       hubEventScheduleItemsRoot.querySelectorAll('[aria-invalid="true"]').forEach(function (element) { element.removeAttribute("aria-invalid"); });
       hubEventValidationRoot.replaceChildren();
@@ -4001,6 +4520,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
       singleWindowScheduleItemId = activePrimary?.id || event.scheduleItems?.[0]?.id || "";
       renderScheduleItems(event.scheduleItems || []);
       updateScheduleModeUi();
+      bindGoodsForEvent(event);
+      bindGoodsGalleryForEvent(event);
     }
 
     function renderHubEvents(events) {
@@ -4358,6 +4879,8 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
         });
         document.getElementById("hub-event-form").hidden = activeTab !== "info";
         hubEventTimelineFields.hidden = activeTab !== "schedule";
+        hubEventGoodsPanel.hidden = activeTab !== "goods";
+        if (activeTab === "goods") loadGoodsMembers();
         document.querySelector('[data-hub-event-tab-panel="history"]').hidden = activeTab !== "history";
       });
     });
@@ -4384,6 +4907,41 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
     hubEventScheduleForm.addEventListener("submit", function (event) {
       event.preventDefault();
       return runHubEventUiAction(t("hubEvent.scheduleSave"), saveScheduleDialog);
+    });
+    hubEventGoodsAdd.addEventListener("click", function () {
+      return runHubEventUiAction(t("goods.dialogCreate"), addGoodsItem);
+    });
+    hubEventGoodsToggle.addEventListener("click", function () {
+      goodsForceOpen = !goodsForceOpen;
+      updateGoodsVisibility();
+    });
+    hubEventFields.category.addEventListener("change", updateGoodsVisibility);
+    document.getElementById("hub-event-goods-dialog-close").addEventListener("click", function () { hubEventGoodsDialog.close(); });
+    hubEventGoodsForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      hubEventGoodsDialogErrors.replaceChildren();
+      return runHubEventUiAction(t("goods.save"), async function () {
+        try {
+          await saveGoodsDialog();
+        } catch (error) {
+          renderGoodsDialogErrors(error);
+          throw error;
+        }
+      });
+    });
+    goodsImportText.addEventListener("input", function () {
+      if (goodsImportState && goodsImportText.value !== goodsImportState.text) {
+        goodsImportApply.hidden = true;
+        const stale = document.createElement("p"); stale.className = "message"; stale.textContent = t("goods.importStale");
+        goodsImportRoot.replaceChildren(stale);
+        goodsImportState = null;
+      }
+    });
+    document.getElementById("hub-event-goods-import-preview").addEventListener("click", function () {
+      return runHubEventUiAction(t("goods.importPreview"), previewGoodsImport);
+    });
+    goodsImportApply.addEventListener("click", function () {
+      return runHubEventUiAction(t("goods.importApply"), applyGoodsImport);
     });
     hubEventPrevPage.addEventListener("click", function () {
       return runHubEventUiAction("Previous hub events page", previousHubEventPage);
