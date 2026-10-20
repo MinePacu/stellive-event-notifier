@@ -10,6 +10,8 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarEntry
 import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarWidgetSnapshot
 import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsItem
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsSalesChannel
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventSourceType
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
@@ -116,7 +118,38 @@ class MockHubRepository : HubRepository {
             startsAt = Instant.parse("2026-06-12T00:00:00Z"),
             venueName = "서울 팝업 스페이스",
             venueAddress = "서울특별시",
-            updatedAt = Instant.parse("2026-06-03T02:00:00Z")
+            updatedAt = Instant.parse("2026-06-03T02:00:00Z"),
+            goodsCount = 3,
+            goodsItems = listOf(
+                HubEventGoodsItem(
+                    id = "mock-popup-acrylic-stand",
+                    name = "아크릴 스탠드 (예시)",
+                    groupLabel = "아크릴",
+                    memberIds = listOf("ayatsuno-yuni", "shirayuki-hina"),
+                    priceKrw = 12000,
+                    salesChannel = HubEventGoodsSalesChannel.ONSITE,
+                    purchaseLimit = 3,
+                    limitNote = "멤버별 1인 3개까지 (예시)",
+                    sortOrder = 0,
+                ),
+                HubEventGoodsItem(
+                    id = "mock-popup-poster-set",
+                    name = "포스터 세트 (예시)",
+                    groupLabel = "인쇄물",
+                    memberIds = listOf("ayatsuno-yuni"),
+                    priceNote = "현장 공개 예정 (예시)",
+                    salesChannel = HubEventGoodsSalesChannel.BOTH,
+                    sortOrder = 1,
+                ),
+                HubEventGoodsItem(
+                    id = "mock-popup-bonus-card",
+                    name = "구매 특전 포토카드 (예시)",
+                    memberIds = emptyList(),
+                    salesChannel = HubEventGoodsSalesChannel.ONSITE,
+                    isBonus = true,
+                    sortOrder = 2,
+                ),
+            ),
         ),
         HubEvent(
             id = "start-only-concert",

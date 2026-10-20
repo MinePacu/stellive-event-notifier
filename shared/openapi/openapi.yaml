@@ -831,6 +831,145 @@ paths:
                 $ref: "#/components/schemas/AdminHubEventResponse"
         "409":
           description: Parent revision conflict.
+  /v1/admin/hub-events/{id}/goods-items:
+    post:
+      summary: Add a goods item to a hub event
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventGoodsItemCreateRequest"
+      responses:
+        "201":
+          description: Goods item created and parent revision incremented.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "400":
+          $ref: "#/components/responses/AdminHubEventValidationFailed"
+        "409":
+          description: Parent revision conflict.
+    put:
+      summary: Replace the whole goods list of a hub event
+      description: >-
+        Validates every item first. On any error nothing is written and the response lists
+        index-based field paths such as `items[3].priceKrw`. Items with a known id are updated,
+        items without id are created, and items omitted from the list are removed.
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventGoodsReplaceRequest"
+      responses:
+        "200":
+          description: Goods list replaced in one transaction and parent revision incremented.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "400":
+          $ref: "#/components/responses/AdminHubEventValidationFailed"
+        "409":
+          description: Parent revision conflict.
+  /v1/admin/hub-events/{id}/goods-items/{goodsItemId}:
+    patch:
+      summary: Update a goods item
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+        - $ref: "#/components/parameters/HubEventGoodsItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventGoodsItemMutationRequest"
+      responses:
+        "200":
+          description: Goods item updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "400":
+          $ref: "#/components/responses/AdminHubEventValidationFailed"
+        "404":
+          description: Hub event or goods item not found.
+        "409":
+          description: Parent revision conflict.
+    delete:
+      summary: Cancel a goods item (soft delete; sets cancelledAt)
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+        - $ref: "#/components/parameters/HubEventGoodsItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventRevisionRequest"
+      responses:
+        "200":
+          description: Goods item cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "404":
+          description: Hub event or goods item not found.
+        "409":
+          description: Parent revision conflict.
+  /v1/admin/hub-events/{id}/goods-items/{goodsItemId}/restore:
+    post:
+      summary: Restore a cancelled goods item
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+        - $ref: "#/components/parameters/HubEventGoodsItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventRevisionRequest"
+      responses:
+        "200":
+          description: Goods item restored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "404":
+          description: Hub event or goods item not found.
+        "409":
+          description: Parent revision conflict.
+  /v1/admin/hub-events/{id}/goods-items/order:
+    put:
+      summary: Reorder all goods items (cancelled ones included)
+      parameters:
+        - $ref: "#/components/parameters/HubEventId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminHubEventGoodsOrderRequest"
+      responses:
+        "200":
+          description: Goods items reordered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHubEventResponse"
+        "400":
+          $ref: "#/components/responses/AdminHubEventValidationFailed"
+        "409":
+          description: Parent revision conflict.
   /v1/admin/hub-events/{id}/cancel:
     post:
       summary: Cancel a published hub event
@@ -1091,6 +1230,12 @@ components:
       required: true
       schema:
         type: string
+    HubEventGoodsItemId:
+      name: goodsItemId
+      in: path
+      required: true
+      schema:
+        type: string
     HubEventScheduleItemId:
       name: scheduleItemId
       in: path
@@ -1118,6 +1263,23 @@ components:
           - type: integer
           - type: number
   responses:
+    AdminHubEventValidationFailed:
+      description: Validation failed; nothing was written.
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - valid
+              - errors
+            properties:
+              valid:
+                type: boolean
+                enum: [false]
+              errors:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminHubEventValidationError"
     InternalUnauthorized:
       description: Missing, invalid, or unconfigured internal bearer token.
       content:
@@ -2340,6 +2502,17 @@ components:
           format: uri
         altText:
           type: string
+    HubEventGoodsListImageKind:
+      type: string
+      enum: [md, bonus]
+    HubEventGoodsListImage:
+      allOf:
+        - $ref: "#/components/schemas/HubEventImage"
+        - type: object
+          properties:
+            kind:
+              $ref: "#/components/schemas/HubEventGoodsListImageKind"
+              description: Optional group; absent means unspecified (clients treat it as md).
     HubEventLinkKind:
       type: string
       enum:
@@ -2466,8 +2639,105 @@ components:
           type: string
         image:
           $ref: "#/components/schemas/HubEventImage"
+        goodsItems:
+          type: array
+          description: >-
+            Detail and admin responses only; never on list, calendar, widget-snapshot or bootstrap payloads.
+            Public detail excludes cancelled items and lists them in sortOrder.
+          items:
+            $ref: "#/components/schemas/HubEventGoodsItem"
+        goodsListImages:
+          type: array
+          maxItems: 20
+          description: >-
+            Official MD/bonus list page images, ordered as in the notice. Detail and admin responses only;
+            never on list, calendar, widget-snapshot or bootstrap payloads. Public detail keeps only displayable
+            images and omits the field when none remain or when the server kill switch
+            (HUB_EVENT_GOODS_GALLERY_ENABLED=false) is off. Runtime URLs are limited to stellive.me
+            (and subdomains) or pbs.twimg.com.
+          items:
+            $ref: "#/components/schemas/HubEventGoodsListImage"
+        goodsListLayout:
+          type: string
+          enum: [split, single]
+          description: >-
+            Public detail only, present only when goodsListImages is present in the same response. "split" shows
+            MD and bonus pages as separate groups, "single" as one strip. Server-driven via
+            HUB_EVENT_GOODS_GALLERY_LAYOUT (default split).
+        goodsCount:
+          type: integer
+          minimum: 1
+          description: List responses only. Number of non-cancelled goods items; omitted when zero.
         notificationEligible:
           type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    HubEventGoodsSalesChannel:
+      type: string
+      enum: [onsite, online, both]
+    HubEventGoodsItem:
+      type: object
+      description: >-
+        Curated static goods list entry. There is intentionally no availability or sold-out field.
+      required:
+        - id
+        - name
+        - memberIds
+        - salesChannel
+        - isBonus
+        - sortOrder
+      properties:
+        id:
+          type: string
+        scheduleItemId:
+          type: string
+          description: Only set when the notice splits sales into rounds; must be a schedule item of the same event.
+        name:
+          type: string
+          maxLength: 160
+        groupLabel:
+          type: string
+          maxLength: 80
+        memberIds:
+          type: array
+          maxItems: 30
+          uniqueItems: true
+          items:
+            type: string
+          description: Active or upcoming catalog member ids only.
+        priceKrw:
+          type: integer
+          minimum: 0
+        priceNote:
+          type: string
+          maxLength: 120
+        salesChannel:
+          $ref: "#/components/schemas/HubEventGoodsSalesChannel"
+        purchaseLimit:
+          type: integer
+          minimum: 1
+        limitNote:
+          type: string
+          maxLength: 200
+        isBonus:
+          type: boolean
+        purchaseUrl:
+          type: string
+          format: uri
+          pattern: "^https://"
+        image:
+          $ref: "#/components/schemas/HubEventImage"
+        sortOrder:
+          type: integer
+          minimum: 0
+        cancelledAt:
+          type: string
+          format: date-time
+          description: Admin responses only.
         createdAt:
           type: string
           format: date-time
@@ -2726,6 +2996,103 @@ components:
               type: array
               items:
                 type: string
+    AdminHubEventGoodsItemInput:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          description: Bulk replace only; must be an existing goods item id of this event. Omit to create.
+        scheduleItemId:
+          type: string
+          nullable: true
+        name:
+          type: string
+          maxLength: 160
+        groupLabel:
+          type: string
+          nullable: true
+          maxLength: 80
+        memberIds:
+          type: array
+          maxItems: 30
+          items:
+            type: string
+        priceKrw:
+          type: integer
+          minimum: 0
+          nullable: true
+        priceNote:
+          type: string
+          nullable: true
+          maxLength: 120
+        salesChannel:
+          $ref: "#/components/schemas/HubEventGoodsSalesChannel"
+        purchaseLimit:
+          type: integer
+          minimum: 1
+          nullable: true
+        limitNote:
+          type: string
+          nullable: true
+          maxLength: 200
+        isBonus:
+          type: boolean
+        purchaseUrl:
+          type: string
+          format: uri
+          pattern: "^https://"
+          nullable: true
+        image:
+          allOf:
+            - $ref: "#/components/schemas/HubEventImage"
+          nullable: true
+        sortOrder:
+          type: integer
+          minimum: 0
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+    AdminHubEventGoodsItemMutationRequest:
+      allOf:
+        - $ref: "#/components/schemas/AdminHubEventGoodsItemInput"
+        - $ref: "#/components/schemas/AdminHubEventRevisionRequest"
+    AdminHubEventGoodsItemCreateRequest:
+      allOf:
+        - $ref: "#/components/schemas/AdminHubEventGoodsItemMutationRequest"
+        - type: object
+          required:
+            - name
+            - salesChannel
+    AdminHubEventGoodsOrderRequest:
+      allOf:
+        - $ref: "#/components/schemas/AdminHubEventRevisionRequest"
+        - type: object
+          required:
+            - goodsItemIds
+          properties:
+            goodsItemIds:
+              type: array
+              items:
+                type: string
+    AdminHubEventGoodsReplaceRequest:
+      allOf:
+        - $ref: "#/components/schemas/AdminHubEventRevisionRequest"
+        - type: object
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              maxItems: 200
+              items:
+                allOf:
+                  - $ref: "#/components/schemas/AdminHubEventGoodsItemInput"
+                  - type: object
+                    required:
+                      - name
+                      - salesChannel
     AdminHubEventScheduleDeleteResponse:
       type: object
       required:

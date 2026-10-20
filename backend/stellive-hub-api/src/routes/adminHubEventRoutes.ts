@@ -8,6 +8,9 @@ import {
   HubEventAdminService,
   HubEventAdminValidationException,
   HubEventRevisionConflictException,
+  type HubEventGoodsMutationInput,
+  type HubEventGoodsOrderInput,
+  type HubEventGoodsReplaceInput,
   type HubEventScheduleMutationInput,
   type HubEventScheduleOrderInput
 } from "../hub-events/hubEventAdminService.js";
@@ -30,6 +33,12 @@ interface HubEventAdminRouteService {
   deleteScheduleItem(id: string, scheduleItemId: string, expectedRevision: number, actor: { actorId?: string; reason?: string }): Promise<unknown>;
   restoreScheduleItem(id: string, scheduleItemId: string, expectedRevision: number, actor: { actorId?: string; reason?: string }): Promise<unknown>;
   reorderScheduleItems(id: string, input: HubEventScheduleOrderInput, actor: { actorId?: string; reason?: string }): Promise<unknown>;
+  createGoodsItem(id: string, input: HubEventGoodsMutationInput, actor: { actorId?: string; reason?: string }): Promise<unknown>;
+  updateGoodsItem(id: string, goodsItemId: string, input: HubEventGoodsMutationInput, actor: { actorId?: string; reason?: string }): Promise<unknown>;
+  deleteGoodsItem(id: string, goodsItemId: string, expectedRevision: number, actor: { actorId?: string; reason?: string }): Promise<unknown>;
+  restoreGoodsItem(id: string, goodsItemId: string, expectedRevision: number, actor: { actorId?: string; reason?: string }): Promise<unknown>;
+  reorderGoodsItems(id: string, input: HubEventGoodsOrderInput, actor: { actorId?: string; reason?: string }): Promise<unknown>;
+  replaceGoodsItems(id: string, input: HubEventGoodsReplaceInput, actor: { actorId?: string; reason?: string }): Promise<unknown>;
 }
 
 export interface AdminHubEventRouteDependencies {
@@ -100,6 +109,9 @@ async function sendServiceError(error: unknown, reply: FastifyReply) {
   }
   if (error instanceof Error && error.message === "hub_event_schedule_item_not_found") {
     return reply.code(404).send({ error: "hub_event_schedule_item_not_found" });
+  }
+  if (error instanceof Error && error.message === "hub_event_goods_item_not_found") {
+    return reply.code(404).send({ error: "hub_event_goods_item_not_found" });
   }
   if (error instanceof Error && error.message === "hub_event_revision_conflict") {
     return reply.code(409).send({ error: "hub_event_revision_conflict" });
@@ -243,6 +255,106 @@ export async function registerAdminHubEventRoutes(app: FastifyInstance, options:
         return await service.reorderScheduleItems(
           request.params.id,
           request.body as HubEventScheduleOrderInput,
+          actorFromRequest(request)
+        );
+      } catch (error) {
+        return sendServiceError(error, reply);
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string } }>("/v1/admin/hub-events/:id/goods-items", privilegedRouteOptions, async (request, reply) => {
+    applyNoStore(reply);
+    try {
+      const created = await service.createGoodsItem(
+        request.params.id,
+        (request.body ?? {}) as HubEventGoodsMutationInput,
+        actorFromRequest(request)
+      );
+      return reply.code(201).send(created);
+    } catch (error) {
+      return sendServiceError(error, reply);
+    }
+  });
+
+  app.put<{ Params: { id: string } }>("/v1/admin/hub-events/:id/goods-items", privilegedRouteOptions, async (request, reply) => {
+    applyNoStore(reply);
+    try {
+      return await service.replaceGoodsItems(
+        request.params.id,
+        (request.body ?? {}) as HubEventGoodsReplaceInput,
+        actorFromRequest(request)
+      );
+    } catch (error) {
+      return sendServiceError(error, reply);
+    }
+  });
+
+  app.put<{ Params: { id: string } }>(
+    "/v1/admin/hub-events/:id/goods-items/order",
+    privilegedRouteOptions,
+    async (request, reply) => {
+      applyNoStore(reply);
+      try {
+        return await service.reorderGoodsItems(
+          request.params.id,
+          (request.body ?? {}) as HubEventGoodsOrderInput,
+          actorFromRequest(request)
+        );
+      } catch (error) {
+        return sendServiceError(error, reply);
+      }
+    }
+  );
+
+  app.patch<{ Params: { id: string; goodsItemId: string } }>(
+    "/v1/admin/hub-events/:id/goods-items/:goodsItemId",
+    privilegedRouteOptions,
+    async (request, reply) => {
+      applyNoStore(reply);
+      try {
+        return await service.updateGoodsItem(
+          request.params.id,
+          request.params.goodsItemId,
+          (request.body ?? {}) as HubEventGoodsMutationInput,
+          actorFromRequest(request)
+        );
+      } catch (error) {
+        return sendServiceError(error, reply);
+      }
+    }
+  );
+
+  app.delete<{ Params: { id: string; goodsItemId: string } }>(
+    "/v1/admin/hub-events/:id/goods-items/:goodsItemId",
+    privilegedRouteOptions,
+    async (request, reply) => {
+      applyNoStore(reply);
+      try {
+        const body = (request.body ?? {}) as { expectedRevision?: number };
+        return await service.deleteGoodsItem(
+          request.params.id,
+          request.params.goodsItemId,
+          Number(body.expectedRevision),
+          actorFromRequest(request)
+        );
+      } catch (error) {
+        return sendServiceError(error, reply);
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string; goodsItemId: string } }>(
+    "/v1/admin/hub-events/:id/goods-items/:goodsItemId/restore",
+    privilegedRouteOptions,
+    async (request, reply) => {
+      applyNoStore(reply);
+      try {
+        const body = (request.body ?? {}) as { expectedRevision?: number };
+        return await service.restoreGoodsItem(
+          request.params.id,
+          request.params.goodsItemId,
+          Number(body.expectedRevision),
           actorFromRequest(request)
         );
       } catch (error) {

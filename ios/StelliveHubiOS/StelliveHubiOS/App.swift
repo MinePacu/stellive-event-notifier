@@ -11,6 +11,7 @@ struct StelliveHubApp: App {
     @StateObject private var songOpenPreferenceStore: SongOpenPreferenceStore
     @StateObject private var announcementReadStore: AnnouncementReadStore
     @StateObject private var reservationStore: ReservationStore
+    @StateObject private var goodsChecklistStore: GoodsChecklistStore
 
     init() {
         let fallback = MockHubStore(settingsPersistence: .standard)
@@ -23,10 +24,13 @@ struct StelliveHubApp: App {
             // swiftlint:disable:next force_unwrapping
             resolvedHubBaseURL = URL(string: "https://hub.invalid")!
         }
+        let goodsChecklist = GoodsChecklistStore()
+        _goodsChecklistStore = StateObject(wrappedValue: goodsChecklist)
         _serverStore = StateObject(
             wrappedValue: ServerHubStore(
                 api: HubAPIClient(baseURL: resolvedHubBaseURL),
-                fallback: fallback
+                fallback: fallback,
+                goodsChecklist: goodsChecklist
             )
         )
         _songFavoritesStore = StateObject(wrappedValue: SongFavoritesStore())
@@ -48,6 +52,7 @@ struct StelliveHubApp: App {
                 .environmentObject(songOpenPreferenceStore)
                 .environmentObject(announcementReadStore)
                 .environmentObject(reservationStore)
+                .environmentObject(goodsChecklistStore)
                 .preferredColorScheme(store.settings.appearanceMode.preferredColorScheme)
                 .task {
                     _ = await serverStore.bootstrap()
