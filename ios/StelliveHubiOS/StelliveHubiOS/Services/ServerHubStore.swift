@@ -307,15 +307,17 @@ final class ServerHubStore: ObservableObject {
                 updatedAt: updatedAt
             )
         }
-        let scoped = (
-            settings.generationEnabled.map { rule("generation", generationId: $0.key, enabled: $0.value) } +
-            settings.memberEnabled.map { rule("member", memberId: $0.key, enabled: $0.value) } +
-            settings.platformEnabled.map { rule("platform", source: $0.key.rawValue, enabled: $0.value) } +
-            settings.eventTypeEnabled.map { rule("event_type", eventType: $0.key.rawValue, enabled: $0.value) }
-        ).sorted {
-            ($0.scope, $0.generationId ?? $0.memberId ?? $0.source ?? $0.eventType ?? "") <
-                ($1.scope, $1.generationId ?? $1.memberId ?? $1.source ?? $1.eventType ?? "")
+        // Built step by step with explicit types: one chained expression timed out the CI type checker.
+        var unsorted: [PreferenceResponse] = []
+        unsorted += settings.generationEnabled.map { rule("generation", generationId: $0.key, enabled: $0.value) }
+        unsorted += settings.memberEnabled.map { rule("member", memberId: $0.key, enabled: $0.value) }
+        unsorted += settings.platformEnabled.map { rule("platform", source: $0.key.rawValue, enabled: $0.value) }
+        unsorted += settings.eventTypeEnabled.map { rule("event_type", eventType: $0.key.rawValue, enabled: $0.value) }
+        func sortKey(_ rule: PreferenceResponse) -> String {
+            let target: String = rule.generationId ?? rule.memberId ?? rule.source ?? rule.eventType ?? ""
+            return rule.scope + "\u{0}" + target
         }
+        let scoped: [PreferenceResponse] = unsorted.sorted { sortKey($0) < sortKey($1) }
         let global = PreferenceResponse(
             deviceId: deviceId,
             scope: "global",
