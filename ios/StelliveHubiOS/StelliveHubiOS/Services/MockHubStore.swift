@@ -1,10 +1,11 @@
 import Foundation
 
-/// Local persistence for `NotificationSettingsState` and the "global rule not yet confirmed by the
+/// Local persistence for `NotificationSettingsState` and the "synced settings not yet confirmed by the
 /// server" flag. A missing or unreadable blob falls back to the defaults.
 struct NotificationSettingsPersistence {
     static let settingsKey = "dev.minepacu.stelliveeventnotifier.notificationSettings"
-    static let globalRuleDirtyKey = "dev.minepacu.stelliveeventnotifier.notificationGlobalRuleDirty"
+    // The key keeps its original name so a flag stored by an older build still loads.
+    static let serverSyncDirtyKey = "dev.minepacu.stelliveeventnotifier.notificationGlobalRuleDirty"
     static let standard = NotificationSettingsPersistence(defaults: .standard)
 
     let defaults: UserDefaults
@@ -21,12 +22,12 @@ struct NotificationSettingsPersistence {
         defaults.set(data, forKey: Self.settingsKey)
     }
 
-    func loadGlobalRuleDirty() -> Bool {
-        defaults.bool(forKey: Self.globalRuleDirtyKey)
+    func loadServerSyncDirty() -> Bool {
+        defaults.bool(forKey: Self.serverSyncDirtyKey)
     }
 
-    func saveGlobalRuleDirty(_ isDirty: Bool) {
-        defaults.set(isDirty, forKey: Self.globalRuleDirtyKey)
+    func saveServerSyncDirty(_ isDirty: Bool) {
+        defaults.set(isDirty, forKey: Self.serverSyncDirtyKey)
     }
 }
 
@@ -54,15 +55,15 @@ final class MockHubStore: ObservableObject {
     @Published var settings: NotificationSettingsState {
         didSet { settingsDidChange(from: oldValue) }
     }
-    /// True while the device's global rule (`NotificationGlobalRule`) was changed locally and the
-    /// server has not confirmed it yet. Persisted so it survives a relaunch.
-    private(set) var isGlobalRuleDirty: Bool {
+    /// True while the server-synced settings (`NotificationServerSyncedSettings`) were changed locally
+    /// and the server has not confirmed them yet. Persisted so it survives a relaunch.
+    private(set) var isServerSyncDirty: Bool {
         didSet {
-            if isGlobalRuleDirty != oldValue { settingsPersistence?.saveGlobalRuleDirty(isGlobalRuleDirty) }
+            if isServerSyncDirty != oldValue { settingsPersistence?.saveServerSyncDirty(isServerSyncDirty) }
         }
     }
     private let settingsPersistence: NotificationSettingsPersistence?
-    private var isApplyingServerGlobalRule = false
+    private var isApplyingServerSettings = false
 
     let filters: [GenerationFilter] = [
         .init(id: "all", displayName: "전체", notificationDefaultEnabled: true),
@@ -97,37 +98,69 @@ final class MockHubStore: ObservableObject {
     init(settingsPersistence: NotificationSettingsPersistence? = nil) {
         self.settingsPersistence = settingsPersistence
         settings = settingsPersistence?.loadSettings() ?? NotificationSettingsState()
-        isGlobalRuleDirty = settingsPersistence?.loadGlobalRuleDirty() ?? false
+        isServerSyncDirty = settingsPersistence?.loadServerSyncDirty() ?? false
     }
 
     private func settingsDidChange(from oldValue: NotificationSettingsState) {
         guard settings != oldValue else { return }
         settingsPersistence?.saveSettings(settings)
-        if !isApplyingServerGlobalRule, settings.globalRule != oldValue.globalRule {
-            isGlobalRuleDirty = true
+        if !isApplyingServerSettings, settings.serverSyncedSettings != oldValue.serverSyncedSettings {
+            isServerSyncDirty = true
         }
     }
 
-    /// Adopts the server's `global` rule (nil when the server has none) and clears the dirty flag.
-    /// A missing `serviceAnnouncementsEnabled` keeps the current local value.
-    func adoptServerGlobalRule(_ preference: PreferenceResponse?) {
-        if let preference {
-            isApplyingServerGlobalRule = true
-            settings.globalEnabled = preference.enabled
-            if let serviceAnnouncementsEnabled = preference.serviceAnnouncementsEnabled {
-                settings.serviceAnnouncementsEnabled = serviceAnnouncementsEnabled
+    /// Adopts the server's rules and clears the dirty flag. Only values the server actually carries
+    /// replace local ones: a missing global field keeps the local value, and the generation/member/
+    /// platform/event-type maps are overlaid key by key (an old build may have left only a global rule).
+    func adoptServerSettings(from preferences: [PreferenceResponse]) {
+        isApplyingServerSettings = true
+        defer { isApplyingServerSettings = false }
+        for preference in preferences {
+            switch preference.scope {
+            case "global":
+                settings.globalEnabled = preference.enabled
+                if let serviceAnnouncementsEnabled = preference.serviceAnnouncementsEnabled {
+                    settings.serviceAnnouncementsEnabled = serviceAnnouncementsEnabled
+                }
+                settings.tapAction = preference.tapAction == "open_platform" ? .openPlatform : .openApp
+                settings.realtimeEnabled = preference.deliveryMode == "realtime_best_effort"
+                if let quietHours = preference.quietHours {
+                    settings.quietHours = QuietHoursState(
+                        enabled: quietHours.enabled, start: quietHours.start, end: quietHours.end, timezone: quietHours.timezone
+                    )
+                }
+                if let allowlist = preference.keywordsAllowlist {
+                    settings.keywordFilters.allowlistText = allowlist.joined(separator: ", ")
+                }
+                if let blocklist = preference.keywordsBlocklist {
+                    settings.keywordFilters.blocklistText = blocklist.joined(separator: ", ")
+                }
+                if let maxNotificationsPerMinute = preference.maxNotificationsPerMinute {
+                    settings.rateLimit.maxNotificationsPerMinute = maxNotificationsPerMinute
+                }
+            case "generation":
+                if let id = preference.generationId { settings.generationEnabled[id] = preference.enabled }
+            case "member":
+                if let id = preference.memberId { settings.memberEnabled[id] = preference.enabled }
+            case "platform":
+                if let platform = preference.source.flatMap(NotificationPlatform.init(rawValue:)) {
+                    settings.platformEnabled[platform] = preference.enabled
+                }
+            case "event_type":
+                if let eventType = preference.eventType.flatMap(NotificationEventType.init(rawValue:)) {
+                    settings.eventTypeEnabled[eventType] = preference.enabled
+                }
+            default:
+                break
             }
-            settings.tapAction = preference.tapAction == "open_platform" ? .openPlatform : .openApp
-            settings.realtimeEnabled = preference.deliveryMode == "realtime_best_effort"
-            isApplyingServerGlobalRule = false
         }
-        isGlobalRuleDirty = false
+        isServerSyncDirty = false
     }
 
-    /// Clears the dirty flag once the server accepted `sent`, unless the user has changed the global
-    /// rule again since it was sent (that newer value is still unconfirmed).
-    func confirmGlobalRuleSynced(sent: NotificationGlobalRule) {
-        if settings.globalRule == sent { isGlobalRuleDirty = false }
+    /// Clears the dirty flag once the server accepted `sent`, unless the user has changed the synced
+    /// settings again since it was sent (that newer value is still unconfirmed).
+    func confirmServerSyncedSettings(sent: NotificationServerSyncedSettings) {
+        if settings.serverSyncedSettings == sent { isServerSyncDirty = false }
     }
 
     @Published var liveMemberPriorityIDs: [String] = []

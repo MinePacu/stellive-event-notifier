@@ -329,7 +329,7 @@ model WebhookSubscription {
 - `PUT /v1/preferences`: upsert a full preference snapshot. Validate scope combinations with Zod.
 - `GET /v1/preferences/resolved`: keep as dev/test only or move under `/v1/dev/*`.
 - `GET /v1/live-status`: return CHZZK live status cache. Mobile apps must not call CHZZK directly.
-- `GET /v1/events/stream`: foreground SSE. Add authentication and device validation.
+- `GET /v1/events/stream`: foreground SSE, registered only when `FOREGROUND_SSE_ENABLED=true` (404 otherwise). Capped at 500 concurrent streams (503) and 5 per client IP (429, both `{"error":"realtime_capacity_reached"}`), 25s comment heartbeat, streams end after 10 minutes so clients reconnect. Still needs authentication and device validation before any client uses it.
 - `GET /v1/notifications/delivery-attempts`: protect as dev diagnostics only.
 
 Current mobile API backend status:
@@ -337,6 +337,11 @@ Current mobile API backend status:
 - `backend/stellive-hub-api/src/routes/appRoutes.ts` owns `GET /v1/bootstrap`, `POST /v1/devices/register`, `PUT /v1/devices/token`, `GET /v1/preferences`, and `PUT /v1/preferences`.
 - `DeviceRepository`, `PreferenceRepository`, and `BootstrapService` provide the server-side boundaries for mobile registration, preference snapshots, and bootstrap assembly.
 - Verified with `rtk npm run build` and `rtk npm test` in `backend/stellive-hub-api`.
+
+Device secret (device-owned endpoint authentication):
+- `POST /v1/devices/register` issues a secret only when the body has `deviceSecretSupported: true` (boolean). It then returns `deviceSecret` (32 random bytes, base64url) when it creates a device or when an existing device has no secret yet (one-time claim for devices registered before secrets existed). Without the flag, old app builds register exactly as before and get no secret. A secret is never reissued or rotated; the server stores only its SHA-256 hex in `Device.secretHash`.
+- Clients persist the secret and send it as the `X-Device-Secret` request header on `POST /v1/devices/register`, `PUT /v1/devices/token`, `GET`/`PUT /v1/preferences`, and `GET /v1/bootstrap?deviceId=...`.
+- If the device has a secret and the header is missing or wrong, these return `401 {"error":"device_auth_failed"}` (bootstrap does not fall back to anonymous). Devices without a secret, and unknown device ids, keep the previous behaviour for old app builds.
 
 ### New endpoints
 

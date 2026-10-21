@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { getPrismaClient } from "../storage/prisma.js";
+import {
+  checkDeviceSecret,
+  DeviceAuthFailedError,
+  generateDeviceSecret,
+  type DeviceSecretCheck,
+} from "../mobile/deviceSecret.js";
 import type { PushTargetDevice } from "../push/pushSender.js";
 
 export interface DeviceRegistrationInput {
@@ -9,6 +15,8 @@ export interface DeviceRegistrationInput {
   locale?: string;
   timezone?: string;
   installationId?: string;
+  deviceSecret?: string;
+  deviceSecretSupported?: boolean;
 }
 
 export interface DeviceTokenInput {
@@ -42,6 +50,7 @@ export class DeviceTokenClaimUnavailableError extends Error {
 interface DeviceRecord {
   id: string;
   tokenStatus: string;
+  secretHash?: string | null;
 }
 
 interface PushTargetRecord {
@@ -56,8 +65,12 @@ interface PushTargetRecord {
 
 interface DeviceClient {
   device: {
+    create?(args: unknown): Promise<unknown>;
     upsert?(args: unknown): Promise<unknown>;
-    findUnique?(args: { where: { id: string }; select?: { id: true; tokenStatus: true } }): Promise<DeviceRecord | null>;
+    findUnique?(args: {
+      where: { id: string };
+      select?: Partial<Record<"id" | "tokenStatus" | "secretHash", true>>;
+    }): Promise<DeviceRecord | null>;
     findMany?(args: unknown): Promise<unknown[]>;
     updateMany?(args: unknown): Promise<{ count: number }>;
   };
@@ -109,33 +122,82 @@ export class DeviceRepository {
     private readonly createDeviceId: () => string = () => `device_${randomUUID()}`
   ) {}
 
-  async register(input: DeviceRegistrationInput): Promise<{ deviceId: string; registered: true }> {
-    if (!this.prisma.device.upsert) throw new Error("device_upsert_unavailable");
+  async register(input: DeviceRegistrationInput): Promise<{ deviceId: string; registered: true; deviceSecret?: string }> {
     if (input.deviceId !== undefined && typeof input.deviceId !== "string") throw new Error("device_id_invalid");
+    const device = this.prisma.device;
+    if (!device.create || !device.upsert || !device.findUnique || !device.updateMany) {
+      throw new Error("device_register_unavailable");
+    }
+    const metadata = {
+      platform: input.platform,
+      locale: input.locale ?? null,
+      timezone: input.timezone ?? null,
+      appVersion: input.appVersion ?? null,
+      lastSeenAt: this.now()
+    };
+    const existing = input.deviceId
+      ? await device.findUnique({ where: { id: input.deviceId }, select: { secretHash: true } })
+      : null;
+
+    if (input.deviceId && existing?.secretHash) {
+      // Never rotate an issued secret; only its holder may refresh the registration.
+      if (checkDeviceSecret(existing.secretHash, input.deviceSecret) !== "ok") throw new DeviceAuthFailedError();
+      await device.updateMany({ where: { id: input.deviceId }, data: metadata });
+      return { deviceId: input.deviceId, registered: true };
+    }
+
     const deviceId = input.deviceId ?? this.createDeviceId();
-    await this.prisma.device.upsert({
-      where: { id: deviceId },
-      create: {
-        id: deviceId,
-        platform: input.platform,
-        deviceToken: null,
-        tokenStatus: "missing",
-        locale: input.locale ?? null,
-        timezone: input.timezone ?? null,
-        appVersion: input.appVersion ?? null,
-        realtimeEnabled: false,
-        realtimeAcknowledged: false,
-        lastSeenAt: this.now()
-      },
-      update: {
-        platform: input.platform,
-        locale: input.locale ?? null,
-        timezone: input.timezone ?? null,
-        appVersion: input.appVersion ?? null,
-        lastSeenAt: this.now()
+    if (!input.deviceSecretSupported) {
+      // Old app builds ignore deviceSecret, so issuing one would lock them out from their next request.
+      await device.upsert({
+        where: { id: deviceId },
+        create: {
+          id: deviceId,
+          ...metadata,
+          deviceToken: null,
+          tokenStatus: "missing",
+          realtimeEnabled: false,
+          realtimeAcknowledged: false
+        },
+        update: metadata
+      });
+      return { deviceId, registered: true };
+    }
+
+    const { secret, hash } = generateDeviceSecret();
+    if (existing) {
+      // One-time claim for legacy rows; losing a concurrent claim means this caller cannot hold the issued secret.
+      const { count } = await device.updateMany({
+        where: { id: deviceId, secretHash: null },
+        data: { ...metadata, secretHash: hash }
+      });
+      if (count !== 1) throw new DeviceAuthFailedError();
+    } else {
+      try {
+        await device.create({
+          data: {
+            id: deviceId,
+            ...metadata,
+            deviceToken: null,
+            tokenStatus: "missing",
+            realtimeEnabled: false,
+            realtimeAcknowledged: false,
+            secretHash: hash
+          }
+        });
+      } catch (error) {
+        // A concurrent request created the row first; the client re-registers and claims or authenticates.
+        if (prismaErrorCode(error) === "P2002") throw new DeviceAuthFailedError();
+        throw error;
       }
-    });
-    return { deviceId, registered: true };
+    }
+    return { deviceId, registered: true, deviceSecret: secret };
+  }
+
+  async verifyDeviceSecret(deviceId: string, provided: unknown): Promise<DeviceSecretCheck | "missing"> {
+    if (!this.prisma.device.findUnique) throw new Error("device_lookup_unavailable");
+    const record = await this.prisma.device.findUnique({ where: { id: deviceId }, select: { secretHash: true } });
+    return record ? checkDeviceSecret(record.secretHash, provided) : "missing";
   }
 
   async updateToken(input: DeviceTokenInput): Promise<{ updated: true; tokenStatus: "active" }> {
@@ -213,14 +275,14 @@ export class DeviceRepository {
     throw new DeviceTokenClaimUnavailableError();
   }
 
-  async getDevice(deviceId: string): Promise<{ deviceId: string; tokenStatus: string } | undefined> {
+  async getDevice(deviceId: string): Promise<{ deviceId: string; tokenStatus: string; secretHash: string | null } | undefined> {
     if (!this.prisma.device.findUnique) throw new Error("device_lookup_unavailable");
     const record = await this.prisma.device.findUnique({
       where: { id: deviceId },
-      select: { id: true, tokenStatus: true }
+      select: { id: true, tokenStatus: true, secretHash: true }
     });
     if (!record) return undefined;
-    return { deviceId: record.id, tokenStatus: record.tokenStatus };
+    return { deviceId: record.id, tokenStatus: record.tokenStatus, secretHash: record.secretHash ?? null };
   }
 
   async findPushTarget(deviceId: string): Promise<PushTargetDevice | undefined> {

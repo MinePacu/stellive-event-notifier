@@ -98,11 +98,15 @@ export interface RegisterDeviceRequest {
   locale?: string;
   timezone?: string;
   installationId?: string;
+  /** Opt in to a per-device secret; send it back in the X-Device-Secret header on device endpoints. */
+  deviceSecretSupported?: boolean;
 }
 
 export interface RegisterDeviceResponse {
   deviceId: string;
   registered: true;
+  /** Returned once, when a new device is created or a legacy device claims its first secret. */
+  deviceSecret?: string;
   serverTime: string;
 }
 

@@ -1,10 +1,14 @@
 package dev.minepacu.stelliveeventnotifier
 
+import dev.minepacu.stelliveeventnotifier.core.model.KeywordFilterState
+import dev.minepacu.stelliveeventnotifier.core.model.NotificationEventType
+import dev.minepacu.stelliveeventnotifier.core.model.NotificationPlatform
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
+import dev.minepacu.stelliveeventnotifier.core.model.QuietHoursState
 import dev.minepacu.stelliveeventnotifier.core.network.HubNetworkResult
 import dev.minepacu.stelliveeventnotifier.feature.home.PreferenceSyncConflictException
 import dev.minepacu.stelliveeventnotifier.feature.home.PreferenceSyncResult
-import dev.minepacu.stelliveeventnotifier.feature.home.RemoteGlobalPreferences
+import dev.minepacu.stelliveeventnotifier.feature.home.RemoteNotificationPreferences
 import dev.minepacu.stelliveeventnotifier.feature.settings.DebouncedSettingsSync
 import dev.minepacu.stelliveeventnotifier.feature.settings.NotificationSettingsReconciler
 import dev.minepacu.stelliveeventnotifier.feature.settings.NotificationSettingsReconciler.SyncOutcome
@@ -59,7 +63,7 @@ class NotificationSettingsReconcilerTest {
 
         assertEquals(SyncOutcome.KEPT_LOCAL, reconciler.sync(settings))
 
-        assertEquals(NotificationSettingsStore.Snapshot(false, true, true), store.load())
+        assertEquals(snapshot(false, true, true), store.load())
     }
 
     @Test
@@ -69,18 +73,18 @@ class NotificationSettingsReconcilerTest {
 
         reconciler.sync(sent)
 
-        assertEquals(NotificationSettingsStore.Snapshot(false, false, true), store.load())
+        assertEquals(snapshot(false, false, true), store.load())
     }
 
     @Test
     fun conflictPullsServerRuleAndClearsDirty() = runTest {
         val settings = toggle(globalEnabled = false)
         remote.pushError = PreferenceSyncConflictException()
-        remote.fetchResult = HubNetworkResult.Success(RemoteGlobalPreferences(true, false))
+        remote.fetchResult = HubNetworkResult.Success(RemoteNotificationPreferences(true, false))
 
         assertEquals(SyncOutcome.CONFLICT, reconciler.sync(settings))
 
-        assertEquals(NotificationSettingsStore.Snapshot(true, false, false), store.load())
+        assertEquals(snapshot(true, false, false), store.load())
     }
 
     @Test
@@ -91,17 +95,17 @@ class NotificationSettingsReconcilerTest {
 
         assertEquals(SyncOutcome.CONFLICT, reconciler.sync(settings))
 
-        assertEquals(NotificationSettingsStore.Snapshot(false, true, true), store.load())
+        assertEquals(snapshot(false, true, true), store.load())
     }
 
     @Test
     fun staleUpdateAdoptsServerRuleAndClearsDirty() = runTest {
         val settings = toggle(globalEnabled = false)
-        remote.pushResults += PreferenceSyncResult.ServerNewer(RemoteGlobalPreferences(true, false))
+        remote.pushResults += PreferenceSyncResult.ServerNewer(RemoteNotificationPreferences(true, false))
 
         assertEquals(SyncOutcome.SERVER_APPLIED, reconciler.sync(settings))
 
-        assertEquals(NotificationSettingsStore.Snapshot(true, false, false), store.load())
+        assertEquals(snapshot(true, false, false), store.load())
     }
 
     @Test
@@ -116,24 +120,47 @@ class NotificationSettingsReconcilerTest {
         assertFalse(store.load().dirty)
     }
 
+    // Adoption now requires at least one owned scoped rule on the server; a global-only rule triggers a push instead.
     @Test
-    fun launchWithCleanStorePullsServerGlobalRule() = runTest {
-        remote.fetchResult = HubNetworkResult.Success(RemoteGlobalPreferences(false, false))
+    fun launchWithCleanStorePullsServerRulesWhenScopedRulesExist() = runTest {
+        remote.fetchResult = HubNetworkResult.Success(
+            RemoteNotificationPreferences(false, false, generationEnabled = mapOf("gen1" to true)),
+        )
 
         assertEquals(SyncOutcome.SERVER_APPLIED, reconciler.reconcileOnLaunch(base))
 
-        assertEquals(NotificationSettingsStore.Snapshot(false, false, false), store.load())
+        assertEquals(snapshot(false, false, false), store.load())
         assertTrue(remote.pushed.isEmpty())
     }
 
     @Test
-    fun launchWithoutServerGlobalRuleKeepsDefaultsAndSendsNothing() = runTest {
+    fun launchWithCleanStoreAndGlobalOnlyServerPushesLocalValuesOnce() = runTest {
+        remote.fetchResult = HubNetworkResult.Success(RemoteNotificationPreferences(false, false))
+
+        assertEquals(SyncOutcome.SYNCED, reconciler.reconcileOnLaunch(base))
+
+        assertEquals(listOf(reconciler.effective(base)), remote.pushed)
+        assertEquals(snapshot(true, true, false), store.load())
+    }
+
+    @Test
+    fun launchWithCleanStoreAndEmptyServerPushesLocalValues() = runTest {
         remote.fetchResult = HubNetworkResult.Success(null)
+
+        assertEquals(SyncOutcome.SYNCED, reconciler.reconcileOnLaunch(base))
+
+        assertEquals(listOf(reconciler.effective(base)), remote.pushed)
+        assertEquals(snapshot(true, true, false), store.load())
+    }
+
+    @Test
+    fun launchWithGlobalOnlyServerPushFailureStaysUnchangedLocally() = runTest {
+        remote.fetchResult = HubNetworkResult.Success(RemoteNotificationPreferences(false, false))
+        remote.pushResults += PreferenceSyncResult.Failed
 
         assertEquals(SyncOutcome.KEPT_LOCAL, reconciler.reconcileOnLaunch(base))
 
-        assertEquals(NotificationSettingsStore.Snapshot(true, true, false), store.load())
-        assertTrue(remote.pushed.isEmpty())
+        assertEquals(snapshot(true, true, false), store.load())
     }
 
     @Test
@@ -144,7 +171,7 @@ class NotificationSettingsReconcilerTest {
 
         assertEquals(SyncOutcome.KEPT_LOCAL, reconciler.reconcileOnLaunch(base))
 
-        assertEquals(NotificationSettingsStore.Snapshot(false, true, false), store.load())
+        assertEquals(snapshot(false, true, false), store.load())
     }
 
     @Test
@@ -154,7 +181,7 @@ class NotificationSettingsReconcilerTest {
 
         assertEquals(SyncOutcome.KEPT_LOCAL, reconciler.reconcileOnLaunch(base))
 
-        assertEquals(NotificationSettingsStore.Snapshot(false, true, true), store.load())
+        assertEquals(snapshot(false, true, true), store.load())
     }
 
     @Test
@@ -167,7 +194,7 @@ class NotificationSettingsReconcilerTest {
 
         assertTrue(remote.pushed.isEmpty())
         assertEquals(0, remote.fetchCalls)
-        assertEquals(NotificationSettingsStore.Snapshot(false, true, true), store.load())
+        assertEquals(snapshot(false, true, true), store.load())
     }
 
     @Test
@@ -189,8 +216,108 @@ class NotificationSettingsReconcilerTest {
         assertEquals(1, remote.pushed.size)
         assertFalse(remote.pushed.single().globalEnabled)
         assertFalse(remote.pushed.single().serviceAnnouncementsEnabled)
-        assertEquals(NotificationSettingsStore.Snapshot(false, false, false), store.load())
+        assertEquals(snapshot(false, false, false), store.load())
     }
+
+    @Test
+    fun quietHoursChangeStoresValueAndMarksDirty() {
+        val quiet = QuietHoursState(enabled = true, start = "22:00", end = "07:30", timezone = "Asia/Tokyo")
+
+        reconciler.saveLocal(reconciler.effective(base).copy(quietHours = quiet))
+
+        assertTrue(store.load().dirty)
+        assertEquals(quiet, reconciler.effective(base).quietHours)
+    }
+
+    @Test
+    fun memberToggleStoresValueAndMarksDirty() {
+        val member = base.memberEnabled.keys.first()
+
+        reconciler.saveLocal(reconciler.effective(base).let { it.copy(memberEnabled = it.memberEnabled + (member to false)) })
+
+        assertTrue(store.load().dirty)
+        assertEquals(false, reconciler.effective(base).memberEnabled[member])
+        assertEquals(base.memberEnabled.keys, reconciler.effective(base).memberEnabled.keys)
+    }
+
+    @Test
+    fun memberToggleDuringInFlightSyncKeepsDirty() = runTest {
+        val member = base.memberEnabled.keys.first()
+        val sent = reconciler.effective(base).also(reconciler::saveLocal)
+        remote.onPush = { reconciler.saveLocal(sent.copy(memberEnabled = sent.memberEnabled + (member to false))) }
+
+        reconciler.sync(sent)
+
+        assertTrue(store.load().dirty)
+    }
+
+    @Test
+    fun adoptingServerRulesOverlaysDetailedSettingsAndIgnoresUnknownNames() = runTest {
+        val member = base.memberEnabled.keys.first()
+        val quiet = QuietHoursState(enabled = true, start = "01:00", end = "02:00", timezone = "Asia/Seoul")
+        remote.fetchResult = HubNetworkResult.Success(
+            RemoteNotificationPreferences(
+                globalEnabled = true,
+                serviceAnnouncementsEnabled = true,
+                quietHours = quiet,
+                keywordFilters = KeywordFilterState("a, b", "spoiler"),
+                maxNotificationsPerMinute = 3,
+                generationEnabled = mapOf("gen2" to false, "gen99" to false),
+                memberEnabled = mapOf(member to false, "unknown-member" to false),
+                platformEnabled = mapOf(NotificationPlatform.NAVER_CAFE to true),
+                eventTypeEnabled = mapOf(NotificationEventType.EVENT_UPDATED to true),
+            ),
+        )
+
+        assertEquals(SyncOutcome.SERVER_APPLIED, reconciler.reconcileOnLaunch(base))
+
+        val adopted = reconciler.effective(base)
+        assertEquals(quiet, adopted.quietHours)
+        assertEquals(KeywordFilterState("a, b", "spoiler"), adopted.keywordFilters)
+        assertEquals(3, adopted.rateLimit.maxNotificationsPerMinute)
+        assertEquals(base.generationEnabled + ("gen2" to false), adopted.generationEnabled)
+        assertEquals(base.memberEnabled + (member to false), adopted.memberEnabled)
+        assertEquals(base.platformEnabled + (NotificationPlatform.NAVER_CAFE to true), adopted.platformEnabled)
+        assertEquals(base.eventTypeEnabled + (NotificationEventType.EVENT_UPDATED to true), adopted.eventTypeEnabled)
+        assertFalse(store.load().dirty)
+    }
+
+    // Moved off the launch path (which now pushes for a global-only server) onto the stale-update adoption path.
+    @Test
+    fun globalOnlyServerRuleLeavesLocalDetailedSettingsUntouched() = runTest {
+        val member = base.memberEnabled.keys.first()
+        val local = reconciler.effective(base).copy(
+            quietHours = QuietHoursState(enabled = true),
+            keywordFilters = KeywordFilterState("x", ""),
+            memberEnabled = base.memberEnabled + (member to false),
+        )
+        reconciler.saveLocal(local)
+        remote.pushResults += PreferenceSyncResult.ServerNewer(
+            RemoteNotificationPreferences(globalEnabled = false, serviceAnnouncementsEnabled = true),
+        )
+
+        assertEquals(SyncOutcome.SERVER_APPLIED, reconciler.sync(local))
+
+        assertEquals(local.copy(globalEnabled = false), reconciler.effective(base))
+    }
+
+    @Test
+    fun legacyStoredToggleKeysStillLoad() {
+        val storage = NotificationSettingsStore.InMemoryStorage().apply {
+            put(mapOf("global_enabled" to false, "service_announcements_enabled" to false, "dirty" to true))
+        }
+
+        assertEquals(snapshot(false, false, true), NotificationSettingsStore(storage).load())
+    }
+
+    private fun snapshot(globalEnabled: Boolean, serviceAnnouncementsEnabled: Boolean, dirty: Boolean) =
+        NotificationSettingsStore.Snapshot(
+            NotificationSettingState(
+                globalEnabled = globalEnabled,
+                serviceAnnouncementsEnabled = serviceAnnouncementsEnabled,
+            ),
+            dirty,
+        )
 
     private fun toggle(globalEnabled: Boolean): NotificationSettingState =
         reconciler.effective(base).copy(globalEnabled = globalEnabled).also(reconciler::saveLocal)
@@ -200,7 +327,7 @@ class NotificationSettingsReconcilerTest {
         val pushResults = ArrayDeque<PreferenceSyncResult>()
         var pushError: PreferenceSyncConflictException? = null
         var onPush: () -> Unit = {}
-        var fetchResult: HubNetworkResult<RemoteGlobalPreferences?> = HubNetworkResult.Success(null)
+        var fetchResult: HubNetworkResult<RemoteNotificationPreferences?> = HubNetworkResult.Success(null)
         var fetchCalls = 0
 
         override suspend fun push(settings: NotificationSettingState): PreferenceSyncResult {
@@ -210,7 +337,7 @@ class NotificationSettingsReconcilerTest {
             return pushResults.removeFirstOrNull() ?: PreferenceSyncResult.Pushed
         }
 
-        override suspend fun fetchGlobal(): HubNetworkResult<RemoteGlobalPreferences?> {
+        override suspend fun fetchRemote(): HubNetworkResult<RemoteNotificationPreferences?> {
             fetchCalls += 1
             return fetchResult
         }

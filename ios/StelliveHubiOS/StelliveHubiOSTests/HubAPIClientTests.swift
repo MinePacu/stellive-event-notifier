@@ -466,14 +466,14 @@ final class ServerHubStoreTests: XCTestCase {
         super.tearDown()
     }
 
-    func testUpdatePreferencesPreservesScopedRulesAndReplacesGlobalRule() async throws {
+    func testUpdatePreferencesPreservesNonOwnedScopesAndReplacesOwnedRules() async throws {
         var requests: [URLRequest] = []
         var updateBody: Data?
         let store = makeStore { request in
             requests.append(request)
             if request.httpMethod == "GET" {
                 return jsonResponse(statusCode: 200, body: """
-                    {"deviceId":"device-1","preferences":[{"deviceId":"device-1","scope":"member","memberId":"akane-lize","enabled":true,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","serviceAnnouncementsEnabled":null,"updatedAt":"2026-07-06T00:00:00Z"}],"updatedAt":"2026-07-06T00:00:00Z","revision":7}
+                    {"deviceId":"device-1","preferences":[{"deviceId":"device-1","scope":"member_platform","memberId":"akane-lize","source":"youtube","enabled":true,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","serviceAnnouncementsEnabled":null,"updatedAt":"2026-07-06T00:00:00Z"},{"deviceId":"device-1","scope":"member","memberId":"stale-member","enabled":false,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","updatedAt":"2026-07-06T00:00:00Z"},{"deviceId":"device-1","scope":"generation","generationId":"gen1","enabled":false,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","updatedAt":"2026-07-06T00:00:00Z"}],"updatedAt":"2026-07-06T00:00:00Z","revision":7}
                     """)
             }
             updateBody = request.httpBody ?? request.httpBodyStream.flatMap(Self.readAll)
@@ -490,14 +490,114 @@ final class ServerHubStoreTests: XCTestCase {
         XCTAssertEqual(requests.map { $0.httpMethod }, ["GET", "PUT"])
         let body = try XCTUnwrap(updateBody)
         let request = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: body)
-        XCTAssertEqual(request.preferences.map(\.scope), ["member", "global"])
+        XCTAssertEqual(request.preferences.first?.scope, "member_platform")
         XCTAssertEqual(request.preferences.first?.memberId, "akane-lize")
+        XCTAssertEqual(request.preferences.filter { $0.scope == "member_platform" }.count, 1)
+        // Owned server rules are regenerated from local state, not duplicated or carried over.
+        XCTAssertTrue(request.preferences.filter { $0.scope == "member" }.isEmpty)
+        XCTAssertEqual(request.preferences.filter { $0.scope == "generation" && $0.generationId == "gen1" }.map(\.enabled), [true])
+        XCTAssertEqual(request.preferences.last?.scope, "global")
         XCTAssertEqual(request.preferences.last?.enabled, false)
         XCTAssertEqual(request.preferences.last?.serviceAnnouncementsEnabled, false)
         XCTAssertEqual(request.expectedRevision, 7)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertNotNil(json["clientUpdatedAt"])
         XCTAssertEqual(json["expectedRevision"] as? Int, 7)
+    }
+
+    func testPreferenceUpdateRequestCarriesGlobalFieldsAndScopedRulesWithGlobalDelivery() throws {
+        let store = makeStore { _ in jsonResponse(statusCode: 500, body: "{}") }
+        var settings = NotificationSettingsState()
+        settings.tapAction = .openPlatform
+        settings.realtimeEnabled = true
+        settings.quietHours = QuietHoursState(enabled: true, start: "22:30", end: "07:15", timezone: "UTC")
+        settings.keywordFilters = KeywordFilterState(allowlistText: "a, ,b", blocklistText: " , ")
+        settings.rateLimit.maxNotificationsPerMinute = 3
+        settings.generationEnabled = ["gen2": false, "gen1": true]
+        settings.memberEnabled = ["gangzi": false]
+        settings.platformEnabled = [.youtube: false, .chzzk: true]
+        settings.eventTypeEnabled = [.eventUpdated: true]
+        let current = PreferencesResponse(deviceId: "device-1", preferences: [], updatedAt: "2026-07-06T00:00:00Z", revision: 4)
+
+        let request = store.preferenceUpdateRequest(
+            deviceId: "device-1", settings: settings, current: current, clientUpdatedAt: "2026-07-06T00:00:00Z"
+        )
+
+        XCTAssertEqual(request.preferences.map(\.scope), ["event_type", "generation", "generation", "member", "platform", "platform", "global"])
+        XCTAssertEqual(request.preferences.compactMap(\.generationId), ["gen1", "gen2"])
+        XCTAssertEqual(request.preferences.compactMap(\.source), ["chzzk", "youtube"])
+        XCTAssertEqual(request.preferences.compactMap(\.eventType), ["event_updated"])
+        XCTAssertEqual(request.preferences.compactMap(\.memberId), ["gangzi"])
+        XCTAssertEqual(request.preferences.map(\.tapAction), Array(repeating: "open_platform", count: 7))
+        XCTAssertEqual(request.preferences.map(\.deliveryMode), Array(repeating: "realtime_best_effort", count: 7))
+        XCTAssertEqual(Set(request.preferences.map(\.updatedAt)).count, 1)
+        let scoped = request.preferences.dropLast()
+        XCTAssertTrue(scoped.allSatisfy { $0.explicitOverride && $0.quietHours == nil && $0.keywordsAllowlist == nil && $0.maxNotificationsPerMinute == nil && $0.serviceAnnouncementsEnabled == nil })
+        XCTAssertEqual(scoped.first { $0.generationId == "gen2" }?.enabled, false)
+        let global = try XCTUnwrap(request.preferences.last)
+        XCTAssertEqual(global.quietHours, PreferenceQuietHoursResponse(enabled: true, start: "22:30", end: "07:15", timezone: "UTC"))
+        XCTAssertEqual(global.keywordsAllowlist, ["a", "b"])
+        XCTAssertNil(global.keywordsBlocklist)
+        XCTAssertEqual(global.maxNotificationsPerMinute, 3)
+        XCTAssertEqual(request.expectedRevision, 4)
+    }
+
+    func testKeywordTermsSplitsTrimsAndDropsEmptyTerms() {
+        XCTAssertEqual(ServerHubStore.keywordTerms("a, ,b"), ["a", "b"])
+        XCTAssertEqual(ServerHubStore.keywordTerms("  굿즈 "), ["굿즈"])
+        XCTAssertNil(ServerHubStore.keywordTerms(""))
+        XCTAssertNil(ServerHubStore.keywordTerms(" , ,"))
+    }
+
+    func testRequestRulesRoundTripThroughAdoptionIntoDefaultState() {
+        let store = makeStore { _ in jsonResponse(statusCode: 500, body: "{}") }
+        var settings = NotificationSettingsState()
+        settings.globalEnabled = false
+        settings.serviceAnnouncementsEnabled = false
+        settings.realtimeEnabled = true
+        settings.tapAction = .openPlatform
+        settings.quietHours = QuietHoursState(enabled: true, start: "22:30", end: "07:15", timezone: "UTC")
+        settings.keywordFilters = KeywordFilterState(allowlistText: "굿즈, 콘서트", blocklistText: "스포")
+        settings.rateLimit.maxNotificationsPerMinute = 3
+        settings.generationEnabled["gen2"] = false
+        settings.memberEnabled = ["gangzi": false, "akane-lize": true]
+        settings.platformEnabled[.naverCafe] = true
+        settings.eventTypeEnabled[.eventUpdated] = true
+        let current = PreferencesResponse(deviceId: "device-1", preferences: [], updatedAt: "2026-07-06T00:00:00Z", revision: 1)
+        let request = store.preferenceUpdateRequest(
+            deviceId: "device-1", settings: settings, current: current, clientUpdatedAt: "2026-07-06T00:00:00Z"
+        )
+
+        let adopted = MockHubStore(settingsPersistence: makeSettingsPersistence())
+        adopted.adoptServerSettings(from: request.preferences)
+
+        XCTAssertEqual(adopted.settings.serverSyncedSettings, settings.serverSyncedSettings)
+        XCTAssertFalse(adopted.isServerSyncDirty)
+    }
+
+    func testQuietHoursAndMemberChangesAreSyncedAndConfirmed() async throws {
+        let stub = PreferenceServerStub()
+        let persistence = makeSettingsPersistence()
+        let mock = MockHubStore(settingsPersistence: persistence)
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        mock.settings.quietHours.enabled = true
+        XCTAssertTrue(mock.isServerSyncDirty)
+        store.schedulePreferenceSync(mock.settings)
+        await store.preferenceSyncTask?.value
+        XCTAssertFalse(mock.isServerSyncDirty)
+        XCTAssertEqual(try decodeGlobalRule(stub.putBodies.last).quietHours?.enabled, true)
+
+        mock.settings.memberEnabled["gangzi"] = false
+        XCTAssertTrue(mock.isServerSyncDirty)
+        XCTAssertTrue(persistence.loadServerSyncDirty())
+        store.schedulePreferenceSync(mock.settings)
+        // A further change before the write is confirmed keeps the flag.
+        mock.settings.quietHours.start = "21:00"
+        await store.preferenceSyncTask?.value
+        XCTAssertTrue(mock.isServerSyncDirty)
+        let request = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: try XCTUnwrap(stub.putBodies.last))
+        XCTAssertEqual(request.preferences.first { $0.memberId == "gangzi" }?.enabled, false)
     }
 
     func testUpdatePreferencesRefetchesAndRebasesGlobalChangeOnceAfterConflict() async throws {
@@ -508,11 +608,11 @@ final class ServerHubStoreTests: XCTestCase {
                 getCount += 1
                 if getCount == 1 {
                     return jsonResponse(statusCode: 200, body: """
-                        {"deviceId":"device-1","preferences":[{"deviceId":"device-1","scope":"member","memberId":"akane-lize","enabled":true,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","updatedAt":"2026-07-06T00:00:00Z"}],"updatedAt":"2026-07-06T00:00:00Z","revision":7}
+                        {"deviceId":"device-1","preferences":[{"deviceId":"device-1","scope":"member_platform","memberId":"akane-lize","source":"youtube","enabled":true,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","updatedAt":"2026-07-06T00:00:00Z"}],"updatedAt":"2026-07-06T00:00:00Z","revision":7}
                         """)
                 }
                 return jsonResponse(statusCode: 200, body: """
-                    {"deviceId":"device-1","preferences":[{"deviceId":"device-1","scope":"generation","generationId":"gen3","enabled":true,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","keywordsBlocklist":["spoiler"],"quietHours":{"enabled":true,"start":"23:00","end":"07:00","timezone":"Asia/Seoul"},"updatedAt":"2026-07-06T00:00:01Z"}],"updatedAt":"2026-07-06T00:00:01Z","revision":8}
+                    {"deviceId":"device-1","preferences":[{"deviceId":"device-1","scope":"generation_platform","generationId":"gen3","source":"chzzk","enabled":true,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","keywordsBlocklist":["spoiler"],"quietHours":{"enabled":true,"start":"23:00","end":"07:00","timezone":"Asia/Seoul"},"updatedAt":"2026-07-06T00:00:01Z"}],"updatedAt":"2026-07-06T00:00:01Z","revision":8}
                     """)
             }
             putBodies.append(request.httpBody ?? request.httpBodyStream.flatMap(Self.readAll) ?? Data())
@@ -533,9 +633,11 @@ final class ServerHubStoreTests: XCTestCase {
         let first = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: putBodies[0])
         let second = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: putBodies[1])
         XCTAssertEqual(first.expectedRevision, 7)
-        XCTAssertEqual(first.preferences.map(\.scope), ["member", "global"])
+        XCTAssertEqual(first.preferences.first?.scope, "member_platform")
+        XCTAssertEqual(first.preferences.last?.scope, "global")
         XCTAssertEqual(second.expectedRevision, 8)
-        XCTAssertEqual(second.preferences.map(\.scope), ["generation", "global"])
+        XCTAssertEqual(second.preferences.first?.scope, "generation_platform")
+        XCTAssertEqual(second.preferences.last?.scope, "global")
         XCTAssertEqual(second.preferences.first?.generationId, "gen3")
         XCTAssertEqual(second.preferences.first?.keywordsBlocklist, ["spoiler"])
         XCTAssertEqual(second.preferences.first?.quietHours?.timezone, "Asia/Seoul")
@@ -663,7 +765,7 @@ final class ServerHubStoreTests: XCTestCase {
         let second = try decodeGlobalRule(stub.putBodies[1])
         XCTAssertEqual(second.tapAction, "open_platform")
         XCTAssertEqual(second.deliveryMode, "realtime_best_effort")
-        XCTAssertFalse(mock.isGlobalRuleDirty)
+        XCTAssertFalse(mock.isServerSyncDirty)
     }
 
     func testSuccessfulSyncClearsDirtyFlag() async {
@@ -673,14 +775,14 @@ final class ServerHubStoreTests: XCTestCase {
         let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
 
         mock.settings.globalEnabled = false
-        XCTAssertTrue(mock.isGlobalRuleDirty)
-        XCTAssertTrue(persistence.loadGlobalRuleDirty())
+        XCTAssertTrue(mock.isServerSyncDirty)
+        XCTAssertTrue(persistence.loadServerSyncDirty())
         store.schedulePreferenceSync(mock.settings)
         await store.preferenceSyncTask?.value
 
         XCTAssertEqual(stub.methods, ["GET", "PUT"])
-        XCTAssertFalse(mock.isGlobalRuleDirty)
-        XCTAssertFalse(persistence.loadGlobalRuleDirty())
+        XCTAssertFalse(mock.isServerSyncDirty)
+        XCTAssertFalse(persistence.loadServerSyncDirty())
     }
 
     func testFailedSyncKeepsLocalValuesAndDirtyFlag() async {
@@ -695,7 +797,7 @@ final class ServerHubStoreTests: XCTestCase {
             await store.preferenceSyncTask?.value
 
             XCTAssertEqual(stub.methods, ["GET", "PUT"], "status \(status)")
-            XCTAssertTrue(mock.isGlobalRuleDirty, "status \(status)")
+            XCTAssertTrue(mock.isServerSyncDirty, "status \(status)")
             XCTAssertFalse(mock.settings.globalEnabled, "status \(status)")
         }
     }
@@ -710,7 +812,7 @@ final class ServerHubStoreTests: XCTestCase {
         store.schedulePreferenceSync(mock.settings)
         await store.preferenceSyncTask?.value
 
-        XCTAssertTrue(mock.isGlobalRuleDirty)
+        XCTAssertTrue(mock.isServerSyncDirty)
         XCTAssertFalse(mock.settings.serviceAnnouncementsEnabled)
     }
 
@@ -726,7 +828,7 @@ final class ServerHubStoreTests: XCTestCase {
         await store.preferenceSyncTask?.value
 
         XCTAssertEqual(try decodeGlobalRule(stub.putBodies.first).deliveryMode, "standard")
-        XCTAssertTrue(mock.isGlobalRuleDirty)
+        XCTAssertTrue(mock.isServerSyncDirty)
         XCTAssertTrue(mock.settings.realtimeEnabled)
     }
 
@@ -749,7 +851,7 @@ final class ServerHubStoreTests: XCTestCase {
         XCTAssertFalse(mock.settings.serviceAnnouncementsEnabled)
         XCTAssertFalse(mock.settings.realtimeEnabled)
         XCTAssertEqual(mock.settings.tapAction, .openPlatform)
-        XCTAssertFalse(mock.isGlobalRuleDirty)
+        XCTAssertFalse(mock.isServerSyncDirty)
     }
 
     func testSecondConflictKeepsDirtyWhenServerRuleCannotBeFetched() async {
@@ -765,7 +867,7 @@ final class ServerHubStoreTests: XCTestCase {
 
         XCTAssertNotNil(store.preferenceSyncErrorMessage)
         XCTAssertTrue(mock.settings.realtimeEnabled)
-        XCTAssertTrue(mock.isGlobalRuleDirty)
+        XCTAssertTrue(mock.isServerSyncDirty)
     }
 
     func testStaleUpdateAdoptsServerGlobalRuleAndClearsDirty() async {
@@ -786,7 +888,7 @@ final class ServerHubStoreTests: XCTestCase {
         XCTAssertTrue(mock.settings.globalEnabled)
         XCTAssertEqual(mock.settings.tapAction, .openPlatform)
         XCTAssertTrue(mock.settings.realtimeEnabled)
-        XCTAssertFalse(mock.isGlobalRuleDirty)
+        XCTAssertFalse(mock.isServerSyncDirty)
     }
 
     func testUpdatePreferencesReportsEachOutcome() async {
@@ -813,7 +915,7 @@ final class ServerHubStoreTests: XCTestCase {
         local.realtimeEnabled = true
         local.globalEnabled = false
         persistence.saveSettings(local)
-        persistence.saveGlobalRuleDirty(true)
+        persistence.saveServerSyncDirty(true)
         let stub = PreferenceServerStub()
         // The server still holds an older global rule; unconfirmed local values must win.
         stub.getBody = preferencesJSON(global: globalPreferenceJSON(
@@ -830,7 +932,7 @@ final class ServerHubStoreTests: XCTestCase {
         XCTAssertEqual(global.tapAction, "open_platform")
         XCTAssertEqual(global.deliveryMode, "realtime_best_effort")
         XCTAssertEqual(mock.settings, local)
-        XCTAssertFalse(mock.isGlobalRuleDirty)
+        XCTAssertFalse(mock.isServerSyncDirty)
     }
 
     func testLaunchWithDirtyFlagKeepsItWhenPushFails() async {
@@ -838,7 +940,7 @@ final class ServerHubStoreTests: XCTestCase {
         var local = NotificationSettingsState()
         local.globalEnabled = false
         persistence.saveSettings(local)
-        persistence.saveGlobalRuleDirty(true)
+        persistence.saveServerSyncDirty(true)
         let stub = PreferenceServerStub()
         stub.putStatus = 500
         let mock = MockHubStore(settingsPersistence: persistence)
@@ -847,15 +949,15 @@ final class ServerHubStoreTests: XCTestCase {
         await store.reconcileNotificationSettingsOnLaunch()
 
         XCTAssertEqual(stub.methods, ["GET", "PUT"])
-        XCTAssertTrue(mock.isGlobalRuleDirty)
+        XCTAssertTrue(mock.isServerSyncDirty)
         XCTAssertFalse(mock.settings.globalEnabled)
     }
 
-    func testLaunchWithoutDirtyFlagAppliesServerGlobalRule() async {
+    func testLaunchWithoutDirtyFlagAppliesServerRulesWhenScopedRulesExist() async {
         let stub = PreferenceServerStub()
         stub.getBody = preferencesJSON(global: globalPreferenceJSON(
             enabled: false, tapAction: "open_platform", deliveryMode: "realtime_best_effort", serviceAnnouncements: "false"
-        ))
+        ), scoped: scopedPlatformPreferenceJSON)
         let persistence = makeSettingsPersistence()
         let mock = MockHubStore(settingsPersistence: persistence)
         let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
@@ -867,7 +969,8 @@ final class ServerHubStoreTests: XCTestCase {
         XCTAssertFalse(mock.settings.serviceAnnouncementsEnabled)
         XCTAssertEqual(mock.settings.tapAction, .openPlatform)
         XCTAssertTrue(mock.settings.realtimeEnabled)
-        XCTAssertFalse(mock.isGlobalRuleDirty)
+        XCTAssertEqual(mock.settings.platformEnabled[.youtube], false)
+        XCTAssertFalse(mock.isServerSyncDirty)
         XCTAssertEqual(persistence.loadSettings(), mock.settings)
     }
 
@@ -875,7 +978,7 @@ final class ServerHubStoreTests: XCTestCase {
         let stub = PreferenceServerStub()
         stub.getBody = preferencesJSON(global: globalPreferenceJSON(
             enabled: true, tapAction: "open_app", deliveryMode: "standard", serviceAnnouncements: "null"
-        ))
+        ), scoped: scopedPlatformPreferenceJSON)
         let persistence = makeSettingsPersistence()
         var local = NotificationSettingsState()
         local.serviceAnnouncementsEnabled = false
@@ -889,10 +992,36 @@ final class ServerHubStoreTests: XCTestCase {
         XCTAssertFalse(mock.settings.serviceAnnouncementsEnabled)
         XCTAssertFalse(mock.settings.realtimeEnabled)
         XCTAssertEqual(mock.settings.tapAction, .openApp)
-        XCTAssertFalse(mock.isGlobalRuleDirty)
+        XCTAssertFalse(mock.isServerSyncDirty)
     }
 
-    func testLaunchWithoutDirtyFlagAndNoServerGlobalRuleKeepsLocalAndSendsNothing() async {
+    func testLaunchWithoutDirtyFlagAndOnlyGlobalRuleOnServerPushesLocalSettingsOnce() async throws {
+        let stub = PreferenceServerStub()
+        stub.getBody = preferencesJSON(global: globalPreferenceJSON(
+            enabled: true, tapAction: "open_app", deliveryMode: "standard", serviceAnnouncements: "true"
+        ))
+        let persistence = makeSettingsPersistence()
+        var local = NotificationSettingsState()
+        local.tapAction = .openPlatform
+        local.memberEnabled["gangzi"] = false
+        local.quietHours.enabled = true
+        persistence.saveSettings(local)
+        let mock = MockHubStore(settingsPersistence: persistence)
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        await store.reconcileNotificationSettingsOnLaunch()
+
+        // One GET to decide, then the regular GET + PUT push.
+        XCTAssertEqual(stub.methods, ["GET", "GET", "PUT"])
+        let request = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: try XCTUnwrap(stub.putBodies.first))
+        XCTAssertEqual(request.preferences.first { $0.memberId == "gangzi" }?.enabled, false)
+        XCTAssertEqual(request.preferences.last?.quietHours?.enabled, true)
+        XCTAssertEqual(request.preferences.last?.tapAction, "open_platform")
+        XCTAssertEqual(mock.settings, local)
+        XCTAssertFalse(mock.isServerSyncDirty)
+    }
+
+    func testLaunchWithoutDirtyFlagAndNoServerRulesPushesLocalSettings() async {
         let stub = PreferenceServerStub()
         stub.getBody = preferencesJSON(global: nil)
         let persistence = makeSettingsPersistence()
@@ -904,9 +1033,27 @@ final class ServerHubStoreTests: XCTestCase {
 
         await store.reconcileNotificationSettingsOnLaunch()
 
-        XCTAssertEqual(stub.methods, ["GET"])
+        XCTAssertEqual(stub.methods, ["GET", "GET", "PUT"])
         XCTAssertEqual(mock.settings, local)
-        XCTAssertFalse(mock.isGlobalRuleDirty)
+        XCTAssertFalse(mock.isServerSyncDirty)
+    }
+
+    func testLaunchWithoutDirtyFlagAndScopedRulesOnServerAdoptsWithoutPutting() async {
+        let stub = PreferenceServerStub()
+        stub.getBody = preferencesJSON(global: nil, scoped: scopedPlatformPreferenceJSON)
+        let persistence = makeSettingsPersistence()
+        var local = NotificationSettingsState()
+        local.memberEnabled["gangzi"] = false
+        persistence.saveSettings(local)
+        let mock = MockHubStore(settingsPersistence: persistence)
+        let store = makeStore(sleep: { _ in }, fallback: mock, handler: stub.handle)
+
+        await store.reconcileNotificationSettingsOnLaunch()
+
+        XCTAssertEqual(stub.methods, ["GET"])
+        XCTAssertEqual(mock.settings.platformEnabled[.youtube], false)
+        XCTAssertEqual(mock.settings.memberEnabled["gangzi"], false)
+        XCTAssertFalse(mock.isServerSyncDirty)
     }
 
     func testLaunchOfflineKeepsLocalSettingsAndDirtyFlag() async {
@@ -914,7 +1061,7 @@ final class ServerHubStoreTests: XCTestCase {
         var local = NotificationSettingsState()
         local.globalEnabled = false
         persistence.saveSettings(local)
-        persistence.saveGlobalRuleDirty(true)
+        persistence.saveServerSyncDirty(true)
         let stub = PreferenceServerStub()
         stub.getSucceedsBeforeFailing = 0
         let mock = MockHubStore(settingsPersistence: persistence)
@@ -923,7 +1070,7 @@ final class ServerHubStoreTests: XCTestCase {
         await store.reconcileNotificationSettingsOnLaunch()
 
         XCTAssertEqual(mock.settings, local)
-        XCTAssertTrue(mock.isGlobalRuleDirty)
+        XCTAssertTrue(mock.isServerSyncDirty)
 
         let cleanPersistence = makeSettingsPersistence()
         cleanPersistence.saveSettings(local)
@@ -933,12 +1080,12 @@ final class ServerHubStoreTests: XCTestCase {
         await cleanStore.reconcileNotificationSettingsOnLaunch()
 
         XCTAssertEqual(cleanMock.settings, local)
-        XCTAssertFalse(cleanMock.isGlobalRuleDirty)
+        XCTAssertFalse(cleanMock.isServerSyncDirty)
     }
 
     func testLaunchWithoutDeviceIDSendsNothingAndKeepsDirtyFlag() async {
         let persistence = makeSettingsPersistence()
-        persistence.saveGlobalRuleDirty(true)
+        persistence.saveServerSyncDirty(true)
         let stub = PreferenceServerStub()
         let mock = MockHubStore(settingsPersistence: persistence)
         let store = makeStore(sleep: { _ in }, fallback: mock, deviceID: nil, handler: stub.handle)
@@ -946,8 +1093,12 @@ final class ServerHubStoreTests: XCTestCase {
         await store.reconcileNotificationSettingsOnLaunch()
 
         XCTAssertTrue(stub.methods.isEmpty)
-        XCTAssertTrue(mock.isGlobalRuleDirty)
+        XCTAssertTrue(mock.isServerSyncDirty)
     }
+
+    private let scopedPlatformPreferenceJSON = """
+        {"deviceId":"device-1","scope":"platform","source":"youtube","enabled":false,"explicitOverride":true,"tapAction":"open_app","deliveryMode":"standard","updatedAt":"2026-07-06T00:00:00Z"}
+        """
 
     private func globalPreferenceJSON(
         enabled: Bool,
@@ -960,9 +1111,9 @@ final class ServerHubStoreTests: XCTestCase {
         """
     }
 
-    private func preferencesJSON(global: String?) -> String {
+    private func preferencesJSON(global: String?, scoped: String? = nil) -> String {
         """
-        {"deviceId":"device-1","preferences":[\(global ?? "")],"updatedAt":"2026-07-06T00:00:00Z","revision":3}
+        {"deviceId":"device-1","preferences":[\([global, scoped].compactMap { $0 }.joined(separator: ","))],"updatedAt":"2026-07-06T00:00:00Z","revision":3}
         """
     }
 
@@ -1569,7 +1720,7 @@ final class ServerHubStoreTests: XCTestCase {
             session: URLSession(configuration: configuration)
         )
         let defaults = UserDefaults(suiteName: "ServerHubStoreTests-\(UUID().uuidString)")!
-        let deviceIDStore = DeviceIDStore(defaults: defaults)
+        let deviceIDStore = DeviceIDStore(defaults: defaults, secureStore: InMemorySecureValueStore())
         if let deviceID { deviceIDStore.saveDeviceID(deviceID) }
         guard let sleep else {
             return ServerHubStore(
@@ -1596,6 +1747,291 @@ final class ServerHubStoreTests: XCTestCase {
     private func decodeGlobalRule(_ body: Data?) throws -> PreferenceResponse {
         let request = try JSONDecoder().decode(UpdatePreferencesRequest.self, from: try XCTUnwrap(body))
         return try XCTUnwrap(request.preferences.first { $0.scope == "global" })
+    }
+}
+
+final class DeviceCredentialStoreTests: XCTestCase {
+    private let legacyKey = "legacy.deviceID"
+
+    private func makeDefaults() -> UserDefaults {
+        let suite = "DeviceCredentialStoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
+        return defaults
+    }
+
+    func testLoadMigratesLegacyUserDefaultsIDIntoSecureStore() {
+        let defaults = makeDefaults()
+        defaults.set("legacy-id", forKey: legacyKey)
+        let secure = InMemorySecureValueStore()
+        let store = DeviceIDStore(defaults: defaults, key: legacyKey, secureStore: secure)
+
+        XCTAssertEqual(store.loadDeviceID(), "legacy-id")
+        XCTAssertEqual(secure.get("deviceID"), "legacy-id")
+        XCTAssertNil(defaults.string(forKey: legacyKey))
+        XCTAssertEqual(store.loadDeviceID(), "legacy-id")
+    }
+
+    func testMigrationKeepsUserDefaultsValueWhenSecureWriteFails() {
+        let defaults = makeDefaults()
+        defaults.set("legacy-id", forKey: legacyKey)
+        let secure = InMemorySecureValueStore()
+        secure.failsWrites = true
+        let store = DeviceIDStore(defaults: defaults, key: legacyKey, secureStore: secure)
+
+        XCTAssertEqual(store.loadDeviceID(), "legacy-id")
+        XCTAssertEqual(defaults.string(forKey: legacyKey), "legacy-id")
+
+        secure.failsWrites = false
+        XCTAssertEqual(store.loadDeviceID(), "legacy-id")
+        XCTAssertNil(defaults.string(forKey: legacyKey))
+    }
+
+    func testSaveDeviceIDFallsBackToUserDefaultsWhenSecureWriteFails() {
+        let defaults = makeDefaults()
+        let secure = InMemorySecureValueStore()
+        secure.failsWrites = true
+        let store = DeviceIDStore(defaults: defaults, key: legacyKey, secureStore: secure)
+
+        store.saveDeviceID("device-1")
+
+        XCTAssertEqual(store.loadDeviceID(), "device-1")
+    }
+
+    func testClearCredentialsRemovesIDSecretAndLegacyValue() {
+        let defaults = makeDefaults()
+        defaults.set("legacy-id", forKey: legacyKey)
+        let store = DeviceIDStore(defaults: defaults, key: legacyKey, secureStore: InMemorySecureValueStore())
+        store.saveDeviceID("device-1")
+        store.saveDeviceSecret("secret-1")
+        defaults.set("legacy-id", forKey: legacyKey)
+
+        store.clearCredentials()
+
+        XCTAssertNil(store.loadDeviceID())
+        XCTAssertNil(store.loadDeviceSecret())
+    }
+}
+
+final class DeviceSecretHeaderTests: XCTestCase {
+    override func tearDown() {
+        StubURLProtocol.requestHandler = nil
+        super.tearDown()
+    }
+
+    private func makeClient(secret: String?, onRequest: @escaping (URLRequest) -> Void) -> HubAPIClient {
+        StubURLProtocol.requestHandler = { request in
+            onRequest(request)
+            return jsonResponse(statusCode: 500, body: "{}")
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        return HubAPIClient(
+            baseURL: URL(string: "https://example.invalid")!,
+            session: URLSession(configuration: configuration),
+            deviceSecret: { secret }
+        )
+    }
+
+    private func callAllEndpoints(_ client: HubAPIClient) async {
+        _ = try? await client.bootstrap(deviceId: "device-1")
+        _ = try? await client.registerDevice(
+            RegisterDeviceRequest(deviceId: "device-1", platform: "ios", appVersion: nil, locale: "ko_KR", timezone: "Asia/Seoul", installationId: nil)
+        )
+        _ = try? await client.updateDeviceToken(
+            UpdateDeviceTokenRequest(deviceId: "device-1", platform: "ios", provider: "apns_via_fcm", token: "t", appVersion: nil, locale: "ko_KR", timezone: "Asia/Seoul")
+        )
+        _ = try? await client.preferences(deviceId: "device-1")
+        _ = try? await client.updatePreferences(UpdatePreferencesRequest(deviceId: "device-1", preferences: [], expectedRevision: 0))
+        _ = try? await client.hubEvent(id: "e1")
+    }
+
+    func testSecretHeaderSentOnExactlyTheFiveDeviceEndpoints() async {
+        var headers: [String: String?] = [:]
+        let client = makeClient(secret: "secret-1") { request in
+            headers["\(request.httpMethod ?? "") \(request.url?.path ?? "")"] = request.value(forHTTPHeaderField: "X-Device-Secret")
+        }
+
+        await callAllEndpoints(client)
+
+        XCTAssertEqual(headers.count, 6)
+        let withSecret = Set(headers.filter { $0.value == "secret-1" }.keys)
+        XCTAssertEqual(
+            withSecret,
+            ["GET /v1/bootstrap", "POST /v1/devices/register", "PUT /v1/devices/token", "GET /v1/preferences", "PUT /v1/preferences"]
+        )
+        XCTAssertNil(headers["GET /v1/hub-events/e1"] ?? nil)
+    }
+
+    func testNoSecretMeansNoHeader() async {
+        var headers: [String?] = []
+        let client = makeClient(secret: nil) { request in
+            headers.append(request.value(forHTTPHeaderField: "X-Device-Secret"))
+        }
+
+        await callAllEndpoints(client)
+
+        XCTAssertEqual(headers.count, 6)
+        XCTAssertTrue(headers.allSatisfy { $0 == nil })
+    }
+
+    func test401DeviceAuthFailedMapsToDeviceAuthFailed() async {
+        StubURLProtocol.requestHandler = { _ in jsonResponse(statusCode: 401, body: #"{"error":{"code":"device_auth_failed"}}"#) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        let client = HubAPIClient(baseURL: URL(string: "https://example.invalid")!, session: URLSession(configuration: configuration))
+
+        do {
+            _ = try await client.preferences(deviceId: "device-1")
+            XCTFail("expected deviceAuthFailed")
+        } catch {
+            XCTAssertEqual(error as? HubAPIError, .deviceAuthFailed)
+        }
+    }
+}
+
+@MainActor
+final class ServerHubStoreRegistrationTests: XCTestCase {
+    override func tearDown() {
+        StubURLProtocol.requestHandler = nil
+        super.tearDown()
+    }
+
+    private let bootstrapBody = """
+        {"config":{"unofficialProject":true,"catalogVersion":"seed","officialYoutubeLiveExcluded":true,"hubCalendarEnabled":true,"foregroundRealtimeEnabled":false},
+         "preferences":[],"catalog":{"generations":[],"members":[]},"liveStatus":[],
+         "hubEventsSummary":{"openCount":0,"upcomingCount":0,"closingSoonCount":0,"preview":[]},
+         "serverTime":"2026-06-11T03:00:00.000Z"}
+        """
+
+    private func makeStore(
+        deviceIDStore: DeviceIDStore,
+        handler: @escaping (URLRequest) -> (HTTPURLResponse, Data)
+    ) -> ServerHubStore {
+        StubURLProtocol.requestHandler = handler
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        let client = HubAPIClient(
+            baseURL: URL(string: "https://example.invalid")!,
+            session: URLSession(configuration: configuration),
+            deviceSecret: deviceIDStore.loadDeviceSecret
+        )
+        return ServerHubStore(api: client, deviceIDStore: deviceIDStore, fallback: MockHubStore())
+    }
+
+    private func makeDeviceIDStore() -> DeviceIDStore {
+        let suite = "ServerHubStoreRegistrationTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
+        return DeviceIDStore(defaults: defaults, secureStore: InMemorySecureValueStore())
+    }
+
+    private static func bodyData(_ request: URLRequest) -> Data {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { return Data() }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
+
+    func testRegistrationSavesDeviceSecretFromResponse() async {
+        let ids = makeDeviceIDStore()
+        let store = makeStore(deviceIDStore: ids) { [bootstrapBody] request in
+            if request.url?.path == "/v1/devices/register" {
+                return jsonResponse(statusCode: 200, body: #"{"deviceId":"device-1","registered":true,"serverTime":"t","deviceSecret":"secret-1"}"#)
+            }
+            return jsonResponse(statusCode: 200, body: bootstrapBody)
+        }
+
+        _ = await store.bootstrap()
+
+        XCTAssertEqual(ids.loadDeviceID(), "device-1")
+        XCTAssertEqual(ids.loadDeviceSecret(), "secret-1")
+    }
+
+    func testRegistrationWithoutDeviceSecretStillWorksOnOldServers() async {
+        let ids = makeDeviceIDStore()
+        var registerHeaders: [String?] = []
+        let store = makeStore(deviceIDStore: ids) { [bootstrapBody] request in
+            if request.url?.path == "/v1/devices/register" {
+                registerHeaders.append(request.value(forHTTPHeaderField: "X-Device-Secret"))
+                return jsonResponse(statusCode: 200, body: #"{"deviceId":"device-1","registered":true,"serverTime":"t"}"#)
+            }
+            return jsonResponse(statusCode: 200, body: bootstrapBody)
+        }
+
+        _ = await store.bootstrap()
+
+        XCTAssertEqual(ids.loadDeviceID(), "device-1")
+        XCTAssertNil(ids.loadDeviceSecret())
+        XCTAssertEqual(registerHeaders.count, 1)
+        XCTAssertNil(registerHeaders[0])
+    }
+
+    func testRegisterAuthFailureClearsCredentialsAndRegistersAgainWithoutDeviceID() async {
+        let ids = makeDeviceIDStore()
+        ids.saveDeviceID("old-device")
+        ids.saveDeviceSecret("old-secret")
+        var registerBodies: [Data] = []
+        var registerHeaders: [String?] = []
+        let store = makeStore(deviceIDStore: ids) { [bootstrapBody] request in
+            if request.url?.path == "/v1/devices/register" {
+                registerBodies.append(Self.bodyData(request))
+                registerHeaders.append(request.value(forHTTPHeaderField: "X-Device-Secret"))
+                if registerBodies.count == 1 {
+                    return jsonResponse(statusCode: 401, body: #"{"error":{"code":"device_auth_failed"}}"#)
+                }
+                return jsonResponse(statusCode: 200, body: #"{"deviceId":"new-device","registered":true,"serverTime":"t","deviceSecret":"new-secret"}"#)
+            }
+            return jsonResponse(statusCode: 200, body: bootstrapBody)
+        }
+
+        _ = await store.bootstrap()
+
+        XCTAssertEqual(registerBodies.count, 2)
+        XCTAssertTrue(String(decoding: registerBodies[0], as: UTF8.self).contains("old-device"))
+        for body in registerBodies {
+            let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
+            XCTAssertEqual(json?["deviceSecretSupported"] as? Bool, true)
+        }
+        XCTAssertEqual(registerHeaders[0], "old-secret")
+        XCTAssertFalse(String(decoding: registerBodies[1], as: UTF8.self).contains("deviceId"))
+        XCTAssertNil(registerHeaders[1])
+        XCTAssertEqual(ids.loadDeviceID(), "new-device")
+        XCTAssertEqual(ids.loadDeviceSecret(), "new-secret")
+    }
+
+    func testBootstrapAuthFailureReRegistersAndRetries() async {
+        let ids = makeDeviceIDStore()
+        ids.saveDeviceID("old-device")
+        ids.saveDeviceSecret("old-secret")
+        var bootstrapCalls = 0
+        let store = makeStore(deviceIDStore: ids) { [bootstrapBody] request in
+            if request.url?.path == "/v1/devices/register" {
+                if request.value(forHTTPHeaderField: "X-Device-Secret") != nil {
+                    return jsonResponse(statusCode: 401, body: #"{"error":{"code":"device_auth_failed"}}"#)
+                }
+                return jsonResponse(statusCode: 200, body: #"{"deviceId":"new-device","registered":true,"serverTime":"t","deviceSecret":"new-secret"}"#)
+            }
+            bootstrapCalls += 1
+            if request.value(forHTTPHeaderField: "X-Device-Secret") == "old-secret" {
+                return jsonResponse(statusCode: 401, body: #"{"error":{"code":"device_auth_failed"}}"#)
+            }
+            return jsonResponse(statusCode: 200, body: bootstrapBody)
+        }
+
+        _ = await store.bootstrap()
+
+        XCTAssertEqual(bootstrapCalls, 2)
+        XCTAssertEqual(ids.loadDeviceID(), "new-device")
+        XCTAssertEqual(ids.loadDeviceSecret(), "new-secret")
     }
 }
 

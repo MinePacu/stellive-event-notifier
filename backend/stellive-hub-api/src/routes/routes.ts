@@ -116,7 +116,7 @@ export interface AppRouteDependencies {
 export interface AppRouteOptions {
   dependencies?: AppRouteDependencies;
   env?: Pick<AppEnv, "MUSIC_CACHE_TTL_SECONDS" | "MUSIC_CACHE_STALE_SECONDS" | "MUSIC_CACHE_MAX_ENTRIES"> &
-    Partial<Pick<AppEnv, "HUB_EVENT_GOODS_GALLERY_ENABLED" | "HUB_EVENT_GOODS_GALLERY_LAYOUT">>;
+    Partial<Pick<AppEnv, "HUB_EVENT_GOODS_GALLERY_ENABLED" | "HUB_EVENT_GOODS_GALLERY_LAYOUT" | "FOREGROUND_SSE_ENABLED">>;
   mobileRateLimiters?: MobileRateLimiters;
 }
 
@@ -166,6 +166,58 @@ function isSupportedPlatformEventInput(input: { source?: unknown; type?: unknown
   const sourceSupported = input.source === undefined || supportedPlatformSources.has(input.source as PlatformSource);
   const typeSupported = input.type === undefined || supportedPlatformEventTypes.has(input.type as PlatformEventType);
   return sourceSupported && typeSupported;
+}
+
+// Each SSE stream pins a socket, so cap them globally and per client IP to bound resource use.
+const SSE_MAX_STREAMS = 500;
+const SSE_MAX_STREAMS_PER_IP = 5;
+// Comment heartbeats keep proxies from timing out idle streams.
+const SSE_HEARTBEAT_MS = 25_000;
+// Streams end after this lifetime so clients reconnect and capacity is redistributed.
+const SSE_MAX_LIFETIME_MS = 10 * 60_000;
+
+function registerForegroundEventStream(app: FastifyInstance) {
+  const streamsByIp = new Map<string, number>();
+  const openStreams = new Set<() => void>();
+
+  // preClose runs before the server waits for connections, which these streams would otherwise hold open.
+  app.addHook("preClose", async () => {
+    for (const end of [...openStreams]) end();
+  });
+
+  app.get("/v1/events/stream", async (request, reply) => {
+    if (openStreams.size >= SSE_MAX_STREAMS) return reply.code(503).send({ error: "realtime_capacity_reached" });
+    const ip = request.ip;
+    const ipStreams = streamsByIp.get(ip) ?? 0;
+    if (ipStreams >= SSE_MAX_STREAMS_PER_IP) return reply.code(429).send({ error: "realtime_capacity_reached" });
+
+    reply.hijack();
+    const raw = reply.raw;
+    streamsByIp.set(ip, ipStreams + 1);
+    const heartbeat = setInterval(() => raw.write(": heartbeat\n\n"), SSE_HEARTBEAT_MS);
+    const lifetime = setTimeout(() => end(), SSE_MAX_LIFETIME_MS);
+    const cleanup = () => {
+      if (!openStreams.delete(end)) return;
+      clearInterval(heartbeat);
+      clearTimeout(lifetime);
+      const remaining = (streamsByIp.get(ip) ?? 1) - 1;
+      if (remaining > 0) streamsByIp.set(ip, remaining);
+      else streamsByIp.delete(ip);
+    };
+    const end = () => {
+      cleanup();
+      raw.end();
+    };
+    openStreams.add(end);
+    raw.on("close", cleanup);
+
+    raw.writeHead(200, {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache",
+      connection: "keep-alive"
+    });
+    raw.write(`event: status\ndata: ${JSON.stringify(realtime.status())}\n\n`);
+  });
 }
 
 export async function registerRoutes(app: FastifyInstance, options: AppRouteOptions = {}) {
@@ -307,14 +359,7 @@ export async function registerRoutes(app: FastifyInstance, options: AppRouteOpti
   });
 
   app.get("/v1/realtime/status", async () => realtime.status());
-  app.get("/v1/events/stream", async (_request, reply) => {
-    reply.raw.writeHead(200, {
-      "content-type": "text/event-stream",
-      "cache-control": "no-cache",
-      connection: "keep-alive"
-    });
-    reply.raw.write(`event: status\ndata: ${JSON.stringify(realtime.status())}\n\n`);
-  });
+  if (options.env?.FOREGROUND_SSE_ENABLED) registerForegroundEventStream(app);
 
   // Dev/mock endpoints and the in-memory delivery-attempts buffer are registered only outside
   // production so mock events cannot be injected or inspected on a live deployment.

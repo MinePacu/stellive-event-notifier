@@ -12,6 +12,7 @@ import type {
   UserNotificationPreference,
 } from "../types.js";
 import { ShortTtlAsyncCache } from "../utils/shortTtlAsyncCache.js";
+import { checkDeviceSecret, DeviceAuthFailedError } from "./deviceSecret.js";
 
 type CatalogMember = Omit<Member, "activeStatus"> & { activeStatus: string };
 
@@ -23,7 +24,7 @@ interface CatalogLike {
 interface DeviceLike {
   getDevice(
     deviceId: string,
-  ): Promise<{ deviceId: string; tokenStatus: string } | undefined>;
+  ): Promise<{ deviceId: string; tokenStatus: string; secretHash?: string | null } | undefined>;
 }
 
 interface PreferenceLike {
@@ -126,10 +127,15 @@ export default class BootstrapService {
     appVersion?: string;
     locale?: string;
     timezone?: string;
+    deviceSecret?: string;
   }): Promise<BootstrapResponse> {
     const device = input.deviceId
       ? await this.dependencies.devices.getDevice(input.deviceId)
       : undefined;
+    // Checked before preferences load so a wrong secret never reads another device's rules.
+    if (device && checkDeviceSecret(device.secretHash, input.deviceSecret) === "mismatch") {
+      throw new DeviceAuthFailedError();
+    }
     const preferences = input.deviceId
       ? await this.dependencies.preferences.listForDevice(input.deviceId)
       : [];

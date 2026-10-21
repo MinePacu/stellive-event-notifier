@@ -69,7 +69,12 @@ struct LiveContentView: View {
             let baseURL = URL(string: value)
         else { return }
 
-        _ = await ServerHubStore(api: HubAPIClient(baseURL: baseURL), fallback: store).bootstrap()
+        let deviceIDStore = DeviceIDStore()
+        _ = await ServerHubStore(
+            api: HubAPIClient(baseURL: baseURL, deviceSecret: deviceIDStore.loadDeviceSecret),
+            deviceIDStore: deviceIDStore,
+            fallback: store
+        ).bootstrap()
     }
 }
 

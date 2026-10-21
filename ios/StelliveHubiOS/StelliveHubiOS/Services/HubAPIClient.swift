@@ -254,12 +254,16 @@ struct RegisterDeviceRequest: Codable, Equatable {
     let locale: String?
     let timezone: String?
     let installationId: String?
+    /// Tells the server this build can store a per-device secret.
+    var deviceSecretSupported: Bool = true
 }
 
 struct RegisterDeviceResponse: Codable, Equatable {
     let deviceId: String
     let registered: Bool
     let serverTime: String
+    /// Only present when the server (newly) issued a secret for this device.
+    let deviceSecret: String?
 }
 
 struct UpdateDeviceTokenRequest: Codable, Equatable {
@@ -310,6 +314,7 @@ enum HubAPIError: Error, Equatable {
     case invalidResponse
     case httpStatus(Int)
     case preferenceStaleUpdate
+    case deviceAuthFailed
 }
 
 enum HubCalendarFetchResult {
@@ -322,6 +327,7 @@ final class HubAPIClient {
     private let session: URLSession
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private let deviceSecret: () -> String?
     private static let iso8601WithFractionalSeconds: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -333,9 +339,10 @@ final class HubAPIClient {
         return formatter
     }()
 
-    init(baseURL: URL, session: URLSession = .shared) {
+    init(baseURL: URL, session: URLSession = .shared, deviceSecret: @escaping () -> String? = { nil }) {
         self.baseURL = baseURL
         self.session = session
+        self.deviceSecret = deviceSecret
         self.encoder = JSONEncoder()
         self.decoder = JSONDecoder()
         self.decoder.dateDecodingStrategy = .custom { decoder in
@@ -355,7 +362,7 @@ final class HubAPIClient {
             URLQueryItem(name: "platform", value: "ios"),
             URLQueryItem(name: "appVersion", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String),
         ].filter { $0.value != nil }
-        return try await send(URLRequest(url: components.url!), responseType: BootstrapResponse.self)
+        return try await send(URLRequest(url: components.url!), responseType: BootstrapResponse.self, deviceAuth: true)
     }
 
     func hubEventsCalendar(
@@ -517,40 +524,46 @@ final class HubAPIClient {
     }
 
     func registerDevice(_ request: RegisterDeviceRequest) async throws -> RegisterDeviceResponse {
-        try await sendJSON(path: "v1/devices/register", method: "POST", body: request, responseType: RegisterDeviceResponse.self)
+        try await sendJSON(path: "v1/devices/register", method: "POST", body: request, responseType: RegisterDeviceResponse.self, deviceAuth: true)
     }
 
     func updateDeviceToken(_ request: UpdateDeviceTokenRequest) async throws -> UpdateDeviceTokenResponse {
-        try await sendJSON(path: "v1/devices/token", method: "PUT", body: request, responseType: UpdateDeviceTokenResponse.self)
+        try await sendJSON(path: "v1/devices/token", method: "PUT", body: request, responseType: UpdateDeviceTokenResponse.self, deviceAuth: true)
     }
 
     func preferences(deviceId: String) async throws -> PreferencesResponse {
         var components = URLComponents(url: baseURL.appendingPathComponent("v1/preferences"), resolvingAgainstBaseURL: false)!
         components.queryItems = [URLQueryItem(name: "deviceId", value: deviceId)]
-        return try await send(URLRequest(url: components.url!), responseType: PreferencesResponse.self)
+        return try await send(URLRequest(url: components.url!), responseType: PreferencesResponse.self, deviceAuth: true)
     }
 
     func updatePreferences(_ request: UpdatePreferencesRequest) async throws -> UpdatePreferencesResponse {
-        try await sendJSON(path: "v1/preferences", method: "PUT", body: request, responseType: UpdatePreferencesResponse.self)
+        try await sendJSON(path: "v1/preferences", method: "PUT", body: request, responseType: UpdatePreferencesResponse.self, deviceAuth: true)
     }
 
     private func sendJSON<RequestBody: Encodable, ResponseBody: Decodable>(
         path: String,
         method: String,
         body: RequestBody,
-        responseType: ResponseBody.Type
+        responseType: ResponseBody.Type,
+        deviceAuth: Bool = false
     ) async throws -> ResponseBody {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.httpBody = try encoder.encode(body)
-        return try await send(request, responseType: responseType)
+        return try await send(request, responseType: responseType, deviceAuth: deviceAuth)
     }
 
     private func send<ResponseBody: Decodable>(
         _ request: URLRequest,
-        responseType: ResponseBody.Type
+        responseType: ResponseBody.Type,
+        deviceAuth: Bool = false
     ) async throws -> ResponseBody {
+        var request = request
+        if deviceAuth, let secret = deviceSecret() {
+            request.setValue(secret, forHTTPHeaderField: "X-Device-Secret")
+        }
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw HubAPIError.invalidResponse
@@ -559,6 +572,10 @@ final class HubAPIClient {
             if httpResponse.statusCode == 409,
                String(data: data, encoding: .utf8)?.contains("preference_stale_update") == true {
                 throw HubAPIError.preferenceStaleUpdate
+            }
+            if httpResponse.statusCode == 401,
+               String(data: data, encoding: .utf8)?.contains("device_auth_failed") == true {
+                throw HubAPIError.deviceAuthFailed
             }
             throw HubAPIError.httpStatus(httpResponse.statusCode)
         }

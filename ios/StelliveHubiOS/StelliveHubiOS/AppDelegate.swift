@@ -4,12 +4,18 @@ import UIKit
 import UserNotifications
 
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
-    private lazy var pushRegistrationCoordinator = PushRegistrationCoordinator(
-        syncToken: PushTokenSyncer(
-            deviceIDStore: DeviceIDStore(),
-            api: HubAPIClient(baseURL: Bundle.main.hubBaseURL ?? URL(string: "http://127.0.0.1:4000")!)
-        ).syncToken
-    )
+    private lazy var pushRegistrationCoordinator: PushRegistrationCoordinator = {
+        let deviceIDStore = DeviceIDStore()
+        return PushRegistrationCoordinator(
+            syncToken: PushTokenSyncer(
+                deviceIDStore: deviceIDStore,
+                api: HubAPIClient(
+                    baseURL: Bundle.main.hubBaseURL ?? URL(string: "http://127.0.0.1:4000")!,
+                    deviceSecret: deviceIDStore.loadDeviceSecret
+                )
+            ).syncToken
+        )
+    }()
 
     func application(
         _ application: UIApplication,

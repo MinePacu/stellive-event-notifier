@@ -50,7 +50,7 @@ final class HubEventGoodsGalleryTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "HubEventGoodsGalleryTests-\(UUID().uuidString)"))
         let store = ServerHubStore(
             api: HubAPIClient(baseURL: URL(string: "https://example.invalid")!, session: URLSession(configuration: configuration)),
-            deviceIDStore: DeviceIDStore(defaults: defaults),
+            deviceIDStore: DeviceIDStore(defaults: defaults, secureStore: InMemorySecureValueStore()),
             fallback: MockHubStore()
         )
         let event = await store.loadHubEventDetail(id: "e1")

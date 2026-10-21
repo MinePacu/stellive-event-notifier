@@ -1,5 +1,6 @@
 export type MobileErrorCode =
   | "device_not_registered"
+  | "device_auth_failed"
   | "device_token_invalid"
   | "device_token_provider_invalid"
   | "preference_conflict"

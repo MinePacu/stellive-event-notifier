@@ -24,7 +24,11 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubEventSourceType
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventTag
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventTimePrecision
+import dev.minepacu.stelliveeventnotifier.core.model.KeywordFilterState
+import dev.minepacu.stelliveeventnotifier.core.model.NotificationEventType
+import dev.minepacu.stelliveeventnotifier.core.model.NotificationPlatform
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
+import dev.minepacu.stelliveeventnotifier.core.model.QuietHoursState
 import dev.minepacu.stelliveeventnotifier.core.model.AnnouncementSummaryItem
 import dev.minepacu.stelliveeventnotifier.core.model.AnnouncementsSummary
 import dev.minepacu.stelliveeventnotifier.core.model.ServiceAnnouncement
@@ -56,6 +60,7 @@ import dev.minepacu.stelliveeventnotifier.core.network.MemberDto
 import dev.minepacu.stelliveeventnotifier.core.network.MusicCatalogItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.MusicListResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.PreferenceDto
+import dev.minepacu.stelliveeventnotifier.core.network.PreferenceQuietHoursDto
 import dev.minepacu.stelliveeventnotifier.core.network.PreferencesResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.RegisterDeviceRequestDto
 import dev.minepacu.stelliveeventnotifier.core.network.RegisterDeviceResponseDto
@@ -90,6 +95,7 @@ class ServerHubRepository(
         const val MUSIC_MAX_ITEMS = 1000
         const val CALENDAR_CACHE_TTL_SECONDS = 300L
         const val CALENDAR_EXTENSION_CHUNK_MONTHS = 6L
+        val CLIENT_OWNED_SCOPES = setOf("global", "generation", "member", "platform", "event_type")
     }
 
     private val eventCache = linkedMapOf<String, HubEvent>()
@@ -107,13 +113,19 @@ class ServerHubRepository(
     private var songFacetCache: SongFacets? = null
 
     override suspend fun bootstrap(): HubDataState {
-        val deviceId = deviceIdStore.getDeviceId()
-        val response = remoteDataSource.bootstrap(deviceId)
+        var response = remoteDataSource.bootstrap(deviceIdStore.getDeviceId())
+        var registered = false
+        if (response.isDeviceAuthFailed()) {
+            // Stale device secret: registration heals the credentials, then retry bootstrap once.
+            runCatching { registerDevice() }
+            registered = true
+            response = remoteDataSource.bootstrap(deviceIdStore.getDeviceId())
+        }
         if (response is HubNetworkResult.Success) {
             // Refresh server-side device metadata on every successful startup. The
             // registration endpoint is idempotent, and failures must not prevent
             // the bootstrap response from reaching the local fallback.
-            runCatching { registerDevice() }
+            if (!registered) runCatching { registerDevice() }
             return fallback.bootstrap()
                 .mergeCatalogProfileImages(response.value.effectiveCatalog.members)
                 .mergeLiveStatus(response.value.liveStatus)
@@ -135,7 +147,7 @@ class ServerHubRepository(
             firstUpdate.isPreferenceStaleUpdate() -> {
                 val refreshed = remoteDataSource.preferences(deviceId)
                 if (refreshed is HubNetworkResult.Success) {
-                    PreferenceSyncResult.ServerNewer(refreshed.value.globalPreferencesOrNull())
+                    PreferenceSyncResult.ServerNewer(refreshed.value.remotePreferencesOrNull())
                 } else {
                     PreferenceSyncResult.Failed
                 }
@@ -156,22 +168,47 @@ class ServerHubRepository(
         }
     }
 
-    override suspend fun globalPreferences(): HubNetworkResult<RemoteGlobalPreferences?> {
+    override suspend fun notificationPreferences(): HubNetworkResult<RemoteNotificationPreferences?> {
         val deviceId = deviceIdStore.getDeviceId() ?: return HubNetworkResult.Failure(code = "device_not_registered")
         return when (val response = remoteDataSource.preferences(deviceId)) {
-            is HubNetworkResult.Success -> HubNetworkResult.Success(response.value.globalPreferencesOrNull())
+            is HubNetworkResult.Success -> HubNetworkResult.Success(response.value.remotePreferencesOrNull())
             is HubNetworkResult.Failure -> response
         }
     }
 
-    private fun PreferencesResponseDto.globalPreferencesOrNull(): RemoteGlobalPreferences? =
-        preferences.firstOrNull { it.scope == "global" }?.let { rule ->
-            RemoteGlobalPreferences(
-                globalEnabled = rule.enabled,
-                serviceAnnouncementsEnabled = rule.serviceAnnouncementsEnabled
-                    ?: NotificationSettingState().serviceAnnouncementsEnabled,
-            )
-        }
+    private fun PreferencesResponseDto.remotePreferencesOrNull(): RemoteNotificationPreferences? {
+        val global = preferences.firstOrNull { it.scope == "global" } ?: return null
+        val rules = preferences.filter { it.scope != "global" }
+        return RemoteNotificationPreferences(
+            globalEnabled = global.enabled,
+            serviceAnnouncementsEnabled = global.serviceAnnouncementsEnabled
+                ?: NotificationSettingState().serviceAnnouncementsEnabled,
+            quietHours = global.quietHours?.let { QuietHoursState(it.enabled, it.start, it.end, it.timezone) },
+            keywordFilters = if (global.keywordsAllowlist == null && global.keywordsBlocklist == null) {
+                null
+            } else {
+                KeywordFilterState(
+                    allowlistText = global.keywordsAllowlist.orEmpty().joinToString(", "),
+                    blocklistText = global.keywordsBlocklist.orEmpty().joinToString(", "),
+                )
+            },
+            maxNotificationsPerMinute = global.maxNotificationsPerMinute,
+            generationEnabled = rules.mapNotNull { rule ->
+                rule.generationId?.takeIf { rule.scope == "generation" }?.let { it to rule.enabled }
+            }.toMap(),
+            memberEnabled = rules.mapNotNull { rule ->
+                rule.memberId?.takeIf { rule.scope == "member" }?.let { it to rule.enabled }
+            }.toMap(),
+            platformEnabled = rules.mapNotNull { rule ->
+                NotificationPlatform.entries.firstOrNull { rule.scope == "platform" && it.wireName == rule.source }
+                    ?.let { it to rule.enabled }
+            }.toMap(),
+            eventTypeEnabled = rules.mapNotNull { rule ->
+                NotificationEventType.entries.firstOrNull { rule.scope == "event_type" && it.wireName == rule.eventType }
+                    ?.let { it to rule.enabled }
+            }.toMap(),
+        )
+    }
 
     private fun preferenceUpdateRequest(
         deviceId: String,
@@ -180,23 +217,55 @@ class ServerHubRepository(
         clientUpdatedAt: String,
     ): UpdatePreferencesRequestDto {
         val updatedAt = Instant.now().toString()
-        val preserved = current.preferences.filterNot { it.scope == "global" }
+        val preserved = current.preferences.filterNot { it.scope in CLIENT_OWNED_SCOPES }
+        val tapAction = settings.tapAction.name.lowercase(Locale.US)
+        val deliveryMode = settings.deliveryMode.name.lowercase(Locale.US)
+        // Scoped rules override the global tapAction/deliveryMode during resolution, so each carries the global values.
+        fun scoped(scope: String, enabled: Boolean, build: PreferenceDto.() -> PreferenceDto) = PreferenceDto(
+            deviceId = deviceId,
+            scope = scope,
+            enabled = enabled,
+            explicitOverride = true,
+            tapAction = tapAction,
+            deliveryMode = deliveryMode,
+            updatedAt = updatedAt,
+        ).build()
+        val global = PreferenceDto(
+            deviceId = deviceId,
+            scope = "global",
+            enabled = settings.globalEnabled,
+            explicitOverride = true,
+            tapAction = tapAction,
+            deliveryMode = deliveryMode,
+            quietHours = settings.quietHours.let { PreferenceQuietHoursDto(it.enabled, it.start, it.end, it.timezone) },
+            keywordsAllowlist = settings.keywordFilters.allowlistText.toKeywordList(),
+            keywordsBlocklist = settings.keywordFilters.blocklistText.toKeywordList(),
+            maxNotificationsPerMinute = settings.rateLimit.maxNotificationsPerMinute,
+            serviceAnnouncementsEnabled = settings.serviceAnnouncementsEnabled,
+            updatedAt = updatedAt,
+        )
         return UpdatePreferencesRequestDto(
             deviceId = deviceId,
-            preferences = preserved + PreferenceDto(
-                deviceId = deviceId,
-                scope = "global",
-                enabled = settings.globalEnabled,
-                explicitOverride = true,
-                tapAction = settings.tapAction.name.lowercase(Locale.US),
-                deliveryMode = settings.deliveryMode.name.lowercase(Locale.US),
-                serviceAnnouncementsEnabled = settings.serviceAnnouncementsEnabled,
-                updatedAt = updatedAt,
-            ),
+            preferences = preserved + global +
+                settings.generationEnabled.toSortedMap().map { (id, enabled) ->
+                    scoped("generation", enabled) { copy(generationId = id) }
+                } +
+                settings.memberEnabled.toSortedMap().map { (id, enabled) ->
+                    scoped("member", enabled) { copy(memberId = id) }
+                } +
+                NotificationPlatform.entries.mapNotNull { platform ->
+                    settings.platformEnabled[platform]?.let { scoped("platform", it) { copy(source = platform.wireName) } }
+                } +
+                NotificationEventType.entries.mapNotNull { type ->
+                    settings.eventTypeEnabled[type]?.let { scoped("event_type", it) { copy(eventType = type.wireName) } }
+                },
             expectedRevision = current.revision,
             clientUpdatedAt = clientUpdatedAt,
         )
     }
+
+    private fun String.toKeywordList(): List<String>? =
+        split(',').map { it.trim() }.filter { it.isNotEmpty() }.takeIf { it.isNotEmpty() }
 
     private fun HubNetworkResult<UpdatePreferencesResponseDto>.isPreferenceConflict(): Boolean =
         this is HubNetworkResult.Failure && code == "preference_conflict"
@@ -452,18 +521,28 @@ class ServerHubRepository(
     }
 
     private suspend fun registerDevice() {
-        val response = remoteDataSource.registerDevice(
+        suspend fun register() = remoteDataSource.registerDevice(
             RegisterDeviceRequestDto(
                 deviceId = deviceIdStore.getDeviceId(),
                 platform = "android",
                 appVersion = BuildConfig.VERSION_NAME,
             ),
         )
+        var response = register()
+        if (response.isDeviceAuthFailed()) {
+            // Secret lost or stale (or a concurrent-register race): start over as a new device.
+            deviceIdStore.clearCredentials()
+            response = register()
+        }
         if (response is HubNetworkResult.Success) {
             deviceIdStore.saveDeviceId(response.value.deviceId)
+            response.value.deviceSecret?.let(deviceIdStore::saveDeviceSecret)
             runCatching { flushPendingPushToken() }
         }
     }
+
+    private fun HubNetworkResult<*>.isDeviceAuthFailed() =
+        this is HubNetworkResult.Failure && code == HubApiClient.DEVICE_AUTH_FAILED
 
     private fun HubDataState.mergeLiveStatus(liveStatus: List<LiveStatusDto>): HubDataState {
         if (liveStatus.isEmpty()) return copy(liveStatusSourceLabel = "서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음")

@@ -26,9 +26,11 @@ struct StelliveHubApp: App {
         }
         let goodsChecklist = GoodsChecklistStore()
         _goodsChecklistStore = StateObject(wrappedValue: goodsChecklist)
+        let deviceIDStore = DeviceIDStore()
         _serverStore = StateObject(
             wrappedValue: ServerHubStore(
-                api: HubAPIClient(baseURL: resolvedHubBaseURL),
+                api: HubAPIClient(baseURL: resolvedHubBaseURL, deviceSecret: deviceIDStore.loadDeviceSecret),
+                deviceIDStore: deviceIDStore,
                 fallback: fallback,
                 goodsChecklist: goodsChecklist
             )
@@ -54,6 +56,10 @@ struct StelliveHubApp: App {
                 .environmentObject(reservationStore)
                 .environmentObject(goodsChecklistStore)
                 .preferredColorScheme(store.settings.appearanceMode.preferredColorScheme)
+                .onChange(of: store.settings) { settings in
+                    // Detailed settings (quiet hours, filters, toggles) are bound straight to the store.
+                    if store.isServerSyncDirty { serverStore.schedulePreferenceSync(settings) }
+                }
                 .task {
                     _ = await serverStore.bootstrap()
                     await serverStore.reconcileNotificationSettingsOnLaunch()

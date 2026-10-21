@@ -20,12 +20,20 @@ import dev.minepacu.stelliveeventnotifier.core.network.MusicMemberSummaryDto
 import dev.minepacu.stelliveeventnotifier.core.network.MusicSourcePlaylistDto
 import dev.minepacu.stelliveeventnotifier.core.network.MobileConfigDto
 import dev.minepacu.stelliveeventnotifier.core.network.PreferenceDto
+import dev.minepacu.stelliveeventnotifier.core.network.PreferenceQuietHoursDto
 import dev.minepacu.stelliveeventnotifier.core.network.PreferencesResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.RegisterDeviceRequestDto
 import dev.minepacu.stelliveeventnotifier.core.network.RegisterDeviceResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.UpdatePreferencesRequestDto
 import dev.minepacu.stelliveeventnotifier.core.network.UpdatePreferencesResponseDto
+import dev.minepacu.stelliveeventnotifier.core.model.DeliveryMode
+import dev.minepacu.stelliveeventnotifier.core.model.KeywordFilterState
+import dev.minepacu.stelliveeventnotifier.core.model.NotificationEventType
+import dev.minepacu.stelliveeventnotifier.core.model.NotificationPlatform
 import dev.minepacu.stelliveeventnotifier.core.model.NotificationSettingState
+import dev.minepacu.stelliveeventnotifier.core.model.QuietHoursState
+import dev.minepacu.stelliveeventnotifier.core.model.RateLimitState
+import dev.minepacu.stelliveeventnotifier.core.model.TapAction
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsSalesChannel
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventTag
 import dev.minepacu.stelliveeventnotifier.core.network.SongCatalogItemDto
@@ -40,8 +48,10 @@ import dev.minepacu.stelliveeventnotifier.core.network.ServiceAnnouncementListRe
 import dev.minepacu.stelliveeventnotifier.feature.home.MockHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.home.PreferenceSyncConflictException
 import dev.minepacu.stelliveeventnotifier.feature.home.PreferenceSyncResult
-import dev.minepacu.stelliveeventnotifier.feature.home.RemoteGlobalPreferences
+import dev.minepacu.stelliveeventnotifier.feature.home.RemoteNotificationPreferences
 import dev.minepacu.stelliveeventnotifier.feature.home.ServerHubRepository
+import dev.minepacu.stelliveeventnotifier.feature.settings.NotificationSettingsReconciler
+import dev.minepacu.stelliveeventnotifier.feature.settings.NotificationSettingsStore
 import java.time.LocalDate
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -51,24 +61,251 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ServerHubRepositoryTest {
-    @Test
-    fun updatePreferencesPreservesScopedRulesAndReplacesGlobalRule() = runTest {
-        val remote = RecordingRemoteDataSource()
-        val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()).apply {
-            saveDeviceId("device-1")
-        }
-        val repository = ServerHubRepository(remote, deviceIdStore, MockHubRepository())
+    private fun registeredDeviceStore() = DeviceIdStore(DeviceIdStore.InMemoryStorage()).apply { saveDeviceId("device-1") }
 
-        repository.updatePreferences(
-            NotificationSettingState(globalEnabled = false, serviceAnnouncementsEnabled = false),
-        )
+    @Test
+    fun updatePreferencesPreservesNonOwnedScopesAndReplacesOwnedRules() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            preferenceSnapshots += PreferencesResponseDto(
+                deviceId = "device-1",
+                preferences = listOf(
+                    preference(scope = "member_platform", memberId = "akane-lize"),
+                    preference(scope = "member", memberId = "akane-lize"),
+                    preference(scope = "generation", generationId = "gen1"),
+                    preference(scope = "platform").copy(source = "chzzk"),
+                    preference(scope = "event_type").copy(eventType = "chzzk_live_started"),
+                    preference(scope = "global"),
+                ),
+                updatedAt = "2026-07-06T00:00:00Z",
+                revision = 7,
+            )
+        }
+        val repository = ServerHubRepository(remote, registeredDeviceStore(), MockHubRepository())
+        val defaults = NotificationSettingState()
+
+        repository.updatePreferences(defaults.copy(globalEnabled = false, serviceAnnouncementsEnabled = false))
 
         val sent = remote.lastUpdatePreferencesRequest!!
         assertEquals("device-1", sent.deviceId)
         assertEquals(7, sent.expectedRevision)
-        assertEquals(listOf("member", "global"), sent.preferences.map { it.scope })
-        assertFalse(sent.preferences.last().enabled)
-        assertEquals(false, sent.preferences.last().serviceAnnouncementsEnabled)
+        assertEquals("member_platform", sent.preferences.first().scope)
+        assertEquals(1, sent.preferences.count { it.scope == "member_platform" })
+        assertEquals(1, sent.preferences.count { it.scope == "global" })
+        assertEquals(defaults.generationEnabled.size, sent.preferences.count { it.scope == "generation" })
+        assertEquals(defaults.memberEnabled.size, sent.preferences.count { it.scope == "member" })
+        assertEquals(defaults.platformEnabled.size, sent.preferences.count { it.scope == "platform" })
+        assertEquals(defaults.eventTypeEnabled.size, sent.preferences.count { it.scope == "event_type" })
+        val global = sent.preferences.single { it.scope == "global" }
+        assertFalse(global.enabled)
+        assertEquals(false, global.serviceAnnouncementsEnabled)
+    }
+
+    @Test
+    fun updatePreferencesSendsGlobalQuietHoursKeywordsAndRateLimit() = runTest {
+        val remote = RecordingRemoteDataSource()
+        val repository = ServerHubRepository(remote, registeredDeviceStore(), MockHubRepository())
+
+        repository.updatePreferences(
+            NotificationSettingState(
+                quietHours = QuietHoursState(enabled = true, start = "22:00", end = "07:00", timezone = "Asia/Tokyo"),
+                keywordFilters = KeywordFilterState(allowlistText = "a, ,b", blocklistText = ""),
+                rateLimit = RateLimitState(maxNotificationsPerMinute = 4),
+            ),
+        )
+
+        val global = remote.lastUpdatePreferencesRequest!!.preferences.single { it.scope == "global" }
+        assertEquals(PreferenceQuietHoursDto(true, "22:00", "07:00", "Asia/Tokyo"), global.quietHours)
+        assertEquals(listOf("a", "b"), global.keywordsAllowlist)
+        assertNull(global.keywordsBlocklist)
+        assertEquals(4, global.maxNotificationsPerMinute)
+    }
+
+    @Test
+    fun updatePreferencesScopedRulesCarryGlobalTapActionDeliveryModeAndNoGlobalOnlyFields() = runTest {
+        val remote = RecordingRemoteDataSource()
+        val repository = ServerHubRepository(remote, registeredDeviceStore(), MockHubRepository())
+        val settings = NotificationSettingState(
+            deliveryMode = DeliveryMode.REALTIME_BEST_EFFORT,
+            tapAction = TapAction.OPEN_PLATFORM,
+            generationEnabled = mapOf("gen2" to false, "gen1" to true),
+            memberEnabled = mapOf("akane-lize" to false),
+            platformEnabled = mapOf(NotificationPlatform.NAVER_CAFE to true, NotificationPlatform.CHZZK to false),
+            eventTypeEnabled = mapOf(NotificationEventType.EVENT_UPDATED to true),
+            keywordFilters = KeywordFilterState(blocklistText = "spoiler"),
+        )
+
+        repository.updatePreferences(settings)
+
+        val rules = remote.lastUpdatePreferencesRequest!!.preferences
+        val global = rules.single { it.scope == "global" }
+        val scoped = rules.filter { it.scope != "global" && it.scope != "member_platform" }
+        assertEquals(listOf("generation", "generation", "member", "platform", "platform", "event_type"), scoped.map { it.scope })
+        assertEquals(listOf("gen1", "gen2"), scoped.filter { it.scope == "generation" }.map { it.generationId })
+        assertEquals("akane-lize", scoped.single { it.scope == "member" }.memberId)
+        assertEquals(listOf("chzzk", "naver_cafe"), scoped.filter { it.scope == "platform" }.map { it.source })
+        assertEquals("event_updated", scoped.single { it.scope == "event_type" }.eventType)
+        assertEquals(
+            listOf(true, false, false, false, true, true),
+            scoped.map { it.enabled },
+        )
+        scoped.forEach { rule ->
+            assertEquals("open_platform", rule.tapAction)
+            assertEquals("realtime_best_effort", rule.deliveryMode)
+            assertEquals(global.tapAction, rule.tapAction)
+            assertEquals(global.deliveryMode, rule.deliveryMode)
+            assertTrue(rule.explicitOverride)
+            assertEquals(global.updatedAt, rule.updatedAt)
+            assertNull(rule.quietHours)
+            assertNull(rule.keywordsAllowlist)
+            assertNull(rule.keywordsBlocklist)
+            assertNull(rule.maxNotificationsPerMinute)
+        }
+        assertEquals(listOf("spoiler"), global.keywordsBlocklist)
+    }
+
+    @Test
+    fun platformAndEventTypeWireNamesMatchServerDomain() {
+        assertEquals(
+            setOf("naver_cafe", "chzzk", "youtube", "hub_event", "service_announcement"),
+            NotificationPlatform.entries.map { it.wireName }.toSet(),
+        )
+        assertEquals(
+            setOf(
+                "cafe_post", "chzzk_live_started", "chzzk_live_ended", "chzzk_chat", "chzzk_subscription",
+                "youtube_upload", "youtube_live_scheduled", "youtube_live_started", "youtube_live_ended",
+                "official_youtube_upload", "event_announced", "event_sales_open", "event_deadline_soon",
+                "event_milestone_due", "event_updated", "event_cancelled", "service_announcement",
+            ),
+            NotificationEventType.entries.map { it.wireName }.toSet(),
+        )
+    }
+
+    @Test
+    fun requestRoundTripsIntoRemoteNotificationPreferences() = runTest {
+        val remote = RecordingRemoteDataSource()
+        val repository = ServerHubRepository(remote, registeredDeviceStore(), MockHubRepository())
+        val settings = NotificationSettingState(
+            globalEnabled = false,
+            quietHours = QuietHoursState(enabled = true, start = "22:00", end = "07:00", timezone = "Asia/Tokyo"),
+            keywordFilters = KeywordFilterState("a,b", "c"),
+            rateLimit = RateLimitState(5),
+            generationEnabled = mapOf("gen3" to false),
+            memberEnabled = mapOf("akane-lize" to false),
+            platformEnabled = mapOf(NotificationPlatform.NAVER_CAFE to true),
+            eventTypeEnabled = mapOf(NotificationEventType.EVENT_UPDATED to true),
+        )
+        repository.updatePreferences(settings)
+        remote.preferenceSnapshots += PreferencesResponseDto(
+            deviceId = "device-1",
+            preferences = remote.lastUpdatePreferencesRequest!!.preferences,
+            updatedAt = "2026-07-06T00:00:00Z",
+            revision = 8,
+        )
+
+        val result = repository.notificationPreferences()
+
+        assertEquals(
+            HubNetworkResult.Success<RemoteNotificationPreferences?>(
+                RemoteNotificationPreferences(
+                    globalEnabled = false,
+                    serviceAnnouncementsEnabled = true,
+                    quietHours = settings.quietHours,
+                    keywordFilters = KeywordFilterState("a, b", "c"),
+                    maxNotificationsPerMinute = 5,
+                    generationEnabled = mapOf("gen3" to false),
+                    memberEnabled = mapOf("akane-lize" to false),
+                    platformEnabled = mapOf(NotificationPlatform.NAVER_CAFE to true),
+                    eventTypeEnabled = mapOf(NotificationEventType.EVENT_UPDATED to true),
+                ),
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun globalOnlyServerSnapshotYieldsNoDetailedSettingsAndIgnoresUnknownNames() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            preferenceSnapshots += PreferencesResponseDto(
+                deviceId = "device-1",
+                preferences = listOf(
+                    preference(scope = "global"),
+                    preference(scope = "platform").copy(source = "someday_platform"),
+                    preference(scope = "event_type").copy(eventType = "someday_event"),
+                ),
+                updatedAt = "2026-07-06T00:00:00Z",
+                revision = 7,
+            )
+        }
+
+        val result = ServerHubRepository(remote, registeredDeviceStore(), MockHubRepository()).notificationPreferences()
+
+        assertEquals(
+            HubNetworkResult.Success<RemoteNotificationPreferences?>(RemoteNotificationPreferences(true, true)),
+            result,
+        )
+    }
+
+    private fun launchReconciler(remote: RecordingRemoteDataSource): NotificationSettingsReconciler {
+        val repository = ServerHubRepository(remote, registeredDeviceStore(), MockHubRepository())
+        return NotificationSettingsReconciler(
+            store = NotificationSettingsStore(NotificationSettingsStore.InMemoryStorage()),
+            remote = object : NotificationSettingsReconciler.Remote {
+                override suspend fun push(settings: NotificationSettingState) = repository.updatePreferences(settings)
+                override suspend fun fetchRemote() = repository.notificationPreferences()
+            },
+            deviceId = { "device-1" },
+        )
+    }
+
+    @Test
+    fun cleanLaunchAgainstGlobalOnlyServerPushesLocalScopedRulesOnce() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            preferenceSnapshots += preferenceSnapshot(revision = 7, scoped = preference(scope = "global"))
+        }
+
+        launchReconciler(remote).reconcileOnLaunch(NotificationSettingState())
+
+        val sent = remote.updatePreferenceRequests.single()
+        val defaults = NotificationSettingState()
+        assertEquals(defaults.memberEnabled.size, sent.preferences.count { it.scope == "member" })
+        assertEquals(defaults.eventTypeEnabled.size, sent.preferences.count { it.scope == "event_type" })
+        assertEquals(1, sent.preferences.count { it.scope == "global" })
+    }
+
+    @Test
+    fun cleanLaunchAgainstEmptyServerPushesLocalSettings() = runTest {
+        val remote = RecordingRemoteDataSource().apply { preferenceSnapshots += preferenceSnapshot(revision = 7) }
+
+        launchReconciler(remote).reconcileOnLaunch(NotificationSettingState())
+
+        assertEquals(1, remote.updatePreferenceRequests.size)
+        assertEquals(1, remote.updatePreferenceRequests.single().preferences.count { it.scope == "global" })
+    }
+
+    @Test
+    fun cleanLaunchAgainstServerWithScopedRulesAdoptsWithoutUpdate() = runTest {
+        val remote = RecordingRemoteDataSource().apply {
+            preferenceSnapshots += PreferencesResponseDto(
+                deviceId = "device-1",
+                preferences = listOf(
+                    preference(scope = "global").copy(enabled = false),
+                    preference(scope = "generation", generationId = "gen2").copy(enabled = false),
+                ),
+                updatedAt = "2026-07-06T00:00:00Z",
+                revision = 7,
+            )
+        }
+        val reconciler = launchReconciler(remote)
+
+        assertEquals(
+            NotificationSettingsReconciler.SyncOutcome.SERVER_APPLIED,
+            reconciler.reconcileOnLaunch(NotificationSettingState()),
+        )
+
+        assertTrue(remote.updatePreferenceRequests.isEmpty())
+        val adopted = reconciler.effective(NotificationSettingState())
+        assertFalse(adopted.globalEnabled)
+        assertEquals(false, adopted.generationEnabled["gen2"])
     }
 
     @Test
@@ -76,30 +313,27 @@ class ServerHubRepositoryTest {
         val remote = RecordingRemoteDataSource().apply {
             preferenceSnapshots += preferenceSnapshot(
                 revision = 7,
-                scoped = preference(scope = "member", memberId = "akane-lize"),
+                scoped = preference(scope = "member_platform", memberId = "akane-lize"),
             )
             preferenceSnapshots += preferenceSnapshot(
                 revision = 8,
-                scoped = preference(scope = "generation", generationId = "gen3").copy(
+                scoped = preference(scope = "generation_platform", generationId = "gen3").copy(
                     keywordsBlocklist = listOf("spoiler"),
                 ),
             )
             updatePreferenceResults += HubNetworkResult.Failure(code = "preference_conflict")
         }
-        val deviceIdStore = DeviceIdStore(DeviceIdStore.InMemoryStorage()).apply {
-            saveDeviceId("device-1")
-        }
-        val repository = ServerHubRepository(remote, deviceIdStore, MockHubRepository())
+        val repository = ServerHubRepository(remote, registeredDeviceStore(), MockHubRepository())
 
         repository.updatePreferences(NotificationSettingState(globalEnabled = false))
 
         assertEquals(2, remote.preferenceCalls)
         assertEquals(listOf(7, 8), remote.updatePreferenceRequests.map { it.expectedRevision })
-        assertEquals(listOf("member", "global"), remote.updatePreferenceRequests[0].preferences.map { it.scope })
-        assertEquals(listOf("generation", "global"), remote.updatePreferenceRequests[1].preferences.map { it.scope })
+        assertEquals("member_platform", remote.updatePreferenceRequests[0].preferences.first().scope)
+        assertEquals("generation_platform", remote.updatePreferenceRequests[1].preferences.first().scope)
         assertEquals("gen3", remote.updatePreferenceRequests[1].preferences.first().generationId)
         assertEquals(listOf("spoiler"), remote.updatePreferenceRequests[1].preferences.first().keywordsBlocklist)
-        assertFalse(remote.updatePreferenceRequests[1].preferences.last().enabled)
+        assertFalse(remote.updatePreferenceRequests[1].preferences.single { it.scope == "global" }.enabled)
     }
 
     @Test
@@ -142,7 +376,7 @@ class ServerHubRepositoryTest {
 
         val result = repository.updatePreferences(NotificationSettingState())
 
-        assertEquals(PreferenceSyncResult.ServerNewer(RemoteGlobalPreferences(false, false)), result)
+        assertEquals(PreferenceSyncResult.ServerNewer(RemoteNotificationPreferences(false, false)), result)
     }
 
     @Test
@@ -176,14 +410,14 @@ class ServerHubRepositoryTest {
             )
         }
         assertEquals(
-            HubNetworkResult.Success<RemoteGlobalPreferences?>(RemoteGlobalPreferences(false, true)),
-            ServerHubRepository(withRule, deviceIdStore, MockHubRepository()).globalPreferences(),
+            HubNetworkResult.Success<RemoteNotificationPreferences?>(RemoteNotificationPreferences(false, true)),
+            ServerHubRepository(withRule, deviceIdStore, MockHubRepository()).notificationPreferences(),
         )
 
         val withoutRule = RecordingRemoteDataSource()
         assertEquals(
-            HubNetworkResult.Success<RemoteGlobalPreferences?>(null),
-            ServerHubRepository(withoutRule, deviceIdStore, MockHubRepository()).globalPreferences(),
+            HubNetworkResult.Success<RemoteNotificationPreferences?>(null),
+            ServerHubRepository(withoutRule, deviceIdStore, MockHubRepository()).notificationPreferences(),
         )
     }
 
@@ -812,7 +1046,7 @@ class ServerHubRepositoryTest {
             return HubNetworkResult.Success(
                 preferenceSnapshots.removeFirstOrNull() ?: preferenceSnapshot(
                     revision = 7,
-                    scoped = preference(scope = "member", memberId = "akane-lize"),
+                    scoped = preference(scope = "member_platform", memberId = "akane-lize"),
                 ),
             )
         }

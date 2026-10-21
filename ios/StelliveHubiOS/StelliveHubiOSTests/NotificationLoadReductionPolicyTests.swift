@@ -71,7 +71,7 @@ final class NotificationLoadReductionPolicyTests: XCTestCase {
         let defaults = UserDefaults.standard
         let deviceIDKey = "test.deviceID.\(UUID().uuidString)"
         let pendingTokenKey = "test.pendingPushToken.\(UUID().uuidString)"
-        let store = DeviceIDStore(defaults: defaults, key: deviceIDKey)
+        let store = DeviceIDStore(defaults: defaults, key: deviceIDKey, secureStore: InMemorySecureValueStore())
         store.saveDeviceID("device-1")
         let syncer = PushTokenSyncer(deviceIDStore: store, api: api, defaults: defaults, pendingTokenKey: pendingTokenKey)
         let coordinator = PushRegistrationCoordinator(syncToken: syncer.syncToken)
