@@ -601,6 +601,7 @@ struct HubEventFeedCardPresentation: Equatable {
         summary = event.summary
         status = event.status
         secondaryTagLabels = HubEventTagDisplayPolicy.secondaryLabels(for: event.tags)
+            + [HubEventGoodsPolicy.countLabel(for: event)].compactMap { $0 }
         accessibilityLabel = [
             event.title,
             status.displayName,

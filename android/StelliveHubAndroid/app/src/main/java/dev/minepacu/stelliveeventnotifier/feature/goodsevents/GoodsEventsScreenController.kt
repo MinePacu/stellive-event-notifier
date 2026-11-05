@@ -38,6 +38,8 @@ import dev.minepacu.stelliveeventnotifier.feature.home.MainUiPolicy
 import dev.minepacu.stelliveeventnotifier.feature.home.ServerHubRepository
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.GoodsEventSelectionMode
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarCard
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsGalleryPolicy
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsSection
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarExpansionPolicy
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarMode
 import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventDetailCalendarPolicy
@@ -146,7 +148,7 @@ internal class GoodsEventsScreenController(private val activity: MainActivity) {
             activity.binding.contentList.addView(activity.loadingCard(MainUiPolicy.hubEventDetailLoadingPresentation()))
             activity.serverHubEventDetailJob?.cancel()
             activity.serverHubEventDetailJob = activity.lifecycleScope.launch {
-                activity.serverHubEventDetail = activity.serverRepository.hubEventDetail(eventId)
+                activity.serverHubEventDetail = loadHubEventDetailAndPruneChecklist(eventId)
                 activity.serverHubEventDetailLoadedId = eventId
                 if (activity.navigationHistory.currentScreen == HubScreen.GOODS_EVENT_DETAIL && activity.selectedHubEventId == eventId) {
                     activity.refreshScreenWhenIdle(HubScreen.GOODS_EVENT_DETAIL, ::renderHubEventDetail)
@@ -176,6 +178,19 @@ internal class GoodsEventsScreenController(private val activity: MainActivity) {
         activity.resetTopBarScrollSources()
         activity.applyContentTopPadding(underTopBar = true)
         renderHubEventDetailInto(activity.binding.contentList, event, fullScreen = true)
+    }
+
+    /**
+     * Fetches the event detail and, only when it came from a successful server response (not cache or
+     * fallback), reconciles the device-local purchase checklist with the latest goods list.
+     */
+    private suspend fun loadHubEventDetailAndPruneChecklist(eventId: String): HubEvent? {
+        val result = activity.serverRepository.hubEventDetailResult(eventId)
+        val event = result.event
+        if (result.isFresh && event != null) {
+            runCatching { activity.goodsChecklistStore.prune(event.id, event.goodsItems) }
+        }
+        return event
     }
 
     internal fun onGoodsEventSelected(eventId: String) {
@@ -387,7 +402,7 @@ internal class GoodsEventsScreenController(private val activity: MainActivity) {
             container.addView(activity.loadingCard(MainUiPolicy.hubEventDetailLoadingPresentation()))
             activity.hubEventDetailJob?.cancel()
             activity.hubEventDetailJob = activity.lifecycleScope.launch {
-                activity.serverHubEventDetail = activity.serverRepository.hubEventDetail(eventId)
+                activity.serverHubEventDetail = loadHubEventDetailAndPruneChecklist(eventId)
                 activity.serverHubEventDetailLoadedId = eventId
                 if (activity.navigationHistory.currentScreen == HubScreen.GOODS_EVENTS && activity.selectedHubEventId == eventId) {
                     activity.refreshScreenWhenIdle(HubScreen.GOODS_EVENTS) {
@@ -561,6 +576,7 @@ internal class GoodsEventsScreenController(private val activity: MainActivity) {
                 ?.let(scheduleCardsById::get)
                 ?.post { activity.selectedHubEventScheduleItemId?.let(scheduleCardsById::get)?.let(::scrollHubEventScheduleCardIntoView) }
         }
+        HubEventGoodsSection(activity).build(event, fullScreen)?.let(container::addView)
         container.addView(activity.sectionLabel("행사 정보").let { if (fullScreen) it.withDetailHorizontalMargins() else it })
         container.addView(
             activity.settingsPanel(
@@ -569,7 +585,7 @@ internal class GoodsEventsScreenController(private val activity: MainActivity) {
                 }
             ).let { if (fullScreen) it.withDetailHorizontalMargins() else it }
         )
-        container.addView(activity.noticeCard(HubEventDetailFormatting.NoticeText).let { if (fullScreen) it.withDetailHorizontalMargins() else it })
+        container.addView(activity.noticeCard(HubEventGoodsGalleryPolicy.detailNoticeText(event)).let { if (fullScreen) it.withDetailHorizontalMargins() else it })
     }
 
     private fun hubEventScheduleCard(

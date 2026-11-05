@@ -505,6 +505,7 @@ model HubEvent {
   venueName             String?
   venueAddress          String?
   image                 Json?
+  goodsListImages       Json?
   notificationEligible  Boolean  @default(true)
   publicationState      String   @default("draft")
   publishedAt           DateTime?
@@ -518,6 +519,7 @@ model HubEvent {
   updatedAt             DateTime @updatedAt
   scheduleItems         HubEventScheduleItem[]
   links                 HubEventExternalLink[] @relation("HubEventLinks")
+  goodsItems            HubEventGoodsItem[]
 
   @@index([publicationState, deletedAt])
   @@index([status])
@@ -553,6 +555,7 @@ model HubEventScheduleItem {
 
   hubEvent HubEvent @relation(fields: [hubEventId], references: [id], onDelete: Cascade)
   links    HubEventExternalLink[] @relation("HubEventScheduleItemLinks")
+  goodsItems HubEventGoodsItem[]
 
   @@index([hubEventId, sortOrder])
   @@index([hubEventId, startsAt])
@@ -576,6 +579,33 @@ model HubEventExternalLink {
 
   @@index([hubEventId, sortOrder])
   @@index([scheduleItemId, sortOrder])
+}
+
+model HubEventGoodsItem {
+  id             String    @id @default(cuid(2))
+  hubEventId     String
+  scheduleItemId String?
+  name           String
+  groupLabel     String?
+  memberIds      String[]  @default([])
+  priceKrw       Int?
+  priceNote      String?
+  salesChannel   String
+  purchaseLimit  Int?
+  limitNote      String?
+  isBonus        Boolean   @default(false)
+  purchaseUrl    String?
+  image          Json?
+  sortOrder      Int       @default(0)
+  cancelledAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  hubEvent     HubEvent              @relation(fields: [hubEventId], references: [id], onDelete: Cascade)
+  scheduleItem HubEventScheduleItem? @relation(fields: [scheduleItemId], references: [id], onDelete: SetNull)
+
+  @@index([hubEventId, sortOrder])
+  @@index([scheduleItemId])
 }
 
 model HubCalendarSpecialDayOccurrence {

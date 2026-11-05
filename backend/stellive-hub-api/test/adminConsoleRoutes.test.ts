@@ -315,3 +315,63 @@ describe("admin console SPA serving", () => {
     });
   });
 });
+
+describe("legacy admin console", () => {
+  async function loginCookie(app: Awaited<ReturnType<typeof buildAdminApp>>): Promise<string> {
+    const login = await app.inject({ method: "POST", url: "/v1/admin/session", payload: { token: "admin-token" } });
+    return String(login.headers["set-cookie"]).split(";")[0];
+  }
+
+  it("returns 404 when the admin console is disabled", async () => {
+    const app = await buildAdminApp({ ADMIN_CONSOLE_ENABLED: "false" });
+    const response = await app.inject({ method: "GET", url: "/admin/legacy", headers: { authorization: "Bearer admin-token" } });
+    await app.close();
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("redirects to the SPA login without a session and rejects a wrong bearer token", async () => {
+    const app = await buildAdminApp();
+    const anonymous = await app.inject({ method: "GET", url: "/admin/legacy" });
+    const wrongBearer = await app.inject({ method: "GET", url: "/admin/legacy", headers: { authorization: "Bearer wrong-token" } });
+    await app.close();
+
+    expect(anonymous.statusCode).toBe(303);
+    expect(anonymous.headers.location).toBe("/admin");
+    expect(wrongBearer.statusCode).toBe(401);
+  });
+
+  it("renders the server console with the goods editors for an SPA session", async () => {
+    const app = await buildAdminApp();
+    const cookie = await loginCookie(app);
+    const response = await app.inject({ method: "GET", url: "/admin/legacy?lang=ko", headers: { cookie } });
+    await app.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/html");
+    expect(response.headers["content-language"]).toBe("ko");
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.headers["x-frame-options"]).toBe("DENY");
+    expect(response.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(response.body).toContain("검증 후 교체");
+    expect(response.body).toContain('href="/admin/legacy?lang=en"');
+    expect(response.body).toContain('action="/admin/legacy/logout"');
+    expect(response.body).not.toContain(indexHtml);
+  });
+
+  it("clears the session on logout and redirects to the SPA", async () => {
+    const app = await buildAdminApp();
+    const cookie = await loginCookie(app);
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/legacy/logout",
+      headers: { cookie, "content-type": "text/plain" },
+      payload: ""
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe("/admin");
+    expect(String(response.headers["set-cookie"])).toContain(`${adminSessionCookieName}=;`);
+  });
+});

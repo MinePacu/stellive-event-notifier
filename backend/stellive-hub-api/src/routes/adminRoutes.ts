@@ -8,6 +8,9 @@ import {
   createAdminSessionCookie,
   shouldEnableAdminConsole
 } from "../admin/adminAuth.js";
+import { renderAdminConsoleHtml } from "../admin/adminConsoleHtml.js";
+import type { AdminLocale } from "../admin/adminI18n.js";
+import { createAdminLanguageCookie, resolveAdminLocale } from "../admin/adminLocale.js";
 import type { AppEnv } from "../config/env.js";
 
 export interface AdminRoutesOptions {
@@ -30,6 +33,20 @@ const adminConsoleContentSecurityPolicy = [
   "font-src 'self' data:",
   "object-src 'none'",
   "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'"
+].join("; ");
+
+// The legacy server-rendered console still carries the goods list and MD gallery editors
+// that the SPA has not ported yet, so it needs inline scripts.
+const legacyAdminConsoleContentSecurityPolicy = [
+  "default-src 'self'",
+  "base-uri 'none'",
+  "connect-src 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "img-src 'self' data:",
+  "object-src 'none'",
+  "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'"
 ].join("; ");
 
@@ -139,6 +156,45 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     return reply.type(adminConsoleMimeTypes[path.extname(servedPath).toLowerCase()] ?? "application/octet-stream").send(body);
   };
 
+  // Static routes take precedence over the /admin/* wildcard below.
+  app.get("/admin/legacy", privilegedRouteOptions, async (request: FastifyRequest, reply: FastifyReply) => {
+    const unavailable = sendAdminConsoleUnavailable(options.env, reply);
+    if (unavailable) return unavailable;
+
+    const authorizationHeader = readHeader(request.headers.authorization, ",");
+    const auth = authorizationHeader
+      ? authenticateBearerToken(authorizationHeader, options.env.ADMIN_CONSOLE_TOKEN)
+      : authenticateAdminSessionCookie(readHeader(request.headers.cookie, "; "), options.env.ADMIN_CONSOLE_TOKEN);
+    if (!auth.ok) {
+      if (authorizationHeader) {
+        return reply.code(401).headers(adminConsoleNoStoreHeaders()).send({ error: auth.reason });
+      }
+      return reply.code(303).headers(adminConsoleNoStoreHeaders()).header("Location", "/admin").send();
+    }
+
+    const locale = resolveLegacyAdminLocale(request);
+    reply.headers(adminConsoleNoStoreHeaders());
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("Content-Security-Policy", legacyAdminConsoleContentSecurityPolicy);
+    reply.header("Content-Language", locale);
+    reply.header("Set-Cookie", createAdminLanguageCookie(locale, isSecureRequest(request, options.env.ADMIN_CONSOLE_COOKIE_SECURE)));
+    return reply.type("text/html; charset=utf-8").send(renderAdminConsoleHtml(locale));
+  });
+
+  app.post("/admin/legacy/logout", privilegedRouteOptions, async (request: FastifyRequest, reply: FastifyReply) => {
+    const unavailable = sendAdminConsoleUnavailable(options.env, reply);
+    if (unavailable) return unavailable;
+
+    const secure = isSecureRequest(request, options.env.ADMIN_CONSOLE_COOKIE_SECURE);
+    return reply
+      .code(303)
+      .headers(adminConsoleNoStoreHeaders())
+      .header("Set-Cookie", clearAdminSessionCookie(secure))
+      .header("Location", "/admin")
+      .send();
+  });
+
   app.get("/admin", privilegedRouteOptions, serveAdminConsole);
   app.get("/admin/*", privilegedRouteOptions, serveAdminConsole);
 }
@@ -211,6 +267,16 @@ async function isRegularFile(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function resolveLegacyAdminLocale(request: FastifyRequest): AdminLocale {
+  const queryStart = request.url.indexOf("?");
+  const queryLanguage = queryStart >= 0 ? new URLSearchParams(request.url.slice(queryStart + 1)).get("lang") : undefined;
+  return resolveAdminLocale({
+    queryLanguage,
+    cookieHeader: readHeader(request.headers.cookie, "; "),
+    acceptLanguage: readHeader(request.headers["accept-language"], ", ")
+  });
 }
 
 function readHeader(value: string | string[] | undefined, separator: string): string | undefined {

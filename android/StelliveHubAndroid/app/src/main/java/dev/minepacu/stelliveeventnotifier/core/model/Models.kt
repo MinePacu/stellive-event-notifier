@@ -262,6 +262,70 @@ data class HubEvent(
     val notificationEligible: Boolean = true,
     val updatedAt: Instant,
     val tags: List<HubEventTag> = emptyList(),
+    /** Detail-only goods list (non-cancelled, server order). Empty on list/summary payloads. */
+    val goodsItems: List<HubEventGoodsItem> = emptyList(),
+    /** List/summary-only goods count (0 when the server omits it). */
+    val goodsCount: Int = 0,
+    /** Detail-only official MD list gallery images (notice order). Empty when absent or the server kill switch is on. */
+    val goodsListImages: List<HubEventGoodsListImage> = emptyList(),
+    /** Detail-only, event-level gallery layout. Absent or unknown server values fall back to [HubEventGoodsListLayout.SPLIT]. */
+    val goodsListLayout: HubEventGoodsListLayout = HubEventGoodsListLayout.SPLIT,
+)
+
+/** Gallery image group: "공식 MD 리스트" or "특전". Absent or unknown server values are [MD]. */
+enum class HubEventGoodsListImageKind(val apiValue: String) {
+    MD("md"),
+    BONUS("bonus");
+
+    companion object {
+        fun fromApiValue(value: String?): HubEventGoodsListImageKind =
+            entries.firstOrNull { it.apiValue == value?.trim() } ?: MD
+    }
+}
+
+/** `split` shows an MD row and a bonus row; `single` shows every image in one row in notice order. */
+enum class HubEventGoodsListLayout(val apiValue: String) {
+    SPLIT("split"),
+    SINGLE("single");
+
+    companion object {
+        fun fromApiValue(value: String?): HubEventGoodsListLayout =
+            entries.firstOrNull { it.apiValue == value?.trim() } ?: SPLIT
+    }
+}
+
+data class HubEventGoodsListImage(
+    val image: HubEventImage,
+    val kind: HubEventGoodsListImageKind = HubEventGoodsListImageKind.MD,
+)
+
+enum class HubEventGoodsSalesChannel(val apiValue: String) {
+    ONSITE("onsite"),
+    ONLINE("online"),
+    BOTH("both");
+
+    companion object {
+        fun fromApiValue(value: String?): HubEventGoodsSalesChannel? =
+            entries.firstOrNull { it.apiValue == value }
+    }
+}
+
+data class HubEventGoodsItem(
+    val id: String,
+    val scheduleItemId: String? = null,
+    val name: String,
+    val groupLabel: String? = null,
+    val memberIds: List<String> = emptyList(),
+    val priceKrw: Int? = null,
+    val priceNote: String? = null,
+    /** Null when the server sends a channel this app version does not know. */
+    val salesChannel: HubEventGoodsSalesChannel? = null,
+    val purchaseLimit: Int? = null,
+    val limitNote: String? = null,
+    val isBonus: Boolean = false,
+    val purchaseUrl: String? = null,
+    val image: HubEventImage? = null,
+    val sortOrder: Int = 0,
 )
 
 data class HubEventsSummary(
