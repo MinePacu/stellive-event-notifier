@@ -201,6 +201,7 @@ internal class ReservationsScreenController(private val activity: MainActivity) 
                                 activity.lifecycleScope.launch { activity.reservationRepository.deleteDraft(draft) }
                             }, LinearLayout.LayoutParams(0, activity.dp(44), 1f).apply { marginEnd = activity.dp(5) })
                             addView(activity.detailActionButton(ReservationPresentationPolicy.addActionLabel(draft.kind), true) {
+                                activity.reservationInternalLaunchPending = true
                                 activity.startActivity(Intent(activity, ReservationQuickAddActivity::class.java).putExtra(ReservationQuickAddActivity.EXTRA_SESSION_ID, draft.sessionId.toString()))
                             }, LinearLayout.LayoutParams(0, activity.dp(44), 1f).apply { marginStart = activity.dp(5) })
                         }.apply { setPadding(0, activity.dp(10), 0, 0) })
@@ -890,6 +891,7 @@ internal class ReservationsScreenController(private val activity: MainActivity) 
             ReservationHelpAction.ADD_WITHOUT_LINK -> {
                 val draft = ReservationDraftPolicy.active(activity.reservationDrafts)
                     .minByOrNull(ReservationDraft::expiresAt) ?: return
+                activity.reservationInternalLaunchPending = true
                 activity.startActivity(Intent(activity, ReservationQuickAddActivity::class.java).putExtra(
                     ReservationQuickAddActivity.EXTRA_SESSION_ID,
                     draft.sessionId.toString(),

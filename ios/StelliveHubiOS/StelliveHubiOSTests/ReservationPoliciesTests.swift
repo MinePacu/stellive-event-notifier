@@ -321,27 +321,86 @@ final class ReservationPoliciesTests: XCTestCase {
         XCTAssertEqual(calls, ["open", "record", "failure"])
     }
 
-    func testReturnPromptRequiresTenSecondsAndPromptsOnce() {
-        let now = Date(timeIntervalSince1970: 100)
-        let draft = makeDraft(id: UUID(), openedAt: now.addingTimeInterval(-10))
-        XCTAssertEqual(
+    func testReturnPromptRequiresTenSecondsAwayAndOnlySnoozesAfterPrompt() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let opened = now.addingTimeInterval(-100)
+        let draft = makeDraft(id: UUID(), openedAt: opened)
+        let prompted = now.addingTimeInterval(-60)
+
+        func decide(
+            _ drafts: [ReservationDraft],
+            promptedAt: [UUID: Date] = [:],
+            lastBackgroundedAt: Date? = nil
+        ) -> ReservationReturnPromptDecision {
             ReservationReturnPromptPolicy.decision(
-                drafts: [draft],
-                externallyOpenedSessionIDs: [draft.sessionID],
-                promptedSessionIDs: [],
+                drafts: drafts,
+                promptedAt: promptedAt,
+                lastBackgroundedAt: lastBackgroundedAt,
                 now: now
-            ),
+            )
+        }
+
+        // Never prompted and away at least 10s.
+        XCTAssertEqual(decide([draft]), .single(draft.sessionID))
+        // Opened less than 10s ago.
+        let recent = makeDraft(id: UUID(), openedAt: now.addingTimeInterval(-5))
+        XCTAssertEqual(decide([recent]), .none)
+        // Prompted and never backgrounded afterwards.
+        XCTAssertEqual(decide([draft], promptedAt: [draft.sessionID: prompted]), .none)
+        // Backgrounded before the prompt only.
+        XCTAssertEqual(
+            decide([draft], promptedAt: [draft.sessionID: prompted], lastBackgroundedAt: prompted.addingTimeInterval(-30)),
+            .none
+        )
+        // Prompted, then left the app and stayed away 10s or more.
+        XCTAssertEqual(
+            decide([draft], promptedAt: [draft.sessionID: prompted], lastBackgroundedAt: now.addingTimeInterval(-20)),
             .single(draft.sessionID)
         )
+        // Backgrounded after the prompt but only 5s ago.
+        XCTAssertEqual(
+            decide([draft], promptedAt: [draft.sessionID: prompted], lastBackgroundedAt: now.addingTimeInterval(-5)),
+            .none
+        )
+        // Link reopened after the last prompt.
+        let reopened = makeDraft(id: draft.sessionID, openedAt: now.addingTimeInterval(-20))
+        XCTAssertEqual(
+            decide([reopened], promptedAt: [draft.sessionID: now.addingTimeInterval(-40)]),
+            .single(draft.sessionID)
+        )
+        // Expired drafts are never prompted (expiresAt is 10_000 in makeDraft).
+        let laterNow = Date(timeIntervalSince1970: 20_000)
         XCTAssertEqual(
             ReservationReturnPromptPolicy.decision(
-                drafts: [draft],
-                externallyOpenedSessionIDs: [draft.sessionID],
-                promptedSessionIDs: [draft.sessionID],
-                now: now
+                drafts: [draft], promptedAt: [:], lastBackgroundedAt: nil, now: laterNow
             ),
             .none
         )
+        // Two eligible drafts.
+        let other = makeDraft(id: UUID(), openedAt: opened, eventID: "other")
+        XCTAssertEqual(decide([draft, other]), .multiple([draft.sessionID, other.sessionID]))
+    }
+
+    func testReturnPromptStorePersistsAndRetainsOnlyActiveIDs() {
+        let suiteName = "ReservationReturnPromptStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = ReservationReturnPromptStore(defaults: defaults)
+        let first = UUID()
+        let second = UUID()
+        let date = Date(timeIntervalSince1970: 500)
+
+        XCTAssertTrue(store.promptedAt().isEmpty)
+        XCTAssertNil(store.lastBackgroundedAt)
+
+        store.markPrompted([first, second], at: date)
+        store.setLastBackgroundedAt(date.addingTimeInterval(10))
+        let reopened = ReservationReturnPromptStore(defaults: defaults)
+        XCTAssertEqual(reopened.promptedAt(), [first: date, second: date])
+        XCTAssertEqual(reopened.lastBackgroundedAt, date.addingTimeInterval(10))
+
+        store.retainOnly([first])
+        XCTAssertEqual(store.promptedAt(), [first: date])
     }
 
     func testSharedStoreMigratesLegacyFilesIntoOneStateFile() throws {
