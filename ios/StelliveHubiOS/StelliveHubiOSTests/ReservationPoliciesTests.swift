@@ -518,6 +518,311 @@ final class ReservationPoliciesTests: XCTestCase {
         XCTAssertEqual(appStore.records, [record])
     }
 
+    // MARK: - Schedule snapshot window
+
+    func testScheduleWindowUsesPrimaryMainWindowForTicketOpenItem() {
+        let ticketOpen = scheduleItem("ticket", kind: .ticketOpen, startsAt: "2026-09-01T11:00:00Z")
+        let main = scheduleItem(
+            "main", kind: .mainWindow, startsAt: "2026-10-10T09:00:00Z", endsAt: "2026-10-10T12:00:00Z",
+            isPrimary: true
+        )
+        let event = hubEvent(startsAt: "2026-09-01T11:00:00Z", scheduleItems: [ticketOpen, main])
+
+        XCTAssertEqual(
+            ReservationSchedulePolicy.window(event: event, scheduleItem: ticketOpen),
+            ReservationScheduleWindow(
+                startsAt: iso("2026-10-10T09:00:00Z"), endsAt: iso("2026-10-10T12:00:00Z"),
+                timePrecision: .datetime, timezone: "Asia/Seoul"
+            )
+        )
+    }
+
+    func testScheduleWindowUsesLinkedMainWindowItemItself() {
+        let primary = scheduleItem("day1", kind: .mainWindow, startsAt: "2026-10-10T09:00:00Z", isPrimary: true)
+        let second = scheduleItem(
+            "day2", kind: .mainWindow, startsAt: "2026-10-10T15:00:00Z", endsAt: "2026-10-12T15:00:00Z",
+            precision: .date, timezone: "Asia/Tokyo"
+        )
+        let event = hubEvent(scheduleItems: [primary, second])
+
+        XCTAssertEqual(
+            ReservationSchedulePolicy.window(event: event, scheduleItem: second),
+            ReservationScheduleWindow(
+                startsAt: iso("2026-10-10T15:00:00Z"), endsAt: iso("2026-10-12T15:00:00Z"),
+                timePrecision: .date, timezone: "Asia/Tokyo"
+            )
+        )
+    }
+
+    func testScheduleWindowFallsBackToEventTimesWithoutPrimary() {
+        let ticketOpen = scheduleItem("ticket", kind: .ticketOpen, startsAt: "2026-09-01T11:00:00Z")
+        let event = hubEvent(
+            startsAt: "2026-10-10T09:00:00Z", endsAt: "2026-10-10T12:00:00Z", scheduleItems: [ticketOpen]
+        )
+
+        XCTAssertEqual(
+            ReservationSchedulePolicy.window(event: event, scheduleItem: ticketOpen),
+            ReservationScheduleWindow(
+                startsAt: iso("2026-10-10T09:00:00Z"), endsAt: iso("2026-10-10T12:00:00Z"),
+                timePrecision: .datetime, timezone: "Asia/Seoul"
+            )
+        )
+    }
+
+    func testScheduleWindowIsNilWithoutAnyDates() {
+        let ticketOpen = scheduleItem("ticket", kind: .ticketOpen, startsAt: "2026-09-01T11:00:00Z")
+        XCTAssertNil(ReservationSchedulePolicy.window(event: hubEvent(scheduleItems: [ticketOpen]), scheduleItem: ticketOpen))
+        XCTAssertNil(ReservationSchedulePolicy.window(event: hubEvent(), scheduleItem: nil))
+    }
+
+    func testScheduleWindowSkipsCancelledPrimary() {
+        let cancelled = scheduleItem(
+            "old", kind: .mainWindow, startsAt: "2026-10-01T09:00:00Z", isPrimary: true, cancelled: true
+        )
+        let active = scheduleItem("new", kind: .mainWindow, startsAt: "2026-10-10T09:00:00Z", isPrimary: true)
+        XCTAssertEqual(
+            ReservationSchedulePolicy.window(event: hubEvent(scheduleItems: [cancelled, active]), scheduleItem: nil)?.startsAt,
+            iso("2026-10-10T09:00:00Z")
+        )
+
+        let onlyCancelled = hubEvent(startsAt: "2026-10-20T09:00:00Z", scheduleItems: [cancelled])
+        XCTAssertEqual(
+            ReservationSchedulePolicy.window(event: onlyCancelled, scheduleItem: nil)?.startsAt,
+            iso("2026-10-20T09:00:00Z")
+        )
+    }
+
+    @MainActor
+    func testRecordFromTicketOpenLinkStaysUpcomingAndMatchesOfficialEvent() throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let now = iso("2026-09-24T00:00:00Z")
+        let ticketOpen = scheduleItem("ticket", kind: .ticketOpen, startsAt: "2026-09-01T11:00:00Z")
+        let main = scheduleItem(
+            "main", kind: .mainWindow, startsAt: "2026-10-10T09:00:00Z", endsAt: "2026-10-10T12:00:00Z",
+            isPrimary: true
+        )
+        let event = hubEvent(scheduleItems: [ticketOpen, main])
+        let store = ReservationStore(sharedStore: try ReservationSharedStore(directoryURL: directory), now: { now })
+        let link = HubEventLink(id: "link", kind: .ticket, label: nil, url: "https://tickets.example.com/concert", sortOrder: 0)
+
+        let draft = try XCTUnwrap(try store.begin(event: event, scheduleItem: ticketOpen, link: link))
+        XCTAssertEqual(draft.eventSnapshot.startsAt, iso("2026-10-10T09:00:00Z"))
+        XCTAssertEqual(draft.eventSnapshot.endsAt, iso("2026-10-10T12:00:00Z"))
+        XCTAssertEqual(draft.eventSnapshot.timePrecision, .datetime)
+        XCTAssertEqual(draft.eventSnapshot.timezone, "Asia/Seoul")
+
+        let record = try store.confirm(sessionID: draft.sessionID, detailURL: nil, linkSource: .appInput)
+        XCTAssertEqual(store.upcomingRecords.map(\.id), [record.id])
+        XCTAssertTrue(store.pastRecords.isEmpty)
+        XCTAssertFalse(ReservationDisplayPolicy.officialEventChanged(record: record, latestEvent: event))
+
+        let moved = scheduleItem(
+            "main", kind: .mainWindow, startsAt: "2026-10-11T09:00:00Z", endsAt: "2026-10-11T12:00:00Z",
+            isPrimary: true
+        )
+        XCTAssertTrue(ReservationDisplayPolicy.officialEventChanged(
+            record: record, latestEvent: hubEvent(scheduleItems: [ticketOpen, moved])
+        ))
+        XCTAssertTrue(ReservationDisplayPolicy.officialEventChanged(
+            record: record, latestEvent: hubEvent(venueName: "새 장소", scheduleItems: [ticketOpen, main])
+        ))
+    }
+
+    func testOfficialEventCancelledIncludesLinkedMainWindowCancellation() {
+        let main = scheduleItem("main", kind: .mainWindow, startsAt: "2026-10-10T09:00:00Z", isPrimary: true, cancelled: true)
+        let ticket = scheduleItem("ticket", kind: .ticketOpen, startsAt: "2026-09-01T11:00:00Z", cancelled: true)
+        let event = hubEvent(scheduleItems: [main, ticket])
+
+        XCTAssertTrue(ReservationDisplayPolicy.officialEventCancelled(
+            record: scheduledRecord(scheduleItemID: "main"), latestEvent: event
+        ))
+        XCTAssertFalse(ReservationDisplayPolicy.officialEventCancelled(
+            record: scheduledRecord(scheduleItemID: "ticket"), latestEvent: event
+        ))
+        XCTAssertTrue(ReservationDisplayPolicy.officialEventCancelled(
+            record: scheduledRecord(), latestEvent: hubEvent(status: .cancelled)
+        ))
+    }
+
+    // MARK: - List sections
+
+    func testSectionsKeepOngoingMultiDayRecordUpcoming() {
+        let record = scheduledRecord(startsAt: "2026-09-20T09:00:00Z", endsAt: "2026-09-30T09:00:00Z")
+        let sections = ReservationListPolicy.sections(records: [record], now: iso("2026-09-24T00:00:00Z"))
+        XCTAssertEqual(sections.upcoming.map(\.id), [record.id])
+        XCTAssertTrue(sections.past.isEmpty)
+    }
+
+    func testSectionsKeepDateOnlyRecordUpcomingUntilNextLocalDay() {
+        // 5/1-5/7 popup: backend sends date precision as local midnight (5/7 00:00 KST).
+        let record = scheduledRecord(
+            startsAt: "2026-04-30T15:00:00Z", endsAt: "2026-05-06T15:00:00Z", precision: .date
+        )
+        XCTAssertTrue(ReservationListPolicy.isUpcoming(record, now: iso("2026-05-07T10:00:00+09:00")))
+        XCTAssertTrue(ReservationListPolicy.isUpcoming(record, now: iso("2026-05-07T23:59:59+09:00")))
+        XCTAssertFalse(ReservationListPolicy.isUpcoming(record, now: iso("2026-05-08T00:00:00+09:00")))
+    }
+
+    func testSectionsTreatUserEndOverrideAsDatetime() {
+        var record = scheduledRecord(
+            startsAt: "2026-04-30T15:00:00Z", endsAt: "2026-05-06T15:00:00Z", precision: .date
+        )
+        record.endsAtOverride = iso("2026-05-07T09:00:00+09:00")
+        XCTAssertFalse(ReservationListPolicy.isUpcoming(record, now: iso("2026-05-07T10:00:00+09:00")))
+    }
+
+    func testSectionsUseDatesForPendingConfirmationAndAlwaysPastForClosedStatuses() {
+        let now = iso("2026-09-24T00:00:00Z")
+        let pendingFuture = scheduledRecord(status: .pendingConfirmation, startsAt: "2026-10-01T00:00:00Z")
+        let pendingPast = scheduledRecord(status: .pendingConfirmation, startsAt: "2026-09-01T00:00:00Z")
+        let undated = scheduledRecord()
+        let cancelledFuture = scheduledRecord(status: .cancelled, startsAt: "2026-10-01T00:00:00Z")
+        let refundedFuture = scheduledRecord(status: .refunded, startsAt: "2026-10-01T00:00:00Z")
+        let completedFuture = scheduledRecord(status: .completed, startsAt: "2026-10-01T00:00:00Z")
+        let early = scheduledRecord(startsAt: "2026-09-25T00:00:00Z")
+
+        let sections = ReservationListPolicy.sections(
+            records: [undated, pendingFuture, cancelledFuture, pendingPast, refundedFuture, early, completedFuture],
+            now: now
+        )
+
+        XCTAssertEqual(sections.upcoming.map(\.id), [early.id, pendingFuture.id, undated.id])
+        XCTAssertEqual(
+            Set(sections.past.map(\.id)),
+            Set([pendingPast.id, cancelledFuture.id, refundedFuture.id, completedFuture.id])
+        )
+    }
+
+    // MARK: - Snapshot compatibility and display
+
+    func testLegacySnapshotWithoutPrecisionDecodesWithDefaults() throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let json = """
+        {"schemaVersion":1,"revision":3,"drafts":[],"records":[{
+          "id":"6B1F3C2E-8E3A-4C6E-9A43-2F2B0D7E1A11","kind":"ticket","status":"confirmed",
+          "eventSnapshot":{"title":"행사","category":"ticketing","startsAt":"2026-10-10T09:00:00Z",
+            "sourceLabel":"공식"},
+          "confirmedAt":"2026-09-01T00:00:00Z","createdAt":"2026-09-01T00:00:00Z",
+          "updatedAt":"2026-09-01T00:00:00Z","schemaVersion":1}]}
+        """
+        try Data(json.utf8).write(to: directory.appendingPathComponent(ReservationSharedStore.stateFileName))
+
+        let state = try ReservationSharedStore(directoryURL: directory).loadState()
+        let snapshot = try XCTUnwrap(state.records.first?.eventSnapshot)
+        XCTAssertNil(snapshot.timePrecision)
+        XCTAssertNil(snapshot.timezone)
+        XCTAssertEqual(snapshot.resolvedTimePrecision, .datetime)
+        XCTAssertEqual(snapshot.resolvedTimeZone.identifier, "Asia/Seoul")
+        XCTAssertEqual(snapshot.startsAt, iso("2026-10-10T09:00:00Z"))
+    }
+
+    func testDateOnlySnapshotFormatsWithoutTimeInItsTimezone() {
+        let record = scheduledRecord(
+            startsAt: "2026-04-30T15:00:00Z", endsAt: "2026-05-06T15:00:00Z", precision: .date
+        )
+        XCTAssertTrue(ReservationDateDisplayPolicy.startIsDateOnly(record))
+        XCTAssertEqual(
+            ReservationDateDisplayPolicy.text(
+                iso("2026-05-06T15:00:00Z"),
+                dateOnly: true,
+                timeZone: record.eventSnapshot.resolvedTimeZone,
+                dateStyle: .numeric,
+                locale: Locale(identifier: "en_US")
+            ),
+            "5/7/2026"
+        )
+
+        var overridden = record
+        overridden.startsAtOverride = iso("2026-05-01T10:00:00+09:00")
+        XCTAssertFalse(ReservationDateDisplayPolicy.startIsDateOnly(overridden))
+        XCTAssertFalse(ReservationDateDisplayPolicy.startIsDateOnly(scheduledRecord(startsAt: "2026-05-01T01:00:00Z")))
+    }
+
+    private func scheduledRecord(
+        status: ReservationStatus = .confirmed,
+        scheduleItemID: String? = nil,
+        startsAt: String? = nil,
+        endsAt: String? = nil,
+        precision: ReservationTimePrecision? = nil,
+        timezone: String? = nil
+    ) -> ReservationRecord {
+        let saved = iso("2026-09-01T00:00:00Z")
+        return ReservationRecord(
+            id: UUID(), sourceSessionID: nil, eventID: "event", scheduleItemID: scheduleItemID,
+            kind: .ticket, status: status,
+            eventSnapshot: ReservationEventSnapshot(
+                title: "테스트 행사", category: "ticketing", startsAt: startsAt.map(iso), endsAt: endsAt.map(iso),
+                venueName: "테스트 장소", venueAddress: nil, sourceLabel: "공식", imageURL: nil,
+                timePrecision: precision, timezone: timezone
+            ),
+            originalActionURL: "https://example.com", reservationDetailURL: nil,
+            providerHistoryURL: nil, linkSource: .appInput, displayTitleOverride: nil,
+            startsAtOverride: nil, endsAtOverride: nil, venueOverride: nil, optionText: nil,
+            quantity: nil, referenceNumber: nil, note: nil, openedAt: nil,
+            confirmedAt: saved, createdAt: saved, updatedAt: saved, schemaVersion: 1
+        )
+    }
+
+    private func hubEvent(
+        status: HubEventStatus = .upcoming,
+        startsAt: String? = nil,
+        endsAt: String? = nil,
+        venueName: String? = "테스트 장소",
+        scheduleItems: [HubEventScheduleItem] = []
+    ) -> HubEvent {
+        var result = HubEvent(
+            id: "event",
+            category: .onlineGoods,
+            participationMode: .offline,
+            status: status,
+            title: "테스트 행사",
+            summary: nil,
+            memberId: nil,
+            generationId: "official",
+            sourceUrl: "https://example.com/source",
+            sourceLabel: "공식",
+            sourceType: .official,
+            announcedAt: nil,
+            startsAt: startsAt.map(iso),
+            endsAt: endsAt.map(iso),
+            purchaseUrl: nil,
+            ticketUrl: nil,
+            venueName: venueName,
+            venueAddress: nil,
+            notificationEligible: true,
+            updatedAt: iso("2026-09-01T00:00:00Z")
+        )
+        result.scheduleItems = scheduleItems
+        return result
+    }
+
+    private func scheduleItem(
+        _ id: String,
+        kind: HubEventScheduleKind,
+        startsAt: String,
+        endsAt: String? = nil,
+        precision: HubEventTimePrecision = .datetime,
+        timezone: String = "Asia/Seoul",
+        isPrimary: Bool = false,
+        cancelled: Bool = false
+    ) -> HubEventScheduleItem {
+        HubEventScheduleItem(
+            id: id, kind: kind, title: nil, label: id, description: nil,
+            startsAt: iso(startsAt), endsAt: endsAt.map(iso),
+            timePrecision: precision, timezone: timezone,
+            actionUrl: nil, sourceUrl: nil, sourceLabel: nil,
+            notificationEligible: true, isPrimary: isPrimary, sortOrder: 0,
+            cancelledAt: cancelled ? iso("2026-09-01T00:00:00Z") : nil
+        )
+    }
+
+    private func iso(_ value: String) -> Date {
+        ISO8601DateFormatter().date(from: value)!
+    }
+
     private func makeDraft(
         id: UUID,
         openedAt: Date,

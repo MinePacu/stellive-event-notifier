@@ -3,6 +3,7 @@ package dev.minepacu.stelliveeventnotifier.feature.reservations.data
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventTimePrecision
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraft
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEventSnapshot
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationKind
@@ -29,6 +30,8 @@ data class ReservationDraftEntity(
     val snapshotVenueAddress: String?,
     val snapshotSourceLabel: String,
     val snapshotImageUrl: String?,
+    val snapshotTimePrecision: String?,
+    val snapshotTimezone: String?,
     val originalActionUrl: String,
     val providerHost: String,
     val openedAtEpochMs: Long,
@@ -55,6 +58,8 @@ data class ReservationRecordEntity(
     val snapshotVenueAddress: String?,
     val snapshotSourceLabel: String,
     val snapshotImageUrl: String?,
+    val snapshotTimePrecision: String?,
+    val snapshotTimezone: String?,
     val originalActionUrl: String?,
     val reservationDetailUrl: String?,
     val providerHistoryUrl: String?,
@@ -97,11 +102,18 @@ internal fun ReservationRecordEntity.toDomain() = ReservationRecord(
 private fun ReservationDraftEntity.snapshot() = ReservationEventSnapshot(
     snapshotTitle, snapshotCategory, snapshotStartsAtEpochMs?.let(Instant::ofEpochMilli),
     snapshotEndsAtEpochMs?.let(Instant::ofEpochMilli), snapshotVenueName, snapshotVenueAddress,
-    snapshotSourceLabel, snapshotImageUrl,
+    snapshotSourceLabel, snapshotImageUrl, snapshotTimePrecision(snapshotTimePrecision), snapshotTimezone(snapshotTimezone),
 )
 
 private fun ReservationRecordEntity.snapshot() = ReservationEventSnapshot(
     snapshotTitle, snapshotCategory, snapshotStartsAtEpochMs?.let(Instant::ofEpochMilli),
     snapshotEndsAtEpochMs?.let(Instant::ofEpochMilli), snapshotVenueName, snapshotVenueAddress,
-    snapshotSourceLabel, snapshotImageUrl,
+    snapshotSourceLabel, snapshotImageUrl, snapshotTimePrecision(snapshotTimePrecision), snapshotTimezone(snapshotTimezone),
 )
+
+/** Rows written before schema v2 have no precision/timezone; they are read as datetime in Asia/Seoul. */
+private fun snapshotTimePrecision(value: String?): HubEventTimePrecision =
+    HubEventTimePrecision.entries.firstOrNull { it.name == value } ?: HubEventTimePrecision.DATETIME
+
+private fun snapshotTimezone(value: String?): String =
+    value?.takeIf(String::isNotBlank) ?: ReservationEventSnapshot.DefaultTimezone

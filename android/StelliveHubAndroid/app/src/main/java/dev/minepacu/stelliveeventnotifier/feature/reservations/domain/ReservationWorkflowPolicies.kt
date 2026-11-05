@@ -145,13 +145,22 @@ enum class ReservationListSectionKind {
 
 object ReservationListPolicy {
     fun sections(records: List<ReservationRecord>, now: Instant = Instant.now()): ReservationListSections {
-        val upcoming = records
-            .filter { it.status == ReservationStatus.CONFIRMED && (it.effectiveStartsAt?.isAfter(now) ?: true) }
-            .sortedBy { it.effectiveStartsAt ?: Instant.MAX }
+        val (upcoming, past) = records.partition { isUpcoming(it, now) }
         return ReservationListSections(
-            upcoming = upcoming,
-            past = records.filterNot(upcoming::contains).sortedByDescending { it.effectiveStartsAt ?: it.updatedAt },
+            upcoming = upcoming.sortedBy { it.effectiveStartsAt ?: Instant.MAX },
+            past = past.sortedByDescending { it.effectiveStartsAt ?: it.updatedAt },
         )
+    }
+
+    private fun isUpcoming(record: ReservationRecord, now: Instant): Boolean {
+        if (record.status != ReservationStatus.CONFIRMED && record.status != ReservationStatus.PENDING_CONFIRMATION) return false
+        val endsAt = record.effectiveEndsAt
+        val reference = endsAt ?: record.effectiveStartsAt ?: return true
+        val isDateOnly = if (endsAt != null) record.effectiveEndsAtIsDateOnly else record.effectiveStartsAtIsDateOnly
+        if (!isDateOnly) return now.isBefore(reference)
+        val zone = ReservationDateFormat.zone(record.eventSnapshot.timezone)
+        val endOfDay = reference.atZone(zone).toLocalDate().plusDays(1).atStartOfDay(zone).toInstant()
+        return now.isBefore(endOfDay)
     }
 
     fun timestampLabel(
@@ -163,7 +172,15 @@ object ReservationListPolicy {
             ReservationListSectionKind.UPCOMING -> record.effectiveStartsAt
             ReservationListSectionKind.PAST -> record.createdAt
         } ?: return null
-        val formatted = format(timestamp)
+        val formatted = when (section) {
+            ReservationListSectionKind.UPCOMING -> ReservationDateFormat.label(
+                timestamp,
+                record.effectiveStartsAtIsDateOnly,
+                record.eventSnapshot.timezone,
+                format,
+            )
+            ReservationListSectionKind.PAST -> format(timestamp)
+        }
         return when (section) {
             ReservationListSectionKind.UPCOMING -> formatted
             ReservationListSectionKind.PAST -> "저장 시각 · $formatted"

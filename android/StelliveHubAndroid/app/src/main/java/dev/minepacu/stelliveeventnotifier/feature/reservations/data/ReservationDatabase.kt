@@ -6,6 +6,8 @@ import androidx.room.Delete
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Upsert
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -47,10 +49,22 @@ interface ReservationDraftDao {
 
 @Database(
     entities = [ReservationRecordEntity::class, ReservationDraftEntity::class],
-    version = 1,
-    exportSchema = false,
+    version = 2,
+    exportSchema = true,
 )
 abstract class ReservationDatabase : RoomDatabase() {
     abstract fun reservationDao(): ReservationDao
     abstract fun reservationDraftDao(): ReservationDraftDao
+}
+
+object ReservationMigrations {
+    /** v2 adds the snapshot time precision and timezone; existing rows keep NULL and read as datetime/Asia/Seoul. */
+    val MIGRATION_1_2 = object : Migration(1, 2) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE reservation_drafts ADD COLUMN snapshotTimePrecision TEXT")
+            db.execSQL("ALTER TABLE reservation_drafts ADD COLUMN snapshotTimezone TEXT")
+            db.execSQL("ALTER TABLE reservation_records ADD COLUMN snapshotTimePrecision TEXT")
+            db.execSQL("ALTER TABLE reservation_records ADD COLUMN snapshotTimezone TEXT")
+        }
+    }
 }

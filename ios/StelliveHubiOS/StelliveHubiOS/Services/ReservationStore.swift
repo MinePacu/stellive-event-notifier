@@ -43,14 +43,11 @@ final class ReservationStore: ObservableObject {
     var pendingCount: Int { activeDrafts.count }
 
     var upcomingRecords: [ReservationRecord] {
-        records.filter { $0.status == .confirmed && ($0.effectiveStartsAt ?? .distantFuture) >= now() }
-            .sorted { ($0.effectiveStartsAt ?? .distantFuture) < ($1.effectiveStartsAt ?? .distantFuture) }
+        ReservationListPolicy.sections(records: records, now: now()).upcoming
     }
 
     var pastRecords: [ReservationRecord] {
-        records.filter { record in
-            record.status != .confirmed || (record.effectiveStartsAt.map { $0 < now() } ?? false)
-        }.sorted { ($0.effectiveStartsAt ?? $0.updatedAt) > ($1.effectiveStartsAt ?? $1.updatedAt) }
+        ReservationListPolicy.sections(records: records, now: now()).past
     }
 
     func reload() {
@@ -78,6 +75,7 @@ final class ReservationStore: ObservableObject {
             throw ReservationError.invalidURL
         }
         let current = now()
+        let window = ReservationSchedulePolicy.window(event: event, scheduleItem: scheduleItem)
         let candidate = ReservationDraft(
             sessionID: UUID(),
             eventID: event.id,
@@ -86,12 +84,14 @@ final class ReservationStore: ObservableObject {
             eventSnapshot: ReservationEventSnapshot(
                 title: event.title,
                 category: event.category.rawValue,
-                startsAt: scheduleItem?.startsAt ?? event.startsAt,
-                endsAt: scheduleItem?.endsAt ?? event.endsAt,
+                startsAt: window?.startsAt,
+                endsAt: window?.endsAt,
                 venueName: event.venueName,
                 venueAddress: event.venueAddress,
                 sourceLabel: event.sourceLabel,
-                imageURL: HubEventImagePolicy.displayURL(for: event.image)?.absoluteString
+                imageURL: HubEventImagePolicy.displayURL(for: event.image)?.absoluteString,
+                timePrecision: window?.timePrecision,
+                timezone: window?.timezone
             ),
             originalActionURL: actionURL.absoluteString,
             providerHost: host,

@@ -210,7 +210,7 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDeepLinkRoute
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEditPresentationPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEditStatusPresentationPolicy
-import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationEventSnapshot
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDateFormat
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationExternalLinkPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPage
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationHelpPolicy
@@ -235,7 +235,7 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPresentationKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationReturnPromptPresentationPolicy
-import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationStatus
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationSchedulePolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLPolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationQuickAddActivity
 import dev.minepacu.stelliveeventnotifier.feature.reservations.system.ReservationTileService
@@ -1489,9 +1489,7 @@ internal fun startScreen(
     internal fun reservationSummaryCard(): MaterialCardView = baseCard(HubCardStyle.INTERACTIVE).apply {
         val now = Instant.now()
         val activeDrafts = reservationDrafts.filter { it.expiresAt.isAfter(now) }
-        val upcoming = reservationRecords.filter {
-            it.status == ReservationStatus.CONFIRMED && (it.effectiveStartsAt?.isAfter(now) ?: true)
-        }.sortedBy { it.effectiveStartsAt ?: Instant.MAX }
+        val upcoming = ReservationListPolicy.sections(reservationRecords, now).upcoming
         isClickable = true
         isFocusable = true
         minimumHeight = dp(86)
@@ -1531,9 +1529,16 @@ internal fun startScreen(
                 setTextColor(color(R.color.hub_text_muted))
                 setPadding(0, dp(4), 0, 0)
             })
-            upcoming.firstOrNull()?.effectiveStartsAt?.let { startsAt ->
+            upcoming.firstOrNull()?.let { record ->
+                val startsAt = record.effectiveStartsAt ?: return@let
+                val label = ReservationDateFormat.label(
+                    startsAt,
+                    record.effectiveStartsAtIsDateOnly,
+                    record.eventSnapshot.timezone,
+                    reservationDateFormatter::format,
+                )
                 addView(TextView(context).apply {
-                    text = "가장 가까운 내역 · ${reservationDateFormatter.format(startsAt)}"
+                    text = "가장 가까운 내역 · $label"
                     textSize = 11f
                     setTextColor(color(R.color.hub_primary))
                     setPadding(0, dp(5), 0, 0)
@@ -1556,14 +1561,9 @@ internal fun startScreen(
             openExternal = { openExternalUrl(link.url) },
             recordBestEffort = {
                 lifecycleScope.launch {
-                    val snapshot = ReservationEventSnapshot(
-                        title = event.title,
-                        category = event.category.name,
-                        startsAt = scheduleItem?.startsAt ?: event.startsAt,
-                        endsAt = scheduleItem?.endsAt ?: event.endsAt,
-                        venueName = event.venueName,
-                        venueAddress = event.venueAddress,
-                        sourceLabel = event.sourceLabel,
+                    val snapshot = ReservationSchedulePolicy.snapshot(
+                        event = event,
+                        scheduleItem = scheduleItem,
                         imageUrl = event.image?.url?.takeIf { HubEventImagePolicy.canDisplay(event.image) },
                     )
                     runCatching {

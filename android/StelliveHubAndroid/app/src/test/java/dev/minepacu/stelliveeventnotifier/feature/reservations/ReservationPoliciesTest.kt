@@ -1,8 +1,23 @@
 package dev.minepacu.stelliveeventnotifier.feature.reservations
 
 import dev.minepacu.stelliveeventnotifier.R
+import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventLinkKind
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleItem
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleKind
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventSourceType
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventStatus
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventTimePrecision
+import dev.minepacu.stelliveeventnotifier.feature.reservations.data.ReservationDraftEntity
+import dev.minepacu.stelliveeventnotifier.feature.reservations.data.ReservationRecordEntity
+import dev.minepacu.stelliveeventnotifier.feature.reservations.data.toDomain
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationActionPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDateFormat
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDisplayPolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationSchedulePolicy
+import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationScheduleWindow
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraft
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftExpiryKind
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationDraftExpiryPresentationPolicy
@@ -43,6 +58,8 @@ import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.Reservatio
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationTileStatePolicy
 import dev.minepacu.stelliveeventnotifier.feature.reservations.domain.ReservationURLPolicy
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.UUID
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -471,9 +488,7 @@ class ReservationPoliciesTest {
         val presentation = ReservationDetailPresentationPolicy.presentation(
             record = record,
             formatDateTime = { it.toString() },
-            officialEventAvailable = true,
-            latestOfficialTitle = record.eventSnapshot.title,
-            latestOfficialStartsAt = record.eventSnapshot.startsAt,
+            latestEvent = officialEvent(startsAt = record.eventSnapshot.startsAt),
         )
 
         assertEquals("행사", presentation.title)
@@ -488,6 +503,8 @@ class ReservationPoliciesTest {
         assertEquals("입장 전 본인 확인", presentation.note)
         assertEquals(listOf("외부 링크 열기", "내역 추가", "최근 수정", "추가 경로"), presentation.recordRows.map { it.label })
         assertTrue(presentation.canOpenOfficialEvent)
+        assertFalse(presentation.officialEventChanged)
+        assertFalse(presentation.officialEventCancelled)
     }
 
     @Test fun detailPresentationOmitsBlankInvalidAndDuplicateValues() {
@@ -517,14 +534,168 @@ class ReservationPoliciesTest {
         val presentation = ReservationDetailPresentationPolicy.presentation(
             record = record,
             formatDateTime = Instant::toString,
-            officialEventAvailable = true,
-            latestOfficialTitle = "변경된 행사명",
-            latestOfficialStartsAt = record.eventSnapshot.startsAt,
-            officialEventCancelled = true,
+            latestEvent = officialEvent(
+                title = "변경된 행사명",
+                status = HubEventStatus.CANCELLED,
+                startsAt = record.eventSnapshot.startsAt,
+            ),
         )
 
         assertTrue(presentation.officialEventChanged)
         assertTrue(presentation.officialEventCancelled)
+    }
+
+    @Test fun scheduleWindowUsesPrimaryMainWindowForTicketOpenLink() {
+        val event = concertEvent()
+
+        assertEquals(
+            ReservationScheduleWindow(concertStart, concertEnd, HubEventTimePrecision.DATETIME, "Asia/Seoul"),
+            ReservationSchedulePolicy.window(event, ticketOpenItem()),
+        )
+        assertEquals(
+            ReservationScheduleWindow(concertStart, concertEnd, HubEventTimePrecision.DATETIME, "Asia/Seoul"),
+            ReservationSchedulePolicy.window(event, null),
+        )
+    }
+
+    @Test fun scheduleWindowUsesLinkedMainWindowItself() {
+        val dayTwo = scheduleItem(
+            id = "day-2",
+            kind = HubEventScheduleKind.MAIN_WINDOW,
+            startsAt = kst("2026-08-16T00:00"),
+            endsAt = kst("2026-08-16T00:00"),
+            precision = HubEventTimePrecision.DATE,
+            timezone = "Asia/Tokyo",
+        )
+        val event = concertEvent(extraItems = listOf(dayTwo))
+
+        assertEquals(
+            ReservationScheduleWindow(dayTwo.startsAt, dayTwo.endsAt, HubEventTimePrecision.DATE, "Asia/Tokyo"),
+            ReservationSchedulePolicy.window(event, dayTwo),
+        )
+    }
+
+    @Test fun scheduleWindowFallsBackToEventTimesAndSkipsCancelledPrimary() {
+        val eventStart = kst("2026-09-01T12:00")
+        val eventEnd = kst("2026-09-01T18:00")
+        val withoutPrimary = officialEvent(startsAt = eventStart, endsAt = eventEnd, scheduleItems = listOf(ticketOpenItem()))
+        val expected = ReservationScheduleWindow(eventStart, eventEnd, HubEventTimePrecision.DATETIME, "Asia/Seoul")
+
+        assertEquals(expected, ReservationSchedulePolicy.window(withoutPrimary, ticketOpenItem()))
+        val cancelledPrimary = mainItem().copy(cancelledAt = kst("2026-07-10T09:00"))
+        assertEquals(
+            expected,
+            ReservationSchedulePolicy.window(withoutPrimary.copy(scheduleItems = listOf(ticketOpenItem(), cancelledPrimary)), ticketOpenItem()),
+        )
+        assertNull(ReservationSchedulePolicy.window(officialEvent(startsAt = null, scheduleItems = listOf(ticketOpenItem())), ticketOpenItem()))
+
+        val snapshot = ReservationSchedulePolicy.snapshot(officialEvent(startsAt = null), null, imageUrl = null)
+        assertNull(snapshot.startsAt)
+        assertNull(snapshot.endsAt)
+        assertEquals(HubEventTimePrecision.DATETIME, snapshot.timePrecision)
+        assertEquals("Asia/Seoul", snapshot.timezone)
+    }
+
+    @Test fun recordFromTicketOpenLinkStaysUpcomingAndUnchanged() {
+        val event = concertEvent()
+        val record = record().copy(
+            scheduleItemId = "ticket-open",
+            eventSnapshot = ReservationSchedulePolicy.snapshot(event, ticketOpenItem(), imageUrl = null),
+        )
+        val now = kst("2026-07-01T20:05")
+
+        assertEquals(concertStart, record.eventSnapshot.startsAt)
+        assertEquals(concertEnd, record.eventSnapshot.endsAt)
+        assertEquals(listOf(record), ReservationListPolicy.sections(listOf(record), now).upcoming)
+        assertFalse(ReservationDisplayPolicy.officialEventChanged(record, event))
+        assertFalse(ReservationDisplayPolicy.officialEventCancelled(record, event))
+    }
+
+    @Test fun officialChangeDetectsMovedPrimaryVenueAndCancelledLinkedMainWindow() {
+        val event = concertEvent()
+        val ticketRecord = record().copy(
+            scheduleItemId = "ticket-open",
+            eventSnapshot = ReservationSchedulePolicy.snapshot(event, ticketOpenItem(), imageUrl = null),
+        )
+        val moved = event.copy(scheduleItems = listOf(ticketOpenItem(), mainItem().copy(startsAt = concertStart.plusSeconds(86_400))))
+
+        assertTrue(ReservationDisplayPolicy.officialEventChanged(ticketRecord, moved))
+        assertTrue(ReservationDisplayPolicy.officialEventChanged(ticketRecord, event.copy(venueName = "다른 장소")))
+        assertFalse(ReservationDisplayPolicy.officialEventChanged(ticketRecord, null))
+
+        val mainRecord = ticketRecord.copy(scheduleItemId = "main")
+        val cancelledMain = event.copy(scheduleItems = listOf(ticketOpenItem(), mainItem().copy(cancelledAt = kst("2026-07-10T09:00"))))
+        assertTrue(ReservationDisplayPolicy.officialEventCancelled(mainRecord, cancelledMain))
+        assertFalse(ReservationDisplayPolicy.officialEventCancelled(ticketRecord, cancelledMain))
+        assertTrue(ReservationDisplayPolicy.officialEventCancelled(ticketRecord, event.copy(status = HubEventStatus.CANCELLED)))
+    }
+
+    @Test fun sectionsKeepOngoingAndDatePrecisionRecordsUpcomingUntilTheirEnd() {
+        val ongoing = record().copy(
+            eventSnapshot = record().eventSnapshot.copy(startsAt = kst("2026-05-01T10:00"), endsAt = kst("2026-05-03T18:00")),
+        )
+        assertEquals(listOf(ongoing), ReservationListPolicy.sections(listOf(ongoing), kst("2026-05-02T12:00")).upcoming)
+
+        val popup = record().copy(eventSnapshot = datePopupSnapshot())
+        assertEquals(listOf(popup), ReservationListPolicy.sections(listOf(popup), kst("2026-05-07T10:00")).upcoming)
+        assertEquals(listOf(popup), ReservationListPolicy.sections(listOf(popup), kst("2026-05-07T23:59")).upcoming)
+        assertEquals(listOf(popup), ReservationListPolicy.sections(listOf(popup), kst("2026-05-08T00:00")).past)
+
+        val overridden = popup.copy(endsAtOverride = kst("2026-05-07T00:00"))
+        assertEquals(listOf(overridden), ReservationListPolicy.sections(listOf(overridden), kst("2026-05-07T10:00")).past)
+    }
+
+    @Test fun sectionsGroupByStatusAndSortUpcomingByStartWithUndatedLast() {
+        val now = kst("2026-07-01T12:00")
+        val undated = record().copy(eventSnapshot = record().eventSnapshot.copy(startsAt = null))
+        val later = record().copy(startsAtOverride = kst("2026-08-01T12:00"))
+        val sooner = record().copy(status = ReservationStatus.PENDING_CONFIRMATION, startsAtOverride = kst("2026-07-02T12:00"))
+        val pendingPast = record().copy(status = ReservationStatus.PENDING_CONFIRMATION, startsAtOverride = kst("2026-06-01T12:00"))
+        val cancelledFuture = record().copy(status = ReservationStatus.CANCELLED, startsAtOverride = kst("2026-09-01T12:00"))
+        val refundedFuture = record().copy(status = ReservationStatus.REFUNDED, startsAtOverride = kst("2026-09-02T12:00"))
+        val completedFuture = record().copy(status = ReservationStatus.COMPLETED, startsAtOverride = kst("2026-09-03T12:00"))
+
+        val sections = ReservationListPolicy.sections(
+            listOf(undated, later, pendingPast, cancelledFuture, sooner, refundedFuture, completedFuture),
+            now,
+        )
+
+        assertEquals(listOf(sooner, later, undated), sections.upcoming)
+        assertEquals(listOf(completedFuture, refundedFuture, cancelledFuture, pendingPast), sections.past)
+    }
+
+    @Test fun entityMappingReadsMissingPrecisionAndTimezoneAsDatetimeInSeoul() {
+        val record = recordEntity(precision = null, timezone = null).toDomain()
+        assertEquals(HubEventTimePrecision.DATETIME, record.eventSnapshot.timePrecision)
+        assertEquals("Asia/Seoul", record.eventSnapshot.timezone)
+
+        val dated = recordEntity(precision = "DATE", timezone = "Asia/Tokyo").toDomain()
+        assertEquals(HubEventTimePrecision.DATE, dated.eventSnapshot.timePrecision)
+        assertEquals("Asia/Tokyo", dated.eventSnapshot.timezone)
+
+        val draft = ReservationDraftEntity(
+            sessionId = UUID.randomUUID().toString(), eventId = "event-1", scheduleItemId = null, kind = "TICKET",
+            snapshotTitle = "행사", snapshotCategory = "OFFLINE", snapshotStartsAtEpochMs = null, snapshotEndsAtEpochMs = null,
+            snapshotVenueName = null, snapshotVenueAddress = null, snapshotSourceLabel = "공식", snapshotImageUrl = null,
+            snapshotTimePrecision = null, snapshotTimezone = null, originalActionUrl = "https://example.com/order",
+            providerHost = "example.com", openedAtEpochMs = 0, expiresAtEpochMs = 1, attemptCount = 1,
+        ).toDomain()
+        assertEquals(HubEventTimePrecision.DATETIME, draft.eventSnapshot.timePrecision)
+        assertEquals("Asia/Seoul", draft.eventSnapshot.timezone)
+    }
+
+    @Test fun datePrecisionValuesAreFormattedWithoutTime() {
+        assertEquals("2026. 5. 7.", ReservationDateFormat.label(Instant.parse("2026-05-06T15:00:00Z"), true, "Asia/Seoul") { "time" })
+        assertEquals("time", ReservationDateFormat.label(Instant.parse("2026-05-06T15:00:00Z"), false, "Asia/Seoul") { "time" })
+
+        val popup = record().copy(eventSnapshot = datePopupSnapshot())
+        val presentation = ReservationDetailPresentationPolicy.presentation(popup, { "time" })
+        assertEquals("2026. 5. 1. – 2026. 5. 7.", presentation.dateTimeLabel)
+        assertEquals(listOf("2026. 5. 1.", "2026. 5. 7."), presentation.informationRows.take(2).map { it.value })
+        assertEquals("2026. 5. 1.", ReservationListPolicy.timestampLabel(popup, ReservationListSectionKind.UPCOMING) { "time" })
+
+        val overridden = popup.copy(endsAtOverride = kst("2026-05-07T20:00"))
+        assertEquals("2026. 5. 1. – time", ReservationDetailPresentationPolicy.presentation(overridden, { "time" }).dateTimeLabel)
     }
 
     @Test fun returnPromptRequiresTenSecondsSinceOpen() {
@@ -618,6 +789,76 @@ class ReservationPoliciesTest {
         assertTrue(ReservationDraftPolicy.selection(listOf(active, draft("other", now.plusSeconds(60))), now) is ReservationDraftSelection.Choose)
         assertEquals(ReservationDraftSelection.None, ReservationDraftPolicy.selection(listOf(expired), now))
     }
+
+    private val seoul: ZoneId = ZoneId.of("Asia/Seoul")
+    private val concertStart: Instant = kst("2026-08-15T18:00")
+    private val concertEnd: Instant = kst("2026-08-15T21:00")
+
+    private fun kst(value: String): Instant = LocalDateTime.parse(value).atZone(seoul).toInstant()
+
+    private fun scheduleItem(
+        id: String,
+        kind: HubEventScheduleKind,
+        startsAt: Instant,
+        endsAt: Instant? = null,
+        precision: HubEventTimePrecision = HubEventTimePrecision.DATETIME,
+        timezone: String = "Asia/Seoul",
+        isPrimary: Boolean = false,
+    ) = HubEventScheduleItem(
+        id = id, kind = kind, label = id, startsAt = startsAt, endsAt = endsAt,
+        timePrecision = precision, timezone = timezone, isPrimary = isPrimary,
+    )
+
+    private fun ticketOpenItem() = scheduleItem("ticket-open", HubEventScheduleKind.TICKET_OPEN, kst("2026-07-01T20:00"))
+
+    private fun mainItem() = scheduleItem("main", HubEventScheduleKind.MAIN_WINDOW, concertStart, concertEnd, isPrimary = true)
+
+    private fun concertEvent(extraItems: List<HubEventScheduleItem> = emptyList()) = officialEvent(
+        startsAt = concertStart,
+        endsAt = concertEnd,
+        scheduleItems = listOf(ticketOpenItem(), mainItem()) + extraItems,
+    )
+
+    private fun officialEvent(
+        title: String = "행사",
+        status: HubEventStatus = HubEventStatus.UPCOMING,
+        startsAt: Instant? = Instant.parse("2026-08-01T08:00:00Z"),
+        endsAt: Instant? = null,
+        venueName: String? = "기본 장소",
+        scheduleItems: List<HubEventScheduleItem> = emptyList(),
+    ) = HubEvent(
+        id = "event-1",
+        category = HubEventCategory.OFFLINE_CONCERT,
+        participationMode = HubEventParticipationMode.OFFLINE,
+        status = status,
+        title = title,
+        generationId = "gen",
+        sourceUrl = "https://example.com/source",
+        sourceLabel = "공식 출처",
+        sourceType = HubEventSourceType.OFFICIAL,
+        scheduleItems = scheduleItems,
+        startsAt = startsAt,
+        endsAt = endsAt,
+        venueName = venueName,
+        updatedAt = Instant.parse("2026-07-01T00:00:00Z"),
+    )
+
+    private fun datePopupSnapshot() = record().eventSnapshot.copy(
+        startsAt = kst("2026-05-01T00:00"),
+        endsAt = kst("2026-05-07T00:00"),
+        timePrecision = HubEventTimePrecision.DATE,
+    )
+
+    private fun recordEntity(precision: String?, timezone: String?) = ReservationRecordEntity(
+        id = UUID.randomUUID().toString(), sourceSessionId = null, eventId = "event-1", scheduleItemId = null,
+        kind = "TICKET", status = "CONFIRMED", snapshotTitle = "행사", snapshotCategory = "OFFLINE",
+        snapshotStartsAtEpochMs = 0, snapshotEndsAtEpochMs = null, snapshotVenueName = null, snapshotVenueAddress = null,
+        snapshotSourceLabel = "공식", snapshotImageUrl = null, snapshotTimePrecision = precision, snapshotTimezone = timezone,
+        originalActionUrl = null, reservationDetailUrl = null, providerHistoryUrl = null, linkSource = null,
+        displayTitleOverride = null, startsAtOverrideEpochMs = null, endsAtOverrideEpochMs = null, venueOverride = null,
+        optionText = null, quantity = null, referenceNumber = null, note = null, openedAtEpochMs = null,
+        confirmedAtEpochMs = 0, createdAtEpochMs = 0, updatedAtEpochMs = 0, effectiveStartsAtEpochMs = 0, schemaVersion = 1,
+    )
 
     private fun draft(eventId: String, expiresAt: Instant) = ReservationDraft(
         sessionId = UUID.randomUUID(), eventId = eventId, scheduleItemId = null, kind = ReservationKind.TICKET,

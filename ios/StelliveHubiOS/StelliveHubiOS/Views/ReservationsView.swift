@@ -165,7 +165,11 @@ private struct ReservationRecordRow: View {
             if let timestampLabel = ReservationListPresentationPolicy.timestampLabel(
                 record: record,
                 section: section,
-                format: { $0.formatted(date: .abbreviated, time: .shortened) }
+                format: { date in
+                    section == .upcoming
+                        ? ReservationDateDisplayPolicy.startText(record: record, date, dateStyle: .abbreviated)
+                        : date.formatted(date: .abbreviated, time: .shortened)
+                }
             ) {
                 Text(timestampLabel)
                     .font(.caption)

@@ -26,13 +26,65 @@ enum ReservationDeepLinkPolicy {
     }
 }
 
+struct ReservationScheduleWindow: Equatable {
+    let startsAt: Date?
+    let endsAt: Date?
+    let timePrecision: ReservationTimePrecision
+    let timezone: String
+}
+
+enum ReservationSchedulePolicy {
+    /// Picks the official schedule a reservation snapshot stores. Auxiliary items such as
+    /// ticket or sales openings never become the record's schedule.
+    static func window(event: HubEvent, scheduleItem: HubEventScheduleItem?) -> ReservationScheduleWindow? {
+        if let scheduleItem, scheduleItem.kind == .mainWindow {
+            return window(from: scheduleItem)
+        }
+        if let primary = event.scheduleItems.first(where: { $0.isPrimary && $0.cancelledAt == nil }) {
+            return window(from: primary)
+        }
+        guard event.startsAt != nil || event.endsAt != nil else { return nil }
+        return ReservationScheduleWindow(
+            startsAt: event.startsAt,
+            endsAt: event.endsAt,
+            timePrecision: .datetime,
+            timezone: ReservationEventSnapshot.defaultTimezone
+        )
+    }
+
+    static func linkedScheduleItem(record: ReservationRecord, in event: HubEvent) -> HubEventScheduleItem? {
+        guard let id = record.scheduleItemID else { return nil }
+        return event.scheduleItems.first { $0.id == id }
+    }
+
+    private static func window(from item: HubEventScheduleItem) -> ReservationScheduleWindow {
+        ReservationScheduleWindow(
+            startsAt: item.startsAt,
+            endsAt: item.endsAt,
+            timePrecision: item.timePrecision == .date ? .date : .datetime,
+            timezone: item.timezone
+        )
+    }
+}
+
 enum ReservationDisplayPolicy {
     static func officialEventChanged(record: ReservationRecord, latestEvent: HubEvent?) -> Bool {
         guard let latestEvent else { return false }
+        let window = ReservationSchedulePolicy.window(
+            event: latestEvent,
+            scheduleItem: ReservationSchedulePolicy.linkedScheduleItem(record: record, in: latestEvent)
+        )
         return latestEvent.title != record.eventSnapshot.title ||
-            latestEvent.startsAt != record.eventSnapshot.startsAt ||
-            latestEvent.endsAt != record.eventSnapshot.endsAt ||
+            window?.startsAt != record.eventSnapshot.startsAt ||
+            window?.endsAt != record.eventSnapshot.endsAt ||
             latestEvent.venueName != record.eventSnapshot.venueName
+    }
+
+    static func officialEventCancelled(record: ReservationRecord, latestEvent: HubEvent?) -> Bool {
+        guard let latestEvent else { return false }
+        if latestEvent.status == .cancelled { return true }
+        guard let item = ReservationSchedulePolicy.linkedScheduleItem(record: record, in: latestEvent) else { return false }
+        return item.kind == .mainWindow && item.cancelledAt != nil
     }
 
     static func linkedEventTitle(record: ReservationRecord) -> String? {
@@ -52,6 +104,98 @@ enum ReservationDisplayPolicy {
 enum ReservationListSectionKind {
     case upcoming
     case past
+}
+
+struct ReservationListSections: Equatable {
+    let upcoming: [ReservationRecord]
+    let past: [ReservationRecord]
+}
+
+enum ReservationListPolicy {
+    static func sections(records: [ReservationRecord], now: Date) -> ReservationListSections {
+        var upcoming: [ReservationRecord] = []
+        var past: [ReservationRecord] = []
+        for record in records {
+            if isUpcoming(record, now: now) { upcoming.append(record) } else { past.append(record) }
+        }
+        return ReservationListSections(
+            upcoming: upcoming.sorted { ($0.effectiveStartsAt ?? .distantFuture) < ($1.effectiveStartsAt ?? .distantFuture) },
+            past: past.sorted { ($0.effectiveStartsAt ?? $0.updatedAt) > ($1.effectiveStartsAt ?? $1.updatedAt) }
+        )
+    }
+
+    static func isUpcoming(_ record: ReservationRecord, now: Date) -> Bool {
+        switch record.status {
+        case .cancelled, .refunded, .completed:
+            return false
+        case .confirmed, .pendingConfirmation:
+            break
+        }
+        let snapshot = record.eventSnapshot
+        let reference: Date
+        let isSnapshotValue: Bool
+        if let value = record.endsAtOverride {
+            (reference, isSnapshotValue) = (value, false)
+        } else if let value = snapshot.endsAt {
+            (reference, isSnapshotValue) = (value, true)
+        } else if let value = record.startsAtOverride {
+            (reference, isSnapshotValue) = (value, false)
+        } else if let value = snapshot.startsAt {
+            (reference, isSnapshotValue) = (value, true)
+        } else {
+            return true
+        }
+        guard isSnapshotValue, snapshot.resolvedTimePrecision == .date else { return now < reference }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = snapshot.resolvedTimeZone
+        let startOfDay = calendar.startOfDay(for: reference)
+        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return now < reference }
+        return now < endOfDay
+    }
+}
+
+enum ReservationDateDisplayPolicy {
+    /// True when the record's displayed start comes from a date-only snapshot (no user override).
+    static func startIsDateOnly(_ record: ReservationRecord) -> Bool {
+        record.startsAtOverride == nil && record.eventSnapshot.resolvedTimePrecision == .date
+    }
+
+    static func text(
+        _ date: Date,
+        dateOnly: Bool,
+        timeZone: TimeZone,
+        dateStyle: Date.FormatStyle.DateStyle,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        guard dateOnly else { return date.formatted(date: dateStyle, time: .shortened) }
+        return date.formatted(Date.FormatStyle(date: dateStyle, time: .omitted, locale: locale, timeZone: timeZone))
+    }
+
+    static func startText(
+        record: ReservationRecord,
+        _ date: Date,
+        dateStyle: Date.FormatStyle.DateStyle
+    ) -> String {
+        text(
+            date,
+            dateOnly: startIsDateOnly(record),
+            timeZone: record.eventSnapshot.resolvedTimeZone,
+            dateStyle: dateStyle
+        )
+    }
+
+    static func snapshotText(
+        snapshot: ReservationEventSnapshot,
+        _ date: Date,
+        dateStyle: Date.FormatStyle.DateStyle
+    ) -> String {
+        text(
+            date,
+            dateOnly: snapshot.resolvedTimePrecision == .date,
+            timeZone: snapshot.resolvedTimeZone,
+            dateStyle: dateStyle
+        )
+    }
 }
 
 enum ReservationListPresentationPolicy {
@@ -243,9 +387,7 @@ enum ReservationHelpContextPolicy {
         now: Date = Date()
     ) -> ReservationHelpContext {
         let activeDrafts = ReservationDraftPolicy.active(drafts, now: now)
-        let hasUpcomingRecords = records.contains {
-            $0.status == .confirmed && ($0.effectiveStartsAt ?? .distantFuture) >= now
-        }
+        let hasUpcomingRecords = records.contains { ReservationListPolicy.isUpcoming($0, now: now) }
         let earliest = activeDrafts.min { $0.expiresAt < $1.expiresAt }
         return ReservationHelpContext(
             activeDraftCount: activeDrafts.count,
