@@ -8,39 +8,41 @@ Docker Compose is still supported for reproducible local development and optiona
 
 ## OCI Admin Console
 
-The backend can serve a lightweight embedded admin console at `/admin` for controlled OCI operations. `/admin` is disabled by default and should be enabled only for maintainer access on a private path such as SSH tunneling, a VPN, or another restricted network route. If it is exposed more broadly, keep HTTPS in front of it and still require admin authentication.
+The backend can serve the admin console SPA (`admin/stellive-hub-admin`, built with Vite) at `/admin` for controlled OCI operations. `/admin` is disabled by default and should be enabled only for maintainer access on a private path such as SSH tunneling, a VPN, or another restricted network route. If it is exposed more broadly, keep HTTPS in front of it and still require admin authentication.
 
 Required environment variables for this surface:
 
 - `ADMIN_CONSOLE_ENABLED=true` to register `/admin`.
-- `ADMIN_CONSOLE_TOKEN` for the HTML admin console route.
+- `ADMIN_CONSOLE_TOKEN` for the admin session API and `/v1/admin/*` routes.
 - `ADMIN_CONSOLE_COOKIE_SECURE=true` when the console is served behind HTTPS and browser login cookies must include the `Secure` attribute.
+- `ADMIN_CONSOLE_DIST_DIR` (optional) to point at the built SPA directory. It defaults to `../../admin/stellive-hub-admin/dist` resolved from the backend working directory (the Docker image builds and copies it there). If `index.html` is missing, `/admin` returns 503 `admin_console_not_built`.
 - `INTERNAL_API_TOKEN` for `/v1/internal/*` JSON routes.
 - `DATABASE_URL` and the existing adapter/push variables still govern what the console can actually inspect.
 
 Auth topology:
 
-- `ADMIN_CONSOLE_ENABLED` affects only whether `/admin`, `/admin/login`, and `/admin/logout` are registered.
+- `ADMIN_CONSOLE_ENABLED` affects only whether `/admin*`, `/v1/admin/session`, and the other `/v1/admin/*` routes respond.
 - `/v1/internal/*` remains independently available when `INTERNAL_API_TOKEN` is configured, even if `/admin` is disabled.
-- `/admin` can be opened from a normal browser through `GET /admin/login`. Login validates `ADMIN_CONSOLE_TOKEN` and sets a short-lived HttpOnly, SameSite=Strict cookie scoped to `/admin`.
-- Bearer authentication still works for direct clients: `Authorization: Bearer <ADMIN_CONSOLE_TOKEN>`.
-- The `/admin` page loads after either an admin session cookie or `ADMIN_CONSOLE_TOKEN` Bearer authentication. Its browser-side UI separately calls `/v1/internal/*` with `INTERNAL_API_TOKEN`, which the maintainer enters into the page.
+- `GET /admin`, `/admin/`, and `/admin/*` serve the static SPA shell without authentication (it contains no data); unknown non-asset paths fall back to `index.html`, and missing `/admin/assets/*` files return 404. All data stays behind authenticated APIs.
+- The SPA signs in with `POST /v1/admin/session` and JSON `{ "token": "<ADMIN_CONSOLE_TOKEN>" }`, which sets a short-lived HttpOnly, SameSite=Strict session cookie. `GET /v1/admin/session` reports whether the cookie or Bearer token is valid, and `DELETE /v1/admin/session` clears the cookie.
+- Bearer authentication still works for direct clients such as the desktop app: `Authorization: Bearer <ADMIN_CONSOLE_TOKEN>`.
+- `/v1/internal/*` is still authenticated separately with `INTERNAL_API_TOKEN`.
 
 Keep `ADMIN_CONSOLE_TOKEN` and `INTERNAL_API_TOKEN` as separate secrets. The current implementation authenticates `/admin` against `ADMIN_CONSOLE_TOKEN` and authenticates `/v1/internal/*` against `INTERNAL_API_TOKEN`. That separation keeps the browser console surface distinct from direct internal API access.
 
 Blank, placeholder, or verification-placeholder values are treated as not configured. In practice, empty strings, `replace_with_*` placeholders, and `verify_required` do not enable `/admin` or `/v1/internal/*`.
 
-The `/admin` page and `/v1/internal/*` routes are same-origin, no-CORS routes intended for controlled access from the backend's own origin. They are not meant to be called by arbitrary third-party browser code. Privileged routes intentionally disable CORS, and `/admin` serves a restrictive CSP plus no-store headers.
+The `/admin` page and `/v1/internal/*` routes are same-origin, no-CORS routes intended for controlled access from the backend's own origin. They are not meant to be called by arbitrary third-party browser code. Privileged routes intentionally disable CORS, and `/admin` serves a restrictive CSP (no inline scripts) plus no-store headers for the HTML shell; hashed `/admin/assets/*` files are cached as immutable.
 
 ### Local Browser Check
 
-After setting real local-only values for `ADMIN_CONSOLE_TOKEN` and `INTERNAL_API_TOKEN`, start the backend and open:
+After setting real local-only values for `ADMIN_CONSOLE_TOKEN` and `INTERNAL_API_TOKEN`, build the SPA (`pnpm build` in `admin/stellive-hub-admin`), start the backend, and open:
 
 ```text
-http://localhost:4000/admin/login
+http://localhost:4000/admin/sign-in
 ```
 
-Enter `ADMIN_CONSOLE_TOKEN` in the login page. After the console opens, enter `INTERNAL_API_TOKEN` in the `Internal API bearer token` field and click Refresh.
+Enter `ADMIN_CONSOLE_TOKEN` on the sign-in page. Operations that call `/v1/internal/*` also need `INTERNAL_API_TOKEN`.
 
 Do not pass either token in the URL query string. Query strings can appear in browser history, proxy logs, and server logs.
 

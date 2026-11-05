@@ -127,14 +127,12 @@ Do not read this file for merge-only work unless a conflict or failed check dire
 ### Backend Routes And Workers
 
 - `backend/stellive-hub-api/src/admin/adminAuth.ts` - Admin session and internal bearer-token authentication helpers.
-- `backend/stellive-hub-api/src/admin/adminConsoleHtml.ts` - Server-rendered admin console HTML.
 - `backend/stellive-hub-api/src/admin/adminHealthService.ts` - Admin health summary service for adapters and backend state.
-- `backend/stellive-hub-api/src/admin/adminThemeHtml.ts` - Shared admin console styling and theme HTML.
 - `backend/stellive-hub-api/src/admin/adminTypes.ts` - Admin route and console data types.
 - `backend/stellive-hub-api/src/routes/adminHubEventRoutes.ts` - Admin routes for hub event management.
 - `backend/stellive-hub-api/src/routes/adminServiceAnnouncementRoutes.ts` - Authenticated service announcement management and history routes.
 - `backend/stellive-hub-api/src/routes/serviceAnnouncementRoutes.ts` - Public announcement list, detail, and summary routes.
-- `backend/stellive-hub-api/src/routes/adminRoutes.ts` - Admin console and admin health routes.
+- `backend/stellive-hub-api/src/routes/adminRoutes.ts` - Admin SPA static serving (`/admin*`) and admin session API (`/v1/admin/session`).
 - `backend/stellive-hub-api/src/routes/appRoutes.ts` - Mobile app routes for bootstrap, devices, preferences, live status, and foreground data.
 - `backend/stellive-hub-api/src/routes/chzzkAuthRoutes.ts` - CHZZK OAuth connect and callback routes.
 - `backend/stellive-hub-api/src/routes/hubEventReadRoutes.ts` - Public hub event list, detail, calendar, widget, and summary routes.

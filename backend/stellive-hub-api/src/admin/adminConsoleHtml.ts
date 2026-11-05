@@ -1798,11 +1798,11 @@ export function renderAdminConsoleHtml(locale: AdminLocale = "en"): string {
           <button type="button" data-page-target="settings">${t("nav.settings")}</button>
         </nav>
         <div class="top-actions topbar-actions">
-          ${renderAdminLanguageHtml(locale, "/admin")}
+          ${renderAdminLanguageHtml(locale, "/admin/legacy")}
           <button class="icon-button has-tooltip" data-tooltip="Refresh adapter, secret, feature flag, and job status." title="Refresh adapter, secret, feature flag, and job status." id="refresh" type="button" aria-label="${tAttr("common.refresh")}">&#8635;</button>
           <button class="icon-button" id="theme-toggle" type="button" aria-label="Toggle dark mode">&#9790;</button>
           <button class="icon-button" type="button" aria-label="Console status">&#9825;</button>
-          <form class="logout-form" method="post" action="/admin/logout">
+          <form class="logout-form" method="post" action="/admin/legacy/logout" enctype="text/plain">
             <button class="profile" type="submit" aria-label="Log out">
               <span class="avatar" aria-hidden="true">A</span>
               <span>

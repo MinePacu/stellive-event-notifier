@@ -1,6 +1,6 @@
 import { translateAdmin, type AdminLocale } from "./adminI18n.js";
 
-export function renderAdminLanguageHtml(locale: AdminLocale, pathname: "/admin" | "/admin/login"): string {
+export function renderAdminLanguageHtml(locale: AdminLocale, pathname: "/admin/legacy"): string {
   const link = (target: AdminLocale, label: string) => {
     const current = target === locale;
     return `<a href="${pathname}?lang=${target}" lang="${target}" hreflang="${target}"${current ? ' aria-current="page" aria-pressed="true"' : ' aria-pressed="false"'}>${escapeHtml(label)}</a>`;

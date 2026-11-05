@@ -13,3 +13,8 @@ build
 android/StelliveHubAndroid/.gradle
 android/StelliveHubAndroid/app/build
 ios/StelliveHubiOS/DerivedData
+**/.npmrc
+admin/stellive-hub-admin/node_modules
+admin/stellive-hub-admin/dist
+admin/stellive-hub-admin/src-tauri/target
+admin/stellive-hub-admin/.npmrc
