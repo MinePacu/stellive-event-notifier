@@ -3,7 +3,8 @@ import type {
   DeviceTokenStatus,
   MobilePlatform,
 } from "../../../../shared/schemas/mobileApi.js";
-import type { AnnouncementsSummary } from "../../../../shared/schemas/domain.js";
+import type { AdapterHealth } from "../admin/adminTypes.js";
+import type { AnnouncementsSummary, LiveStatusHealth } from "../../../../shared/schemas/domain.js";
 import type {
   Generation,
   HubEventsSummary,
@@ -34,6 +35,10 @@ interface LiveStatusLike {
   listDiagnostics(): Promise<LiveStatus[]>;
 }
 
+interface LiveStatusHealthLike {
+  getLatestAdapterHealth(source: "chzzk"): Promise<AdapterHealth | null>;
+}
+
 interface HubEventsLike {
   summary(): Promise<HubEventsSummary> | HubEventsSummary;
 }
@@ -62,6 +67,7 @@ export interface BootstrapServiceDependencies {
   devices: DeviceLike;
   preferences: PreferenceLike;
   liveStatus: LiveStatusLike;
+  liveStatusHealth?: LiveStatusHealthLike;
   hubEvents: HubEventsLike;
   announcements?: AnnouncementsLike;
   memberProfileImages?: MemberProfileImageHydratorLike;
@@ -97,10 +103,28 @@ function toMobileDisplayLiveStatus(status: LiveStatus): LiveStatus {
   };
 }
 
+const liveStatusHealthStates = {
+  enabled: "ok",
+  rate_limited: "rate_limited",
+  verify_required: "unavailable",
+  disabled: "disabled",
+} as const;
+
+function toLiveStatusHealth(health: AdapterHealth | null): LiveStatusHealth {
+  if (!health) return { state: "disabled" };
+  return {
+    state: liveStatusHealthStates[health.status],
+    reason: health.reason,
+    lastCheckedAt: health.lastCheckedAt,
+    ...(health.lastSuccessfulAt ? { lastSuccessfulAt: health.lastSuccessfulAt } : {}),
+  };
+}
+
 export default class BootstrapService {
   private readonly clock: () => Date;
   private readonly catalogCache: ShortTtlAsyncCache<HydratedCatalog>;
   private readonly liveStatusCache: ShortTtlAsyncCache<LiveStatus[]>;
+  private readonly liveStatusHealthCache: ShortTtlAsyncCache<LiveStatusHealth | undefined>;
   private readonly hubEventsSummaryCache: ShortTtlAsyncCache<HubEventsSummary>;
 
   constructor(private readonly dependencies: BootstrapServiceDependencies) {
@@ -111,6 +135,10 @@ export default class BootstrapService {
       now,
     });
     this.liveStatusCache = new ShortTtlAsyncCache({
+      ttlMs: (dependencies.cacheTtlSeconds?.liveStatus ?? 10) * 1_000,
+      now,
+    });
+    this.liveStatusHealthCache = new ShortTtlAsyncCache({
       ttlMs: (dependencies.cacheTtlSeconds?.liveStatus ?? 10) * 1_000,
       now,
     });
@@ -136,6 +164,15 @@ export default class BootstrapService {
     const liveStatus = await this.liveStatusCache.getOrLoad(() =>
       this.dependencies.liveStatus.listDiagnostics(),
     );
+    // Additive hint: a health read failure must not fail bootstrap.
+    const liveStatusHealth = this.dependencies.liveStatusHealth
+      ? await this.liveStatusHealthCache.getOrLoad(() =>
+          this.dependencies.liveStatusHealth!
+            .getLatestAdapterHealth("chzzk")
+            .then(toLiveStatusHealth)
+            .catch(() => undefined),
+        )
+      : undefined;
     const catalog = await this.catalogCache.getOrLoad(async () => {
       const members = this.dependencies.catalog.getMembers().filter(isCatalogVisible);
       const hydratedMembers = this.dependencies.memberProfileImages
@@ -179,6 +216,7 @@ export default class BootstrapService {
       },
       preferences,
       liveStatus: liveStatus.map(toMobileDisplayLiveStatus),
+      liveStatusHealth,
       hubEventsSummary,
       announcementsSummary,
       serverTime: this.clock().toISOString(),

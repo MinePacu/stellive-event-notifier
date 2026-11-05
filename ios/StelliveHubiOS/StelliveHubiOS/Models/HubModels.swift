@@ -1969,6 +1969,74 @@ enum LiveStatusFormatter {
     }
 }
 
+struct LiveStatusHealthResponse: Codable, Equatable {
+    enum State: String, Codable, Equatable {
+        case ok
+        case rateLimited = "rate_limited"
+        case unavailable
+        case disabled
+    }
+
+    let state: State
+    let reason: String?
+    let lastCheckedAt: String?
+    let lastSuccessfulAt: String?
+
+    init(state: State, reason: String? = nil, lastCheckedAt: String? = nil, lastSuccessfulAt: String? = nil) {
+        self.state = state
+        self.reason = reason
+        self.lastCheckedAt = lastCheckedAt
+        self.lastSuccessfulAt = lastSuccessfulAt
+    }
+}
+
+enum LiveStatusHealthPolicy {
+    static let staleThreshold: TimeInterval = 5 * 60
+
+    static func parseInstant(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+    }
+
+    /// Whole minutes since the last successful poll when it is older than the threshold (state ok/rate_limited only).
+    static func staleMinutes(health: LiveStatusHealthResponse?, serverTime: String?, now: Date = Date()) -> Int? {
+        guard let health, health.state == .ok || health.state == .rateLimited,
+              let last = parseInstant(health.lastSuccessfulAt) else { return nil }
+        let reference = parseInstant(serverTime) ?? now
+        let age = reference.timeIntervalSince(last)
+        guard age > staleThreshold else { return nil }
+        return Int(age / 60)
+    }
+
+    static func sourceLabel(
+        isLiveListEmpty: Bool,
+        health: LiveStatusHealthResponse?,
+        serverTime: String?,
+        now: Date = Date()
+    ) -> String {
+        switch health?.state {
+        case .unavailable: return "서버 연결됨 · 라이브 상태 확인 불가"
+        case .disabled: return "서버 연결됨 · 라이브 수집 꺼짐"
+        default: break
+        }
+        if let minutes = staleMinutes(health: health, serverTime: serverTime, now: now) {
+            return "서버 연결됨 · 라이브 정보 지연 (\(minutes)분 전 확인)"
+        }
+        return isLiveListEmpty ? "서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음" : "서버 liveStatus"
+    }
+
+    static func notice(health: LiveStatusHealthResponse?, serverTime: String?, now: Date = Date()) -> String? {
+        switch health?.state {
+        case .unavailable: return "지금은 방송 상태를 확인할 수 없어요. 방송 중이어도 표시되지 않을 수 있어요."
+        case .disabled: return "라이브 상태 수집이 꺼져 있어요."
+        default: break
+        }
+        return staleMinutes(health: health, serverTime: serverTime, now: now).map { "라이브 정보가 \($0)분 전 기준이에요." }
+    }
+}
+
 struct GenerationFilter: Identifiable, Hashable {
     let id: String
     let displayName: String

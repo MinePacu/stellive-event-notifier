@@ -195,6 +195,75 @@ final class ServerLiveStatusMappingTests: XCTestCase {
     }
 }
 
+final class LiveStatusHealthPolicyTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func iso(_ offset: TimeInterval) -> String {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.string(from: now.addingTimeInterval(offset))
+    }
+
+    private func health(_ state: LiveStatusHealthResponse.State, lastOK: TimeInterval? = nil) -> LiveStatusHealthResponse {
+        .init(state: state, lastSuccessfulAt: lastOK.map(iso))
+    }
+
+    private func label(_ h: LiveStatusHealthResponse?, empty: Bool = true, serverTime: String? = nil) -> String {
+        LiveStatusHealthPolicy.sourceLabel(isLiveListEmpty: empty, health: h, serverTime: serverTime, now: now)
+    }
+
+    func testAbsentHealthKeepsLegacyLabels() {
+        XCTAssertEqual(label(nil), "서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음")
+        XCTAssertEqual(label(nil, empty: false), "서버 liveStatus")
+        XCTAssertNil(LiveStatusHealthPolicy.notice(health: nil, serverTime: nil, now: now))
+    }
+
+    func testUnavailableAndDisabled() {
+        XCTAssertEqual(label(health(.unavailable)), "서버 연결됨 · 라이브 상태 확인 불가")
+        XCTAssertEqual(label(health(.disabled)), "서버 연결됨 · 라이브 수집 꺼짐")
+        XCTAssertNotNil(LiveStatusHealthPolicy.notice(health: health(.unavailable), serverTime: nil, now: now))
+        XCTAssertEqual(LiveStatusHealthPolicy.notice(health: health(.disabled), serverTime: nil, now: now), "라이브 상태 수집이 꺼져 있어요.")
+    }
+
+    func testOkAndRateLimitedFresh() {
+        XCTAssertEqual(label(health(.ok, lastOK: -60), empty: false), "서버 liveStatus")
+        XCTAssertEqual(label(health(.rateLimited)), "서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음")
+    }
+
+    func testStaleBoundary() {
+        XCTAssertNil(LiveStatusHealthPolicy.staleMinutes(health: health(.ok, lastOK: -300), serverTime: nil, now: now))
+        XCTAssertEqual(LiveStatusHealthPolicy.staleMinutes(health: health(.ok, lastOK: -301), serverTime: nil, now: now), 5)
+        XCTAssertEqual(label(health(.rateLimited, lastOK: -420)), "서버 연결됨 · 라이브 정보 지연 (7분 전 확인)")
+        XCTAssertEqual(LiveStatusHealthPolicy.notice(health: health(.ok, lastOK: -420), serverTime: nil, now: now), "라이브 정보가 7분 전 기준이에요.")
+    }
+
+    func testServerTimeOverridesDeviceClock() {
+        let h = health(.ok, lastOK: -600)
+        // Server says only 1 minute after last success even though device clock is 10 minutes later.
+        XCTAssertNil(LiveStatusHealthPolicy.staleMinutes(health: h, serverTime: iso(-540), now: now))
+        XCTAssertEqual(LiveStatusHealthPolicy.staleMinutes(health: h, serverTime: nil, now: now), 10)
+    }
+
+    func testFractionalAndPlainSecondsParse() {
+        XCTAssertNotNil(LiveStatusHealthPolicy.parseInstant("2026-10-20T03:23:58.345Z"))
+        XCTAssertNotNil(LiveStatusHealthPolicy.parseInstant("2026-10-20T03:23:58Z"))
+        XCTAssertNil(LiveStatusHealthPolicy.parseInstant("garbage"))
+    }
+
+    func testBootstrapDecodesHealthAndUnknownStateAsNil() throws {
+        func decode(_ healthJSON: String) throws -> BootstrapResponse {
+            let json = """
+            {"config":{"unofficialProject":true,"catalogVersion":"v","officialYoutubeLiveExcluded":true,"hubCalendarEnabled":true},"liveStatusHealth":\(healthJSON)}
+            """
+            return try JSONDecoder().decode(BootstrapResponse.self, from: Data(json.utf8))
+        }
+        let ok = try decode(#"{"state":"rate_limited","lastSuccessfulAt":"2026-10-20T03:23:58.345Z"}"#)
+        XCTAssertEqual(ok.liveStatusHealth?.state, .rateLimited)
+        XCTAssertEqual(ok.liveStatusHealth?.lastSuccessfulAt, "2026-10-20T03:23:58.345Z")
+        XCTAssertNil(try decode(#"{"state":"brand_new"}"#).liveStatusHealth)
+    }
+}
+
 private final class ServerLiveStatusStubURLProtocol: URLProtocol {
     static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
 

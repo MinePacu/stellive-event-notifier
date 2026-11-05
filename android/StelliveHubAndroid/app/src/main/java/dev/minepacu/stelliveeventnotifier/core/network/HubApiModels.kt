@@ -376,6 +376,13 @@ data class HubCalendarWidgetSnapshotDto(
     val items: List<Map<String, Any?>> = emptyList(),
 )
 
+data class LiveStatusHealthDto(
+    val state: String? = null,
+    val reason: String? = null,
+    val lastCheckedAt: String? = null,
+    val lastSuccessfulAt: String? = null,
+)
+
 data class BootstrapResponseDto(
     val config: MobileConfigDto,
     val device: BootstrapDeviceDto? = null,
@@ -387,6 +394,7 @@ data class BootstrapResponseDto(
     val hubEventsSummary: HubEventsSummaryDto? = null,
     val hubCalendarWidgetSnapshot: HubCalendarWidgetSnapshotDto? = null,
     val announcementsSummary: AnnouncementsSummaryDto? = null,
+    val liveStatusHealth: LiveStatusHealthDto? = null,
     val serverTime: String? = null,
 ) {
     val effectiveCatalog: BootstrapCatalogDto

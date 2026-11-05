@@ -488,4 +488,44 @@ describe("BootstrapService", () => {
     expect(JSON.stringify(bootstrap)).not.toContain("rawPayload");
     expect(JSON.stringify(bootstrap)).not.toContain("deviceToken");
   });
+
+  describe("liveStatusHealth", () => {
+    const build = (getLatestAdapterHealth: () => Promise<any>) =>
+      new BootstrapService({
+        catalog: { getGenerations: () => [], getMembers: () => [] },
+        devices: { getDevice: async () => undefined },
+        preferences: { listForDevice: async () => [] },
+        liveStatus: { listDiagnostics: async () => [] },
+        liveStatusHealth: { getLatestAdapterHealth },
+        hubEvents: { summary: async () => ({ openCount: 0, upcomingCount: 0, closingSoonCount: 0, preview: [] }) },
+      });
+    const base = { source: "chzzk", reason: "r", lastCheckedAt: "2026-10-20T00:00:00.000Z" };
+
+    it.each([
+      ["enabled", "ok"],
+      ["rate_limited", "rate_limited"],
+      ["verify_required", "unavailable"],
+      ["disabled", "disabled"],
+    ])("maps %s to %s", async (status, state) => {
+      const res = await build(async () => ({ ...base, status, lastSuccessfulAt: "2026-10-19T00:00:00.000Z" })).getBootstrap({});
+      expect(res.liveStatusHealth).toEqual({
+        state,
+        reason: "r",
+        lastCheckedAt: base.lastCheckedAt,
+        lastSuccessfulAt: "2026-10-19T00:00:00.000Z",
+      });
+    });
+
+    it("reports disabled when no health record exists", async () => {
+      const res = await build(async () => null).getBootstrap({});
+      expect(res.liveStatusHealth).toEqual({ state: "disabled" });
+    });
+
+    it("omits the field when the health read fails", async () => {
+      const res = await build(async () => {
+        throw new Error("db down");
+      }).getBootstrap({});
+      expect(res.liveStatusHealth).toBeUndefined();
+    });
+  });
 });

@@ -132,16 +132,18 @@ final class MockHubStore: ObservableObject {
 
     @Published var liveMemberPriorityIDs: [String] = []
     @Published private(set) var liveStatusSourceLabel = "앱 내 목업"
+    @Published private(set) var liveStatusNotice: String?
     @Published private(set) var serverConnectionDebugLogs = ["bootstrap: 대기 중"]
 
     func applyBootstrap(_ response: BootstrapResponse) {
         mergeProfileImages(response.effectiveCatalog.members)
+        liveStatusNotice = LiveStatusHealthPolicy.notice(health: response.liveStatusHealth, serverTime: response.serverTime)
         guard response.liveStatus.isEmpty == false else {
-            liveStatusSourceLabel = "서버 연결됨 · 라이브 폴링 꺼짐/데이터 없음"
+            liveStatusSourceLabel = LiveStatusHealthPolicy.sourceLabel(isLiveListEmpty: true, health: response.liveStatusHealth, serverTime: response.serverTime)
             recordServerConnectionDebugLog("bootstrap: \(liveStatusSourceLabel)")
             return
         }
-        liveStatusSourceLabel = "서버 liveStatus"
+        liveStatusSourceLabel = LiveStatusHealthPolicy.sourceLabel(isLiveListEmpty: false, health: response.liveStatusHealth, serverTime: response.serverTime)
         recordServerConnectionDebugLog("bootstrap: \(liveStatusSourceLabel) · \(response.liveStatus.count)개")
         let liveStatusByMemberID = Dictionary(uniqueKeysWithValues: response.liveStatus.map { ($0.memberId, $0) })
         members = members.map { member in
@@ -187,6 +189,7 @@ final class MockHubStore: ObservableObject {
 
     func markBootstrapFailed() {
         liveStatusSourceLabel = "서버 연결 실패 · 앱 내 목업"
+        liveStatusNotice = nil
         recordServerConnectionDebugLog("bootstrap: \(liveStatusSourceLabel)")
     }
 

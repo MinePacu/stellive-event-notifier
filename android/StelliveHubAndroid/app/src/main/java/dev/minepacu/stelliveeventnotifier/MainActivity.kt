@@ -343,6 +343,7 @@ internal lateinit var binding: ActivityMainBinding
     }
     internal var serverMembers: List<HubMember>? = null
     private var liveStatusSourceLabel = "앱 내 목업"
+    internal var liveStatusNotice: String? = null
     internal var debugModeEnabled = false
     internal var systemTopInsetPx = 0
     private var systemBottomInsetPx = 0
@@ -671,6 +672,7 @@ private var notificationPermissionRequested = false
             announcementsSummary = state.announcementsSummary
             announcementReadStore.initializeSummary(announcementsSummary.items)
             liveStatusSourceLabel = state.liveStatusSourceLabel
+            liveStatusNotice = state.liveStatusNotice
             recordServerConnectionLog("bootstrap: $liveStatusSourceLabel")
             val screen = navigationHistory.currentScreen
             val scrollY = currentContentScrollY()

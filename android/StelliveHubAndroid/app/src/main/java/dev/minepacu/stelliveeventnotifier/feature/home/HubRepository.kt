@@ -22,6 +22,7 @@ data class HubDataState(
     val hubEventsSummary: HubEventsSummary,
     val announcementsSummary: AnnouncementsSummary = AnnouncementsSummary(),
     val liveStatusSourceLabel: String = "앱 내 목업",
+    val liveStatusNotice: String? = null,
 )
 
 /** The server-synced subset of the global preference rule. */
