@@ -13,7 +13,7 @@ final class SongUiPolicyTests: XCTestCase {
 
     func testSongFiltersExcludeNonSongCategories() {
         XCTAssertEqual(IOSSongPagePolicy.generationFilters.map(\.id), ["all", "gen1", "gen2", "gen3", "gen4"])
-        XCTAssertEqual(IOSSongPagePolicy.generationFilters.map(\.label), ["전체", "1기생", "2기생", "3기생"])
+        XCTAssertEqual(IOSSongPagePolicy.generationFilters.map(\.label), ["전체", "1기생", "2기생", "3기생", "4기생"])
         XCTAssertEqual(IOSSongPagePolicy.typeFilters.map(\.id), ["all", "original", "cover"])
         XCTAssertEqual(IOSSongPagePolicy.generationFilters.filter { $0.id == "all" }.count, 1)
         XCTAssertEqual(IOSSongPagePolicy.typeFilters.filter { $0.id == "all" }.count, 1)
