@@ -118,6 +118,44 @@ export interface HubEventImage {
   sourceUrl?: string
 }
 
+export const HUB_EVENT_GOODS_SALES_CHANNELS = [
+  'onsite',
+  'online',
+  'both',
+] as const
+export type HubEventGoodsSalesChannel =
+  (typeof HUB_EVENT_GOODS_SALES_CHANNELS)[number]
+
+export interface HubEventGoodsItem {
+  id: string
+  scheduleItemId?: string
+  name: string
+  groupLabel?: string
+  memberIds: string[]
+  priceKrw?: number
+  priceNote?: string
+  salesChannel: HubEventGoodsSalesChannel
+  purchaseLimit?: number
+  limitNote?: string
+  isBonus: boolean
+  purchaseUrl?: string
+  image?: HubEventImage
+  sortOrder: number
+  cancelledAt?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export const HUB_EVENT_GOODS_LIST_IMAGE_KINDS = ['md', 'bonus'] as const
+export type HubEventGoodsListImageKind =
+  (typeof HUB_EVENT_GOODS_LIST_IMAGE_KINDS)[number]
+
+/** One official MD / bonus notice page image (`goodsListImages`). */
+export interface HubEventGoodsListImage extends HubEventImage {
+  kind?: HubEventGoodsListImageKind
+  altText?: string
+}
+
 export interface AdminHubEvent {
   id: string
   category: HubEventCategory
@@ -142,6 +180,9 @@ export interface AdminHubEvent {
   venueName?: string
   venueAddress?: string
   image?: HubEventImage
+  /** Only on the admin detail response (GET /v1/admin/hub-events/:id). */
+  goodsItems?: HubEventGoodsItem[]
+  goodsListImages?: HubEventGoodsListImage[]
   notificationEligible: boolean
   createdAt: string
   updatedAt: string

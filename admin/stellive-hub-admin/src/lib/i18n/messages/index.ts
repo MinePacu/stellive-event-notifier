@@ -4,6 +4,7 @@ import { auditMessages } from './audit'
 import { authMessages } from './auth'
 import { commonMessages } from './common'
 import { dashboardMessages } from './dashboard'
+import { goodsMessages } from './goods'
 import { hubEventsMessages } from './hubEvents'
 import { navMessages } from './nav'
 import { operationsMessages } from './operations'
@@ -17,6 +18,7 @@ const catalogs = [
   settingsMessages,
   dashboardMessages,
   hubEventsMessages,
+  goodsMessages,
   announcementsMessages,
   operationsMessages,
   auditMessages,

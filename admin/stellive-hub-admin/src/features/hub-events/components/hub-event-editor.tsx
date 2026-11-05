@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useForm, useWatch } from 'react-hook-form'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CheckCircle2,
   Loader2,
@@ -46,6 +46,12 @@ import {
   validationFieldToFormField,
 } from '../form'
 import {
+  buildGoodsGalleryPayload,
+  type GalleryDraft,
+  toGalleryDraft,
+} from '../goods/goods-gallery'
+import { GoodsTab, type RunGoodsMutation } from '../goods/goods-tab'
+import {
   cancelScheduleItem,
   getHubEvent,
   hubEventKeys,
@@ -84,6 +90,20 @@ type HubEventEditorProps = {
   onClose: () => void
 }
 
+type GoodsMutationVars = {
+  label: string
+  run: () => Promise<AdminHubEvent>
+}
+
+type GalleryState = { rows: GalleryDraft[]; dirty: boolean }
+
+function toGalleryState(event: AdminHubEvent | null): GalleryState {
+  return {
+    rows: (event?.goodsListImages ?? []).map((image) => toGalleryDraft(image)),
+    dirty: false,
+  }
+}
+
 type ScheduleMutationVars = {
   label: string
   run: () => Promise<AdminHubEvent>
@@ -116,7 +136,15 @@ export function HubEventEditor({
   >()
   const [pendingAction, setPendingAction] =
     useState<HubEventLifecycleAction | null>(null)
-  const [confirmSaveFirst, setConfirmSaveFirst] = useState(false)
+  // What to add once a new event has been saved as a draft.
+  const [saveFirstTarget, setSaveFirstTarget] = useState<
+    'schedule' | 'goods' | null
+  >(null)
+  const [goodsAddRequest, setGoodsAddRequest] = useState(0)
+  const [gallery, setGallery] = useState<GalleryState>(() =>
+    toGalleryState(initialEvent)
+  )
+  const category = useWatch({ control: form.control, name: 'category' })
   const [confirmDiscard, setConfirmDiscard] = useState(false)
 
   const scheduleItems = useMemo(
@@ -127,7 +155,8 @@ export function HubEventEditor({
   const deleted = current?.publicationState === 'deleted'
   // Read during render so react-hook-form keeps `isDirty` up to date for the
   // handlers below (formState is a subscription proxy).
-  const isDirty = form.formState.isDirty
+  const formDirty = form.formState.isDirty
+  const isDirty = formDirty || gallery.dirty
 
   // Server validation errors that point into links / schedule items.
   const { linkErrors, invalidScheduleIndexes } = useMemo(() => {
@@ -157,9 +186,18 @@ export function HubEventEditor({
   }
 
   const acceptEvent = (event: AdminHubEvent, resetForm: boolean) => {
-    setCurrent(event)
+    // Only the admin detail and goods responses carry goodsItems; keep the
+    // loaded list when another response for the same event omits it.
+    setCurrent((previous) =>
+      event.goodsItems === undefined && previous?.id === event.id
+        ? { ...event, goodsItems: previous.goodsItems }
+        : event
+    )
     onCurrentChange(event)
-    if (resetForm) form.reset(toFormValues(event))
+    if (resetForm) {
+      form.reset(toFormValues(event))
+      setGallery(toGalleryState(event))
+    }
   }
 
   const applyValidation = (result: HubEventValidationResult) => {
@@ -197,6 +235,9 @@ export function HubEventEditor({
   const buildInput = () => {
     try {
       const input = toHubEventInput(form.getValues())
+      // An untouched gallery is not sent, so it is never cleared by accident.
+      if (gallery.dirty)
+        input.goodsListImages = buildGoodsGalleryPayload(gallery.rows)
       setClientError(null)
       return input
     } catch (error) {
@@ -254,7 +295,7 @@ export function HubEventEditor({
         return
       }
       if (updated && typeof updated === 'object' && 'id' in updated)
-        acceptEvent(updated, !form.formState.isDirty)
+        acceptEvent(updated, !form.formState.isDirty && !gallery.dirty)
     },
     onError: (error) => {
       setPendingAction(null)
@@ -266,7 +307,7 @@ export function HubEventEditor({
     mutationFn: (vars: ScheduleMutationVars) => vars.run(),
     meta: { suppressErrorToast: true },
     onSuccess: (updated, vars) => {
-      acceptEvent(updated, !form.formState.isDirty)
+      acceptEvent(updated, !form.formState.isDirty && !gallery.dirty)
       setConflict(null)
       if (vars.fromDialog) {
         setScheduleDialog(null)
@@ -297,10 +338,46 @@ export function HubEventEditor({
     },
   })
 
+  const goodsMutation = useMutation({
+    mutationFn: (vars: GoodsMutationVars) => vars.run(),
+    meta: { suppressErrorToast: true },
+    onSuccess: (updated, vars) => {
+      acceptEvent(updated, !form.formState.isDirty && !gallery.dirty)
+      setConflict(null)
+      refreshQueries(updated.id)
+      done(vars.label)
+    },
+    onError: handleError,
+  })
+
+  const runGoods: RunGoodsMutation = (label, run) => {
+    if (!current?.id) return Promise.reject(new Error('hub_event_required'))
+    const { id, revision } = current
+    return goodsMutation.mutateAsync({ label, run: () => run(id, revision) })
+  }
+
+  // List rows have no goodsItems; the admin detail endpoint does.
+  const currentId = current?.id
+  const goodsMissing = Boolean(currentId) && current?.goodsItems === undefined
+  const goodsQuery = useQuery({
+    queryKey: [...hubEventKeys.all, 'detail', currentId],
+    queryFn: () => getHubEvent(currentId as string),
+    enabled: goodsMissing,
+    staleTime: 0,
+    gcTime: 0,
+  })
+  const goodsItems =
+    current?.goodsItems ??
+    (goodsQuery.data && goodsQuery.data.id === currentId
+      ? (goodsQuery.data.goodsItems ?? [])
+      : undefined)
+  const goodsEvent =
+    current && goodsItems !== undefined ? { ...current, goodsItems } : current
+
   const reloadMutation = useMutation({
     mutationFn: (id: string) => getHubEvent(id),
     onSuccess: (latest) => {
-      acceptEvent(latest, !form.formState.isDirty)
+      acceptEvent(latest, !form.formState.isDirty && !gallery.dirty)
       setConflict(null)
       refreshQueries(latest.id)
     },
@@ -311,6 +388,7 @@ export function HubEventEditor({
     saveMutation.isPending ||
     lifecycleMutation.isPending ||
     scheduleMutation.isPending ||
+    goodsMutation.isPending ||
     reloadMutation.isPending
 
   const handleValidate = () => {
@@ -335,7 +413,7 @@ export function HubEventEditor({
 
   const handleAddSchedule = () => {
     if (!current?.id) {
-      setConfirmSaveFirst(true)
+      setSaveFirstTarget('schedule')
       return
     }
     setScheduleErrors(undefined)
@@ -343,19 +421,24 @@ export function HubEventEditor({
   }
 
   const handleSaveThenAdd = async () => {
+    const target = saveFirstTarget
     const input = buildInput()
     if (!input) {
-      setConfirmSaveFirst(false)
+      setSaveFirstTarget(null)
       return
     }
     try {
       await saveMutation.mutateAsync(input)
     } catch {
       // Already reported by the mutation's onError.
-      setConfirmSaveFirst(false)
+      setSaveFirstTarget(null)
       return
     }
-    setConfirmSaveFirst(false)
+    setSaveFirstTarget(null)
+    if (target === 'goods') {
+      setGoodsAddRequest((value) => value + 1)
+      return
+    }
     setScheduleErrors(undefined)
     setScheduleDialog({ item: null })
   }
@@ -519,6 +602,12 @@ export function HubEventEditor({
               <TabsTrigger value='schedule'>
                 {t('hubEvent.scheduleTab', { count: scheduleItems.length })}
               </TabsTrigger>
+              <TabsTrigger value='goods'>
+                {t('goods.tab', {
+                  count: (goodsItems ?? []).filter((item) => !item.cancelledAt)
+                    .length,
+                })}
+              </TabsTrigger>
               <TabsTrigger value='history'>
                 {t('hubEvent.historyTab')}
               </TabsTrigger>
@@ -572,6 +661,28 @@ export function HubEventEditor({
                 }
               />
             </TabsContent>
+            <TabsContent value='goods'>
+              <GoodsTab
+                event={goodsEvent}
+                category={category}
+                scheduleItems={scheduleItems}
+                loading={goodsItems === undefined && goodsQuery.isPending}
+                loadError={
+                  goodsQuery.isError ? describeApiError(goodsQuery.error) : null
+                }
+                disabled={busy || deleted}
+                addRequest={goodsAddRequest}
+                onRequireSave={() => setSaveFirstTarget('goods')}
+                runGoods={runGoods}
+                gallery={{
+                  rows: gallery.rows,
+                  dirty: gallery.dirty,
+                  serverErrors: validation?.errors ?? [],
+                  defaultSourceUrl: () => form.getValues('sourceUrl').trim(),
+                  onChange: (rows) => setGallery({ rows, dirty: true }),
+                }}
+              />
+            </TabsContent>
             <TabsContent value='history'>
               <AuditLog eventId={current?.id} />
             </TabsContent>
@@ -622,11 +733,23 @@ export function HubEventEditor({
         ) : null}
 
         <ConfirmDialog
-          open={confirmSaveFirst}
-          onOpenChange={(open) => !open && !busy && setConfirmSaveFirst(false)}
-          title={t('hubEvent.scheduleCreate')}
-          desc={t('hubEvent.saveBeforeSchedule')}
-          confirmText={t('hubEvent.saveDraftThenAdd')}
+          open={saveFirstTarget !== null}
+          onOpenChange={(open) => !open && !busy && setSaveFirstTarget(null)}
+          title={
+            saveFirstTarget === 'goods'
+              ? t('goods.dialogCreate')
+              : t('hubEvent.scheduleCreate')
+          }
+          desc={
+            saveFirstTarget === 'goods'
+              ? t('goods.saveBeforeAdd')
+              : t('hubEvent.saveBeforeSchedule')
+          }
+          confirmText={
+            saveFirstTarget === 'goods'
+              ? t('goods.saveDraftThenAdd')
+              : t('hubEvent.saveDraftThenAdd')
+          }
           isLoading={saveMutation.isPending}
           handleConfirm={() => void handleSaveThenAdd()}
         />
