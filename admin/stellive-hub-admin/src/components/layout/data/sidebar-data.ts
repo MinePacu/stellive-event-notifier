@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import {
   CalendarDays,
+  ExternalLink,
   LayoutDashboard,
   Megaphone,
   ScrollText,
@@ -8,6 +9,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import { useT } from '@/lib/i18n'
+import { isTauri } from '@/lib/runtime'
 import { type SidebarData } from '../types'
 
 /** Sidebar/command-menu navigation, translated for the current locale. */
@@ -30,6 +32,19 @@ export function useSidebarData(): SidebarData {
               url: '/announcements',
               icon: Megaphone,
             },
+            // The server console still has the goods list and MD gallery
+            // editors. It needs the web admin session cookie, so the desktop
+            // app (bearer token only) does not link to it.
+            ...(isTauri()
+              ? []
+              : [
+                  {
+                    title: t('nav.legacyConsole'),
+                    url: '/admin/legacy',
+                    icon: ExternalLink,
+                    external: true,
+                  },
+                ]),
           ],
         },
         {

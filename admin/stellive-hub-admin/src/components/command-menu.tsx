@@ -48,13 +48,18 @@ export function CommandMenu() {
           {sidebarData.navGroups.map((group) => (
             <CommandGroup key={group.title} heading={group.title}>
               {group.items.map((navItem, i) => {
-                if (navItem.url)
+                if (navItem.url) {
+                  const url = navItem.url
                   return (
                     <CommandItem
                       key={`${navItem.url}-${i}`}
                       value={navItem.title}
                       onSelect={() => {
-                        runCommand(() => navigate({ to: navItem.url }))
+                        runCommand(() =>
+                          navItem.external
+                            ? window.location.assign(url)
+                            : navigate({ to: url })
+                        )
                       }}
                     >
                       <div className='flex size-4 items-center justify-center'>
@@ -63,6 +68,7 @@ export function CommandMenu() {
                       {navItem.title}
                     </CommandItem>
                   )
+                }
 
                 return navItem.items?.map((subItem, i) => (
                   <CommandItem

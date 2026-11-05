@@ -8,6 +8,8 @@ type BaseNavItem = {
 
 type NavLink = BaseNavItem & {
   url: LinkProps['to'] | (string & {})
+  /** Full-page link outside the SPA router (e.g. the server-rendered legacy console). */
+  external?: boolean
   items?: never
 }
 

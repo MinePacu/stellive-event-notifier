@@ -10,6 +10,7 @@ export const navMessages = defineMessages({
     'nav.audit': 'Audit',
     'nav.settings': 'Settings',
     'nav.logout': 'Log out',
+    'nav.legacyConsole': 'Legacy console (goods editor)',
     'page.dashboardDescription':
       'Admin session and internal token are separate.',
     'page.hubEventsDescription':
@@ -35,6 +36,7 @@ export const navMessages = defineMessages({
     'nav.audit': '감사',
     'nav.settings': '설정',
     'nav.logout': '로그아웃',
+    'nav.legacyConsole': '기존 콘솔 (굿즈 편집)',
     'page.dashboardDescription': '관리자 세션과 내부 토큰은 별도로 관리됩니다.',
     'page.hubEventsDescription':
       '허브 이벤트를 작성, 검증, 게시하고 검토합니다.',
