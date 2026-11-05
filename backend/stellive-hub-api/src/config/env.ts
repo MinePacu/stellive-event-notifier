@@ -61,6 +61,8 @@ const envSchema = z
     DATABASE_URL: z.string().min(1),
     REDIS_URL: optionalString(),
     HUB_EVENTS_STORAGE_MODE: z.enum(["memory", "prisma"]).default("memory"),
+    HUB_EVENT_GOODS_GALLERY_ENABLED: booleanFlag(true),
+    HUB_EVENT_GOODS_GALLERY_LAYOUT: z.enum(["split", "single"]).catch("split").default("split"),
     BOOTSTRAP_CATALOG_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(30),
     BOOTSTRAP_LIVE_STATUS_CACHE_TTL_SECONDS: z.coerce.number().int().positive().max(10).default(10),
     BOOTSTRAP_HUB_EVENTS_SUMMARY_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(30),

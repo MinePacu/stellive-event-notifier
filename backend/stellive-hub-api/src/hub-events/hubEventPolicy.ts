@@ -112,7 +112,7 @@ function validateTags(errors: HubEventValidationError[], rawTags: unknown) {
   });
 }
 
-function hasHttpsUrl(value: string): boolean {
+export function hasHttpsUrl(value: string): boolean {
   try {
     return new URL(value).protocol === "https:";
   } catch {
@@ -175,20 +175,24 @@ function validateLinks(
   });
 }
 
-function validateHubEventImageForAdmin(errors: HubEventValidationError[], input: Record<string, unknown>) {
+export function validateHubEventImageForAdmin(
+  errors: HubEventValidationError[],
+  input: Record<string, unknown>,
+  imageField = "image"
+) {
   if (!("image" in input) || input.image === undefined || input.image === null) {
     return;
   }
 
   if (!isRecord(input.image)) {
-    addError(errors, "image", "image_policy_state_not_allowed", "image must be an object.");
+    addError(errors, imageField, "image_policy_state_not_allowed", "image must be an object.");
     return;
   }
 
   const image = input.image;
   const policyState = stringField(image, "policyState");
   if (!policyState || !allowedImagePolicyStates.has(policyState)) {
-    addError(errors, "image.policyState", "image_policy_state_not_allowed", "image policyState is not allowed.");
+    addError(errors, `${imageField}.policyState`, "image_policy_state_not_allowed", "image policyState is not allowed.");
     return;
   }
 
@@ -198,7 +202,7 @@ function validateHubEventImageForAdmin(errors: HubEventValidationError[], input:
   if (policyState === "none" && hasReviewMetadata) {
     addError(
       errors,
-      "image.policyState",
+      `${imageField}.policyState`,
       "image_policy_state_not_allowed",
       "image policyState none cannot be saved with image metadata."
     );
@@ -207,7 +211,7 @@ function validateHubEventImageForAdmin(errors: HubEventValidationError[], input:
 
   for (const field of imageAssetFields) {
     if (field in image) {
-      addError(errors, `image.${field}`, "image_asset_fields_not_allowed", "Image binary or local asset fields are not allowed.");
+      addError(errors, `${imageField}.${field}`, "image_asset_fields_not_allowed", "Image binary or local asset fields are not allowed.");
     }
   }
 
@@ -220,15 +224,15 @@ function validateHubEventImageForAdmin(errors: HubEventValidationError[], input:
   const sourceUrl = stringField(image, "sourceUrl")?.trim();
 
   if (!url) {
-    addError(errors, "image.url", "image_url_not_https", "Displayable image metadata requires an HTTPS image URL.");
+    addError(errors, `${imageField}.url`, "image_url_not_https", "Displayable image metadata requires an HTTPS image URL.");
   } else if (!hasHttpsUrl(url)) {
-    addError(errors, "image.url", "image_url_not_https", "Image URL must be HTTPS.");
+    addError(errors, `${imageField}.url`, "image_url_not_https", "Image URL must be HTTPS.");
   }
 
   if (!sourceLabel || !sourceUrl) {
-    addError(errors, "image.source", "image_source_required", "Displayable image metadata requires sourceLabel and sourceUrl.");
+    addError(errors, `${imageField}.source`, "image_source_required", "Displayable image metadata requires sourceLabel and sourceUrl.");
   } else if (!hasHttpsUrl(sourceUrl)) {
-    addError(errors, "image.sourceUrl", "image_url_not_https", "Image sourceUrl must be HTTPS.");
+    addError(errors, `${imageField}.sourceUrl`, "image_url_not_https", "Image sourceUrl must be HTTPS.");
   }
 }
 

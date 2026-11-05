@@ -8,7 +8,11 @@ import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarEntryKind
 import dev.minepacu.stelliveeventnotifier.core.model.HubCalendarSpecialDayKind
 import dev.minepacu.stelliveeventnotifier.core.model.HubEvent
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventCategory
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsItem
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsListLayout
+import dev.minepacu.stelliveeventnotifier.core.model.HubEventGoodsSalesChannel
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventImage
+import dev.minepacu.stelliveeventnotifier.feature.hubevents.HubEventGoodsGalleryPolicy
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventImagePolicyState
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventParticipationMode
 import dev.minepacu.stelliveeventnotifier.core.model.HubEventScheduleItem
@@ -44,6 +48,7 @@ import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarEntryDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarFetchResult
 import dev.minepacu.stelliveeventnotifier.core.network.HubCalendarResponseDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubEventDto
+import dev.minepacu.stelliveeventnotifier.core.network.HubEventGoodsItemDto
 import dev.minepacu.stelliveeventnotifier.core.network.HubApiClient
 import dev.minepacu.stelliveeventnotifier.core.network.HubNetworkResult
 import dev.minepacu.stelliveeventnotifier.core.network.LiveStatusDto
@@ -193,14 +198,16 @@ class ServerHubRepository(
         return eventCache.values.takeIf { it.isNotEmpty() }?.toList() ?: fallback.hubEvents(filterId, from, to)
     }
 
-    override suspend fun hubEventDetail(id: String): HubEvent? {
+    override suspend fun hubEventDetail(id: String): HubEvent? = hubEventDetailResult(id).event
+
+    override suspend fun hubEventDetailResult(id: String): HubEventDetailResult {
         val response = remoteDataSource.hubEvent(id)
         if (response is HubNetworkResult.Success) {
-            val event = response.value.toHubEventOrNull() ?: return eventCache[id]
+            val event = response.value.toHubEventOrNull() ?: return HubEventDetailResult(eventCache[id], isFresh = false)
             eventCache[id] = event
-            return event
+            return HubEventDetailResult(event, isFresh = true)
         }
-        return eventCache[id]
+        return HubEventDetailResult(eventCache[id], isFresh = false)
     }
 
     override suspend fun announcements(cursor: String?): ServiceAnnouncementListResult {
@@ -577,6 +584,40 @@ class ServerHubRepository(
             notificationEligible = notificationEligible,
             updatedAt = updatedAt,
             tags = tags.toHubEventTags(),
+            goodsItems = goodsItems.mapNotNull { it.toGoodsItemOrNull() }
+                .sortedWith(compareBy<HubEventGoodsItem> { it.sortOrder }.thenBy { it.id }),
+            goodsCount = goodsCount?.coerceAtLeast(0) ?: 0,
+            goodsListImages = HubEventGoodsGalleryPolicy.fromDtos(goodsListImages),
+            goodsListLayout = HubEventGoodsListLayout.fromApiValue(goodsListLayout),
+        )
+    }
+
+    private fun HubEventGoodsItemDto.toGoodsItemOrNull(): HubEventGoodsItem? {
+        val itemId = id?.trim()?.takeIf(String::isNotEmpty) ?: return null
+        val itemName = name?.trim()?.takeIf(String::isNotEmpty) ?: return null
+        return HubEventGoodsItem(
+            id = itemId,
+            scheduleItemId = scheduleItemId?.trim()?.takeIf(String::isNotEmpty),
+            name = itemName,
+            groupLabel = groupLabel?.trim()?.takeIf(String::isNotEmpty),
+            memberIds = memberIds.map(String::trim).filter(String::isNotEmpty).distinct(),
+            priceKrw = priceKrw?.takeIf { it >= 0 },
+            priceNote = priceNote?.trim()?.takeIf(String::isNotEmpty),
+            salesChannel = HubEventGoodsSalesChannel.fromApiValue(salesChannel),
+            purchaseLimit = purchaseLimit?.takeIf { it >= 1 },
+            limitNote = limitNote?.trim()?.takeIf(String::isNotEmpty),
+            isBonus = isBonus,
+            purchaseUrl = purchaseUrl?.trim()?.takeIf { it.startsWith("https://", ignoreCase = true) },
+            image = image?.let {
+                HubEventImage(
+                    policyState = it.policyState.toImagePolicyState(),
+                    url = it.url,
+                    sourceLabel = it.sourceLabel,
+                    sourceUrl = it.sourceUrl,
+                    altText = it.altText,
+                )
+            },
+            sortOrder = sortOrder,
         )
     }
 

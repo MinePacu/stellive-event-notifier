@@ -47,7 +47,13 @@ function createFakeService() {
     updateScheduleItem: vi.fn(async () => event),
     deleteScheduleItem: vi.fn(async () => ({ event, scheduleItemId: "schedule-1", deletion: "hard_deleted" as const })),
     restoreScheduleItem: vi.fn(async () => event),
-    reorderScheduleItems: vi.fn(async () => event)
+    reorderScheduleItems: vi.fn(async () => event),
+    createGoodsItem: vi.fn(async () => event),
+    updateGoodsItem: vi.fn(async () => event),
+    deleteGoodsItem: vi.fn(async () => event),
+    restoreGoodsItem: vi.fn(async () => event),
+    reorderGoodsItems: vi.fn(async () => event),
+    replaceGoodsItems: vi.fn(async () => event)
   };
 }
 

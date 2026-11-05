@@ -1,6 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { getPrismaClient } from "../storage/prisma.js";
 import type {
   HubEvent,
+  HubEventGoodsItem,
+  HubEventGoodsSalesChannel,
   HubEventImage,
   HubEventLink,
   HubEventScheduleItem,
@@ -13,6 +16,8 @@ import type { HubEventFilters, HubEventListResult } from "./hubEventService.js";
 import { koreaDateKey, resolveEffectiveHubEventStatus, withEffectiveHubEventStatus } from "./hubEventStatus.js";
 import { deriveHubEventScheduleMode, normalizeHubEventScheduleText } from "./hubEventSchedulePolicy.js";
 import { isHubEventTag } from "./hubEventTagPolicy.js";
+import { withPublicGoodsItems, type AdminHubEventGoodsItemWriteInput } from "./hubEventGoodsPolicy.js";
+import { normalizeGoodsListImages, withPublicGoodsListImages } from "./hubEventGoodsGalleryPolicy.js";
 import {
   firstEventLegacyProjection,
   firstScheduleLegacyProjection,
@@ -44,6 +49,7 @@ interface HubEventRecord {
   venueName: string | null;
   venueAddress: string | null;
   image?: unknown | null;
+  goodsListImages?: unknown | null;
   notificationEligible: boolean;
   publicationState: string;
   publishedAt: Date | null;
@@ -57,6 +63,29 @@ interface HubEventRecord {
   updatedAt: Date;
   scheduleItems?: HubEventScheduleItemRecord[];
   links?: HubEventExternalLinkRecord[];
+  goodsItems?: HubEventGoodsItemRecord[];
+  _count?: { goodsItems?: number };
+}
+
+interface HubEventGoodsItemRecord {
+  id: string;
+  hubEventId: string;
+  scheduleItemId: string | null;
+  name: string;
+  groupLabel: string | null;
+  memberIds: string[] | null;
+  priceKrw: number | null;
+  priceNote: string | null;
+  salesChannel: string;
+  purchaseLimit: number | null;
+  limitNote: string | null;
+  isBonus: boolean;
+  purchaseUrl: string | null;
+  image?: unknown | null;
+  sortOrder: number;
+  cancelledAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 interface HubEventScheduleItemRecord {
@@ -122,6 +151,12 @@ interface HubEventDelegate {
     updateMany?(args: { where: Record<string, unknown>; data: Record<string, unknown> }): Promise<{ count: number }>;
     delete?(args: { where: { id: string } }): Promise<HubEventScheduleItemRecord>;
   };
+  hubEventGoodsItem?: {
+    findMany?(args: unknown): Promise<HubEventGoodsItemRecord[]>;
+    create?(args: { data: Record<string, unknown> }): Promise<HubEventGoodsItemRecord>;
+    update?(args: { where: { id: string }; data: Record<string, unknown> }): Promise<HubEventGoodsItemRecord>;
+    deleteMany?(args: { where: Record<string, unknown> }): Promise<{ count: number }>;
+  };
   hubEventExternalLink?: {
     findMany?(args: unknown): Promise<HubEventExternalLinkRecord[]>;
     create?(args: { data: Record<string, unknown> }): Promise<HubEventExternalLinkRecord>;
@@ -163,7 +198,7 @@ export type AdminHubEventScheduleItemWriteInput = Omit<
 
 export type AdminHubEventWriteInput = Omit<
   Partial<HubEvent>,
-  "announcedAt" | "startsAt" | "endsAt" | "scheduleItems" | "links"
+  "announcedAt" | "startsAt" | "endsAt" | "scheduleItems" | "links" | "goodsItems" | "goodsCount"
 > & {
   announcedAt?: NullableDateInput;
   startsAt?: NullableDateInput;
@@ -173,6 +208,14 @@ export type AdminHubEventWriteInput = Omit<
   actorId?: string;
   expectedRevision?: number;
 };
+
+export type { AdminHubEventGoodsItemWriteInput };
+
+export interface ReplaceHubEventGoodsItemsInput {
+  items: AdminHubEventGoodsItemWriteInput[];
+  expectedRevision: number;
+  actorId?: string;
+}
 
 export interface SetHubEventPublicationStateInput {
   id: string;
@@ -281,6 +324,28 @@ function toScheduleItem(record: HubEventScheduleItemRecord): HubEventScheduleIte
   return { ...item, links: resolvedScheduleLinks(item) };
 }
 
+function toGoodsItem(record: HubEventGoodsItemRecord): HubEventGoodsItem {
+  return stripUndefined({
+    id: record.id,
+    scheduleItemId: record.scheduleItemId ?? undefined,
+    name: record.name,
+    groupLabel: record.groupLabel ?? undefined,
+    memberIds: record.memberIds ?? [],
+    priceKrw: record.priceKrw ?? undefined,
+    priceNote: record.priceNote ?? undefined,
+    salesChannel: record.salesChannel as HubEventGoodsSalesChannel,
+    purchaseLimit: record.purchaseLimit ?? undefined,
+    limitNote: record.limitNote ?? undefined,
+    isBonus: record.isBonus,
+    purchaseUrl: record.purchaseUrl ?? undefined,
+    image: normalizeHubEventImage(record.image),
+    sortOrder: record.sortOrder,
+    cancelledAt: toIso(record.cancelledAt),
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString()
+  }) as unknown as HubEventGoodsItem;
+}
+
 function toLink(record: HubEventExternalLinkRecord): HubEventLink {
   return stripUndefined({
     id: record.id,
@@ -318,6 +383,7 @@ function toPublicHubEvent(record: HubEventRecord): HubEvent {
     venueName: record.venueName ?? undefined,
     venueAddress: record.venueAddress ?? undefined,
     image: normalizeHubEventImage(record.image),
+    goodsCount: record._count?.goodsItems && record._count.goodsItems > 0 ? record._count.goodsItems : undefined,
     notificationEligible: record.notificationEligible,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString()
@@ -325,9 +391,20 @@ function toPublicHubEvent(record: HubEventRecord): HubEvent {
   return { ...event, links: resolvedEventLinks(event) };
 }
 
+/** Public detail: non-cancelled goods only, images only when displayable. */
+function toPublicDetailHubEvent(record: HubEventRecord): HubEvent {
+  return withPublicGoodsListImages(withPublicGoodsItems({
+    ...toPublicHubEvent(record),
+    goodsItems: (record.goodsItems ?? []).map(toGoodsItem),
+    goodsListImages: normalizeGoodsListImages(record.goodsListImages)
+  }));
+}
+
 function toAdminHubEvent(record: HubEventRecord): AdminHubEvent {
   return stripUndefined({
     ...toPublicHubEvent(record),
+    goodsItems: record.goodsItems?.map(toGoodsItem),
+    goodsListImages: normalizeGoodsListImages(record.goodsListImages),
     publicationState: record.publicationState,
     publishedAt: toIso(record.publishedAt),
     cancelledAt: toIso(record.cancelledAt),
@@ -384,6 +461,12 @@ function toScheduleDate(
   return toDate(value);
 }
 
+/** undefined = leave untouched; null (HTTP body) or an empty list clears the column. */
+function toGoodsListImagesWriteValue(value: HubEventImage[] | null | undefined) {
+  if (value === undefined) return undefined;
+  return (value === null ? undefined : normalizeGoodsListImages(value)) ?? Prisma.DbNull;
+}
+
 function toWriteData(input: AdminHubEventWriteInput): Record<string, unknown> {
   const activeSchedules = input.scheduleItems?.filter((item) => !item.cancelledAt) ?? [];
   const projectedSchedule = activeSchedules.find((item) => item.isPrimary);
@@ -415,6 +498,7 @@ function toWriteData(input: AdminHubEventWriteInput): Record<string, unknown> {
     venueName: input.venueName,
     venueAddress: input.venueAddress,
     image: input.image,
+    goodsListImages: toGoodsListImagesWriteValue(input.goodsListImages),
     notificationEligible: input.notificationEligible
   });
 }
@@ -469,6 +553,38 @@ const scheduleItemsInclude = {
     orderBy: [{ sortOrder: "asc" }, { startsAt: "asc" }, { id: "asc" }]
   }
 };
+const goodsItemsOrderBy = [{ sortOrder: "asc" }, { id: "asc" }];
+// List payloads only carry a non-cancelled goods count, never the items themselves.
+const listInclude = {
+  ...scheduleItemsInclude,
+  _count: { select: { goodsItems: { where: { cancelledAt: null } } } }
+};
+// Admin detail includes every goods item (cancelled ones flagged via cancelledAt).
+const adminDetailInclude = { ...scheduleItemsInclude, goodsItems: { orderBy: goodsItemsOrderBy } };
+// Public detail excludes cancelled goods items.
+const publicDetailInclude = {
+  ...scheduleItemsInclude,
+  goodsItems: { where: { cancelledAt: null }, orderBy: goodsItemsOrderBy }
+};
+
+function toGoodsWriteData(item: AdminHubEventGoodsItemWriteInput, index: number): Record<string, unknown> {
+  return {
+    scheduleItemId: item.scheduleItemId ?? null,
+    name: item.name,
+    groupLabel: item.groupLabel ?? null,
+    memberIds: item.memberIds ?? [],
+    priceKrw: item.priceKrw ?? null,
+    priceNote: item.priceNote ?? null,
+    salesChannel: item.salesChannel,
+    purchaseLimit: item.purchaseLimit ?? null,
+    limitNote: item.limitNote ?? null,
+    isBonus: item.isBonus ?? false,
+    purchaseUrl: item.purchaseUrl ?? null,
+    image: item.image ?? Prisma.DbNull,
+    sortOrder: item.sortOrder ?? index,
+    cancelledAt: toDate(item.cancelledAt) ?? null
+  };
+}
 
 function addHubEventFilters(where: Record<string, unknown>, filters: HubEventFilters, options: { includeStatus?: boolean } = {}) {
   if (filters.category) where.category = filters.category;
@@ -642,7 +758,7 @@ export class HubEventRepository {
 
     const records = await findMany({
       where,
-      include: scheduleItemsInclude,
+      include: listInclude,
       orderBy: [{ endsAt: "asc" }, { startsAt: "asc" }, { updatedAt: "desc" }],
       take: queryLimit,
       cursor: filters.cursor ? { id: filters.cursor } : undefined,
@@ -672,9 +788,9 @@ export class HubEventRepository {
         publicationState: "published",
         deletedAt: null
       },
-      include: scheduleItemsInclude
+      include: publicDetailInclude
     });
-    return record ? withEffectiveHubEventStatus(toPublicHubEvent(record)) : undefined;
+    return record ? withEffectiveHubEventStatus(toPublicDetailHubEvent(record)) : undefined;
   }
 
   async listAdmin(filters: AdminHubEventFilters = {}): Promise<AdminHubEventListResult> {
@@ -693,7 +809,7 @@ export class HubEventRepository {
 
     const records = await findMany({
       where,
-      include: scheduleItemsInclude,
+      include: listInclude,
       orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
       take: limit + 1,
       cursor: filters.cursor ? { id: filters.cursor } : undefined,
@@ -709,7 +825,7 @@ export class HubEventRepository {
 
   async getAdminById(id: string): Promise<AdminHubEvent | undefined> {
     const findFirst = requireMethod(this.prisma.hubEvent?.findFirst?.bind(this.prisma.hubEvent), "hub_event_find_first");
-    const record = await findFirst({ where: { id }, include: scheduleItemsInclude });
+    const record = await findFirst({ where: { id }, include: adminDetailInclude });
     return record ? toAdminHubEvent(record) : undefined;
   }
 
@@ -732,7 +848,7 @@ export class HubEventRepository {
         createdBy: input.actorId,
         updatedBy: input.actorId
       },
-      include: scheduleItemsInclude
+      include: adminDetailInclude
     });
     return toAdminHubEvent(record);
   }
@@ -750,12 +866,12 @@ export class HubEventRepository {
         const result = await updateMany({ where: { id, revision: input.expectedRevision }, data: updateData });
         if (result.count !== 1) throw new Error("hub_event_revision_conflict");
         const findFirst = requireMethod(client.hubEvent?.findFirst?.bind(client.hubEvent), "hub_event_find_first");
-        const found = await findFirst({ where: { id }, include: scheduleItemsInclude });
+        const found = await findFirst({ where: { id }, include: adminDetailInclude });
         if (!found) throw new Error("hub_event_not_found");
         record = found;
       } else {
         const update = requireMethod(client.hubEvent?.update?.bind(client.hubEvent), "hub_event_update");
-        record = await update({ where: { id }, data: updateData, include: scheduleItemsInclude });
+        record = await update({ where: { id }, data: updateData, include: adminDetailInclude });
       }
 
       if (input.links !== undefined) {
@@ -765,7 +881,7 @@ export class HubEventRepository {
       if (input.scheduleItems === undefined || !client.hubEventScheduleItem) {
         if (input.links === undefined) return toAdminHubEvent(record);
         const findFirst = requireMethod(client.hubEvent?.findFirst?.bind(client.hubEvent), "hub_event_find_first");
-        const refreshed = await findFirst({ where: { id }, include: scheduleItemsInclude });
+        const refreshed = await findFirst({ where: { id }, include: adminDetailInclude });
         return toAdminHubEvent(refreshed ?? record);
       }
 
@@ -822,7 +938,7 @@ export class HubEventRepository {
       }
 
       const findFirst = requireMethod(client.hubEvent?.findFirst?.bind(client.hubEvent), "hub_event_find_first");
-      const refreshed = await findFirst({ where: { id }, include: scheduleItemsInclude });
+      const refreshed = await findFirst({ where: { id }, include: adminDetailInclude });
       return toAdminHubEvent(refreshed ?? record);
     };
 
@@ -888,7 +1004,53 @@ export class HubEventRepository {
       );
       await deleteSchedule({ where: { id: scheduleItemId } });
       const findFirst = requireMethod(client.hubEvent?.findFirst?.bind(client.hubEvent), "hub_event_find_first");
-      const refreshed = await findFirst({ where: { id }, include: scheduleItemsInclude });
+      const refreshed = await findFirst({ where: { id }, include: adminDetailInclude });
+      if (!refreshed) throw new Error("hub_event_not_found");
+      return toAdminHubEvent(refreshed);
+    };
+    return this.prisma.$transaction ? this.prisma.$transaction(run) : run(this.prisma);
+  }
+
+  /**
+   * Replaces the event's goods list in one transaction and bumps HubEvent.revision (optimistic lock).
+   * Items with a known id are updated, items without one are created, and items missing from the
+   * input are hard-deleted. Callers that only change one item pass the full list with that change applied.
+   */
+  async replaceGoodsItems(id: string, input: ReplaceHubEventGoodsItemsInput): Promise<AdminHubEvent> {
+    const run = async (client: HubEventDelegate): Promise<AdminHubEvent> => {
+      const updateEvent = requireMethod(client.hubEvent?.updateMany?.bind(client.hubEvent), "hub_event_update_many");
+      const result = await updateEvent({
+        where: { id, revision: input.expectedRevision },
+        data: { updatedBy: input.actorId, revision: { increment: 1 } }
+      });
+      if (result.count !== 1) throw new Error("hub_event_revision_conflict");
+
+      const goods = client.hubEventGoodsItem;
+      const findMany = requireMethod(goods?.findMany?.bind(goods), "hub_event_goods_item_find_many");
+      const create = requireMethod(goods?.create?.bind(goods), "hub_event_goods_item_create");
+      const update = requireMethod(goods?.update?.bind(goods), "hub_event_goods_item_update");
+      const deleteMany = requireMethod(goods?.deleteMany?.bind(goods), "hub_event_goods_item_delete_many");
+      const existing = await findMany({ where: { hubEventId: id }, select: { id: true } });
+      const existingIds = new Set(existing.map((item) => item.id));
+      const retainedIds = new Set<string>();
+
+      for (const [index, item] of input.items.entries()) {
+        const data = toGoodsWriteData(item, index);
+        if (item.id && existingIds.has(item.id)) {
+          retainedIds.add(item.id);
+          await update({ where: { id: item.id }, data });
+        } else {
+          const created = await create({ data: { ...data, hubEventId: id } });
+          retainedIds.add(created.id);
+        }
+      }
+      const removedIds = [...existingIds].filter((goodsItemId) => !retainedIds.has(goodsItemId));
+      if (removedIds.length > 0) {
+        await deleteMany({ where: { id: { in: removedIds }, hubEventId: id } });
+      }
+
+      const findFirst = requireMethod(client.hubEvent?.findFirst?.bind(client.hubEvent), "hub_event_find_first");
+      const refreshed = await findFirst({ where: { id }, include: adminDetailInclude });
       if (!refreshed) throw new Error("hub_event_not_found");
       return toAdminHubEvent(refreshed);
     };
@@ -907,7 +1069,7 @@ export class HubEventRepository {
         updatedBy: input.actorId,
         revision: { increment: 1 }
       }),
-      include: scheduleItemsInclude
+      include: adminDetailInclude
     });
     return toAdminHubEvent(record);
   }
@@ -922,7 +1084,7 @@ export class HubEventRepository {
         updatedBy: input.actorId,
         revision: { increment: 1 }
       },
-      include: scheduleItemsInclude
+      include: adminDetailInclude
     });
     return toAdminHubEvent(record);
   }

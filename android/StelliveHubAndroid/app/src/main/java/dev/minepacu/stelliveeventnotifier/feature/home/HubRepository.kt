@@ -23,6 +23,9 @@ data class HubDataState(
     val liveStatusSourceLabel: String = "앱 내 목업",
 )
 
+/** [isFresh] is true only when [event] was just parsed from a successful server detail response (not cache/fallback). */
+data class HubEventDetailResult(val event: HubEvent?, val isFresh: Boolean)
+
 interface HubRepository {
     suspend fun bootstrap(): HubDataState
     suspend fun refresh(): HubDataState = bootstrap()
@@ -33,6 +36,9 @@ interface HubRepository {
         to: LocalDate? = null,
     ): List<HubEvent>
     suspend fun hubEventDetail(id: String): HubEvent?
+    /** Like [hubEventDetail] but also reports whether the event came from a successful (HTTP 200) detail fetch. */
+    suspend fun hubEventDetailResult(id: String): HubEventDetailResult =
+        HubEventDetailResult(hubEventDetail(id), isFresh = false)
     suspend fun announcements(cursor: String? = null): ServiceAnnouncementListResult = ServiceAnnouncementListResult(emptyList())
     suspend fun announcementDetail(id: String): ServiceAnnouncement? = null
     suspend fun hubCalendarDays(from: LocalDate, to: LocalDate, timezone: String): List<HubCalendarDay>
