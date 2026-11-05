@@ -122,6 +122,9 @@ async function sendServiceError(error: unknown, reply: FastifyReply) {
   if (error instanceof Error && error.message === "hub_event_schedule_item_not_found") {
     return reply.code(404).send({ error: "hub_event_schedule_item_not_found" });
   }
+  if (error instanceof Error && error.message === "hub_event_link_not_found") {
+    return reply.code(404).send({ error: "hub_event_link_not_found" });
+  }
   if (error instanceof Error && error.message === "hub_event_goods_item_not_found") {
     return reply.code(404).send({ error: "hub_event_goods_item_not_found" });
   }

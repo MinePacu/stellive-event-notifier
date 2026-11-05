@@ -45,6 +45,13 @@ function resolvedLinks(links: readonly HubEventLink[] | undefined): HubEventLink
     });
 }
 
+const LEGACY_LINK_ID_PREFIX = "legacy:";
+
+/** Ids the read path synthesizes from legacy URL fields; they never exist in HubEventExternalLink. */
+export function isSynthesizedLegacyLinkId(id: string | undefined): boolean {
+  return typeof id === "string" && id.startsWith(LEGACY_LINK_ID_PREFIX);
+}
+
 function legacyLink(id: string, kind: HubEventLinkKind, url: string | undefined, label: string | undefined, sortOrder: number): HubEventLink | undefined {
   const normalizedUrl = url?.trim();
   if (!normalizedUrl || !isHttpsUrl(normalizedUrl)) return undefined;
@@ -55,9 +62,9 @@ export function resolvedEventLinks(event: Pick<HubEvent, "id" | "links" | "purch
   const current = resolvedLinks(event.links);
   if (current.length > 0) return current;
   return resolvedLinks([
-    legacyLink(`legacy:${event.id}:purchase`, "purchase", event.purchaseUrl, undefined, 0),
-    legacyLink(`legacy:${event.id}:ticket`, "ticket", event.ticketUrl, undefined, 1),
-    legacyLink(`legacy:${event.id}:source`, "source", event.sourceUrl, event.sourceLabel, 2)
+    legacyLink(`${LEGACY_LINK_ID_PREFIX}${event.id}:purchase`, "purchase", event.purchaseUrl, undefined, 0),
+    legacyLink(`${LEGACY_LINK_ID_PREFIX}${event.id}:ticket`, "ticket", event.ticketUrl, undefined, 1),
+    legacyLink(`${LEGACY_LINK_ID_PREFIX}${event.id}:source`, "source", event.sourceUrl, event.sourceLabel, 2)
   ].filter((link): link is HubEventLink => Boolean(link)));
 }
 
@@ -74,8 +81,8 @@ export function resolvedScheduleLinks(item: Pick<HubEventScheduleItem, "id" | "k
           ? "source"
           : "content";
   return resolvedLinks([
-    legacyLink(`legacy:${item.id}:action`, actionKind, item.actionUrl, undefined, 0),
-    legacyLink(`legacy:${item.id}:source`, "source", item.sourceUrl, item.sourceLabel, 1)
+    legacyLink(`${LEGACY_LINK_ID_PREFIX}${item.id}:action`, actionKind, item.actionUrl, undefined, 0),
+    legacyLink(`${LEGACY_LINK_ID_PREFIX}${item.id}:source`, "source", item.sourceUrl, item.sourceLabel, 1)
   ].filter((link): link is HubEventLink => Boolean(link)));
 }
 

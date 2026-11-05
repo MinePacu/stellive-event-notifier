@@ -503,4 +503,19 @@ describe("admin hub event routes", () => {
       currentRevision: 3
     });
   });
+  it("returns unknown link ids as 404 responses", async () => {
+    const service = createFakeService();
+    service.update.mockRejectedValueOnce(new Error("hub_event_link_not_found"));
+    const { app } = await buildTestApp(service);
+    const response = await app.inject({
+      method: "PUT",
+      url: "/v1/admin/hub-events/event-1",
+      headers: { authorization: "Bearer admin-token", "content-type": "application/json" },
+      payload: { expectedRevision: 1, links: [{ id: "foreign-link", kind: "source", url: "https://example.com/source" }] }
+    });
+    await app.close();
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "hub_event_link_not_found" });
+  });
 });

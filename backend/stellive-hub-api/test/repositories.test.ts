@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { HubEventRepository } from "../src/hub-events/hubEventRepository.js";
+import { resolvedEventLinks, resolvedScheduleLinks } from "../src/hub-events/hubEventLinkPolicy.js";
 import { NotificationJobRepository } from "../src/jobs/notificationJobRepository.js";
 import { PlatformApiStateRepository } from "../src/repositories/platformApiStateRepository.js";
 import { ExternalApiCallLogRepository } from "../src/repositories/externalApiCallLogRepository.js";
@@ -1775,6 +1776,81 @@ describe("HubEventRepository", () => {
     await expect(repository.update("event-1", {
       links: [{ id: "foreign-link", kind: "source", url: "https://example.com/source", sortOrder: 0 }]
     })).rejects.toThrow("hub_event_link_not_found");
+  });
+
+  it("persists synthesized legacy links as new rows when the admin echoes them back on save", async () => {
+    const linkWrites: Array<{ method: string; args: { where?: unknown; data?: Record<string, unknown> } }> = [];
+    let nextLinkId = 0;
+    const client = {
+      hubEvent: {
+        async update() { return { ...record, scheduleItems: [], links: [] }; },
+        async findFirst() { return { ...record, scheduleItems: [], links: [] }; }
+      },
+      hubEventScheduleItem: {
+        async findMany() { return [{ id: "item-1" }]; },
+        async update(args: unknown) { return args; },
+        async create() { return { id: "created" }; },
+        async updateMany() { return { count: 0 }; }
+      },
+      hubEventExternalLink: {
+        async findMany() { return []; },
+        async update(args: never) { linkWrites.push({ method: "update", args }); return args; },
+        async create(args: never) { linkWrites.push({ method: "create", args }); return { id: `link-${++nextLinkId}` }; },
+        async deleteMany(args: never) { linkWrites.push({ method: "deleteMany", args }); return { count: 0 }; }
+      }
+    };
+    const repository = new HubEventRepository(client as never);
+
+    // What the admin GET returns for an event and schedule item with no HubEventExternalLink rows.
+    const eventLinks = resolvedEventLinks({
+      id: "event-1",
+      links: [],
+      purchaseUrl: "https://example.com/purchase",
+      ticketUrl: undefined,
+      sourceUrl: "https://example.com/source",
+      sourceLabel: "Stellive Official"
+    });
+    const scheduleLinks = resolvedScheduleLinks({
+      id: "item-1",
+      kind: "sales_open",
+      links: [],
+      actionUrl: "https://example.com/action",
+      sourceUrl: "https://example.com/item-source",
+      sourceLabel: undefined
+    });
+    expect(eventLinks.map((link) => link.id)).toEqual(["legacy:event-1:purchase", "legacy:event-1:source"]);
+    expect(scheduleLinks.map((link) => link.id)).toEqual(["legacy:item-1:action", "legacy:item-1:source"]);
+
+    await repository.update("event-1", {
+      links: eventLinks,
+      scheduleMode: "timeline",
+      scheduleItems: [
+        {
+          id: "item-1",
+          kind: "sales_open",
+          label: "예약 판매 시작",
+          startsAt: "2026-06-13T00:00:00.000Z",
+          timePrecision: "datetime",
+          timezone: "Asia/Seoul",
+          notificationEligible: true,
+          isPrimary: true,
+          sortOrder: 0,
+          links: scheduleLinks
+        }
+      ],
+      actorId: "admin-1"
+    });
+
+    expect(linkWrites.map((write) => write.method)).toEqual(["create", "create", "create", "create"]);
+    expect(linkWrites.map((write) => write.args.data)).toEqual([
+      expect.objectContaining({ hubEventId: "event-1", scheduleItemId: null, kind: "purchase", url: "https://example.com/purchase" }),
+      expect.objectContaining({ hubEventId: "event-1", scheduleItemId: null, kind: "source", url: "https://example.com/source", label: "Stellive Official" }),
+      expect.objectContaining({ hubEventId: null, scheduleItemId: "item-1", kind: "purchase", url: "https://example.com/action" }),
+      expect.objectContaining({ hubEventId: null, scheduleItemId: "item-1", kind: "source", url: "https://example.com/item-source" })
+    ]);
+    for (const write of linkWrites) {
+      expect(write.args.data).not.toHaveProperty("id");
+    }
   });
 
   it("passes explicit null dates through update writes", async () => {

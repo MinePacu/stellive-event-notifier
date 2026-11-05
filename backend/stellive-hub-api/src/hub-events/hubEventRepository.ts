@@ -21,6 +21,7 @@ import { normalizeGoodsListImages, withPublicGoodsListImages } from "./hubEventG
 import {
   firstEventLegacyProjection,
   firstScheduleLegacyProjection,
+  isSynthesizedLegacyLinkId,
   normalizeHubEventLinks,
   resolvedEventLinks,
   resolvedScheduleLinks,
@@ -962,7 +963,9 @@ export class HubEventRepository {
 
     for (const link of normalized) {
       const data = toLinkWriteData(link);
-      if (link.id) {
+      // Synthesized legacy links (see resolvedEventLinks) are echoed back by the admin
+      // consoles; persist them as new rows instead of looking them up.
+      if (link.id && !isSynthesizedLegacyLinkId(link.id)) {
         if (!existingIds.has(link.id)) throw new Error("hub_event_link_not_found");
         retainedIds.add(link.id);
         await update({ where: { id: link.id }, data });
